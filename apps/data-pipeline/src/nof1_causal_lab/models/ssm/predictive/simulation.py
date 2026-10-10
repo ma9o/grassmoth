@@ -42,6 +42,7 @@ if TYPE_CHECKING:
 
     from nof1_causal_lab.artifacts.posterior_diagnostics import PosteriorPredictiveChecks
     from nof1_causal_lab.artifacts.scenarios import StateAssignment
+    from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.predictive.types import PredictiveDraws
 
@@ -123,6 +124,7 @@ def _window_input_events(
 def generate_simulation_batch(
     source: CompiledDynamicalModel | BoundPanel,
     *,
+    compute_budget: ComputeBudget,
     start: float,
     end: float,
     assignments: tuple[StateAssignment, ...] = (),
@@ -203,6 +205,7 @@ def generate_simulation_batch(
                 None,
                 (),
                 history_events,
+                compute_budget=compute_budget,
             )
             initial = history[:, -1, :]
     if laws.latent_paths is not None:
@@ -237,6 +240,7 @@ def generate_simulation_batch(
                 initial,
                 (),
                 history_events,
+                compute_budget=compute_budget,
             )
             initial = history[:, -1, :]
     from nof1_causal_lab.models.ssm.observation_support import simulation_observation_support
@@ -254,6 +258,7 @@ def generate_simulation_batch(
         compiled_dynamical_model,
         laws.parameters,
         jnp.asarray(grid),
+        compute_budget=compute_budget,
         seed=seed,
         initial_states=initial,
         interventions=tuple(interventions),
@@ -297,7 +302,7 @@ def measure_simulation_batch(
     batch: SimulationBatch,
     *,
     groups: tuple[str, ...] = ("dynamics", "measurement"),
-    edge_contrasts: bool = False,
+    edge_contrasts: ComputeBudget | None = None,
     clock: Callable[[], float],
 ) -> tuple[tuple[PredictiveAssessment, ...], PosteriorPredictiveChecks | None]:
     """All selected reducers consume the same generated paths."""

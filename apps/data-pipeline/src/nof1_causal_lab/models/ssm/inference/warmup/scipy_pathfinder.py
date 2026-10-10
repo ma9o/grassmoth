@@ -34,8 +34,10 @@ from nof1_causal_lab.models.ssm.execution.contracts import EMPTY_LAPLACE_STATE
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from jax.stages import Compiled
     from jax.typing import DTypeLike
 
+    from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.autoreparam import Strategy
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.runtime import BoundPanel
@@ -57,6 +59,12 @@ from nof1_causal_lab.artifacts.posterior_diagnostics import (
     PathfinderDiagnostics,
     PathfinderStartDiagnostics,
 )
+from nof1_causal_lab.compute.batching import (
+    CompiledBatch,
+    compile_batched,
+    compiled_memory,
+)
+from nof1_causal_lab.compute.budget import MemoryDemand
 from nof1_causal_lab.utils.immutability import freeze_fields
 
 if TYPE_CHECKING:
@@ -117,22 +125,28 @@ class _ScipyPathfinderStartResult:
     diagnostics: PathfinderStartDiagnostics
 
 
-@functools.partial(jax.jit, static_argnames=("runtime_log_posterior_fn",))
+@functools.partial(jax.jit, static_argnames=("runtime_log_posterior_fn", "batch_size"))
 def _scipy_pathfinder_value_batch_runtime(
     z_batch: jnp.ndarray,
     observations: jnp.ndarray,
     times: jnp.ndarray,
     *,
     runtime_log_posterior_fn: Callable[..., jax.Array],
+    batch_size: int,
 ) -> jnp.ndarray:
-    return jax.vmap(
+    # Keep the complete Monte Carlo batch, but bound simultaneous trajectory
+    # workspaces independently of the candidate and ELBO sample counts.
+    values = jax.lax.map(
         lambda z_arg: runtime_log_posterior_fn(
             z_arg,
             observations,
             times,
             solver_state=EMPTY_LAPLACE_STATE,
-        )
-    )(z_batch)
+        ),
+        z_batch,
+        batch_size=batch_size,
+    )
+    return jnp.asarray(values)
 
 
 @functools.partial(jax.jit, static_argnames=("runtime_log_posterior_fn",))
@@ -279,17 +293,21 @@ def _estimate_elbo_candidate_batch(
         actual_batch_size = len(batch_means)
         if actual_batch_size == 0:
             continue
-        while len(batch_means) < candidate_batch_size:
-            batch_means.append(batch_means[-1])
-            batch_chols.append(batch_chols[-1])
-
         mean_stack = np.stack(batch_means, axis=0)
         chol_stack = np.stack(batch_chols, axis=0)
-        zeta = rng.standard_normal((candidate_batch_size, elbo_samples, dim))
+        # Generate only real candidates' randomness. Padding copies completed
+        # samples so changing execution batches cannot shift the RNG stream.
+        zeta = rng.standard_normal((actual_batch_size, elbo_samples, dim))
         samples = mean_stack[:, None, :] + np.einsum("bni,bji->bnj", zeta, chol_stack)
-        flat_samples = samples.reshape(candidate_batch_size * elbo_samples, dim)
+        actual_samples = samples.reshape(actual_batch_size * elbo_samples, dim)
+        padding = (candidate_batch_size - actual_batch_size) * elbo_samples
+        flat_samples = np.concatenate(
+            (actual_samples, np.repeat(actual_samples[-1:], padding, axis=0)), axis=0
+        )
         flat_log_post = np.asarray(log_post_batch_fn(flat_samples), dtype=np.float64)
-        log_post_samples = flat_log_post.reshape(candidate_batch_size, elbo_samples)
+        log_post_samples = flat_log_post[: actual_batch_size * elbo_samples].reshape(
+            actual_batch_size, elbo_samples
+        )
 
         log_det_terms = np.log(np.abs(np.diagonal(chol_stack, axis1=1, axis2=2))).sum(axis=1)
         log_q = (
@@ -597,11 +615,11 @@ def scipy_pathfinder(
     elbo_samples: int = 10,
     elbo_screen_samples: int | None = None,
     elbo_refine_candidates: int = 16,
-    elbo_candidate_batch_size: int = 8,
+    elbo_candidate_batch_size: int,
     lbfgs_memory: int = 10,
     jitter: float = 1e-6,
     seed: int = 0,
-    parallel_workers: int | None = None,
+    parallel_workers: int,
     clock: Callable[[], float],
 ) -> ScipyPathfinderResult:
     """Select a Gaussian initialization proposal from multiple SciPy Pathfinder runs.
@@ -624,8 +642,8 @@ def scipy_pathfinder(
         jitter: Diagonal stabilization added to the inverse-Hessian approximation
             before Cholesky factorization.
         seed: Random seed for ELBO sampling.
-        parallel_workers: Threads running independent starts; ``None`` uses one
-            per start, and larger values are capped at the number of starts.
+        parallel_workers: Resolved concurrency limit for independent starts,
+            capped at the number of starts.
         clock: Injected monotonic clock returning seconds for elapsed-time diagnostics.
 
     Returns:
@@ -650,7 +668,7 @@ def scipy_pathfinder(
     pf_t0 = clock()
 
     dim = int(x0_starts[0].shape[0])
-    worker_count = len(x0_starts) if parallel_workers is None else int(parallel_workers)
+    worker_count = int(parallel_workers)
     if worker_count < 1:
         raise ValueError("parallel_workers must be >= 1.")
     worker_count = min(worker_count, len(x0_starts))
@@ -744,10 +762,90 @@ def scipy_pathfinder(
     )
 
 
+@dataclass(frozen=True)
+class _PathfinderExecution:
+    gradient: Compiled
+    values: tuple[tuple[int, CompiledBatch[Compiled]], ...]
+    candidate_batch_size: int
+    parallel_workers: int
+
+
+def _compile_pathfinder_execution(
+    runtime_log_posterior_fn: Callable[..., jax.Array],
+    flat_example: jax.Array,
+    observations: jax.Array,
+    times: jax.Array,
+    *,
+    compute_budget: ComputeBudget,
+    n_starts: int,
+    requested_workers: int | None,
+    maxiter: int,
+    elbo_samples: int,
+    screen_samples: int,
+) -> _PathfinderExecution:
+    """Share the allocation among starts, then compile memory-sized ELBO batches."""
+    gradient = _scipy_pathfinder_value_and_grad_runtime.lower(
+        flat_example, observations, times, runtime_log_posterior_fn=runtime_log_posterior_fn
+    ).compile()
+    dim = int(flat_example.size)
+
+    def compile_values(count: int, size: int) -> tuple[Compiled, MemoryDemand]:
+        executable = _scipy_pathfinder_value_batch_runtime.lower(
+            jax.ShapeDtypeStruct((count, dim), flat_example.dtype),
+            observations,
+            times,
+            runtime_log_posterior_fn=runtime_log_posterior_fn,
+            batch_size=size,
+        ).compile()
+        return executable, compiled_memory(executable)
+
+    # One candidate still carries every ELBO sample in its input/output buffers,
+    # even when its inner map evaluates only one sample at a time.
+    _, candidate_memory = compile_values(max(elbo_samples, screen_samples), 1)
+    gradient_memory = compiled_memory(gradient)
+    # Accepted points, gradients and candidate Cholesky factors stay live while
+    # ELBOs are scored. Include dense Hessian reconstruction and L-BFGS history.
+    history_bytes = 8 * ((maxiter + 2) * (dim * dim + 3 * dim) + 8 * dim * dim + 20 * dim)
+    # Stacked factors/means, noise, samples, padded copies, log densities and
+    # reductions. Numerical sample counts stay independent of scheduling.
+    candidate_bytes = 8 * (2 * dim * dim + dim + max(elbo_samples, screen_samples) * (4 * dim + 4))
+    step_memory = MemoryDemand(
+        host_bytes=max(candidate_memory.host_bytes + candidate_bytes, gradient_memory.host_bytes),
+        device_bytes=max(candidate_memory.device_bytes, gradient_memory.device_bytes),
+    )
+    worker_limit = min(n_starts, compute_budget.cpu_workers)
+    if requested_workers is not None:
+        worker_limit = min(worker_limit, requested_workers)
+    workers = compute_budget.capacity(
+        step_memory.with_host_workspace(history_bytes), limit=worker_limit
+    )
+    if workers == 0:
+        raise MemoryError("One Pathfinder start exceeds the numerical execution memory budget")
+    per_worker = compute_budget.per_worker(workers, host_workspace_bytes=history_bytes)
+    candidate_size = per_worker.capacity(
+        candidate_memory.with_host_workspace(candidate_bytes), limit=maxiter + 2
+    )
+    if candidate_size == 0:
+        raise MemoryError("One Pathfinder candidate exceeds its worker's memory budget")
+    value_budget = per_worker.per_worker(1, host_workspace_bytes=candidate_size * candidate_bytes)
+    counts = sorted({candidate_size * screen_samples, candidate_size * elbo_samples})
+    values = tuple(
+        (
+            count,
+            compile_batched(
+                functools.partial(compile_values, count), max_batch_size=count, budget=value_budget
+            ),
+        )
+        for count in counts
+    )
+    return _PathfinderExecution(gradient, values, candidate_size, workers)
+
+
 def run_scipy_pathfinder_approximation(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
+    compute_budget: ComputeBudget,
     trace_key: jnp.ndarray,
     pathfinder_key: jnp.ndarray,
     reparam: Strategy | None,
@@ -758,7 +856,6 @@ def run_scipy_pathfinder_approximation(
     pathfinder_parallel_workers: int | None = None,
     elbo_screen_samples: int | None = None,
     elbo_refine_candidates: int = 16,
-    elbo_candidate_batch_size: int = 8,
     init_scale: float = 0.1,
     clock: Callable[[], float],
 ) -> tuple[ScipyPathfinderResult, PathfinderDiagnostics]:
@@ -783,22 +880,12 @@ def run_scipy_pathfinder_approximation(
 
     def log_post_batch_np(x_batch: np.ndarray) -> np.ndarray:
         xj = jnp.asarray(x_batch, dtype=flat_dtype)
-        fx = _scipy_pathfinder_value_batch_runtime(
-            xj,
-            observations,
-            times,
-            runtime_log_posterior_fn=runtime_log_post_fn,
-        )
+        fx = dict(execution.values)[int(xj.shape[0])].executable(xj, observations, times)
         return np.asarray(jax.device_get(fx), dtype=np.float64)
 
     def log_post_and_grad_np(x: np.ndarray) -> tuple[float, np.ndarray]:
         xj = jnp.asarray(x, dtype=flat_dtype)
-        fx, gx = _scipy_pathfinder_value_and_grad_runtime(
-            xj,
-            observations,
-            times,
-            runtime_log_posterior_fn=runtime_log_post_fn,
-        )
+        fx, gx = execution.gradient(xj, observations, times)
         return float(fx), np.asarray(jax.device_get(gx), dtype=np.float64)
 
     seed_int = int(jax.device_get(random.randint(pathfinder_key, (), 0, 2**31 - 1)))
@@ -808,22 +895,29 @@ def run_scipy_pathfinder_approximation(
         elbo_samples=int(num_elbo_samples),
         elbo_screen_samples=elbo_screen_samples,
     )
-    compile_batch_sizes = sorted(
-        {
-            int(elbo_candidate_batch_size) * int(resolved_elbo_screen_samples),
-            int(elbo_candidate_batch_size) * int(num_elbo_samples),
-        }
-    )
     compile_t0 = clock()
-    log_post_and_grad_np(base_np)
-    for batch_size in compile_batch_sizes:
-        log_post_batch_np(np.repeat(base_np[None, :], int(batch_size), axis=0))
+    execution = _compile_pathfinder_execution(
+        runtime_log_post_fn,
+        flat_example,
+        observations,
+        times,
+        compute_budget=compute_budget,
+        n_starts=n_pathfinder_starts,
+        requested_workers=pathfinder_parallel_workers,
+        maxiter=maxiter,
+        elbo_samples=num_elbo_samples,
+        screen_samples=resolved_elbo_screen_samples,
+    )
+    compile_batch_sizes = tuple(count for count, _ in execution.values)
     jax_compile_seconds = clock() - compile_t0
     logger.info(
-        "scipy_pathfinder: JAX compile/warm-up done in %.1fs (grad_shape=%s, value_batch_sizes=%s)",
+        "scipy_pathfinder: compiled in %.1fs (grad_shape=%s, value_batch_sizes=%s, "
+        "microbatches=%s, workers=%d)",
         jax_compile_seconds,
         tuple(base_np.shape),
         compile_batch_sizes,
+        tuple(batch.batch_size for _, batch in execution.values),
+        execution.parallel_workers,
     )
     x0_starts = [
         base_np + float(init_scale) * rng.standard_normal(base_np.shape)
@@ -839,9 +933,9 @@ def run_scipy_pathfinder_approximation(
         elbo_samples=int(num_elbo_samples),
         elbo_screen_samples=elbo_screen_samples,
         elbo_refine_candidates=int(elbo_refine_candidates),
-        elbo_candidate_batch_size=int(elbo_candidate_batch_size),
+        elbo_candidate_batch_size=execution.candidate_batch_size,
         seed=seed_int,
-        parallel_workers=pathfinder_parallel_workers,
+        parallel_workers=execution.parallel_workers,
         clock=clock,
     )
     pathfinder_runtime_seconds = clock() - pathfinder_runtime_t0

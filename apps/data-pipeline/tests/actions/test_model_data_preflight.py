@@ -25,6 +25,7 @@ from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.state import StudyState
 from nof1_causal_lab.study.store import ArtifactStore
 from tests.action_fixtures import edit_and_check
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.helpers import write_question
 from tests.inference_fixtures import compile_fit_fixture
 from tests.integration.runner_fixtures import panel_frame, panel_metadata
@@ -82,6 +83,7 @@ def test_interval_summary_fails_shared_preflight_before_particle_dispatch():
         prepared.inputs.prior_runtime_bundle,
         prepared.panel,
         sampler=SamplerSpec(),
+        compute_budget=COMPUTE_BUDGET,
         clock=time.monotonic,
     )
     assert isinstance(failure, ObservationPreflightFailure)

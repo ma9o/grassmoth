@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.observation_data import ObservationDataset
 from nof1_causal_lab.artifacts.posterior import InferenceEvidence, InferenceMetadata
+from nof1_causal_lab.compute.resources import CPU_ALLOCATION_ENV, HOST_MEMORY_ALLOCATION_ENV
 from nof1_causal_lab.study.result_codec import pack_result, unpack_result
 from nof1_causal_lab.utils.arrays import decode_array, encode_array
 
@@ -25,6 +26,9 @@ if TYPE_CHECKING:
     from nof1_causal_lab.models.model_structure import StructuralSelection
     from nof1_causal_lab.numpyro_json import ArrayLoader
     from nof1_causal_lab.sampler_config import SamplerSpec
+
+_FIT_CPU_CORES = 8
+_FIT_HOST_MEMORY_MIB = 32768
 
 
 @dataclass(frozen=True)
@@ -116,15 +120,22 @@ def _dispatch_fit(payload: FitComputeInput, *, timeout: int = 10800) -> FitCompu
         # layer after its add_local_* source mounts (Modal forbids that order).
         env={
             "DEPLOYMENT_ENV": "development",
-            "JAX_PLATFORMS": "cuda",
+            "JAX_PLATFORMS": "cuda,cpu",
             "JAX_COMPILATION_CACHE_DIR": "/cache/jax",
             "JAX_ENABLE_COMPILATION_CACHE": "true",
             "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": "0",
             "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES": "0",
+            CPU_ALLOCATION_ENV: str(_FIT_CPU_CORES),
+            HOST_MEMORY_ALLOCATION_ENV: str(_FIT_HOST_MEMORY_MIB * 1024**2),
+            # Starts own CPU concurrency; each small NumPy/SciPy operation gets
+            # one BLAS thread instead of multiplying the allocation per start.
+            "OPENBLAS_NUM_THREADS": "1",
+            "OMP_NUM_THREADS": "1",
+            "MKL_NUM_THREADS": "1",
         },
         gpu=GPU_A100_80GB,
-        cpu=8,
-        memory=32768,
+        cpu=_FIT_CPU_CORES,
+        memory=_FIT_HOST_MEMORY_MIB,
         timeout=timeout,
         retries=0,
         volumes={"/cache": modal.Volume.from_name("nof1-cached-fit-cache", create_if_missing=True)},

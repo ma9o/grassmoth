@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
+from nof1_causal_lab.compute.resources import read_compute_budget
 from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
 
 if TYPE_CHECKING:
@@ -180,6 +181,7 @@ def _run_one(
             ),
         ),
         clock=time.monotonic,
+        compute_budget=read_compute_budget(),
     )
     if isinstance(result, ObservationPreflightFailure):
         raise ValueError(result.message)

@@ -14,6 +14,7 @@ import jax
 import jax.numpy as jnp
 from typing_extensions import TypedDict
 
+from nof1_causal_lab.compute.resources import read_compute_budget
 from nof1_causal_lab.models.ssm import numerics as numeric
 from nof1_causal_lab.models.ssm.inference import ParticleMCMCPosterior
 from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
@@ -84,6 +85,7 @@ def fit_prepared_model(
         result = fit(
             prepared.inputs.prior_runtime_bundle,
             prepared.panel,
+            compute_budget=read_compute_budget(),
             sampler=sampler,
             clock=time.monotonic,
         )

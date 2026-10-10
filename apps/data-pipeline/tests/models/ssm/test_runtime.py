@@ -40,6 +40,7 @@ from nof1_causal_lab.models.ssm.runtime import (
 )
 from nof1_causal_lab.sampler_config import SamplerSpec
 from nof1_causal_lab.utils.observation_semantics import SummaryOperator
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
 from tests.model_fixtures import (
     _two_state_fixed_drift_model,
@@ -711,6 +712,7 @@ class TestPrepareModelRuntime:
             end=float(runtime.times[-1]),
             draws=3,
             time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+            compute_budget=COMPUTE_BUDGET,
         )
         from nof1_causal_lab.models.ssm.predictive.simulation import SimulationBatch
 

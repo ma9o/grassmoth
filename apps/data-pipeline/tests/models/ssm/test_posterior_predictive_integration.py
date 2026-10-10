@@ -16,6 +16,7 @@ from nof1_causal_lab.models.posterior_predictive import measure_predictive_check
 from nof1_causal_lab.models.ssm.predictive.registry_runtime import (
     sample_prior_predictive_from_runtime,
 )
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.inference_fixtures import compile_fit_fixture, compile_model_fixture
 from tests.model_fixtures import (
     load_model_fixture,
@@ -42,7 +43,12 @@ def test_predictive_draws_feed_mixed_family_diagnostics():
     runtime = compile_fit_fixture(dynamical_model_spec).prior_runtime_bundle
     times = jnp.array([0.0, 0.1, 0.25, 0.4, 0.7, 1.0], dtype=jnp.float32)
     samples = sample_prior_predictive_from_runtime(
-        compile_model_fixture(dynamical_model_spec), runtime, times, num_samples=3, seed=7
+        compile_model_fixture(dynamical_model_spec),
+        runtime,
+        times,
+        num_samples=3,
+        seed=7,
+        compute_budget=COMPUTE_BUDGET,
     )
     assert samples.trajectory.latents.shape == (3, 6, 1)
     assert samples.trajectory.observations.shape == (3, 6, 2)

@@ -11,7 +11,7 @@ import json
 import logging
 import threading
 from collections import OrderedDict
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, Protocol, cast
 
 import equinox as eqx
 import jax
@@ -22,6 +22,7 @@ import numpy as np
 from nof1_causal_lab.artifacts.expressions import expression_coefficients
 from nof1_causal_lab.artifacts.likelihood import DistributionFamily
 from nof1_causal_lab.artifacts.parameter import SiteKind
+from nof1_causal_lab.compute.batching import compile_batched, compiled_memory
 from nof1_causal_lab.models.predictive_simulation import (
     sample_model_observations,
 )
@@ -50,8 +51,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     import dynestyx as dsx
+    from jax.stages import Compiled
     from jax.typing import ArrayLike
 
+    from nof1_causal_lab.compute.budget import ComputeBudget, MemoryDemand
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.dynamics.spec import CompiledDynamics, DynamicsSpec
 
@@ -107,7 +110,6 @@ def _predictive_models(
 # numerical sample-site names carry no meaning.
 _SDE_CFL_SAFETY = 0.25
 _SDE_MAX_STEPS = 16384
-_PREDICTIVE_MICROBATCH_SIZE = 32
 _LATENT_CACHE_MAX_ENTRIES = 2
 _LATENT_CACHE_ENGINE_VERSION = 3
 _latent_cache: OrderedDict[str, jax.Array] = OrderedDict()
@@ -241,6 +243,8 @@ def _simulate_model_predictive_draws_microbatched(
     keys: jnp.ndarray,
     span: float,
     max_rates: jnp.ndarray,
+    *,
+    batch_size: int,
 ) -> jnp.ndarray:
     arrays, structure = eqx.partition(dynamical_models, eqx.is_array)
 
@@ -257,12 +261,30 @@ def _simulate_model_predictive_draws_microbatched(
     result: jnp.ndarray = jax.lax.map(
         simulate_one,
         (arrays, keys, max_rates),
-        batch_size=_PREDICTIVE_MICROBATCH_SIZE,
+        batch_size=batch_size,
     )
     return result
 
 
-_simulate_model_predictive_draws = eqx.filter_jit(_simulate_model_predictive_draws_microbatched)
+class _CompiledPrediction(Protocol):
+    compiled: Compiled
+
+    def __call__(self, *args: object, **kwargs: object) -> jnp.ndarray: ...
+
+
+class _LoweredPrediction(Protocol):
+    def compile(self) -> _CompiledPrediction: ...
+
+
+class _PredictiveCompiler(Protocol):
+    def lower(self, *args: object, **kwargs: object) -> _LoweredPrediction: ...
+
+
+# Equinox's annotation preserves the wrapped function signature and omits its
+# documented lower/compile surface; describe that surface at this library seam.
+_simulate_model_predictive_draws = cast(
+    "_PredictiveCompiler", eqx.filter_jit(_simulate_model_predictive_draws_microbatched)
+)
 
 
 def _simulate_vector_field_predictive_latents(
@@ -270,6 +292,7 @@ def _simulate_vector_field_predictive_latents(
     samples: Mapping[str, jnp.ndarray],
     times: jnp.ndarray,
     *,
+    compute_budget: ComputeBudget,
     rng_key: jax.Array,
     dynamics: DynamicsSpec | None = None,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
@@ -296,13 +319,15 @@ def _simulate_vector_field_predictive_latents(
         sorted_models = jax.tree.map(
             lambda leaf: leaf[order] if eqx.is_array(leaf) else leaf, dynamical_models
         )
-        sorted_latents = _simulate_model_predictive_draws(
-            sorted_models,
-            times,
-            draw_keys[order],
-            span,
-            max_rates[order],
-        )
+        args = (sorted_models, times, draw_keys[order], span, max_rates[order])
+
+        def compile_batch(size: int) -> tuple[Callable[..., jnp.ndarray], MemoryDemand]:
+            executable = _simulate_model_predictive_draws.lower(*args, batch_size=size).compile()
+            return executable, compiled_memory(executable.compiled)
+
+        batch = compile_batched(compile_batch, max_batch_size=n_draws, budget=compute_budget)
+        logger.info("Predictive execution: draws=%d microbatch=%d", n_draws, batch.batch_size)
+        sorted_latents = batch.executable(*args, batch_size=batch.batch_size)
         latents = sorted_latents[inverse_order]
         _cache_latents(cache_key, latents)
         logger.info("Prior-predictive latent cache miss %s", cache_key[:12])
@@ -379,6 +404,7 @@ def sample_prior_predictive_from_runtime(
     runtime: PriorRuntimeBundle,
     times: jnp.ndarray,
     *,
+    compute_budget: ComputeBudget,
     observation_support=None,
     observation_mask: jnp.ndarray | None = None,
     num_samples: int = 100,
@@ -398,6 +424,7 @@ def sample_prior_predictive_from_runtime(
         compiled_dynamical_model,
         samples,
         times,
+        compute_budget=compute_budget,
         observation_support=observation_support,
         observation_mask=observation_mask,
         seed=seed,
@@ -410,6 +437,7 @@ def simulate_predictive_draws(
     samples: Mapping[str, jnp.ndarray],
     times: jnp.ndarray,
     *,
+    compute_budget: ComputeBudget,
     observation_support=None,
     observation_mask: jnp.ndarray | None = None,
     seed: int = 0,
@@ -429,6 +457,7 @@ def simulate_predictive_draws(
         initial_states,
         interventions,
         input_events,
+        compute_budget=compute_budget,
     )
     observations, observations_mask, expected_observations = sample_predictive_emissions(
         compiled_dynamical_model,
@@ -487,6 +516,8 @@ def simulate_latent_histories(
     initial_states,
     interventions,
     input_events=(),
+    *,
+    compute_budget: ComputeBudget,
 ):
     """Execute the same nonlinear field with explicit starts, noise and paired do-operations."""
     if numeric.input_mask(compiled_dynamical_model).any() and not input_events:
@@ -494,7 +525,7 @@ def simulate_latent_histories(
     if initial_states is None and not interventions and not input_events:
         # The initial-law case retains caching and microbatching of the same exact solver.
         latents, predictors = _simulate_vector_field_predictive_latents(
-            compiled_dynamical_model, samples, times, rng_key=key
+            compiled_dynamical_model, samples, times, rng_key=key, compute_budget=compute_budget
         )
         return latents, predictors, None
 

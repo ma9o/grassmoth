@@ -17,6 +17,7 @@ from nof1_causal_lab.artifacts.simulation import (
     SimulationReport,
     SingleArmSimulation,
 )
+from nof1_causal_lab.compute.resources import read_compute_budget
 from nof1_causal_lab.models.ssm import numerics as numeric
 from nof1_causal_lab.models.ssm.predictive.simulation import (
     generate_simulation_batch,
@@ -58,6 +59,7 @@ def simulate(
     assignments = design.assignments(time_origin)
     batch = generate_simulation_batch(
         compiled_dynamical_model,
+        compute_budget=read_compute_budget(),
         start=start,
         end=end,
         assignments=assignments,

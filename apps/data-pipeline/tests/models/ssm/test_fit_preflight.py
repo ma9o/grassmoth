@@ -25,6 +25,7 @@ from nof1_causal_lab.models.ssm.preflight import (
     validate_observations_for_fit,
 )
 from nof1_causal_lab.sampler_config import SamplerSpec
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture
 from tests.model_fixtures import (
     construct_named,
@@ -318,6 +319,7 @@ def test_fit_runs_preflight_before_dispatch():
         ),
         sampler=SamplerSpec(),
         clock=time.monotonic,
+        compute_budget=COMPUTE_BUDGET,
     )
     assert isinstance(failure, ObservationPreflightFailure)
     assert "raw_channel" in failure.message

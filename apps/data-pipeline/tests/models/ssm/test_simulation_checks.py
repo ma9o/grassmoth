@@ -22,6 +22,7 @@ from nof1_causal_lab.models.ssm.simulation_checks import (
     DesignInfo,
     measure_construct_simulation,
 )
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.helpers import fixture_entity_id
 from tests.inference_fixtures import compile_model_fixture
 from tests.model_fixtures import fixed_hill_model, load_model_fixture
@@ -110,7 +111,12 @@ def test_time_invariant_construct_omits_temporal_transmission_check():
     )
 
     results, _timings = measure_construct_simulation(
-        compile_model_fixture(dynamical_model_spec), pred, design, target, clock=time.monotonic
+        compile_model_fixture(dynamical_model_spec),
+        pred,
+        design,
+        target,
+        clock=time.monotonic,
+        edge_contrasts=COMPUTE_BUDGET,
     )
     checks = {result.check for result in results}
     assert {"C5a location reach", "C5b width"} <= checks
@@ -211,6 +217,7 @@ def test_fixed_hill_coefficients_participate_in_checks_and_edge_off(
         dynamics=dynamics,
         measurement=measurement,
         clock=time.monotonic,
+        edge_contrasts=COMPUTE_BUDGET,
     )
     assert len(captured) == int(dynamics)
     assert compile_model_fixture(spec).dynamics.spec.components[2] == original

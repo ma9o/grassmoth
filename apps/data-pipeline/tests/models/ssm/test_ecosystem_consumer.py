@@ -18,6 +18,7 @@ from nof1_causal_lab.models.ssm.inference import fit
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
 from nof1_causal_lab.sampler_config import MarginalParticleGibbsSpec, SamplerSpec
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture
 from tests.model_fixtures import load_model_fixture
 
@@ -122,6 +123,7 @@ def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(mo
             ),
         ),
         clock=time.monotonic,
+        compute_budget=COMPUTE_BUDGET,
     )
     assert not isinstance(result, ObservationPreflightFailure)
     assert not hasattr(result.diagnostics, "likelihood_backend")

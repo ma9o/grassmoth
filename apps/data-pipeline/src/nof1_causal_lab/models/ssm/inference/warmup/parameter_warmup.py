@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 
     from jax.typing import DTypeLike
 
+    from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.autoreparam import Strategy
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.runtime import BoundPanel
@@ -116,6 +117,7 @@ def prepare_parameter_warmup(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
+    compute_budget: ComputeBudget,
     bundle: ParticleTarget,
     method_label: str,
     phase_label: str,
@@ -182,6 +184,7 @@ def prepare_parameter_warmup(
         pathfinder_state, pathfinder_diagnostics = run_scipy_pathfinder_approximation(
             priors,
             panel,
+            compute_budget=compute_budget,
             trace_key=trace_key,
             pathfinder_key=pathfinder_key,
             reparam=reparam,

@@ -33,6 +33,7 @@ from nof1_causal_lab.models.ssm.runtime import (
     bind_panel,
     input_trajectory_events,
 )
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.inference_fixtures import compile_model_fixture, parameter_draws, particle_posterior
 from tests.model_fixtures import x_y_model
 
@@ -217,6 +218,7 @@ def test_unmeasured_model_inputs_drive_both_simulation_arms_and_survive_conditio
         draws=2,
         time_origin=_ORIGIN,
         assignments=(StateAssignment(target=source.id, time=1, value=7),),
+        compute_budget=COMPUTE_BUDGET,
     )
     assert isinstance(batch, SimulationBatch)
     grid = np.asarray(batch.times)
@@ -246,7 +248,9 @@ def test_unmeasured_model_inputs_drive_both_simulation_arms_and_survive_conditio
     assert draws.state_ids == (dynamical_model_spec.constructs[1].id,)
     assert draws.latent_paths is not None
     assert draws.latent_paths.shape == (2, 2, 1)
-    forecast = generate_simulation_batch(fitted, start=2, end=4, draws=2, time_origin=_ORIGIN)
+    forecast = generate_simulation_batch(
+        fitted, start=2, end=4, draws=2, time_origin=_ORIGIN, compute_budget=COMPUTE_BUDGET
+    )
     assert isinstance(forecast, SimulationBatch)
     assert np.isfinite(forecast.prediction.trajectory.latents).all()
     np.testing.assert_array_equal(forecast.prediction.trajectory.latents[:, -1, 0], [2.0, 2.0])

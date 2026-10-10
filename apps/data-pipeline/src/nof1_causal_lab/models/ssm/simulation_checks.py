@@ -42,6 +42,7 @@ if TYPE_CHECKING:
     import jax.numpy as jnp
 
     from nof1_causal_lab.artifacts.expressions import CoefficientExpression
+    from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel, CompiledState
     from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponentSpec
     from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
@@ -171,7 +172,7 @@ def measure_construct_simulation(
     *,
     dynamics: bool = True,
     measurement: bool = True,
-    edge_contrasts: bool = True,
+    edge_contrasts: ComputeBudget | None,
     clock: Callable[[], float],
 ) -> tuple[list[CheckResult], list[MeasurementTiming]]:
     """Execute selected check groups over a shared predictive batch."""
@@ -203,7 +204,7 @@ def measure_construct_dynamics(
     design: DesignInfo,
     target: ConstructSimulationTarget,
     *,
-    edge_contrasts: bool = True,
+    edge_contrasts: ComputeBudget | None,
     clock: Callable[[], float],
 ) -> tuple[list[CheckResult], list[MeasurementTiming]]:
     """Measure confinement, scale, resolvability, edge contrasts and saturation."""
@@ -344,7 +345,12 @@ def measure_construct_dynamics(
             )
             for parent in target.edge_parents
         )
-    for parent in target.edge_parents if edge_contrasts else ():
+    contrasts = (
+        tuple((parent, edge_contrasts) for parent in target.edge_parents)
+        if edge_contrasts is not None
+        else ()
+    )
+    for parent, compute_budget in contrasts:
         started = clock()
         edge_target = _incoming_edge_off_target(
             compiled_dynamical_model, replace(target, edge_parents=(parent,)), latent_names, d
@@ -355,6 +361,7 @@ def measure_construct_dynamics(
             design.t_grid,
             edge_target,
             design.seed,
+            compute_budget=compute_budget,
         )[:, :, d]
         edge_label = f"{parent}->{target.name}"
         phase_results = list(
@@ -434,10 +441,7 @@ def measure_construct_measurement(
     d = numeric.state_names(compiled_dynamical_model).index(target.name)
     results: list[CheckResult] = []
     timings: list[MeasurementTiming] = []
-    time_invariant_mask = compiled_dynamical_model.diffusion_block.time_invariant_mask
-    target_is_time_invariant = bool(
-        time_invariant_mask is not None and np.asarray(time_invariant_mask, dtype=bool)[d]
-    )
+    target_is_time_invariant = compiled_dynamical_model.states[d].time_invariant
 
     # C5a/C5b coverage for every indicator; C5c transmission only for dynamic constructs.
     for indicator in compiled_dynamical_model.observations:
@@ -576,6 +580,8 @@ def _resimulate_edge_off(
     t_grid: jnp.ndarray,
     edge_target: _EdgeOffTarget,
     seed: int,
+    *,
+    compute_budget: ComputeBudget,
 ) -> jnp.ndarray:
     """Re-simulate the latents with the given edge contributions zeroed, all else fixed.
 
@@ -604,5 +610,6 @@ def _resimulate_edge_off(
         t_grid,
         rng_key=predictive_keys(seed).latents,
         dynamics=intervention_dynamics,
+        compute_budget=compute_budget,
     )
     return latents

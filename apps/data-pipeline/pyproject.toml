@@ -43,6 +43,7 @@ dependencies = [
     "msgpack>=1.2.3",
     "pytimeparse2>=1.7.1",
     "python-dateutil>=2.9.0.post0",
+    "psutil>=7.2.2",
 ]
 
 [project.scripts]

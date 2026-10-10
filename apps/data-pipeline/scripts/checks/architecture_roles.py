@@ -19,6 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = PROJECT_ROOT / "src" / PACKAGE
 DIRECTORY_ROLES: dict[str, ModuleRole] = {
     "artifacts": "domain",
+    "compute": "domain",
     "actions": "shell",
     "models": "compiler",
     "models/ssm": "execution",
@@ -65,6 +66,8 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "actions/validation/checks": "compiler",
     "actions/validation/rules": "compiler",
     "compilation_errors": "domain",
+    "compute/batching": "compiler",
+    "compute/resources": "edge",
     "distributions": "domain",
     "json_types": "domain",
     "llm_specs": "domain",

@@ -26,6 +26,7 @@ from nof1_causal_lab.models.posterior_predictive import (
 from nof1_causal_lab.models.predictive_simulation import PredictiveObservationMeanOverflow
 from nof1_causal_lab.models.ssm import numerics as numeric
 from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.inference_fixtures import compile_model_fixture
 from tests.model_fixtures import (
     load_model_fixture,
@@ -271,6 +272,7 @@ class TestForwardSimulation:
             compile_model_fixture(dynamical_model_spec),
             samples,
             jnp.arange(3, dtype=jnp.float32),
+            compute_budget=COMPUTE_BUDGET,
         )
 
         np.testing.assert_allclose(

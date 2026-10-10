@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.autoreparam import Strategy
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.runtime import BoundPanel
@@ -53,6 +54,7 @@ def fit_marginal_particle_gibbs(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
+    compute_budget: ComputeBudget,
     sampler: SamplerSpec,
     reparam: Strategy | None = None,
     clock: Callable[[], float],
@@ -102,6 +104,7 @@ def fit_marginal_particle_gibbs(
     warmup_result = prepare_parameter_warmup(
         priors,
         panel,
+        compute_budget=compute_budget,
         bundle=bundle.runtime,
         method_label="marginal_particle_gibbs",
         phase_label="phase 2/4",

@@ -29,6 +29,7 @@ from nof1_causal_lab.study.history import StudyRepository
 from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.store import ArtifactStore
 from tests.action_fixtures import applied_record, empty_simulation_summary
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.data_fixtures import metadata_for_model
 from tests.helpers import make_model, write_question
 from tests.inference_fixtures import compile_model_fixture
@@ -278,6 +279,7 @@ def test_authored_law_advances_from_zero_before_a_later_requested_start():
         end=3.0,
         draws=2,
         time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+        compute_budget=COMPUTE_BUDGET,
     )
     from nof1_causal_lab.models.ssm.predictive.simulation import SimulationBatch
 
@@ -292,4 +294,5 @@ def test_authored_law_advances_from_zero_before_a_later_requested_start():
             end=1.0,
             draws=2,
             time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+            compute_budget=COMPUTE_BUDGET,
         )

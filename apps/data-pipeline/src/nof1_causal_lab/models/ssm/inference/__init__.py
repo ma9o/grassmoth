@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.runtime import BoundPanel
 
@@ -52,6 +53,7 @@ def fit(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
+    compute_budget: ComputeBudget,
     sampler: SamplerSpec,
     reparam: Strategy | Literal["auto"] | None = "auto",
     clock: Callable[[], float],
@@ -68,6 +70,7 @@ def fit(
     return fit_marginal_particle_gibbs(
         priors,
         panel,
+        compute_budget=compute_budget,
         sampler=sampler,
         reparam=resolved_reparam,
         clock=clock,
@@ -79,6 +82,8 @@ def prior_predictive(
     panel: BoundPanel,
     num_samples: int = 100,
     seed: int = 0,
+    *,
+    compute_budget: ComputeBudget,
 ) -> PredictiveDraws:
     """Sample the prior predictive distribution on the bound model's time grid."""
     from nof1_causal_lab.models.ssm.predictive.registry_runtime import (
@@ -89,6 +94,7 @@ def prior_predictive(
         panel.compiled_dynamical_model,
         priors,
         panel.times,
+        compute_budget=compute_budget,
         num_samples=num_samples,
         seed=seed,
         input_events=panel.input_events,

@@ -43,6 +43,7 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.runner
     _initialize_chain_state,
 )
 from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.helpers import make_model
 from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
 from tests.model_fixtures import _exact_model_model, load_model_fixture
@@ -580,6 +581,7 @@ def test_exact_observations_pass_through_full_construct_diagnostics(exact_model)
             next(state for state in compiled_dynamical_model.states if state.id == target.id)
         ),
         clock=time.monotonic,
+        edge_contrasts=COMPUTE_BUDGET,
     )
     transmission = next(result for result in results if result.check == "C5c transmission")
     assert transmission.passed

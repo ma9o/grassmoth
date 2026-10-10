@@ -67,6 +67,7 @@ from nof1_causal_lab.models.ssm.inference.utils import _discover_sites
 from nof1_causal_lab.models.ssm.inference.warmup.map import _build_map_laplace_bundle
 from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
 from nof1_causal_lab.sampler_config import SamplerSpec
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.inference_fixtures import (
     bind_panel_fixture,
     compile_fit_fixture,
@@ -916,6 +917,7 @@ class TestDefaultMethodRouting:
             bind_panel_fixture(model.compiled_dynamical_model, observations, times),
             sampler=SamplerSpec(),
             clock=time.monotonic,
+            compute_budget=COMPUTE_BUDGET,
         )
         assert not isinstance(result, ObservationPreflightFailure)
 
