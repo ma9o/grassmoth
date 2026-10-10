@@ -123,6 +123,7 @@ def test_conditioning_rejects_warmup_statically(tmp_path):
     probe = tmp_path / "conditioning_types.py"
     probe.write_text(
         dedent("""\
+            from datetime import UTC, datetime
             from jax import Array
             from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
             from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
@@ -191,7 +192,7 @@ def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engi
     prior = _treatment_outcome()
     with pytest.raises(CausalCertificationError, match="retained joint uncertainty"):
         certify_conditioned_model(prior, revision, inference_log(prior), prior, _report(prior).core)
-    from nof1_causal_lab.models.ssm.inference.convergence import parameter_convergence
+    from nof1_causal_lab.models.ssm.inference.convergence import chain_convergence
 
     diagnostics = report.core.inference_diagnostics
     assert diagnostics is not None
@@ -206,7 +207,7 @@ def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engi
     mixed_poorly = report.revised(
         core=report.core.revised(
             inference_diagnostics=poorly_mixed,
-            convergence=parameter_convergence(poorly_mixed),
+            convergence=chain_convergence(poorly_mixed),
         )
     )
     with pytest.raises(CausalCertificationError, match=r"r_hat fails.*ess_tail fails"):

@@ -869,9 +869,7 @@ def run_scipy_pathfinder_approximation(
     setup_t0 = clock()
     from nof1_causal_lab.models.ssm.inference.backend_factory import build_laplace_backend
 
-    backend = build_laplace_backend(
-        panel.compiled_dynamical_model, n_ieks_iters, panel.observation_support
-    )
+    backend = build_laplace_backend(panel, n_ieks_iters)
     laplace_bundle = _build_map_laplace_bundle(priors, panel, trace_key, backend, reparam)
     runtime_log_post_fn = laplace_bundle["log_posterior_fn"]
     flat_example = laplace_bundle["flat_example"]

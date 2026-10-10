@@ -1,6 +1,8 @@
-"""Shared parameter warmup and preconditioner setup for blocked SSM MCMC.
+"""Shared joint initialization and preconditioner setup for blocked SSM MCMC.
 
-Init positions (Pathfinder draws) and the preconditioner (Pathfinder or
+LAPS supplies paired parameter/path starts and an ensemble covariance from the
+exact joint density. Its ensemble is initialization evidence, never a posterior.
+Other explicit init positions (Pathfinder draws) and preconditioners (Pathfinder or
 Laplace/MAP covariance) are Gaussian approximations used only to warm-start the
 sampler. Seeding from them is valid no matter how poor the linearization is: the
 invariant distribution is the exact posterior for any seed, so the approximation
@@ -24,10 +26,15 @@ if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.autoreparam import Strategy
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.runtime import BoundPanel
+    from nof1_causal_lab.sampler_config import (
+        LapsInitializationSpec,
+        ParameterInitialization,
+        ParameterPreconditioner,
+    )
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -37,6 +44,11 @@ from nof1_causal_lab.artifacts.posterior_diagnostics import (
     ParameterWarmupDiagnostics,
     PathfinderDiagnostics,
 )
+from nof1_causal_lab.models.ssm.inference.warmup.laps import (
+    LapsInitializationResult,
+    prepare_laps_initialization,
+)
+from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.inference.warmup.scipy_pathfinder import (
     ScipyPathfinderResult,
     run_scipy_pathfinder_approximation,
@@ -61,6 +73,7 @@ class ParameterWarmupResult:
     preconditioner_chol: jnp.ndarray | None
     warmup_diagnostics: ParameterWarmupDiagnostics
     pathfinder_state: ScipyPathfinderResult | None
+    laps_initialization: LapsInitializationResult | None
 
 
 def _laplace_preconditioner_chol_from_map_result(
@@ -128,10 +141,11 @@ def prepare_parameter_warmup(
     seed: int,
     n_ieks_iters: int,
     num_chains: int,
-    init_method: Literal["random", "pathfinder"],
+    init_method: ParameterInitialization,
+    laps_spec: LapsInitializationSpec,
     initial_positions_override: jnp.ndarray | None,
     parameter_preconditioner_chol: jnp.ndarray | None,
-    auto_preconditioner_method: Literal["map", "none", "pathfinder"],
+    auto_preconditioner_method: ParameterPreconditioner,
     auto_preconditioner_maxiter: int,
     pathfinder_num_elbo_samples: int,
     pathfinder_maxiter: int,
@@ -142,7 +156,7 @@ def prepare_parameter_warmup(
     prior_release_scale: float = 0.05,
     release_jitter_key: jnp.ndarray | None = None,
     clock: Callable[[], float],
-) -> ParameterWarmupResult:
+) -> ParameterWarmupResult | InitializationFailure:
     """Resolve parameter init positions and the parameter-kernel preconditioner.
 
     The policy is intentionally centralized: if Pathfinder is needed for both
@@ -154,8 +168,42 @@ def prepare_parameter_warmup(
     dtype = bundle.initial_position.dtype
     pathfinder_state: ScipyPathfinderResult | None = None
     pathfinder_diagnostics: PathfinderDiagnostics | None = None
+    laps_result: LapsInitializationResult | None = None
     init_positions: jnp.ndarray | None = None
     preconditioner_chol = parameter_preconditioner_chol
+
+    if (initial_positions_override is None and init_method == "laps") or (
+        parameter_preconditioner_chol is None and auto_preconditioner_method == "laps"
+    ):
+        logger.info(
+            "%s: running joint LAPS initialization (ensemble=%d)",
+            phase_label,
+            laps_spec.ensemble_size,
+        )
+        laps_outcome = prepare_laps_initialization(
+            bundle,
+            spec=laps_spec,
+            key=pathfinder_key,
+            num_chains=num_chains,
+            compute_budget=compute_budget,
+        )
+        if isinstance(laps_outcome, InitializationFailure):
+            return laps_outcome
+        laps_result = laps_outcome
+        measured = laps_result.diagnostics
+        logger.info(
+            "%s: LAPS ready (dim=%d, ensemble=%d, unadjusted=%d, adjusted=%d, "
+            "early_stop=%s, steps=%.4g/%.4g, adjusted_accept=%.3f)",
+            phase_label,
+            measured.joint_dimension,
+            measured.ensemble_size,
+            measured.unadjusted_steps,
+            measured.adjusted_steps,
+            measured.early_stopped,
+            measured.unadjusted_step_size,
+            measured.adjusted_step_size,
+            measured.adjusted_acceptance,
+        )
 
     sampling_mode = None
     released_names: tuple[str, ...] = ()
@@ -213,6 +261,10 @@ def prepare_parameter_warmup(
             dtype=dtype,
         )
         init_source = "user_provided"
+    elif init_method == "laps":
+        assert laps_result is not None  # The LAPS consumer above owns this package.
+        init_positions = laps_result.positions
+        init_source = "laps"
     elif init_method == "pathfinder":
         if pathfinder_state is None or pathfinder_diagnostics is None:
             raise RuntimeError("Pathfinder state missing for Pathfinder initialization.")
@@ -242,7 +294,12 @@ def prepare_parameter_warmup(
 
     preconditioner_t0 = clock()
     if parameter_preconditioner_chol is None:
-        if auto_preconditioner_method == "pathfinder":
+        if auto_preconditioner_method == "laps":
+            assert laps_result is not None  # The LAPS consumer above owns this package.
+            preconditioner_chol = laps_result.parameter_chol
+            preconditioner_source = "laps"
+            preconditioner_device = jax.default_backend()
+        elif auto_preconditioner_method == "pathfinder":
             if pathfinder_state is None or pathfinder_diagnostics is None:
                 raise RuntimeError("Pathfinder state missing for Pathfinder preconditioner.")
             preconditioner_chol = jax.device_put(
@@ -279,6 +336,7 @@ def prepare_parameter_warmup(
 
     warmup_diagnostics = ParameterWarmupDiagnostics(
         pathfinder=pathfinder_diagnostics,
+        laps=None if laps_result is None else laps_result.diagnostics,
         pathfinder_run_count=1 if pathfinder_consumers else 0,
         pathfinder_consumers=tuple(pathfinder_consumers),
         init_source=init_source,
@@ -306,4 +364,5 @@ def prepare_parameter_warmup(
         preconditioner_chol=preconditioner_chol,
         warmup_diagnostics=warmup_diagnostics,
         pathfinder_state=pathfinder_state,
+        laps_initialization=laps_result if init_source == "laps" else None,
     )

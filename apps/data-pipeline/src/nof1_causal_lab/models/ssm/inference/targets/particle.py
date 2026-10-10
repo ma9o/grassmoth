@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast
 
 import dynestyx as dsx
@@ -10,13 +10,20 @@ import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
 
+from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import (
+    GaussianReference,
+    GaussianReferenceBridge,
+)
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from dynestyx.models.core import DiscreteStateTransition
 
+    from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
     from nof1_causal_lab.models.ssm.inference.conditioning import ExactStateConstraints
     from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
+    from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 
 
 # Array leaves of the continuous model and its observation grid. Static model
@@ -37,7 +44,47 @@ class ParticleTarget:
     dynamical_model: Callable[[ParticleContext], dsx.DynamicalModel]
     observations: jax.Array
     times: jax.Array
-    density_indices: tuple[int, ...] | None = None
+    state_space: StateSpace
+    intervals: ParticleIntervalObservations | None = None
+    exact_constraints: ExactStateConstraints | None = None
+    bridge: GaussianReferenceBridge | None = None
+
+    def at_temperature(self, reference: GaussianReference, beta: jax.Array) -> ParticleTarget:
+        """Compose a reference bridge without changing the exact model or its support."""
+        return replace(
+            self,
+            bridge=GaussianReferenceBridge(reference, beta),
+            intervals=None if self.intervals is None else replace(self.intervals, power=beta),
+        )
+
+    @property
+    def independent_mask(self) -> jax.Array:
+        """Coordinates with their own density, before conditioning on exact readings."""
+        mask = jnp.zeros((self.times.size, self.state_space.size), dtype=bool)
+        mask = mask.at[0, jnp.asarray(self.state_space.initial, dtype=jnp.int32)].set(True)
+        return mask.at[1:, jnp.asarray(self.state_space.transition, dtype=jnp.int32)].set(True)
+
+    def replay_path(self, context: ParticleContext, coordinates: jax.Array) -> jax.Array:
+        """Reconstruct exact initial values, static quantities and deterministic recurrences."""
+        if self.exact_constraints is not None:
+            coordinates = self.exact_constraints.project(coordinates)
+        if not self.state_space.requires_replay:
+            return coordinates
+        independent = self.independent_mask
+        initial = jnp.where(independent[0], coordinates[0], self.initial_moments(context)[0])
+        inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
+        initial = initial.at[inputs].set(coordinates[0, inputs])
+
+        def advance(previous: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
+            mean = self._transition_distribution(context, previous, index).mean
+            current = jnp.where(independent[index], coordinates[index], mean)
+            # Inputs have no density and can change at every model grid point.
+            inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
+            current = current.at[inputs].set(coordinates[index, inputs])
+            return current, current
+
+        _, tail = jax.lax.scan(advance, initial, jnp.arange(1, self.times.size))
+        return jnp.concatenate((initial[None], tail))
 
     @property
     def initial_position(self):
@@ -46,7 +93,15 @@ class ParticleTarget:
 
     def log_prior(self, position):
         """Evaluate the parameter prior density at the supplied unconstrained position."""
-        return self.parameters.log_prior(position)
+
+        def exact():
+            return self.parameters.log_prior(position)
+
+        return (
+            exact()
+            if self.bridge is None
+            else self.bridge.combine(exact, self.bridge.reference.parameter_log_prob(position))
+        )
 
     def initial_moments(self, context):
         """Return the exact model's Gaussian initial-state mean and covariance for this context."""
@@ -58,14 +113,22 @@ class ParticleTarget:
 
     def initial_log_prob(self, context, state):
         """Evaluate initial-state density on the modeled coordinates of the supplied state."""
-        return self._modeled_log_prob(self.dynamical_model(context).initial_condition, state)
 
-    def _modeled_log_prob(self, distribution, state):
-        indices = jnp.asarray(
-            self.density_indices
-            if self.density_indices is not None
-            else tuple(range(state.shape[-1]))
+        def exact():
+            return self._modeled_log_prob(
+                self.dynamical_model(context).initial_condition, state, self.state_space.initial
+            )
+
+        return (
+            exact()
+            if self.bridge is None
+            else self.bridge.combine(exact, self.bridge.reference.initial_log_prob(state))
         )
+
+    def _modeled_log_prob(self, distribution, state, density_indices):
+        if not density_indices:
+            return jnp.asarray(0.0, dtype=state.dtype)
+        indices = jnp.asarray(density_indices, dtype=jnp.int32)
         return dist.MultivariateNormal(
             distribution.mean[indices],
             covariance_matrix=distribution.covariance_matrix[jnp.ix_(indices, indices)],
@@ -78,9 +141,30 @@ class ParticleTarget:
 
     def transition_log_prob(self, context, previous, current, index):
         """Evaluate the current state's modeled transition density from its predecessor."""
-        return self._modeled_log_prob(
-            self._transition_distribution(context, previous, index), current
+
+        def exact():
+            return self._modeled_log_prob(
+                self._transition_distribution(context, previous, index),
+                current,
+                self.state_space.transition,
+            )
+
+        return (
+            exact()
+            if self.bridge is None
+            else self.bridge.combine(
+                exact, self.bridge.reference.transition_log_prob(previous, current, index)
+            )
         )
+
+    def transition_moments(
+        self, context: ParticleContext, previous: jax.Array, index: jax.Array
+    ) -> tuple[jax.Array, jax.Array]:
+        """Expose declared transition moments for initialization of a frozen Gaussian reference."""
+        distribution = cast(
+            "dist.MultivariateNormal", self._transition_distribution(context, previous, index)
+        )
+        return jnp.asarray(distribution.mean), jnp.asarray(distribution.covariance_matrix)
 
     def aligned_transition_log_prob(self, context, previous, current, index):
         """Evaluate transition densities for aligned predecessor and successor particle pairs."""
@@ -116,20 +200,33 @@ class ParticleTarget:
         return jnp.concatenate([initial[None], tail])
 
     def observation_increment(self, context, state, index, observations):
-        """Sum observation log probabilities at one time index for the supplied latent state."""
+        """Score point factors at one leaf; interval factors belong to enclosing tree nodes."""
+        if self.intervals is not None:
+            observations = jnp.where(
+                self.intervals.operator.point_like_mask(jnp.dtype(bool))[None, :],
+                observations,
+                jnp.nan,
+            )
         distribution = self.dynamical_model(context).observation_model(
             state, None, context[1][index]
         )
-        return jnp.sum(distribution.log_prob(observations[index]))
+
+        def exact():
+            return jnp.sum(distribution.log_prob(observations[index]))
+
+        return exact() if self.bridge is None else self.bridge.observation(exact)
 
     def observation_log_probs(self, context, path, observations):
         """Evaluate the observation log likelihood at each time along a latent path."""
+        if self.intervals is not None:
+            return self.intervals.trajectory_log_probs(context, path, observations)
         return jax.vmap(
             lambda state, index: self.observation_increment(context, state, index, observations)
         )(path, jnp.arange(path.shape[0]))
 
     def path_log_prob(self, context, path, observations):
         """Sum initial, transition, and observation log densities for a complete latent path."""
+        path = self.replay_path(context, path)
         transitions = jax.vmap(
             lambda previous, current, index: self.transition_log_prob(
                 context, previous, current, index

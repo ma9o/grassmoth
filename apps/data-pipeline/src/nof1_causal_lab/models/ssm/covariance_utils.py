@@ -9,7 +9,7 @@ the jaxtyping imports resolvable for beartype).
 
 import jax.numpy as jnp
 
-from nof1_causal_lab.models.ssm.shapes import Array, Float, FloatScalar
+from nof1_causal_lab.models.ssm.shapes import Array, Float
 
 # Defined locally so the covariance core does not depend on execution contracts.
 CHOL_JITTER = 1e-8
@@ -30,26 +30,12 @@ def symmetrize_with_jitter(
     return symmetrize(M) + eye * jitter
 
 
-def stabilize_covariance_for_cholesky(
-    cov: Float[Array, "N N"],
-    *,
-    min_eigenvalue: float = CHOL_JITTER,
-) -> tuple[Float[Array, "N N"], FloatScalar]:
-    """Symmetrize and diagonally repair a covariance matrix for stable Cholesky."""
-    cov_sym = 0.5 * (cov + cov.T)
-    min_eig = jnp.min(jnp.linalg.eigvalsh(cov_sym))
-    jitter = jnp.maximum(min_eigenvalue - min_eig, 0.0) + min_eigenvalue
-    eye = jnp.eye(cov.shape[0], dtype=cov.dtype)
-    return cov_sym + jitter * eye, min_eig
-
-
 def logdet_from_cholesky(cholesky: Float[Array, "*batch N N"]) -> Float[Array, "*batch"]:
     """Log-determinant of ``A = L Lᵀ`` from its lower-triangular Cholesky factor ``L``.
 
     Computes ``2 · Σ log diag(L)``, batched over any leading dimensions. Expects a
-    valid Cholesky factor (strictly positive diagonal); callers guarantee positive
-    definiteness upstream (e.g. via :func:`symmetrize_with_jitter` /
-    :func:`stabilize_covariance_for_cholesky`), so no diagonal clipping is needed.
+    valid Cholesky factor (strictly positive diagonal); callers own positive
+    definiteness, so no diagonal clipping is needed.
     """
     diagonal = jnp.diagonal(cholesky, axis1=-2, axis2=-1)
     return 2.0 * jnp.sum(jnp.log(diagonal), axis=-1)

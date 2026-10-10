@@ -55,9 +55,7 @@ def compute_ieks_latent_paths(
     observations, times = panel.observations, panel.times
     from nof1_causal_lab.models.ssm.inference.warmup.map import _build_map_laplace_bundle
 
-    backend = build_laplace_backend(
-        panel.compiled_dynamical_model, n_ieks_iters, panel.observation_support
-    )
+    backend = build_laplace_backend(panel, n_ieks_iters)
     bundle = _build_map_laplace_bundle(priors, panel, trace_key, backend, reparam)
     aux_fn = bundle["neg_log_posterior_with_aux_fn"]
     dtype = bundle["flat_example"].dtype
@@ -65,12 +63,13 @@ def compute_ieks_latent_paths(
     paths = []
     for chain_idx, position in enumerate(jnp.asarray(positions, dtype=dtype)):
         _, aux = aux_fn(position, observations, times)
-        if "latent_mode" not in aux:
+        mode = aux["inner"].state.latent_mode
+        if mode is None:
             raise ValueError(
                 "Laplace backend returned no latent mode; cannot build a "
                 "data-conditioned latent init path."
             )
-        path = jnp.asarray(aux["latent_mode"])
+        path = jnp.asarray(mode)
         if not bool(jnp.all(jnp.isfinite(path))):
             raise ValueError(
                 f"IEKS latent init path for chain {chain_idx} is non-finite; the "

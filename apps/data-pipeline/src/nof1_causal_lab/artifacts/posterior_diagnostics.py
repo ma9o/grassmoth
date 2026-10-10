@@ -13,13 +13,14 @@ from .checks import (
     ConvergenceSubject,
     Evaluated,
     IndicatorCheckSubject,
+    LatentConvergenceSubject,
     NotEvaluated,
     NumericCriterionEvidence,
 )
 from .display_frames import central_frame
 from .effects import HistogramBin
 from .empirical import EmpiricalPoint
-from .identity import IndicatorId, ParameterRef
+from .identity import ConstructRef, IndicatorId, ParameterRef
 
 
 class ParameterDiagnostics(Value):
@@ -70,12 +71,25 @@ class EnergyDiagnostics(Value):
     bfmi: tuple[float, ...]
 
 
+class LatentDiagnostics(Value):
+    """Worst chain estimators across a construct's independent, unobserved time coordinates."""
+
+    subject: ConstructRef
+    label: str
+    coordinates: int
+    r_hat: float | None
+    ess_bulk: float | None
+    ess_tail: float | None
+    mcse_mean: float | None
+
+
 class ChainDiagnostics(Value):
     """Compact retained-chain measurements; plot series compose the report detail."""
 
     num_chains: int
     num_samples_per_chain: int
     per_parameter: tuple[ParameterDiagnostics, ...]
+    per_latent: tuple[LatentDiagnostics, ...] | None = None
     num_divergences: int | None = None
     divergence_rate: float | None = None
     tree_depth_mean: float | None = None
@@ -86,23 +100,29 @@ class ChainDiagnostics(Value):
     energy: EnergyDiagnostics | None = None
 
 
-type ConvergenceAssessmentSubject = ConvergenceSubject | Literal["recorded_parameter_chains"]
+type ConvergenceAssessmentSubject = (
+    ConvergenceSubject
+    | LatentConvergenceSubject
+    | Literal["recorded_parameter_chains", "recorded_latent_chains"]
+)
 
 
-class ParameterConvergenceReport(Value):
-    """Recorded-chain criteria cover parameters, not latent-path mixing."""
+class ConvergenceReport(Value):
+    """Recorded-chain criteria cover parameters and independent latent coordinates."""
 
     findings: tuple[Assessment[ConvergenceAssessmentSubject, NumericCriterionEvidence], ...]
 
     @computed_field
     @property
     def checked(self) -> int:
-        """Number of distinct parameter references represented by convergence findings."""
+        """Number of distinct parameter and construct references with convergence findings."""
         return len(
             frozenset(
                 item.subject.parameter
-                for item in self.findings
                 if isinstance(item.subject, ConvergenceSubject)
+                else item.subject.state
+                for item in self.findings
+                if isinstance(item.subject, (ConvergenceSubject, LatentConvergenceSubject))
             )
         )
 
@@ -304,10 +324,24 @@ class PathfinderDiagnostics(Value):
     pathfinder_per_start: tuple[PathfinderStartDiagnostics, ...]
 
 
+class LapsInitializationDiagnostics(Value):
+    """Realized joint-ensemble initialization, without any claim of posterior convergence."""
+
+    ensemble_size: int
+    joint_dimension: int
+    unadjusted_steps: int
+    adjusted_steps: int
+    unadjusted_step_size: float
+    adjusted_step_size: float
+    adjusted_acceptance: float
+    early_stopped: bool
+
+
 class ParameterWarmupDiagnostics(Value):
-    """Realized initialization and preconditioning, with the complete Pathfinder evidence once."""
+    """Realized initialization and preconditioning, retaining each initializer's evidence once."""
 
     pathfinder: PathfinderDiagnostics | None = None
+    laps: LapsInitializationDiagnostics | None = None
     pathfinder_run_count: int
     pathfinder_consumers: tuple[str, ...]
     init_source: str
@@ -320,6 +354,21 @@ class ParameterWarmupDiagnostics(Value):
     prior_released_site_names: tuple[str, ...] = ()
     prior_released_site_indices: tuple[int, ...] = ()
     prior_release_scale: float = 0.0
+
+
+class ReplicaSwapCounts(Value):
+    """Accepted and attempted exchanges at one neighboring temperature pair."""
+
+    accepted: int
+    attempted: int
+
+
+class TemperingDiagnostics(Value):
+    """Frozen ladder and retained swap counts; columns are neighboring temperature edges."""
+
+    inverse_temperatures: tuple[float, ...]
+    ladder_frozen_at_warmup_step: int
+    swaps: tuple[tuple[ReplicaSwapCounts, ...], ...]
 
 
 class ParticleSamplerDiagnostics(Value):
@@ -348,3 +397,4 @@ class ParticleSamplerDiagnostics(Value):
     amala_grad_norm_mean: float | None = None
     amala_grad_norm_max: float | None = None
     parameter_warmup: ParameterWarmupDiagnostics
+    tempering: TemperingDiagnostics | None = None

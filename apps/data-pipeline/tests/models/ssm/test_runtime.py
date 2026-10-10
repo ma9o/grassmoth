@@ -31,6 +31,7 @@ from nof1_causal_lab.artifacts.parameter_spec import (
 from nof1_causal_lab.models.model_structure import StructuralSelection
 from nof1_causal_lab.models.ssm import numerics as numeric
 from nof1_causal_lab.models.ssm.compile.inputs import compile_priors
+from nof1_causal_lab.models.ssm.compile.observation_windows import compile_observation_scan
 from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
 from nof1_causal_lab.models.ssm.runtime import (
     BoundPanel,
@@ -626,13 +627,14 @@ class TestPrepareModelRuntime:
         assert runtime.observation_support.support_end_times.shape == (2, 1)
         assert runtime.observation_support.support_start_times[1, 0] == pytest.approx(0.0)
         assert runtime.observation_support.support_end_times[1, 0] == pytest.approx(31.0)
-        assert runtime.observation_support.interval_prev_coeffs.shape == (2, 1, 1)
-        assert runtime.observation_support.interval_curr_coeffs.shape == (2, 1, 1)
-        assert runtime.observation_support.interval_weights.shape == (2, 1, 1)
-        assert runtime.observation_support.emission_slot_indices.tolist() == [[-1], [0]]
-        assert runtime.observation_support.interval_prev_coeffs[1, 0, 0] == pytest.approx(15.5)
-        assert runtime.observation_support.interval_curr_coeffs[1, 0, 0] == pytest.approx(15.5)
-        assert runtime.observation_support.interval_weights[1, 0, 0] == pytest.approx(31.0)
+        scan = compile_observation_scan(runtime.observation_support.window_plan)
+        assert scan.prev_coeffs.shape == (2, 1, 1)
+        assert scan.curr_coeffs.shape == (2, 1, 1)
+        assert scan.weights.shape == (2, 1, 1)
+        assert scan.emission_slots.tolist() == [[-1], [0]]
+        assert scan.prev_coeffs[1, 0, 0] == pytest.approx(15.5)
+        assert scan.curr_coeffs[1, 0, 0] == pytest.approx(15.5)
+        assert scan.weights[1, 0, 0] == pytest.approx(31.0)
         assert numeric.observation_names(runtime.compiled_dynamical_model) == ("stress_score",)
 
     @pytest.mark.contract
@@ -669,13 +671,23 @@ class TestPrepareModelRuntime:
         assert isinstance(runtime, BoundPanel)
         assert runtime.times.tolist() == [0.0, 1.0, 2.0, 3.0]
         assert runtime.observation_support is not None
-        assert runtime.observation_support.max_active_windows == 2
-        assert runtime.observation_support.emission_slot_indices.tolist() == [[-1], [-1], [0], [1]]
-        assert runtime.observation_support.interval_weights.shape == (4, 1, 2)
-        assert runtime.observation_support.interval_weights[1, 0, 0] == pytest.approx(1.0)
-        assert runtime.observation_support.interval_weights[2, 0, 0] == pytest.approx(1.0)
-        assert runtime.observation_support.interval_weights[2, 0, 1] == pytest.approx(1.0)
-        assert runtime.observation_support.interval_weights[3, 0, 1] == pytest.approx(1.0)
+        plan = runtime.observation_support.window_plan
+        assert [(window.anchor_index, window.start_index) for window in plan.windows] == [
+            (2, 0),
+            (3, 1),
+        ]
+        np.testing.assert_array_equal(plan.windows[0].step_indices, [1, 2])
+        np.testing.assert_array_equal(plan.windows[1].step_indices, [2, 3])
+        with pytest.raises(ValueError, match="read-only"):
+            plan.windows[0].coefficients[0, 0] = 99.0
+        scan = compile_observation_scan(plan)
+        assert scan.max_active_windows == 2
+        assert scan.emission_slots.tolist() == [[-1], [-1], [0], [1]]
+        assert scan.weights.shape == (4, 1, 2)
+        assert scan.weights[1, 0, 0] == pytest.approx(1.0)
+        assert scan.weights[2, 0, 0] == pytest.approx(1.0)
+        assert scan.weights[2, 0, 1] == pytest.approx(1.0)
+        assert scan.weights[3, 0, 1] == pytest.approx(1.0)
 
     @pytest.mark.inference(concern="predictive")
     def test_prior_predictive_reuses_prepared_support_schedule(self):

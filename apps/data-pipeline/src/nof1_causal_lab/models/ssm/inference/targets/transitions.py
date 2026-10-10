@@ -3,12 +3,11 @@
 from typing import TYPE_CHECKING, cast
 
 import dynestyx as dsx
-import equinox as eqx
 import jax
 import jax.numpy as jnp
 from dynestyx.inference.configs.discretizer import ExactAffineConfig
 
-from nof1_causal_lab.models.ssm.covariance_utils import CHOL_JITTER
+from nof1_causal_lab.models.ssm.covariance_utils import CHOL_JITTER, symmetrize_with_jitter
 from nof1_causal_lab.models.ssm.dynamics.linearisation import infer_linearisation
 from nof1_causal_lab.models.ssm.shapes import Array, Float
 
@@ -44,24 +43,30 @@ def build_discrete_transitions(
         if states.shape != shape:
             raise ValueError(f"linearization_states must have shape {shape}, got {states.shape}")
 
-    # The covariance extracted from the Van Loan exponential is linear in L Lᵀ.
-    # Keep its noise block near
-    # unit scale so large Pathfinder draws do not exhaust expm's squaring
-    # budget solely because of diffusion magnitude. Restore the exact scale
-    # afterward. The library's explicit covariance regularization is confined
-    # to this Gaussian initialization view, including lawless input coordinates.
     diffusion = dynamics.diffusion.as_matrix(x=None, u=None, t=0, state_dim=n_latent)
-    scale = jax.lax.stop_gradient(jnp.maximum(1.0, jnp.max(jnp.abs(diffusion))))
-    normalized = eqx.tree_at(
-        lambda value: value.diffusion, dynamics, dsx.FullDiffusion(diffusion / scale)
-    )
-
     starts = jnp.cumsum(time_intervals) - time_intervals - time_intervals[0]
 
     def at_interval(state: jax.Array, start: jax.Array, dt: jax.Array) -> dsx.LinearGaussianParams:
-        affine_drift = dsx.linearize_drift(normalized.total_drift, x=state, u=None, t=start)
+        affine_drift = dsx.linearize_drift(dynamics.total_drift, x=state, u=None, t=start)
+        bias = cast("jax.Array", affine_drift.b)
+        # A diagonal coordinate change keeps large accounting/log-rate couplings
+        # from consuming the exponential's scaling budget purely through units.
+        # The transformation is algebraically undone below; stopping its gradient
+        # avoids differentiating the arbitrary choice of numerical coordinates.
+        units = jax.lax.stop_gradient(
+            jnp.maximum(
+                1.0, dt * jnp.maximum(jnp.max(jnp.abs(affine_drift.A), axis=1), jnp.abs(bias))
+            )
+        )
+        normalized_diffusion = diffusion / units[:, None]
+        noise_scale = jax.lax.stop_gradient(
+            jnp.maximum(1.0, jnp.max(jnp.abs(normalized_diffusion)))
+        )
+        normalized_drift = dsx.AffineDrift(
+            A=affine_drift.A * units[None, :] / units[:, None], b=bias / units
+        )
         affine_model = dsx.StochasticContinuousTimeStateEvolution(
-            drift=affine_drift, diffusion=normalized.diffusion
+            drift=normalized_drift, diffusion=dsx.FullDiffusion(normalized_diffusion / noise_scale)
         )
         evolution = cast(
             "dsx.LinearGaussianStateEvolution",
@@ -70,6 +75,15 @@ def build_discrete_transitions(
             ),
         )
         params = evolution.params_at(start, start + dt)
-        return params._replace(cov=(params.cov * scale) * scale)
+        # Dynestyx requires a nondegenerate initialization Gaussian, including for
+        # static coordinates. Remove its numerical-coordinate jitter before
+        # restoring units, then apply the same jitter in the model coordinates.
+        unregularized = params.cov - CHOL_JITTER * jnp.eye(n_latent, dtype=params.cov.dtype)
+        covariance = unregularized * (noise_scale * units[:, None]) * (noise_scale * units[None, :])
+        return params._replace(
+            A=params.A * units[:, None] / units[None, :],
+            bias=cast("jax.Array", params.bias) * units,
+            cov=symmetrize_with_jitter(covariance, jitter=CHOL_JITTER),
+        )
 
     return jax.vmap(at_interval)(states, starts, time_intervals)

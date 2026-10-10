@@ -41,6 +41,7 @@ if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.prior import PriorValidationResult
     from nof1_causal_lab.models.model_structure import StructuralSelection
     from nof1_causal_lab.models.ssm.compile.bindings import CompiledParameterBinding
+    from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
     from nof1_causal_lab.models.ssm.dynamics.expression import BoundExpression
     from nof1_causal_lab.models.ssm.dynamics.spec import CompiledDynamics
     from nof1_causal_lab.models.ssm.structure import (
@@ -146,6 +147,7 @@ class CompiledDynamicalModel:
     auxiliary_coordinates: tuple[ParameterCoordinate, ...]
     laws: tuple[CompiledLaw, ...]
     input_trajectories: tuple[CompiledInputTrajectory, ...]
+    state_space: StateSpace
 
     @property
     def state_index(self) -> Mapping[ConstructId, int]:
@@ -225,6 +227,7 @@ def compile_model(
     """Compile shared execution facts without imposing fitting's prior-engine limits."""
     from nof1_causal_lab.models.model_parameters import require_priors
     from nof1_causal_lab.models.ssm.compile import support as numeric
+    from nof1_causal_lab.models.ssm.compile.state_space import compile_state_space
     from nof1_causal_lab.models.ssm.dynamics.spec import compile_dynamics
 
     dynamical_model_spec = selection.dynamical_model_spec
@@ -334,6 +337,12 @@ def compile_model(
             auxiliary_coordinates=auxiliary,
             laws=_compile_laws(selection, bindings, states),
             input_trajectories=_compile_input_trajectories(selection, states),
+            state_space=compile_state_space(
+                blocks[0],
+                blocks[5],
+                numeric.static_factor_loadings(selection),
+                tuple(index for index, state in enumerate(states) if state.is_input),
+            ),
         )
     except IncompleteModelError as exc:
         return IncompleteModel(str(exc))

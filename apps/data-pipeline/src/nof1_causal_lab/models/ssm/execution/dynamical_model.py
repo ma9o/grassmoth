@@ -13,9 +13,7 @@ from typing import TYPE_CHECKING, override
 import dynestyx as dsx
 import jax
 import jax.numpy as jnp
-import numpy as np
 import numpyro.distributions as dist
-from numpyro.distributions import MultivariateNormal
 
 from nof1_causal_lab.models.ssm import numerics as numeric
 from nof1_causal_lab.models.ssm.dynamics.intervention import Intervention
@@ -26,12 +24,14 @@ from nof1_causal_lab.models.ssm.dynamics.spec import (
 from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField, VectorFieldArgs
 from nof1_causal_lab.models.ssm.execution.contracts import MeasurementParams
 from nof1_causal_lab.models.ssm.execution.observation_model import compile_observation_model
+from nof1_causal_lab.models.ssm.execution.supported_normal import SupportedNormal
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from dynestyx import StochasticContinuousTimeStateEvolution
     from jax.typing import ArrayLike
+    from numpyro.distributions import MultivariateNormal
 
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.dynamics.spec import DynamicsSpec
@@ -173,15 +173,9 @@ def initial_state_distribution(
     input_values: jax.Array | None = None,
 ) -> MultivariateNormal:
     """Embed the modeled initial law in a state vector with lawless inputs."""
-    endogenous = jnp.asarray(np.flatnonzero(~numeric.input_mask(compiled_dynamical_model)))
-    factor = (
-        jnp.zeros_like(covariance)
-        .at[jnp.ix_(endogenous, endogenous)]
-        .set(jnp.linalg.cholesky(covariance[jnp.ix_(endogenous, endogenous)]))
-    )
     if input_values is not None:
         mean = jnp.where(numeric.input_mask(compiled_dynamical_model), input_values[0], mean)
-    return MultivariateNormal(mean, scale_tril=factor)
+    return SupportedNormal(mean, covariance, compiled_dynamical_model.state_space.initial)
 
 
 def assemble_likelihood_inputs(

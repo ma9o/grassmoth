@@ -35,11 +35,19 @@
 #     an N x N batch of triangular solves.
 #   * Resampling is inverse-CDF multinomial (a single cumulative sum + searchsorted),
 #     avoiding the O(N^3) Gumbel-noise materialization of a batched categorical draw.
+#   * An interval factor belongs to its smallest enclosing tree node. Leaves
+#     carry weighted response moments; a merge adds the children's moments and
+#     pays only the factors owned by that node. Thus each per-label segment
+#     evidence contains precisely its internal transitions and completed factors.
+#     The same target/product-of-children ratio below remains valid for these
+#     nonlocal factors, without adding singular accumulator states to the SDE.
 
 from __future__ import annotations
 
 import math
+from functools import partial
 from types import MappingProxyType
+from typing import TYPE_CHECKING, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -54,7 +62,21 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs._math 
     _normalize_log_probs,
     _observation_log_probs_by_param,
     _value_and_grad_by_param,
+    coordinate_proposal_mask,
 )
+from nof1_causal_lab.models.ssm.inference.targets.intervals import gather_interval_statistics
+
+if TYPE_CHECKING:
+    from nof1_causal_lab.models.ssm.compile.interval_tree import CompiledIntervalTreeLevel
+
+
+class _Segment(NamedTuple):
+    first: jax.Array
+    last: jax.Array
+    evidence: jax.Array
+    origin: jax.Array
+    weights: jax.Array
+    statistics: jax.Array
 
 
 def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLatentSmootherResult:
@@ -71,6 +93,7 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
     latent_dtype = ctx.latent_dtype
     traj_dtype = ctx.traj_dtype
     latent_dim = int(x_ref.shape[-1])
+    intervals = ctx.intervals
     # Both leaves (amala_exact, paid_mix) draw the auxiliary trajectory z and pay its
     # pseudo-observation potential; paid_mix additionally mixes in the fixed pilot
     # and wide components (whose reference-independence needs no payment).
@@ -89,13 +112,9 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
     # Sampling a key and splitting that same key into descendants reuses its
     # random stream. Allocate disjoint branches before any draws.
     aux_key, mask_key, key_leaves, key_tree, key_root = random.split(key, 5)
-    block_coords = ctx.latent_block_coords
-    if block_coords is not None and block_coords < latent_dim:
-        chosen_coords = random.permutation(mask_key, latent_dim)[:block_coords]
-        coord_mask = jnp.zeros((latent_dim,), dtype=bool).at[chosen_coords].set(True)
-        proposal_mask = ctx.latent_free_mask & coord_mask[None, :]
-    else:
-        proposal_mask = ctx.latent_free_mask
+    proposal_mask = coordinate_proposal_mask(
+        mask_key, ctx.latent_free_mask, ctx.latent_block_coords
+    )
 
     def _clip_gradient(grad: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         norm: jnp.ndarray = jnp.linalg.norm(grad)
@@ -307,47 +326,74 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
         return ctx.selected_transition_log_probs(prev_particles, next_particles, seam)
 
     def _stitch_logits(
-        left: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-        right: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+        left: _Segment,
+        right: _Segment,
         seam: jnp.ndarray | int,
+        plan: CompiledIntervalTreeLevel | None,
+        node: jax.Array,
     ) -> jnp.ndarray:
-        _, left_last, left_psi, _, left_weights = left
-        right_first, _, right_psi, _, right_weights = right
-        transition_lp = ctx.pairwise_transition_log_probs(left_last, right_first, seam)
+        transition_lp = ctx.pairwise_transition_log_probs(left.last, right.first, seam)
+        if intervals is not None and plan is not None and plan.emission_slots.shape[1]:
+            emission_log_probs = intervals.emission_log_probs
+            left_stats = gather_interval_statistics(
+                left.statistics, jnp.asarray(plan.left_slots)[node]
+            )
+            right_stats = gather_interval_statistics(
+                right.statistics, jnp.asarray(plan.right_slots)[node]
+            )
+            transition_lp = transition_lp + jax.vmap(
+                lambda stats: emission_log_probs(contexts, stats[None] + right_stats, plan, node)
+            )(left_stats)
         log_joint = jax.scipy.special.logsumexp(
-            logpi[None, None, :] + left_psi[:, None, :] + right_psi[None, :, :] + transition_lp,
+            logpi[None, None, :]
+            + left.evidence[:, None, :]
+            + right.evidence[None, :, :]
+            + transition_lp,
             axis=-1,
         )
-        log_left = jax.scipy.special.logsumexp(logpi[None, :] + left_psi, axis=1)
-        log_right = jax.scipy.special.logsumexp(logpi[None, :] + right_psi, axis=1)
+        log_left = jax.scipy.special.logsumexp(logpi[None, :] + left.evidence, axis=1)
+        log_right = jax.scipy.special.logsumexp(logpi[None, :] + right.evidence, axis=1)
         seam_coupling = log_joint - log_left[:, None] - log_right[None, :]
-        pair_logits = left_weights[:, None] + right_weights[None, :] + seam_coupling
+        pair_logits = left.weights[:, None] + right.weights[None, :] + seam_coupling
         return pair_logits.astype(traj_dtype)
 
     def _combine(
-        left: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
-        right: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray],
+        left: _Segment,
+        right: _Segment,
         seam: jnp.ndarray,
         combine_key: jax.Array,
-    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-        pair_logits = _stitch_logits(left, right, seam)
+        plan: CompiledIntervalTreeLevel | None,
+        node: jax.Array,
+    ) -> _Segment:
+        pair_logits = _stitch_logits(left, right, seam, plan, node)
         free_pairs = _multinomial(combine_key, pair_logits.reshape(-1), num_free_particles)
         selected = jnp.concatenate([jnp.zeros((1,), dtype=jnp.int32), free_pairs], axis=0)
         left_idx = selected // num_particles
         right_idx = selected % num_particles
-        left_first, left_last, left_psi, left_origin, _ = left
-        right_first, right_last, right_psi, right_origin, _ = right
-        first = left_first[left_idx]
-        last = right_last[right_idx]
-        origin = jnp.concatenate([left_origin[left_idx], right_origin[right_idx]], axis=1)
+        first = left.first[left_idx]
+        last = right.last[right_idx]
+        origin = jnp.concatenate([left.origin[left_idx], right.origin[right_idx]], axis=1)
         transition_lp = _selected_transition_log_probs(
-            left_last[left_idx],
-            right_first[right_idx],
+            left.last[left_idx],
+            right.first[right_idx],
             seam,
         )
-        psi = (left_psi[left_idx] + right_psi[right_idx] + transition_lp).astype(traj_dtype)
+        statistics = left.statistics
+        if intervals is not None and plan is not None:
+            statistics = gather_interval_statistics(
+                left.statistics[left_idx], jnp.asarray(plan.left_slots)[node]
+            ) + gather_interval_statistics(
+                right.statistics[right_idx], jnp.asarray(plan.right_slots)[node]
+            )
+            if plan.emission_slots.shape[1]:
+                transition_lp = transition_lp + intervals.emission_log_probs(
+                    contexts, statistics, plan, node
+                )
+        psi = (left.evidence[left_idx] + right.evidence[right_idx] + transition_lp).astype(
+            traj_dtype
+        )
         log_weights = jnp.full((num_particles,), -math.log(num_particles), dtype=traj_dtype)
-        return first, last, psi, origin, log_weights
+        return _Segment(first, last, psi, origin, log_weights, statistics)
 
     with jax.named_scope("dsmc_tree"):
         depth = max((num_steps - 1).bit_length(), 0)
@@ -358,6 +404,21 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
                 jnp.arange(num_steps, dtype=jnp.int32),
                 leaf_keys,
             )
+        statistics = (
+            jnp.zeros(
+                (padded_steps, num_particles, num_parameter_particles, 0, 0, 1), dtype=latent_dtype
+            )
+            if intervals is None
+            else intervals.leaf_statistics(contexts, leaf_particles)
+        )
+        if intervals is not None and intervals.tree.levels[0].emission_slots.shape[1]:
+            leaf_psi = leaf_psi + jax.vmap(
+                lambda stats, node: intervals.emission_log_probs(
+                    contexts, stats, intervals.tree.levels[0], node
+                )
+            )(statistics[:num_steps], jnp.arange(num_steps))
+            evidence = jax.scipy.special.logsumexp(logpi[None, None, :] + leaf_psi, axis=-1)
+            leaf_weights = jax.vmap(_normalize_log_probs)(evidence).astype(traj_dtype)
         if num_steps == 1:
             evidence = jax.scipy.special.logsumexp(logpi[None, :] + leaf_psi[0], axis=1)
             chosen = _multinomial(key_root, evidence, 1)[0]
@@ -393,29 +454,39 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
                 num_pairs = segments // 2
                 seams = (1 << level) + jnp.arange(num_pairs, dtype=jnp.int32) * (1 << (level + 1))
                 pair_keys = random.split(level_keys[level], num_pairs)
-                left = (
+                left = _Segment(
                     first[0::2],
                     last[0::2],
                     psi[0::2],
                     origin[0::2],
                     weights[0::2],
+                    statistics[0::2],
                 )
-                right = (
+                right = _Segment(
                     first[1::2],
                     last[1::2],
                     psi[1::2],
                     origin[1::2],
                     weights[1::2],
+                    statistics[1::2],
                 )
+                plan = None if intervals is None else intervals.tree.levels[level + 1]
                 with jax.named_scope("dsmc_combine"):
-                    first, last, psi, origin, weights = jax.vmap(_combine, in_axes=(0, 0, 0, 0))(
-                        left, right, seams, pair_keys
-                    )
+                    # All merges at this level share one vmap, including their N x N
+                    # particle-pair workspaces. Future memory-budgeted batching should
+                    # split independent merges while preserving each merge's full
+                    # resampling law and its existing random key.
+                    first, last, psi, origin, weights, statistics = jax.vmap(
+                        partial(_combine, plan=plan)
+                    )(left, right, seams, pair_keys, node=jnp.arange(num_pairs))
                 segments = num_pairs
-            left_root = (first[0], last[0], psi[0], origin[0], weights[0])
-            right_root = (first[1], last[1], psi[1], origin[1], weights[1])
+            left_root = _Segment(first[0], last[0], psi[0], origin[0], weights[0], statistics[0])
+            right_root = _Segment(first[1], last[1], psi[1], origin[1], weights[1], statistics[1])
+            plan = None if intervals is None else intervals.tree.levels[depth]
             with jax.named_scope("dsmc_combine"):
-                pair_logits = _stitch_logits(left_root, right_root, padded_steps // 2)
+                pair_logits = _stitch_logits(
+                    left_root, right_root, padded_steps // 2, plan, jnp.asarray(0)
+                )
             chosen = _multinomial(key_root, pair_logits.reshape(-1), 1)[0]
             left_idx = chosen // num_particles
             right_idx = chosen % num_particles
@@ -434,5 +505,6 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
         latent_path=latent_path,
         final_label_log_probs=final_label_log_probs,
         origin_path=origin_path.astype(jnp.int32),
+        proposal_mask=proposal_mask,
         diagnostics=MappingProxyType(diagnostics),
     )

@@ -4,30 +4,31 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import numpy as np
+
 from nof1_causal_lab.artifacts.likelihood import DeltaLawSpec, NormalLawSpec
 from nof1_causal_lab.models.ssm import numerics as numeric
 from nof1_causal_lab.models.ssm.dynamics.expression import BoundExpression
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.likelihood import Law
-    from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.execution.contracts import ObservationLaws
-    from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
+    from nof1_causal_lab.models.ssm.runtime import BoundPanel
 
 
 def build_laplace_backend(
-    compiled_dynamical_model: CompiledDynamicalModel,
+    panel: BoundPanel,
     n_ieks_iters: int,
-    observation_support: ObservationSupportRuntime | None = None,
 ):
     """Construct a Laplace likelihood backend for a compiled spec."""
     from nof1_causal_lab.models.ssm.inference.targets.laplace import LaplaceLikelihood
 
     return LaplaceLikelihood(
-        n_latent=numeric.n_states(compiled_dynamical_model),
-        n_manifest=numeric.n_observations(compiled_dynamical_model),
+        n_latent=numeric.n_states(panel.compiled_dynamical_model),
+        n_manifest=numeric.n_observations(panel.compiled_dynamical_model),
         n_ieks_iters=n_ieks_iters,
-        observation_support=observation_support,
+        observation_support=panel.observation_support,
+        observed_mask=~np.isnan(np.asarray(panel.observations)),
     )
 
 

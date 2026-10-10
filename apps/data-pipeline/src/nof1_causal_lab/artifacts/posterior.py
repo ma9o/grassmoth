@@ -12,10 +12,10 @@ from .identity import ConstructId, DistributionId, ParameterId
 from .model_checks import QuestionCheckReport
 from .posterior_diagnostics import (
     ChainDiagnostics,
+    ConvergenceReport,
     DensityCurve,
     LOODiagnostics,
     LOOPITPoint,
-    ParameterConvergenceReport,
     ParetoKPoint,
     ParticleMCMCEvidence,
     ParticleSamplerDiagnostics,
@@ -73,7 +73,7 @@ class InferenceReportCore(Value):
 
     inference_metadata: InferenceMetadata
     inference_diagnostics: ChainDiagnostics | None
-    convergence: ParameterConvergenceReport
+    convergence: ConvergenceReport
     loo_diagnostics: LOODiagnostics | None = None
     posterior_marginals: tuple[PosteriorMarginal, ...]
     prior_densities: Mapping[ParameterId, DensityCurve] = Field(

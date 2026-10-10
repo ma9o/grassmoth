@@ -373,7 +373,7 @@ def test_undefined_student_moments_produce_an_explicit_diagnostic():
 def test_diagnostic_noise_matches_point_and_interval_execution(
     families, interval, expected_variance, model_fixture_payload
 ):
-    from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
+    from tests.inference_fixtures import make_observation_support_runtime
 
     channels = len(families)
     spec = model_fixture_payload()
@@ -389,7 +389,7 @@ def test_diagnostic_noise_matches_point_and_interval_execution(
     )
     support = None
     if interval:
-        support = ObservationSupportRuntime.assembled(
+        support = make_observation_support_runtime(
             anchor_times=np.arange(3.0),
             manifest_names=numeric.observation_names(compile_model_fixture(spec)),
             support_kinds=("interval",) * channels,
@@ -398,10 +398,6 @@ def test_diagnostic_noise_matches_point_and_interval_execution(
             observation_windows=("2d",) * channels,
             support_start_times=np.tile([[np.nan], [np.nan], [0.0]], (1, channels)),
             support_end_times=np.tile([[np.nan], [np.nan], [2.0]], (1, channels)),
-            interval_prev_coeffs=np.tile([[[0.0]], [[0.5]], [[0.5]]], (1, channels, 1)),
-            interval_curr_coeffs=np.tile([[[0.0]], [[0.5]], [[0.5]]], (1, channels, 1)),
-            interval_weights=np.tile([[[0.0]], [[1.0]], [[1.0]]], (1, channels, 1)),
-            emission_slot_indices=np.tile([[-1], [-1], [0]], (1, channels)),
         )
     _, variance = observation_signal_and_variance(
         compile_model_fixture(spec), prediction, 0, np.array([2]), observation_support=support

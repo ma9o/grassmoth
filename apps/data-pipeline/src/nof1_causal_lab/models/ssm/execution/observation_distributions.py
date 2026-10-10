@@ -44,6 +44,23 @@ def _log_mass(value: jax.Array) -> jax.Array:
     return jnp.where(positive, jnp.log(jnp.where(positive, value, 1.0)), -jnp.inf)
 
 
+@jax.custom_jvp
+def _positive_log(value: jax.Array) -> jax.Array:
+    """Log a positive operand without squaring its reciprocal in higher derivatives."""
+    return jnp.log(value)
+
+
+@_positive_log.defjvp
+def _positive_log_jvp(
+    primals: tuple[jax.Array], tangents: tuple[jax.Array]
+) -> tuple[jax.Array, jax.Array]:
+    (value,), (tangent,) = primals, tangents
+    logarithm = _positive_log(value)
+    # Reuse the log rule under nested differentiation. Unlike d(1 / value),
+    # this keeps derivatives of log(exp(eta)) finite in float32's tails.
+    return logarithm, tangent * jnp.exp(-logarithm)
+
+
 class BinaryProbabilityDistribution(dist.CategoricalLogits):
     """Exact Bernoulli endpoints, with the original categorical draw stream."""
 
@@ -105,9 +122,19 @@ class ZeroMeanNegativeBinomial(dist.MixtureGeneral):
 
     @override
     def log_prob(self, value: ArrayLike, intermediates: list[jax.Array] | None = None) -> jax.Array:
-        zero_count = -self.concentration * jnp.log1p(self.response_mean / self.concentration)
-        positive_count = super().log_prob(value, intermediates)
-        positive_count = jnp.where(self.response_mean == 0.0, -jnp.inf, positive_count)
+        del intermediates
+        zero_mean = self.response_mean == 0.0
+        logits = _positive_log(jnp.where(zero_mean, 1.0, self.response_mean)) - _positive_log(
+            self.concentration
+        )
+        positive_count = dist.NegativeBinomialLogits(self.concentration, logits).log_prob(value)
+        positive_count = jnp.where(zero_mean, -jnp.inf, positive_count)
+        # The boundary expression preserves the exact right derivative -1 at
+        # mean zero; positive means use log space without reciprocal-rate terms.
+        boundary = -self.concentration * jnp.log1p(
+            jnp.where(zero_mean, self.response_mean, 0.0) / self.concentration
+        )
+        zero_count = jnp.where(zero_mean, boundary, -self.concentration * jax.nn.softplus(logits))
         return jnp.where(jnp.asarray(value) == 0, zero_count, positive_count)
 
     @property

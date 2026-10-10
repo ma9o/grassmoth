@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from nof1_causal_lab.models.ssm.inference.methods._pmcmc_shared.extraction import (
     extract_grouped_public_samples,
@@ -77,6 +78,7 @@ def test_library_parameter_output_preserves_public_vector_sites_and_chain_order(
         dynamical_model=_no_numerical_execution,
         observations=jnp.zeros((4, 1)),
         times=jnp.arange(4.0),
+        state_space=StateSpace(1, (), (0,), (0,)),
     )
     problem = ParticleProblem(runtime=runtime, site_info={}, public_sites=frozenset({"beta"}))
     samples = extract_grouped_public_samples(positions, bundle=problem, num_chains=2, num_samples=3)
@@ -91,6 +93,7 @@ def test_supplied_initial_path_does_not_compute_a_predictive_rollout():
         spec=ParticleTarget,
         context=Mock(),
         initial_path=Mock(side_effect=_no_numerical_execution),
+        replay_path=Mock(side_effect=lambda _context, path: path),
         initial_moments=Mock(return_value=(jnp.zeros(1), jnp.eye(1))),
         log_posterior_from_context=Mock(return_value=(jnp.array(-2.0), jnp.array(-1.0))),
     )
@@ -122,6 +125,17 @@ def test_fixed_model_samples_replay_deterministics_with_zero_parameter_dimension
     samples = extract_constrained_samples(jnp.zeros((3, 0)), parameters, {"lambda"})
     assert set(samples) == {"lambda"}
     np.testing.assert_array_equal(samples["lambda"], np.ones((3, 2, 1)))
+    bundle = Mock(
+        spec=ParticleProblem,
+        runtime=Mock(
+            spec=ParticleTarget, initial_position=parameters.initial_position, parameters=parameters
+        ),
+        public_sites=frozenset({"lambda"}),
+    )
+    grouped = extract_grouped_public_samples(
+        jnp.zeros((2, 3, 0)), bundle=bundle, num_chains=2, num_samples=3
+    )
+    np.testing.assert_array_equal(grouped["lambda"], np.ones((2, 3, 2, 1)))
 
 
 def test_loo_uses_joint_emissions_and_omits_only_completely_missing_rows(monkeypatch):
@@ -158,7 +172,7 @@ def test_loo_uses_joint_emissions_and_omits_only_completely_missing_rows(monkeyp
     result, points = measured
     assert [(point.timestep, point.k, point.status) for point in points] == [
         (3, 0.8, "failed"),
-        (4, 0.6, "warning"),
+        (4, 0.6, "failed"),
         (1, 0.2, "passed"),
     ]
     assert result.elpd_loo == -7.0

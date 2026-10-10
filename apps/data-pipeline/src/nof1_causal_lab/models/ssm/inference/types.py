@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from xarray import DataTree
 
     from nof1_causal_lab.artifacts.identity import ConstructId
+    from nof1_causal_lab.models.ssm.inference.latent_diagnostics import LatentChainEvidence
     from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 
 
@@ -110,6 +111,7 @@ class ProductionDiagnostics:
 
     mcmc: TrajectoryMCMCResult
     observation_log_probs: jnp.ndarray
+    latent_chains: LatentChainEvidence | None = None
     compiled_step: Compiled | None = None
     public_sites: tuple[str, ...] | None = None
     exact_observation_rows: jnp.ndarray | None = None
@@ -251,37 +253,40 @@ class ParticleMCMCPosterior:
         import numpy as np
         from arviz_stats.sampling_diagnostics import ess, mcse, rhat
 
+        from nof1_causal_lab.models.ssm.inference.latent_diagnostics import latent_chain_diagnostics
+
         mcmc = self.diagnostics.mcmc
         chain_samples = mcmc.get_samples(group_by_chain=True)
         public_sites = self.diagnostics.public_sites
         if public_sites is not None:
             chain_samples = _filter_public_samples(chain_samples, set(public_sites))
-        idata = _arviz_idata_from_posterior(chain_samples)
-        r_hat = rhat(idata)
-        ess_bulk, ess_tail = ess(idata, method="bulk"), ess(idata, method="tail")
-        mcse_mean = mcse(idata, method="mean")
+        parameters: list[ParameterDiagnostics] = []
+        if chain_samples:
+            idata = _arviz_idata_from_posterior(chain_samples)
+            r_hat = rhat(idata)
+            ess_bulk, ess_tail = ess(idata, method="bulk"), ess(idata, method="tail")
+            mcse_mean = mcse(idata, method="mean")
 
-        def metric(values: ArrayLike, indices: tuple[int, ...]) -> float | None:
-            value = float(np.asarray(values)[indices])
-            return value if math.isfinite(value) else None
+            def metric(values: ArrayLike, indices: tuple[int, ...]) -> float | None:
+                value = float(np.asarray(values)[indices])
+                return value if math.isfinite(value) else None
 
-        parameters = []
-        for name in chain_samples:
-            for indices in np.ndindex(np.shape(r_hat[name].values)):
-                coordinate = ParameterCoordinate(site_name=name, indices=indices)
-                reference = references[coordinate]
-                if reference is not None:
-                    label, subject = reference
-                    parameters.append(
-                        ParameterDiagnostics(
-                            parameter=label,
-                            subject=subject,
-                            r_hat=metric(r_hat[name].values, indices),
-                            ess_bulk=metric(ess_bulk[name].values, indices),
-                            ess_tail=metric(ess_tail[name].values, indices),
-                            mcse_mean=metric(mcse_mean[name].values, indices),
+            for name in chain_samples:
+                for indices in np.ndindex(np.shape(r_hat[name].values)):
+                    coordinate = ParameterCoordinate(site_name=name, indices=indices)
+                    reference = references[coordinate]
+                    if reference is not None:
+                        label, subject = reference
+                        parameters.append(
+                            ParameterDiagnostics(
+                                parameter=label,
+                                subject=subject,
+                                r_hat=metric(r_hat[name].values, indices),
+                                ess_bulk=metric(ess_bulk[name].values, indices),
+                                ess_tail=metric(ess_tail[name].values, indices),
+                                mcse_mean=metric(mcse_mean[name].values, indices),
+                            )
                         )
-                    )
         extra = mcmc.get_extra_fields()
         energy = extra.get("energy")
         if energy is not None and mcmc.num_chains > 1 and energy.ndim == 1:
@@ -294,6 +299,9 @@ class ParticleMCMCPosterior:
             num_chains=int(mcmc.num_chains),
             num_samples_per_chain=int(mcmc.num_samples),
             per_parameter=tuple(parameters),
+            per_latent=latent_chain_diagnostics(self.diagnostics.latent_chains)
+            if self.diagnostics.latent_chains is not None
+            else None,
             num_divergences=int(jnp.sum(extra["diverging"])) if "diverging" in extra else None,
             divergence_rate=average("diverging"),
             tree_depth_mean=average("num_steps"),

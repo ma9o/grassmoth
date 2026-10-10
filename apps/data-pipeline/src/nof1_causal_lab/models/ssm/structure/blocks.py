@@ -45,14 +45,13 @@ class DiffusionBlockSpec:
     """Process-noise Cholesky factor ``L_Q`` block.
 
     Free entries on the lower-Cholesky support are sampled from the canonical
-    site-prior registry. Time-invariant latents have their diagonal forced
-    toward a tiny epsilon so their diffusion is effectively zero.
+    site-prior registry. The compiler removes diffusion support for static
+    constructs and deterministic inputs; their diffusion remains exactly zero.
     """
 
     n_latent: int
     diffusion_chol_support: np.ndarray
     diffusion_chol_template: jnp.ndarray
-    time_invariant_mask: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         """Own immutable collection fields describing diffusion sparsity and fixed coefficients."""
@@ -110,7 +109,7 @@ class DiffusionBlockSpec:
         diag_free: jnp.ndarray | None = None,
         lower_free: jnp.ndarray | None = None,
     ) -> jnp.ndarray:
-        """Insert free diffusion coefficients into the fixed Cholesky template and zero static states."""
+        """Insert free diffusion coefficients into the compiler's fixed Cholesky template."""
         from nof1_causal_lab.models.ssm.structure.assembly import assemble_diffusion_chol
 
         return assemble_diffusion_chol(
@@ -119,7 +118,6 @@ class DiffusionBlockSpec:
             lower_positions=self.diffusion_lower_positions,
             diag_free=diag_free,
             lower_free=lower_free,
-            time_invariant_mask=self.time_invariant_mask,
         )
 
 

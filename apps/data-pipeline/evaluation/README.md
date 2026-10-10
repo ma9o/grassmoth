@@ -10,5 +10,6 @@ imports it.
 - `fixtures/synthetic_nonlinear.py` defines the shared nonlinear recovery fixture.
 - `recovery/` extracts parameter-recovery diagnostics from fitted results.
 
-Generated benchmark outputs belong in `scratchpad/` and are not committed.
+Exploratory experiments, their runners, and generated outputs belong in
+`scratchpad/` and are not committed. Keep only maintained, reusable benchmarks here.
 GPU entrypoints spend money and must only be run when explicitly requested.

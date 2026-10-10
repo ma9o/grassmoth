@@ -84,7 +84,9 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         observations=jnp.zeros((3, 1)),
         times=jnp.arange(3.0),
         initial_position=jnp.zeros(1),
+        independent_mask=jnp.ones((3, 1), dtype=bool),
         context=Mock(return_value=jnp.array(0.0)),
+        replay_path=lambda _context, path: path,
         initial_path=Mock(side_effect=AssertionError("Supplied paths must not be regenerated")),
         initial_moments=Mock(return_value=(jnp.zeros(1), jnp.eye(1))),
         log_posterior_from_context=lambda z, _context, path, _obs: (

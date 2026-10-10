@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
+import jax.scipy.linalg as jla
 
 from nof1_causal_lab.models.ssm.execution.contracts import (
     LIKELIHOOD_SOLVER_KIND_SUPPORT_IEKS,
@@ -20,21 +21,17 @@ from nof1_causal_lab.models.ssm.execution.observation_operator import (
     trajectory_observation_log_prob,
 )
 
+from .interval_precision import IntervalPrecision, factor_interval_precision
 from .shared import (
     GaussianTrajectoryPriorTerms,
     SupportObservationWindowBatch,
     _build_prior_banded_system,
-    _factor_block_banded_cholesky,
-    _factor_block_profile_cholesky,
     _predictive_latent_init,
     _prepare_linearized_path,
-    _solve_block_banded_from_cholesky,
-    _solve_block_profile_from_cholesky,
     build_gaussian_trajectory_prior_terms,
-    precision_logdet,
     trajectory_prior_log_prob_from_terms,
 )
-from .solvers import solve_fixed_point_mode, solve_latent_mode
+from .solvers import solve_fixed_point_mode, solve_interval_latent_mode
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -62,91 +59,62 @@ def _assemble_support_aware_observation_system(
     support_window_batches: tuple[SupportObservationWindowBatch, ...],
     point_like_mask: jnp.ndarray,
     window_derivatives: tuple[SupportWindowDerivatives, ...],
-    bandwidth: int,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Assemble exact Newton observation terms in block-banded form."""
+) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    """Keep interval curvature as Jᵀ C J without expanding temporal bands."""
     T, D = z_est.shape
-    diag = jnp.zeros((T, D, D), dtype=z_est.dtype)
-    upper = jnp.zeros((bandwidth, T, D, D), dtype=z_est.dtype)
-    rhs = jnp.zeros((T, D), dtype=z_est.dtype)
-
+    dtype = jnp.result_type(z_est, H, d, R)
     clean_obs = jnp.nan_to_num(observations, nan=0.0)
-    point_mask = obs_mask.astype(z_est.dtype) * point_like_mask[None, :]
-
-    local_grads, local_hess = jax.vmap(
+    point_mask = obs_mask.astype(dtype) * point_like_mask[None, :]
+    local_grads, diagonal = jax.vmap(
         lambda y_t, z_t, mask_t: obs_kernel.latent_grad_hess_fn(y_t, z_t, H, d, R, mask_t)
     )(clean_obs, z_est, point_mask)
-    diag = diag + local_hess
-    point_rhs: jnp.ndarray = jax.vmap(lambda j_t, z_t, g_t: j_t @ z_t + g_t)(
-        local_hess, z_est, local_grads
-    )
-    rhs = rhs + point_rhs
-
-    if len(support_window_batches) == 0:
-        return diag, upper, rhs
-
-    max_support_state_len = max(batch.max_state_len for batch in support_window_batches)
-    padded_z = jnp.pad(z_est, ((0, max_support_state_len - 1), (0, 0)))
-
-    for support_windows, batch_window_derivatives in zip(
-        support_window_batches,
-        window_derivatives,
-        strict=True,
-    ):
-        segment_states = padded_z[support_windows.padded_state_indices]
-        segment_flat = segment_states.reshape(segment_states.shape[0], -1)
-        anchor_obs = clean_obs[support_windows.anchor_indices]
-        grad_blocks, jac_blocks, mean_info = batch_window_derivatives(
-            segment_flat,
-            support_windows.state_lens,
-            support_windows.mask_full.astype(z_est.dtype),
-            support_windows.prev_coeffs.astype(z_est.dtype),
-            support_windows.curr_coeffs.astype(z_est.dtype),
-            support_windows.weights.astype(z_est.dtype),
-            anchor_obs,
+    gradient = local_grads
+    columns = []
+    information_blocks = []
+    for windows, derivatives in zip(support_window_batches, window_derivatives, strict=True):
+        padded = jnp.pad(z_est, ((0, windows.max_state_len - 1), (0, 0)))
+        segments = padded[windows.padded_state_indices]
+        grad, jac, information = derivatives(
+            segments.reshape(segments.shape[0], -1),
+            windows.state_lens,
+            windows.mask_full.astype(dtype) * obs_mask[windows.anchor_indices].astype(dtype),
+            windows.prev_coeffs.astype(dtype),
+            windows.curr_coeffs.astype(dtype),
+            windows.weights.astype(dtype),
+            clean_obs[windows.anchor_indices],
             H,
             d,
             R,
         )
-        diag_updates = jnp.einsum("gmid,gmn,gnie->gide", jac_blocks, mean_info, jac_blocks)
-        taylor_rhs = grad_blocks + jnp.einsum("gide,gie->gid", diag_updates, segment_states)
-
-        diag = diag.at[support_windows.time_indices.reshape(-1)].add(
-            (
-                diag_updates * support_windows.valid_diag.astype(z_est.dtype)[..., None, None]
-            ).reshape(-1, D, D)
+        gradient = gradient.at[windows.time_indices.reshape(-1)].add(
+            (grad * windows.valid_diag[..., None]).reshape(-1, D)
         )
-
-        batch_bandwidth = support_windows.cross_time_indices.shape[0]
-        for offset in range(1, batch_bandwidth + 1):
-            cross_len = support_windows.max_state_len - offset
-            left_jac = jac_blocks[:, :, :cross_len, :]
-            right_jac = jac_blocks[:, :, offset:, :]
-            cross_updates = jnp.einsum("gmid,gmn,gnie->gide", left_jac, mean_info, right_jac)
-
-            left_states = segment_states[:, :cross_len, :]
-            right_states = segment_states[:, offset:, :]
-            taylor_rhs = taylor_rhs.at[:, :cross_len, :].add(
-                jnp.einsum("gide,gie->gid", cross_updates, right_states)
-            )
-            taylor_rhs = taylor_rhs.at[:, offset:, :].add(
-                jnp.einsum("gide,gid->gie", cross_updates, left_states)
-            )
-
-            valid_cross = support_windows.valid_cross[offset - 1, :, :cross_len]
-            upper_times = support_windows.cross_time_indices[offset - 1, :, :cross_len]
-            upper = upper.at[offset - 1, upper_times.reshape(-1)].add(
-                (cross_updates * valid_cross.astype(z_est.dtype)[..., None, None]).reshape(-1, D, D)
-            )
-
-        rhs = rhs.at[support_windows.time_indices.reshape(-1)].add(
-            (taylor_rhs * support_windows.valid_diag.astype(z_est.dtype)[..., None]).reshape(
-                -1,
-                D,
+        wi, mi = windows.component_windows, windows.component_manifests
+        indices = windows.time_indices[wi]
+        values = jac[wi, mi] * windows.valid_diag[wi, :, None]
+        column = (
+            jnp.zeros((wi.size, T, D), dtype=dtype)
+            .at[jnp.arange(wi.size)[:, None], indices]
+            .add(values)
+        )
+        columns.append(jnp.moveaxis(column, 0, -1))
+        information_blocks.append(
+            jnp.where(
+                wi[:, None] == wi[None, :], information[wi[:, None], mi[:, None], mi[None, :]], 0
             )
         )
-
-    return diag, upper, rhs
+    jacobian = jnp.concatenate(columns, axis=-1) if columns else jnp.zeros((T, D, 0), dtype=dtype)
+    information = (
+        jnp.asarray(jla.block_diag(*information_blocks))
+        if information_blocks
+        else jnp.zeros((0, 0), dtype=dtype)
+    )
+    rhs = (
+        gradient
+        + jnp.einsum("tde,te->td", diagonal, z_est)
+        + jnp.einsum("tdk,k->td", jacobian, information @ jnp.einsum("tdk,td->k", jacobian, z_est))
+    )
+    return diagonal, jacobian, information, rhs
 
 
 def _make_support_window_derivatives(
@@ -183,7 +151,7 @@ def _make_support_window_derivatives(
         )
 
         def _single_step_window(_):
-            return last_response, last_response**2, mask_full_single
+            return last_response, last_response**2, mask_full_single.astype(responses.dtype)
 
         def _multi_step_window(_):
             zeros = jnp.zeros((n_manifest, 1), dtype=responses.dtype)
@@ -351,18 +319,17 @@ def _support_aware_posterior_system(
     support_window_batches: tuple[SupportObservationWindowBatch, ...],
     point_like_mask: jnp.ndarray,
     window_derivatives: tuple[SupportWindowDerivatives, ...],
-    bandwidth: int,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Assemble the exact support-aware posterior Newton system at `z_est`."""
-    prior_diag, prior_upper, prior_rhs = _build_prior_banded_system(
+) -> IntervalPrecision:
+    """Assemble tridiagonal and interval factors at an initialization iterate."""
+    prior_diag, prior_upper, _prior_rhs = _build_prior_banded_system(
         Ad,
         Qd,
         cd,
         init_mean,
         init_cov,
-        bandwidth,
+        1,
     )
-    obs_diag, obs_upper, obs_rhs = _assemble_support_aware_observation_system(
+    obs_diag, jacobian, information, _obs_rhs = _assemble_support_aware_observation_system(
         z_est,
         observations,
         obs_mask,
@@ -373,9 +340,8 @@ def _support_aware_posterior_system(
         support_window_batches,
         point_like_mask,
         window_derivatives,
-        bandwidth,
     )
-    return prior_diag + obs_diag, prior_upper + obs_upper, prior_rhs + obs_rhs
+    return IntervalPrecision(prior_diag + obs_diag, prior_upper, jacobian, information)
 
 
 def _support_latent_mode(
@@ -386,13 +352,7 @@ def _support_latent_mode(
     objects,
     observation_support,
     support_window_batches,
-    bandwidth,
-    row_upper,
-    row_lower,
     n_iters,
-    *,
-    factor=_factor_block_profile_cholesky,
-    solve=_solve_block_profile_from_cholesky,
 ) -> tuple[jax.Array, dict[str, jax.Array]]:
     point_mask = get_point_like_mask(
         get_support_kind_codes(observation_support), observations.dtype
@@ -434,20 +394,15 @@ def _support_latent_mode(
             support_window_batches,
             point_mask,
             derivatives,
-            bandwidth,
         )
 
-    return solve_latent_mode(
+    return solve_interval_latent_mode(
         log_joint,
         system,
         initial,
         parameters,
-        bandwidth=bandwidth,
-        row_upper=row_upper,
-        row_lower=row_lower,
+        rank=sum(batch.component_windows.size for batch in support_window_batches),
         max_steps=n_iters,
-        factor=factor,
-        solve=solve,
     )
 
 
@@ -469,10 +424,6 @@ def _support_aware_laplace_terms_from_mode(
     support_window_batches: tuple[SupportObservationWindowBatch, ...],
     point_like_mask: jnp.ndarray,
     window_derivatives: tuple[SupportWindowDerivatives, ...],
-    bandwidth: int,
-    row_upper_bandwidths: jnp.ndarray,
-    row_lower_bandwidths: jnp.ndarray,
-    factor_block_cholesky_fn=_factor_block_profile_cholesky,
 ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     """Evaluate the Laplace log-likelihood terms at a fixed latent mode."""
     prior_terms = build_gaussian_trajectory_prior_terms(
@@ -496,7 +447,7 @@ def _support_aware_laplace_terms_from_mode(
         mean_log_prob_fn=mean_log_prob_fn,
         observation_support=observation_support,
     )
-    system_diag, system_upper, _system_rhs = _support_aware_posterior_system(
+    precision = _support_aware_posterior_system(
         z_mode,
         observations,
         obs_mask,
@@ -512,21 +463,12 @@ def _support_aware_laplace_terms_from_mode(
         support_window_batches,
         point_like_mask,
         window_derivatives,
-        bandwidth,
     )
     with jax.named_scope("map/support_aware_final_hessian"):
-        chol_diag, _lower = factor_block_cholesky_fn(
-            system_diag,
-            system_upper,
-            row_upper_bandwidths,
-            row_lower_bandwidths,
-        )
-
+        factor = factor_interval_precision(precision)
     flat_dim = observations.shape[0] * init_mean.shape[0]
-    laplace_logdet = precision_logdet(
-        system_diag, system_upper, row_upper_bandwidths, row_lower_bandwidths
-    )
-    min_chol_diag = jnp.min(jnp.diagonal(chol_diag, axis1=1, axis2=2))
+    laplace_logdet = factor.logdet
+    min_chol_diag = jnp.min(jnp.diagonal(factor.diagonal_cholesky, axis1=1, axis2=2))
     log_lik = mode_log_joint + 0.5 * flat_dim * jnp.log(2.0 * jnp.pi) - 0.5 * laplace_logdet
     return log_lik, mode_log_joint, laplace_logdet, min_chol_diag
 
@@ -545,15 +487,10 @@ def _support_dynamic_transition_ieks_laplace(
     mean_log_prob_fn: EmissionLogProbFn | None,
     observation_support: ObservationSupportRuntime,
     support_window_batches: tuple[SupportObservationWindowBatch, ...],
-    bandwidth: int,
-    row_upper_bandwidths: jnp.ndarray,
-    row_lower_bandwidths: jnp.ndarray,
     window_derivatives: tuple[SupportWindowDerivatives, ...],
     n_ieks_iters: int,
     *,
     z_init: jnp.ndarray | None = None,
-    factor_block_cholesky_fn=_factor_block_banded_cholesky,
-    solve_block_from_cholesky_fn=_solve_block_banded_from_cholesky,
 ) -> tuple[jnp.ndarray, jnp.ndarray, dict[str, jnp.ndarray]]:
     """Optimistix fixed points over support-aware local initialization modes."""
     point_mask = get_point_like_mask(
@@ -580,12 +517,7 @@ def _support_dynamic_transition_ieks_laplace(
             objects,
             observation_support,
             support_window_batches,
-            bandwidth,
-            row_upper_bandwidths,
-            row_lower_bandwidths,
             1,
-            factor=factor_block_cholesky_fn,
-            solve=solve_block_from_cholesky_fn,
         )
         return mode
 
@@ -610,10 +542,6 @@ def _support_dynamic_transition_ieks_laplace(
         support_window_batches,
         point_mask,
         window_derivatives,
-        bandwidth,
-        row_upper_bandwidths,
-        row_lower_bandwidths,
-        factor_block_cholesky_fn=factor_block_cholesky_fn,
     )
     A0, Q0, c0 = transitions_at(initial)
     prior0 = build_gaussian_trajectory_prior_terms(A0, Q0, c0, init_mean, init_cov)
@@ -642,7 +570,7 @@ def _support_dynamic_transition_ieks_laplace(
     return log_lik, mode, {**aux, "latent_mode": mode}
 
 
-def _support_aware_ieks_laplace_core(
+def _support_aware_ieks_laplace(
     observations: jnp.ndarray,
     obs_mask: jnp.ndarray,
     Ad: jnp.ndarray,
@@ -657,9 +585,6 @@ def _support_aware_ieks_laplace_core(
     mean_log_prob_fn: EmissionLogProbFn | None,
     observation_support: ObservationSupportRuntime,
     support_window_batches: tuple[SupportObservationWindowBatch, ...],
-    bandwidth: int,
-    row_upper_bandwidths: jnp.ndarray,
-    row_lower_bandwidths: jnp.ndarray,
     window_derivatives: tuple[SupportWindowDerivatives, ...],
     build_measurement_objects: Callable[
         [jnp.ndarray, ObservationLaws],
@@ -668,7 +593,6 @@ def _support_aware_ieks_laplace_core(
     observation_laws: ObservationLaws,
     n_ieks_iters: int,
     z_init: jnp.ndarray | None = None,
-    final_factor_block_cholesky_fn=_factor_block_profile_cholesky,
 ) -> tuple[jnp.ndarray, jnp.ndarray, dict[str, jnp.ndarray]]:
     """Sparse support-aware Newton mode and implicit gradients owned by Optimistix."""
     del obs_kernel, mean_log_prob_fn, window_derivatives
@@ -691,9 +615,6 @@ def _support_aware_ieks_laplace_core(
         objects,
         observation_support,
         support_window_batches,
-        bandwidth,
-        row_upper_bandwidths,
-        row_lower_bandwidths,
         n_ieks_iters,
     )
     A, Q, c, loading, intercept, variance, mean, covariance, kernel, mean_density, derivatives = (
@@ -717,10 +638,6 @@ def _support_aware_ieks_laplace_core(
         support_window_batches,
         point_mask,
         derivatives,
-        bandwidth,
-        row_upper_bandwidths,
-        row_lower_bandwidths,
-        factor_block_cholesky_fn=final_factor_block_cholesky_fn,
     )
     aux = build_likelihood_eval_aux(
         observations.dtype,
@@ -731,58 +648,3 @@ def _support_aware_ieks_laplace_core(
         **mode_aux,
     )
     return log_lik, mode, {**aux, "latent_mode": mode}
-
-
-def _support_aware_ieks_laplace(
-    observations: jnp.ndarray,
-    obs_mask: jnp.ndarray,
-    Ad: jnp.ndarray,
-    Qd: jnp.ndarray,
-    cd: jnp.ndarray,
-    H: jnp.ndarray,
-    d: jnp.ndarray,
-    R: jnp.ndarray,
-    init_mean: jnp.ndarray,
-    init_cov: jnp.ndarray,
-    obs_kernel: ObservationKernel,
-    mean_log_prob_fn: EmissionLogProbFn | None,
-    observation_support: ObservationSupportRuntime,
-    support_window_batches: tuple[SupportObservationWindowBatch, ...],
-    bandwidth: int,
-    row_upper_bandwidths: jnp.ndarray,
-    row_lower_bandwidths: jnp.ndarray,
-    window_derivatives: tuple[SupportWindowDerivatives, ...],
-    build_measurement_objects: Callable[
-        [jnp.ndarray, ObservationLaws],
-        tuple[CompiledObservationModel, tuple[SupportWindowDerivatives, ...]],
-    ],
-    observation_laws: ObservationLaws,
-    n_ieks_iters: int,
-    z_init: jnp.ndarray | None = None,
-) -> tuple[jnp.ndarray, jnp.ndarray, dict[str, jnp.ndarray]]:
-    """Support-aware IEKS solve plus Laplace log-likelihood."""
-    return _support_aware_ieks_laplace_core(
-        observations,
-        obs_mask,
-        Ad,
-        Qd,
-        cd,
-        H,
-        d,
-        R,
-        init_mean,
-        init_cov,
-        obs_kernel,
-        mean_log_prob_fn,
-        observation_support,
-        support_window_batches,
-        bandwidth,
-        row_upper_bandwidths,
-        row_lower_bandwidths,
-        window_derivatives,
-        build_measurement_objects,
-        observation_laws,
-        n_ieks_iters,
-        z_init=z_init,
-        final_factor_block_cholesky_fn=_factor_block_profile_cholesky,
-    )

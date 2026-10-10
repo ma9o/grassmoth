@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Self
 import numpy as np
 import numpyro.distributions as dist
 
-from nof1_causal_lab.artifacts.likelihood import NormalLawSpec, StudentTLawSpec
+from nof1_causal_lab.artifacts.likelihood import DeltaLawSpec, NormalLawSpec, StudentTLawSpec
 from nof1_causal_lab.models.ssm import numerics as numeric
 
 if TYPE_CHECKING:
@@ -37,13 +37,55 @@ def validate_observation_support_for_fit(panel: BoundPanel) -> ObservationPrefli
         for indicator in panel.compiled_dynamical_model.observations
         if indicator.support.support_kind == "interval"
         and not panel.compiled_dynamical_model.states[indicator.state_index].is_input
+        and isinstance(indicator.law, DeltaLawSpec)
     ]
     if intervals:
         names = ", ".join(intervals)
         return ObservationPreflightFailure.rejected(
-            "Particle inference supports only point measurements; "
-            f"unsupported interval summaries: {names}."
+            "Exact endogenous interval constraints are not supported by particle inference; "
+            f"use a noisy interval observation law for: {names}."
         )
+    compiled = panel.compiled_dynamical_model
+    observed = np.asarray(panel.observations)
+    for index, state in enumerate(compiled.states):
+        columns = tuple(
+            column
+            for column, indicator in enumerate(compiled.observations)
+            if indicator.state_index == index and isinstance(indicator.law, DeltaLawSpec)
+        )
+        if state.is_input or not columns:
+            continue
+        exact = observed[:, columns]
+        readings = exact[np.isfinite(exact)]
+        if state.time_invariant and readings.size and np.any(readings != readings[0]):
+            return ObservationPreflightFailure.rejected(
+                f"Conflicting exact observations for static construct {state.name!r}."
+            )
+        initial = readings if state.time_invariant else exact[0][np.isfinite(exact[0])]
+        if initial.size and index not in compiled.state_space.initial:
+            if compiled.initial_mean_block.free_support[index]:
+                return ObservationPreflightFailure.rejected(
+                    f"Exact readings of {state.name!r} constrain its uncertain initial mean; "
+                    "inference on parameter equality constraints is not supported."
+                )
+            if np.any(initial != np.asarray(compiled.initial_mean_block.template)[index]):
+                return ObservationPreflightFailure.rejected(
+                    f"Exact readings of {state.name!r} disagree with its fixed initial value."
+                )
+    for column, indicator in enumerate(compiled.observations):
+        state = compiled.states[indicator.state_index]
+        if (
+            isinstance(indicator.law, DeltaLawSpec)
+            and not state.is_input
+            and not state.time_invariant
+            and indicator.state_index not in compiled.state_space.transition
+            and np.any(np.isfinite(observed[1:, column]))
+        ):
+            return ObservationPreflightFailure.rejected(
+                f"Exact readings of deterministic evolving construct {state.name!r} after the "
+                "initial time require constrained inference, which is not supported. "
+                "Its declared deterministic dynamics have been preserved."
+            )
     return None
 
 
@@ -87,6 +129,10 @@ def validate_observations_for_fit(
 
     problems: list[str] = []
     for j in range(numeric.n_observations(compiled_dynamical_model)):
+        # Interval sums and variability are not on the point-intercept scale.
+        # Their reach depends on the whole path and its recorded support.
+        if compiled_dynamical_model.observations[j].support.support_kind == "interval":
+            continue
         finite = obs[:, j][np.isfinite(obs[:, j])]
         if finite.size == 0:
             continue

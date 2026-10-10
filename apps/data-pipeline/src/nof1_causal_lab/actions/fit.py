@@ -18,7 +18,7 @@ from nof1_causal_lab.artifacts.posterior import (
     InferenceReportCore,
     InferenceReportDetail,
 )
-from nof1_causal_lab.models.ssm.inference.convergence import parameter_convergence
+from nof1_causal_lab.models.ssm.inference.convergence import chain_convergence
 from nof1_causal_lab.models.ssm.inference.persistence import condition_model
 
 if TYPE_CHECKING:
@@ -200,7 +200,7 @@ def read_inference_report(
             core=InferenceReportCore(
                 inference_metadata=metadata,
                 inference_diagnostics=diagnostics,
-                convergence=parameter_convergence(diagnostics),
+                convergence=chain_convergence(diagnostics),
                 loo_diagnostics=loo[0] if loo is not None else None,
                 posterior_marginals=marginals,
                 prior_densities=priors,

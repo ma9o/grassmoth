@@ -5,13 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
-import numpy as np
 import numpyro
 
 from nof1_causal_lab.models.ssm import numerics as numeric
 from nof1_causal_lab.models.ssm.covariance_utils import (
-    INITIAL_STATE_COV_MIN_EIGENVALUE,
-    stabilize_covariance_for_cholesky,
     symmetrize,
 )
 
@@ -57,10 +54,12 @@ def assemble_model_matrices(
     if static_sds.size:
         loadings = jnp.asarray(compiled_dynamical_model.static_factor_loadings)
         covariance = covariance + loadings @ jnp.diag(static_sds**2) @ loadings.T
-    endogenous = jnp.asarray(np.flatnonzero(~numeric.input_mask(compiled_dynamical_model)))
-    endogenous_covariance, min_eigenvalue = stabilize_covariance_for_cholesky(
-        symmetrize(covariance[jnp.ix_(endogenous, endogenous)]),
-        min_eigenvalue=INITIAL_STATE_COV_MIN_EIGENVALUE,
+    endogenous = jnp.asarray(compiled_dynamical_model.state_space.initial, dtype=jnp.int32)
+    endogenous_covariance = symmetrize(covariance[jnp.ix_(endogenous, endogenous)])
+    min_eigenvalue = (
+        jnp.min(jnp.linalg.eigvalsh(endogenous_covariance))
+        if compiled_dynamical_model.state_space.initial
+        else jnp.asarray(jnp.inf, dtype=covariance.dtype)
     )
     initial_covariance = (
         jnp.zeros_like(covariance).at[jnp.ix_(endogenous, endogenous)].set(endogenous_covariance)

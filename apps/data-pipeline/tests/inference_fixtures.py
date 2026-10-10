@@ -15,8 +15,10 @@ from nof1_causal_lab.actions.effects import ActionEffects
 from nof1_causal_lab.artifacts.posterior import InferenceReportCore
 from nof1_causal_lab.models.ssm import numerics as numeric
 from nof1_causal_lab.models.ssm.autoreparam import Strategy, _minimal_reparam
+from nof1_causal_lab.models.ssm.compile.observation_windows import compile_window_plan
 from nof1_causal_lab.models.ssm.inference.shared import assemble_parameter_draws
 from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
+from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
 from nof1_causal_lab.numpyro_json import empirical_atoms
 from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.state import ArtifactRecord
@@ -24,6 +26,8 @@ from tests.git_fixtures import git_oid
 from tests.model_fixtures import _make_lgss_data_model_fixture
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from numpyro.primitives import Message
 
     from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
@@ -86,7 +90,7 @@ def inference_metadata(model):
 
 
 def _report(model):
-    from nof1_causal_lab.artifacts.identity import DistributionId, ParameterRef
+    from nof1_causal_lab.artifacts.identity import ConstructRef, DistributionId, ParameterRef
     from nof1_causal_lab.artifacts.posterior import (
         InferenceEvidence,
         InferenceMetadata,
@@ -95,13 +99,15 @@ def _report(model):
     )
     from nof1_causal_lab.artifacts.posterior_diagnostics import (
         ChainDiagnostics,
+        LatentDiagnostics,
         ParameterDiagnostics,
         ParticleMCMCEvidence,
     )
     from nof1_causal_lab.models.ssm.compile.bindings import parameter_bindings
-    from nof1_causal_lab.models.ssm.inference.convergence import parameter_convergence
+    from nof1_causal_lab.models.ssm.inference.convergence import chain_convergence
 
-    binding = parameter_bindings(compile_model_fixture(model))[0][0]
+    compiled = compile_model_fixture(model)
+    binding = parameter_bindings(compiled)[0][0]
     element, label = next(iter(binding.elements.items()))
     diagnostics = ChainDiagnostics(
         num_chains=4,
@@ -116,6 +122,19 @@ def _report(model):
                 mcse_mean=None,
             ),
         ),
+        per_latent=tuple(
+            LatentDiagnostics(
+                subject=ConstructRef(id=s.id),
+                label=s.name,
+                coordinates=3,
+                r_hat=1.0,
+                ess_bulk=800.0,
+                ess_tail=600.0,
+                mcse_mean=None,
+            )
+            for s in compiled.states
+            if not s.is_input
+        ),
     )
     return InferenceReport(
         evidence=InferenceEvidence(),
@@ -129,7 +148,7 @@ def _report(model):
                 sampler_diagnostics=None,
             ),
             inference_diagnostics=diagnostics,
-            convergence=parameter_convergence(diagnostics),
+            convergence=chain_convergence(diagnostics),
             posterior_marginals=(),
             prior_densities={},
         ),
@@ -233,36 +252,41 @@ def make_lgss_data(
     }
 
 
-def make_observation_support_runtime(**kwargs: Any) -> ObservationSupportRuntime:
-    """Build ObservationSupportRuntime while accepting 2D interval coefficient inputs."""
-    support_kinds = kwargs["support_kinds"]
-    kwargs.setdefault(
-        "summary_operators",
-        ["mean" if kind == "interval" else "last" for kind in support_kinds],
-    )
-    kwargs.setdefault(
-        "anchor_policies",
-        [
+def make_observation_support_runtime(
+    *,
+    anchor_times: np.ndarray,
+    manifest_names: Sequence[str],
+    support_kinds: Sequence[str | None],
+    observation_windows: Sequence[str | None],
+    support_start_times: np.ndarray,
+    support_end_times: np.ndarray,
+    summary_operators: Sequence[str | None] | None = None,
+    anchor_policies: Sequence[str | None] | None = None,
+) -> ObservationSupportRuntime:
+    """Compile test-owned window bounds through the production quadrature owner."""
+    if summary_operators is None:
+        summary_operators = tuple(
+            "mean" if kind == "interval" else "last" for kind in support_kinds
+        )
+    if anchor_policies is None:
+        anchor_policies = tuple(
             "support_start" if operator == "first" else "support_end"
-            for operator in kwargs["summary_operators"]
-        ],
+            for operator in summary_operators
+        )
+    plan = compile_window_plan(
+        anchor_times, support_start_times, support_end_times, support_kinds, manifest_names
     )
-    prev = np.asarray(kwargs["interval_prev_coeffs"], dtype=np.float64)
-    curr = np.asarray(kwargs["interval_curr_coeffs"], dtype=np.float64)
-    weights = np.asarray(kwargs["interval_weights"], dtype=np.float64)
-    if prev.ndim == 2:
-        prev = prev[..., None]
-        curr = curr[..., None]
-        weights = weights[..., None]
-    kwargs["interval_prev_coeffs"] = prev
-    kwargs["interval_curr_coeffs"] = curr
-    kwargs["interval_weights"] = weights
-    emission_slots = kwargs.get("emission_slot_indices")
-    if emission_slots is None:
-        support_end = np.asarray(kwargs["support_end_times"])
-        emission_slots = np.where(np.isfinite(support_end), 0, -1).astype(np.int64)
-    kwargs["emission_slot_indices"] = emission_slots
-    return ObservationSupportRuntime.assembled(**kwargs)
+    assert not isinstance(plan, ObservationPreflightFailure), plan
+    return ObservationSupportRuntime.assembled(
+        window_plan=plan,
+        manifest_names=manifest_names,
+        support_kinds=support_kinds,
+        summary_operators=summary_operators,
+        anchor_policies=anchor_policies,
+        observation_windows=observation_windows,
+        support_start_times=support_start_times,
+        support_end_times=support_end_times,
+    )
 
 
 def parameter_draws(

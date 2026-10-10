@@ -132,6 +132,7 @@ def _run_one(
     from evaluation.recovery.extraction import parameter_recovery, scalar_posterior_ess
 
     from nof1_causal_lab.models.ssm.inference import fit
+    from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
     from nof1_causal_lab.sampler_config import (
         MarginalParticleGibbsSpec,
         SamplerSpec,
@@ -183,7 +184,7 @@ def _run_one(
         clock=time.monotonic,
         compute_budget=read_compute_budget(),
     )
-    if isinstance(result, ObservationPreflightFailure):
+    if isinstance(result, (ObservationPreflightFailure, InitializationFailure)):
         raise ValueError(result.message)
     elapsed_seconds = time.monotonic() - started
     logger.info("finished dSMC/%s in %.1fs", proposal, elapsed_seconds)
@@ -220,7 +221,7 @@ def _build_parser() -> argparse.ArgumentParser:
         type=_parse_metrics,
         default=("particle_identity", "parameter_movement"),
     )
-    parser.add_argument("--init-method", choices=("random", "pathfinder"), default="pathfinder")
+    parser.add_argument("--init-method", choices=("random", "pathfinder", "laps"), default="laps")
     parser.add_argument("--init-scale", type=float, default=0.05)
     parser.add_argument("--pathfinder-num-elbo-samples", type=int, default=20)
     parser.add_argument("--pathfinder-maxiter", type=int, default=50)
@@ -229,8 +230,8 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--pathfinder-init-scale", type=float, default=0.1)
     parser.add_argument(
         "--auto-preconditioner-method",
-        choices=("map", "none", "pathfinder"),
-        default="pathfinder",
+        choices=("map", "none", "pathfinder", "laps"),
+        default="laps",
     )
     parser.add_argument("--auto-preconditioner-maxiter", type=int, default=200)
     parser.add_argument("--n-ieks-iters", type=int, default=6)
@@ -276,7 +277,7 @@ def main() -> None:
         seed=args.data_seed,
         diffusion_scale=args.diffusion_scale,
     )
-    model = load_synthetic_nonlinear_model(diffusion_scale=args.diffusion_scale)
+    model = load_synthetic_nonlinear_model(T=args.t_steps, diffusion_scale=args.diffusion_scale)
     panel = bind_synthetic_nonlinear_panel(model, data)
     runs = {
         f"point:{proposal}": _run_one(

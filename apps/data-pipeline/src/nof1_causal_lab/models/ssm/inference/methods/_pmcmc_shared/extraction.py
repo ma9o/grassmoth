@@ -39,7 +39,9 @@ def extract_grouped_public_samples(
     num_chains: int,
     num_samples: int,
 ) -> dict[str, jnp.ndarray]:
-    flat_positions = grouped_positions.reshape((-1, bundle.runtime.initial_position.size))
+    flat_positions = grouped_positions.reshape(
+        (num_chains * num_samples, bundle.runtime.initial_position.size)
+    )
     public_samples = extract_constrained_samples(
         flat_positions, bundle.runtime.parameters, bundle.public_sites
     )

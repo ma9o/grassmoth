@@ -18,9 +18,12 @@ from nof1_causal_lab.models.model_structure import StructuralSelection
 from nof1_causal_lab.models.ssm import runtime as runtime_module
 from nof1_causal_lab.models.ssm.compile import inputs as compilation
 from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
-from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
 from nof1_causal_lab.sampler_config import SamplerSpec
-from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture
+from tests.inference_fixtures import (
+    bind_panel_fixture,
+    compile_fit_fixture,
+    make_observation_support_runtime,
+)
 from tests.model_fixtures import load_model_fixture
 
 
@@ -47,6 +50,7 @@ def _sleep_state_model() -> DynamicalModelSpec:
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
 
 
 pytestmark = pytest.mark.contract
@@ -61,7 +65,7 @@ def _fake_result():
 
 
 def _make_observation_support_runtime() -> ObservationSupportRuntime:
-    return ObservationSupportRuntime.assembled(
+    return make_observation_support_runtime(
         manifest_names=("manifest_0", "manifest_1"),
         anchor_times=np.array([0.0, 1.5]),
         support_kinds=("interval", "point"),
@@ -70,25 +74,6 @@ def _make_observation_support_runtime() -> ObservationSupportRuntime:
         observation_windows=("1d", "1d"),
         support_start_times=np.array([[np.nan, 0.0], [0.0, 1.5]]),
         support_end_times=np.array([[np.nan, 0.0], [1.5, 1.5]]),
-        interval_prev_coeffs=np.array(
-            [
-                [[0.0, 0.0], [0.0, 0.0]],
-                [[0.5, 0.0], [0.0, 0.0]],
-            ]
-        ),
-        interval_curr_coeffs=np.array(
-            [
-                [[0.0, 0.0], [0.0, 0.0]],
-                [[0.5, 0.0], [0.0, 0.0]],
-            ]
-        ),
-        interval_weights=np.array(
-            [
-                [[0.0, 0.0], [0.0, 0.0]],
-                [[1.0, 0.0], [0.0, 0.0]],
-            ]
-        ),
-        emission_slot_indices=np.array([[-1, -1], [0, -1]]),
     )
 
 

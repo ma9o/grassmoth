@@ -109,7 +109,7 @@ def test_mcmc_report_preserves_coordinate_metrics_chains_and_sampler_statistics(
     report = particle_posterior.get_mcmc_diagnostics(refs)
     traces, ranks = particle_posterior.get_chain_detail(refs)
     assert report.num_chains == 2
-    assert report.num_samples == 64
+    assert report.num_samples_per_chain == 64
     assert report.num_divergences == 1
     assert report.divergence_rate == pytest.approx(1 / 128)
     assert report.tree_depth_mean == report.tree_depth_max == 4
@@ -168,3 +168,44 @@ def test_posterior_marginals_and_traces_preserve_joint_draws_and_divergences(par
             (slice(None), *coordinate.indices)
         ]
         np.testing.assert_array_equal(columns[subject], values)
+
+
+@pytest.mark.inference(concern="sampling")
+def test_latent_convergence_detects_stuck_paths_despite_well_mixed_parameters(particle_posterior):
+    from dataclasses import replace
+
+    from nof1_causal_lab.artifacts.identity import ConstructId, ConstructRef
+    from nof1_causal_lab.models.ssm.inference.convergence import chain_convergence
+    from nof1_causal_lab.models.ssm.inference.latent_diagnostics import LatentChainEvidence
+
+    states = tuple(
+        (ConstructRef(id=ConstructId("construct:" + name)), name)
+        for name in ("moving", "stuck", "input")
+    )
+    rng = np.random.default_rng(23)
+    paths = rng.normal(size=(2, 64, 3, 3))
+    paths[:, :, :, 1] = np.array([0.0, 1.0])[:, None, None]
+    paths[:, :, :, 2] = 10.0
+    free = np.ones((3, 3), dtype=bool)
+    free[:, 2] = False
+    posterior = replace(
+        particle_posterior,
+        diagnostics=replace(
+            particle_posterior.diagnostics,
+            latent_chains=LatentChainEvidence(paths, free, states),
+        ),
+    )
+    refs = references([("alpha", ()), ("beta", (0,)), ("beta", (1,)), ("sigma", ())])
+    report = posterior.get_mcmc_diagnostics(refs)
+    assert len(report.per_latent) == 2
+    assert report.per_latent[0].ess_bulk > 0
+    assert report.per_latent[1].ess_bulk == report.per_latent[1].ess_tail == 0
+    assert chain_convergence(report).status == "failed"
+    no_parameters = replace(
+        posterior,
+        diagnostics=replace(
+            posterior.diagnostics,
+            mcmc=replace(posterior.diagnostics.mcmc, chain_samples={}),
+        ),
+    )
+    assert no_parameters.get_mcmc_diagnostics({}).per_parameter == ()

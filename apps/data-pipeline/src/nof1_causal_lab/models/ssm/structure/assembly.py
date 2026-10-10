@@ -60,7 +60,6 @@ def assemble_diffusion_chol(
     lower_positions: Sequence[tuple[int, int]],
     diag_free: jnp.ndarray | None,
     lower_free: jnp.ndarray | None,
-    time_invariant_mask: np.ndarray | jnp.ndarray | None,
 ) -> jnp.ndarray:
     """Process-noise Cholesky assembler shared by ``DiffusionBlockSpec`` and ``DynamicalModelSpec``."""
     diffusion = jnp.asarray(diffusion_chol_template)
@@ -72,11 +71,6 @@ def assemble_diffusion_chol(
         lower_free = jnp.asarray(lower_free, dtype=diffusion.dtype)
         for idx, (row, col) in enumerate(lower_positions):
             diffusion = diffusion.at[row, col].set(lower_free[idx])
-    if time_invariant_mask is not None:
-        ti = jnp.asarray(time_invariant_mask, dtype=bool)
-        diag_vals = jnp.diag(diffusion)
-        new_diag = jnp.where(ti, jnp.asarray(1e-6, dtype=diffusion.dtype), diag_vals)
-        diffusion = diffusion - jnp.diag(diag_vals) + jnp.diag(new_diag)
     return diffusion
 
 

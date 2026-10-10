@@ -13,6 +13,7 @@ from numpyro.distributions import MultivariateNormal
 
 from nof1_causal_lab.artifacts.identity import scientific_id
 from nof1_causal_lab.distributions import DistributionFamily
+from nof1_causal_lab.models.ssm.covariance_utils import CHOL_JITTER
 from nof1_causal_lab.models.ssm.dynamics.edges import (
     DenseLinear,
     DiagonalDecay,
@@ -41,6 +42,7 @@ from nof1_causal_lab.models.ssm.inference.targets.laplace.shared import (
 from nof1_causal_lab.models.ssm.inference.targets.transitions import build_discrete_transitions
 from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
 from tests.dynamics_fixtures import hill_term
+from tests.inference_fixtures import make_observation_support_runtime
 from tests.observation_fixtures import observation_laws
 
 
@@ -112,7 +114,7 @@ def _trajectory_runtime_dynamics() -> StochasticContinuousTimeStateEvolution:
 
 
 def _interval_mean_support_runtime() -> ObservationSupportRuntime:
-    return ObservationSupportRuntime.assembled(
+    return make_observation_support_runtime(
         anchor_times=np.array([0.0, 0.50, 1.25], dtype=np.float64),
         manifest_names=("mean_signal",),
         support_kinds=("interval",),
@@ -121,10 +123,6 @@ def _interval_mean_support_runtime() -> ObservationSupportRuntime:
         observation_windows=("previous_interval",),
         support_start_times=np.array([[np.nan], [0.0], [0.50]], dtype=np.float64),
         support_end_times=np.array([[np.nan], [0.50], [1.25]], dtype=np.float64),
-        interval_prev_coeffs=np.array([[[0.0]], [[0.25]], [[0.375]]], dtype=np.float64),
-        interval_curr_coeffs=np.array([[[0.0]], [[0.25]], [[0.375]]], dtype=np.float64),
-        interval_weights=np.array([[[0.0]], [[0.50]], [[0.75]]], dtype=np.float64),
-        emission_slot_indices=np.array([[-1], [0], [0]], dtype=np.int64),
     )
 
 
@@ -206,6 +204,45 @@ def test_point_dynamic_linearization_states_use_interval_starts():
 
 
 @pytest.mark.inference(concern="warmup")
+def test_accounting_transition_scaling_preserves_integrated_brownian_law_and_gradient():
+    """Large unit conversion is not stiffness: compare to the analytic integral law."""
+    with jax.enable_x64():
+        interval, sigma, rate = 365.0, 0.3, 0.2
+
+        def transitions(gain):
+            dynamics = continuous_state_evolution(
+                vector_field=VectorField(n_latent=3, components=(DenseLinear(), Intercept())),
+                vf_params=(
+                    {"drift": jnp.array([[0.0, 0.0, 0.0], [gain, 0.0, 0.0], [0.0, 0.0, 0.0]])},
+                    {"cint": jnp.array([rate, 0.0, 0.0])},
+                ),
+                diffusion=jnp.diag(jnp.array([sigma, 0.0, 0.0])),
+            )
+            return build_discrete_transitions(dynamics, jnp.array([interval]))
+
+        gain = jnp.asarray(1e6)
+        result = jax.jit(transitions)(gain)
+        expected_covariance = sigma**2 * np.array(
+            [
+                [interval, gain * interval**2 / 2, 0.0],
+                [gain * interval**2 / 2, gain**2 * interval**3 / 3, 0.0],
+                [0.0, 0.0, 0.0],
+            ]
+        )
+        np.testing.assert_allclose(
+            result.A[0], [[1, 0, 0], [gain * interval, 1, 0], [0, 0, 1]], rtol=1e-8, atol=1e-8
+        )
+        np.testing.assert_allclose(
+            result.bias[0], [rate * interval, rate * gain * interval**2 / 2, 0], rtol=1e-8
+        )
+        np.testing.assert_allclose(
+            result.cov[0], expected_covariance + CHOL_JITTER * np.eye(3), rtol=1e-7, atol=1e-9
+        )
+        gradient = jax.jit(jax.grad(lambda value: transitions(value).cov[0, 1, 1]))(gain)
+        np.testing.assert_allclose(gradient, 2 * gain * sigma**2 * interval**3 / 3, rtol=1e-7)
+
+
+@pytest.mark.inference(concern="warmup")
 @pytest.mark.parametrize("solver", ["point", "dense", "banded"])
 def test_nonlinear_laplace_backends_match_finite_difference(monkeypatch, solver):
     """Check nonlinear parameter gradients and diagnostics at each solver boundary."""
@@ -221,6 +258,7 @@ def test_nonlinear_laplace_backends_match_finite_difference(monkeypatch, solver)
         n_latent=2,
         n_manifest=1,
         n_ieks_iters=2,
+        observed_mask=np.ones((3, 1), dtype=bool),
         observation_support=None if solver == "point" else _interval_mean_support_runtime(),
     )
     measurement = MeasurementParams(

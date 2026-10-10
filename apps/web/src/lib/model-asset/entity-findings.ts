@@ -26,6 +26,7 @@ export function recordedEntityFailures(
       finding.kind === "evaluated" &&
       finding.outcome === "failed" &&
       typeof finding.subject !== "string" &&
+      "parameter" in finding.subject &&
       parameters.includes(finding.subject.parameter.parameter_id)
         ? [`Parameter convergence: ${finding.subject.label}`]
         : [],

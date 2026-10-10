@@ -43,7 +43,7 @@ from nof1_causal_lab.artifacts.posterior import (
     InferenceReportCore,
     InferenceReportDetail,
 )
-from nof1_causal_lab.artifacts.posterior_diagnostics import ParameterConvergenceReport
+from nof1_causal_lab.artifacts.posterior_diagnostics import ConvergenceReport
 from nof1_causal_lab.artifacts.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
     ModelSimulationResult,
@@ -232,7 +232,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
                 sampler_diagnostics=None,
             ),
             inference_diagnostics=None,
-            convergence=ParameterConvergenceReport(findings=()),
+            convergence=ConvergenceReport(findings=()),
             posterior_marginals=(),
             prior_densities={},
         ),

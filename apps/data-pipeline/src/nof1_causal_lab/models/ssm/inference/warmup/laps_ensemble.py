@@ -1,0 +1,209 @@
+"""Single-device ensemble execution of BlackJAX's two LAPS initialization phases.
+
+The BlackJAX kernels and adaptation rules are unchanged. A compiled vmap runs
+the ensemble on the selected device, avoiding the library's multi-device
+shard_map requirement on every scan inside a user-supplied density.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, cast
+
+import jax
+import jax.numpy as jnp
+import numpy as np
+from blackjax.adaptation import laps, laps_burn_in
+from blackjax.mcmc.adjusted_mclmc import build_kernel
+from blackjax.mcmc.hmc import HMCState
+from blackjax.mcmc.integrators import (
+    IntegratorState,
+    generate_isokinetic_integrator,
+    mclachlan_coefficients,
+    omelyan_coefficients,
+)
+
+from nof1_causal_lab.artifacts.posterior_diagnostics import LapsInitializationDiagnostics
+from nof1_causal_lab.compute.batching import compiled_memory
+from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.sampler_config import LapsInitializationSpec
+
+
+@dataclass(frozen=True)
+class LapsEnsemble:
+    """Final joint positions and measurements of both initialization phases."""
+
+    positions: jax.Array
+    diagnostics: LapsInitializationDiagnostics
+
+
+def _execute[State, Result](
+    function: Callable[[State], Result], initial: State, budget: ComputeBudget
+) -> Result:
+    """Check the complete compiled phase's buffers before executing the ensemble."""
+    compiled = jax.jit(function).lower(initial).compile()
+    if not budget.capacity(compiled_memory(compiled), limit=1):
+        raise MemoryError("The LAPS ensemble exceeds the numerical execution memory budget")
+    return cast("Result", compiled(initial))
+
+
+def run_laps_ensemble(
+    log_density: Callable[[jax.Array], jax.Array],
+    *,
+    dimension: int,
+    scientific_dimension: int,
+    key: jax.Array,
+    spec: LapsInitializationSpec,
+    compute_budget: ComputeBudget,
+) -> LapsEnsemble | InitializationFailure:
+    """Run unadjusted LAPS burn-in followed by its Metropolis-adjusted refinement."""
+    initial_key, burn_key, adjusted_key = jax.random.split(key, 3)
+    positions = spec.initial_scale * jax.random.normal(initial_key, (spec.ensemble_size, dimension))
+
+    def initialize(points: jax.Array) -> IntegratorState:
+        values, gradients = jax.vmap(jax.value_and_grad(log_density))(points)
+        signs = jnp.where(jnp.mean(-points * gradients, axis=0) < 1, -1.0, 1.0)
+        # Rescale before taking the norm, preserving direction without squaring
+        # very large scores in the original physical units.
+        scaled = gradients / jnp.max(jnp.abs(gradients), axis=-1, keepdims=True)
+        momentum = signs * scaled / jnp.linalg.norm(scaled, axis=-1, keepdims=True)
+        return IntegratorState(points, momentum, values, gradients)
+
+    state = _execute(initialize, positions, compute_budget)
+    if not all(np.isfinite(np.asarray(leaf)).all() for leaf in jax.tree.leaves(state)):
+        return InitializationFailure.unavailable(
+            "LAPS starts have a non-finite joint density or gradient"
+        )
+
+    adaptation = laps_burn_in.Adaptation(
+        dimension,
+        microcanonical=True,
+        alpha=1.9,
+        C=0.1,
+        r_end=0.01,
+        bias_type=3,
+        save_num=max(2, round(0.2 * spec.num_unadjusted_steps)),
+    )
+    burn_kernel = laps_burn_in.build_kernel(log_density, dimension, microcanonical=True)
+
+    def burn(initial: IntegratorState):
+        def condition(carry):
+            _, tuning, index, keep_going = carry
+            return (
+                (index < spec.num_unadjusted_steps)
+                & keep_going
+                & jnp.isfinite(tuning.step_size)
+                & (tuning.step_size > 0)
+            )
+
+        def step(carry):
+            current, tuning, index, _ = carry
+            sampling_key, summary_key = jax.random.split(jax.random.fold_in(burn_key, index))
+            current, info = jax.vmap(burn_kernel, in_axes=(0, 0, None))(
+                jax.random.split(sampling_key, spec.ensemble_size), current, tuning
+            )
+            summaries = jax.vmap(adaptation.summary_statistics_fn, in_axes=(0, 0, None))(
+                current, info, summary_key
+            )
+            tuning, summary = adaptation.update(
+                tuning, jax.tree.map(lambda values: jnp.mean(values, axis=0), summaries)
+            )
+            return current, tuning, index + 1, adaptation.while_cond(summary, index)
+
+        return jax.lax.while_loop(
+            condition,
+            step,
+            (initial, adaptation.initial_state, jnp.asarray(0), jnp.asarray(True)),
+        )
+
+    state, burn_tuning, steps, _ = _execute(burn, state, compute_budget)
+    burn_step = float(burn_tuning.step_size)
+    inverse_mass = np.asarray(burn_tuning.inverse_mass_matrix)
+    if not np.isfinite(burn_step) or burn_step <= 0 or not np.isfinite(inverse_mass).all():
+        return InitializationFailure.unavailable(
+            "LAPS unadjusted step size or ensemble scale collapsed"
+        )
+    if np.any(inverse_mass <= 0):
+        return InitializationFailure.unavailable(
+            "LAPS ensemble has a constant coordinate after burn-in"
+        )
+
+    coefficients = omelyan_coefficients if dimension > 200 else mclachlan_coefficients
+    adjusted_kernel = build_kernel(integrator=generate_isokinetic_integrator(coefficients))
+    adjusted_adaptation = laps.Adaptation(
+        burn_tuning._replace(
+            step_size=burn_tuning.step_size / jnp.sqrt(jnp.mean(burn_tuning.inverse_mass_matrix))
+        ),
+        num_adaptation_samples=spec.num_adjusted_steps,
+        steps_per_sample=spec.steps_per_sample,
+        acc_prob_target=0.9 if dimension > 200 else 0.7,
+    )
+
+    def refine(initial: HMCState):
+        def step(carry, index):
+            current, tuning = carry
+            sampling_key, summary_key = jax.random.split(jax.random.fold_in(adjusted_key, index))
+
+            def move(chain_key, chain_state):
+                return adjusted_kernel(
+                    rng_key=chain_key,
+                    state=chain_state,
+                    logdensity_fn=log_density,
+                    step_size=tuning.step_size,
+                    integration_steps_params=(spec.steps_per_sample,),
+                    inverse_mass_matrix=burn_tuning.inverse_mass_matrix,
+                    L_proposal_factor=1.25,
+                )
+
+            current, info = jax.vmap(move)(
+                jax.random.split(sampling_key, spec.ensemble_size), current
+            )
+            summaries = jax.vmap(adjusted_adaptation.summary_statistics_fn, in_axes=(0, 0, None))(
+                current, info, summary_key
+            )
+            tuning, summary = adjusted_adaptation.update(
+                tuning, jax.tree.map(lambda values: jnp.mean(values, axis=0), summaries)
+            )
+            return (current, tuning), summary["acc_prob"]
+
+        return jax.lax.scan(
+            step,
+            (initial, adjusted_adaptation.initial_state),
+            jnp.arange(spec.num_adjusted_steps),
+        )
+
+    (final, tuning), acceptance = _execute(
+        refine, HMCState(state.position, state.logdensity, state.logdensity_grad), compute_budget
+    )
+    mean_acceptance = float(jnp.mean(acceptance))
+    final_step = float(tuning.step_size)
+    if (
+        not np.isfinite(np.asarray(final.position)).all()
+        or not np.isfinite(np.asarray(final.logdensity)).all()
+        or not bool(jnp.any(jnp.asarray(final.position) != jnp.asarray(state.position)))
+        or not np.isfinite(final_step)
+        or final_step <= 0
+        or not np.isfinite(mean_acceptance)
+        or mean_acceptance <= 0
+    ):
+        return InitializationFailure.unavailable(
+            "LAPS adjusted refinement did not produce a finite moving ensemble"
+        )
+    return LapsEnsemble(
+        positions=jnp.asarray(final.position),
+        diagnostics=LapsInitializationDiagnostics(
+            ensemble_size=spec.ensemble_size,
+            joint_dimension=scientific_dimension,
+            unadjusted_steps=int(steps),
+            adjusted_steps=spec.num_adjusted_steps,
+            unadjusted_step_size=burn_step,
+            adjusted_step_size=final_step,
+            adjusted_acceptance=mean_acceptance,
+            early_stopped=int(steps) < spec.num_unadjusted_steps,
+        ),
+    )

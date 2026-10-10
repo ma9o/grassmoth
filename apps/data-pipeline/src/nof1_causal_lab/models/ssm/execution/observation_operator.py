@@ -8,9 +8,14 @@ from typing import TYPE_CHECKING, NamedTuple, overload
 import jax
 import jax.numpy as jnp
 
+from nof1_causal_lab.models.ssm.compile.observation_windows import compile_observation_scan
 from nof1_causal_lab.models.ssm.execution.contracts import NUMERICAL_EPSILON
 
 if TYPE_CHECKING:
+    from nof1_causal_lab.models.ssm.compile.observation_windows import (
+        CompiledObservationScan,
+        CompiledWindowPlan,
+    )
     from nof1_causal_lab.models.ssm.execution.observation_model import (
         EmissionLogProbFn,
         ObservationKernel,
@@ -50,12 +55,8 @@ class ObservationOperator:
     support_kind_codes: jnp.ndarray
     summary_operator_codes: jnp.ndarray
     interval_summary_indices: tuple[int, ...]
-    prev_coeffs: jnp.ndarray
-    curr_coeffs: jnp.ndarray
-    interval_weights: jnp.ndarray
-    emission_slots: jnp.ndarray
-    max_active_windows: int
-    n_manifest: int
+    window_plan: CompiledWindowPlan
+    scan: CompiledObservationScan
 
     @property
     def requires_interval_summary_handling(self) -> bool:
@@ -88,7 +89,7 @@ class ObservationOperator:
                 "empty_accumulators is undefined without interval-summary observation support"
             )
         return jnp.zeros(
-            (*leading_shape, self.n_manifest, self.max_active_windows),
+            (*leading_shape, self.window_plan.n_manifest, self.scan.max_active_windows),
             dtype=dtype,
         )
 
@@ -139,27 +140,14 @@ def compile_observation_operator(
     interval_summary_indices = tuple(
         idx for idx, kind in enumerate(observation_support.support_kinds) if kind == "interval"
     )
-    prev_coeffs = jnp.asarray(observation_support.interval_prev_coeffs)
-    curr_coeffs = jnp.asarray(observation_support.interval_curr_coeffs)
-    if held_channels:
-        # Inputs hold their left-hand level through each segment. Reuse the
-        # compiled overlap weights instead of interpolating across assignments.
-        channels = jnp.asarray(held_channels)
-        prev_coeffs = prev_coeffs.at[:, channels, :].set(
-            jnp.asarray(observation_support.interval_weights)[:, channels, :]
-        )
-        curr_coeffs = curr_coeffs.at[:, channels, :].set(0.0)
+    window_plan = observation_support.window_plan.with_held_channels(held_channels)
     return ObservationOperator(
         observation_support=observation_support,
         support_kind_codes=get_support_kind_codes(observation_support),
         summary_operator_codes=get_summary_operator_codes(observation_support),
         interval_summary_indices=interval_summary_indices,
-        prev_coeffs=prev_coeffs,
-        curr_coeffs=curr_coeffs,
-        interval_weights=jnp.asarray(observation_support.interval_weights),
-        emission_slots=jnp.asarray(observation_support.emission_slot_indices, dtype=jnp.int32),
-        max_active_windows=observation_support.max_active_windows,
-        n_manifest=len(observation_support.support_kinds),
+        window_plan=window_plan,
+        scan=compile_observation_scan(window_plan),
     )
 
 
@@ -396,11 +384,10 @@ def _project_response_trajectory_with_operator(
     if not observation_operator.requires_interval_summary_handling:
         return response_trajectory, jnp.ones((T, n_manifest), dtype=dtype)
 
-    support = observation_operator.observation_support
     point_like_mask = observation_operator.point_like_mask(dtype)
     interval_summary_mask = observation_operator.interval_summary_mask(dtype)
 
-    emission_slots = jnp.asarray(support.emission_slot_indices, dtype=jnp.int32)
+    emission_slots = jnp.asarray(observation_operator.scan.emission_slots, dtype=jnp.int32)
     semantic_mask_0 = point_like_mask + interval_summary_mask * (emission_slots[0] >= 0).astype(
         dtype
     )
@@ -409,10 +396,9 @@ def _project_response_trajectory_with_operator(
     if T == 1:
         return expected_0[None, :], semantic_mask_0[None, :]
 
-    prev_coeffs = jnp.asarray(observation_operator.prev_coeffs, dtype=dtype)
-    curr_coeffs = jnp.asarray(observation_operator.curr_coeffs, dtype=dtype)
-    interval_weights = jnp.asarray(observation_operator.interval_weights, dtype=dtype)
-    emission_slots = jnp.asarray(observation_operator.emission_slots, dtype=jnp.int32)
+    prev_coeffs = jnp.asarray(observation_operator.scan.prev_coeffs, dtype=dtype)
+    curr_coeffs = jnp.asarray(observation_operator.scan.curr_coeffs, dtype=dtype)
+    interval_weights = jnp.asarray(observation_operator.scan.weights, dtype=dtype)
     zeros = observation_operator.empty_accumulators(dtype)
     full_obs_mask = jnp.ones((n_manifest,), dtype=dtype)
 

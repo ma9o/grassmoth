@@ -789,9 +789,7 @@ def fit_map(
     phase_started_at = clock()
     logger.info("MAP phase start: phase=build_likelihood_backend")
     with jax.named_scope("map/build_likelihood_backend"):
-        backend = build_laplace_backend(
-            panel.compiled_dynamical_model, n_ieks_iters, panel.observation_support
-        )
+        backend = build_laplace_backend(panel, n_ieks_iters)
     logger.info(
         "MAP phase complete: phase=build_likelihood_backend elapsed=%.1fs backend=%s",
         (clock() - phase_started_at),

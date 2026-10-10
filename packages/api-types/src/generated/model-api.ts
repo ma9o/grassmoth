@@ -712,6 +712,11 @@ export interface components {
             /** Per Parameter */
             readonly per_parameter: readonly components["schemas"]["ParameterDiagnostics"][];
             /**
+             * Per Latent
+             * @default null
+             */
+            readonly per_latent: readonly components["schemas"]["LatentDiagnostics"][] | null;
+            /**
              * Num Divergences
              * @default null
              */
@@ -936,7 +941,31 @@ export interface components {
             /** @description 'time_varying' (changes over time) or 'time_invariant' (fixed) */
             readonly temporal_status: components["schemas"]["TemporalStatus"];
         };
-        readonly ConvergenceAssessmentSubject: components["schemas"]["ConvergenceSubject"] | "recorded_parameter_chains";
+        readonly ConvergenceAssessmentSubject: components["schemas"]["ConvergenceSubject"] | components["schemas"]["LatentConvergenceSubject"] | ("recorded_parameter_chains" | "recorded_latent_chains");
+        /**
+         * ConvergenceReport
+         * @description Recorded-chain criteria cover parameters and independent latent coordinates.
+         */
+        readonly ConvergenceReport: {
+            /** Findings */
+            readonly findings: readonly Domain.Assessment<Domain.ConvergenceAssessmentSubject, Domain.NumericCriterionEvidence>[];
+            /**
+             * Checked
+             * @description Number of distinct parameter and construct references with convergence findings.
+             */
+            readonly checked: number;
+            /**
+             * Status
+             * @description Convergence verdict with failed checks taking precedence over unevaluated checks.
+             * @enum {string}
+             */
+            readonly status: "passed" | "failed" | "not_evaluated";
+            /**
+             * Messages
+             * @description Explanations for convergence checks that failed or could not be evaluated.
+             */
+            readonly messages: readonly string[];
+        };
         /**
          * ConvergenceSubject
          * @description A convergence criterion on one stable scientific scalar.
@@ -3965,7 +3994,7 @@ export interface components {
              */
             readonly end: string | null;
         };
-        readonly FindingSubject: string | components["schemas"]["EntityRef"] | components["schemas"]["PredictiveSubject"] | components["schemas"]["IndicatorCheckSubject"] | components["schemas"]["ConvergenceSubject"] | components["schemas"]["QuestionSubject"];
+        readonly FindingSubject: string | components["schemas"]["EntityRef"] | components["schemas"]["PredictiveSubject"] | components["schemas"]["IndicatorCheckSubject"] | components["schemas"]["ConvergenceSubject"] | components["schemas"]["LatentConvergenceSubject"] | components["schemas"]["QuestionSubject"];
         /**
          * FitCheckReport
          * @description Compatibility and question findings owned by one completed fit.
@@ -4129,6 +4158,32 @@ export interface components {
             readonly distribution: "Gamma";
             readonly concentration: components["schemas"]["Expression-Output"];
             readonly rate: components["schemas"]["Expression-Output"];
+        };
+        /**
+         * GaussianReferenceTemperingSpec
+         * @description Optional replica exchange; each ladder retains only its exact beta-one chain.
+         *
+         *     The ladder spans beta one to zero. The reference is fixed at initialization,
+         *     its endpoint is independently refreshed every sweep, and even/odd neighboring
+         *     swaps alternate. Rejection-based ladder adaptation runs during the first half
+         *     of warmup, leaving the rest to settle before retaining posterior draws.
+         */
+        readonly GaussianReferenceTemperingSpec: {
+            /**
+             * Num Temperatures
+             * @default 48
+             */
+            readonly num_temperatures: number;
+            /**
+             * Reference Scale
+             * @default 1
+             */
+            readonly reference_scale: number;
+            /**
+             * Adaptation Interval
+             * @default 500
+             */
+            readonly adaptation_interval: number;
         };
         /** @description A native Git object identity for an immutable tree or commit. */
         readonly "GitOid-Input": string;
@@ -4337,7 +4392,7 @@ export interface components {
         readonly InferenceReportCore: {
             readonly inference_metadata: components["schemas"]["InferenceMetadata"];
             readonly inference_diagnostics: components["schemas"]["ChainDiagnostics"] | null;
-            readonly convergence: components["schemas"]["ParameterConvergenceReport"];
+            readonly convergence: components["schemas"]["ConvergenceReport"];
             /** @default null */
             readonly loo_diagnostics: components["schemas"]["LOODiagnostics"] | null;
             /** Posterior Marginals */
@@ -4521,6 +4576,92 @@ export interface components {
             readonly ecdf: number;
         };
         /**
+         * LapsInitializationDiagnostics
+         * @description Realized joint-ensemble initialization, without any claim of posterior convergence.
+         */
+        readonly LapsInitializationDiagnostics: {
+            /** Ensemble Size */
+            readonly ensemble_size: number;
+            /** Joint Dimension */
+            readonly joint_dimension: number;
+            /** Unadjusted Steps */
+            readonly unadjusted_steps: number;
+            /** Adjusted Steps */
+            readonly adjusted_steps: number;
+            /** Unadjusted Step Size */
+            readonly unadjusted_step_size: number;
+            /** Adjusted Step Size */
+            readonly adjusted_step_size: number;
+            /** Adjusted Acceptance */
+            readonly adjusted_acceptance: number;
+            /** Early Stopped */
+            readonly early_stopped: boolean;
+        };
+        /**
+         * LapsInitializationSpec
+         * @description Joint ensemble initialization; its draws are never reported as posterior samples.
+         */
+        readonly LapsInitializationSpec: {
+            /**
+             * Ensemble Size
+             * @default 1024
+             */
+            readonly ensemble_size: number;
+            /**
+             * Num Unadjusted Steps
+             * @default 10000
+             */
+            readonly num_unadjusted_steps: number;
+            /**
+             * Num Adjusted Steps
+             * @default 100
+             */
+            readonly num_adjusted_steps: number;
+            /**
+             * Steps Per Sample
+             * @default 15
+             */
+            readonly steps_per_sample: number;
+            /**
+             * Initial Scale
+             * @default 1
+             */
+            readonly initial_scale: number;
+            /**
+             * Covariance Regularization
+             * @default 0.0001
+             */
+            readonly covariance_regularization: number;
+        };
+        /**
+         * LatentConvergenceSubject
+         * @description A convergence criterion over a construct's independent latent coordinates.
+         */
+        readonly LatentConvergenceSubject: {
+            readonly state: components["schemas"]["ConstructRef-Output"];
+            /** Label */
+            readonly label: string;
+        };
+        /**
+         * LatentDiagnostics
+         * @description Worst chain estimators across a construct's independent, unobserved time coordinates.
+         */
+        readonly LatentDiagnostics: {
+            readonly subject: components["schemas"]["ConstructRef-Output"];
+            /** Label */
+            readonly label: string;
+            /** Coordinates */
+            readonly coordinates: number;
+            /** R Hat */
+            readonly r_hat: number | null;
+            /** Ess Bulk */
+            readonly ess_bulk: number | null;
+            /** Ess Tail */
+            readonly ess_tail: number | null;
+            /** Mcse Mean */
+            readonly mcse_mean: number | null;
+        };
+        /**
          * LikelihoodSpec
          * @description An indicator's conditional probability law and its scientific justification.
          */
@@ -4588,6 +4729,8 @@ export interface components {
              * @default 2
              */
             readonly n_parameter_particles: number;
+            /** @default null */
+            readonly tempering: components["schemas"]["GaussianReferenceTemperingSpec"] | null;
             /**
              * Latent Delta
              * @default 0.2
@@ -4719,12 +4862,9 @@ export interface components {
              * @enum {string}
              */
             readonly adaptation_scheme: "simple" | "dual_averaging";
-            /**
-             * Init Method
-             * @default pathfinder
-             * @enum {string}
-             */
-            readonly init_method: "random" | "pathfinder";
+            /** @default laps */
+            readonly init_method: components["schemas"]["ParameterInitialization"];
+            readonly laps: components["schemas"]["LapsInitializationSpec"];
             /**
              * Pathfinder Num Elbo Samples
              * @default 20
@@ -4750,12 +4890,8 @@ export interface components {
              * @default 0.1
              */
             readonly pathfinder_init_scale: number | null;
-            /**
-             * Auto Preconditioner Method
-             * @default pathfinder
-             * @enum {string}
-             */
-            readonly auto_preconditioner_method: "map" | "none" | "pathfinder";
+            /** @default laps */
+            readonly auto_preconditioner_method: components["schemas"]["ParameterPreconditioner"];
             /**
              * Auto Preconditioner Maxiter
              * @default 200
@@ -5363,30 +5499,6 @@ export interface components {
             readonly causal: components["schemas"]["CausalEffectResult"] | Domain.NotEvaluated<"causal_effect">;
         };
         /**
-         * ParameterConvergenceReport
-         * @description Recorded-chain criteria cover parameters, not latent-path mixing.
-         */
-        readonly ParameterConvergenceReport: {
-            /** Findings */
-            readonly findings: readonly Domain.Assessment<Domain.ConvergenceAssessmentSubject, Domain.NumericCriterionEvidence>[];
-            /**
-             * Checked
-             * @description Number of distinct parameter references represented by convergence findings.
-             */
-            readonly checked: number;
-            /**
-             * Status
-             * @description Convergence verdict with failed checks taking precedence over unevaluated checks.
-             * @enum {string}
-             */
-            readonly status: "passed" | "failed" | "not_evaluated";
-            /**
-             * Messages
-             * @description Explanations for convergence checks that failed or could not be evaluated.
-             */
-            readonly messages: readonly string[];
-        };
-        /**
          * ParameterDiagnostics
          * @description Measurements on one scientifically identified retained scalar chain.
          */
@@ -5411,6 +5523,10 @@ export interface components {
         readonly "ParameterId-Input": `parameter:${string}`;
         /** @description A scientific parameter identity connects component coefficients to one parameter definition. */
         readonly "ParameterId-Output": `parameter:${string}`;
+        /** @enum {string} */
+        readonly ParameterInitialization: "random" | "pathfinder" | "laps";
+        /** @enum {string} */
+        readonly ParameterPreconditioner: "map" | "none" | "pathfinder" | "laps";
         /**
          * ParameterRef
          * @description A scalar finding identifies its scientific parameter and declared logical component.
@@ -5457,11 +5573,13 @@ export interface components {
         readonly "ParameterTransformSpec-Output": components["schemas"]["IdentityTransformSpec-Output"] | components["schemas"]["PersistenceTransformSpec-Output"] | components["schemas"]["IntervalEffectTransformSpec-Output"] | components["schemas"]["InitialCorrelationTransformSpec-Output"];
         /**
          * ParameterWarmupDiagnostics
-         * @description Realized initialization and preconditioning, with the complete Pathfinder evidence once.
+         * @description Realized initialization and preconditioning, retaining each initializer's evidence once.
          */
         readonly ParameterWarmupDiagnostics: {
             /** @default null */
             readonly pathfinder: components["schemas"]["PathfinderDiagnostics"] | null;
+            /** @default null */
+            readonly laps: components["schemas"]["LapsInitializationDiagnostics"] | null;
             /** Pathfinder Run Count */
             readonly pathfinder_run_count: number;
             /** Pathfinder Consumers */
@@ -5595,6 +5713,8 @@ export interface components {
              */
             readonly amala_grad_norm_max: number | null;
             readonly parameter_warmup: components["schemas"]["ParameterWarmupDiagnostics"];
+            /** @default null */
+            readonly tempering: components["schemas"]["TemperingDiagnostics"] | null;
         };
         /**
          * PathfinderDiagnostics
@@ -6100,6 +6220,16 @@ export interface components {
              */
             readonly kind: "removed";
             readonly before: components["schemas"]["DataPoint"];
+        };
+        /**
+         * ReplicaSwapCounts
+         * @description Accepted and attempted exchanges at one neighboring temperature pair.
+         */
+        readonly ReplicaSwapCounts: {
+            /** Accepted */
+            readonly accepted: number;
+            /** Attempted */
+            readonly attempted: number;
         };
         /**
          * RetractedArtifact
@@ -6727,6 +6857,18 @@ export interface components {
          * @enum {string}
          */
         readonly SummaryOperator: "first" | "last" | "sum" | "count" | "mean" | "std";
+        /**
+         * TemperingDiagnostics
+         * @description Frozen ladder and retained swap counts; columns are neighboring temperature edges.
+         */
+        readonly TemperingDiagnostics: {
+            /** Inverse Temperatures */
+            readonly inverse_temperatures: readonly number[];
+            /** Ladder Frozen At Warmup Step */
+            readonly ladder_frozen_at_warmup_step: number;
+            /** Swaps */
+            readonly swaps: readonly (readonly components["schemas"]["ReplicaSwapCounts"][])[];
+        };
         /**
          * TemporalStatus
          * @description Temporal status states whether a construct varies within the individual over time.

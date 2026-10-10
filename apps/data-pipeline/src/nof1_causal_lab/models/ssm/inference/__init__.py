@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.runtime import BoundPanel
 
@@ -57,7 +58,7 @@ def fit(
     sampler: SamplerSpec,
     reparam: Strategy | Literal["auto"] | None = "auto",
     clock: Callable[[], float],
-) -> ParticleMCMCPosterior | ObservationPreflightFailure:
+) -> ParticleMCMCPosterior | ObservationPreflightFailure | InitializationFailure:
     """Run the production particle sampler on resolved numerical controls."""
     failure = validate_observations_for_fit(priors, panel)
     if failure is not None:

@@ -12,6 +12,7 @@ import jax.numpy as jnp
 import jax.random as random
 from blackjax.adaptation.step_size import dual_averaging_adaptation
 
+from nof1_causal_lab.artifacts.posterior_diagnostics import ReplicaSwapCounts, TemperingDiagnostics
 from nof1_causal_lab.models.ssm.inference.mcmc_state import (
     TrajectoryMCMCState,
     _adapt_scale,
@@ -24,6 +25,11 @@ from nof1_causal_lab.models.ssm.inference.mcmc_state import (
 from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs._math import _masked_mean
 from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.diagnostics import (
     build_mpgibbs_diagnostic_flags,
+)
+from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.tempering import (
+    ExchangeRecord,
+    ReplicaExchangeKernel,
+    adapt_temperature_ladder,
 )
 from nof1_causal_lab.utils.immutability import freeze_fields
 
@@ -63,6 +69,7 @@ class ParticleChainResult:
     first_step_seconds: float
     sampling_loop_seconds: float
     post_warmup_complete_log_posterior_mean: jnp.ndarray
+    tempering: TemperingDiagnostics | None = None
 
     def __post_init__(self) -> None:
         """Freeze retained, warmup, and combined chain diagnostics and any latent summary mapping."""
@@ -108,6 +115,7 @@ def _initialize_chain_state(
     )
     if exact_constraints is not None:
         latent_trajectory = exact_constraints.project(latent_trajectory)
+    latent_trajectory = target.replay_path(context, latent_trajectory)
     complete_lp, trajectory_lp = target.log_posterior_from_context(
         init_position,
         context,
@@ -161,6 +169,7 @@ def run_marginal_particle_gibbs(
     compute_latent_posterior_summary: bool = True,
     # Both adaptation policies stop updating after warmup.
     adaptation_scheme: Literal["simple", "dual_averaging"] = "simple",
+    tempering: ReplicaExchangeKernel | None = None,
     clock: Callable[[], float],
 ) -> ParticleChainResult:
     """Run marginalized Particle Gibbs chains."""
@@ -176,9 +185,9 @@ def run_marginal_particle_gibbs(
     observations = target.observations
     times = target.times
     latent_active = (
-        jnp.ones(times.shape, dtype=bool)
+        jnp.any(target.independent_mask, axis=-1)
         if kernel.exact_constraints is None
-        else jnp.any(kernel.exact_constraints.free_mask, axis=-1)
+        else jnp.any(kernel.exact_constraints.free_mask & target.independent_mask, axis=-1)
     )
     num_steps = int(observations.shape[0])
     base_key = random.PRNGKey(seed)
@@ -255,25 +264,37 @@ def run_marginal_particle_gibbs(
         )
     initial_param_step_size = states.param_step_size
     initial_latent_delta = states.latent_delta
+    levels = 1 if tempering is None else tempering.spec.num_temperatures
+    betas = jnp.linspace(1.0, 0.0, levels, dtype=states.position.dtype)
+    cold_indices = jnp.arange(num_chains) * levels
+    replicas = num_chains * levels
+    states = jax.tree.map(lambda value: jnp.repeat(value, levels, axis=0), states)
+    if tempering is not None:
+        states = tempering.rebind(states, betas)
+    swap_accepted = jnp.zeros((num_chains, levels - 1), dtype=jnp.int32)
+    swap_attempted = jnp.zeros_like(swap_accepted)
+    warmup_attempts = jnp.zeros_like(swap_attempted)
+    warmup_rejections = jnp.zeros(swap_attempted.shape, dtype=betas.dtype)
+    ladder_frozen_at = 0
+    rebind = None if tempering is None else jax.jit(tempering.rebind)
+    adapt_ladder = jax.jit(adapt_temperature_ladder)
     latent_acceptance_window = jnp.zeros(
         (
-            num_chains,
+            replicas,
             int(kernel.amala_adaptation_window),
             num_steps,
         ),
         dtype=states.latent_delta.dtype,
     )
-    latent_acceptance_window_count = 0
-    step_keys = random.split(chain_key, total_steps * num_chains).reshape(
-        total_steps, num_chains, 2
-    )
+    latent_proposal_window = jnp.zeros_like(latent_acceptance_window)
+    step_keys = random.split(chain_key, total_steps * replicas).reshape(total_steps, replicas, 2)
     need_public_latent = compute_latent_posterior_summary or retain_latent_paths
     diagnostic_flags = build_mpgibbs_diagnostic_flags(
         diagnostic_metrics=kernel.diagnostic_metrics,
     )
     latent_moments: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray] | None = None
     if compute_latent_posterior_summary:
-        public_example = states.latent_trajectory
+        public_example = states.latent_trajectory[cold_indices]
         latent_moments = (
             jnp.zeros_like(public_example),
             jnp.zeros_like(public_example),
@@ -306,24 +327,45 @@ def run_marginal_particle_gibbs(
 
     sampling_loop_started = clock()
     first_step_seconds = 0.0
-    compiled_step = _run_batched_step.lower(states, step_keys[0], step_fn=kernel.step_fn).compile()
+
+    def population_step(
+        current: TrajectoryMCMCState, keys: jax.Array, ladder: jax.Array, index: jax.Array
+    ) -> tuple[TrajectoryMCMCState, dict[str, jax.Array], ExchangeRecord]:
+        if tempering is not None:
+            return tempering.step(current, keys, ladder, index)
+        result: tuple[TrajectoryMCMCState, dict[str, jax.Array]] = _run_batched_step(
+            current, keys, step_fn=kernel.step_fn
+        )
+        updated, info = result
+        empty = jnp.zeros((num_chains, 0), dtype=jnp.int32)
+        return updated, info, ExchangeRecord(empty, empty, empty.astype(ladder.dtype))
+
+    compiled_step = (
+        jax.jit(population_step).lower(states, step_keys[0], betas, jnp.asarray(0)).compile()
+    )
     for step_idx in range(total_steps):
         step_started = sampling_loop_started if step_idx == 0 else clock()
-        states, step_info = compiled_step(states, step_keys[step_idx])
+        states, replica_info, exchange = compiled_step(
+            states, step_keys[step_idx], betas, jnp.asarray(step_idx)
+        )
+        cold_states = jax.tree.map(lambda value: value[cold_indices], states)
+        step_info = jax.tree.map(lambda value: value[cold_indices], replica_info)
         if step_idx == 0:
             states.complete_log_posterior.block_until_ready()
             first_step_seconds = clock() - step_started
 
         if step_idx >= num_warmup:
+            swap_accepted = swap_accepted + exchange.accepted
+            swap_attempted = swap_attempted + exchange.attempted
             observation_log_prob_history.append(
-                score_observations(states.latent_context, states.latent_trajectory)
+                score_observations(cold_states.latent_context, cold_states.latent_trajectory)
             )
-        position_history.append(states.position)
+        position_history.append(cold_states.position)
         parameter_accept_history.append(step_info["parameter_accepted"])
         latent_accept_history.append(
-            _masked_mean(step_info["latent_accepted"], latent_active, axis=-1)
+            _masked_mean(step_info["latent_accepted"], step_info["latent_proposed"], axis=-1)
         )
-        complete_lp_history.append(states.complete_log_posterior)
+        complete_lp_history.append(cold_states.complete_log_posterior)
         selected_label_history.append(step_info["selected_label"])
         final_particle_history.append(step_info["final_particle"])
         latent_move_rms_history.append(step_info["latent_move_rms"])
@@ -344,7 +386,7 @@ def run_marginal_particle_gibbs(
             parameter_jump_rms_history.append(step_info["parameter_jump_rms"])
 
         if need_public_latent:
-            public_latent = states.latent_trajectory
+            public_latent = cold_states.latent_trajectory
             if step_idx >= num_warmup and latent_moments is not None:
                 latent_sum, latent_sumsq, sample_count = latent_moments
                 latent_moments = (
@@ -356,17 +398,17 @@ def run_marginal_particle_gibbs(
                 latent_paths_history.append(public_latent)
 
         if step_idx < num_warmup:
+            step_info = replica_info
             window_slot = step_idx % int(kernel.amala_adaptation_window)
             latent_acceptance_window = latent_acceptance_window.at[:, window_slot, :].set(
                 step_info["latent_accepted"].astype(latent_acceptance_window.dtype)
             )
-            latent_acceptance_window_count = min(
-                latent_acceptance_window_count + 1,
-                int(kernel.amala_adaptation_window),
+            latent_proposal_window = latent_proposal_window.at[:, window_slot, :].set(
+                step_info["latent_proposed"].astype(latent_proposal_window.dtype)
             )
-            latent_acceptance_rate = jnp.sum(latent_acceptance_window, axis=1) / jnp.asarray(
-                latent_acceptance_window_count,
-                dtype=latent_acceptance_window.dtype,
+            proposal_count = jnp.sum(latent_proposal_window, axis=1)
+            latent_acceptance_rate = jnp.sum(latent_acceptance_window, axis=1) / jnp.maximum(
+                proposal_count, 1
             )
             target_accept = jnp.asarray(
                 kernel.amala_target_accept,
@@ -399,7 +441,9 @@ def run_marginal_particle_gibbs(
             should_adapt_latent_delta = should_adapt_latent_delta & (
                 (step_idx + 1) > int(kernel.amala_adaptation_window)
             )
-            should_adapt_latent_delta = should_adapt_latent_delta & latent_active
+            should_adapt_latent_delta = (
+                should_adapt_latent_delta & latent_active & (proposal_count > 0)
+            )
             next_latent_delta = jnp.where(
                 should_adapt_latent_delta,
                 states.latent_delta + delta_update,
@@ -448,6 +492,17 @@ def run_marginal_particle_gibbs(
                         max_scale=kernel.max_scale,
                     )
                 )
+            if tempering is not None and rebind is not None:
+                warmup_attempts = warmup_attempts + exchange.attempted
+                warmup_rejections = warmup_rejections + exchange.rejection_probability
+                if (step_idx + 1) % tempering.spec.adaptation_interval == 0 and (
+                    step_idx + 1
+                ) <= num_warmup // 2:
+                    betas = adapt_ladder(betas, warmup_rejections, warmup_attempts)
+                    states = rebind(states, betas)
+                    warmup_attempts = jnp.zeros_like(warmup_attempts)
+                    warmup_rejections = jnp.zeros_like(warmup_rejections)
+                    ladder_frozen_at = step_idx + 1
             continue
 
     states.complete_log_posterior.block_until_ready()
@@ -642,11 +697,26 @@ def run_marginal_particle_gibbs(
         warmup_latent_paths=warmup_latent_paths,
         all_latent_paths=all_latent_paths,
         initial_param_step_size=initial_param_step_size,
-        final_param_step_size=states.param_step_size,
+        final_param_step_size=states.param_step_size[cold_indices],
         initial_latent_delta=initial_latent_delta,
-        final_latent_delta=states.latent_delta,
+        final_latent_delta=states.latent_delta[cold_indices],
         compiled_step=compiled_step,
         first_step_seconds=first_step_seconds,
         sampling_loop_seconds=sampling_loop_seconds,
         post_warmup_complete_log_posterior_mean=post_warmup_complete_log_posterior_mean,
+        tempering=None
+        if tempering is None
+        else TemperingDiagnostics(
+            inverse_temperatures=tuple(float(beta) for beta in jax.device_get(betas)),
+            ladder_frozen_at_warmup_step=ladder_frozen_at,
+            swaps=tuple(
+                tuple(
+                    ReplicaSwapCounts(accepted=int(a), attempted=int(n))
+                    for a, n in zip(accepted, attempted, strict=True)
+                )
+                for accepted, attempted in zip(
+                    jax.device_get(swap_accepted), jax.device_get(swap_attempted), strict=True
+                )
+            ),
+        ),
     )

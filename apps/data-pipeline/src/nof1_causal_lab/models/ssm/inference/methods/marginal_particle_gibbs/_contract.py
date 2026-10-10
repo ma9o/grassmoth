@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from jax.typing import DTypeLike
     from jaxtyping import Array, Float
 
+    from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
+
 
 type ParticleContextRuntimeFn = Callable[[jnp.ndarray, jnp.ndarray], ParticleContext]
 type ObservationIncrementLogProbRuntimeFn = Callable[
@@ -39,6 +41,7 @@ class MPGibbsLatentSmootherResult(NamedTuple):
     latent_path: Float[Array, "T D"]
     final_label_log_probs: Float[Array, " K"]
     origin_path: jnp.ndarray
+    proposal_mask: jnp.ndarray
     diagnostics: Mapping[str, jnp.ndarray]
 
 
@@ -74,6 +77,7 @@ class MPGibbsStatic(NamedTuple):
     transition_log_probs_for_pairs_fn: TransitionLogProbFn
     transition_pairwise_log_probs_fn: TransitionLogProbFn
     diagnostic_metrics: frozenset[str]
+    intervals: ParticleIntervalObservations | None
 
 
 class SmootherContext(NamedTuple):
@@ -108,3 +112,5 @@ class SmootherContext(NamedTuple):
     selected_transition_log_probs: Callable[..., jnp.ndarray]
     pairwise_transition_log_probs: Callable[..., jnp.ndarray]
     trajectory_label_log_probs: Callable[..., jnp.ndarray]
+    trajectory_label_log_weights: Callable[[jnp.ndarray], jnp.ndarray]
+    intervals: ParticleIntervalObservations | None

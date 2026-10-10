@@ -160,10 +160,11 @@ def _score_weight_negative_binomial(
     r: float | jnp.ndarray,
 ) -> tuple[Float[Array, " M"], Float[Array, " M"]]:
     """Negative Binomial (log link): exact score and neg-Hessian."""
-    mu = jnp.exp(eta)
-    denom = r + mu
-    g = r * (y_t - mu) / denom * obs_mask_t
-    w = r * (r + y_t) * mu / (denom**2) * obs_mask_t
+    logits = eta - jnp.log(r)
+    p = jax.nn.sigmoid(logits)
+    q = jax.nn.sigmoid(-logits)
+    g = (y_t * q - r * p) * obs_mask_t
+    w = (r + y_t) * p * q * obs_mask_t
     return g, w
 
 

@@ -11,6 +11,12 @@ import lineax as lx
 import optimistix as optx
 from optimistix._search import EvalGradHessianInv
 
+from .interval_precision import (
+    IntervalFactor,
+    IntervalPrecision,
+    factor_interval_precision,
+    solve_interval_precision,
+)
 from .shared import _factor_block_profile_cholesky, _solve_block_profile_from_cholesky
 
 if TYPE_CHECKING:
@@ -24,9 +30,7 @@ if TYPE_CHECKING:
 _MODE_DAMPING = 1e-6
 
 
-type Factor = Callable[[jax.Array, jax.Array, jax.Array, jax.Array], tuple[jax.Array, jax.Array]]
 type Solve = Callable[[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array], jax.Array]
-type System = Callable[[jax.Array], tuple[jax.Array, jax.Array, jax.Array]]
 
 
 def solve_fixed_point_mode(
@@ -36,9 +40,15 @@ def solve_fixed_point_mode(
     max_steps: int,
 ) -> tuple[jax.Array, jax.Array]:
     """Iterate a local initialization mode with the common IEKS stopping policy."""
+
+    def convergence_norm(value: PyTree[jax.Array]) -> jax.Array:
+        # Optimistix initializes its scalar convergence state in the default
+        # floating dtype, independently of the coordinate arrays' precision.
+        return jnp.asarray(optx.max_norm(value), dtype=jnp.asarray(jnp.inf).dtype)
+
     solution = optx.fixed_point(
         update,
-        optx.FixedPointIteration(rtol=1e-3, atol=1e-3),
+        optx.FixedPointIteration(rtol=1e-3, atol=1e-3, norm=convergence_norm),
         initial,
         max_steps=max(max_steps, 1),
         throw=False,
@@ -50,21 +60,13 @@ def _apply_inverse(chol, lower, row_upper, row_lower, solve: Solve, vector) -> j
     return solve(chol, lower, vector, row_upper, row_lower)
 
 
-def _curvature_at(curvature, parameters, y):
-    return curvature(y, parameters)
-
-
 class _StructuredNewton(
     optx.AbstractQuasiNewton[jax.Array, None, EvalGradHessianInv[jax.Array], None]
 ):
     """Supply Newton curvature; Optimistix owns the search, iteration and termination."""
 
-    system: System = eqx.field(kw_only=True)
-    bandwidth: int = eqx.field(kw_only=True)
-    row_upper: jax.Array = eqx.field(kw_only=True)
-    row_lower: jax.Array = eqx.field(kw_only=True)
-    factor: Factor = _factor_block_profile_cholesky
-    solve: Solve = _solve_block_profile_from_cholesky
+    inverse_at: Callable[[jax.Array], lx.AbstractLinearOperator] = eqx.field(kw_only=True)
+    initial_inverse: lx.AbstractLinearOperator = eqx.field(kw_only=True)
     rtol: float = 1e-3
     atol: float = 1e-3
     norm: Callable[[PyTree[jax.Array]], jax.Array] = optx.two_norm
@@ -85,27 +87,15 @@ class _StructuredNewton(
 
     @override  # noqa: V105 - Optimistix calls this initialization override.
     def init_hessian(self, y, f, grad):
-        # Optimistix requests a template here, before evaluating the objective.
-        chol = jnp.broadcast_to(jnp.eye(y.shape[1], dtype=y.dtype), (*y.shape, y.shape[1]))
-        lower = jnp.zeros((self.bandwidth, *chol.shape), dtype=y.dtype)
-        return self._hessian_info(y, f, grad, chol, lower), None
-
-    def _hessian_info(self, y, f, grad, chol, lower):
-        inverse = lx.FunctionLinearOperator(
-            eqx.Partial(_apply_inverse, chol, lower, self.row_upper, self.row_lower, self.solve),
-            jax.ShapeDtypeStruct(y.shape, y.dtype),
-            tags=lx.positive_semidefinite_tag,
-            closure_convert=False,
-        )
-        return optx.FunctionInfo.EvalGradHessianInv(f, grad, inverse)
+        del y
+        return optx.FunctionInfo.EvalGradHessianInv(f, grad, self.initial_inverse), None
 
     @override  # noqa: V105 - Optimistix calls this override.
     def update_hessian(self, y, y_eval, f_info, f_eval_info, hessian_update_state):
         del y, f_info, hessian_update_state
-        diag, upper, _rhs = self.system(y_eval)
-        diag = diag + _MODE_DAMPING * jnp.eye(y_eval.shape[1], dtype=y_eval.dtype)[None]
-        chol, lower = self.factor(diag, upper, self.row_upper, self.row_lower)
-        return self._hessian_info(y_eval, f_eval_info.f, f_eval_info.grad, chol, lower), None
+        return optx.FunctionInfo.EvalGradHessianInv(
+            f_eval_info.f, f_eval_info.grad, self.inverse_at(y_eval)
+        ), None
 
     @override
     def postprocess(self, fn, y, aux, args, options, state, tags, result):
@@ -185,20 +175,92 @@ def solve_latent_mode(
 ) -> tuple[jax.Array, dict[str, jax.Array]]:
     """Solve an initialization mode with a sparse Newton step and sparse implicit AD."""
     curvature = eqx.filter_closure_convert(system, initial, args)
+    diagonal = jnp.broadcast_to(
+        jnp.eye(initial.shape[1], dtype=initial.dtype), (*initial.shape, initial.shape[1])
+    )
+    lower = jnp.zeros((bandwidth, *diagonal.shape), dtype=initial.dtype)
+    template = _inverse_operator(
+        eqx.Partial(_apply_inverse, diagonal, lower, row_upper, row_lower, solve), initial
+    )
+    return _minimize_mode(
+        log_joint,
+        initial,
+        args,
+        eqx.Partial(_banded_inverse_at, curvature, args, row_upper, row_lower, factor, solve),
+        template,
+        optx.ImplicitAdjoint(_BandedAdjointSolver(bandwidth)),
+        max_steps,
+    )
+
+
+def _inverse_operator(apply, coordinates: jax.Array) -> lx.FunctionLinearOperator:
+    return lx.FunctionLinearOperator(
+        apply,
+        jax.ShapeDtypeStruct(coordinates.shape, coordinates.dtype),
+        tags=lx.positive_semidefinite_tag,
+        closure_convert=False,
+    )
+
+
+def _banded_inverse_at(curvature, parameters, row_upper, row_lower, factor, solve, y):
+    diag, upper, _rhs = curvature(y, parameters)
+    diag, upper = jnp.asarray(diag, y.dtype), jnp.asarray(upper, y.dtype)
+    diag = diag + _MODE_DAMPING * jnp.eye(y.shape[1], dtype=y.dtype)[None]
+    chol, lower = factor(diag, upper, row_upper, row_lower)
+    return _inverse_operator(
+        eqx.Partial(_apply_inverse, chol, lower, row_upper, row_lower, solve), y
+    )
+
+
+def _interval_inverse_at(curvature, parameters, y):
+    precision = jax.tree.map(lambda x: jnp.asarray(x, y.dtype), curvature(y, parameters))
+    precision = IntervalPrecision(
+        precision.diagonal + _MODE_DAMPING * jnp.eye(y.shape[1], dtype=y.dtype)[None],
+        precision.upper,
+        precision.jacobian,
+        precision.information,
+    )
+    factor = factor_interval_precision(precision)
+    return _inverse_operator(eqx.Partial(solve_interval_precision, factor), y)
+
+
+def solve_interval_latent_mode(
+    log_joint, system, initial, args, *, rank: int, max_steps: int
+) -> tuple[jax.Array, dict[str, jax.Array]]:
+    """Use Woodbury Newton steps and a matrix-free implicit differentiation solve."""
+    curvature = eqx.filter_closure_convert(system, initial, args)
+    diagonal = jnp.broadcast_to(
+        jnp.eye(initial.shape[1], dtype=initial.dtype), (*initial.shape, initial.shape[1])
+    )
+    factor = IntervalFactor(
+        diagonal,
+        jnp.zeros((1, *diagonal.shape), dtype=initial.dtype),
+        jnp.zeros((*initial.shape, rank), dtype=initial.dtype),
+        jnp.zeros((rank, rank), dtype=initial.dtype),
+        jnp.asarray(0.0, dtype=initial.dtype),
+    )
+    template = _inverse_operator(eqx.Partial(solve_interval_precision, factor), initial)
+    return _minimize_mode(
+        log_joint,
+        initial,
+        args,
+        eqx.Partial(_interval_inverse_at, curvature, args),
+        template,
+        optx.ImplicitAdjoint(lx.GMRES(rtol=1e-6, atol=1e-6, max_steps=128)),
+        max_steps,
+    )
+
+
+def _minimize_mode(
+    log_joint, initial: jax.Array, args, inverse_at, initial_inverse, adjoint, max_steps
+) -> tuple[jax.Array, dict[str, jax.Array]]:
     solution = optx.minimise(
         lambda y, parameters: -log_joint(y, parameters),
-        _StructuredNewton(
-            system=eqx.Partial(_curvature_at, curvature, args),
-            bandwidth=bandwidth,
-            row_upper=row_upper,
-            row_lower=row_lower,
-            factor=factor,
-            solve=solve,
-        ),
+        _StructuredNewton(inverse_at=inverse_at, initial_inverse=initial_inverse),
         initial,
         args=args,
         max_steps=max(max_steps, 1) + 1,
-        adjoint=optx.ImplicitAdjoint(_BandedAdjointSolver(bandwidth)),
+        adjoint=adjoint,
         throw=False,
     )
     return solution.value, {

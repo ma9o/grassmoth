@@ -136,7 +136,7 @@ def build_smoother_context(
         transition_lp = jnp.moveaxis(per_param, 0, -1)
         return jnp.where(real_seam, transition_lp, 0.0).astype(traj_dtype)
 
-    def _trajectory_label_log_probs(path: jnp.ndarray) -> jnp.ndarray:
+    def _trajectory_label_log_weights(path: jnp.ndarray) -> jnp.ndarray:
         def _one_context(context: ParticleContext) -> jnp.ndarray:
             return trajectory_log_prob_fn(
                 context,
@@ -145,7 +145,10 @@ def build_smoother_context(
             )
 
         trajectory_log_probs = jax.vmap(_one_context)(contexts).astype(traj_dtype)
-        return _normalize_log_probs(parameter_log_probs + trajectory_log_probs).astype(traj_dtype)
+        return (parameter_log_probs + trajectory_log_probs).astype(traj_dtype)
+
+    def _trajectory_label_log_probs(path: jnp.ndarray) -> jnp.ndarray:
+        return _normalize_log_probs(_trajectory_label_log_weights(path))
 
     return SmootherContext(
         contexts=contexts,
@@ -179,4 +182,6 @@ def build_smoother_context(
         selected_transition_log_probs=_selected_transition_log_probs,
         pairwise_transition_log_probs=_pairwise_transition_log_probs,
         trajectory_label_log_probs=_trajectory_label_log_probs,
+        trajectory_label_log_weights=_trajectory_label_log_weights,
+        intervals=static.intervals,
     )

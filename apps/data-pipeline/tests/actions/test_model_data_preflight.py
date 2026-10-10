@@ -2,6 +2,7 @@
 
 import time
 from datetime import UTC, datetime
+from unittest.mock import Mock
 
 import polars as pl
 import pytest
@@ -19,7 +20,6 @@ from nof1_causal_lab.artifacts.observation_data import ObservationDataset
 from nof1_causal_lab.artifacts.question import QuestionSpec
 from nof1_causal_lab.models.model_structure import StructuralSelection
 from nof1_causal_lab.models.ssm.inference import fit
-from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
 from nof1_causal_lab.sampler_config import SamplerSpec
 from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.state import StudyState
@@ -57,7 +57,11 @@ def test_specification_reports_each_distinct_fit_law_reason_once(monkeypatch):
     assert finding.evidence.count("Invalid scale.") == 1
 
 
-def test_interval_summary_fails_shared_preflight_before_particle_dispatch():
+def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypatch):
+    from nof1_causal_lab.models.ssm.inference.methods import marginal_particle_gibbs
+
+    dispatch = Mock(return_value=object())
+    monkeypatch.setattr(marginal_particle_gibbs, "fit_marginal_particle_gibbs", dispatch)
     dynamical_model_spec, panel = (
         stress_sleep_causal_model(),
         panel_frame(n_days=4),
@@ -70,24 +74,31 @@ def test_interval_summary_fails_shared_preflight_before_particle_dispatch():
     finding = report[0]
     assert finding.code == "fit_preflight"
     assert finding.kind == "evaluated"
-    assert finding.outcome == "failed"
-    assert "interval summaries" in finding.evidence
-    assert "stress_score" in finding.evidence
+    assert finding.outcome == "passed"
     from nof1_causal_lab.models.ssm.runtime import PreparedFit, prepare_fit
 
     prepared = prepare_fit(inputs, panel, time_origin=panel_metadata().time_origin)
     assert isinstance(prepared, PreparedFit)
     assert prepared.inputs is inputs
     assert prepared.panel.compiled_dynamical_model is inputs.compiled_dynamical_model
-    failure = fit(
+    sampler = SamplerSpec()
+    result = fit(
         prepared.inputs.prior_runtime_bundle,
         prepared.panel,
-        sampler=SamplerSpec(),
+        sampler=sampler,
+        reparam=None,
+        clock=time.monotonic,
         compute_budget=COMPUTE_BUDGET,
+    )
+    assert result is dispatch.return_value
+    dispatch.assert_called_once_with(
+        prepared.inputs.prior_runtime_bundle,
+        prepared.panel,
+        compute_budget=COMPUTE_BUDGET,
+        sampler=sampler,
+        reparam=None,
         clock=time.monotonic,
     )
-    assert isinstance(failure, ObservationPreflightFailure)
-    assert "interval summaries" in failure.message
 
 
 def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeypatch):

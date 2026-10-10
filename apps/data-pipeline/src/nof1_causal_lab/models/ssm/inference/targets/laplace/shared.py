@@ -14,8 +14,10 @@ from nof1_causal_lab.models.ssm.covariance_utils import (
     logdet_from_cholesky,
     symmetrize_with_jitter,
 )
-from nof1_causal_lab.models.ssm.execution.observation_operator import (
-    get_support_kind_codes,
+from nof1_causal_lab.models.ssm.inference.targets.laplace.tridiagonal import (
+    factor_tridiagonal,
+    inverse_subset_tridiagonal,
+    solve_tridiagonal,
 )
 from nof1_causal_lab.models.ssm.inference.targets.transitions import build_discrete_transitions
 
@@ -44,8 +46,8 @@ class SupportObservationWindowBatch:
     padded_state_indices: jnp.ndarray
     time_indices: jnp.ndarray
     valid_diag: jnp.ndarray
-    cross_time_indices: jnp.ndarray
-    valid_cross: jnp.ndarray
+    component_windows: jnp.ndarray
+    component_manifests: jnp.ndarray
 
 
 @dataclass(frozen=True)
@@ -94,7 +96,7 @@ def _prepare_linearized_path(
         path = _predictive_latent_init(Ad, cd, init_mean)
     else:
         path = jnp.asarray(z_init, dtype=dtype)
-    return transitions_at, path
+    return transitions_at, jnp.asarray(path, dtype=dtype)
 
 
 def _should_use_dense_support_laplace(*, n_time: int, n_latent: int) -> bool:
@@ -320,148 +322,6 @@ def _build_prior_banded_system(
     return diag, upper, rhs
 
 
-def _factor_block_banded_cholesky(
-    diag: jnp.ndarray,
-    upper: jnp.ndarray,
-    row_upper_bandwidths: jnp.ndarray | None = None,
-    row_lower_bandwidths: jnp.ndarray | None = None,
-    jitter: float = 1e-6,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    """Block-banded Cholesky factorization A = L L^T."""
-    T, _D = diag.shape[:2]
-    bandwidth = upper.shape[0]
-    if row_upper_bandwidths is None:
-        row_upper_bandwidths = jnp.full((T,), bandwidth, dtype=jnp.int32)
-    if row_lower_bandwidths is None:
-        row_lower_bandwidths = jnp.full((T,), bandwidth, dtype=jnp.int32)
-    chol_diag = jnp.zeros_like(diag)
-    lower = jnp.zeros_like(upper)
-
-    def _factor_step(
-        i: int | jnp.ndarray, state: tuple[jnp.ndarray, jnp.ndarray]
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        chol_diag_state, lower_state = state
-        upper_bw_i = row_upper_bandwidths[i]
-        lower_bw_i = row_lower_bandwidths[i]
-
-        def _schur_offset(offset: int | jnp.ndarray, schur: jnp.ndarray) -> jnp.ndarray:
-            result: jnp.ndarray = jax.lax.cond(
-                (i >= offset) & (offset <= lower_bw_i),
-                lambda s: s - lower_state[offset - 1, i] @ lower_state[offset - 1, i].T,
-                lambda s: s,
-                schur,
-            )
-            return result
-
-        schur = jax.lax.fori_loop(1, bandwidth + 1, _schur_offset, diag[i])
-        l_ii = jnp.linalg.cholesky(_symmetrize_psd(schur, jitter=jitter))
-        chol_diag_state = chol_diag_state.at[i].set(l_ii)
-
-        def _update_lower_for_offset(
-            offset_j: int | jnp.ndarray, lower_curr: jnp.ndarray
-        ) -> jnp.ndarray:
-            def _compute(curr_lower: jnp.ndarray) -> jnp.ndarray:
-                lower_bw_j = row_lower_bandwidths[i + offset_j]
-
-                def _cross_update(
-                    offset_k: int | jnp.ndarray, schur_off: jnp.ndarray
-                ) -> jnp.ndarray:
-                    cross_offset = offset_j + offset_k - 1
-                    result: jnp.ndarray = jax.lax.cond(
-                        (i >= offset_k)
-                        & (offset_k <= lower_bw_i)
-                        & (cross_offset < bandwidth)
-                        & (cross_offset < lower_bw_j),
-                        lambda s: (
-                            s
-                            - curr_lower[cross_offset, i + offset_j] @ curr_lower[offset_k - 1, i].T
-                        ),
-                        lambda s: s,
-                        schur_off,
-                    )
-                    return result
-
-                schur_off = jax.lax.fori_loop(
-                    1, bandwidth + 1, _cross_update, upper[offset_j - 1, i].T
-                )
-                l_ji = jla.solve_triangular(l_ii, schur_off.T, lower=True).T
-                return curr_lower.at[offset_j - 1, i + offset_j].set(l_ji)
-
-            result: jnp.ndarray = jax.lax.cond(
-                (i + offset_j < T) & (offset_j <= upper_bw_i),
-                _compute,
-                lambda x: x,
-                lower_curr,
-            )
-            return result
-
-        lower_state: jnp.ndarray = jax.lax.fori_loop(
-            1, bandwidth + 1, _update_lower_for_offset, lower_state
-        )
-        return chol_diag_state, lower_state
-
-    result: tuple[jnp.ndarray, jnp.ndarray] = jax.lax.fori_loop(
-        0, T, _factor_step, (chol_diag, lower)
-    )
-    return result
-
-
-def _solve_block_banded_from_cholesky(
-    chol_diag: jnp.ndarray,
-    lower: jnp.ndarray,
-    rhs: jnp.ndarray,
-    row_upper_bandwidths: jnp.ndarray | None = None,
-    row_lower_bandwidths: jnp.ndarray | None = None,
-) -> jnp.ndarray:
-    """Solve A x = rhs from block-banded Cholesky factors."""
-    T = rhs.shape[0]
-    bandwidth = lower.shape[0]
-    if row_upper_bandwidths is None:
-        row_upper_bandwidths = jnp.full((T,), bandwidth, dtype=jnp.int32)
-    if row_lower_bandwidths is None:
-        row_lower_bandwidths = jnp.full((T,), bandwidth, dtype=jnp.int32)
-    y = jnp.zeros_like(rhs)
-
-    def _forward_step(i: int | jnp.ndarray, y_state: jnp.ndarray) -> jnp.ndarray:
-        lower_bw_i = row_lower_bandwidths[i]
-
-        def _forward_offset(offset: int | jnp.ndarray, res: jnp.ndarray) -> jnp.ndarray:
-            result: jnp.ndarray = jax.lax.cond(
-                (i >= offset) & (offset <= lower_bw_i),
-                lambda r: r - lower[offset - 1, i] @ y_state[i - offset],
-                lambda r: r,
-                res,
-            )
-            return result
-
-        res = jax.lax.fori_loop(1, bandwidth + 1, _forward_offset, rhs[i])
-        y_i = jla.solve_triangular(chol_diag[i], res, lower=True)
-        return y_state.at[i].set(y_i)
-
-    y = jax.lax.fori_loop(0, T, _forward_step, y)
-    x = jnp.zeros_like(rhs)
-
-    def _backward_step(rev_idx: int | jnp.ndarray, x_state: jnp.ndarray) -> jnp.ndarray:
-        i = T - 1 - rev_idx
-        upper_bw_i = row_upper_bandwidths[i]
-
-        def _backward_offset(offset: int | jnp.ndarray, res: jnp.ndarray) -> jnp.ndarray:
-            result: jnp.ndarray = jax.lax.cond(
-                (i + offset < T) & (offset <= upper_bw_i),
-                lambda r: r - lower[offset - 1, i + offset].T @ x_state[i + offset],
-                lambda r: r,
-                res,
-            )
-            return result
-
-        res = jax.lax.fori_loop(1, bandwidth + 1, _backward_offset, y[i])
-        x_i = jla.solve_triangular(chol_diag[i].T, res, lower=False)
-        return x_state.at[i].set(x_i)
-
-    result: jnp.ndarray = jax.lax.fori_loop(0, T, _backward_step, x)
-    return result
-
-
 def _block_banded_logdet(chol_diag: jnp.ndarray) -> jnp.ndarray:
     """Log determinant from block-banded Cholesky factors."""
     return 2.0 * jnp.sum(jnp.log(jnp.clip(jnp.diagonal(chol_diag, axis1=1, axis2=2), 1e-12)))
@@ -491,24 +351,9 @@ def _factor_block_profile_cholesky(
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Exact block-profile Cholesky factorization A = L L^T."""
     if upper.shape[0] == 1:
-        # Point observations have a tridiagonal precision. Carry its preceding
-        # block directly rather than running the general profile's inner loops.
-        off_diagonal = jnp.where(row_upper_bandwidths[:-1, None, None] > 0, upper[0, :-1], 0)
-        first = jnp.linalg.cholesky(_symmetrize_psd(diag[0], jitter=jitter))
-
-        def _tridiagonal_step(previous, blocks):
-            diagonal, off = blocks
-            lower_block = jla.solve_triangular(previous, off, lower=True).T
-            chol = jnp.linalg.cholesky(
-                _symmetrize_psd(diagonal - lower_block @ lower_block.T, jitter=jitter)
-            )
-            return chol, (chol, lower_block)
-
-        _, (rest, lower_blocks) = jax.lax.scan(_tridiagonal_step, first, (diag[1:], off_diagonal))
-        return (
-            jnp.concatenate((first[None], rest)),
-            jnp.concatenate((jnp.zeros_like(first)[None], lower_blocks))[None],
-        )
+        off_diagonal = jnp.where(row_upper_bandwidths[:, None, None] > 0, upper[0], 0)
+        chol, lower = factor_tridiagonal(diag, off_diagonal, jitter=jitter)
+        return chol, lower[None]
 
     T, _D = diag.shape[:2]
     chol_diag = jnp.zeros_like(diag)
@@ -597,29 +442,7 @@ def _solve_block_profile_from_cholesky(
 ) -> jnp.ndarray:
     """Solve A x = rhs from exact block-profile Cholesky factors."""
     if lower.shape[0] == 1:
-        first = jla.solve_triangular(chol_diag[0], rhs[0], lower=True)
-
-        def _tridiagonal_forward(previous, blocks):
-            diagonal, off, value = blocks
-            result = jla.solve_triangular(diagonal, value - off @ previous, lower=True)
-            return result, result
-
-        _, rest = jax.lax.scan(_tridiagonal_forward, first, (chol_diag[1:], lower[0, 1:], rhs[1:]))
-        forward = jnp.concatenate((first[None], rest))
-        last = jla.solve_triangular(chol_diag[-1].T, forward[-1], lower=False)
-
-        def _tridiagonal_backward(following, blocks):
-            diagonal, off, value = blocks
-            result = jla.solve_triangular(diagonal.T, value - off.T @ following, lower=False)
-            return result, result
-
-        _, rest = jax.lax.scan(
-            _tridiagonal_backward,
-            last,
-            (chol_diag[:-1], lower[0, 1:], forward[:-1]),
-            reverse=True,
-        )
-        return jnp.concatenate((rest, last[None]))
+        return solve_tridiagonal(chol_diag, lower[0], rhs)
 
     T = rhs.shape[0]
     y = jnp.zeros_like(rhs)
@@ -718,6 +541,9 @@ def _block_profile_inverse_subset_from_cholesky(
     _row_lower_bandwidths: jnp.ndarray,
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Return diagonal and upper-profile blocks of A^{-1} from A = L L^T."""
+    if lower.shape[0] == 1:
+        diagonal, upper = inverse_subset_tridiagonal(chol_diag, lower[0])
+        return diagonal, upper[None]
     t_steps, block_dim = chol_diag.shape[:2]
     max_bandwidth = lower.shape[0]
     eye = jnp.eye(block_dim, dtype=chol_diag.dtype)
@@ -840,79 +666,39 @@ def _precision_logdet_jvp(primals, tangents):
 
 def _infer_support_groups(
     observation_support: ObservationSupportRuntime,
-) -> tuple[tuple[SupportObservationWindowBatch, ...], int, jnp.ndarray]:
-    """Compile anchored non-point observation windows into coarse exact-preserving buckets."""
-    anchor_times = np.asarray(observation_support.anchor_times)
-    support_kind_codes = np.asarray(get_support_kind_codes(observation_support))
-    support_start_times = np.asarray(observation_support.support_start_times)
-    prev_coeffs = np.asarray(observation_support.interval_prev_coeffs)
-    curr_coeffs = np.asarray(observation_support.interval_curr_coeffs)
-    weights = np.asarray(observation_support.interval_weights)
-    emission_slots = np.asarray(observation_support.emission_slot_indices)
-    T, n_manifest = emission_slots.shape
+    observed_mask: np.ndarray,
+) -> tuple[SupportObservationWindowBatch, ...]:
+    """Compile only observed interval factors into exact-preserving window buckets."""
+    plan = observation_support.window_plan
+    T, n_manifest = len(plan.times), plan.n_manifest
+    observed_windows = tuple(
+        window
+        for window in plan.windows
+        if observed_mask[window.anchor_index, window.manifest_index]
+    )
+    anchors = sorted({window.anchor_index for window in observed_windows})
+    windows_by_anchor = {anchor: [] for anchor in anchors}
+    for window in observed_windows:
+        windows_by_anchor[window.anchor_index].append(window)
 
     compiled_windows: list[
         tuple[int, int, int, np.ndarray, np.ndarray, np.ndarray, np.ndarray]
     ] = []
-    max_bandwidth = 1 if T > 1 else 0
-    row_upper_bandwidths = np.zeros((T,), dtype=np.int64)
-    for anchor_idx in range(T):
-        manifests = [
-            manifest_idx
-            for manifest_idx in range(n_manifest)
-            if support_kind_codes[manifest_idx] == 1
-            and emission_slots[anchor_idx, manifest_idx] >= 0
-        ]
-        if not manifests:
-            continue
-
-        manifest_windows: list[tuple[int, int, int]] = []
-        start_idx = anchor_idx
-        for manifest_idx in manifests:
-            slot_idx = int(emission_slots[anchor_idx, manifest_idx])
-            support_start = float(support_start_times[anchor_idx, manifest_idx])
-            if not np.isfinite(support_start):
-                raise ValueError(
-                    "Support-aware Laplace requires finite support_start metadata "
-                    f"for emitted interval observation manifest={manifest_idx} anchor_idx={anchor_idx}."
-                )
-            local_start_idx = int(np.searchsorted(anchor_times, support_start, side="right") - 1)
-            local_start_idx = max(local_start_idx, 0)
-            start_idx = min(start_idx, local_start_idx)
-            manifest_windows.append((manifest_idx, slot_idx, local_start_idx))
-
-        start_idx = max(start_idx, 0)
-        max_bandwidth = max(max_bandwidth, anchor_idx - start_idx)
-
+    for anchor_idx, windows in windows_by_anchor.items():
+        start_idx = min(window.start_index for window in windows)
         mask_full = np.zeros((n_manifest,), dtype=np.float64)
-        mask_full[manifests] = 1.0
         segment_len = anchor_idx - start_idx
         group_prev = np.zeros((segment_len, n_manifest), dtype=np.float64)
         group_curr = np.zeros((segment_len, n_manifest), dtype=np.float64)
         group_weights = np.zeros((segment_len, n_manifest), dtype=np.float64)
-        for manifest_idx, slot_idx, local_start_idx in manifest_windows:
-            offset = local_start_idx - start_idx
-            local_segment_len = anchor_idx - local_start_idx
-            if local_segment_len <= 0:
-                continue
-            group_prev[offset : offset + local_segment_len, manifest_idx] = prev_coeffs[
-                local_start_idx + 1 : anchor_idx + 1,
-                manifest_idx,
-                slot_idx,
-            ]
-            group_curr[offset : offset + local_segment_len, manifest_idx] = curr_coeffs[
-                local_start_idx + 1 : anchor_idx + 1,
-                manifest_idx,
-                slot_idx,
-            ]
-            group_weights[offset : offset + local_segment_len, manifest_idx] = weights[
-                local_start_idx + 1 : anchor_idx + 1,
-                manifest_idx,
-                slot_idx,
-            ]
+        for window in windows:
+            manifest_idx = window.manifest_index
+            mask_full[manifest_idx] = 1.0
+            indices = window.step_indices - start_idx - 1
+            group_prev[indices, manifest_idx] = window.coefficients[:, 0]
+            group_curr[indices, manifest_idx] = window.coefficients[:, 1]
+            group_weights[indices, manifest_idx] = window.weights
         state_len = anchor_idx - start_idx + 1
-        for row_idx in range(start_idx, anchor_idx):
-            row_upper_bandwidths[row_idx] = max(row_upper_bandwidths[row_idx], anchor_idx - row_idx)
         compiled_windows.append(
             (
                 state_len,
@@ -937,7 +723,6 @@ def _infer_support_groups(
         n_windows = len(windows_for_state_len)
         max_segment_len = batch_state_len - 1
         local_positions = np.arange(batch_state_len, dtype=np.int64)
-        batch_bandwidth = max(batch_state_len - 1, 0)
 
         state_lens = np.zeros((n_windows,), dtype=np.int64)
         anchor_indices = np.zeros((n_windows,), dtype=np.int64)
@@ -949,11 +734,6 @@ def _infer_support_groups(
         padded_state_indices = np.zeros((n_windows, batch_state_len), dtype=np.int64)
         time_indices = np.zeros((n_windows, batch_state_len), dtype=np.int64)
         valid_diag = np.zeros((n_windows, batch_state_len), dtype=bool)
-        cross_time_indices = np.zeros(
-            (batch_bandwidth, n_windows, batch_state_len),
-            dtype=np.int64,
-        )
-        valid_cross = np.zeros((batch_bandwidth, n_windows, batch_state_len), dtype=bool)
 
         for window_idx, (
             state_len,
@@ -979,16 +759,7 @@ def _infer_support_groups(
             time_indices[window_idx] = np.clip(raw_positions, 0, T - 1)
             valid_diag[window_idx, :state_len] = True
 
-            for offset in range(1, batch_bandwidth + 1):
-                cross_len = batch_state_len - offset
-                cross_time_indices[offset - 1, window_idx, :cross_len] = np.clip(
-                    raw_positions[:cross_len],
-                    0,
-                    T - 1,
-                )
-                valid_len = max(state_len - offset, 0)
-                if valid_len > 0:
-                    valid_cross[offset - 1, window_idx, :valid_len] = True
+        component_windows, component_manifests = np.nonzero(mask_full)
 
         return SupportObservationWindowBatch(
             max_state_len=batch_state_len,
@@ -1002,8 +773,8 @@ def _infer_support_groups(
             padded_state_indices=jnp.asarray(padded_state_indices, dtype=jnp.int32),
             time_indices=jnp.asarray(time_indices, dtype=jnp.int32),
             valid_diag=jnp.asarray(valid_diag),
-            cross_time_indices=jnp.asarray(cross_time_indices, dtype=jnp.int32),
-            valid_cross=jnp.asarray(valid_cross),
+            component_windows=jnp.asarray(component_windows, dtype=jnp.int32),
+            component_manifests=jnp.asarray(component_manifests, dtype=jnp.int32),
         )
 
     windows_by_state_len: dict[
@@ -1014,11 +785,7 @@ def _infer_support_groups(
         bucket_state_len = _support_bucket_state_len(window[0])
         windows_by_state_len.setdefault(bucket_state_len, []).append(window)
 
-    return (
-        tuple(
-            _compile_support_batch(state_len, windows_by_state_len[state_len])
-            for state_len in sorted(windows_by_state_len)
-        ),
-        max_bandwidth,
-        jnp.asarray(row_upper_bandwidths, dtype=jnp.int32),
+    return tuple(
+        _compile_support_batch(state_len, windows_by_state_len[state_len])
+        for state_len in sorted(windows_by_state_len)
     )

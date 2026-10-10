@@ -196,7 +196,7 @@ def _run_benchmark(
     total_steps = warmup_steps + sample_steps
     print("JAX devices:", jax.devices(), "| config:", cfg.tag, flush=True)
     data = simulate_synthetic_nonlinear_data(T=cfg.t_steps, seed=71, diffusion_scale=1.0)
-    model = load_synthetic_nonlinear_model(diffusion_scale=1.0)
+    model = load_synthetic_nonlinear_model(T=cfg.t_steps, diffusion_scale=1.0)
     bundle = build_particle_problem(
         model.prior_runtime_bundle,
         bind_synthetic_nonlinear_panel(model, data),

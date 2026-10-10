@@ -2633,6 +2633,21 @@
             "title": "Per Parameter",
             "type": "array"
           },
+          "per_latent": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LatentDiagnostics"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Per Latent"
+          },
           "num_divergences": {
             "anyOf": [
               {
@@ -2733,6 +2748,7 @@
           "num_chains",
           "num_samples_per_chain",
           "per_parameter",
+          "per_latent",
           "num_divergences",
           "divergence_rate",
           "tree_depth_mean",
@@ -3391,10 +3407,66 @@
             "$ref": "#/components/schemas/ConvergenceSubject"
           },
           {
-            "const": "recorded_parameter_chains",
+            "$ref": "#/components/schemas/LatentConvergenceSubject"
+          },
+          {
+            "enum": [
+              "recorded_parameter_chains",
+              "recorded_latent_chains"
+            ],
             "type": "string"
           }
         ],
+        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "ConvergenceReport": {
+        "additionalProperties": false,
+        "description": "Recorded-chain criteria cover parameters and independent latent coordinates.",
+        "properties": {
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/Assessment_ConvergenceAssessmentSubject_NumericCriterionEvidence_"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "checked": {
+            "description": "Number of distinct parameter and construct references with convergence findings.",
+            "readOnly": true,
+            "title": "Checked",
+            "type": "integer"
+          },
+          "status": {
+            "description": "Convergence verdict with failed checks taking precedence over unevaluated checks.",
+            "enum": [
+              "passed",
+              "failed",
+              "not_evaluated"
+            ],
+            "readOnly": true,
+            "title": "Status",
+            "type": "string"
+          },
+          "messages": {
+            "description": "Explanations for convergence checks that failed or could not be evaluated.",
+            "items": {
+              "type": "string"
+            },
+            "readOnly": true,
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "findings",
+          "checked",
+          "status",
+          "messages"
+        ],
+        "title": "ConvergenceReport",
+        "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
@@ -15137,6 +15209,9 @@
             "$ref": "#/components/schemas/ConvergenceSubject"
           },
           {
+            "$ref": "#/components/schemas/LatentConvergenceSubject"
+          },
+          {
             "$ref": "#/components/schemas/QuestionSubject"
           }
         ],
@@ -15711,6 +15786,40 @@
         "x-typescript-mode": "serialization",
         "x-typescript-type": "GammaLawSpec<Expression>",
         "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "GaussianReferenceTemperingSpec": {
+        "additionalProperties": false,
+        "description": "Optional replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.",
+        "properties": {
+          "num_temperatures": {
+            "default": 48,
+            "minimum": 2,
+            "title": "Num Temperatures",
+            "type": "integer"
+          },
+          "reference_scale": {
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "title": "Reference Scale",
+            "type": "number"
+          },
+          "adaptation_interval": {
+            "default": 500,
+            "minimum": 2,
+            "title": "Adaptation Interval",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "num_temperatures",
+          "reference_scale",
+          "adaptation_interval"
+        ],
+        "title": "GaussianReferenceTemperingSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.sampler_config",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16389,7 +16498,7 @@
             ]
           },
           "convergence": {
-            "$ref": "#/components/schemas/ParameterConvergenceReport"
+            "$ref": "#/components/schemas/ConvergenceReport"
           },
           "loo_diagnostics": {
             "anyOf": [
@@ -17040,6 +17149,211 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "LapsInitializationDiagnostics": {
+        "additionalProperties": false,
+        "description": "Realized joint-ensemble initialization, without any claim of posterior convergence.",
+        "properties": {
+          "ensemble_size": {
+            "title": "Ensemble Size",
+            "type": "integer"
+          },
+          "joint_dimension": {
+            "title": "Joint Dimension",
+            "type": "integer"
+          },
+          "unadjusted_steps": {
+            "title": "Unadjusted Steps",
+            "type": "integer"
+          },
+          "adjusted_steps": {
+            "title": "Adjusted Steps",
+            "type": "integer"
+          },
+          "unadjusted_step_size": {
+            "title": "Unadjusted Step Size",
+            "type": "number"
+          },
+          "adjusted_step_size": {
+            "title": "Adjusted Step Size",
+            "type": "number"
+          },
+          "adjusted_acceptance": {
+            "title": "Adjusted Acceptance",
+            "type": "number"
+          },
+          "early_stopped": {
+            "title": "Early Stopped",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ensemble_size",
+          "joint_dimension",
+          "unadjusted_steps",
+          "adjusted_steps",
+          "unadjusted_step_size",
+          "adjusted_step_size",
+          "adjusted_acceptance",
+          "early_stopped"
+        ],
+        "title": "LapsInitializationDiagnostics",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "LapsInitializationSpec": {
+        "additionalProperties": false,
+        "description": "Joint ensemble initialization; its draws are never reported as posterior samples.",
+        "properties": {
+          "ensemble_size": {
+            "default": 1024,
+            "minimum": 2,
+            "title": "Ensemble Size",
+            "type": "integer"
+          },
+          "num_unadjusted_steps": {
+            "default": 10000,
+            "minimum": 10,
+            "title": "Num Unadjusted Steps",
+            "type": "integer"
+          },
+          "num_adjusted_steps": {
+            "default": 100,
+            "minimum": 1,
+            "title": "Num Adjusted Steps",
+            "type": "integer"
+          },
+          "steps_per_sample": {
+            "default": 15,
+            "minimum": 1,
+            "title": "Steps Per Sample",
+            "type": "integer"
+          },
+          "initial_scale": {
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "title": "Initial Scale",
+            "type": "number"
+          },
+          "covariance_regularization": {
+            "default": 0.0001,
+            "exclusiveMinimum": 0,
+            "title": "Covariance Regularization",
+            "type": "number"
+          }
+        },
+        "required": [
+          "ensemble_size",
+          "num_unadjusted_steps",
+          "num_adjusted_steps",
+          "steps_per_sample",
+          "initial_scale",
+          "covariance_regularization"
+        ],
+        "title": "LapsInitializationSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.sampler_config",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "LatentConvergenceSubject": {
+        "additionalProperties": false,
+        "description": "A convergence criterion over a construct's independent latent coordinates.",
+        "properties": {
+          "state": {
+            "$ref": "#/components/schemas/ConstructRef-Output"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "label"
+        ],
+        "title": "LatentConvergenceSubject",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "LatentDiagnostics": {
+        "additionalProperties": false,
+        "description": "Worst chain estimators across a construct's independent, unobserved time coordinates.",
+        "properties": {
+          "subject": {
+            "$ref": "#/components/schemas/ConstructRef-Output"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "coordinates": {
+            "title": "Coordinates",
+            "type": "integer"
+          },
+          "r_hat": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R Hat"
+          },
+          "ess_bulk": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ess Bulk"
+          },
+          "ess_tail": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ess Tail"
+          },
+          "mcse_mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mcse Mean"
+          }
+        },
+        "required": [
+          "subject",
+          "label",
+          "coordinates",
+          "r_hat",
+          "ess_bulk",
+          "ess_tail",
+          "mcse_mean"
+        ],
+        "title": "LatentDiagnostics",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "LikelihoodSpec-Input": {
         "additionalProperties": false,
         "description": "An indicator's conditional probability law and its scientific justification.",
@@ -17251,6 +17565,17 @@
             "title": "N Parameter Particles",
             "type": "integer"
           },
+          "tempering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GaussianReferenceTemperingSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "latent_delta": {
             "default": 0.2,
             "title": "Latent Delta",
@@ -17411,13 +17736,11 @@
             "type": "string"
           },
           "init_method": {
-            "default": "pathfinder",
-            "enum": [
-              "random",
-              "pathfinder"
-            ],
-            "title": "Init Method",
-            "type": "string"
+            "$ref": "#/components/schemas/ParameterInitialization",
+            "default": "laps"
+          },
+          "laps": {
+            "$ref": "#/components/schemas/LapsInitializationSpec"
           },
           "pathfinder_num_elbo_samples": {
             "default": 20,
@@ -17437,6 +17760,7 @@
           "pathfinder_parallel_workers": {
             "anyOf": [
               {
+                "minimum": 1,
                 "type": "integer"
               },
               {
@@ -17459,14 +17783,8 @@
             "title": "Pathfinder Init Scale"
           },
           "auto_preconditioner_method": {
-            "default": "pathfinder",
-            "enum": [
-              "map",
-              "none",
-              "pathfinder"
-            ],
-            "title": "Auto Preconditioner Method",
-            "type": "string"
+            "$ref": "#/components/schemas/ParameterPreconditioner",
+            "default": "laps"
           },
           "auto_preconditioner_maxiter": {
             "default": 200,
@@ -17491,6 +17809,7 @@
         },
         "required": [
           "n_parameter_particles",
+          "tempering",
           "latent_delta",
           "parameter_proposal",
           "amala_delta_init",
@@ -17519,6 +17838,7 @@
           "adaptation_rate",
           "adaptation_scheme",
           "init_method",
+          "laps",
           "pathfinder_num_elbo_samples",
           "pathfinder_maxiter",
           "n_pathfinder_starts",
@@ -19757,56 +20077,6 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "ParameterConvergenceReport": {
-        "additionalProperties": false,
-        "description": "Recorded-chain criteria cover parameters, not latent-path mixing.",
-        "properties": {
-          "findings": {
-            "items": {
-              "$ref": "#/components/schemas/Assessment_ConvergenceAssessmentSubject_NumericCriterionEvidence_"
-            },
-            "title": "Findings",
-            "type": "array"
-          },
-          "checked": {
-            "description": "Number of distinct parameter references represented by convergence findings.",
-            "readOnly": true,
-            "title": "Checked",
-            "type": "integer"
-          },
-          "status": {
-            "description": "Convergence verdict with failed checks taking precedence over unevaluated checks.",
-            "enum": [
-              "passed",
-              "failed",
-              "not_evaluated"
-            ],
-            "readOnly": true,
-            "title": "Status",
-            "type": "string"
-          },
-          "messages": {
-            "description": "Explanations for convergence checks that failed or could not be evaluated.",
-            "items": {
-              "type": "string"
-            },
-            "readOnly": true,
-            "title": "Messages",
-            "type": "array"
-          }
-        },
-        "required": [
-          "findings",
-          "checked",
-          "status",
-          "messages"
-        ],
-        "title": "ParameterConvergenceReport",
-        "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
       "ParameterDiagnostics": {
         "additionalProperties": false,
         "description": "Measurements on one scientifically identified retained scalar chain.",
@@ -19910,6 +20180,29 @@
         "x-layer": "identity",
         "x-concern": "identity",
         "description": "A scientific parameter identity connects component coefficients to one parameter definition."
+      },
+      "ParameterInitialization": {
+        "enum": [
+          "random",
+          "pathfinder",
+          "laps"
+        ],
+        "type": "string",
+        "x-python-module": "nof1_causal_lab.sampler_config",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ParameterPreconditioner": {
+        "enum": [
+          "map",
+          "none",
+          "pathfinder",
+          "laps"
+        ],
+        "type": "string",
+        "x-python-module": "nof1_causal_lab.sampler_config",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
       },
       "ParameterRef": {
         "additionalProperties": false,
@@ -20126,12 +20419,23 @@
       },
       "ParameterWarmupDiagnostics": {
         "additionalProperties": false,
-        "description": "Realized initialization and preconditioning, with the complete Pathfinder evidence once.",
+        "description": "Realized initialization and preconditioning, retaining each initializer's evidence once.",
         "properties": {
           "pathfinder": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/PathfinderDiagnostics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "laps": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LapsInitializationDiagnostics"
               },
               {
                 "type": "null"
@@ -20226,6 +20530,7 @@
         },
         "required": [
           "pathfinder",
+          "laps",
           "pathfinder_run_count",
           "pathfinder_consumers",
           "init_source",
@@ -20468,6 +20773,17 @@
           },
           "parameter_warmup": {
             "$ref": "#/components/schemas/ParameterWarmupDiagnostics"
+          },
+          "tempering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TemperingDiagnostics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -20493,7 +20809,8 @@
           "selected_particle_unique_count_mean",
           "amala_grad_norm_mean",
           "amala_grad_norm_max",
-          "parameter_warmup"
+          "parameter_warmup",
+          "tempering"
         ],
         "title": "ParticleSamplerDiagnostics",
         "type": "object",
@@ -22022,6 +22339,29 @@
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Removed<DataPoint>",
         "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "ReplicaSwapCounts": {
+        "additionalProperties": false,
+        "description": "Accepted and attempted exchanges at one neighboring temperature pair.",
+        "properties": {
+          "accepted": {
+            "title": "Accepted",
+            "type": "integer"
+          },
+          "attempted": {
+            "title": "Attempted",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "accepted",
+          "attempted"
+        ],
+        "title": "ReplicaSwapCounts",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -23822,6 +24162,43 @@
         "type": "string",
         "x-python-module": "nof1_causal_lab.utils.observation_semantics",
         "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "TemperingDiagnostics": {
+        "additionalProperties": false,
+        "description": "Frozen ladder and retained swap counts; columns are neighboring temperature edges.",
+        "properties": {
+          "inverse_temperatures": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Inverse Temperatures",
+            "type": "array"
+          },
+          "ladder_frozen_at_warmup_step": {
+            "title": "Ladder Frozen At Warmup Step",
+            "type": "integer"
+          },
+          "swaps": {
+            "items": {
+              "items": {
+                "$ref": "#/components/schemas/ReplicaSwapCounts"
+              },
+              "type": "array"
+            },
+            "title": "Swaps",
+            "type": "array"
+          }
+        },
+        "required": [
+          "inverse_temperatures",
+          "ladder_frozen_at_warmup_step",
+          "swaps"
+        ],
+        "title": "TemperingDiagnostics",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "TemporalStatus": {

@@ -48,7 +48,7 @@ def compile_exact_state_constraints(
         for index, indicator in enumerate(compiled_dynamical_model.observations)
         if isinstance(indicator.law, DeltaLawSpec)
     ]
-    if not exact:
+    if not exact and input_values is None:
         return None
     observed = np.asarray(observations)
     values = np.full(
@@ -86,4 +86,9 @@ def compile_exact_state_constraints(
     if input_values is not None:
         inputs = numeric.input_mask(compiled_dynamical_model)
         values[:, inputs] = np.asarray(input_values)[:, inputs]
+    for index, state in enumerate(compiled_dynamical_model.states):
+        if state.time_invariant:
+            readings = values[:, index][~np.isnan(values[:, index])]
+            if readings.size:
+                values[:, index] = readings[0]
     return ExactStateConstraints(jnp.asarray(values))

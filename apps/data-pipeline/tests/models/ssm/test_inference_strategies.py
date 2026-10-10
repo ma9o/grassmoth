@@ -48,14 +48,12 @@ from nof1_causal_lab.models.ssm.inference.targets.laplace import (
     _build_ieks_system_from_prior,
     _build_prior_tridiagonal_system,
     _compute_profile_lower_bandwidths,
-    _factor_block_banded_cholesky,
     _factor_block_profile_cholesky,
     _ieks_smooth,
     _infer_support_groups,
     _make_support_window_derivatives,
     _predictive_latent_init,
     _should_use_dense_support_laplace,
-    _solve_block_banded_from_cholesky,
     block_profile_logdet_packed_cotangent,
 )
 from nof1_causal_lab.models.ssm.inference.targets.laplace.shared import (
@@ -140,9 +138,6 @@ def test_compile_observation_operator_keeps_point_support_without_interval_summa
         observation_windows=[None],
         support_start_times=np.array([[0.0], [1.0]]),
         support_end_times=np.array([[0.0], [1.0]]),
-        interval_prev_coeffs=np.zeros((2, 1)),
-        interval_curr_coeffs=np.zeros((2, 1)),
-        interval_weights=np.zeros((2, 1)),
     )
 
     operator = compile_observation_operator(support)
@@ -157,6 +152,33 @@ def test_compile_observation_operator_keeps_point_support_without_interval_summa
     )
 
 
+@pytest.mark.inference(concern="predictive")
+def test_held_windows_preserve_the_shared_plan_and_emission_schedule():
+    times = np.array([0.0, 1.0, 3.0, 4.0, 6.0])
+    support = make_observation_support_runtime(
+        anchor_times=times,
+        manifest_names=("mean",),
+        support_kinds=("interval",),
+        observation_windows=("2d",),
+        support_start_times=np.array([[np.nan], [np.nan], [0.5], [2.0], [4.0]]),
+        support_end_times=np.array([[np.nan], [np.nan], [3.0], [4.0], [6.0]]),
+    )
+    linear = compile_observation_operator(support)
+    held = compile_observation_operator(support, held_channels=(0,))
+    response = jnp.asarray(2 * times[:, None] + 1)
+    linear_means, linear_mask = linear.project_response_trajectory(response)
+    held_means, held_mask = held.project_response_trajectory(response)
+
+    assert linear.window_plan is support.window_plan
+    assert held.window_plan is not support.window_plan
+    np.testing.assert_allclose(linear_means[2:, 0], [4.5, 7.0, 11.0])
+    np.testing.assert_allclose(held_means[2:, 0], [2.6, 5.0, 9.0])
+    np.testing.assert_array_equal(linear_mask[:, 0], [0, 0, 1, 1, 1])
+    np.testing.assert_array_equal(held_mask, linear_mask)
+    assert linear.scan.max_active_windows == held.scan.max_active_windows == 2
+    np.testing.assert_array_equal(held.scan.emission_slots[2:, 0], [0, 1, 0])
+
+
 @pytest.mark.contract
 def test_expected_observation_mean_dispatches_by_summary_operator():
     support = make_observation_support_runtime(
@@ -167,9 +189,6 @@ def test_expected_observation_mean_dispatches_by_summary_operator():
         observation_windows=["1d", "1d", "1d", "1d", None],
         support_start_times=np.zeros((1, 5)),
         support_end_times=np.zeros((1, 5)),
-        interval_prev_coeffs=np.zeros((1, 5)),
-        interval_curr_coeffs=np.zeros((1, 5)),
-        interval_weights=np.ones((1, 5)),
     )
     operator = compile_observation_operator(support)
     assert operator.summary_operator_codes is not None
@@ -290,9 +309,6 @@ class TestSupportAwareTrajectoryObservationLogProb:
             observation_windows=["1d"],
             support_start_times=np.array([[np.nan], [0.0]]),
             support_end_times=np.array([[np.nan], [1.0]]),
-            interval_prev_coeffs=np.array([[0.0], [0.5]]),
-            interval_curr_coeffs=np.array([[0.0], [0.5]]),
-            interval_weights=np.array([[0.0], [1.0]]),
         )
         latent = jnp.array([[1.0], [3.0]], dtype=jnp.float32)
         observations = jnp.array([[jnp.nan], [2.0]], dtype=jnp.float32)
@@ -336,31 +352,6 @@ class TestSupportAwareTrajectoryObservationLogProb:
             observation_windows=["2d"],
             support_start_times=np.array([[np.nan], [np.nan], [-2.0], [-1.0]]),
             support_end_times=np.array([[np.nan], [np.nan], [0.0], [1.0]]),
-            interval_prev_coeffs=np.array(
-                [
-                    [[0.0, 0.0]],
-                    [[0.5, 0.0]],
-                    [[0.5, 0.5]],
-                    [[0.0, 0.5]],
-                ]
-            ),
-            interval_curr_coeffs=np.array(
-                [
-                    [[0.0, 0.0]],
-                    [[0.5, 0.0]],
-                    [[0.5, 0.5]],
-                    [[0.0, 0.5]],
-                ]
-            ),
-            interval_weights=np.array(
-                [
-                    [[0.0, 0.0]],
-                    [[1.0, 0.0]],
-                    [[1.0, 1.0]],
-                    [[0.0, 1.0]],
-                ]
-            ),
-            emission_slot_indices=np.array([[-1], [-1], [0], [1]], dtype=np.int64),
         )
         latent = jnp.array([[1.0], [3.0], [5.0], [7.0]], dtype=jnp.float32)
         observations = jnp.array([[jnp.nan], [jnp.nan], [3.0], [5.0]], dtype=jnp.float32)
@@ -406,7 +397,38 @@ class TestSupportAwareTrajectoryObservationLogProb:
         assert ll[3] == pytest.approx(float(manual_1))
 
 
+def _dense_block_profile(diagonal, upper, profile):
+    n_time, n_state = diagonal.shape[:2]
+    result = jnp.zeros((n_time * n_state, n_time * n_state), dtype=diagonal.dtype)
+    for row in range(n_time):
+        here = slice(row * n_state, (row + 1) * n_state)
+        result = result.at[here, here].set(diagonal[row] + 1e-6 * jnp.eye(n_state))
+        for offset in range(1, int(profile[row]) + 1):
+            other = slice((row + offset) * n_state, (row + offset + 1) * n_state)
+            result = result.at[here, other].set(upper[offset - 1, row])
+            result = result.at[other, here].set(upper[offset - 1, row].T)
+    return result
+
+
 class TestLaplaceSupportAware:
+    @pytest.mark.contract
+    def test_support_groups_drop_missing_intervals_before_sizing_windows(self):
+        support = make_observation_support_runtime(
+            anchor_times=np.arange(9, dtype=float),
+            manifest_names=["short_observed", "long_missing"],
+            support_kinds=["interval", "interval"],
+            observation_windows=["1d", "8d"],
+            support_start_times=np.vstack([np.full((8, 2), np.nan), [7.0, 0.0]]),
+            support_end_times=np.vstack([np.full((8, 2), np.nan), [8.0, 8.0]]),
+        )
+        mask = np.zeros((9, 2), dtype=bool)
+        mask[-1, 0] = True
+        batches = _infer_support_groups(support, mask)
+        assert len(batches) == 1
+        assert batches[0].max_state_len == 2
+        np.testing.assert_array_equal(batches[0].component_manifests, [0])
+        assert _infer_support_groups(support, np.zeros_like(mask)) == ()
+
     @pytest.mark.contract
     def test_infer_support_groups_ignores_reused_slot_history(self):
         support = make_observation_support_runtime(
@@ -416,24 +438,18 @@ class TestLaplaceSupportAware:
             observation_windows=["1d"],
             support_start_times=np.array([[np.nan], [0.0], [np.nan], [2.0], [np.nan], [4.0]]),
             support_end_times=np.array([[np.nan], [1.0], [np.nan], [3.0], [np.nan], [5.0]]),
-            interval_prev_coeffs=np.array([[0.0], [0.5], [0.0], [0.5], [0.0], [0.5]]),
-            interval_curr_coeffs=np.array([[0.0], [0.5], [0.0], [0.5], [0.0], [0.5]]),
-            interval_weights=np.array([[0.0], [1.0], [0.0], [1.0], [0.0], [1.0]]),
-            emission_slot_indices=np.array([[-1], [0], [-1], [0], [-1], [0]], dtype=np.int64),
         )
 
-        window_batches, bandwidth, row_upper_bandwidths = _infer_support_groups(support)
+        window_batches = _infer_support_groups(
+            support, np.ones_like(support.support_end_times, dtype=bool)
+        )
         assert len(window_batches) == 1
         windows = window_batches[0]
 
         np.testing.assert_array_equal(np.asarray(windows.anchor_indices), np.array([1, 3, 5]))
         np.testing.assert_array_equal(np.asarray(windows.start_indices), np.array([0, 2, 4]))
         np.testing.assert_array_equal(np.asarray(windows.state_lens), np.array([2, 2, 2]))
-        np.testing.assert_array_equal(
-            np.asarray(row_upper_bandwidths), np.array([1, 0, 1, 0, 1, 0])
-        )
         assert windows.max_state_len == 2
-        assert bandwidth == 1
 
     @pytest.mark.contract
     def test_infer_support_groups_buckets_by_state_length(self):
@@ -444,22 +460,18 @@ class TestLaplaceSupportAware:
             observation_windows=["3d"],
             support_start_times=np.array([[np.nan], [0.0], [np.nan], [0.0]]),
             support_end_times=np.array([[np.nan], [1.0], [np.nan], [3.0]]),
-            interval_prev_coeffs=np.array([[0.0], [0.5], [0.0], [0.5]]),
-            interval_curr_coeffs=np.array([[0.0], [0.5], [0.0], [0.5]]),
-            interval_weights=np.array([[0.0], [1.0], [0.0], [1.0]]),
-            emission_slot_indices=np.array([[-1], [0], [-1], [0]], dtype=np.int64),
         )
 
-        window_batches, bandwidth, row_upper_bandwidths = _infer_support_groups(support)
+        window_batches = _infer_support_groups(
+            support, np.ones_like(support.support_end_times, dtype=bool)
+        )
 
         assert [batch.max_state_len for batch in window_batches] == [2, 4]
         np.testing.assert_array_equal(np.asarray(window_batches[0].anchor_indices), np.array([1]))
         np.testing.assert_array_equal(np.asarray(window_batches[1].anchor_indices), np.array([3]))
-        np.testing.assert_array_equal(np.asarray(row_upper_bandwidths), np.array([3, 2, 1, 0]))
-        assert bandwidth == 3
 
     @pytest.mark.inference(concern="warmup")
-    def test_profile_masked_banded_cholesky_matches_full_banded_solver(self):
+    def test_profile_cholesky_matches_dense_reference(self):
         row_upper_bandwidths = jnp.array([3, 2, 1, 1, 0], dtype=jnp.int32)
         row_lower_bandwidths = jnp.asarray(
             _compute_profile_lower_bandwidths(np.asarray(row_upper_bandwidths)),
@@ -476,40 +488,18 @@ class TestLaplaceSupportAware:
         upper = upper.at[2, 0, 0, 0].set(0.02)
         rhs = jnp.asarray(np.array([1.0, -0.5, 0.25, 0.75, -1.25], dtype=np.float32)[:, None])
 
-        chol_full, lower_full = _factor_block_banded_cholesky(diag, upper)
-        sol_full = _solve_block_banded_from_cholesky(chol_full, lower_full, rhs)
-
-        chol_profile, lower_profile = _factor_block_banded_cholesky(
-            diag,
-            upper,
-            row_upper_bandwidths,
-            row_lower_bandwidths,
+        dense = _dense_block_profile(diag, upper, (3, 2, 1, 1, 0))
+        chol, lower = _factor_block_profile_cholesky(
+            diag, upper, row_upper_bandwidths, row_lower_bandwidths
         )
-        sol_profile = _solve_block_banded_from_cholesky(
-            chol_profile,
-            lower_profile,
-            rhs,
-            row_upper_bandwidths,
-            row_lower_bandwidths,
-        )
-
-        np.testing.assert_allclose(
-            np.asarray(chol_profile), np.asarray(chol_full), rtol=1e-6, atol=1e-6
+        solution = _solve_block_profile_from_cholesky(
+            chol, lower, rhs, row_upper_bandwidths, row_lower_bandwidths
         )
         np.testing.assert_allclose(
-            np.asarray(lower_profile),
-            np.asarray(lower_full),
-            rtol=1e-6,
-            atol=1e-6,
+            solution[:, 0], jnp.linalg.solve(dense, rhs[:, 0]), rtol=1e-6, atol=1e-6
         )
         np.testing.assert_allclose(
-            np.asarray(sol_profile), np.asarray(sol_full), rtol=1e-6, atol=1e-6
-        )
-        np.testing.assert_allclose(
-            np.asarray(_block_banded_logdet(chol_profile)),
-            np.asarray(_block_banded_logdet(chol_full)),
-            rtol=1e-6,
-            atol=1e-6,
+            _block_banded_logdet(chol), jnp.linalg.slogdet(dense)[1], rtol=1e-6, atol=1e-6
         )
 
     @pytest.mark.inference(concern="warmup")
@@ -541,11 +531,10 @@ class TestLaplaceSupportAware:
             observation_windows=["1d"],
             support_start_times=np.array([[np.nan], [0.0]]),
             support_end_times=np.array([[np.nan], [1.0]]),
-            interval_prev_coeffs=np.array([[0.0], [0.5]]),
-            interval_curr_coeffs=np.array([[0.0], [0.5]]),
-            interval_weights=np.array([[0.0], [1.0]]),
         )
-        window_batches, bandwidth, _row_upper_bandwidths = _infer_support_groups(support)
+        window_batches = _infer_support_groups(
+            support, np.ones_like(support.support_end_times, dtype=bool)
+        )
         assert len(window_batches) == 1
         windows = window_batches[0]
         observation_operator = compile_observation_operator(support)
@@ -585,10 +574,9 @@ class TestLaplaceSupportAware:
                 window_batches,
                 observation_operator.point_like_mask(states.dtype),
                 window_derivatives,
-                bandwidth,
             )
 
-        diag, upper, rhs = _assemble(z_est, observations)
+        diag, jacobian, mean_information, rhs = _assemble(z_est, observations)
 
         # y ~ Normal((z0 + z1)/2, variance=0.2): information is w wᵀ / R,
         # and the Gaussian information vector is w y / R, independent of z_est.
@@ -598,13 +586,8 @@ class TestLaplaceSupportAware:
         information = np.outer(weights, weights) / 0.2
         expected_rhs = weights * 1.3 / 0.2
 
-        np.testing.assert_allclose(diag[:, 0, 0], np.diag(information), rtol=1e-5, atol=1e-5)
-        np.testing.assert_allclose(
-            upper[0, 0, 0, 0],
-            information[0, 1],
-            rtol=1e-5,
-            atol=1e-5,
-        )
+        dense = np.diag(diag[:, 0, 0]) + jacobian[:, 0] @ mean_information @ jacobian[:, 0].T
+        np.testing.assert_allclose(dense, information, rtol=1e-5, atol=1e-5)
         np.testing.assert_allclose(rhs[:, 0], expected_rhs, rtol=1e-5, atol=1e-5)
 
 
@@ -636,13 +619,7 @@ class TestLaplaceSolverState:
         upper = upper[: max(profile)]
 
         def _packed_logdet(diag_blocks, upper_blocks):
-            chol_diag, _lower = _factor_block_banded_cholesky(
-                diag_blocks,
-                upper_blocks,
-                row_upper_bandwidths,
-                row_lower_bandwidths,
-            )
-            return _block_banded_logdet(chol_diag)
+            return jnp.linalg.slogdet(_dense_block_profile(diag_blocks, upper_blocks, profile))[1]
 
         direct_diag_bar, direct_upper_bar = jax.grad(_packed_logdet, argnums=(0, 1))(diag, upper)
         value, (compiled_diag_bar, compiled_upper_bar) = jax.jit(
@@ -662,16 +639,13 @@ class TestLaplaceSolverState:
             row_upper_bandwidths,
             row_lower_bandwidths,
         )
-        reference_chol, reference_lower = _factor_block_banded_cholesky(
-            diag, upper, row_upper_bandwidths, row_lower_bandwidths
-        )
         rhs = jnp.arange(8, dtype=diag.dtype).reshape(4, 2) / 10
         np.testing.assert_allclose(
             _solve_block_profile_from_cholesky(
                 chol_diag, lower, rhs, row_upper_bandwidths, row_lower_bandwidths
             ),
-            _solve_block_banded_from_cholesky(
-                reference_chol, reference_lower, rhs, row_upper_bandwidths, row_lower_bandwidths
+            jnp.linalg.solve(_dense_block_profile(diag, upper, profile), rhs.reshape(-1)).reshape(
+                rhs.shape
             ),
             rtol=1e-5,
             atol=1e-6,
@@ -700,6 +674,7 @@ class TestLaplaceSolverState:
             n_latent=1,
             n_manifest=1,
             n_ieks_iters=2,
+            observed_mask=np.ones((3, 1), dtype=bool),
         )
         ct_params = _runtime_dynamics(
             drift=jnp.array([[-0.4]], dtype=jnp.float32),
@@ -786,14 +761,12 @@ class TestLaplaceSolverState:
             observation_windows=["2d"],
             support_start_times=np.array([[np.nan], [np.nan], [0.0]]),
             support_end_times=np.array([[np.nan], [np.nan], [2.0]]),
-            interval_prev_coeffs=np.array([[0.0], [0.5], [0.5]]),
-            interval_curr_coeffs=np.array([[0.0], [0.5], [0.5]]),
-            interval_weights=np.array([[0.0], [1.0], [1.0]]),
         )
         backend = LaplaceLikelihood(
             n_latent=1,
             n_manifest=1,
             n_ieks_iters=2,
+            observed_mask=np.ones((3, 1), dtype=bool),
             observation_support=support,
         )
         compiled = compile_observation_model(

@@ -25,9 +25,8 @@ from nof1_causal_lab.models.posterior_predictive import (
 )
 from nof1_causal_lab.models.predictive_simulation import PredictiveObservationMeanOverflow
 from nof1_causal_lab.models.ssm import numerics as numeric
-from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
 from tests.compute_fixtures import COMPUTE_BUDGET
-from tests.inference_fixtures import compile_model_fixture
+from tests.inference_fixtures import compile_model_fixture, make_observation_support_runtime
 from tests.model_fixtures import (
     load_model_fixture,
 )
@@ -45,6 +44,7 @@ def _posterior_runtime_assembles_ordered_cutpoints_from_sample_sites_model_fixtu
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
 
 
 def _make_lp_and_samples(
@@ -78,7 +78,7 @@ class TestForwardSimulation:
     @staticmethod
     def _window_average_support() -> ObservationSupportRuntime:
         nan = np.nan
-        return ObservationSupportRuntime.assembled(
+        return make_observation_support_runtime(
             anchor_times=np.array([0.0, 1.0, 2.0], dtype=np.float32),
             manifest_names=("y",),
             support_kinds=("interval",),
@@ -87,10 +87,6 @@ class TestForwardSimulation:
             observation_windows=("2d",),
             support_start_times=np.array([[nan], [nan], [0.0]], dtype=np.float32),
             support_end_times=np.array([[nan], [nan], [2.0]], dtype=np.float32),
-            interval_prev_coeffs=np.array([[[0.0]], [[0.5]], [[0.5]]], dtype=np.float32),
-            interval_curr_coeffs=np.array([[[0.0]], [[0.5]], [[0.5]]], dtype=np.float32),
-            interval_weights=np.array([[[0.0]], [[1.0]], [[1.0]]], dtype=np.float32),
-            emission_slot_indices=np.array([[-1], [-1], [0]], dtype=np.int64),
         )
 
     @pytest.mark.contract

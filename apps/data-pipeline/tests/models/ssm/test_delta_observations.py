@@ -42,10 +42,14 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.kernel
 from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.runner import (
     _initialize_chain_state,
 )
-from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
 from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.helpers import make_model
-from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
+from tests.inference_fixtures import (
+    bind_panel_fixture,
+    compile_fit_fixture,
+    compile_model_fixture,
+    make_observation_support_runtime,
+)
 from tests.model_fixtures import _exact_model_model, load_model_fixture
 from tests.observation_fixtures import observation_laws
 
@@ -239,7 +243,7 @@ def test_mixed_delta_density_draws_and_missingness_remain_exact():
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.inference(concern="predictive")
 def test_exact_window_mean_constrains_the_summary_without_pinning_the_path():
-    support = ObservationSupportRuntime.assembled(
+    support = make_observation_support_runtime(
         anchor_times=np.array([0.0, 2.0]),
         manifest_names=("setting_mean",),
         support_kinds=("interval",),
@@ -248,10 +252,6 @@ def test_exact_window_mean_constrains_the_summary_without_pinning_the_path():
         observation_windows=("2d",),
         support_start_times=np.array([[np.nan], [0.0]]),
         support_end_times=np.array([[np.nan], [2.0]]),
-        interval_prev_coeffs=np.array([[[0.0]], [[1.0]]]),
-        interval_curr_coeffs=np.array([[[0.0]], [[1.0]]]),
-        interval_weights=np.array([[[0.0]], [[2.0]]]),
-        emission_slot_indices=np.array([[-1], [0]]),
     )
     covariance = jnp.zeros((1, 1))
     compiled = compile_observation_model(
@@ -332,7 +332,7 @@ def test_unsupported_delta_constraints_fail_before_parameter_initialization(
             compile_fit_fixture(exact_model).prior_runtime_bundle,
             bind_panel_fixture(
                 compile_model_fixture(exact_model),
-                jnp.array([[1.0, 0.0], [jnp.nan, 0.5]]),
+                jnp.array([[jnp.nan, jnp.nan], [1.0, 0.5]]),
                 jnp.array([0.0, 1.0]),
             ),
             scheme="euler_maruyama",

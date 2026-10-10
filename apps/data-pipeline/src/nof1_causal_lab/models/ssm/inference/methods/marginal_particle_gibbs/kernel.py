@@ -58,6 +58,9 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.diagno
 from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.smoothers.dsmc import (
     step as dsmc_step,
 )
+from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.smoothers.replayed import (
+    step as replayed_step,
+)
 from nof1_causal_lab.sampler_config import DSMCLeafProposal, MarginalParticleGibbsSpec
 
 if TYPE_CHECKING:
@@ -239,9 +242,9 @@ def build_marginal_particle_gibbs_kernel(
     if exact_constraints is not None:
         fixed_path = exact_constraints.project(fixed_path)
     latent_free_mask = (
-        jnp.ones(fixed_path.shape, dtype=bool)
+        target.independent_mask
         if exact_constraints is None
-        else exact_constraints.free_mask
+        else exact_constraints.free_mask & target.independent_mask
     )
 
     def _theta_logpost_grad(z: jnp.ndarray) -> jnp.ndarray:
@@ -347,6 +350,7 @@ def build_marginal_particle_gibbs_kernel(
         transition_log_probs_for_pairs_fn=target.aligned_transition_log_prob,
         transition_pairwise_log_probs_fn=target.pairwise_transition_log_prob,
         diagnostic_metrics=resolved_diagnostic_metrics,
+        intervals=target.intervals,
     )
 
     def _step_fn(state: TrajectoryMCMCState, key: jnp.ndarray):
@@ -370,7 +374,8 @@ def build_marginal_particle_gibbs_kernel(
             ctx = build_smoother_context(static, state, parameter_particles, label_correction)
         contexts = ctx.contexts
         with jax.named_scope("dsmc_smoother_full"):
-            smoother_result = dsmc_step(ctx, block_key, x_ref)
+            smoother = replayed_step if target.state_space.requires_replay else dsmc_step
+            smoother_result = smoother(ctx, block_key, x_ref)
 
         with jax.named_scope("postprocess"):
             latent_path = smoother_result.latent_path
@@ -388,6 +393,7 @@ def build_marginal_particle_gibbs_kernel(
             selected_label = random.categorical(label_key, final_label_log_probs).astype(jnp.int32)
             next_position = parameter_particles[selected_label]
             next_context = _select_pytree(contexts, selected_label)
+            latent_path = target.replay_path(next_context, latent_path)
             next_traj_lp = jnp.asarray(
                 trajectory_log_prob_fn(
                     next_context,
@@ -404,10 +410,12 @@ def build_marginal_particle_gibbs_kernel(
             )
             latent_move_rms = jnp.sqrt(_masked_mean(latent_move * latent_move, latent_free_mask))
             latent_move_max_abs = jnp.max(jnp.abs(latent_move))
-            parameter_accepted = (selected_label != 0).astype(state.position.dtype)
-            latent_updated = ((origin_path != 0) & jnp.any(latent_free_mask, axis=-1)).astype(
+            parameter_accepted = jnp.any(next_position != state.position).astype(
                 state.position.dtype
             )
+            latent_updated = jnp.any(
+                (latent_path != x_ref) & smoother_result.proposal_mask, axis=-1
+            ).astype(state.position.dtype)
             # Per-(t, d) exact-equality freeze indicator. A completely stuck chain has
             # zero autocovariance at every lag and therefore reports PERFECT ESS under
             # initial-positive-sequence estimators — this counter is the direct gauge
@@ -421,6 +429,7 @@ def build_marginal_particle_gibbs_kernel(
             step_info = {
                 "parameter_accepted": parameter_accepted,
                 "latent_accepted": latent_updated,
+                "latent_proposed": jnp.any(smoother_result.proposal_mask, axis=-1),
                 "latent_frozen_frac": latent_frozen_frac,
                 "latent_frozen_frac_by_d": latent_frozen_frac_by_d,
                 "selected_label": selected_label.astype(jnp.float32),
@@ -434,8 +443,10 @@ def build_marginal_particle_gibbs_kernel(
             }
             if diagnostic_flags.parameter_movement:
                 parameter_jump = next_position - state.position
-                step_info["parameter_jump_rms"] = jnp.sqrt(
-                    jnp.mean(parameter_jump * parameter_jump)
+                step_info["parameter_jump_rms"] = (
+                    jnp.sqrt(jnp.mean(parameter_jump * parameter_jump))
+                    if parameter_jump.size
+                    else zero_scalar
                 )
             if diagnostic_flags.particle_identity:
                 reference_path_hit_rate = jnp.mean((origin_path == 0).astype(state.position.dtype))

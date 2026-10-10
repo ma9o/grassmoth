@@ -461,7 +461,6 @@ def diffusion_block(selection: StructuralSelection) -> DiffusionBlockSpec:
         n_latent=count,
         diffusion_chol_support=support,
         diffusion_chol_template=jnp.asarray(template),
-        time_invariant_mask=static if static.any() else None,
     )
 
 

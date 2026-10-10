@@ -16,7 +16,9 @@ from typing_extensions import TypedDict
 
 from nof1_causal_lab.compute.resources import read_compute_budget
 from nof1_causal_lab.models.ssm import numerics as numeric
+from nof1_causal_lab.models.ssm.compile.observation_windows import compile_observation_scan
 from nof1_causal_lab.models.ssm.inference import ParticleMCMCPosterior
+from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
 from nof1_causal_lab.models.ssm.runtime import BoundPanel, PreparedFit, prepare_fit
 from nof1_causal_lab.sampler_config import SamplerSpec
@@ -75,7 +77,7 @@ def fit_prepared_model(
     prepared: PreparedFit,
     *,
     sampler: SamplerSpec,
-) -> ParticleMCMCPosterior | ObservationPreflightFailure:
+) -> ParticleMCMCPosterior | ObservationPreflightFailure | InitializationFailure:
     """Run on resolved sampler choices and the sampler's owned initialization."""
     from nof1_causal_lab.models.ssm.inference import fit
 
@@ -91,7 +93,7 @@ def fit_prepared_model(
         )
     finally:
         stop_trace(profile_dir)
-    if isinstance(result, ObservationPreflightFailure):
+    if isinstance(result, (ObservationPreflightFailure, InitializationFailure)):
         return result
     if profile_dir is not None:
         compiled_step = result.diagnostics.compiled_step
@@ -133,7 +135,7 @@ def _support_summary(panel: BoundPanel) -> str:
     return (
         f"interval({len(support.interval_summary_manifest_names)}: "
         f"{_format_name_preview(support.interval_summary_manifest_names)}) "
-        f"max_active_windows={support.max_active_windows}"
+        f"max_active_windows={compile_observation_scan(support.window_plan).max_active_windows}"
     )
 
 
@@ -199,7 +201,7 @@ def fit_model(
     logger.info("Starting inference kernel...")
     fit_t0 = time.monotonic()
     result = fit_prepared_model(prepared, sampler=sampler)
-    if isinstance(result, ObservationPreflightFailure):
+    if isinstance(result, (ObservationPreflightFailure, InitializationFailure)):
         return {
             "fitted": False,
             "error": result.message,

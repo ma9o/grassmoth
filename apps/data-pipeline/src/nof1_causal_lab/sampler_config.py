@@ -10,12 +10,40 @@ from pydantic import Field, FiniteFloat, field_serializer, field_validator
 from nof1_causal_lab.artifacts.base import Value
 
 type DSMCLeafProposal = Literal["amala_exact", "paid_mix"]
+type ParameterInitialization = Literal["random", "pathfinder", "laps"]
+type ParameterPreconditioner = Literal["map", "none", "pathfinder", "laps"]
+
+
+class GaussianReferenceTemperingSpec(Value):
+    """Optional replica exchange; each ladder retains only its exact beta-one chain.
+
+    The ladder spans beta one to zero. The reference is fixed at initialization,
+    its endpoint is independently refreshed every sweep, and even/odd neighboring
+    swaps alternate. Rejection-based ladder adaptation runs during the first half
+    of warmup, leaving the rest to settle before retaining posterior draws.
+    """
+
+    num_temperatures: int = Field(default=48, ge=2)
+    reference_scale: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+    adaptation_interval: int = Field(default=500, ge=2)
+
+
+class LapsInitializationSpec(Value):
+    """Joint ensemble initialization; its draws are never reported as posterior samples."""
+
+    ensemble_size: int = Field(default=1024, ge=2)
+    num_unadjusted_steps: int = Field(default=10000, ge=10)
+    num_adjusted_steps: int = Field(default=100, ge=1)
+    steps_per_sample: int = Field(default=15, ge=1)
+    initial_scale: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+    covariance_regularization: float = Field(default=1e-4, gt=0, allow_inf_nan=False)
 
 
 class MarginalParticleGibbsSpec(Value):
     """Marginalized Particle Gibbs inference settings."""
 
     n_parameter_particles: int = 2
+    tempering: GaussianReferenceTemperingSpec | None = None
     latent_delta: float = 0.2
     parameter_proposal: Literal["random_walk", "pseudo_langevin"] = "pseudo_langevin"
     amala_delta_init: float = 1e-2
@@ -50,13 +78,14 @@ class MarginalParticleGibbsSpec(Value):
     param_target_accept: float = 0.35
     adaptation_rate: float = 0.05
     adaptation_scheme: Literal["simple", "dual_averaging"] = "simple"
-    init_method: Literal["random", "pathfinder"] = "pathfinder"
+    init_method: ParameterInitialization = "laps"
+    laps: LapsInitializationSpec = Field(default_factory=LapsInitializationSpec)
     pathfinder_num_elbo_samples: int = 20
     pathfinder_maxiter: int = 20
     n_pathfinder_starts: int = 8
-    pathfinder_parallel_workers: int | None = None
+    pathfinder_parallel_workers: int | None = Field(default=None, ge=1)
     pathfinder_init_scale: float | None = 0.1
-    auto_preconditioner_method: Literal["map", "none", "pathfinder"] = "pathfinder"
+    auto_preconditioner_method: ParameterPreconditioner = "laps"
     auto_preconditioner_maxiter: int = 200
     init_scale: float = 0.05
     compute_latent_posterior_summary: bool = True

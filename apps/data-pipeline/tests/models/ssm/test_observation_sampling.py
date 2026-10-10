@@ -202,18 +202,61 @@ def test_negative_binomial_density_has_the_exact_mean_gradient():
 
 
 @pytest.mark.inference(concern="sampling")
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_negative_binomial_tail_values_gradients_and_hessians_match_double_reference(dtype):
+    """Finite log probabilities must retain finite derivatives through extreme log means."""
+    points = np.array(
+        [(eta, log_r) for eta in (-80, -60, -40, 0, 40, 60, 80) for log_r in (-2, 1.17, 4)]
+    )
+
+    def actual(z, count):
+        return to_native(
+            NegativeBinomial2LawSpec(mean=jnp.exp(z[0]), concentration=jnp.exp(z[1]))
+        ).log_prob(jnp.asarray(count, dtype=z.dtype))
+
+    def reference(z, count):
+        mean, r = jnp.exp(z)
+        # Counts zero and two have elementary normalizers, independent of the
+        # density implementation and generic gammaln/betaln approximations.
+        zero_count = -r * jnp.log1p(mean / r)
+        if count == 0.0:
+            return zero_count
+        return (
+            jnp.log(r) + jnp.log1p(r) - jnp.log(2.0) + zero_count + 2 * (z[0] - jnp.log(r + mean))
+        )
+
+    def derivatives(fn, coordinates, count):
+        return jax.jit(
+            jax.vmap(lambda z: (jax.value_and_grad(fn)(z, count), jax.hessian(fn)(z, count)))
+        )(coordinates)
+
+    with jax.enable_x64():
+        for count in (0.0, 2.0):
+            observed = derivatives(actual, jnp.asarray(points, dtype=dtype), count)
+            expected = derivatives(reference, jnp.asarray(points, dtype=jnp.float64), count)
+            tolerance = 8e-5 if dtype == "float32" else 2e-10
+            for value, target in zip(
+                jax.tree.leaves(observed), jax.tree.leaves(expected), strict=True
+            ):
+                assert np.isfinite(value).all()
+                np.testing.assert_allclose(value, target, rtol=tolerance, atol=tolerance)
+
+
+@pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize(
     ("family", "extras"),
     [
         (DistributionFamily.GAMMA, {"obs_shape": 2.0}),
         (DistributionFamily.BETA, {"obs_concentration": 3.0}),
+        (DistributionFamily.NEGATIVE_BINOMIAL, {"obs_r": 3.0}),
     ],
 )
 def test_missing_invalid_observation_has_zero_gradient(family: DistributionFamily, extras):
     likelihood = mean_density(observation_laws([family], parameters=extras)[0])
+    value = 2.0 if family == DistributionFamily.NEGATIVE_BINOMIAL else 0.2
 
     def fn(mu):
-        return likelihood(jnp.array([0.2, jnp.nan]), mu, jnp.eye(2), jnp.array([1.0, 0.0]))
+        return likelihood(jnp.array([value, jnp.nan]), mu, jnp.eye(2), jnp.array([1.0, 0.0]))
 
     gradient = jax.grad(fn)(jnp.array([0.4, 0.6]))
     assert jnp.isfinite(gradient[0])
@@ -291,6 +334,7 @@ def test_zero_mean_negative_binomial_has_the_exact_boundary_gradient():
 
     assert score(jnp.asarray(0.0)) == 0.0
     assert jax.grad(score)(jnp.asarray(0.0)) == -1.0
+    assert float(jax.grad(jax.grad(score))(jnp.asarray(0.0))) == pytest.approx(1.0 / 3.0)
 
 
 @pytest.mark.inference(concern="sampling")

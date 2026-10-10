@@ -6,8 +6,8 @@ likelihood.  Three solver strategies are dispatched automatically:
 
 - **Point IEKS**: block-tridiagonal O(T D^3) — used when every observation is
   a point measurement.
-- **Support-aware IEKS**: profile-banded Cholesky — used when some observations
-  are interval summaries (e.g. means/sums over windows).
+- **Support-aware IEKS**: tridiagonal precision plus low-rank corrections for
+  observed interval summaries (e.g. means/sums over windows).
 - **Dense support**: full joint Hessian — fallback for very short series with
   interval summaries.
 """
@@ -19,7 +19,6 @@ from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
-import numpy as np
 
 from nof1_causal_lab.models.ssm.dynamics.linearisation import infer_linearisation
 from nof1_causal_lab.models.ssm.execution.contracts import (
@@ -45,12 +44,10 @@ from .shared import (
     _build_ieks_system_from_prior,
     _build_prior_tridiagonal_system,
     _compute_profile_lower_bandwidths,
-    _factor_block_banded_cholesky,
     _factor_block_profile_cholesky,
     _infer_support_groups,
     _predictive_latent_init,
     _should_use_dense_support_laplace,
-    _solve_block_banded_from_cholesky,
     _solve_block_profile_from_cholesky,
     block_profile_logdet_packed_cotangent,
 )
@@ -62,6 +59,7 @@ from .support import (
 )
 
 if TYPE_CHECKING:
+    import numpy as np
     from dynestyx import StochasticContinuousTimeStateEvolution
     from numpyro.distributions import MultivariateNormal
 
@@ -97,9 +95,6 @@ class LaplaceLikelihood:
     observation_support: ObservationSupportRuntime | None
     _summary_operator_codes: jax.Array
     _support_window_batches: tuple[SupportObservationWindowBatch, ...]
-    _support_bandwidth: int
-    _support_row_upper_bandwidths: jax.Array
-    _support_row_lower_bandwidths: jax.Array
 
     def __init__(
         self,
@@ -107,6 +102,8 @@ class LaplaceLikelihood:
         n_manifest: int,
         n_ieks_iters: int = 5,
         observation_support: ObservationSupportRuntime | None = None,
+        *,
+        observed_mask: np.ndarray,
     ) -> None:
         """Bind state dimensions and support-window structure for initialization-only Laplace solves."""
         object.__setattr__(self, "n_latent", n_latent)
@@ -125,46 +122,13 @@ class LaplaceLikelihood:
             observation_support is not None
             and observation_support.requires_interval_summary_handling
         ):
-            support_window_batches, support_bandwidth, support_row_upper_bandwidths = (
-                _infer_support_groups(observation_support)
-            )
-            object.__setattr__(self, "_support_window_batches", tuple(support_window_batches))
-            object.__setattr__(self, "_support_bandwidth", support_bandwidth)
-            prior_row_upper_bandwidths = np.zeros(
-                (len(observation_support.anchor_times),),
-                dtype=np.int64,
-            )
-            if len(prior_row_upper_bandwidths) > 1:
-                prior_row_upper_bandwidths[:-1] = 1
-            full_row_upper_bandwidths = np.maximum(
-                np.asarray(support_row_upper_bandwidths, dtype=np.int64),
-                prior_row_upper_bandwidths,
-            )
             object.__setattr__(
                 self,
-                "_support_row_upper_bandwidths",
-                jnp.asarray(
-                    full_row_upper_bandwidths,
-                    dtype=jnp.int32,
-                ),
-            )
-            object.__setattr__(
-                self,
-                "_support_row_lower_bandwidths",
-                jnp.asarray(
-                    _compute_profile_lower_bandwidths(full_row_upper_bandwidths),
-                    dtype=jnp.int32,
-                ),
+                "_support_window_batches",
+                _infer_support_groups(observation_support, observed_mask),
             )
         else:
             object.__setattr__(self, "_support_window_batches", ())
-            object.__setattr__(self, "_support_bandwidth", 1 if n_latent > 0 else 0)
-            object.__setattr__(
-                self, "_support_row_upper_bandwidths", jnp.zeros((0,), dtype=jnp.int32)
-            )
-            object.__setattr__(
-                self, "_support_row_lower_bandwidths", jnp.zeros((0,), dtype=jnp.int32)
-            )
 
     def _build_support_window_derivatives(
         self, observation_model: CompiledObservationModel
@@ -266,9 +230,6 @@ class LaplaceLikelihood:
                         observation_model.mean_log_prob_fn,
                         self.observation_support,
                         self._support_window_batches,
-                        self._support_bandwidth,
-                        self._support_row_upper_bandwidths,
-                        self._support_row_lower_bandwidths,
                         window_derivatives,
                         self.n_ieks_iters,
                         z_init=support_mode_init,
@@ -330,9 +291,6 @@ class LaplaceLikelihood:
                     observation_model.mean_log_prob_fn,
                     self.observation_support,
                     self._support_window_batches,
-                    self._support_bandwidth,
-                    self._support_row_upper_bandwidths,
-                    self._support_row_lower_bandwidths,
                     window_derivatives=window_derivatives,
                     build_measurement_objects=_build_support_measurement_objects,
                     observation_laws=observation_laws,
@@ -485,12 +443,10 @@ __all__ = [
     "_build_ieks_system_from_prior",
     "_build_prior_tridiagonal_system",
     "_compute_profile_lower_bandwidths",
-    "_factor_block_banded_cholesky",
     "_factor_block_profile_cholesky",
     "_infer_support_groups",
     "_predictive_latent_init",
     "_should_use_dense_support_laplace",
-    "_solve_block_banded_from_cholesky",
     "_solve_block_profile_from_cholesky",
     "block_profile_logdet_packed_cotangent",
     # support.py re-exports

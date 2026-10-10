@@ -10,10 +10,14 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 
+from nof1_causal_lab.artifacts.construct import replace_constructs
 from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.likelihood import DistributionFamily, LinkFunction
 from nof1_causal_lab.artifacts.parameter import ParameterCoordinate, SiteKind
+from nof1_causal_lab.models.ssm.compile.observation_windows import compile_window_plan
+from nof1_causal_lab.models.ssm.joint_layout import JointLawLayout
 from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
+from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledFitInputs
@@ -231,7 +235,9 @@ class SyntheticNonlinearData:
     observation_support: ObservationSupportRuntime
 
 
-def load_synthetic_nonlinear_spec(*, diffusion_scale: float = 1.0) -> DynamicalModelSpec:
+def load_synthetic_nonlinear_spec(
+    *, T: int = 32, diffusion_scale: float = 1.0
+) -> DynamicalModelSpec:
     """Load the retained recovery model and explicitly scale its diffusion priors."""
     dynamical_model_spec = DynamicalModelSpec.model_validate_json(
         Path(__file__).with_name("synthetic_nonlinear_model.json").read_text()
@@ -241,10 +247,50 @@ def load_synthetic_nonlinear_spec(*, diffusion_scale: float = 1.0) -> DynamicalM
         if dynamical_model_spec.parameter_context(parameter.id).quantity == SiteKind.DIFFUSION_DIAG:
             assert parameter.distribution is not None
             distributions[parameter.distribution] = dist.HalfNormal(0.4 * float(diffusion_scale))
-    return dynamical_model_spec.with_entities(distributions=distributions)
+    inputs = _build_transition_inputs(T)
+    input_constructs = tuple(
+        sorted(
+            (
+                construct
+                for construct in dynamical_model_spec.constructs
+                if construct.role == "exogenous"
+            ),
+            key=lambda construct: construct.id,
+        )
+    )
+    layout = JointLawLayout(
+        parameters=(),
+        constructs=tuple(construct.id for construct in input_constructs),
+        time_points=tuple(float(index) for index in range(T)),
+        labels={},
+    )
+    distributions[layout.distribution_id] = dist.Delta(
+        jnp.asarray(
+            np.concatenate(
+                [inputs[:, INPUT_NAMES.index(construct.name)] for construct in input_constructs]
+            )
+        ),
+        event_dim=1,
+    )
+    revised_inputs = tuple(
+        construct.with_distribution(layout.distribution_id) for construct in input_constructs
+    )
+    return dynamical_model_spec.with_entities(
+        constructs=tuple(
+            construct.with_distribution(layout.distribution_id)
+            if construct.role == "exogenous"
+            else construct
+            for construct in dynamical_model_spec.constructs
+        ),
+        edges=replace_constructs(dynamical_model_spec.edges, revised_inputs),
+        distributions=distributions,
+        law_layouts={layout.distribution_id: layout},
+    )
 
 
-def load_synthetic_nonlinear_model(*, diffusion_scale: float = 1.0) -> CompiledFitInputs:
+def load_synthetic_nonlinear_model(
+    *, T: int = 32, diffusion_scale: float = 1.0
+) -> CompiledFitInputs:
     from nof1_causal_lab.models.model_structure import StructuralSelection
     from nof1_causal_lab.models.ssm.compile.inputs import (
         CompiledFitInputs,
@@ -252,7 +298,9 @@ def load_synthetic_nonlinear_model(*, diffusion_scale: float = 1.0) -> CompiledF
     )
 
     inputs = compile_ssm_inputs_from_model(
-        StructuralSelection(load_synthetic_nonlinear_spec(diffusion_scale=diffusion_scale), None)
+        StructuralSelection(
+            load_synthetic_nonlinear_spec(T=T, diffusion_scale=diffusion_scale), None
+        )
     )
     assert isinstance(inputs, CompiledFitInputs), inputs
     return inputs
@@ -278,7 +326,9 @@ def bind_synthetic_nonlinear_panel(inputs: CompiledFitInputs, data: SyntheticNon
             rows.append(
                 {
                     "indicator_id": str(observation.id),
-                    "value": float(data.observations[j, i]),
+                    "value": None
+                    if np.isnan(data.observations[j, i])
+                    else float(data.observations[j, i]),
                     "anchor_time": anchor,
                     "support_kind": observation.support.support_kind.value,
                     "summary_operator": observation.support.summary_operator.value,
@@ -316,21 +366,12 @@ def _build_gp_interval_support(T: int, gp_rows: np.ndarray, window: int = 3):
     n_manifest = len(MANIFEST_NAMES) + len(INPUT_NAMES)
     support_start_times = np.full((T, n_manifest), np.nan, dtype=np.float64)
     support_end_times = np.full((T, n_manifest), np.nan, dtype=np.float64)
-    interval_prev_coeffs = np.zeros((T, n_manifest), dtype=np.float64)
-    interval_curr_coeffs = np.zeros((T, n_manifest), dtype=np.float64)
-    interval_weights = np.zeros((T, n_manifest), dtype=np.float64)
-    emission_slot_indices = np.full((T, n_manifest), -1, dtype=np.int64)
     gp_idx = MANIFEST_NAMES.index("gp_clinical_severity")
 
     for end in gp_rows:
         start = max(0, int(end) - window)
         support_start_times[end, gp_idx] = float(start)
         support_end_times[end, gp_idx] = float(end)
-        emission_slot_indices[end, gp_idx] = 0
-        for step in range(start + 1, int(end) + 1):
-            interval_prev_coeffs[step, gp_idx] += 0.5
-            interval_curr_coeffs[step, gp_idx] += 0.5
-            interval_weights[step, gp_idx] += 1.0
 
     support_kinds = [None] * n_manifest
     summary_operators = ["last"] * n_manifest
@@ -339,51 +380,24 @@ def _build_gp_interval_support(T: int, gp_rows: np.ndarray, window: int = 3):
     summary_operators[gp_idx] = "mean"
     observation_windows[gp_idx] = f"{window}d"
 
-    return _make_observation_support_runtime(
-        anchor_times=np.arange(T, dtype=np.float64),
+    plan = compile_window_plan(
+        np.arange(T, dtype=np.float64),
+        support_start_times,
+        support_end_times,
+        support_kinds,
+        [*MANIFEST_NAMES, *INPUT_NAMES],
+    )
+    assert not isinstance(plan, ObservationPreflightFailure), plan
+    return ObservationSupportRuntime.assembled(
+        window_plan=plan,
         manifest_names=[*MANIFEST_NAMES, *INPUT_NAMES],
         support_kinds=support_kinds,
         summary_operators=summary_operators,
+        anchor_policies=("support_end",) * n_manifest,
         observation_windows=observation_windows,
         support_start_times=support_start_times,
         support_end_times=support_end_times,
-        interval_prev_coeffs=interval_prev_coeffs,
-        interval_curr_coeffs=interval_curr_coeffs,
-        interval_weights=interval_weights,
-        emission_slot_indices=emission_slot_indices,
     )
-
-
-def _make_observation_support_runtime(**kwargs) -> ObservationSupportRuntime:
-    """Build the runtime while accepting compact 2D interval coefficients."""
-    support_kinds = kwargs["support_kinds"]
-    kwargs.setdefault(
-        "summary_operators",
-        ["mean" if kind == "interval" else "last" for kind in support_kinds],
-    )
-    kwargs.setdefault(
-        "anchor_policies",
-        [
-            "support_start" if operator == "first" else "support_end"
-            for operator in kwargs["summary_operators"]
-        ],
-    )
-    prev = np.asarray(kwargs["interval_prev_coeffs"], dtype=np.float64)
-    curr = np.asarray(kwargs["interval_curr_coeffs"], dtype=np.float64)
-    weights = np.asarray(kwargs["interval_weights"], dtype=np.float64)
-    if prev.ndim == 2:
-        prev = prev[..., None]
-        curr = curr[..., None]
-        weights = weights[..., None]
-    kwargs["interval_prev_coeffs"] = prev
-    kwargs["interval_curr_coeffs"] = curr
-    kwargs["interval_weights"] = weights
-    emission_slots = kwargs.get("emission_slot_indices")
-    if emission_slots is None:
-        support_end = np.asarray(kwargs["support_end_times"])
-        emission_slots = np.where(np.isfinite(support_end), 0, -1).astype(np.int64)
-    kwargs["emission_slot_indices"] = emission_slots
-    return ObservationSupportRuntime.assembled(**kwargs)
 
 
 def _sample_negative_binomial(rng: np.random.Generator, mean: np.ndarray, r: float) -> np.ndarray:

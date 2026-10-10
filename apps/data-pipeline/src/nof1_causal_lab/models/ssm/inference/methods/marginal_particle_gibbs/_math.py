@@ -10,6 +10,18 @@ from jaxtyping import Array, Float, Int
 FloatScalar = Float[Array, ""]
 
 
+def coordinate_proposal_mask(
+    key: jax.Array, free_mask: jax.Array, block_coords: int | None
+) -> jax.Array:
+    """Choose only coordinates with independent, unobserved values to propose."""
+    dimension = free_mask.shape[-1]
+    if block_coords is None or block_coords >= dimension:
+        return free_mask
+    scores = jnp.where(jnp.any(free_mask, axis=0), jax.random.uniform(key, (dimension,)), -jnp.inf)
+    chosen = jnp.argsort(scores)[-block_coords:]
+    return free_mask & jnp.zeros(dimension, dtype=bool).at[chosen].set(True)[None, :]
+
+
 def _value_and_grad_by_param[Context](
     contexts: Context,
     particle: jax.Array,

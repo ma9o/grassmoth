@@ -6,12 +6,13 @@ from nof1_causal_lab.artifacts.checks import (
     ConvergenceCriterion,
     ConvergenceSubject,
     Evaluated,
+    LatentConvergenceSubject,
     NotEvaluated,
     NumericCriterionEvidence,
 )
 from nof1_causal_lab.artifacts.posterior_diagnostics import (
     ChainDiagnostics,
-    ParameterConvergenceReport,
+    ConvergenceReport,
 )
 
 # Vehtari et al. (2021), https://doi.org/10.1214/20-BA1221.
@@ -19,10 +20,10 @@ R_HAT_LIMIT = 1.01
 ESS_PER_CHAIN = 100
 
 
-def parameter_convergence(chains: ChainDiagnostics | None) -> ParameterConvergenceReport:
+def chain_convergence(chains: ChainDiagnostics | None) -> ConvergenceReport:
     """Assess retained chain convergence or report explicitly that chain evidence is unavailable."""
     if chains is None:
-        return ParameterConvergenceReport(
+        return ConvergenceReport(
             findings=(
                 NotEvaluated(
                     code="parameter_chains",
@@ -34,20 +35,40 @@ def parameter_convergence(chains: ChainDiagnostics | None) -> ParameterConvergen
         )
     findings = []
     minimum = ESS_PER_CHAIN * chains.num_chains
-    for parameter in chains.per_parameter:
+    coordinates = tuple(
+        (
+            ConvergenceSubject(parameter=p.subject, label=p.parameter),
+            p.r_hat,
+            p.ess_bulk,
+            p.ess_tail,
+        )
+        for p in chains.per_parameter
+    ) + tuple(
+        (LatentConvergenceSubject(state=p.subject, label=p.label), p.r_hat, p.ess_bulk, p.ess_tail)
+        for p in chains.per_latent or ()
+    )
+    if chains.per_latent is None:
+        findings.append(
+            NotEvaluated(
+                code="latent_chains",
+                subject="recorded_latent_chains",
+                reason="NO_RETAINED_CHAINS",
+                detail="Latent chain convergence was not measured.",
+            )
+        )
+    for subject, r_hat, ess_bulk, ess_tail in coordinates:
         for criterion, value, lower, upper in (
-            (ConvergenceCriterion.R_HAT, parameter.r_hat, None, R_HAT_LIMIT),
-            (ConvergenceCriterion.ESS_BULK, parameter.ess_bulk, float(minimum), None),
-            (ConvergenceCriterion.ESS_TAIL, parameter.ess_tail, float(minimum), None),
+            (ConvergenceCriterion.R_HAT, r_hat, None, R_HAT_LIMIT),
+            (ConvergenceCriterion.ESS_BULK, ess_bulk, float(minimum), None),
+            (ConvergenceCriterion.ESS_TAIL, ess_tail, float(minimum), None),
         ):
-            subject = ConvergenceSubject(parameter=parameter.subject, label=parameter.parameter)
             if value is None:
                 findings.append(
                     NotEvaluated(
                         code=criterion.value,
                         subject=subject,
                         reason="INSUFFICIENT_CHAIN_SAMPLES",
-                        detail=f"{parameter.parameter}: {criterion.value} is unavailable.",
+                        detail=f"{subject.label}: {criterion.value} is unavailable.",
                     )
                 )
             else:
@@ -58,7 +79,7 @@ def parameter_convergence(chains: ChainDiagnostics | None) -> ParameterConvergen
                     lower=lower,
                     upper=upper,
                     upper_inclusive=upper is None,
-                    note=parameter.parameter,
+                    note=subject.label,
                 )
                 findings.append(
                     Evaluated(
@@ -68,9 +89,9 @@ def parameter_convergence(chains: ChainDiagnostics | None) -> ParameterConvergen
                         evidence=evidence,
                     )
                 )
-    return ParameterConvergenceReport(findings=tuple(findings))
+    return ConvergenceReport(findings=tuple(findings))
 
 
-def convergence_failures(report: ParameterConvergenceReport) -> tuple[str, ...]:
+def convergence_failures(report: ConvergenceReport) -> tuple[str, ...]:
     """Action messages use the same measured verdict, without reconstruction."""
     return report.messages

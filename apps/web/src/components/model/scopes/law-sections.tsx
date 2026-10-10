@@ -84,6 +84,7 @@ function ParameterLawSections({
               fit?.convergence.findings.filter(
                 (item) =>
                   typeof item.subject !== "string" &&
+                  "parameter" in item.subject &&
                   item.subject.parameter.element_id === subject.element_id,
               ) ?? [];
             const trace = chains?.trace_data.find(

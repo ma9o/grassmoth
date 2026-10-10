@@ -117,6 +117,13 @@ class ConvergenceSubject(Value):
     label: str
 
 
+class LatentConvergenceSubject(Value):
+    """A convergence criterion over a construct's independent latent coordinates."""
+
+    state: ConstructRef
+    label: str
+
+
 class OutcomeSubject(Value):
     """The outcome construct selected by the study question."""
 
@@ -143,6 +150,7 @@ type FindingSubject = (
     | PredictiveSubject
     | IndicatorCheckSubject
     | ConvergenceSubject
+    | LatentConvergenceSubject
     | QuestionSubject
 )
 
