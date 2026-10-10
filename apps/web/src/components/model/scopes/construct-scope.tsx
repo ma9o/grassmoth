@@ -15,6 +15,9 @@ export function ConstructScope({ context, id }: { context: ScopeContext; id: Con
   if (!scope) return null;
   const { modelSnapshot, construct, indicators } = scope;
   const equation = constructEquation(construct, context.entities);
+  const latent = modelSnapshot.fit?.inference_diagnostics?.per_latent?.find(
+    (item) => item.subject.id === id,
+  );
   const flows = modelSnapshot.dynamical_model_spec
     ? modelFlowPlots(modelSnapshot.dynamical_model_spec)
     : null;
@@ -61,6 +64,22 @@ export function ConstructScope({ context, id }: { context: ScopeContext; id: Con
         <FlowSection title="Intrinsic drift" plot={flows?.intrinsic.get(id)} />
       )}
       <LawSections context={context} uses={ownLawUses(construct)} />
+      {latent && (
+        <Section title="Latent convergence">
+          <Prose>
+            Worst chain diagnostics across {latent.coordinates} independent, unobserved time
+            coordinates of {latent.label}.
+          </Prose>
+          <KeyValue
+            rows={[
+              ["Maximum R-hat", latent.r_hat?.toPrecision(4) ?? "Unavailable"],
+              ["Minimum bulk ESS", latent.ess_bulk?.toPrecision(4) ?? "Unavailable"],
+              ["Minimum tail ESS", latent.ess_tail?.toPrecision(4) ?? "Unavailable"],
+              ["Maximum mean MCSE", latent.mcse_mean?.toPrecision(4) ?? "Unavailable"],
+            ]}
+          />
+        </Section>
+      )}
       <SimulatedHistory context={context} id={id} kind="states" />
 
       {modelSnapshot.identification?.treatments[id] && (

@@ -71,6 +71,14 @@ export function recordedEntityFailures(
           [
             ...new Set([
               ...convergence(uses.map((use) => use.parameterId)),
+              ...(fit?.convergence.findings ?? []).flatMap((finding) =>
+                typeof finding.subject !== "string" &&
+                "state" in finding.subject &&
+                finding.subject.state.id === construct.id &&
+                (finding.kind === "not_evaluated" || finding.outcome === "failed")
+                  ? [`Latent convergence: ${finding.subject.label}`]
+                  : [],
+              ),
               ...construct.indicators.flatMap(
                 (indicator) => indicators[indicator.observation.id] ?? [],
               ),

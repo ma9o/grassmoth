@@ -14,7 +14,7 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
   const { convergence } = report;
   const mcmc = report.inference_diagnostics;
   return (
-    <Section title="Parameter convergence">
+    <Section title="Chain convergence">
       <Hint>
         Marginal particle Gibbs · {mcmc?.num_chains ?? "Unavailable"} chains ×{" "}
         {mcmc?.num_samples_per_chain ?? "Unavailable"} draws ·{" "}
@@ -22,7 +22,7 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
       </Hint>
       <div className="flex items-center gap-2">
         <StatusIcon status={convergence.status} />
-        <span>Parameter convergence: {humanize(convergence.status)}.</span>
+        <span>Chain convergence: {humanize(convergence.status)}.</span>
       </div>
       {convergence.messages.map((message) => (
         <p key={message}>{message}</p>
@@ -45,12 +45,39 @@ export function FitDetails({ context }: { context: ScopeContext }) {
   const plot = detail.data?.detail;
   const mcmc = report.inference_diagnostics;
   const gibbs = report.inference_metadata.sampler_diagnostics;
+  const tempering = gibbs?.tempering;
   return (
     <>
       <FitCalibration context={context} />
+      {tempering && (
+        <Section title="Parallel tempering" wide>
+          <Hint>
+            Each temperature ladder contributes one cold posterior chain. Local movement telemetry
+            below is recorded before replica exchanges.
+          </Hint>
+          <KeyValue
+            rows={[
+              ["Temperatures per chain", String(tempering.inverse_temperatures.length)],
+              ["Ladder frozen at warmup step", String(tempering.ladder_frozen_at_warmup_step)],
+              [
+                "Inverse temperatures",
+                tempering.inverse_temperatures.map((beta) => formatSignificant(beta)).join(", "),
+              ],
+            ]}
+          />
+          {tempering.swaps.map((counts, chain) => (
+            <p key={chain}>
+              Chain {chain + 1} swaps by neighboring pair:{" "}
+              {counts.map(({ accepted, attempted }) => `${accepted}/${attempted}`).join(" · ")}
+            </p>
+          ))}
+        </Section>
+      )}
       {(gibbs || plot?.final_latent_delta) && (
         <Section title="Latent mixing" wide>
-          <Hint>Parameter convergence does not assess latent-path mixing.</Hint>
+          <Hint>
+            Movement telemetry complements the latent R-hat and ESS reported for each construct.
+          </Hint>
           <KeyValue
             rows={[
               ["Latent moves accepted", gibbs?.latent_update_fraction],
