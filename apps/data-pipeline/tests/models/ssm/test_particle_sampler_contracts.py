@@ -4,10 +4,13 @@ import time
 from unittest.mock import Mock
 
 import jax.numpy as jnp
+import jax.random as random
 import numpy as np
 import pytest
 from pydantic import ValidationError
 
+from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
+from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
 from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs import (
     runner,
 )
@@ -16,7 +19,12 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.kernel
     build_marginal_particle_gibbs_kernel,
 )
 from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
-from nof1_causal_lab.sampler_config import MarginalParticleGibbsSpec
+from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
+from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
+from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
+from nof1_causal_lab.models.ssm.runtime import BoundPanel
+from nof1_causal_lab.sampler_config import MarginalParticleGibbsSpec, SamplerSpec
+from tests.compute_fixtures import COMPUTE_BUDGET
 
 pytestmark = pytest.mark.contract
 
@@ -61,7 +69,7 @@ def test_sampler_boundary_rejects_unknown_modes(field):
 @pytest.mark.parametrize(
     ("invalid", "error"),
     [
-        ("position_shape", "init_positions must have shape"),
+        ("position_shape", "initialization.positions must have shape"),
         ("path_shape", "leading dimension num_chains"),
         ("position_finite", r"non-finite for chain\(s\) \[1\]"),
         ("path_finite", r"non-finite for chain\(s\) \[1\]"),
@@ -112,13 +120,56 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
             num_warmup=0,
             num_samples=1,
             num_chains=2,
-            seed=0,
+            key=random.PRNGKey(0),
             adaptation_rate=0.1,
-            init_scale=0.0,
             retain_latent_paths=True,
-            init_positions=jnp.asarray(positions),
-            initial_latent_trajectories=jnp.asarray(paths),
+            initialization=Mock(
+                spec=LapsInitializationResult,
+                positions=jnp.asarray(positions),
+                paths=jnp.asarray(paths),
+            ),
             clock=time.monotonic,
         )
     step.assert_not_called()
     target.initial_path.assert_not_called()
+
+
+def test_laps_failure_stops_production_before_sampling(monkeypatch):
+    from importlib import import_module
+
+    fitting = import_module(
+        "nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.fit"
+    )
+    target = Mock(spec=ParticleTarget, initial_position=jnp.zeros(1))
+    monkeypatch.setattr(
+        fitting, "build_particle_problem", Mock(return_value=Mock(runtime=target, public_sites=()))
+    )
+    failure = InitializationFailure.unavailable("No finite LAPS ensemble")
+    initialize = Mock(return_value=failure)
+    sample = Mock(side_effect=AssertionError("Failed initialization must stop the fit"))
+    monkeypatch.setattr(fitting, "prepare_laps_initialization", initialize)
+    monkeypatch.setattr(fitting, "run_marginal_particle_gibbs", sample)
+    result = fitting.fit_marginal_particle_gibbs(
+        Mock(spec=PriorRuntimeBundle),
+        Mock(
+            spec=BoundPanel,
+            observations=jnp.zeros((3, 1)),
+            compiled_dynamical_model=Mock(
+                spec=CompiledDynamicalModel,
+                state_space=StateSpace(
+                    size=1,
+                    inputs=(),
+                    initial=(0,),
+                    transition=(0,),
+                    static=(),
+                    recurrence=ParallelRecurrences(()),
+                ),
+            ),
+        ),
+        compute_budget=COMPUTE_BUDGET,
+        sampler=SamplerSpec(),
+        clock=time.monotonic,
+    )
+    assert result is failure
+    initialize.assert_called_once()
+    sample.assert_not_called()

@@ -1,6 +1,6 @@
 """Shared utilities for inference backends.
 
-Particle inference and MAP initialization share NumPyro's prior replay and
+Particle inference and LAPS initialization share NumPyro's prior replay and
 transformations. Application metadata supports initialization proposals and
 reporting; it never reconstructs the prior density or deterministic model sites.
 """
@@ -62,10 +62,9 @@ def _discover_sites(
     """Trace model once to discover sample sites (names, shapes, transforms).
 
     Site discovery is structural: it only needs the latent sample/deterministic
-    sites emitted by ``numpyro_model``. Tracing through the real likelihood backend
-    can trigger large JAX/XLA compilations for support-aware Laplace before
-    inference even starts, so discovery always replays the model with the dummy
-    backend instead.
+    sites emitted by ``numpyro_model``. Discovery replays the model with a zero
+    likelihood; the particle target owns the exact joint likelihood used by
+    LAPS and sampling.
     """
     _ = likelihood_backend
     model_fn = functools.partial(
@@ -101,8 +100,6 @@ def _discover_sites(
 class _DummyLikelihoodBackend:
     """Dummy backend for model replay — returns zero log-likelihood."""
 
-    checkpoint_loglik = False
-
     def compute_log_likelihood(self, *_args: object, **_kwargs: object) -> jax.Array:
         return jnp.array(0.0)
 
@@ -136,8 +133,3 @@ def extract_constrained_samples(
 ) -> dict[str, jnp.ndarray]:
     """Replay the prior program and retain its authored parameter/deterministic sites."""
     return _filter_public_samples(jax.vmap(parameters.constrain)(particles), public_sites)
-
-
-# ---------------------------------------------------------------------------
-# Differentiable evaluators
-# ---------------------------------------------------------------------------

@@ -1,14 +1,7 @@
-"""Architectural guard: linearization is confined to particle-sampler init.
+"""LAPS and particle sampling use the exact joint density.
 
-Project invariant (see AGENTS.md / the SSM design): the continuous-time model is
-nonlinear and the framework must never *assume* linearizability on any path that
-produces a reported result. The one sanctioned use of the linearised IEKS/Laplace
-marginal-likelihood backend is to *initialise* the particle samplers — initial
-parameter positions, the proposal preconditioner, and the cSMC reference path.
-
-This test fails if the linearised Laplace backend leaks out of that init/warmup
-allowlist (e.g. into a counterfactual, predictive, estimate, or diagnostic path).
-It is a static import scan — no JAX, no model build.
+Guard against reintroducing a linearized Gaussian likelihood backend. This is a
+static source scan, with no JAX execution or model build.
 """
 
 from __future__ import annotations
@@ -32,40 +25,18 @@ _LAPLACE_BACKEND_SYMBOLS = (
     "linearize_drift",
 )
 
-# The ONLY modules permitted to reference the Laplace backend: its own
-# implementation package, the inference-owned factory, and the warmup/init path
-# (Pathfinder/MAP positions + preconditioner and the cSMC reference trajectory).
-_ALLOWED_EXACT = {
-    "models/ssm/inference/backend_factory.py",
-    "models/ssm/inference/targets/transitions.py",
-    "models/ssm/inference/warmup/latent_init.py",
-    "models/ssm/inference/warmup/map.py",
-    "models/ssm/inference/warmup/scipy_pathfinder.py",
-}
-_ALLOWED_PREFIXES = (
-    # The backend's own implementation.
-    "models/ssm/inference/targets/laplace/",
-)
 
-
-def _is_allowed(rel_path: str) -> bool:
-    return rel_path in _ALLOWED_EXACT or rel_path.startswith(_ALLOWED_PREFIXES)
-
-
-def test_laplace_backend_is_confined_to_sampler_init() -> None:
+def test_linearized_backends_are_absent_from_production() -> None:
     offenders: dict[str, list[str]] = {}
     for py_path in _SRC.rglob("*.py"):
         rel = py_path.relative_to(_SRC).as_posix()
-        if _is_allowed(rel):
-            continue
         text = py_path.read_text(encoding="utf-8")
         hits = [symbol for symbol in _LAPLACE_BACKEND_SYMBOLS if symbol in text]
         if hits:
             offenders[rel] = hits
 
     assert not offenders, (
-        "Linearised IEKS/Laplace backend referenced outside the sampler-init "
-        "allowlist. Linearization may only initialise the particle samplers, never "
-        "feed an estimate/counterfactual/predictive/diagnostic. Offending modules: "
+        "LAPS initialization and particle sampling must use the exact joint density. "
+        "Linearized backend references found in: "
         f"{offenders}"
     )

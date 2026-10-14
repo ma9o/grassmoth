@@ -4862,56 +4862,12 @@ export interface components {
              * @enum {string}
              */
             readonly adaptation_scheme: "simple" | "dual_averaging";
-            /** @default laps */
-            readonly init_method: components["schemas"]["ParameterInitialization"];
             readonly laps: components["schemas"]["LapsInitializationSpec"];
-            /**
-             * Pathfinder Num Elbo Samples
-             * @default 20
-             */
-            readonly pathfinder_num_elbo_samples: number;
-            /**
-             * Pathfinder Maxiter
-             * @default 20
-             */
-            readonly pathfinder_maxiter: number;
-            /**
-             * N Pathfinder Starts
-             * @default 8
-             */
-            readonly n_pathfinder_starts: number;
-            /**
-             * Pathfinder Parallel Workers
-             * @default null
-             */
-            readonly pathfinder_parallel_workers: number | null;
-            /**
-             * Pathfinder Init Scale
-             * @default 0.1
-             */
-            readonly pathfinder_init_scale: number | null;
-            /** @default laps */
-            readonly auto_preconditioner_method: components["schemas"]["ParameterPreconditioner"];
-            /**
-             * Auto Preconditioner Maxiter
-             * @default 200
-             */
-            readonly auto_preconditioner_maxiter: number;
-            /**
-             * Init Scale
-             * @default 0.05
-             */
-            readonly init_scale: number;
             /**
              * Compute Latent Posterior Summary
              * @default true
              */
             readonly compute_latent_posterior_summary: boolean;
-            /**
-             * N Ieks Iters
-             * @default 6
-             */
-            readonly n_ieks_iters: number;
         };
         /**
          * @description A measurement dtype defines the observed value domain of an indicator.
@@ -5523,10 +5479,6 @@ export interface components {
         readonly "ParameterId-Input": `parameter:${string}`;
         /** @description A scientific parameter identity connects component coefficients to one parameter definition. */
         readonly "ParameterId-Output": `parameter:${string}`;
-        /** @enum {string} */
-        readonly ParameterInitialization: "random" | "pathfinder" | "laps";
-        /** @enum {string} */
-        readonly ParameterPreconditioner: "map" | "none" | "pathfinder" | "laps";
         /**
          * ParameterRef
          * @description A scalar finding identifies its scientific parameter and declared logical component.
@@ -5571,58 +5523,6 @@ export interface components {
             readonly sources: readonly components["schemas"]["LiteratureSource-Output"][];
         };
         readonly "ParameterTransformSpec-Output": components["schemas"]["IdentityTransformSpec-Output"] | components["schemas"]["PersistenceTransformSpec-Output"] | components["schemas"]["IntervalEffectTransformSpec-Output"] | components["schemas"]["InitialCorrelationTransformSpec-Output"];
-        /**
-         * ParameterWarmupDiagnostics
-         * @description Realized initialization and preconditioning, retaining each initializer's evidence once.
-         */
-        readonly ParameterWarmupDiagnostics: {
-            /** @default null */
-            readonly pathfinder: components["schemas"]["PathfinderDiagnostics"] | null;
-            /** @default null */
-            readonly laps: components["schemas"]["LapsInitializationDiagnostics"] | null;
-            /** Pathfinder Run Count */
-            readonly pathfinder_run_count: number;
-            /** Pathfinder Consumers */
-            readonly pathfinder_consumers: readonly string[];
-            /** Init Source */
-            readonly init_source: string;
-            /** Preconditioner Source */
-            readonly preconditioner_source: string;
-            /**
-             * Preconditioner Device
-             * @default null
-             */
-            readonly preconditioner_device: string | null;
-            /** Dim */
-            readonly dim: number;
-            /** Duration Seconds */
-            readonly duration_seconds: number;
-            /**
-             * Pathfinder Sampling Mode
-             * @default null
-             */
-            readonly pathfinder_sampling_mode: string | null;
-            /**
-             * Pathfinder Init Scale
-             * @default null
-             */
-            readonly pathfinder_init_scale: number | null;
-            /**
-             * Prior Released Site Names
-             * @default []
-             */
-            readonly prior_released_site_names: readonly string[];
-            /**
-             * Prior Released Site Indices
-             * @default []
-             */
-            readonly prior_released_site_indices: readonly number[];
-            /**
-             * Prior Release Scale
-             * @default 0
-             */
-            readonly prior_release_scale: number;
-        };
         /**
          * ParetoKPoint
          * @description One PSIS influence measurement with its original row and scientific class.
@@ -5712,87 +5612,9 @@ export interface components {
              * @default null
              */
             readonly amala_grad_norm_max: number | null;
-            readonly parameter_warmup: components["schemas"]["ParameterWarmupDiagnostics"];
+            readonly initialization: components["schemas"]["LapsInitializationDiagnostics"];
             /** @default null */
             readonly tempering: components["schemas"]["TemperingDiagnostics"] | null;
-        };
-        /**
-         * PathfinderDiagnostics
-         * @description Retained native initialization measurements; never posterior evidence.
-         */
-        readonly PathfinderDiagnostics: {
-            /** N Pathfinder Starts */
-            readonly n_pathfinder_starts: number;
-            /** N Pathfinder Starts Finite */
-            readonly n_pathfinder_starts_finite: number;
-            /** Pathfinder Parallel Workers */
-            readonly pathfinder_parallel_workers: number;
-            /** Pathfinder Setup Seconds */
-            readonly pathfinder_setup_seconds: number;
-            /** Pathfinder Jax Compile Seconds */
-            readonly pathfinder_jax_compile_seconds: number;
-            /** Pathfinder Jax Compile Batch Sizes */
-            readonly pathfinder_jax_compile_batch_sizes: readonly number[];
-            /** Pathfinder Runtime Seconds */
-            readonly pathfinder_runtime_seconds: number;
-            /** Pathfinder Total Seconds */
-            readonly pathfinder_total_seconds: number;
-            /** Best Pathfinder Elbo */
-            readonly best_pathfinder_elbo: number;
-            /** Pathfinder Elbo Min */
-            readonly pathfinder_elbo_min: number;
-            /** Pathfinder Elbo Max */
-            readonly pathfinder_elbo_max: number;
-            /** Pathfinder Elbo Spread */
-            readonly pathfinder_elbo_spread: number;
-            /** Pathfinder Elbos */
-            readonly pathfinder_elbos: readonly number[];
-            /** Pathfinder Maxiter */
-            readonly pathfinder_maxiter: number;
-            /** Pathfinder Lbfgs Memory */
-            readonly pathfinder_lbfgs_memory: number;
-            /** Pathfinder Elbo Samples */
-            readonly pathfinder_elbo_samples: number;
-            /** Pathfinder Elbo Screen Samples */
-            readonly pathfinder_elbo_screen_samples: number;
-            /** Pathfinder Elbo Refine Candidates */
-            readonly pathfinder_elbo_refine_candidates: number;
-            /** Pathfinder Elbo Candidate Batch Size */
-            readonly pathfinder_elbo_candidate_batch_size: number;
-            /** Pathfinder Per Start */
-            readonly pathfinder_per_start: readonly components["schemas"]["PathfinderStartDiagnostics"][];
-        };
-        /**
-         * PathfinderStartDiagnostics
-         * @description Retained native initialization measurements; never posterior evidence.
-         */
-        readonly PathfinderStartDiagnostics: {
-            /** N Elbo Batch Evaluations */
-            readonly n_elbo_batch_evaluations: number;
-            /** N Elbo Screen Candidates */
-            readonly n_elbo_screen_candidates: number;
-            /** N Elbo Refine Candidates */
-            readonly n_elbo_refine_candidates: number;
-            /** Best Elbo Candidate Index */
-            readonly best_elbo_candidate_index: number;
-            /** Start Idx */
-            readonly start_idx: number;
-            /** N Trajectory Points */
-            readonly n_trajectory_points: number;
-            /** N Valid Iterates */
-            readonly n_valid_iterates: number;
-            /** N Elbo Candidates */
-            readonly n_elbo_candidates: number;
-            /** N Lbfgs Iterations */
-            readonly n_lbfgs_iterations: number;
-            /** Final Log Posterior */
-            readonly final_log_posterior: number;
-            /** Best Elbo This Start */
-            readonly best_elbo_this_start: number | null;
-            /** Scipy Success */
-            readonly scipy_success: boolean;
-            /** Scipy Status */
-            readonly scipy_status: number;
         };
         /**
          * PersistenceTransformSpec

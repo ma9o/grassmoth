@@ -19,7 +19,6 @@ from nof1_causal_lab.distributions import DistributionFamily
 from nof1_causal_lab.models.ssm.dynamics.intervention import Intervention
 from nof1_causal_lab.models.ssm.inference import problem as problem_module
 from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
-from nof1_causal_lab.models.ssm.inference.targets.laplace.shared import _prepare_linearized_path
 from tests.dynamics_fixtures import potential_term
 from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
 from tests.model_fixtures import (
@@ -82,33 +81,6 @@ def test_sampler_context_is_a_dynestyx_model_pytree(runtime):
     )
     assert shapes[0].initial_condition.loc.shape == (2, 1)
     assert shapes[1].shape == (2, len(runtime.times))
-
-
-@pytest.mark.inference(concern="warmup")
-@pytest.mark.parametrize("supplied_path", [False, True])
-def test_warmup_gaussian_view_traces_with_scalar_state(runtime, supplied_path):
-    """Trace the real library discretizer without executing matrix exponentials."""
-    context = runtime.context(runtime.initial_position, runtime.times)
-    continuous = context[0].state_evolution
-    init_mean = jnp.array([0.7])
-    intervals = jnp.array([1e-4, 0.1, 0.25])
-
-    def prepare(path):
-        transitions_at, seed = _prepare_linearized_path(
-            continuous,
-            intervals,
-            init_mean,
-            z_init=path if supplied_path else None,
-            dtype=path.dtype,
-        )
-        return seed, transitions_at(seed)
-
-    shapes = jax.eval_shape(prepare, jnp.zeros((3, 1)))
-    seed, (transition, covariance, bias) = shapes
-    assert seed.shape == (3, 1)
-    assert transition.shape == (3, 1, 1)
-    assert covariance.shape == (3, 1, 1)
-    assert bias.shape == (3, 1)
 
 
 @pytest.mark.inference(concern="simulation")

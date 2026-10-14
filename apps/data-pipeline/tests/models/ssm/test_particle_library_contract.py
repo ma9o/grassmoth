@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
+from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from nof1_causal_lab.models.ssm.inference.methods._pmcmc_shared.extraction import (
     extract_grouped_public_samples,
@@ -78,7 +78,7 @@ def test_library_parameter_output_preserves_public_vector_sites_and_chain_order(
         dynamical_model=_no_numerical_execution,
         observations=jnp.zeros((4, 1)),
         times=jnp.arange(4.0),
-        state_space=StateSpace(1, (), (0,), (0,)),
+        state_space=StateSpace(1, (), (0,), (0,), (), ParallelRecurrences(())),
     )
     problem = ParticleProblem(runtime=runtime, site_info={}, public_sites=frozenset({"beta"}))
     samples = extract_grouped_public_samples(positions, bundle=problem, num_chains=2, num_samples=3)

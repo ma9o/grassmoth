@@ -35,6 +35,7 @@ class ParticleIntervalObservations:
     dynamical_model: Callable[[ParticleContext], dsx.DynamicalModel]
     operator: ObservationOperator
     tree: CompiledIntervalTree
+    state_projection: Callable[[ParticleContext, jax.Array], jax.Array]
     power: jax.Array | None = None
 
     def response(self, context: ParticleContext, state: jax.Array) -> jax.Array:
@@ -42,7 +43,7 @@ class ParticleIntervalObservations:
         observation = cast(
             "HeterogeneousObservation", self.dynamical_model(context).observation_model
         )
-        return observation(state, None, 0).response
+        return observation(self.state_projection(context, state), None, 0).response
 
     def trajectory_log_probs(
         self, context: ParticleContext, path: jax.Array, observations: jax.Array
@@ -58,7 +59,7 @@ class ParticleIntervalObservations:
             observation_support=self.operator.observation_support,
         )
         densities = trajectory_observation_log_probs(
-            path,
+            self.state_projection(context, path),
             observations,
             None,
             measurement.lambda_mat,

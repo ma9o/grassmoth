@@ -43,6 +43,7 @@ if TYPE_CHECKING:
         MarginalParticleGibbsKernel,
     )
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
+    from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -104,14 +105,12 @@ def _initialize_chain_state(
     param_min_scale: float,
     param_max_scale: float,
     param_target_accept: float,
-    initial_latent_trajectory: jnp.ndarray | None,
+    initial_latent_trajectory: jnp.ndarray,
     exact_constraints: ExactStateConstraints | None = None,
 ) -> TrajectoryMCMCState:
     context = target.context(init_position, times)
-    latent_trajectory = (
-        target.initial_path(context, exact_constraints=exact_constraints)
-        if initial_latent_trajectory is None
-        else jnp.asarray(initial_latent_trajectory, dtype=target.initial_moments(context)[0].dtype)
+    latent_trajectory = jnp.asarray(
+        initial_latent_trajectory, dtype=target.initial_moments(context)[0].dtype
     )
     if exact_constraints is not None:
         latent_trajectory = exact_constraints.project(latent_trajectory)
@@ -160,19 +159,17 @@ def run_marginal_particle_gibbs(
     num_warmup: int,
     num_samples: int,
     num_chains: int,
-    seed: int,
+    key: jax.Array,
     adaptation_rate: float,
-    init_scale: float,
     retain_latent_paths: bool,
-    init_positions: jnp.ndarray | None = None,
-    initial_latent_trajectories: jnp.ndarray | None = None,
+    initialization: LapsInitializationResult,
     compute_latent_posterior_summary: bool = True,
     # Both adaptation policies stop updating after warmup.
     adaptation_scheme: Literal["simple", "dual_averaging"] = "simple",
     tempering: ReplicaExchangeKernel | None = None,
     clock: Callable[[], float],
 ) -> ParticleChainResult:
-    """Run marginalized Particle Gibbs chains."""
+    """Run marginalized Particle Gibbs chains from paired LAPS starts."""
     use_dual_averaging = adaptation_scheme == "dual_averaging"
     da_param_update = (
         dual_averaging_adaptation(target=float(kernel.target_accept))[1]
@@ -190,36 +187,21 @@ def run_marginal_particle_gibbs(
         else jnp.any(kernel.exact_constraints.free_mask & target.independent_mask, axis=-1)
     )
     num_steps = int(observations.shape[0])
-    base_key = random.PRNGKey(seed)
-    init_key, chain_key = random.split(base_key)
     dim = int(target.initial_position.shape[0])
-    if init_positions is None:
-        init_keys = random.split(init_key, num_chains)
-        init_noise = jax.vmap(
-            lambda key: random.normal(
-                key,
-                target.initial_position.shape,
-                dtype=target.initial_position.dtype,
-            )
-        )(init_keys)
-        chain_init_positions = target.initial_position[None, :] + init_scale * init_noise
-    else:
-        chain_init_positions = jnp.asarray(init_positions, dtype=target.initial_position.dtype)
-        if chain_init_positions.shape != (num_chains, dim):
-            raise ValueError(
-                "init_positions must have shape (num_chains, dim); got "
-                f"{chain_init_positions.shape} with num_chains={num_chains} and dim={dim}."
-            )
-
-    if initial_latent_trajectories is not None:
-        chain_initial_latents = jnp.asarray(initial_latent_trajectories, dtype=observations.dtype)
-        if chain_initial_latents.shape[0] != num_chains:
-            raise ValueError(
-                "initial_latent_trajectories must have leading dimension num_chains; got "
-                f"{chain_initial_latents.shape[0]} with num_chains={num_chains}."
-            )
-    else:
-        chain_initial_latents = None
+    chain_init_positions = jnp.asarray(
+        initialization.positions, dtype=target.initial_position.dtype
+    )
+    if chain_init_positions.shape != (num_chains, dim):
+        raise ValueError(
+            "initialization.positions must have shape (num_chains, dim); got "
+            f"{chain_init_positions.shape} with num_chains={num_chains} and dim={dim}."
+        )
+    chain_initial_latents = jnp.asarray(initialization.paths, dtype=observations.dtype)
+    if chain_initial_latents.shape[0] != num_chains:
+        raise ValueError(
+            "initialization.paths must have leading dimension num_chains; got "
+            f"{chain_initial_latents.shape[0]} with num_chains={num_chains}."
+        )
 
     initial_latent_delta_value = kernel.amala_delta_init
     initial_latent_delta = jnp.full(
@@ -239,9 +221,7 @@ def run_marginal_particle_gibbs(
                 param_min_scale=kernel.min_scale,
                 param_max_scale=kernel.max_scale,
                 param_target_accept=kernel.target_accept,
-                initial_latent_trajectory=(
-                    None if chain_initial_latents is None else chain_initial_latents[chain_idx]
-                ),
+                initial_latent_trajectory=chain_initial_latents[chain_idx],
             )
             for chain_idx in range(num_chains)
         ]
@@ -255,12 +235,7 @@ def run_marginal_particle_gibbs(
         raise ValueError(
             "Initial complete log-posterior is non-finite for chain(s) "
             f"{nonfinite_chains}. Every move would be rejected against a non-finite "
-            "reference, so the sampler cannot recover from this state. The predictive "
-            "latent init likely diverged: nonlinear vector fields can be explosive "
-            "under unconditional forward simulation at data-informed initial "
-            "parameters even when their posterior density is finite. Supply "
-            "different init_positions or a data-conditioned "
-            "initial_latent_trajectories."
+            "reference, so the sampler cannot recover from this initialization."
         )
     initial_param_step_size = states.param_step_size
     initial_latent_delta = states.latent_delta
@@ -287,7 +262,7 @@ def run_marginal_particle_gibbs(
         dtype=states.latent_delta.dtype,
     )
     latent_proposal_window = jnp.zeros_like(latent_acceptance_window)
-    step_keys = random.split(chain_key, total_steps * replicas).reshape(total_steps, replicas, 2)
+    step_keys = random.split(key, (total_steps, replicas))
     need_public_latent = compute_latent_posterior_summary or retain_latent_paths
     diagnostic_flags = build_mpgibbs_diagnostic_flags(
         diagnostic_metrics=kernel.diagnostic_metrics,

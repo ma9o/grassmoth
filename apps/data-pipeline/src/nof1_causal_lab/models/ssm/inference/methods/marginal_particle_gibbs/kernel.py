@@ -33,12 +33,14 @@ MALA step of ``h = 0.1`` corresponds to ``param_step_size = 0.025`` here.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import jax
 import jax.numpy as jnp
 from jax import random
 
+from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCState, _clip_scale
 from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs._context import (
     build_smoother_context,
@@ -57,9 +59,6 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.diagno
 )
 from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.smoothers.dsmc import (
     step as dsmc_step,
-)
-from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.smoothers.replayed import (
-    step as replayed_step,
 )
 from nof1_causal_lab.sampler_config import DSMCLeafProposal, MarginalParticleGibbsSpec
 
@@ -227,9 +226,26 @@ def build_marginal_particle_gibbs_kernel(
     if target_accept is None:
         target_accept = _DEFAULT_OPTIONS.param_target_accept
 
+    assert isinstance(target.state_space.recurrence, ParallelRecurrences), (
+        "The fitting preflight must establish an associative deterministic recurrence"
+    )
     latent_context_runtime_fn = target.context
     log_prior_unc_fn = target.log_prior
-    obs_increment_fn = target.observation_increment
+    local_target = (
+        replace(target, state_projection=target.fixed_recurrences, intervals=None)
+        if target.state_space.requires_replay
+        else target
+    )
+
+    def obs_increment_fn(context, state, index, observations):
+        # A hard likelihood at an artificial accumulator value can exclude valid
+        # paths. Replay models therefore defer every observation factor to the
+        # exact root target. Gaussian dynamics and paid auxiliary potentials
+        # define the intermediate targets on the independent path coordinates.
+        if target.state_space.requires_replay:
+            return jnp.asarray(0.0, dtype=state.dtype)
+        return local_target.observation_increment(context, state, index, observations)
+
     trajectory_log_prob_fn = target.path_log_prob
     runtime_observations = target.observations
     runtime_times = target.times
@@ -345,12 +361,12 @@ def build_marginal_particle_gibbs_kernel(
         paid_mix_z_weight=paid_mix_z_weight,
         paid_mix_pilot_weight=paid_mix_pilot_weight,
         pilot_moments=pilot_moments,
-        transition_initial_log_prob_fn=target.initial_log_prob,
-        transition_log_prob_fn=target.transition_log_prob,
-        transition_log_probs_for_pairs_fn=target.aligned_transition_log_prob,
-        transition_pairwise_log_probs_fn=target.pairwise_transition_log_prob,
+        transition_initial_log_prob_fn=local_target.initial_log_prob,
+        transition_log_prob_fn=local_target.transition_log_prob,
+        transition_log_probs_for_pairs_fn=local_target.aligned_transition_log_prob,
+        transition_pairwise_log_probs_fn=local_target.pairwise_transition_log_prob,
         diagnostic_metrics=resolved_diagnostic_metrics,
-        intervals=target.intervals,
+        intervals=local_target.intervals,
     )
 
     def _step_fn(state: TrajectoryMCMCState, key: jnp.ndarray):
@@ -373,9 +389,21 @@ def build_marginal_particle_gibbs_kernel(
         with jax.named_scope("build_context"):
             ctx = build_smoother_context(static, state, parameter_particles, label_correction)
         contexts = ctx.contexts
+
+        def root_correction(path: jax.Array) -> jax.Array:
+            if not target.state_space.requires_replay:
+                return jnp.zeros(num_parameter_particles, dtype=traj_dtype)
+            return jnp.asarray(
+                jax.vmap(
+                    lambda context: (
+                        target.path_log_prob(context, path, runtime_observations)
+                        - local_target.prior_path_log_prob(context, path)
+                    )
+                )(contexts)
+            )
+
         with jax.named_scope("dsmc_smoother_full"):
-            smoother = replayed_step if target.state_space.requires_replay else dsmc_step
-            smoother_result = smoother(ctx, block_key, x_ref)
+            smoother_result = dsmc_step(ctx, block_key, x_ref, root_correction)
 
         with jax.named_scope("postprocess"):
             latent_path = smoother_result.latent_path

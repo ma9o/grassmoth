@@ -342,6 +342,12 @@ def compile_model(
                 blocks[5],
                 numeric.static_factor_loadings(selection),
                 tuple(index for index, state in enumerate(states) if state.is_input),
+                tuple(
+                    index
+                    for index, state in enumerate(states)
+                    if state.time_invariant and not state.is_input
+                ),
+                dynamics_spec,
             ),
         )
     except IncompleteModelError as exc:

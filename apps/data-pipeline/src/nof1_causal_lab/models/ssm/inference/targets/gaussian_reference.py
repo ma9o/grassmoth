@@ -9,6 +9,8 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve_triangular
 
+from nof1_causal_lab.models.ssm.execution.affine import compose_affine_maps
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -43,7 +45,7 @@ class GaussianReference:
         return _normal_log_prob(position - self.parameter_mean, self.parameter_chol)
 
     def initial_log_prob(self, state: jax.Array) -> jax.Array:
-        """Score the free initial coordinates, including static unknowns."""
+        """Score free initial path coordinates; static unknowns belong to the parameter law."""
         return self._innovation_log_prob(state - self.path_mean[0], jnp.asarray(0))
 
     def transition_log_prob(
@@ -82,16 +84,7 @@ class GaussianReference:
         )
         noise = jnp.where(self.free_mask, noise, 0.0)
 
-        def compose(
-            left: tuple[jax.Array, jax.Array], right: tuple[jax.Array, jax.Array]
-        ) -> tuple[jax.Array, jax.Array]:
-            left_matrix, left_noise = left
-            right_matrix, right_noise = right
-            return right_matrix @ left_matrix, (
-                jnp.einsum("...ij,...j->...i", right_matrix, left_noise) + right_noise
-            )
-
-        _, residuals = jax.lax.associative_scan(compose, (self.autoregression, noise))
+        _, residuals = jax.lax.associative_scan(compose_affine_maps, (self.autoregression, noise))
         return position, jnp.asarray(self.path_mean + residuals)
 
 

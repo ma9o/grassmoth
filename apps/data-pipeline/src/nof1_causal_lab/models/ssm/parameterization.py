@@ -2,7 +2,7 @@
 
 The registry derives authored sample-site shapes and bindings from DynamicalModelSpec
 without tracing. NumPyro distributions preserve native parameter pytrees and
-stable per-site random streams. Particle inference and MAP initialization use
+stable per-site random streams. Particle inference and LAPS initialization use
 NumPyro replay through Dynestyx for reparameterized sites, transformations, and
 the prior density; this module does not define a second inference target.
 """

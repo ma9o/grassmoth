@@ -61,8 +61,6 @@ def run_recovery(
     t_steps: int,
     num_particles: int,
     n_parameter_particles: int,
-    pathfinder_maxiter: int,
-    n_pathfinder_starts: int,
     seed: int,
 ) -> RecoveryBenchmarkResult:
     """Run the current recovery comparison on one GPU worker."""
@@ -85,10 +83,6 @@ def run_recovery(
         str(num_particles),
         "--n-parameter-particles",
         str(n_parameter_particles),
-        "--pathfinder-maxiter",
-        str(pathfinder_maxiter),
-        "--n-pathfinder-starts",
-        str(n_pathfinder_starts),
         "--seed",
         str(seed),
         "--data-seed",
@@ -97,10 +91,6 @@ def run_recovery(
         "1.0",
         "--num-chains",
         "1",
-        "--pathfinder-num-elbo-samples",
-        "20",
-        "--pathfinder-init-scale",
-        "0.1",
         "--output",
         str(out_path),
     ]
@@ -115,8 +105,6 @@ def main(
     t: int = 1000,
     num_particles: int = 512,
     n_parameter_particles: int = 2,
-    pathfinder_maxiter: int = 50,
-    n_pathfinder_starts: int = 8,
     seed: int = 1009,
 ) -> None:
     out = run_recovery.remote(
@@ -125,8 +113,6 @@ def main(
         t,
         num_particles,
         n_parameter_particles,
-        pathfinder_maxiter,
-        n_pathfinder_starts,
         seed,
     )
     print(f"\n========= recovery [{GPU}] warmup={num_warmup} samples={num_samples} =========")

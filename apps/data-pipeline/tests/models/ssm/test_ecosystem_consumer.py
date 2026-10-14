@@ -19,7 +19,11 @@ from nof1_causal_lab.models.ssm.inference import fit
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
-from nof1_causal_lab.sampler_config import MarginalParticleGibbsSpec, SamplerSpec
+from nof1_causal_lab.sampler_config import (
+    LapsInitializationSpec,
+    MarginalParticleGibbsSpec,
+    SamplerSpec,
+)
 from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture
 from tests.model_fixtures import construct_named, load_model_fixture
@@ -134,9 +138,9 @@ def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(in
                 adaptation_scheme="dual_averaging",
                 param_step_size=0.0005,
                 latent_delta=0.2,
-                init_method="random",
-                auto_preconditioner_method="none",
-                init_scale=0.0,
+                laps=LapsInitializationSpec(
+                    ensemble_size=128, num_unadjusted_steps=1000, num_adjusted_steps=20
+                ),
             ),
         ),
         clock=time.monotonic,

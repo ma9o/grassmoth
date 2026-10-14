@@ -19,8 +19,10 @@ from nof1_causal_lab.models.ssm.dynamics import (
     VectorFieldArgs,
     simulate,
 )
-from nof1_causal_lab.models.ssm.dynamics.edges import DenseLinear
 from tests.causal.steady_state_reference import compute_steady_state
+from tests.dynamics_fixtures import (
+    DenseLinear,
+)
 
 
 def resolve_action_value(baseline_value, *, mode, value=None, amount=None):

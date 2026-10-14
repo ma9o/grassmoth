@@ -128,9 +128,10 @@ def test_conditioning_rejects_warmup_statically(tmp_path):
             from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
             from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
             from nof1_causal_lab.models.ssm.inference.persistence import condition_model
-            from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior, WarmupProposal
+            from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior
+            from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
 
-            def condition(model: DynamicalModelSpec, compiled: CompiledDynamicalModel, posterior: ParticleMCMCPosterior, warmup: WarmupProposal, times: Array):
+            def condition(model: DynamicalModelSpec, compiled: CompiledDynamicalModel, posterior: ParticleMCMCPosterior, warmup: LapsInitializationResult, times: Array):
                 condition_model(model, compiled, posterior, times=times, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
                 condition_model(model, compiled, warmup, times=times, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
             """)
@@ -153,7 +154,7 @@ def test_conditioning_rejects_warmup_statically(tmp_path):
     assert checked.stdout.count("error[") == 1, checked.stdout + checked.stderr
     assert "invalid-argument-type" in checked.stdout
     assert "ParticleMCMCPosterior" in checked.stdout
-    assert "WarmupProposal" in checked.stdout
+    assert "LapsInitializationResult" in checked.stdout
 
 
 def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engine_evidence():

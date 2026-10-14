@@ -76,7 +76,6 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "models/predictive_simulation": "execution",
     "models/ssm/constants": "domain",
     "models/ssm/counterfactual/orchestration": "compiler",
-    "models/ssm/dynamics/linearisation": "compiler",
     "models/ssm/dynamics/serialization": "domain",
     "models/ssm/dynamics/spec": "domain",
     "models/ssm/inference/methods/marginal_particle_gibbs/_context": "compiler",
@@ -146,10 +145,6 @@ ANNOTATION_MODULES = frozenset(
         "models/ssm/inference/mcmc_state",
         "models/ssm/inference/methods/marginal_particle_gibbs/fit",
         "models/ssm/inference/methods/marginal_particle_gibbs/runner",
-        "models/ssm/inference/targets/laplace/__init__",
-        "models/ssm/inference/warmup/parameter_warmup",
-        "models/ssm/inference/warmup/map",
-        "models/ssm/inference/warmup/scipy_pathfinder",
     }
 )
 

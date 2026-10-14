@@ -27,10 +27,9 @@ Axis        Meaning
 
 Conventions
 -----------
-- Dtypes stay generic: ``Float`` / ``Int`` / ``Bool``, never bit-width pinned.
+- Dtypes stay generic: ``Float`` / ``Int``, never bit-width pinned.
   The runtime is float32 but some parameter paths are float64, and ``Float``
-  accepts both. Masks / indicators that may arrive as bool *or* float use
-  ``Shaped`` (shape-checked, dtype-agnostic).
+  accepts both.
 - A floating-point scalar is ``Float[Array, ""]`` — exported as :data:`FloatScalar`.
 - PRNG keys are :data:`PRNGKeyArray` (accepts old ``uint32[2]`` and typed keys).
 - Rank-polymorphic helpers use ``*batch`` for leading axes they pass through.
@@ -49,9 +48,9 @@ relocating them into ``TYPE_CHECKING``. For jitted code the checks fire at trace
 time, so they are effectively free shape assertions on the numerical core.
 """
 
-from jaxtyping import Array, Bool, Float, Int, Shaped
+from jaxtyping import Array, Float, Int
 
 FloatScalar = Float[Array, ""]
 """A floating-point scalar (rank-0 array)."""
 
-__all__ = ["Array", "Bool", "Float", "FloatScalar", "Int", "Shaped"]
+__all__ = ["Array", "Float", "FloatScalar", "Int"]

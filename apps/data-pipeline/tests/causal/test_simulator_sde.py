@@ -16,7 +16,9 @@ from nof1_causal_lab.models.ssm.dynamics import (
     VectorField,
     simulate,
 )
-from nof1_causal_lab.models.ssm.dynamics.edges import DenseLinear
+from tests.dynamics_fixtures import (
+    DenseLinear,
+)
 
 
 def _linear_setup():

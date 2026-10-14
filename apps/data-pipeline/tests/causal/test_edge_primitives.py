@@ -21,19 +21,22 @@ import pytest
 from nof1_causal_lab.artifacts.identity import scientific_id
 from nof1_causal_lab.models.ssm.dynamics import (
     ConstantValueFn,
-    DiagonalDecay,
     EdgeInputOverride,
-    Intercept,
     Intervention,
-    LinearEdge,
     VariableOverride,
     VectorField,
     VectorFieldArgs,
     simulate,
 )
-from nof1_causal_lab.models.ssm.dynamics.edges import DenseLinear
 from tests.causal.steady_state_reference import compute_steady_state
-from tests.dynamics_fixtures import hill_term, interaction_term
+from tests.dynamics_fixtures import (
+    DenseLinear,
+    DiagonalDecay,
+    Intercept,
+    LinearEdge,
+    hill_term,
+    interaction_term,
+)
 
 
 def _dense_matrix_vector_field(n_latent: int) -> VectorField:

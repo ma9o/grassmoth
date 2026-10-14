@@ -12,14 +12,7 @@ Prior/predictive validation lives in ``ssm.predictive``.
 from __future__ import annotations
 
 from .draws import DynamicsDraws, dynamics_from_samples
-from .edges import (
-    DiagonalDecay,
-    Intercept,
-    LinearEdge,
-    StateDecay,
-    StateIntercept,
-    VectorFieldComponent,
-)
+from .edges import VectorFieldComponent
 from .intervention import (
     ConstantValueFn,
     EdgeInputOverride,
@@ -30,7 +23,6 @@ from .intervention import (
     ValueFn,
     VariableOverride,
 )
-from .linearisation import Linearisation, infer_linearisation
 from .serialization import (
     dynamics_spec_to_dict,
 )
@@ -52,30 +44,23 @@ __all__ = [
     "BrownianTreeSpec",
     "CompiledDynamics",
     "DynamicsSpec",
-    "DiagonalDecay",
     "VectorFieldComponent",
     "ConstantValueFn",
     "EdgeInputOverride",
     "LinearRampValueFn",
-    "Intercept",
     "Intervention",
     "IndexedBrownianSpec",
-    "Linearisation",
-    "LinearEdge",
     "Override",
     "DynamicsDraws",
     "PrecomputedValueFn",
     "ProcessNoise",
     "SimulationConfig",
-    "StateDecay",
-    "StateIntercept",
     "ValueFn",
     "VariableOverride",
     "VectorField",
     "VectorFieldArgs",
     "compile_dynamics",
     "dynamics_spec_to_dict",
-    "infer_linearisation",
     "dynamics_from_samples",
     "simulate",
 ]

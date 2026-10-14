@@ -39,7 +39,7 @@ Two execution targets, same core (`_run_benchmark`):
     uv run python evaluation/benchmarks/benchmark_gpu.py --local --p 2 --no-trace # production P, analysis only
 
 The model is the ``evaluation/fixtures/synthetic_nonlinear.py`` fixture (3 latent
-states, mixed observation families), built with random init (no Pathfinder) —
+states, mixed observation families), initialized with LAPS —
 numerics are irrelevant; only the compiled-kernel shapes/op-structure matter.
 """
 
@@ -184,6 +184,7 @@ def _run_benchmark(
         simulate_synthetic_nonlinear_data,
     )
 
+    from nof1_causal_lab.compute.resources import read_compute_budget
     from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.kernel import (
         build_marginal_particle_gibbs_kernel,
     )
@@ -191,7 +192,10 @@ def _run_benchmark(
         run_marginal_particle_gibbs,
     )
     from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
+    from nof1_causal_lab.models.ssm.inference.warmup.laps import prepare_laps_initialization
+    from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
     from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
+    from nof1_causal_lab.sampler_config import MarginalParticleGibbsSpec
 
     total_steps = warmup_steps + sample_steps
     print("JAX devices:", jax.devices(), "| config:", cfg.tag, flush=True)
@@ -205,6 +209,16 @@ def _run_benchmark(
         reparam=None,
     )
     dim = int(bundle.runtime.initial_position.shape[0])
+    options = MarginalParticleGibbsSpec(dsmc_leaf_proposal=cfg.leaf)
+    initialization = prepare_laps_initialization(
+        bundle.runtime,
+        spec=options.laps,
+        key=random.PRNGKey(1),
+        num_chains=1,
+        compute_budget=read_compute_budget(),
+    )
+    if isinstance(initialization, InitializationFailure):
+        raise ValueError(initialization.message)
     kernel = build_marginal_particle_gibbs_kernel(
         bundle.runtime,
         num_particles=cfg.num_particles,
@@ -212,6 +226,11 @@ def _run_benchmark(
         param_step_size=0.01,
         dsmc_leaf_proposal=cfg.leaf,
         latent_block_coords=cfg.block_coords,
+        parameter_preconditioner_chol=initialization.parameter_chol,
+        parameter_reference_path=initialization.paths[0],
+        pilot_means=initialization.pilot_mean,
+        pilot_vars=options.paid_mix_pilot_var_scale * initialization.pilot_proposal_variance,
+        pilot_wide_vars=options.paid_mix_wide_mult * initialization.pilot_proposal_variance,
     )
     started = time.monotonic()
     from nof1_causal_lab.actions.inference.fit import (
@@ -231,9 +250,9 @@ def _run_benchmark(
             num_warmup=warmup_steps,
             num_samples=sample_steps,
             num_chains=1,
-            seed=0,
+            key=random.PRNGKey(2),
             adaptation_rate=0.0,
-            init_scale=0.05,
+            initialization=initialization,
             retain_latent_paths=False,
             compute_latent_posterior_summary=False,
             adaptation_scheme="simple",

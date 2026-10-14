@@ -15,16 +15,12 @@ from nof1_causal_lab.compute.budget import (
 pytestmark = pytest.mark.contract
 
 
-def test_shared_memory_adds_host_and_device_workspaces_and_partitions_concurrency():
+def test_shared_memory_adds_host_and_device_workspaces():
     demand = MemoryDemand(host_bytes=30, device_bytes=40)
-    shared = ComputeBudget(cpu_workers=4, memory=SharedMemoryBudget(available_bytes=200))
-    separate = ComputeBudget(
-        cpu_workers=4, memory=AcceleratorMemoryBudget(host_bytes=200, device_bytes=200)
-    )
+    shared = ComputeBudget(memory=SharedMemoryBudget(available_bytes=200))
+    separate = ComputeBudget(memory=AcceleratorMemoryBudget(host_bytes=200, device_bytes=200))
     assert shared.capacity(demand, limit=4) == 2
     assert separate.capacity(demand, limit=4) == 4
-    assert shared.per_worker(2, host_workspace_bytes=40).capacity(demand, limit=1) == 0
-    assert separate.per_worker(2, host_workspace_bytes=40).capacity(demand, limit=1) == 1
 
 
 def test_batch_width_adapts_to_memory_and_workload_without_executing():
@@ -37,7 +33,7 @@ def test_batch_width_adapts_to_memory_and_workload_without_executing():
         compile_batched(
             compile_batch,
             max_batch_size=12,
-            budget=ComputeBudget(cpu_workers=1, memory=SharedMemoryBudget(available_bytes=memory)),
+            budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=memory)),
         ).batch_size
         for memory in (100, 200, 1000)
     )
@@ -56,7 +52,7 @@ def test_compiled_memory_is_verified_when_workspaces_scale_non_linearly():
     selected = compile_batched(
         compile_batch,
         max_batch_size=16,
-        budget=ComputeBudget(cpu_workers=1, memory=SharedMemoryBudget(available_bytes=100)),
+        budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=100)),
     )
     assert selected.batch_size == 2
     assert widths == [1, 8, 4, 2]
@@ -69,7 +65,7 @@ def test_impossible_single_lane_fails_before_execution():
         compile_batched(
             lambda _size: (executable, MemoryDemand(host_bytes=30, device_bytes=40)),
             max_batch_size=4,
-            budget=ComputeBudget(cpu_workers=1, memory=SharedMemoryBudget(available_bytes=50)),
+            budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=50)),
         )
     executable.assert_not_called()
 

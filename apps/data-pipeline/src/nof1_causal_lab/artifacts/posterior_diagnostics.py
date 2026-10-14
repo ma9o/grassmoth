@@ -271,59 +271,6 @@ class PosteriorPredictiveChecks(Value):
     test_stats: tuple[PPCTestStat, ...] = Field(default_factory=tuple)
 
 
-class ElboScoringDiagnostics(Value):
-    """Retained native initialization measurements; never posterior evidence."""
-
-    n_elbo_batch_evaluations: int
-    n_elbo_screen_candidates: int
-    n_elbo_refine_candidates: int
-    best_elbo_candidate_index: int
-
-
-class PathfinderStartDiagnostics(Value):
-    """Retained native initialization measurements; never posterior evidence."""
-
-    n_elbo_batch_evaluations: int
-    n_elbo_screen_candidates: int
-    n_elbo_refine_candidates: int
-    best_elbo_candidate_index: int
-
-    start_idx: int
-    n_trajectory_points: int
-    n_valid_iterates: int
-    n_elbo_candidates: int
-    n_lbfgs_iterations: int
-    final_log_posterior: float
-    best_elbo_this_start: float | None
-    scipy_success: bool
-    scipy_status: int
-
-
-class PathfinderDiagnostics(Value):
-    """Retained native initialization measurements; never posterior evidence."""
-
-    n_pathfinder_starts: int
-    n_pathfinder_starts_finite: int
-    pathfinder_parallel_workers: int
-    pathfinder_setup_seconds: float
-    pathfinder_jax_compile_seconds: float
-    pathfinder_jax_compile_batch_sizes: tuple[int, ...]
-    pathfinder_runtime_seconds: float
-    pathfinder_total_seconds: float
-    best_pathfinder_elbo: float
-    pathfinder_elbo_min: float
-    pathfinder_elbo_max: float
-    pathfinder_elbo_spread: float
-    pathfinder_elbos: tuple[float, ...]
-    pathfinder_maxiter: int
-    pathfinder_lbfgs_memory: int
-    pathfinder_elbo_samples: int
-    pathfinder_elbo_screen_samples: int
-    pathfinder_elbo_refine_candidates: int
-    pathfinder_elbo_candidate_batch_size: int
-    pathfinder_per_start: tuple[PathfinderStartDiagnostics, ...]
-
-
 class LapsInitializationDiagnostics(Value):
     """Realized joint-ensemble initialization, without any claim of posterior convergence."""
 
@@ -335,25 +282,6 @@ class LapsInitializationDiagnostics(Value):
     adjusted_step_size: float
     adjusted_acceptance: float
     early_stopped: bool
-
-
-class ParameterWarmupDiagnostics(Value):
-    """Realized initialization and preconditioning, retaining each initializer's evidence once."""
-
-    pathfinder: PathfinderDiagnostics | None = None
-    laps: LapsInitializationDiagnostics | None = None
-    pathfinder_run_count: int
-    pathfinder_consumers: tuple[str, ...]
-    init_source: str
-    preconditioner_source: str
-    preconditioner_device: str | None = None
-    dim: int
-    duration_seconds: float
-    pathfinder_sampling_mode: str | None = None
-    pathfinder_init_scale: float | None = None
-    prior_released_site_names: tuple[str, ...] = ()
-    prior_released_site_indices: tuple[int, ...] = ()
-    prior_release_scale: float = 0.0
 
 
 class ReplicaSwapCounts(Value):
@@ -396,5 +324,5 @@ class ParticleSamplerDiagnostics(Value):
     selected_particle_unique_count_mean: float | None = None
     amala_grad_norm_mean: float | None = None
     amala_grad_norm_max: float | None = None
-    parameter_warmup: ParameterWarmupDiagnostics
+    initialization: LapsInitializationDiagnostics
     tempering: TemperingDiagnostics | None = None

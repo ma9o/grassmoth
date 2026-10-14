@@ -182,6 +182,5 @@ def build_smoother_context(
         selected_transition_log_probs=_selected_transition_log_probs,
         pairwise_transition_log_probs=_pairwise_transition_log_probs,
         trajectory_label_log_probs=_trajectory_label_log_probs,
-        trajectory_label_log_weights=_trajectory_label_log_weights,
         intervals=static.intervals,
     )

@@ -11,7 +11,7 @@ import numpyro.distributions as dist
 
 from nof1_causal_lab.distributions import DistributionFamily
 from nof1_causal_lab.models.ssm.compile.interval_tree import compile_interval_tree
-from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
+from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
 from nof1_causal_lab.models.ssm.execution.contracts import MeasurementParams
 from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from nof1_causal_lab.models.ssm.execution.observation_operator import compile_observation_operator
@@ -20,7 +20,11 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.runner
 )
 from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
 from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
-from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
+from nof1_causal_lab.models.ssm.inference.targets.particle import (
+    ParticleContext,
+    ParticleTarget,
+    identity_state,
+)
 from tests.inference_fixtures import make_observation_support_runtime
 from tests.observation_fixtures import observation_laws
 
@@ -77,7 +81,7 @@ def interval_target(
     _, static = eqx.partition(model(jnp.zeros(1)), eqx.is_array)
 
     def context(position: jax.Array, grid: jax.Array) -> ParticleContext:
-        return eqx.filter(model(position), eqx.is_array), grid
+        return eqx.filter(model(position), eqx.is_array), grid, jnp.zeros(state_dim)
 
     def declared(bound: ParticleContext) -> dsx.DynamicalModel:
         return eqx.combine(bound[0], static)
@@ -93,6 +97,7 @@ def interval_target(
             declared,
             operator,
             compile_interval_tree(operator.window_plan, summaries, observations),
+            identity_state,
         )
         if operator.requires_interval_summary_handling
         else None
@@ -103,7 +108,14 @@ def interval_target(
         declared,
         jnp.asarray(observations),
         jnp.asarray(times),
-        StateSpace(state_dim, (), tuple(range(state_dim)), tuple(range(state_dim))),
+        StateSpace(
+            state_dim,
+            (),
+            tuple(range(state_dim)),
+            tuple(range(state_dim)),
+            (),
+            ParallelRecurrences(()),
+        ),
         intervals=intervals,
     )
 

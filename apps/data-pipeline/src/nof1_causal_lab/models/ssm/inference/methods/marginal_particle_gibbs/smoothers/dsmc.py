@@ -17,7 +17,7 @@
 #
 # Leaf proposals are gradient-informed auxiliary ("amala_exact") proposals — or the
 # paid mixture ("paid_mix") that wraps the same z-anchored component together with a
-# fixed IEKS-pilot component and a wide tail in one paid density. Both are exactly
+# fixed LAPS-pilot component and a wide tail in one paid density. Both are exactly
 # corrected: the auxiliary pseudo-observation potential restores invariance for the
 # reference-dependent component, and the mixture density is subtracted in full.
 #
@@ -41,6 +41,10 @@
 #     evidence contains precisely its internal transitions and completed factors.
 #     The same target/product-of-children ratio below remains valid for these
 #     nonlocal factors, without adding singular accumulator states to the SDE.
+#   * For replayed state coordinates, intermediate targets retain only Gaussian
+#     initial/transition factors and the paid auxiliary potentials. Observations
+#     and the recurrence correction are paid at the root, so a hard likelihood
+#     at an artificial recurrence value cannot exclude a valid complete path.
 
 from __future__ import annotations
 
@@ -67,6 +71,8 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs._math 
 from nof1_causal_lab.models.ssm.inference.targets.intervals import gather_interval_statistics
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from nof1_causal_lab.models.ssm.compile.interval_tree import CompiledIntervalTreeLevel
 
 
@@ -79,7 +85,12 @@ class _Segment(NamedTuple):
     statistics: jax.Array
 
 
-def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLatentSmootherResult:
+def step(
+    ctx: SmootherContext,
+    key: jax.Array,
+    x_ref: jax.Array,
+    root_correction: Callable[[jax.Array], jax.Array],
+) -> MPGibbsLatentSmootherResult:
     """Conditional de-sequentialized SMC sweep over the posterior parameter mixture."""
     contexts = ctx.contexts
     logpi = ctx.initial_label_log_probs
@@ -331,6 +342,7 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
         seam: jnp.ndarray | int,
         plan: CompiledIntervalTreeLevel | None,
         node: jax.Array,
+        correction: jax.Array | float = 0.0,
     ) -> jnp.ndarray:
         transition_lp = ctx.pairwise_transition_log_probs(left.last, right.first, seam)
         if intervals is not None and plan is not None and plan.emission_slots.shape[1]:
@@ -348,7 +360,10 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
             logpi[None, None, :]
             + left.evidence[:, None, :]
             + right.evidence[None, :, :]
-            + transition_lp,
+            + transition_lp
+            + correction,
+            # The full-path correction is paid only at the root. Intermediate
+            # targets retain local factors; the root target is the exact model.
             axis=-1,
         )
         log_left = jax.scipy.special.logsumexp(logpi[None, :] + left.evidence, axis=1)
@@ -420,7 +435,10 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
             evidence = jax.scipy.special.logsumexp(logpi[None, None, :] + leaf_psi, axis=-1)
             leaf_weights = jax.vmap(_normalize_log_probs)(evidence).astype(traj_dtype)
         if num_steps == 1:
-            evidence = jax.scipy.special.logsumexp(logpi[None, :] + leaf_psi[0], axis=1)
+            correction = jax.vmap(lambda state: root_correction(state[None]))(leaf_particles[0])
+            evidence = jax.scipy.special.logsumexp(
+                logpi[None, :] + leaf_psi[0] + correction, axis=1
+            )
             chosen = _multinomial(key_root, evidence, 1)[0]
             latent_path = leaf_particles[0, chosen][None, :]
             origin_path = leaf_origin[0, chosen]
@@ -483,9 +501,26 @@ def step(ctx: SmootherContext, key: jax.Array, x_ref: jax.Array) -> MPGibbsLaten
             left_root = _Segment(first[0], last[0], psi[0], origin[0], weights[0], statistics[0])
             right_root = _Segment(first[1], last[1], psi[1], origin[1], weights[1], statistics[1])
             plan = None if intervals is None else intervals.tree.levels[depth]
+
+            def correct_pair(left_origins: jax.Array, right_origins: jax.Array) -> jax.Array:
+                origins = jnp.concatenate((left_origins, right_origins))[:num_steps]
+                path = leaf_particles[jnp.arange(num_steps), origins]
+                return root_correction(path)
+
+            # Keep all N x N root weights, but evaluate eight left choices at a
+            # time instead of materializing N x N complete trajectories. Each
+            # batch still reconstructs time with an affine prefix and reduction;
+            # its depth is O(log T), with a batch count independent of T.
+            correction = jax.lax.map(
+                lambda left_origins: jax.vmap(correct_pair, in_axes=(None, 0))(
+                    left_origins, right_root.origin
+                ),
+                left_root.origin,
+                batch_size=min(8, num_particles),
+            )
             with jax.named_scope("dsmc_combine"):
                 pair_logits = _stitch_logits(
-                    left_root, right_root, padded_steps // 2, plan, jnp.asarray(0)
+                    left_root, right_root, padded_steps // 2, plan, jnp.asarray(0), correction
                 )
             chosen = _multinomial(key_root, pair_logits.reshape(-1), 1)[0]
             left_idx = chosen // num_particles

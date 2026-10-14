@@ -1,6 +1,7 @@
 """Replica exchange preserves exact cold laws, compiled support, and chain ownership."""
 
 from time import perf_counter
+from unittest.mock import Mock
 
 import jax
 import jax.numpy as jnp
@@ -24,6 +25,7 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.temper
 )
 from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import GaussianReferenceBridge
 from nof1_causal_lab.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
+from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
 from nof1_causal_lab.sampler_config import GaussianReferenceTemperingSpec
 from tests.inference_fixtures import compile_fit_fixture
 from tests.interval_particle_fixtures import gaussian_interval_case, initialize_interval_chain
@@ -142,12 +144,14 @@ def test_reference_and_swaps_preserve_static_accumulator_and_exact_coordinates()
     baseline, driver, total = (indices[n] for n in ("baseline", "driver", "total"))
     target = problem.runtime
     reference = _reference(target)
-    assert target.initial_position.size == 0
-    assert reference.free_mask[:, baseline].tolist() == [True, False, False, False]
+    assert target.initial_position.size == 1
+    assert not reference.free_mask[:, baseline].any()
     assert not reference.free_mask[:, total].any()
     assert not reference.free_mask[2, driver]
     parameters, coordinates = jax.vmap(reference.sample)(jax.random.split(jax.random.key(12), 3))
-    states = jax.vmap(lambda path: _initial(target, path))(coordinates)
+    states = jax.vmap(lambda position, path: _initial(target, path, position=position))(
+        parameters, coordinates
+    )
     betas = jnp.array([1.0, 0.4, 0.0])
     exchange = ReplicaExchangeKernel(
         target, reference, _local_kernel, GaussianReferenceTemperingSpec(num_temperatures=3)
@@ -160,12 +164,15 @@ def test_reference_and_swaps_preserve_static_accumulator_and_exact_coordinates()
     np.testing.assert_array_equal(
         paths[:, :, baseline], jnp.repeat(paths[:, :1, baseline], 4, axis=1)
     )
-    np.testing.assert_array_equal(paths[:, 1:, total], jnp.cumsum(paths[:, :-1, driver], axis=1))
+    np.testing.assert_allclose(
+        paths[:, 1:, total], jnp.cumsum(paths[:, :-1, driver], axis=1), atol=1e-6
+    )
     assert target.exact_constraints is not None
     np.testing.assert_array_equal(
         paths[:, 2, driver], jnp.repeat(target.exact_constraints.values[2, driver], 3)
     )
-    assert parameters.shape == (3, 0)
+    assert parameters.shape == (3, 1)
+    np.testing.assert_array_equal(paths[:, 0, baseline], after.position[:, 0])
     np.testing.assert_allclose(
         after.trajectory_log_prob, exchange.rebind(after, betas).trajectory_log_prob, atol=2e-5
     )
@@ -293,9 +300,13 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(tem
         num_warmup=4,
         num_samples=6,
         num_chains=2,
-        seed=711,
+        key=jax.random.PRNGKey(711),
         adaptation_rate=0.05,
-        init_scale=0.1,
+        initialization=Mock(
+            spec=LapsInitializationResult,
+            positions=jnp.broadcast_to(target.initial_position, (2, 1)),
+            paths=jnp.broadcast_to(reference.path_mean, (2, *reference.path_mean.shape)),
+        ),
         retain_latent_paths=True,
         tempering=exchange if tempered else None,
         clock=perf_counter,

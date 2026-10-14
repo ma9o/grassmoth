@@ -151,7 +151,6 @@ FULL_CONFIG = textwrap.dedent("""\
         seed: 123
         num_particles: 24
         marginal_particle_gibbs:
-          n_ieks_iters: 10
           n_parameter_particles: 3
           latent_delta: 0.29
           amala_kappa: 0.2
@@ -161,13 +160,10 @@ FULL_CONFIG = textwrap.dedent("""\
           param_step_size_max: 0.7
           param_target_accept: 0.4
           adaptation_rate: 0.03
-          init_method: random
-          pathfinder_num_elbo_samples: 7
-          pathfinder_maxiter: 8
-          n_pathfinder_starts: 2
-          pathfinder_init_scale:
-          auto_preconditioner_method: none
-          auto_preconditioner_maxiter: 13
+          laps:
+            ensemble_size: 256
+            num_unadjusted_steps: 1000
+            num_adjusted_steps: 20
 """)
 
 
@@ -230,7 +226,6 @@ class TestLoadConfig:
         assert cfg.inference.sampler.num_chains == 2
         assert cfg.inference.sampler.seed == 123
         assert cfg.inference.compute_loo_diagnostics is False
-        assert cfg.inference.sampler.marginal_particle_gibbs.n_ieks_iters == 10
         assert cfg.inference.sampler.num_particles == 24
         assert cfg.inference.sampler.marginal_particle_gibbs.n_parameter_particles == 3
         assert cfg.inference.sampler.marginal_particle_gibbs.latent_delta == 0.29
@@ -241,13 +236,9 @@ class TestLoadConfig:
         assert cfg.inference.sampler.marginal_particle_gibbs.param_step_size_max == 0.7
         assert cfg.inference.sampler.marginal_particle_gibbs.param_target_accept == 0.4
         assert cfg.inference.sampler.marginal_particle_gibbs.adaptation_rate == 0.03
-        assert cfg.inference.sampler.marginal_particle_gibbs.init_method == "random"
-        assert cfg.inference.sampler.marginal_particle_gibbs.pathfinder_num_elbo_samples == 7
-        assert cfg.inference.sampler.marginal_particle_gibbs.pathfinder_maxiter == 8
-        assert cfg.inference.sampler.marginal_particle_gibbs.n_pathfinder_starts == 2
-        assert cfg.inference.sampler.marginal_particle_gibbs.pathfinder_init_scale is None
-        assert cfg.inference.sampler.marginal_particle_gibbs.auto_preconditioner_method == "none"
-        assert cfg.inference.sampler.marginal_particle_gibbs.auto_preconditioner_maxiter == 13
+        assert cfg.inference.sampler.marginal_particle_gibbs.laps.ensemble_size == 256
+        assert cfg.inference.sampler.marginal_particle_gibbs.laps.num_unadjusted_steps == 1000
+        assert cfg.inference.sampler.marginal_particle_gibbs.laps.num_adjusted_steps == 20
         assert cfg.llm.embedded.max_tokens == 4096
         assert cfg.llm.embedded.reasoning_effort == "low"
         assert cfg.llm.claude_code.effort == "medium"
@@ -270,7 +261,7 @@ class TestLoadConfig:
         cfg = load_config()
         sampler = cfg.inference.sampler
         assert sampler.num_warmup == 500
-        assert sampler.marginal_particle_gibbs.n_ieks_iters == 10
+        assert sampler.marginal_particle_gibbs.laps.ensemble_size == 256
 
         load_config.cache_clear()
 

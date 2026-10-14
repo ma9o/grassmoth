@@ -62,7 +62,6 @@ inference:
     seed: 0
     num_particles: 64
     marginal_particle_gibbs:
-      n_ieks_iters: 6
       n_parameter_particles: 2
       # The indexed production method: parallel-in-time c-dSMC tree smoother with the
       # paid mixture leaf (amala_exact z-component + fixed LAPS-pilot component + wide
@@ -73,5 +72,3 @@ inference:
       param_step_size: 0.02
       param_target_accept: 0.35
       adaptation_rate: 0.05
-      init_method: laps
-      auto_preconditioner_method: laps

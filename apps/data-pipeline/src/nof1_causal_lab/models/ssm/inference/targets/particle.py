@@ -10,6 +10,8 @@ import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
 
+from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences
+from nof1_causal_lab.models.ssm.execution.affine import compose_affine_maps
 from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import (
     GaussianReference,
     GaussianReferenceBridge,
@@ -28,7 +30,12 @@ if TYPE_CHECKING:
 
 # Array leaves of the continuous model and its observation grid. Static model
 # metadata is retained by the discrete-model factory, outside the sampler state.
-type ParticleContext = tuple[dsx.DynamicalModel, jax.Array]
+type ParticleContext = tuple[dsx.DynamicalModel, jax.Array, jax.Array]
+
+
+def identity_state(_context: ParticleContext, state: jax.Array) -> jax.Array:
+    """Leave a supplied state unchanged when evaluating the exact model factors."""
+    return state
 
 
 @dataclass(frozen=True, eq=False)
@@ -48,6 +55,23 @@ class ParticleTarget:
     intervals: ParticleIntervalObservations | None = None
     exact_constraints: ExactStateConstraints | None = None
     bridge: GaussianReferenceBridge | None = None
+    state_projection: Callable[[ParticleContext, jax.Array], jax.Array] = identity_state
+
+    def project_state(self, context: ParticleContext, state: jax.Array) -> jax.Array:
+        """Bind global static coordinates before evaluating a local model factor."""
+        indices = jnp.asarray(self.state_space.static, dtype=jnp.int32)
+        state = state.at[..., indices].set(context[2][indices])
+        return self.state_projection(context, state)
+
+    def fixed_recurrences(self, context: ParticleContext, state: jax.Array) -> jax.Array:
+        """A parameter-only local reference; the root pays its exact density correction."""
+        indices = jnp.asarray(self.state_space.recurrence.indices, dtype=jnp.int32)
+        initial = self.initial_moments(context)[0]
+        if self.exact_constraints is not None:
+            initial = jnp.where(
+                self.exact_constraints.free_mask[0], initial, self.exact_constraints.values[0]
+            )
+        return state.at[..., indices].set(initial[indices])
 
     def at_temperature(self, reference: GaussianReference, beta: jax.Array) -> ParticleTarget:
         """Compose a reference bridge without changing the exact model or its support."""
@@ -58,22 +82,61 @@ class ParticleTarget:
         )
 
     @property
-    def independent_mask(self) -> jax.Array:
-        """Coordinates with their own density, before conditioning on exact readings."""
+    def state_density_mask(self) -> jax.Array:
+        """State density coordinates, including one copy of every random static state."""
         mask = jnp.zeros((self.times.size, self.state_space.size), dtype=bool)
         mask = mask.at[0, jnp.asarray(self.state_space.initial, dtype=jnp.int32)].set(True)
         return mask.at[1:, jnp.asarray(self.state_space.transition, dtype=jnp.int32)].set(True)
+
+    @property
+    def independent_mask(self) -> jax.Array:
+        """Free path coordinates; random static states are sampled in the global block."""
+        static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
+        return self.state_density_mask.at[:, static].set(False)
 
     def replay_path(self, context: ParticleContext, coordinates: jax.Array) -> jax.Array:
         """Reconstruct exact initial values, static quantities and deterministic recurrences."""
         if self.exact_constraints is not None:
             coordinates = self.exact_constraints.project(coordinates)
+        static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
+        coordinates = coordinates.at[:, static].set(context[2][static])
         if not self.state_space.requires_replay:
             return coordinates
         independent = self.independent_mask
         initial = jnp.where(independent[0], coordinates[0], self.initial_moments(context)[0])
         inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
         initial = initial.at[inputs].set(coordinates[0, inputs])
+        initial = initial.at[static].set(context[2][static])
+        if isinstance(self.state_space.recurrence, ParallelRecurrences):
+            coordinates = coordinates.at[0].set(initial)
+            deterministic = jnp.asarray(self.state_space.recurrence.indices, dtype=jnp.int32)
+            if not self.state_space.recurrence.indices or self.times.size == 1:
+                return coordinates
+
+            def affine(previous: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
+                zero = previous.at[deterministic].set(0)
+                offset = jnp.asarray(self._transition_distribution(context, zero, index).mean)[
+                    deterministic
+                ]
+                # The compiler proved affine dependence. Basis evaluations recover
+                # its exact coefficients, not a local approximation of nonlinear drift.
+                basis = jnp.eye(deterministic.size, dtype=coordinates.dtype)
+                columns = jax.vmap(
+                    lambda unit: (
+                        self._transition_distribution(
+                            context, zero.at[deterministic].set(unit), index
+                        ).mean[deterministic]
+                        - offset
+                    )
+                )(basis)
+                return jnp.asarray(columns).T, offset
+
+            matrices, offsets = jax.vmap(affine)(coordinates[:-1], jnp.arange(1, self.times.size))
+            matrices = jnp.concatenate((jnp.zeros_like(matrices[:1]), matrices))
+            offsets = jnp.concatenate((initial[deterministic][None], offsets))
+
+            _, values = jax.lax.associative_scan(compose_affine_maps, (matrices, offsets))
+            return coordinates.at[:, deterministic].set(values)
 
         def advance(previous: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
             mean = self._transition_distribution(context, previous, index).mean
@@ -113,6 +176,7 @@ class ParticleTarget:
 
     def initial_log_prob(self, context, state):
         """Evaluate initial-state density on the modeled coordinates of the supplied state."""
+        state = self.project_state(context, state)
 
         def exact():
             return self._modeled_log_prob(
@@ -129,18 +193,27 @@ class ParticleTarget:
         if not density_indices:
             return jnp.asarray(0.0, dtype=state.dtype)
         indices = jnp.asarray(density_indices, dtype=jnp.int32)
+        # The declared Gaussian embeds its factor on precisely these stochastic
+        # coordinates. Reusing it avoids rebuilding the full-state covariance
+        # and differentiating through a second Cholesky decomposition.
         return dist.MultivariateNormal(
             distribution.mean[indices],
-            covariance_matrix=distribution.covariance_matrix[jnp.ix_(indices, indices)],
+            scale_tril=distribution.scale_tril[jnp.ix_(indices, indices)],
         ).log_prob(state[indices])
 
     def _transition_distribution(self, context, previous, index):
         times = context[1]
         evolution = cast("DiscreteStateTransition", self.dynamical_model(context).state_evolution)
-        return evolution(previous, None, times[jnp.maximum(index - 1, 0)], times[index])
+        return evolution(
+            self.project_state(context, previous),
+            None,
+            times[jnp.maximum(index - 1, 0)],
+            times[index],
+        )
 
     def transition_log_prob(self, context, previous, current, index):
         """Evaluate the current state's modeled transition density from its predecessor."""
+        current = self.project_state(context, current)
 
         def exact():
             return self._modeled_log_prob(
@@ -183,6 +256,7 @@ class ParticleTarget:
     def initial_path(self, context, *, exact_constraints: ExactStateConstraints | None = None):
         """Build an initialization path from successive transition means and any exact state constraints."""
         initial = jnp.asarray(self.dynamical_model(context).initial_condition.mean)
+        initial = self.project_state(context, initial)
         if exact_constraints is not None:
             initial = jnp.where(
                 exact_constraints.free_mask[0], initial, exact_constraints.values[0]
@@ -208,7 +282,7 @@ class ParticleTarget:
                 jnp.nan,
             )
         distribution = self.dynamical_model(context).observation_model(
-            state, None, context[1][index]
+            self.project_state(context, state), None, context[1][index]
         )
 
         def exact():
@@ -225,18 +299,28 @@ class ParticleTarget:
         )(path, jnp.arange(path.shape[0]))
 
     def path_log_prob(self, context, path, observations):
-        """Sum initial, transition, and observation log densities for a complete latent path."""
+        """Evaluate the joint path density after reconstructing constrained coordinates.
+
+        Exact readings and deterministic coordinates are replayed before scoring
+        the initial, transition, and observation factors.
+        """
         path = self.replay_path(context, path)
+        return self.factor_log_prob(context, path, observations)
+
+    def factor_log_prob(self, context, path, observations):
+        """Sum local factors on supplied coordinates, without a path reconstruction."""
+        return self.prior_path_log_prob(context, path) + jnp.sum(
+            self.observation_log_probs(context, path, observations)
+        )
+
+    def prior_path_log_prob(self, context, path):
+        """Sum initial and transition factors on supplied coordinates without replay."""
         transitions = jax.vmap(
             lambda previous, current, index: self.transition_log_prob(
                 context, previous, current, index
             )
         )(path[:-1], path[1:], jnp.arange(1, path.shape[0]))
-        return (
-            self.initial_log_prob(context, path[0])
-            + jnp.sum(transitions)
-            + jnp.sum(self.observation_log_probs(context, path, observations))
-        )
+        return self.initial_log_prob(context, path[0]) + jnp.sum(transitions)
 
     def log_posterior_from_context(self, position, context, path, observations):
         """Return joint posterior and path log densities using an already bound model context."""

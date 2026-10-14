@@ -78,40 +78,12 @@ class ObservationOperator:
         """Project response trajectories onto this operator's recorded measurement supports."""
         return _project_response_trajectory_with_operator(response_trajectory, self)
 
-    def empty_accumulators(
-        self,
-        dtype: jnp.dtype,
-        leading_shape: tuple[int, ...] = (),
-    ) -> jnp.ndarray:
-        """Allocate zero accumulators for each leading index, indicator, and active interval window."""
-        if not self.requires_interval_summary_handling:
-            raise ValueError(
-                "empty_accumulators is undefined without interval-summary observation support"
-            )
-        return jnp.zeros(
-            (*leading_shape, self.window_plan.n_manifest, self.scan.max_active_windows),
-            dtype=dtype,
-        )
-
 
 class SupportObservationSummary(NamedTuple):
     """Expected responses and emission masks for observations whose support is ready to evaluate."""
 
     expected_mean: jnp.ndarray
     semantic_mask: jnp.ndarray
-    emitted_interval_summary_mask: jnp.ndarray
-
-
-class SupportObservationStepResult(NamedTuple):
-    """Completed support statistics and the accumulator state carried into the next solver step."""
-
-    obs_sum: jnp.ndarray
-    obs_sumsq: jnp.ndarray
-    obs_weight: jnp.ndarray
-    next_accum_sum: jnp.ndarray
-    next_accum_sumsq: jnp.ndarray
-    next_accum_weight: jnp.ndarray
-    summary: SupportObservationSummary
 
 
 @overload
@@ -177,27 +149,6 @@ def get_interval_summary_mask(support_kind_codes: jnp.ndarray, dtype: jnp.dtype)
     return 1.0 - get_point_like_mask(support_kind_codes, dtype)
 
 
-def accumulate_support_statistics(
-    prev_response: jnp.ndarray,
-    accum_sum: jnp.ndarray,
-    accum_sumsq: jnp.ndarray,
-    accum_weight: jnp.ndarray,
-    response_t: jnp.ndarray,
-    prev_coeff_t: jnp.ndarray,
-    curr_coeff_t: jnp.ndarray,
-    weight_t: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Advance interval-summary sufficient statistics by one model step."""
-    prev_response_exp = jnp.expand_dims(prev_response, axis=-1)
-    response_t_exp = jnp.expand_dims(response_t, axis=-1)
-    obs_sum = accum_sum + prev_coeff_t * prev_response_exp + curr_coeff_t * response_t_exp
-    obs_sumsq = (
-        accum_sumsq + prev_coeff_t * (prev_response_exp**2) + curr_coeff_t * (response_t_exp**2)
-    )
-    obs_weight = accum_weight + weight_t
-    return obs_sum, obs_sumsq, obs_weight
-
-
 def select_emitted_support_statistics(
     obs_sum: jnp.ndarray,
     obs_sumsq: jnp.ndarray,
@@ -247,28 +198,6 @@ def expected_observation_mean(
     return jnp.where(summary_operator_codes == _STD_OPERATOR_CODE, std_mean, expected_mean)
 
 
-def reset_support_accumulators(
-    obs_sum: jnp.ndarray,
-    obs_sumsq: jnp.ndarray,
-    obs_weight: jnp.ndarray,
-    emission_slot_indices: jnp.ndarray,
-    emit_mask: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    """Reset interval accumulators once an interval-summary observation has been emitted."""
-    safe_indices = jnp.clip(emission_slot_indices, 0, obs_sum.shape[-1] - 1)
-    slot_ids = jnp.arange(obs_sum.shape[-1], dtype=safe_indices.dtype)
-    while slot_ids.ndim < obs_sum.ndim:
-        slot_ids = slot_ids.reshape((1,) * (obs_sum.ndim - 1) + (-1,))
-    reset_mask = jnp.expand_dims(emit_mask > 0.5, axis=-1) & (
-        slot_ids == jnp.expand_dims(safe_indices, axis=-1)
-    )
-    zeros = jnp.zeros_like(obs_sum)
-    next_sum = jnp.where(reset_mask, zeros, obs_sum)
-    next_sumsq = jnp.where(reset_mask, zeros, obs_sumsq)
-    next_weight = jnp.where(reset_mask, zeros, obs_weight)
-    return next_sum, next_sumsq, next_weight
-
-
 def summarize_support_observation(
     observation_operator: ObservationOperator,
     response_t: jnp.ndarray,
@@ -307,58 +236,6 @@ def summarize_support_observation(
     return SupportObservationSummary(
         expected_mean=expected_mean,
         semantic_mask=semantic_mask,
-        emitted_interval_summary_mask=emitted_interval_summary_mask,
-    )
-
-
-def advance_support_observation_state(
-    observation_operator: ObservationOperator,
-    response_prev: jnp.ndarray,
-    accum_sum: jnp.ndarray,
-    accum_sumsq: jnp.ndarray,
-    accum_weight: jnp.ndarray,
-    response_t: jnp.ndarray,
-    obs_mask_t: jnp.ndarray,
-    prev_coeff_t: jnp.ndarray,
-    curr_coeff_t: jnp.ndarray,
-    weight_t: jnp.ndarray,
-    emission_slot_indices: jnp.ndarray,
-) -> SupportObservationStepResult:
-    """Advance support-aware accumulators and summarize the current emitted observation."""
-    obs_sum, obs_sumsq, obs_weight = accumulate_support_statistics(
-        response_prev,
-        accum_sum,
-        accum_sumsq,
-        accum_weight,
-        response_t,
-        prev_coeff_t,
-        curr_coeff_t,
-        weight_t,
-    )
-    summary = summarize_support_observation(
-        observation_operator,
-        response_t,
-        obs_sum,
-        obs_sumsq,
-        obs_weight,
-        obs_mask_t,
-        emission_slot_indices,
-    )
-    next_sum, next_sumsq, next_weight = reset_support_accumulators(
-        obs_sum,
-        obs_sumsq,
-        obs_weight,
-        emission_slot_indices,
-        summary.emitted_interval_summary_mask,
-    )
-    return SupportObservationStepResult(
-        obs_sum=obs_sum,
-        obs_sumsq=obs_sumsq,
-        obs_weight=obs_weight,
-        next_accum_sum=next_sum,
-        next_accum_sumsq=next_sumsq,
-        next_accum_weight=next_weight,
-        summary=summary,
     )
 
 
@@ -399,46 +276,49 @@ def _project_response_trajectory_with_operator(
     prev_coeffs = jnp.asarray(observation_operator.scan.prev_coeffs, dtype=dtype)
     curr_coeffs = jnp.asarray(observation_operator.scan.curr_coeffs, dtype=dtype)
     interval_weights = jnp.asarray(observation_operator.scan.weights, dtype=dtype)
-    zeros = observation_operator.empty_accumulators(dtype)
     full_obs_mask = jnp.ones((n_manifest,), dtype=dtype)
-
-    def _scan_step(carry, inputs):
-        response_prev, accum_sum, accum_sumsq, accum_weight = carry
-        response_t, prev_coeff_t, curr_coeff_t, weight_t, emission_slots_t = inputs
-
-        step_result = advance_support_observation_state(
-            observation_operator,
-            response_prev,
-            accum_sum,
-            accum_sumsq,
-            accum_weight,
-            response_t,
-            full_obs_mask,
-            prev_coeff_t,
-            curr_coeff_t,
-            weight_t,
-            emission_slots_t,
-        )
-        return (
-            response_t,
-            step_result.next_accum_sum,
-            step_result.next_accum_sumsq,
-            step_result.next_accum_weight,
-        ), (
-            step_result.summary.expected_mean,
-            step_result.summary.semantic_mask,
-        )
-
-    _, (expected_rest, semantic_mask_rest) = jax.lax.scan(
-        _scan_step,
-        (response_trajectory[0], zeros, zeros, zeros),
+    previous, current = response_trajectory[:-1, :, None], response_trajectory[1:, :, None]
+    increments = jnp.stack(
         (
-            response_trajectory[1:],
-            prev_coeffs[1:],
-            curr_coeffs[1:],
+            prev_coeffs[1:] * previous + curr_coeffs[1:] * current,
+            prev_coeffs[1:] * previous**2 + curr_coeffs[1:] * current**2,
             interval_weights[1:],
-            emission_slots[1:],
         ),
+        axis=-1,
+    )
+    slots = emission_slots[1:]
+    slot_ids = jnp.arange(increments.shape[-2])
+    reset = (
+        (slots >= 0)[..., None]
+        & interval_summary_mask[None, :, None].astype(bool)
+        & (slot_ids == slots[..., None])
+    )
+    keep = (~reset).astype(dtype)[..., None]
+
+    def compose(left, right):
+        left_keep, left_value = left
+        right_keep, right_value = right
+        return right_keep * left_keep, right_keep * left_value + right_value
+
+    # A reset is the affine map s -> 0, otherwise s -> s + increment.
+    # Composition is associative, including reused slots and overlapping windows.
+    _, after_reset = jax.lax.associative_scan(compose, (keep, keep * increments))
+    before_reset = jnp.concatenate((jnp.zeros_like(after_reset[:1]), after_reset[:-1])) + increments
+
+    def summarize(response, statistics, emission):
+        summary = summarize_support_observation(
+            observation_operator,
+            response,
+            statistics[..., 0],
+            statistics[..., 1],
+            statistics[..., 2],
+            full_obs_mask,
+            emission,
+        )
+        return summary.expected_mean, summary.semantic_mask
+
+    expected_rest, semantic_mask_rest = jax.vmap(summarize)(
+        response_trajectory[1:], before_reset, slots
     )
     return (
         jnp.concatenate([expected_0[None, :], expected_rest], axis=0),
@@ -513,72 +393,3 @@ def trajectory_observation_log_probs(
         )
     )(clean_obs, expected_means, mask_float, semantic_mask)
     return point_ll + interval_summary_ll
-
-
-def trajectory_observation_log_prob(
-    latent_trajectory: jnp.ndarray,
-    observations: jnp.ndarray,
-    obs_mask: jnp.ndarray | None,
-    H: jnp.ndarray,
-    d_meas: jnp.ndarray,
-    R: jnp.ndarray,
-    obs_kernel: ObservationKernel,
-    mean_log_prob_fn: EmissionLogProbFn | None = None,
-    observation_support: ObservationSupportRuntime | None = None,
-) -> jnp.ndarray:
-    """Return the total observation log-likelihood for a latent trajectory."""
-    return jnp.sum(
-        trajectory_observation_log_probs(
-            latent_trajectory,
-            observations,
-            obs_mask,
-            H,
-            d_meas,
-            R,
-            obs_kernel,
-            mean_log_prob_fn,
-            observation_support,
-        )
-    )
-
-
-def row_observation_log_probs(
-    latent_trajectory: jnp.ndarray,
-    observations: jnp.ndarray,
-    obs_mask: jnp.ndarray,
-    H_rows: jnp.ndarray,
-    d_rows: jnp.ndarray,
-    R: jnp.ndarray,
-    obs_kernel: ObservationKernel,
-) -> jnp.ndarray:
-    """Per-row ``(T,)`` point-observation log-prob for per-row observation operators.
-
-    Sum over the leading axis equals :func:`row_observation_log_prob`.
-    """
-    clean_obs = jnp.nan_to_num(observations, nan=0.0)
-    obs_mask_float = obs_mask.astype(latent_trajectory.dtype)
-    return jax.vmap(
-        lambda y_t, z_t, mask_t, H_t, d_t: obs_kernel.log_prob_fn(
-            y_t,
-            H_t @ z_t + d_t,
-            R,
-            mask_t,
-        )
-    )(clean_obs, latent_trajectory, obs_mask_float, H_rows, d_rows)
-
-
-def row_observation_log_prob(
-    latent_trajectory: jnp.ndarray,
-    observations: jnp.ndarray,
-    obs_mask: jnp.ndarray,
-    H_rows: jnp.ndarray,
-    d_rows: jnp.ndarray,
-    R: jnp.ndarray,
-    obs_kernel: ObservationKernel,
-) -> jnp.ndarray:
-    """Return the point-observation log-probability for per-row observation operators."""
-    return jnp.sum(
-        row_observation_log_probs(
-            latent_trajectory, observations, obs_mask, H_rows, d_rows, R, obs_kernel
-        )
-    )

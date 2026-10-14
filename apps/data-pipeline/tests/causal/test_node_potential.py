@@ -16,7 +16,6 @@ from nof1_causal_lab.models.ssm.dynamics import (
     Intervention,
     VariableOverride,
     VectorFieldArgs,
-    infer_linearisation,
 )
 from nof1_causal_lab.models.ssm.dynamics.spec import DynamicsSpec, compile_dynamics
 from nof1_causal_lab.models.ssm.execution.dynamical_model import continuous_state_evolution
@@ -65,7 +64,6 @@ def test_native_potential_matches_restoring_force_and_its_derivatives(quartic):
         jax.jacfwd(force)(x), [[0.0, 0.0], [0.0, -1.2 - 3 * quartic * displacement**2]]
     )
     np.testing.assert_allclose(force(jnp.array([3.0, 0.5])), [0.0, 0.0], atol=1e-7)
-    assert infer_linearisation(compiled.vector_field) == "trajectory"
 
 
 @pytest.mark.inference(concern="simulation")

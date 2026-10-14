@@ -7,14 +7,10 @@ Covers: Gaussian, Poisson, Student-t, Gamma, Bernoulli, NegBin, Beta,
 import jax
 import jax.numpy as jnp
 import jax.scipy.stats as jstats
-import numpy as np
 import pytest
 
 from nof1_causal_lab.artifacts.likelihood import DistributionFamily, LinkFunction
-from nof1_causal_lab.models.ssm.execution.emissions import (
-    _score_weight_negative_binomial,
-    gaussian_block_log_prob,
-)
+from nof1_causal_lab.models.ssm.execution.emissions import gaussian_block_log_prob
 from tests.observation_fixtures import mean_density, observation_kernel, observation_laws
 
 # =============================================================================
@@ -268,39 +264,6 @@ class TestNegBinEmission:
         ).log_prob_fn(y, H @ z + d, R, mask)
         # Higher r (less overdispersion) should give higher log-prob near the mean
         assert lp_high_r > lp_low_r
-
-
-@pytest.mark.inference(concern="warmup")
-def test_negative_binomial_tail_scores_curvature_and_derivatives_match_double_reference():
-    """Initialization derivatives retain the exact tail limits without exponentiating the rate."""
-    points = np.array([(eta, 1.17) for eta in (-80, -60, -40, 0, 40, 60, 80)])
-
-    def actual(z):
-        score, weight = _score_weight_negative_binomial(
-            jnp.array([2.0], dtype=z.dtype), z[:1], jnp.ones(1, dtype=z.dtype), jnp.exp(z[1])
-        )
-        return jnp.stack((score[0], weight[0]))
-
-    def reference(z):
-        mu, r = jnp.exp(z)
-        return jnp.array([r * (2 - mu) / (r + mu), r * (r + 2) * mu / (r + mu) ** 2])
-
-    with jax.enable_x64():
-        values, gradients = jax.jit(jax.vmap(lambda z: (actual(z), jax.jacfwd(actual)(z))))(
-            jnp.asarray(points, dtype=jnp.float32)
-        )
-        expected, expected_gradients = jax.vmap(lambda z: (reference(z), jax.jacfwd(reference)(z)))(
-            jnp.asarray(points, dtype=jnp.float64)
-        )
-        assert np.isfinite(gradients).all()
-        np.testing.assert_allclose(values, expected, rtol=2e-5, atol=2e-6)
-        np.testing.assert_allclose(gradients, expected_gradients, rtol=2e-5, atol=2e-6)
-    tails = jax.jit(jax.vmap(actual))(jnp.array([[-1000.0, 1.17], [1000.0, 1.17]]))
-    np.testing.assert_allclose(tails, [[2.0, 0.0], [-np.exp(1.17), 0.0]], rtol=1e-6)
-    masked = _score_weight_negative_binomial(
-        jnp.ones(2), jnp.array([-1000.0, 1000.0]), jnp.zeros(2), 3.0
-    )
-    np.testing.assert_array_equal(masked, np.zeros((2, 2)))
 
 
 # =============================================================================

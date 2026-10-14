@@ -94,7 +94,7 @@ def sample_parameters(
 
 
 def initialization_input_intervention(panel: BoundPanel, times: jnp.ndarray) -> Intervention:
-    """Use the bound input path in the Gaussian particle-initialization view."""
+    """Use the bound input path when tracing structural parameters."""
     return Intervention(
         tuple(
             VariableOverride(
@@ -111,7 +111,7 @@ def numpyro_model(
     priors: PriorRuntimeBundle,
     likelihood_backend: InitializationLikelihoodBackend,
 ) -> None:
-    """Replay compiled priors and the particle-initialization likelihood."""
+    """Replay compiled priors with a likelihood placeholder for structural tracing."""
     compiled_dynamical_model = panel.compiled_dynamical_model
     observations, times = panel.observations, panel.times
     sampled = sample_parameters(compiled_dynamical_model, priors)

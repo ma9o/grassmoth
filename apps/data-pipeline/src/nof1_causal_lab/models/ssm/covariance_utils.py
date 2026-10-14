@@ -28,14 +28,3 @@ def symmetrize_with_jitter(
     """Symmetrize a square matrix or stack of square matrices and add diagonal jitter."""
     eye = jnp.eye(M.shape[-1], dtype=M.dtype)
     return symmetrize(M) + eye * jitter
-
-
-def logdet_from_cholesky(cholesky: Float[Array, "*batch N N"]) -> Float[Array, "*batch"]:
-    """Log-determinant of ``A = L Lᵀ`` from its lower-triangular Cholesky factor ``L``.
-
-    Computes ``2 · Σ log diag(L)``, batched over any leading dimensions. Expects a
-    valid Cholesky factor (strictly positive diagonal); callers own positive
-    definiteness, so no diagonal clipping is needed.
-    """
-    diagonal = jnp.diagonal(cholesky, axis1=-2, axis2=-1)
-    return 2.0 * jnp.sum(jnp.log(diagonal), axis=-1)

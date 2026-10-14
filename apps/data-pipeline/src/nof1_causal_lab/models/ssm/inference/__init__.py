@@ -10,24 +10,11 @@ Method:
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from nof1_causal_lab.compute.budget import ComputeBudget
-    from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
-    from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
-    from nof1_causal_lab.models.ssm.runtime import BoundPanel
-
 from typing import TYPE_CHECKING, Literal
 
 from nof1_causal_lab.models.ssm.autoreparam import AutoReparam
 from nof1_causal_lab.models.ssm.inference.types import (
     ParticleMCMCPosterior as ParticleMCMCPosterior,
-)
-from nof1_causal_lab.models.ssm.inference.types import (
-    WarmupProposal as WarmupProposal,
 )
 from nof1_causal_lab.models.ssm.preflight import (
     ObservationPreflightFailure,
@@ -37,13 +24,18 @@ from nof1_causal_lab.models.ssm.preflight import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.autoreparam import Strategy
+    from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
+    from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.predictive.types import PredictiveDraws
+    from nof1_causal_lab.models.ssm.runtime import BoundPanel
     from nof1_causal_lab.sampler_config import SamplerSpec
 
 __all__ = [
     "ParticleMCMCPosterior",
-    "WarmupProposal",
     "fit",
     "prior_predictive",
     "validate_observations_for_fit",

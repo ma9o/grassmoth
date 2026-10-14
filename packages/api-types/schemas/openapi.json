@@ -17735,76 +17735,13 @@
             "title": "Adaptation Scheme",
             "type": "string"
           },
-          "init_method": {
-            "$ref": "#/components/schemas/ParameterInitialization",
-            "default": "laps"
-          },
           "laps": {
             "$ref": "#/components/schemas/LapsInitializationSpec"
-          },
-          "pathfinder_num_elbo_samples": {
-            "default": 20,
-            "title": "Pathfinder Num Elbo Samples",
-            "type": "integer"
-          },
-          "pathfinder_maxiter": {
-            "default": 20,
-            "title": "Pathfinder Maxiter",
-            "type": "integer"
-          },
-          "n_pathfinder_starts": {
-            "default": 8,
-            "title": "N Pathfinder Starts",
-            "type": "integer"
-          },
-          "pathfinder_parallel_workers": {
-            "anyOf": [
-              {
-                "minimum": 1,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Pathfinder Parallel Workers"
-          },
-          "pathfinder_init_scale": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": 0.1,
-            "title": "Pathfinder Init Scale"
-          },
-          "auto_preconditioner_method": {
-            "$ref": "#/components/schemas/ParameterPreconditioner",
-            "default": "laps"
-          },
-          "auto_preconditioner_maxiter": {
-            "default": 200,
-            "title": "Auto Preconditioner Maxiter",
-            "type": "integer"
-          },
-          "init_scale": {
-            "default": 0.05,
-            "title": "Init Scale",
-            "type": "number"
           },
           "compute_latent_posterior_summary": {
             "default": true,
             "title": "Compute Latent Posterior Summary",
             "type": "boolean"
-          },
-          "n_ieks_iters": {
-            "default": 6,
-            "title": "N Ieks Iters",
-            "type": "integer"
           }
         },
         "required": [
@@ -17837,18 +17774,8 @@
           "param_target_accept",
           "adaptation_rate",
           "adaptation_scheme",
-          "init_method",
           "laps",
-          "pathfinder_num_elbo_samples",
-          "pathfinder_maxiter",
-          "n_pathfinder_starts",
-          "pathfinder_parallel_workers",
-          "pathfinder_init_scale",
-          "auto_preconditioner_method",
-          "auto_preconditioner_maxiter",
-          "init_scale",
-          "compute_latent_posterior_summary",
-          "n_ieks_iters"
+          "compute_latent_posterior_summary"
         ],
         "title": "MarginalParticleGibbsSpec",
         "type": "object",
@@ -20181,29 +20108,6 @@
         "x-concern": "identity",
         "description": "A scientific parameter identity connects component coefficients to one parameter definition."
       },
-      "ParameterInitialization": {
-        "enum": [
-          "random",
-          "pathfinder",
-          "laps"
-        ],
-        "type": "string",
-        "x-python-module": "nof1_causal_lab.sampler_config",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ParameterPreconditioner": {
-        "enum": [
-          "map",
-          "none",
-          "pathfinder",
-          "laps"
-        ],
-        "type": "string",
-        "x-python-module": "nof1_causal_lab.sampler_config",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "ParameterRef": {
         "additionalProperties": false,
         "description": "A scalar finding identifies its scientific parameter and declared logical component.",
@@ -20415,139 +20319,6 @@
         ],
         "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
         "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ParameterWarmupDiagnostics": {
-        "additionalProperties": false,
-        "description": "Realized initialization and preconditioning, retaining each initializer's evidence once.",
-        "properties": {
-          "pathfinder": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PathfinderDiagnostics"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "laps": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/LapsInitializationDiagnostics"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
-          "pathfinder_run_count": {
-            "title": "Pathfinder Run Count",
-            "type": "integer"
-          },
-          "pathfinder_consumers": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Pathfinder Consumers",
-            "type": "array"
-          },
-          "init_source": {
-            "title": "Init Source",
-            "type": "string"
-          },
-          "preconditioner_source": {
-            "title": "Preconditioner Source",
-            "type": "string"
-          },
-          "preconditioner_device": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Preconditioner Device"
-          },
-          "dim": {
-            "title": "Dim",
-            "type": "integer"
-          },
-          "duration_seconds": {
-            "title": "Duration Seconds",
-            "type": "number"
-          },
-          "pathfinder_sampling_mode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Pathfinder Sampling Mode"
-          },
-          "pathfinder_init_scale": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Pathfinder Init Scale"
-          },
-          "prior_released_site_names": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Prior Released Site Names",
-            "type": "array"
-          },
-          "prior_released_site_indices": {
-            "default": [],
-            "items": {
-              "type": "integer"
-            },
-            "title": "Prior Released Site Indices",
-            "type": "array"
-          },
-          "prior_release_scale": {
-            "default": 0.0,
-            "title": "Prior Release Scale",
-            "type": "number"
-          }
-        },
-        "required": [
-          "pathfinder",
-          "laps",
-          "pathfinder_run_count",
-          "pathfinder_consumers",
-          "init_source",
-          "preconditioner_source",
-          "preconditioner_device",
-          "dim",
-          "duration_seconds",
-          "pathfinder_sampling_mode",
-          "pathfinder_init_scale",
-          "prior_released_site_names",
-          "prior_released_site_indices",
-          "prior_release_scale"
-        ],
-        "title": "ParameterWarmupDiagnostics",
-        "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
-        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "ParetoKPoint": {
@@ -20771,8 +20542,8 @@
             "default": null,
             "title": "Amala Grad Norm Max"
           },
-          "parameter_warmup": {
-            "$ref": "#/components/schemas/ParameterWarmupDiagnostics"
+          "initialization": {
+            "$ref": "#/components/schemas/LapsInitializationDiagnostics"
           },
           "tempering": {
             "anyOf": [
@@ -20809,217 +20580,10 @@
           "selected_particle_unique_count_mean",
           "amala_grad_norm_mean",
           "amala_grad_norm_max",
-          "parameter_warmup",
+          "initialization",
           "tempering"
         ],
         "title": "ParticleSamplerDiagnostics",
-        "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "PathfinderDiagnostics": {
-        "additionalProperties": false,
-        "description": "Retained native initialization measurements; never posterior evidence.",
-        "properties": {
-          "n_pathfinder_starts": {
-            "title": "N Pathfinder Starts",
-            "type": "integer"
-          },
-          "n_pathfinder_starts_finite": {
-            "title": "N Pathfinder Starts Finite",
-            "type": "integer"
-          },
-          "pathfinder_parallel_workers": {
-            "title": "Pathfinder Parallel Workers",
-            "type": "integer"
-          },
-          "pathfinder_setup_seconds": {
-            "title": "Pathfinder Setup Seconds",
-            "type": "number"
-          },
-          "pathfinder_jax_compile_seconds": {
-            "title": "Pathfinder Jax Compile Seconds",
-            "type": "number"
-          },
-          "pathfinder_jax_compile_batch_sizes": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Pathfinder Jax Compile Batch Sizes",
-            "type": "array"
-          },
-          "pathfinder_runtime_seconds": {
-            "title": "Pathfinder Runtime Seconds",
-            "type": "number"
-          },
-          "pathfinder_total_seconds": {
-            "title": "Pathfinder Total Seconds",
-            "type": "number"
-          },
-          "best_pathfinder_elbo": {
-            "title": "Best Pathfinder Elbo",
-            "type": "number"
-          },
-          "pathfinder_elbo_min": {
-            "title": "Pathfinder Elbo Min",
-            "type": "number"
-          },
-          "pathfinder_elbo_max": {
-            "title": "Pathfinder Elbo Max",
-            "type": "number"
-          },
-          "pathfinder_elbo_spread": {
-            "title": "Pathfinder Elbo Spread",
-            "type": "number"
-          },
-          "pathfinder_elbos": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Pathfinder Elbos",
-            "type": "array"
-          },
-          "pathfinder_maxiter": {
-            "title": "Pathfinder Maxiter",
-            "type": "integer"
-          },
-          "pathfinder_lbfgs_memory": {
-            "title": "Pathfinder Lbfgs Memory",
-            "type": "integer"
-          },
-          "pathfinder_elbo_samples": {
-            "title": "Pathfinder Elbo Samples",
-            "type": "integer"
-          },
-          "pathfinder_elbo_screen_samples": {
-            "title": "Pathfinder Elbo Screen Samples",
-            "type": "integer"
-          },
-          "pathfinder_elbo_refine_candidates": {
-            "title": "Pathfinder Elbo Refine Candidates",
-            "type": "integer"
-          },
-          "pathfinder_elbo_candidate_batch_size": {
-            "title": "Pathfinder Elbo Candidate Batch Size",
-            "type": "integer"
-          },
-          "pathfinder_per_start": {
-            "items": {
-              "$ref": "#/components/schemas/PathfinderStartDiagnostics"
-            },
-            "title": "Pathfinder Per Start",
-            "type": "array"
-          }
-        },
-        "required": [
-          "n_pathfinder_starts",
-          "n_pathfinder_starts_finite",
-          "pathfinder_parallel_workers",
-          "pathfinder_setup_seconds",
-          "pathfinder_jax_compile_seconds",
-          "pathfinder_jax_compile_batch_sizes",
-          "pathfinder_runtime_seconds",
-          "pathfinder_total_seconds",
-          "best_pathfinder_elbo",
-          "pathfinder_elbo_min",
-          "pathfinder_elbo_max",
-          "pathfinder_elbo_spread",
-          "pathfinder_elbos",
-          "pathfinder_maxiter",
-          "pathfinder_lbfgs_memory",
-          "pathfinder_elbo_samples",
-          "pathfinder_elbo_screen_samples",
-          "pathfinder_elbo_refine_candidates",
-          "pathfinder_elbo_candidate_batch_size",
-          "pathfinder_per_start"
-        ],
-        "title": "PathfinderDiagnostics",
-        "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "PathfinderStartDiagnostics": {
-        "additionalProperties": false,
-        "description": "Retained native initialization measurements; never posterior evidence.",
-        "properties": {
-          "n_elbo_batch_evaluations": {
-            "title": "N Elbo Batch Evaluations",
-            "type": "integer"
-          },
-          "n_elbo_screen_candidates": {
-            "title": "N Elbo Screen Candidates",
-            "type": "integer"
-          },
-          "n_elbo_refine_candidates": {
-            "title": "N Elbo Refine Candidates",
-            "type": "integer"
-          },
-          "best_elbo_candidate_index": {
-            "title": "Best Elbo Candidate Index",
-            "type": "integer"
-          },
-          "start_idx": {
-            "title": "Start Idx",
-            "type": "integer"
-          },
-          "n_trajectory_points": {
-            "title": "N Trajectory Points",
-            "type": "integer"
-          },
-          "n_valid_iterates": {
-            "title": "N Valid Iterates",
-            "type": "integer"
-          },
-          "n_elbo_candidates": {
-            "title": "N Elbo Candidates",
-            "type": "integer"
-          },
-          "n_lbfgs_iterations": {
-            "title": "N Lbfgs Iterations",
-            "type": "integer"
-          },
-          "final_log_posterior": {
-            "title": "Final Log Posterior",
-            "type": "number"
-          },
-          "best_elbo_this_start": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Best Elbo This Start"
-          },
-          "scipy_success": {
-            "title": "Scipy Success",
-            "type": "boolean"
-          },
-          "scipy_status": {
-            "title": "Scipy Status",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "n_elbo_batch_evaluations",
-          "n_elbo_screen_candidates",
-          "n_elbo_refine_candidates",
-          "best_elbo_candidate_index",
-          "start_idx",
-          "n_trajectory_points",
-          "n_valid_iterates",
-          "n_elbo_candidates",
-          "n_lbfgs_iterations",
-          "final_log_posterior",
-          "best_elbo_this_start",
-          "scipy_success",
-          "scipy_status"
-        ],
-        "title": "PathfinderStartDiagnostics",
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
         "x-layer": "findings",

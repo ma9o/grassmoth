@@ -171,31 +171,6 @@ def mixed_family_model() -> DynamicalModelSpec:
     return load_model_fixture("observation_support/mixed_family_model.json")
 
 
-def _make_lgss_data_model_fixture() -> DynamicalModelSpec:
-    dynamical_model_spec = load_model_fixture("common/one_state_gaussian_model.json")
-    latent_0 = construct_named(dynamical_model_spec, "latent_0")
-    latent_0_diffusion_diag = parameter_for(
-        dynamical_model_spec, SiteKind.DIFFUSION_DIAG, "latent_0"
-    )
-    latent_0_t0_means = parameter_for(dynamical_model_spec, SiteKind.T0_MEANS, "latent_0")
-    latent_0_t0_var_diag = parameter_for(dynamical_model_spec, SiteKind.T0_VAR_DIAG, "latent_0")
-    latent_0_revised = latent_0.revised(
-        coefficients=(
-            coefficient(latent_0_diffusion_diag.id, "diffusion_scale"),
-            coefficient(0.0, "initial_mean"),
-            coefficient(1.0, "initial_scale"),
-        )
-    )
-    parameters, distributions = without_parameters(
-        dynamical_model_spec, latent_0_t0_means, latent_0_t0_var_diag
-    )
-    return dynamical_model_spec.with_entities(
-        edges=replace_constructs(dynamical_model_spec.edges, (latent_0_revised,)),
-        parameters=parameters,
-        distributions=distributions,
-    )
-
-
 def _exact_model_model() -> DynamicalModelSpec:
     dynamical_model_spec = load_model_fixture(
         "delta_observations/authored_affine_delta_keeps_its_calibration_coefficients_complete_model.json"

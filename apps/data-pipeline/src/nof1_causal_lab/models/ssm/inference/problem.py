@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast
 
 import dynestyx as dsx
 import equinox as eqx
+import jax.numpy as jnp
 import numpy as np
 
 from nof1_causal_lab.distributions import DistributionFamily
@@ -19,6 +20,7 @@ from nof1_causal_lab.models.ssm.inference.conditioning import (
     ExactStateConstraints,
     compile_exact_state_constraints,
 )
+from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
 from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 from nof1_causal_lab.models.ssm.inference.utils import (
@@ -71,14 +73,40 @@ def build_particle_problem(
         raise ValueError(
             "Particle inference currently requires Gaussian latent diffusion for every state."
         )
-    parameters, site_info, public_sites = prepare_model_parameters(
+    scientific_parameters, site_info, public_sites = prepare_model_parameters(
         priors, panel, trace_key, reparam
+    )
+    parameter_size = scientific_parameters.initial_position.size
+    state_space = compiled_dynamical_model.state_space
+    free_static = tuple(
+        index
+        for index in state_space.static
+        if index in state_space.initial
+        and (exact_constraints is None or bool(exact_constraints.free_mask[0, index]))
     )
 
     def continuous_model(position: jax.Array, runtime_times: jax.Array) -> dsx.DynamicalModel:
         return build_dynamical_model(
-            compiled_dynamical_model, parameters.constrain(position), t0=runtime_times[0]
+            compiled_dynamical_model,
+            scientific_parameters.constrain(position[:parameter_size]),
+            t0=runtime_times[0],
         )
+
+    initial_model = continuous_model(scientific_parameters.initial_position, times)
+    static_indices = jnp.asarray(free_static, dtype=jnp.int32)
+    parameters = ParameterTransform(
+        jnp.concatenate(
+            (
+                scientific_parameters.initial_position,
+                initial_model.initial_condition.mean[static_indices],
+            )
+        ),
+        lambda position: scientific_parameters.unravel(position[:parameter_size]),
+        lambda position: scientific_parameters.constrain(position[:parameter_size]),
+        # The joint initial-state factor retains the static prior, including its
+        # correlation with dynamic initial states. It must be paid exactly once.
+        lambda position: scientific_parameters.log_prior(position[:parameter_size]),
+    )
 
     # Partition once to retain static metadata outside the sampler state. Every
     # parameter-dependent value in the declared model is an explicit array leaf.
@@ -87,10 +115,18 @@ def build_particle_problem(
     )
 
     def context_fn(position: jax.Array, runtime_times: jax.Array) -> ParticleContext:
-        dynamical_model_arrays: dsx.DynamicalModel = eqx.filter(
-            continuous_model(position, runtime_times), eqx.is_array
+        model = continuous_model(position, runtime_times)
+        static_values = (
+            jnp.asarray(model.initial_condition.mean)
+            .at[static_indices]
+            .set(position[parameter_size:])
         )
-        return dynamical_model_arrays, runtime_times
+        if exact_constraints is not None:
+            static_values = jnp.where(
+                exact_constraints.free_mask[0], static_values, exact_constraints.values[0]
+            )
+        dynamical_model_arrays: dsx.DynamicalModel = eqx.filter(model, eqx.is_array)
+        return dynamical_model_arrays, runtime_times, static_values
 
     def declared_model(context: ParticleContext) -> dsx.DynamicalModel:
         model = eqx.combine(context[0], static_model)
@@ -105,6 +141,15 @@ def build_particle_problem(
         )
 
     operator = compile_observation_operator(panel.observation_support)
+    runtime = ParticleTarget(
+        parameters,
+        context_fn,
+        declared_model,
+        observations,
+        times,
+        state_space,
+        exact_constraints=exact_constraints,
+    )
     intervals = (
         ParticleIntervalObservations(
             declared_model,
@@ -114,18 +159,10 @@ def build_particle_problem(
                 panel.observation_support.summary_operators,
                 np.asarray(observations),
             ),
+            runtime.project_state,
         )
         if operator.requires_interval_summary_handling
         else None
     )
-    runtime = ParticleTarget(
-        parameters,
-        context_fn,
-        declared_model,
-        observations,
-        times,
-        compiled_dynamical_model.state_space,
-        intervals,
-        exact_constraints,
-    )
+    runtime = replace(runtime, intervals=intervals)
     return ParticleProblem(runtime, site_info, public_sites, exact_constraints)

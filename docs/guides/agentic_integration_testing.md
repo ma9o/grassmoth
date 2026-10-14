@@ -20,7 +20,7 @@ including standalone notebook support tests. The top-level groups are `contract`
 |-------|---------------|--------|
 | `contract` | — | Isolated routing, validation, schema, identity, and projection without scientific numerical execution |
 | `inference` | `sampling` | Parameterization, exact probability targets, particle sampling, and posterior diagnostics |
-| `inference` | `warmup` | Laplace and optimizer initialization, local linearization, solver references, and gradients |
+| `inference` | `warmup` | LAPS initialization, proposal preconditioning, and exact joint-density gradients |
 | `inference` | `simulation` | State dynamics, deterministic/stochastic trajectories, steady states, and interventions |
 | `inference` | `predictive` | Prior/posterior predictive generation, observation sampling, and predictive diagnostics |
 | `inference` | `recovery` | Fitted accuracy and uncertainty checked against known generating parameters |
@@ -46,7 +46,7 @@ child workflows to `workflow`, even without a complete study journey.
 
 Use function or class markers in mixed files;
 a module's `pytestmark` applies only when every test shares the concern. A test can
-have multiple owners: the MAP recovery suite carries both
+have multiple owners: an initialization recovery test carries both
 `pytest.mark.inference(concern="warmup")` and `pytest.mark.inference(concern="recovery")`.
 The [collection check](../../apps/data-pipeline/conftest.py) rejects unowned cases
 and missing or invalid inference concerns before `-m` or `-k` can deselect them.
@@ -87,7 +87,7 @@ which concerns need to run.
 |------------------|--------------------|
 | Schema, routing, validation, identity, or projection | Affected `contract` tests |
 | Exact density, parameterization, particle sampling, or posterior diagnostics | `inference(concern='sampling')` and affected contracts |
-| Initialization, Laplace, optimization, or solver references | `inference(concern='warmup')` and affected contracts |
+| Initialization, proposal preconditioning, or joint-density gradients | `inference(concern='warmup')` and affected contracts |
 | Dynamics, trajectories, steady states, or interventions | `inference(concern='simulation')` and affected contracts |
 | Prior/posterior prediction, observation draws, or predictive checks | `inference(concern='predictive')` and affected contracts |
 | Estimation accuracy or uncertainty against known generating parameters | `inference(concern='recovery')` plus the changed fitting or warmup concern |
@@ -105,7 +105,7 @@ uncertainty, rather than merely because it touches a fitting-related file.
 For a file-scoped Python run, invoke pytest directly from `apps/data-pipeline`:
 
 ```bash
-uv run pytest tests/models/ssm/test_transition_builder.py -m "contract or inference(concern='warmup')" -n 0
+uv run pytest tests/models/ssm/test_laps_initialization.py -m "contract or inference(concern='warmup')" -n 0
 uv run pytest tests/models/ssm/test_emissions.py tests/models/ssm/test_observation_sampling.py -m "contract or inference(concern='sampling') or inference(concern='predictive')"
 uv run pytest tests/test_concerns.py -m contract -n 0
 ```

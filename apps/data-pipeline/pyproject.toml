@@ -37,9 +37,7 @@ dependencies = [
     "y0 @ git+https://github.com/y0-causal-inference/y0.git",
     "temporalio>=1.33.0",
     "pygit2>=1.20.1",
-    "optimistix>=0.1.0",
     "sympy>=1.14.0",
-    "lineax>=0.1.1",
     "msgpack>=1.2.3",
     "pytimeparse2>=1.7.1",
     "python-dateutil>=2.9.0.post0",
@@ -385,7 +383,7 @@ replace-imports-with-any = [
 ]
 
 [tool.pytest.ini_options]
-addopts = "-n auto -m 'not (inference or workflow)' --strict-markers --tb=short -ra --instafail --timeout=300 --durations=10 --jaxtyping-packages=nof1_causal_lab.models.ssm.covariance_utils,nof1_causal_lab.models.ssm.dynamics.vector_field,nof1_causal_lab.models.ssm.execution.emissions,nof1_causal_lab.models.ssm.execution.observation_kernel_helpers,nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs._math,nof1_causal_lab.models.ssm.inference.targets.transitions,beartype.beartype"
+addopts = "-n auto -m 'not (inference or workflow)' --strict-markers --tb=short -ra --instafail --timeout=300 --durations=10 --jaxtyping-packages=nof1_causal_lab.models.ssm.covariance_utils,nof1_causal_lab.models.ssm.dynamics.vector_field,nof1_causal_lab.models.ssm.execution.emissions,nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs._math,beartype.beartype"
 markers = [
     "contract: isolated routing, validation, schema, identity, and projection without scientific numerical execution",
     "inference(concern): scientific numerical execution; concern must be sampling, warmup, simulation, predictive, or recovery",

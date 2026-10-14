@@ -2,18 +2,6 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from nof1_causal_lab.compute.budget import ComputeBudget
-    from nof1_causal_lab.models.ssm.autoreparam import Strategy
-    from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
-    from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
-    from nof1_causal_lab.models.ssm.runtime import BoundPanel
-    from nof1_causal_lab.sampler_config import SamplerSpec
-
 import logging
 from typing import TYPE_CHECKING
 
@@ -26,6 +14,7 @@ from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.posterior_diagnostics import (
     ParticleSamplerDiagnostics,
 )
+from nof1_causal_lab.models.ssm.compile.state_space import SequentialRecurrences
 from nof1_causal_lab.models.ssm.inference.latent_diagnostics import LatentChainEvidence
 from nof1_causal_lab.models.ssm.inference.methods._pmcmc_shared import (
     build_pmcmc_mcmc_result,
@@ -51,11 +40,21 @@ from nof1_causal_lab.models.ssm.inference.types import (
     ProductionDiagnostics,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
+from nof1_causal_lab.models.ssm.inference.warmup.laps import prepare_laps_initialization
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
-from nof1_causal_lab.models.ssm.inference.warmup.parameter_warmup import prepare_parameter_warmup
 from nof1_causal_lab.models.ssm.transition_kinds import (
     LATENT_TRANSITION_EULER_MARUYAMA,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.models.ssm.autoreparam import Strategy
+    from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
+    from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
+    from nof1_causal_lab.models.ssm.runtime import BoundPanel
+    from nof1_causal_lab.sampler_config import SamplerSpec
 
 logger = logging.getLogger(__name__)
 
@@ -70,13 +69,22 @@ def fit_marginal_particle_gibbs(
     clock: Callable[[], float],
 ) -> ParticleMCMCPosterior | InitializationFailure:
     """Run exact particle inference with resolved choices and owned warmup outputs."""
+    recurrence = panel.compiled_dynamical_model.state_space.recurrence
+    if isinstance(recurrence, SequentialRecurrences):
+        names = tuple(
+            panel.compiled_dynamical_model.states[index].name for index in recurrence.indices
+        )
+        return InitializationFailure.unavailable(
+            "DSMC requires deterministic recurrences that are affine in their deterministic "
+            "coordinates to preserve O(log T) parallel depth; unsupported states: "
+            + ", ".join(names)
+        )
     observations = panel.observations
     options = sampler.marginal_particle_gibbs
-    initial_latent_trajectories = None
     overall_t0 = clock()
     logger.info(
         "marginal_particle_gibbs entry: chains=%d warmup=%d samples=%d T=%d "
-        "n_manifest=%d num_particles=%d n_parameter_particles=%d init_method=%s",
+        "n_manifest=%d num_particles=%d n_parameter_particles=%d",
         sampler.num_chains,
         sampler.num_warmup,
         sampler.num_samples_per_chain,
@@ -84,17 +92,15 @@ def fit_marginal_particle_gibbs(
         int(observations.shape[1]) if observations.ndim >= 2 else 0,
         sampler.num_particles,
         options.n_parameter_particles,
-        options.init_method,
     )
 
     base_key = random.PRNGKey(sampler.seed)
-    trace_key, pathfinder_key, pf_sample_key = random.split(base_key, 3)
+    trace_key, laps_key, sampling_key = random.split(base_key, 3)
 
     phase_t0 = clock()
     logger.info("phase 1/4: building marginalized Particle Gibbs runtime bundle...")
     # The model is a continuous-time nonlinear SDE; the particle smoother always
     # discretizes it with the nonlinearity-preserving Euler-Maruyama scheme.
-    # Linearised discretisation is confined to the warmup/init backend.
     scheme = LATENT_TRANSITION_EULER_MARUYAMA
     bundle = build_particle_problem(
         priors,
@@ -111,79 +117,35 @@ def fit_marginal_particle_gibbs(
     )
 
     phase_t0 = clock()
-    warmup_result = prepare_parameter_warmup(
-        priors,
-        panel,
+    logger.info("phase 2/4: joint LAPS initialization (ensemble=%d)", options.laps.ensemble_size)
+    initialization = prepare_laps_initialization(
+        bundle.runtime,
         compute_budget=compute_budget,
-        bundle=bundle.runtime,
-        method_label="marginal_particle_gibbs",
-        phase_label="phase 2/4",
-        trace_key=trace_key,
-        pathfinder_key=pathfinder_key,
-        sample_key=pf_sample_key,
-        reparam=reparam,
-        seed=sampler.seed,
-        n_ieks_iters=options.n_ieks_iters,
+        spec=options.laps,
+        key=laps_key,
         num_chains=sampler.num_chains,
-        init_method=options.init_method,
-        laps_spec=options.laps,
-        initial_positions_override=None,
-        parameter_preconditioner_chol=None,
-        auto_preconditioner_method=options.auto_preconditioner_method,
-        auto_preconditioner_maxiter=options.auto_preconditioner_maxiter,
-        pathfinder_num_elbo_samples=options.pathfinder_num_elbo_samples,
-        pathfinder_maxiter=options.pathfinder_maxiter,
-        n_pathfinder_starts=options.n_pathfinder_starts,
-        pathfinder_parallel_workers=options.pathfinder_parallel_workers,
-        pathfinder_init_scale=options.pathfinder_init_scale,
-        clock=clock,
     )
-    if isinstance(warmup_result, InitializationFailure):
-        return warmup_result
-    init_positions = warmup_result.init_positions
-    parameter_preconditioner_chol = warmup_result.preconditioner_chol
-    laps_initialization = warmup_result.laps_initialization
-    if laps_initialization is not None:
-        initial_latent_trajectories = laps_initialization.paths
-    logger.info("phase 2/4: parameter warmup ready in %.1fs", (clock() - phase_t0))
+    if isinstance(initialization, InitializationFailure):
+        return initialization
+    measured = initialization.diagnostics
+    logger.info(
+        "phase 2/4: LAPS ready in %.1fs (dim=%d, ensemble=%d, unadjusted=%d, adjusted=%d, "
+        "early_stop=%s, steps=%.4g/%.4g, adjusted_accept=%.3f)",
+        (clock() - phase_t0),
+        measured.joint_dimension,
+        measured.ensemble_size,
+        measured.unadjusted_steps,
+        measured.adjusted_steps,
+        measured.early_stopped,
+        measured.unadjusted_step_size,
+        measured.adjusted_step_size,
+        measured.adjusted_acceptance,
+    )
 
     pilot_means = pilot_vars = pilot_wide_vars = None
-    pilot_positions = (
-        init_positions
-        if init_positions is not None
-        else jnp.broadcast_to(
-            bundle.runtime.initial_position,
-            (sampler.num_chains, int(bundle.runtime.initial_position.shape[0])),
-        )
-    )
     if options.dsmc_leaf_proposal == "paid_mix" or options.tempering is not None:
-        # Fixed proposal moments come from the chosen initialization. LAPS owns
-        # complete paired starts, so neither its paths nor its moments are
-        # replaced by a second initializer.
-        if laps_initialization is not None:
-            pilot_means = laps_initialization.pilot_mean
-            cross_chain_var = laps_initialization.pilot_variance
-        else:
-            from nof1_causal_lab.models.ssm.inference.warmup.latent_init import (
-                compute_ieks_latent_paths,
-            )
-
-            ieks_paths = compute_ieks_latent_paths(
-                priors,
-                panel,
-                positions=pilot_positions,
-                trace_key=trace_key,
-                reparam=reparam,
-                n_ieks_iters=options.n_ieks_iters,
-            )
-            if bundle.exact_constraints is not None:
-                ieks_paths = bundle.exact_constraints.project(ieks_paths)
-            initial_latent_trajectories = ieks_paths
-            pilot_means = jnp.mean(ieks_paths, axis=0)
-            cross_chain_var = jnp.var(ieks_paths, axis=0)
-        temporal_var = jnp.var(pilot_means, axis=0)
-        var_floor = 1e-6 * (1.0 + temporal_var)
-        core_var = temporal_var[None, :] + cross_chain_var + var_floor[None, :]
+        pilot_means = initialization.pilot_mean
+        core_var = initialization.pilot_proposal_variance
         pilot_vars = options.paid_mix_pilot_var_scale * core_var
         pilot_wide_vars = options.paid_mix_wide_mult * core_var
 
@@ -200,7 +162,7 @@ def fit_marginal_particle_gibbs(
             target_accept=options.param_target_accept,
             min_scale=options.param_step_size_min,
             max_scale=options.param_step_size_max,
-            parameter_preconditioner_chol=parameter_preconditioner_chol,
+            parameter_preconditioner_chol=initialization.parameter_chol,
             parameter_proposal=options.parameter_proposal,
             latent_delta=options.latent_delta,
             amala_delta_init=options.amala_delta_init,
@@ -221,13 +183,9 @@ def fit_marginal_particle_gibbs(
             pilot_means=pilot_means,
             pilot_vars=pilot_vars,
             pilot_wide_vars=pilot_wide_vars,
-            # A provided initialization also supplies a fixed proposal oracle. It
+            # LAPS also supplies a fixed proposal oracle. It
             # stays fixed across chains and never follows the sampled trajectory.
-            parameter_reference_path=(
-                None
-                if initial_latent_trajectories is None
-                else jnp.asarray(initial_latent_trajectories)[0]
-            ),
+            parameter_reference_path=initialization.paths[0],
             diagnostic_metrics_all=options.diagnostic_metrics_all,
             diagnostic_metrics=options.diagnostic_metrics,
         )
@@ -235,12 +193,11 @@ def fit_marginal_particle_gibbs(
     kernel = make_kernel(bundle.runtime)
     tempering = None
     if options.tempering is not None:
-        assert initial_latent_trajectories is not None  # Tempering owns an initialized path bank.
         reference = build_gaussian_reference(
             bundle.runtime,
-            positions=pilot_positions,
-            paths=initial_latent_trajectories,
-            parameter_chol=parameter_preconditioner_chol,
+            positions=initialization.positions,
+            paths=initialization.paths,
+            parameter_chol=initialization.parameter_chol,
             scale=options.tempering.reference_scale,
         )
         tempering = ReplicaExchangeKernel(bundle.runtime, reference, make_kernel, options.tempering)
@@ -250,12 +207,10 @@ def fit_marginal_particle_gibbs(
         num_warmup=sampler.num_warmup,
         num_samples=sampler.num_samples_per_chain,
         num_chains=sampler.num_chains,
-        seed=sampler.seed,
-        init_scale=options.init_scale,
+        key=sampling_key,
         adaptation_rate=options.adaptation_rate,
         retain_latent_paths=sampler.retain_latent_paths,
-        init_positions=init_positions,
-        initial_latent_trajectories=initial_latent_trajectories,
+        initialization=initialization,
         compute_latent_posterior_summary=options.compute_latent_posterior_summary,
         adaptation_scheme=options.adaptation_scheme,
         tempering=tempering,
@@ -306,7 +261,7 @@ def fit_marginal_particle_gibbs(
         chain_post_warmup_complete_log_posterior_mean=jax.device_get(
             run_result.post_warmup_complete_log_posterior_mean
         ).tolist(),
-        parameter_warmup=warmup_result.warmup_diagnostics,
+        initialization=initialization.diagnostics,
         tempering=run_result.tempering,
         latent_move_rms_mean=float(jnp.mean(summary_extra_fields["latent_move_rms"]))
         if "latent_move_rms" in summary_extra_fields
@@ -335,9 +290,9 @@ def fit_marginal_particle_gibbs(
         latent_chains=LatentChainEvidence(
             paths=np.asarray(run_result.latent_paths),
             free_mask=np.asarray(
-                bundle.runtime.independent_mask
+                bundle.runtime.state_density_mask
                 if bundle.exact_constraints is None
-                else bundle.runtime.independent_mask & bundle.exact_constraints.free_mask
+                else bundle.runtime.state_density_mask & bundle.exact_constraints.free_mask
             ),
             states=tuple(
                 (ConstructRef(id=s.id), s.name) for s in panel.compiled_dynamical_model.states
@@ -355,7 +310,7 @@ def fit_marginal_particle_gibbs(
         all_complete_log_posterior_history=run_result.all_complete_log_posterior_history,
         latent_posterior_summary=run_result.latent_posterior_summary,
         exact_observation_rows=jnp.any(
-            ~bundle.exact_constraints.free_mask & bundle.runtime.independent_mask, axis=-1
+            ~bundle.exact_constraints.free_mask & bundle.runtime.state_density_mask, axis=-1
         )
         if bundle.exact_constraints is not None
         else None,

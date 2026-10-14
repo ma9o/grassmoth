@@ -2,14 +2,10 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, override
 
-import dynestyx as dsx
 import jax.numpy as jnp
-import jax.random as random
-import jax.scipy.linalg as jla
 import numpy as np
-from dynestyx.inference.configs.discretizer import ExactAffineConfig
 
 from nof1_causal_lab.actions.effects import ActionEffects
 from nof1_causal_lab.artifacts.posterior import InferenceReportCore
@@ -23,7 +19,6 @@ from nof1_causal_lab.numpyro_json import empirical_atoms
 from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.state import ArtifactRecord
 from tests.git_fixtures import git_oid
-from tests.model_fixtures import _make_lgss_data_model_fixture
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -182,74 +177,12 @@ def particle_posterior(draws):
     )
 
 
-def affine_test_evolution(A, covariance, b=None, B=None):
-    """Library-owned exact affine reference, restricted to test data and comparisons."""
-    return dsx.discretize_state_evolution(
-        dsx.StochasticContinuousTimeStateEvolution(
-            drift=dsx.AffineDrift(A=A, b=b, B=B),
-            diffusion=dsx.FullDiffusion(jnp.linalg.cholesky(covariance)),
-        ),
-        ExactAffineConfig(covariance_jitter=0.0),
-    )
-
-
 class MinimalReparam(Strategy):
     """Test-owned minimal reparameterization strategy."""
 
     @override
     def configure(self, msg: Message):
         return _minimal_reparam(msg["fn"], is_observed=msg.get("is_observed", False))
-
-
-def make_lgss_data(
-    *,
-    T: int = 100,
-    dt: float = 1.0,
-    decay_diag: float = -0.3,
-    diff_sd: float = 0.3,
-    obs_sd: float = 0.5,
-    seed: int = 42,
-) -> dict[str, Any]:
-    """Build 1D linear-Gaussian SSM data plus a free-parameter DynamicalModelSpec.
-
-    Returns a dict with ``observations``, ``times``, ``spec``, the true
-    parameter values, and ``n_latent`` for convenience. Used by recovery
-    checks that fit the same canonical 1D model with different inference
-    methods.
-    """
-    n_latent, n_manifest = 1, 1
-
-    true_dynamics = jnp.array([[decay_diag]])
-    true_diff_cov = jnp.array([[diff_sd**2]])
-    true_obs_var = jnp.array([[obs_sd**2]])
-
-    parameters = affine_test_evolution(true_dynamics, true_diff_cov).params_at(0.0, dt)
-    Ad, Qd = parameters.A, parameters.cov
-    Qd_chol = jla.cholesky(Qd + jnp.eye(n_latent) * 1e-8, lower=True)
-    R_chol = jla.cholesky(true_obs_var, lower=True)
-
-    key = random.PRNGKey(seed)
-    states = [jnp.zeros(n_latent)]
-    for _ in range(T - 1):
-        key, nk = random.split(key)
-        states.append(Ad @ states[-1] + Qd_chol @ random.normal(nk, (n_latent,)))
-    latent = jnp.stack(states)
-
-    key, obs_key = random.split(key)
-    observations = latent + random.normal(obs_key, (T, n_manifest)) @ R_chol.T
-    times = jnp.arange(T, dtype=float) * dt
-
-    dynamical_model_spec = _make_lgss_data_model_fixture()
-
-    return {
-        "observations": observations,
-        "times": times,
-        "spec": dynamical_model_spec,
-        "true_decay_diag": decay_diag,
-        "true_diff_diag": diff_sd,
-        "true_obs_sd": obs_sd,
-        "n_latent": n_latent,
-    }
 
 
 def make_observation_support_runtime(

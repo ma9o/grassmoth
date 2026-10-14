@@ -1,4 +1,4 @@
-"""Tests for vector-field linearisation and component-native dynamics specs."""
+"""Tests for structural tracing and component-native dynamics specs."""
 
 from __future__ import annotations
 
@@ -14,14 +14,11 @@ from nof1_causal_lab.artifacts.identity import scientific_id
 from nof1_causal_lab.models.ssm.dynamics import (
     DynamicsSpec,
     Intervention,
-    StateDecay,
-    VectorField,
     VectorFieldArgs,
     compile_dynamics,
-    infer_linearisation,
 )
 from nof1_causal_lab.models.ssm.model import numpyro_model
-from tests.dynamics_fixtures import decay_term, hill_term, intercept_term, linear_term
+from tests.dynamics_fixtures import decay_term, intercept_term, linear_term
 from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture
 from tests.model_fixtures import load_model_fixture
 
@@ -34,46 +31,6 @@ def _nonlinear_dynamics_uses_vector_field_backend_method_model_fixture() -> Dyna
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
-
-
-@pytest.mark.contract
-class TestInferLinearisation:
-    def test_state_decay_only_is_constant(self):
-        field = VectorField(
-            n_latent=2,
-            components=(
-                StateDecay(target=0),
-                StateDecay(target=1),
-            ),
-        )
-        assert infer_linearisation(field) == "constant"
-
-    def test_expression_terms_use_trajectory_initialization(self):
-        spec = DynamicsSpec(
-            n_latent=2,
-            components=(
-                *(decay_term(target=i) for i in range(2)),
-                linear_term(source=0, target=1),
-            ),
-        )
-        compiled = compile_dynamics(spec)
-        # Generic expressions take the local initialization path; exact execution
-        # never substitutes a linear drift based on their scientific role labels.
-        assert infer_linearisation(compiled.vector_field) == "trajectory"
-
-    def test_hill_makes_it_trajectory(self):
-        spec = DynamicsSpec(
-            n_latent=2,
-            components=(
-                *(decay_term(target=i) for i in range(2)),
-                hill_term(
-                    source=0,
-                    target=1,
-                ),
-            ),
-        )
-        compiled = compile_dynamics(spec)
-        assert infer_linearisation(compiled.vector_field) == "trajectory"
 
 
 @pytest.mark.inference(concern="simulation")

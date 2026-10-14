@@ -51,8 +51,8 @@ class LapsCoordinates:
         """MCLMC needs at least two dimensions; independent normal auxiliaries fill tiny models."""
         return max(2, self.dimension)
 
-    def decode(self, position: jax.Array) -> tuple[jax.Array, jax.Array]:
-        """Recover parameters and their matching exact-model trajectory."""
+    def _coordinates(self, position: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Recover parameters and affine path coordinates before deterministic replay."""
         innovations = jnp.zeros(self.path_center.size, dtype=position.dtype)
         innovations = innovations.at[self.free_indices].set(
             position[self.parameter_dimension : self.dimension]
@@ -60,13 +60,20 @@ class LapsCoordinates:
         innovations = innovations.reshape(self.path_center.shape)
         parameters = self.parameter_center + position[: self.parameter_dimension]
         coordinates = self.path_center + jnp.einsum("tij,tj->ti", self.path_chol, innovations)
+        return parameters, coordinates
+
+    def decode(self, position: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Recover parameters and their matching exact-model trajectory."""
+        parameters, coordinates = self._coordinates(position)
         context = self.target.context(parameters, self.target.times)
         path = self.target.replay_path(context, coordinates)
         return parameters, path
 
     def log_density(self, position: jax.Array) -> jax.Array:
         """Score the exact nonlinear model after the frozen coordinate change."""
-        parameters, path = self.decode(position)
+        # The exact joint target owns deterministic replay. Decoding here would
+        # reconstruct and differentiate through the same trajectory twice.
+        parameters, path = self._coordinates(position)
         log_jacobian = jnp.sum(
             jnp.where(
                 self.free_mask,
@@ -122,6 +129,13 @@ class LapsInitializationResult:
     pilot_mean: jax.Array
     pilot_variance: jax.Array
     diagnostics: LapsInitializationDiagnostics
+
+    @property
+    def pilot_proposal_variance(self) -> jax.Array:
+        """Fixed path proposal spread across ensemble members and observation times."""
+        temporal_variance = jnp.var(self.pilot_mean, axis=0)
+        variance_floor = 1e-6 * (1.0 + temporal_variance)
+        return self.pilot_variance + temporal_variance[None, :] + variance_floor[None, :]
 
 
 def prepare_laps_initialization(

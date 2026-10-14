@@ -6,11 +6,19 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from nof1_causal_lab.artifacts.construct import replace_constructs
+from nof1_causal_lab.artifacts.construct import CausalEdgeSpec, ConstructSpec, replace_constructs
 from nof1_causal_lab.artifacts.expressions import LiteralExpression, coefficient, state
-from nof1_causal_lab.artifacts.identity import MechanismId
-from nof1_causal_lab.artifacts.likelihood import LikelihoodSpec, NormalLawSpec
-from nof1_causal_lab.artifacts.mechanism import DriftMechanismSpec
+from nof1_causal_lab.artifacts.identity import ConstructId, EdgeId, MechanismId
+from nof1_causal_lab.artifacts.likelihood import DeltaLawSpec, LikelihoodSpec, NormalLawSpec
+from nof1_causal_lab.artifacts.mechanism import DriftMechanismSpec, PotentialMechanismSpec
+from nof1_causal_lab.models.ssm.compile.state_space import (
+    ParallelRecurrences,
+    SequentialRecurrences,
+)
+from nof1_causal_lab.models.ssm.execution.supported_normal import SupportedNormal
+from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.fit import (
+    fit_marginal_particle_gibbs,
+)
 from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
@@ -18,10 +26,39 @@ from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.runner
     _initialize_chain_state,
 )
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
+from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
+from nof1_causal_lab.sampler_config import SamplerSpec
+from tests.compute_fixtures import COMPUTE_BUDGET
 from tests.helpers import make_model
 from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture
 
 pytestmark = pytest.mark.inference(concern="sampling")
+
+
+def test_supported_density_and_gradients_preserve_correlated_nonleading_coordinates():
+    target = _problem(_model())[1].runtime
+    active = jnp.array([1, 3])
+    mean = jnp.array([0.0, 0.2, 0.0, -0.4])
+
+    def factor(parameters):
+        return jnp.array([[jnp.exp(parameters[0]), 0.0], [parameters[1], jnp.exp(parameters[2])]])
+
+    def score(parameters, values):
+        chol = factor(parameters)
+        covariance = jnp.zeros((4, 4)).at[jnp.ix_(active, active)].set(chol @ chol.T)
+        law = SupportedNormal(mean, covariance, (1, 3))
+        return target._modeled_log_prob(law, values, (1, 3))
+
+    def analytic(parameters, values):
+        residual = jnp.linalg.solve(factor(parameters), values[active] - mean[active])
+        return -jnp.log(2 * jnp.pi) - parameters[0] - parameters[2] - 0.5 * residual @ residual
+
+    parameters = jnp.array([-0.7, 0.3, 0.2])
+    values = jnp.array([0.0, 0.8, 0.0, -0.1])
+    actual = jax.jit(jax.value_and_grad(score, argnums=(0, 1)))(parameters, values)
+    expected = jax.value_and_grad(analytic, argnums=(0, 1))(parameters, values)
+    for measured, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        np.testing.assert_allclose(measured, reference, rtol=2e-6, atol=2e-6)
 
 
 def _model():
@@ -92,9 +129,9 @@ def _problem(model, observations=None):
     )
 
 
-def _initial(target, path):
+def _initial(target, path, *, position=None):
     return _initialize_chain_state(
-        target.initial_position,
+        target.initial_position if position is None else position,
         observations=target.observations,
         times=target.times,
         target=target,
@@ -115,7 +152,8 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
     b, x, a, y = (indices[n] for n in ("baseline", "driver", "total", "outcome"))
     assert set(compiled.state_space.initial) == {b, x, y}
     assert set(compiled.state_space.transition) == {x, y}
-    context = target.context(target.initial_position, target.times)
+    position = target.initial_position.at[-1].set(0.2)
+    context = target.context(position, target.times)
     coordinates = jnp.zeros((4, 4)).at[0, b].set(0.2).at[:, x].set(jnp.array([1.0, 2.0, 3.0, 4.0]))
     path = target.replay_path(context, coordinates)
     np.testing.assert_array_equal(path[:, b], jnp.full(4, coordinates[0, b]))
@@ -192,7 +230,7 @@ def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
 
 @pytest.mark.inference(concern="recovery")
 @pytest.mark.parametrize("parameter_mean", [False, True])
-def test_replayed_static_sampler_recovers_one_shared_gaussian_unknown(parameter_mean):
+def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_mean):
     model = _model()
     baseline = next(c for c in model.constructs if c.name == "baseline")
     baseline = baseline.revised(
@@ -259,8 +297,205 @@ def test_replayed_static_sampler_recovers_one_shared_gaussian_unknown(parameter_
     assert np.var(samples) == pytest.approx(variance, abs=0.005)
 
 
+def test_static_promotion_keeps_correlated_initial_density_and_shared_coordinate():
+    model = _model()
+    baseline = next(c for c in model.constructs if c.name == "baseline")
+    driver = next(c for c in model.constructs if c.name == "driver")
+    driver = driver.revised(
+        coefficients=(
+            *driver.coefficients,
+            coefficient(0.4, "initial_correlation", construct_ids=(baseline.id,)),
+        )
+    )
+    common = ConstructSpec(
+        id=ConstructId("construct:initial_common_cause"),
+        name="initial_common_cause",
+        description="Marginalized root of the correlated initial law",
+        role="endogenous",
+        temporal_status="time_invariant",
+    )
+    edges = replace_constructs(model.edges, (driver,)) + tuple(
+        CausalEdgeSpec(
+            id=EdgeId("edge:initial_common_cause_" + child.name),
+            cause=common,
+            effect=child,
+            description="Shared initial cause",
+        )
+        for child in (baseline, driver)
+    )
+    compiled, problem = _problem(model.with_entities(edges=edges))
+    target = problem.runtime
+    indices = {item.name: i for i, item in enumerate(compiled.states)}
+    b, x, y = (indices[name] for name in ("baseline", "driver", "outcome"))
+    assert target.initial_position.size == 1
+    assert not np.any(target.independent_mask[:, b])
+    np.testing.assert_array_equal(target.state_density_mask[:, b], [True, False, False, False])
+    position = jnp.array([0.7])
+    context = target.context(position, target.times)
+    coordinates = jnp.zeros((4, 4)).at[:, x].set(-0.2).at[:, y].set(0.3)
+    path = target.replay_path(context, coordinates)
+    np.testing.assert_array_equal(path[:, b], jnp.full(4, position[0]))
+    expected = dist.MultivariateNormal(
+        jnp.zeros(3),
+        covariance_matrix=jnp.array([[1.0, 0.4, 0.0], [0.4, 1.0, 0.0], [0.0, 0.0, 1.0]]),
+    ).log_prob(jnp.array([0.7, -0.2, 0.3]))
+    np.testing.assert_allclose(
+        target.initial_log_prob(context, coordinates[0]), expected, atol=2e-6
+    )
+
+
+def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_subsystem():
+    model = _model()
+    assert isinstance(_problem(model)[0].state_space.recurrence, ParallelRecurrences)
+    driver = next(c for c in model.constructs if c.name == "driver")
+    driver = driver.revised(
+        dynamics=(
+            DriftMechanismSpec(
+                id=MechanismId("mechanism:nonlinear_driver"), expression=-(state(driver.id) ** 3)
+            ),
+        )
+    )
+    model = model.with_entities(edges=replace_constructs(model.edges, (driver,)))
+    assert isinstance(_problem(model)[0].state_space.recurrence, ParallelRecurrences)
+    total = next(c for c in model.constructs if c.name == "total")
+    potential = total.revised(
+        dynamics=(
+            PotentialMechanismSpec(
+                id=MechanismId("mechanism:quadratic_total"), expression=state(total.id) ** 2 * 0.2
+            ),
+        )
+    )
+    compiled, problem = _problem(
+        model.with_entities(edges=replace_constructs(model.edges, (potential,)))
+    )
+    assert isinstance(compiled.state_space.recurrence, ParallelRecurrences)
+    indices = {item.name: i for i, item in enumerate(compiled.states)}
+    coordinates = (
+        jnp.zeros((4, len(compiled.states)))
+        .at[:, indices["driver"]]
+        .set(jnp.array([0.5, -0.2, 0.8, 1.0]))
+    )
+    target = problem.runtime
+    path = target.replay_path(target.context(target.initial_position, target.times), coordinates)
+    np.testing.assert_allclose(path[:, indices["total"]], [0.0, 0.5, 0.1, 0.86], atol=1e-6)
+    total = total.revised(
+        dynamics=(
+            DriftMechanismSpec(
+                id=MechanismId("mechanism:nonlinear_total"), expression=state(total.id) ** 2
+            ),
+        )
+    )
+    prepared = compile_fit_fixture(
+        model.with_entities(edges=replace_constructs(model.edges, (total,)))
+    )
+    compiled = prepared.compiled_dynamical_model
+    assert isinstance(compiled.state_space.recurrence, SequentialRecurrences)
+    panel = bind_panel_fixture(
+        compiled, jnp.full((4, len(compiled.observations)), jnp.nan), jnp.arange(4.0)
+    )
+    failure = fit_marginal_particle_gibbs(
+        prepared.prior_runtime_bundle,
+        panel,
+        compute_budget=COMPUTE_BUDGET,
+        sampler=SamplerSpec(),
+        clock=lambda: 0.0,
+    )
+    assert isinstance(failure, InitializationFailure)
+    assert "O(log T)" in failure.message
+    assert "total" in failure.message
+
+
+@pytest.mark.inference(concern="recovery")
+def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution():
+    compiled, problem = _problem(_model())
+    target = problem.runtime
+    indices = {item.name: i for i, item in enumerate(compiled.states)}
+    b, x, a, y = (indices[name] for name in ("baseline", "driver", "total", "outcome"))
+    kernel = build_marginal_particle_gibbs_kernel(
+        target,
+        # Cross a root-score batch boundary and exercise its final partial batch.
+        num_particles=9,
+        num_parameter_particles=2,
+        param_step_size=0.1,
+        parameter_proposal="random_walk",
+        dsmc_leaf_proposal="amala_exact",
+    )
+
+    def draw_and_step(key):
+        draw_key, step_key = jax.random.split(key)
+        noises = jax.random.normal(draw_key, (4, 3))
+        path = jnp.zeros((4, 4)).at[:, b].set(noises[0, 0])
+        path = path.at[0, x].set(noises[0, 1]).at[0, y].set(noises[0, 2])
+        for t in range(1, 4):
+            path = path.at[t, x].set(path[t - 1, x] + path[0, b] + 0.4 * noises[t, 1])
+            path = path.at[t, a].set(path[t - 1, a] + path[t - 1, x])
+            path = path.at[t, y].set(path[t - 1, y] + path[t - 1, a] + 0.4 * noises[t, 2])
+        initial = _initial(target, path, position=path[0, b : b + 1])._replace(
+            latent_delta=jnp.full(4, 0.5)
+        )
+        after, _ = kernel.step_fn(initial, step_key)
+        chosen = jnp.array([b, x, a, y])
+        return path[-1, chosen], after.latent_trajectory[-1, chosen]
+
+    previous, updated = jax.jit(jax.vmap(draw_and_step))(
+        jax.random.split(jax.random.key(814), 1024)
+    )
+    before, after = np.asarray(previous), np.asarray(updated)
+    differences = np.concatenate((after - before, after**2 - before**2), axis=1)
+    errors = np.abs(differences.mean(axis=0)) / (
+        differences.std(axis=0, ddof=1) / np.sqrt(len(before))
+    )
+    assert np.max(errors) < 4.5, errors
+
+
+def test_parallel_accumulator_preserves_an_exact_random_initial_value():
+    model = _model()
+    total = next(c for c in model.constructs if c.name == "total")
+    total = total.revised(
+        coefficients=tuple(
+            coefficient(1.0, "initial_scale") if c.role == "initial_scale" else c
+            for c in total.coefficients
+        ),
+        indicators=tuple(
+            indicator.revised(
+                likelihood=LikelihoodSpec(
+                    law=DeltaLawSpec(v=state(total.id)),
+                    reasoning="An exact initial accumulator reading",
+                    standardized=False,
+                )
+            )
+            for indicator in total.indicators
+        ),
+    )
+    model = model.with_entities(edges=replace_constructs(model.edges, (total,)))
+    compiled = compile_fit_fixture(model).compiled_dynamical_model
+    indices = {item.name: i for i, item in enumerate(compiled.states)}
+    column = next(
+        i for i, law in enumerate(compiled.observations) if law.state_index == indices["total"]
+    )
+    compiled, problem = _problem(
+        model, jnp.full((4, len(compiled.observations)), jnp.nan).at[0, column].set(0.7)
+    )
+    target = problem.runtime
+    kernel = build_marginal_particle_gibbs_kernel(
+        target,
+        num_particles=4,
+        num_parameter_particles=2,
+        param_step_size=0.01,
+        exact_constraints=target.exact_constraints,
+    )
+    initial = _initial(target, jnp.zeros((4, len(compiled.states))))
+    after, _ = jax.jit(kernel.step_fn)(initial, jax.random.key(582))
+    path = after.latent_trajectory
+    assert np.isfinite(after.complete_log_posterior)
+    np.testing.assert_allclose(
+        path[:, indices["total"]],
+        jnp.concatenate((jnp.array([0.7]), 0.7 + jnp.cumsum(path[:-1, indices["driver"]]))),
+        atol=1e-6,
+    )
+
+
 def test_exact_static_readings_share_one_value_and_inconsistent_constraints_are_rejected():
-    from nof1_causal_lab.artifacts.likelihood import DeltaLawSpec
     from nof1_causal_lab.models.ssm.inference.conditioning import compile_exact_state_constraints
     from nof1_causal_lab.models.ssm.preflight import (
         ObservationPreflightFailure,

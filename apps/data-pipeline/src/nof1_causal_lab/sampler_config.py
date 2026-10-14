@@ -10,8 +10,6 @@ from pydantic import Field, FiniteFloat, field_serializer, field_validator
 from nof1_causal_lab.artifacts.base import Value
 
 type DSMCLeafProposal = Literal["amala_exact", "paid_mix"]
-type ParameterInitialization = Literal["random", "pathfinder", "laps"]
-type ParameterPreconditioner = Literal["map", "none", "pathfinder", "laps"]
 
 
 class GaussianReferenceTemperingSpec(Value):
@@ -62,9 +60,9 @@ class MarginalParticleGibbsSpec(Value):
     # (None = all). Blocks of 2-4 sidestep the joint-coherence weight degeneracy of
     # full-state proposals at higher latent dimension.
     latent_block_coords: int | None = None
-    # paid_mix leaf mixture: z-anchored (amala_exact core) + fixed IEKS-pilot
+    # paid_mix leaf mixture: z-anchored (amala_exact core) + fixed LAPS-pilot
     # component + wide tail (weight = 1 - z - pilot). Pilot variances are
-    # pilot_var_scale x the IEKS paths' per-coordinate spread; the wide tail is
+    # pilot_var_scale x the LAPS paths' per-coordinate spread; the wide tail is
     # wide_mult x the same spread.
     paid_mix_z_weight: float = 0.85
     paid_mix_pilot_weight: float = 0.10
@@ -78,19 +76,8 @@ class MarginalParticleGibbsSpec(Value):
     param_target_accept: float = 0.35
     adaptation_rate: float = 0.05
     adaptation_scheme: Literal["simple", "dual_averaging"] = "simple"
-    init_method: ParameterInitialization = "laps"
     laps: LapsInitializationSpec = Field(default_factory=LapsInitializationSpec)
-    pathfinder_num_elbo_samples: int = 20
-    pathfinder_maxiter: int = 20
-    n_pathfinder_starts: int = 8
-    pathfinder_parallel_workers: int | None = Field(default=None, ge=1)
-    pathfinder_init_scale: float | None = 0.1
-    auto_preconditioner_method: ParameterPreconditioner = "laps"
-    auto_preconditioner_maxiter: int = 200
-    init_scale: float = 0.05
     compute_latent_posterior_summary: bool = True
-
-    n_ieks_iters: int = 6
 
     @field_validator("amala_grad_clip", mode="before")
     @classmethod

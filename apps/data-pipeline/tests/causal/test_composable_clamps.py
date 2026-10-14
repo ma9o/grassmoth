@@ -20,8 +20,10 @@ from nof1_causal_lab.models.ssm.counterfactual import (
     vmap_simulate_interventions_from_state,
 )
 from nof1_causal_lab.models.ssm.dynamics import DynamicsDraws, ProcessNoise, VectorField
-from nof1_causal_lab.models.ssm.dynamics.edges import DenseLinear
 from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
+from tests.dynamics_fixtures import (
+    DenseLinear,
+)
 from tests.inference_fixtures import compile_model_fixture
 from tests.model_fixtures import (
     _exact_model_model,

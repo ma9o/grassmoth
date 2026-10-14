@@ -28,7 +28,7 @@ type TransitionLogProbFn = Callable[
 ]
 
 # Paid mixture leaf: the amala_exact z-anchored component plus a FIXED pilot
-# component (IEKS warmup moments) and a wide tail, all inside one paid proposal
+# component (LAPS ensemble moments) and a wide tail, all inside one paid proposal
 # density. Any component that is useless on a given fit costs only its share of
 # proposal mass — never correctness — so the mixture strictly generalizes
 # amala_exact (its z-component alone).
@@ -67,7 +67,7 @@ class MPGibbsStatic(NamedTuple):
     # coordinate-conditional cSMC on the same target.
     latent_block_coords: int | None
     # paid_mix leaf: mixture weights (wide weight = 1 - z - pilot) and the FIXED
-    # per-time pilot moments derived from the IEKS warmup paths.
+    # per-time pilot moments derived from the LAPS ensemble paths.
     paid_mix_z_weight: float
     paid_mix_pilot_weight: float
     # Present only for paid_mix: means, pilot variances, wide-tail variances.
@@ -112,5 +112,4 @@ class SmootherContext(NamedTuple):
     selected_transition_log_probs: Callable[..., jnp.ndarray]
     pairwise_transition_log_probs: Callable[..., jnp.ndarray]
     trajectory_label_log_probs: Callable[..., jnp.ndarray]
-    trajectory_label_log_weights: Callable[[jnp.ndarray], jnp.ndarray]
     intervals: ParticleIntervalObservations | None

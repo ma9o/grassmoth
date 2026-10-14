@@ -18,7 +18,6 @@ from nof1_causal_lab.artifacts.likelihood import (
     DeltaLawSpec,
     DistributionFamily,
     LikelihoodSpec,
-    NormalLawSpec,
     ObservationLawSpec,
 )
 from nof1_causal_lab.models.model_parameters import iter_coefficient_uses
@@ -30,7 +29,6 @@ from nof1_causal_lab.models.model_structure import (
 from nof1_causal_lab.models.ssm import numerics as numeric
 from nof1_causal_lab.models.ssm.execution.observation_model import compile_observation_model
 from nof1_causal_lab.models.ssm.inference import problem as problem_module
-from nof1_causal_lab.models.ssm.inference.backend_factory import initialization_observation_laws
 from nof1_causal_lab.models.ssm.inference.conditioning import compile_exact_state_constraints
 from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs._math import (
     _masked_mean,
@@ -234,10 +232,6 @@ def test_mixed_delta_density_draws_and_missingness_remain_exact():
     assert density(jnp.full(2, jnp.nan), predictor, covariance, jnp.zeros(2)) == 0
     draw = compiled.point_sampler.sample_point(jax.random.key(2), predictor)
     assert draw[0] == predictor[0]
-    with pytest.raises(ValueError, match="no smooth log-density"):
-        kernel.latent_grad_hess_fn(
-            observed, predictor, jnp.eye(2), jnp.zeros(2), covariance, jnp.ones(2)
-        )
 
 
 @pytest.mark.inference(concern="sampling")
@@ -470,26 +464,28 @@ def test_conditioned_target_preserves_initial_and_transition_evidence(point_prob
         ).log_prob(path[index])
     np.testing.assert_allclose(state.trajectory_log_prob, expected, rtol=1e-6)
     assert jnp.isfinite(state.complete_log_posterior)
+    coordinates = path.at[0, 0].set(0.0)
+    np.testing.assert_array_equal(runtime.replay_path(state.latent_context, coordinates), path)
+    np.testing.assert_allclose(
+        runtime.path_log_prob(state.latent_context, coordinates, runtime.observations),
+        expected,
+        rtol=1e-6,
+    )
+    # Emission factors score the supplied state, including exact-reading support.
     assert jnp.isneginf(
-        runtime.path_log_prob(state.latent_context, path.at[0, 0].set(0.0), runtime.observations)
+        runtime.observation_log_probs(state.latent_context, coordinates, runtime.observations)[0]
+    )
+    coordinate_gradient = jax.grad(
+        lambda coords: runtime.path_log_prob(state.latent_context, coords, runtime.observations)
+    )(coordinates)
+    assert jnp.isfinite(coordinate_gradient).all()
+    np.testing.assert_array_equal(
+        coordinate_gradient[~point_problem.exact_constraints.free_mask], 0.0
     )
     derivative = jax.grad(
         lambda z: runtime.log_posterior(z, path, runtime.observations, runtime.times)
     )(runtime.initial_position)
     assert jnp.isfinite(derivative).all()
-
-
-@pytest.mark.contract
-def test_gaussian_view_is_confined_to_warmup(exact_model):
-    compiled_dynamical_model = compile_model_fixture(exact_model)
-    laws = tuple(observation.law for observation in compiled_dynamical_model.observations)
-    warmup_laws = initialization_observation_laws(laws)
-    assert all(isinstance(law, NormalLawSpec) for law in warmup_laws)
-    delta, gaussian = laws[0], warmup_laws[0]
-    assert isinstance(delta, DeltaLawSpec)
-    assert isinstance(gaussian, NormalLawSpec)
-    assert gaussian.loc is delta.v
-    assert numeric.observation_families(compiled_dynamical_model) == ("delta", "gaussian")
 
 
 @pytest.mark.inference(concern="sampling")

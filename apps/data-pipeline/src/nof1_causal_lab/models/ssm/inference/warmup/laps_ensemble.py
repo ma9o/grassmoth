@@ -1,8 +1,8 @@
 """Single-device ensemble execution of BlackJAX's two LAPS initialization phases.
 
-The BlackJAX kernels and adaptation rules are unchanged. A compiled vmap runs
-the ensemble on the selected device, avoiding the library's multi-device
-shard_map requirement on every scan inside a user-supplied density.
+The BlackJAX kernels and adaptation rules are unchanged. Compiled batches run
+the ensemble on the selected device. All members contribute to one adaptation
+update, regardless of the batch width selected from compiler memory estimates.
 """
 
 from __future__ import annotations
@@ -43,13 +43,27 @@ class LapsEnsemble:
 
 
 def _execute[State, Result](
-    function: Callable[[State], Result], initial: State, budget: ComputeBudget
+    function: Callable[[State, int], Result],
+    initial: State,
+    budget: ComputeBudget,
+    *,
+    max_batch_size: int,
 ) -> Result:
-    """Check the complete compiled phase's buffers before executing the ensemble."""
-    compiled = jax.jit(function).lower(initial).compile()
-    if not budget.capacity(compiled_memory(compiled), limit=1):
-        raise MemoryError("The LAPS ensemble exceeds the numerical execution memory budget")
-    return cast("Result", compiled(initial))
+    """Select a fitting batch width while preserving the full ensemble state.
+
+    Compile the largest candidate first: full-state outputs and adaptation
+    history are fixed costs, so scaling a one-member estimate would count them
+    repeatedly. Halving only changes the compiled map width; no kernel executes
+    until the complete phase fits, and no numerical run is retried after OOM.
+    """
+    batch_size = max_batch_size
+    while True:
+        compiled = jax.jit(function, static_argnums=1).lower(initial, batch_size).compile()
+        if budget.capacity(compiled_memory(compiled), limit=1):
+            return cast("Result", compiled(initial))
+        if batch_size == 1:
+            raise MemoryError("The LAPS ensemble exceeds the numerical execution memory budget")
+        batch_size = max(1, batch_size // 2)
 
 
 def run_laps_ensemble(
@@ -65,8 +79,10 @@ def run_laps_ensemble(
     initial_key, burn_key, adjusted_key = jax.random.split(key, 3)
     positions = spec.initial_scale * jax.random.normal(initial_key, (spec.ensemble_size, dimension))
 
-    def initialize(points: jax.Array) -> IntegratorState:
-        values, gradients = jax.vmap(jax.value_and_grad(log_density))(points)
+    def initialize(points: jax.Array, batch_size: int) -> IntegratorState:
+        values, gradients = jax.lax.map(
+            jax.value_and_grad(log_density), points, batch_size=batch_size
+        )
         signs = jnp.where(jnp.mean(-points * gradients, axis=0) < 1, -1.0, 1.0)
         # Rescale before taking the norm, preserving direction without squaring
         # very large scores in the original physical units.
@@ -74,7 +90,7 @@ def run_laps_ensemble(
         momentum = signs * scaled / jnp.linalg.norm(scaled, axis=-1, keepdims=True)
         return IntegratorState(points, momentum, values, gradients)
 
-    state = _execute(initialize, positions, compute_budget)
+    state = _execute(initialize, positions, compute_budget, max_batch_size=spec.ensemble_size)
     if not all(np.isfinite(np.asarray(leaf)).all() for leaf in jax.tree.leaves(state)):
         return InitializationFailure.unavailable(
             "LAPS starts have a non-finite joint density or gradient"
@@ -91,7 +107,7 @@ def run_laps_ensemble(
     )
     burn_kernel = laps_burn_in.build_kernel(log_density, dimension, microcanonical=True)
 
-    def burn(initial: IntegratorState):
+    def burn(initial: IntegratorState, batch_size: int):
         def condition(carry):
             _, tuning, index, keep_going = carry
             return (
@@ -104,8 +120,10 @@ def run_laps_ensemble(
         def step(carry):
             current, tuning, index, _ = carry
             sampling_key, summary_key = jax.random.split(jax.random.fold_in(burn_key, index))
-            current, info = jax.vmap(burn_kernel, in_axes=(0, 0, None))(
-                jax.random.split(sampling_key, spec.ensemble_size), current, tuning
+            current, info = jax.lax.map(
+                lambda member: burn_kernel(member[0], member[1], tuning),
+                (jax.random.split(sampling_key, spec.ensemble_size), current),
+                batch_size=batch_size,
             )
             summaries = jax.vmap(adaptation.summary_statistics_fn, in_axes=(0, 0, None))(
                 current, info, summary_key
@@ -121,7 +139,9 @@ def run_laps_ensemble(
             (initial, adaptation.initial_state, jnp.asarray(0), jnp.asarray(True)),
         )
 
-    state, burn_tuning, steps, _ = _execute(burn, state, compute_budget)
+    state, burn_tuning, steps, _ = _execute(
+        burn, state, compute_budget, max_batch_size=spec.ensemble_size
+    )
     burn_step = float(burn_tuning.step_size)
     inverse_mass = np.asarray(burn_tuning.inverse_mass_matrix)
     if not np.isfinite(burn_step) or burn_step <= 0 or not np.isfinite(inverse_mass).all():
@@ -144,7 +164,7 @@ def run_laps_ensemble(
         acc_prob_target=0.9 if dimension > 200 else 0.7,
     )
 
-    def refine(initial: HMCState):
+    def refine(initial: HMCState, batch_size: int):
         def step(carry, index):
             current, tuning = carry
             sampling_key, summary_key = jax.random.split(jax.random.fold_in(adjusted_key, index))
@@ -160,8 +180,10 @@ def run_laps_ensemble(
                     L_proposal_factor=1.25,
                 )
 
-            current, info = jax.vmap(move)(
-                jax.random.split(sampling_key, spec.ensemble_size), current
+            current, info = jax.lax.map(
+                lambda member: move(member[0], member[1]),
+                (jax.random.split(sampling_key, spec.ensemble_size), current),
+                batch_size=batch_size,
             )
             summaries = jax.vmap(adjusted_adaptation.summary_statistics_fn, in_axes=(0, 0, None))(
                 current, info, summary_key
@@ -178,7 +200,10 @@ def run_laps_ensemble(
         )
 
     (final, tuning), acceptance = _execute(
-        refine, HMCState(state.position, state.logdensity, state.logdensity_grad), compute_budget
+        refine,
+        HMCState(state.position, state.logdensity, state.logdensity_grad),
+        compute_budget,
+        max_batch_size=spec.ensemble_size,
     )
     mean_acceptance = float(jnp.mean(acceptance))
     final_step = float(tuning.step_size)

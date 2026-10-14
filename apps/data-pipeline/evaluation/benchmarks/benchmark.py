@@ -2,8 +2,7 @@
 
 The benchmark compares the two supported dSMC leaf proposals on the synthetic
 nonlinear fixture. Both proposals target the exact Euler-Maruyama transition;
-the IEKS/Laplace machinery used by ``paid_mix`` only constructs its corrected
-proposal and never substitutes for the reported posterior.
+LAPS supplies paired starts and fixed proposal moments for both methods.
 
 This is an evaluation entry point, not a test. Running it performs inference
 and can be expensive:
@@ -155,16 +154,6 @@ def _run_one(
                 dsmc_leaf_proposal=proposal,
                 latent_block_coords=args.latent_block_coords,
                 diagnostic_metrics=args.diagnostic_metrics,
-                init_method=args.init_method,
-                init_scale=args.init_scale,
-                pathfinder_num_elbo_samples=args.pathfinder_num_elbo_samples,
-                pathfinder_maxiter=args.pathfinder_maxiter,
-                n_pathfinder_starts=args.n_pathfinder_starts,
-                pathfinder_parallel_workers=args.pathfinder_parallel_workers,
-                pathfinder_init_scale=args.pathfinder_init_scale,
-                auto_preconditioner_method=args.auto_preconditioner_method,
-                auto_preconditioner_maxiter=args.auto_preconditioner_maxiter,
-                n_ieks_iters=args.n_ieks_iters,
                 param_step_size=args.param_step_size,
                 param_step_size_min=args.param_step_size_min,
                 param_step_size_max=args.param_step_size_max,
@@ -221,20 +210,6 @@ def _build_parser() -> argparse.ArgumentParser:
         type=_parse_metrics,
         default=("particle_identity", "parameter_movement"),
     )
-    parser.add_argument("--init-method", choices=("random", "pathfinder", "laps"), default="laps")
-    parser.add_argument("--init-scale", type=float, default=0.05)
-    parser.add_argument("--pathfinder-num-elbo-samples", type=int, default=20)
-    parser.add_argument("--pathfinder-maxiter", type=int, default=50)
-    parser.add_argument("--n-pathfinder-starts", type=int, default=8)
-    parser.add_argument("--pathfinder-parallel-workers", type=int)
-    parser.add_argument("--pathfinder-init-scale", type=float, default=0.1)
-    parser.add_argument(
-        "--auto-preconditioner-method",
-        choices=("map", "none", "pathfinder", "laps"),
-        default="laps",
-    )
-    parser.add_argument("--auto-preconditioner-maxiter", type=int, default=200)
-    parser.add_argument("--n-ieks-iters", type=int, default=6)
     parser.add_argument("--param-step-size", type=float, default=0.02)
     parser.add_argument("--param-step-size-min", type=float, default=1e-6)
     parser.add_argument("--param-step-size-max", type=float, default=1e3)
@@ -305,7 +280,6 @@ def main() -> None:
             "n_parameter_particles": args.n_parameter_particles,
             "latent_block_coords": args.latent_block_coords,
             "diagnostic_metrics": args.diagnostic_metrics,
-            "init_method": args.init_method,
         },
         "runs": runs,
     }

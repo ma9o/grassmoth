@@ -75,37 +75,6 @@ def _arviz_idata_from_posterior(
 
 
 @dataclass(frozen=True, kw_only=True)
-class WarmupDiagnostics:
-    """Initialization-only MAP measurements and native proposal inputs."""
-
-    likelihood_backend: object
-    success: bool
-    status: int
-    n_iters: int
-    n_function_evals: int
-    objective_at_mode: float
-    mode_log_posterior: float
-    mode_log_likelihood: float
-    mode_log_prior: float
-    init_log_posterior_best: float
-    n_init_samples: int
-    n_ieks_iters: int
-    parameter_covariance: jnp.ndarray | NDArray
-    covariance_diag: tuple[float, ...]
-    compute_parameter_hessian: bool
-    parameter_posterior_strategy: str
-    parameter_covariance_method: str
-    hessian_condition_number: float | None
-    parameter_hessian_min_eig: float | None
-    parameter_hessian_max_eig: float | None
-    hessian_jitter: float
-
-    def __post_init__(self) -> None:
-        """Own immutable collection fields containing initialization diagnostics."""
-        freeze_fields(self)
-
-
-@dataclass(frozen=True, kw_only=True)
 class ProductionDiagnostics:
     """The exact producer's native buffers, separate from serialized report values."""
 
@@ -144,23 +113,6 @@ class ProductionDiagnostics:
                     }
                 ),
             )
-        freeze_fields(self)
-
-
-@dataclass(frozen=True)
-class WarmupProposal:
-    """Laplace/IEKS approximation usable only for sampler initialization."""
-
-    _samples: Mapping[str, jnp.ndarray]
-    diagnostics: WarmupDiagnostics
-
-    def get_samples(self) -> Mapping[str, jnp.ndarray]:
-        """Return approximate parameter draws for warmup consumers."""
-        return self._samples
-
-    def __post_init__(self) -> None:
-        """Own an immutable mapping of proposal samples and freeze the remaining collection fields."""
-        object.__setattr__(self, "_samples", MappingProxyType(dict(self._samples)))
         freeze_fields(self)
 
 

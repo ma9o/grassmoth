@@ -8,25 +8,18 @@ from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-import jax.scipy.linalg as jla
 
 from nof1_causal_lab.artifacts.likelihood import (
     BernoulliLogitsLawSpec,
     BernoulliProbsLawSpec,
-    BetaLawSpec,
     CategoricalLawSpec,
-    DeltaLawSpec,
     GammaLawSpec,
     Law,
     LinkFunction,
-    NegativeBinomial2LawSpec,
     NormalLawSpec,
     OrderedLogisticLawSpec,
-    PoissonLawSpec,
-    StudentTLawSpec,
     map_law,
 )
-from nof1_causal_lab.models.ssm.covariance_utils import symmetrize, symmetrize_with_jitter
 from nof1_causal_lab.models.ssm.execution import emissions
 from nof1_causal_lab.models.ssm.execution.observation_distributions import (
     evaluate_law,
@@ -47,19 +40,14 @@ if TYPE_CHECKING:
 
 type EmissionLogProbFn = Callable[[jax.Array, jax.Array, jax.Array, jax.Array], jax.Array]
 type ResponseFn = Callable[[jax.Array], jax.Array]
-type ScoreWeightFn = Callable[[jax.Array, jax.Array, jax.Array], tuple[jax.Array, jax.Array]]
-type LatentGradHessFn = Callable[
-    [jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array], tuple[jax.Array, jax.Array]
-]
 
 
 @dataclass(frozen=True)
 class ObservationKernel:
-    """Compiled observation density, response transformation, and latent derivative functions."""
+    """Compiled exact observation density and response transformation."""
 
     log_prob_fn: EmissionLogProbFn
     response_fn: ResponseFn
-    latent_grad_hess_fn: LatentGradHessFn
 
 
 @dataclass(frozen=True)
@@ -145,183 +133,9 @@ class CompiledObservationModel:
         )
 
 
-def _make_glm_grad_hess(score_weight_fn: ScoreWeightFn) -> LatentGradHessFn:
-    """Build emission_grad_hess_fn for GLM families (diagonal Hessian in η-space).
-
-    For dist with element-wise log p(y_j | η_j), the chain rule gives:
-        g_z = H^T g_eta,   neg_H_z = H^T diag(w_eta) H
-    which is always PSD when w_eta >= 0.
-    """
-
-    def emission_grad_hess_fn(
-        y_t: jnp.ndarray,
-        z_t: jnp.ndarray,
-        H: jnp.ndarray,
-        d: jnp.ndarray,
-        _R: jnp.ndarray,
-        mask_t: jnp.ndarray,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        eta = H @ z_t + d
-        g_eta, w_eta = score_weight_fn(y_t, eta, mask_t)
-        g_z = H.T @ g_eta
-        neg_H_z = H.T @ (w_eta[:, None] * H)
-        return g_z, symmetrize(neg_H_z)
-
-    return emission_grad_hess_fn
-
-
-def _make_student_t_grad_hess(df: float | jnp.ndarray) -> LatentGradHessFn:
-    """Build emission_grad_hess_fn for Student-t (scale extracted from diag(R))."""
-
-    def emission_grad_hess_fn(
-        y_t: jnp.ndarray,
-        z_t: jnp.ndarray,
-        H: jnp.ndarray,
-        d: jnp.ndarray,
-        R: jnp.ndarray,
-        mask_t: jnp.ndarray,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        eta = H @ z_t + d
-        scale_diag = jnp.sqrt(jnp.diag(R))
-        residual = y_t - eta
-        sig2 = scale_diag**2
-        denom = df * sig2 + residual**2
-        g_eta = (df + 1.0) * residual / denom * mask_t
-        w_eta = jnp.maximum((df + 1.0) * (df * sig2 - residual**2) / (denom**2), 0.0) * mask_t
-        g_z = H.T @ g_eta
-        neg_H_z = H.T @ (w_eta[:, None] * H)
-        return g_z, symmetrize(neg_H_z)
-
-    return emission_grad_hess_fn
-
-
-def _delta_grad_hess(
-    _y_t: jnp.ndarray,
-    _z_t: jnp.ndarray,
-    _H: jnp.ndarray,
-    _d: jnp.ndarray,
-    _R: jnp.ndarray,
-    _mask_t: jnp.ndarray,
-) -> tuple[jnp.ndarray, jnp.ndarray]:
-    raise ValueError(
-        "Delta observations impose exact constraints and have no smooth log-density "
-        "for Gaussian initialization."
-    )
-
-
-def _make_gaussian_grad_hess() -> LatentGradHessFn:
-    """Build emission_grad_hess_fn for Gaussian (full R, exact analytical form)."""
-    from nof1_causal_lab.models.ssm.execution.contracts import (
-        MISSING_DATA_LARGE_VAR,
-    )
-
-    def emission_grad_hess_fn(
-        y_t: jnp.ndarray,
-        z_t: jnp.ndarray,
-        H: jnp.ndarray,
-        d: jnp.ndarray,
-        R: jnp.ndarray,
-        mask_t: jnp.ndarray,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        eta = H @ z_t + d
-        residual = (y_t - eta) * mask_t
-        R_adj = R + jnp.diag((1.0 - mask_t) * MISSING_DATA_LARGE_VAR)
-        R_adj = symmetrize_with_jitter(R_adj)
-        g_z = H.T @ jla.solve(R_adj, residual, assume_a="pos")
-        neg_H_z = H.T @ jla.solve(R_adj, H, assume_a="pos")
-        return g_z, symmetrize(neg_H_z)
-
-    return emission_grad_hess_fn
-
-
 def _law_link(law: Law[BoundExpression]) -> LinkFunction:
     """Every operand of a bound law carries the law's parsed link."""
     return law.operands()[0][1].link
-
-
-def _group_initialization(group: LawGroup) -> LatentGradHessFn:
-    template = group.laws[0]
-    if isinstance(template, NormalLawSpec):
-        return _make_gaussian_grad_hess()
-    if isinstance(template, DeltaLawSpec):
-        return _delta_grad_hess
-
-    def score_weight(y: jax.Array, eta: jax.Array, mask: jax.Array) -> tuple[jax.Array, jax.Array]:
-        size = max(group.indices) + 1
-        full_eta = jnp.zeros((size,), dtype=eta.dtype).at[jnp.asarray(group.indices)].set(eta)
-        law = group.evaluate(full_eta, jnp.ones((size,), dtype=eta.dtype))
-        if isinstance(law, PoissonLawSpec):
-            return emissions._score_weight_poisson(y, eta, mask)
-        if isinstance(law, BernoulliLogitsLawSpec):
-            return emissions._score_weight_bernoulli_logit(y, eta, mask)
-        if isinstance(law, BernoulliProbsLawSpec):
-            fn = (
-                emissions._score_weight_bernoulli_probit
-                if _law_link(template) == LinkFunction.PROBIT
-                else emissions._score_weight_bernoulli_logit
-            )
-            return fn(y, eta, mask)
-        if isinstance(law, NegativeBinomial2LawSpec):
-            return emissions._score_weight_negative_binomial(y, eta, mask, law.concentration)
-        if isinstance(law, GammaLawSpec):
-            fn = (
-                emissions._score_weight_gamma_inverse
-                if _law_link(template) == LinkFunction.INVERSE
-                else emissions._score_weight_gamma_log
-            )
-            return fn(y, eta, mask, law.concentration)
-        if isinstance(law, BetaLawSpec):
-            fn = (
-                emissions._score_weight_beta_probit
-                if _law_link(template) == LinkFunction.PROBIT
-                else emissions._score_weight_beta_logit
-            )
-            return fn(y, eta, mask, law.concentration1 + law.concentration0)
-        if isinstance(law, OrderedLogisticLawSpec):
-            return emissions._score_weight_ordered_logistic(
-                y, eta, mask, law.cutpoints, jnp.full(eta.shape, law.cutpoints.shape[-1] + 1)
-            )
-        if isinstance(law, CategoricalLawSpec):
-            intercepts = jnp.stack(
-                tuple(
-                    operand.logits.evaluate(jnp.zeros(()), jnp.ones(()))[1:]
-                    for operand in group.laws
-                    if isinstance(operand, CategoricalLawSpec)
-                )
-            )
-            slopes = jnp.stack(
-                tuple(
-                    jax.jacfwd(operand.logits.evaluate, argnums=0)(jnp.zeros(()), jnp.ones(()))[1:]
-                    for operand in group.laws
-                    if isinstance(operand, CategoricalLawSpec)
-                )
-            )
-            return emissions._score_weight_categorical(
-                y, eta, mask, intercepts, slopes, jnp.full(eta.shape, law.logits.shape[-1])
-            )
-        raise ValueError("This law has no GLM initialization score")
-
-    if isinstance(template, StudentTLawSpec):
-
-        def student(
-            y: jax.Array,
-            z: jax.Array,
-            H: jax.Array,
-            d: jax.Array,
-            R: jax.Array,
-            mask: jax.Array,
-        ) -> tuple[jax.Array, jax.Array]:
-            df = jnp.stack(
-                tuple(
-                    law.df.evaluate(jnp.zeros(()), jnp.ones(()))
-                    for law in group.laws
-                    if isinstance(law, StudentTLawSpec)
-                )
-            )
-            return _make_student_t_grad_hess(df)(y, z, H, d, R, mask)
-
-        return student
-    return _make_glm_grad_hess(score_weight)
 
 
 def _group_density(
@@ -347,7 +161,7 @@ def compile_observation_model(
     manifest_cov: jax.Array,
     observation_support: ObservationSupportRuntime | None = None,
 ) -> CompiledObservationModel:
-    """Compile exact laws, shared response projection, and initialization operations."""
+    """Compile exact laws, shared response projection, and observation sampling."""
     from .observation_dispatch import build_point_observation_sampler
 
     if manifest_cov.shape != (len(laws), len(laws)):
@@ -360,7 +174,6 @@ def compile_observation_model(
         else tuple(str(kind) for kind in observation_support.support_kinds)
     )
     groups = compile_law_groups(laws, roles=roles)
-    derivatives = tuple(_group_initialization(group) for group in groups)
 
     def density(y: jax.Array, eta: jax.Array, R: jax.Array, mask: jax.Array) -> jax.Array:
         return sum(
@@ -384,25 +197,8 @@ def compile_observation_model(
             values = values.at[jnp.asarray(group.indices)].set(declared)
         return values
 
-    def grad_hess(
-        y: jax.Array,
-        z: jax.Array,
-        H: jax.Array,
-        d: jax.Array,
-        R: jax.Array,
-        mask: jax.Array,
-    ) -> tuple[jax.Array, jax.Array]:
-        gradient, hessian = jnp.zeros_like(z), jnp.zeros((z.size, z.size), dtype=z.dtype)
-        for group, derivative in zip(groups, derivatives, strict=True):
-            indices = jnp.asarray(group.indices)
-            g, h = derivative(
-                y[indices], z, H[indices], d[indices], R[jnp.ix_(indices, indices)], mask[indices]
-            )
-            gradient, hessian = gradient + g, hessian + h
-        return gradient, hessian
-
     operator = compile_observation_operator(observation_support)
-    kernel = ObservationKernel(density, response, grad_hess)
+    kernel = ObservationKernel(density, response)
     point_sampler = build_point_observation_sampler(laws, manifest_cov, groups=groups)
     if operator is None or not operator.requires_interval_summary_handling:
         return CompiledObservationModel(kernel, point_sampler, None, operator)

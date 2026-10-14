@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.observation_data import ObservationDataset
 from nof1_causal_lab.artifacts.posterior import InferenceEvidence, InferenceMetadata
-from nof1_causal_lab.compute.resources import CPU_ALLOCATION_ENV, HOST_MEMORY_ALLOCATION_ENV
+from nof1_causal_lab.compute.resources import HOST_MEMORY_ALLOCATION_ENV
 from nof1_causal_lab.study.result_codec import pack_result, unpack_result
 from nof1_causal_lab.utils.arrays import decode_array, encode_array
 
@@ -125,10 +125,8 @@ def _dispatch_fit(payload: FitComputeInput, *, timeout: int = 10800) -> FitCompu
             "JAX_ENABLE_COMPILATION_CACHE": "true",
             "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": "0",
             "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES": "0",
-            CPU_ALLOCATION_ENV: str(_FIT_CPU_CORES),
             HOST_MEMORY_ALLOCATION_ENV: str(_FIT_HOST_MEMORY_MIB * 1024**2),
-            # Starts own CPU concurrency; each small NumPy/SciPy operation gets
-            # one BLAS thread instead of multiplying the allocation per start.
+            # Keep small host-side NumPy/SciPy operations within one BLAS thread.
             "OPENBLAS_NUM_THREADS": "1",
             "OMP_NUM_THREADS": "1",
             "MKL_NUM_THREADS": "1",
