@@ -11,14 +11,14 @@ import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
 
-from nof1_causal_lab.artifacts.likelihood import (
+from nof1_causal_lab.artifacts.model.likelihood import (
     BernoulliLogitsLawSpec,
     CategoricalLawSpec,
     Law,
     NormalLawSpec,
     OrderedLogisticLawSpec,
 )
-from nof1_causal_lab.models.ssm.covariance_utils import symmetrize_with_jitter
+from nof1_causal_lab.models.ssm.covariance import symmetrize_with_jitter
 from nof1_causal_lab.models.ssm.execution.observation_distributions import (
     category_probabilities,
     feasible_law,
@@ -27,11 +27,11 @@ from nof1_causal_lab.models.ssm.execution.observation_distributions import (
     safe_native,
     to_native,
 )
-from nof1_causal_lab.models.ssm.execution.observation_model import compile_law_groups
+from nof1_causal_lab.models.ssm.execution.observation_groups import compile_law_groups
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.execution.contracts import ObservationLaws
-    from nof1_causal_lab.models.ssm.execution.observation_model import LawGroup
+    from nof1_causal_lab.models.ssm.execution.observation_groups import LawGroup
 
 type ObservationSampleFn = Callable[[jax.Array, jax.Array], jax.Array]
 

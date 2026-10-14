@@ -13,13 +13,12 @@ import equinox as eqx
 import jax
 import jax.numpy as jnp
 
+from nof1_causal_lab.models.ssm.dynamics.edges import VectorFieldComponent
+from nof1_causal_lab.models.ssm.dynamics.intervention import Intervention
 from nof1_causal_lab.models.ssm.shapes import Array, Float
 
-from .edges import VectorFieldComponent
-from .intervention import Intervention
-
 if TYPE_CHECKING:
-    from .expression import ExpressionComponent
+    from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponent
 
 
 class VectorFieldArgs(eqx.Module):

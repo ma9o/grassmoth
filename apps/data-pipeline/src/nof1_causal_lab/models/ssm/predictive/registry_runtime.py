@@ -19,32 +19,22 @@ import jax.numpy as jnp
 import jax.random as random
 import numpy as np
 
-from nof1_causal_lab.artifacts.expressions import expression_coefficients
-from nof1_causal_lab.artifacts.likelihood import DistributionFamily
-from nof1_causal_lab.artifacts.parameter import SiteKind
+from nof1_causal_lab.artifacts.model.expressions import expression_coefficients
+from nof1_causal_lab.artifacts.model.parameter import SiteKind
+from nof1_causal_lab.artifacts.probability.families import DistributionFamily
 from nof1_causal_lab.compute.batching import compile_batched, compiled_memory
-from nof1_causal_lab.models.predictive_simulation import (
-    sample_model_observations,
-)
-from nof1_causal_lab.models.ssm import numerics as numeric
-from nof1_causal_lab.models.ssm.dynamics.serialization import dynamics_spec_to_dict
+from nof1_causal_lab.models.ssm import compiled_access as numeric
+from nof1_causal_lab.models.ssm.dynamics.cache_identity import dynamics_spec_to_dict
 from nof1_causal_lab.models.ssm.dynamics.simulator import (
     IndexedBrownianSpec,
     ProcessNoise,
     SimulationConfig,
     simulate_model_path,
 )
-from nof1_causal_lab.models.ssm.dynamics.spec import (
-    compile_dynamics,
-)
+from nof1_causal_lab.models.ssm.dynamics.spec import compile_dynamics
 from nof1_causal_lab.models.ssm.execution.dynamical_model import build_dynamical_model
-from nof1_causal_lab.models.ssm.parameterization import (
-    PriorRuntimeBundle,
-    assemble_deterministics_from_registry,
-    sample_prior_parameters,
-)
-
-from .types import PredictiveDraws, PredictiveTrajectory
+from nof1_causal_lab.models.ssm.predictive.observations import sample_model_observations
+from nof1_causal_lab.models.ssm.predictive.types import PredictiveDraws, PredictiveTrajectory
 
 if TYPE_CHECKING:
     from _hashlib import HASH
@@ -341,28 +331,6 @@ def _simulate_vector_field_predictive_latents(
     return latents, predict(dynamical_models, latents)
 
 
-def sample_prior_parameters_from_runtime(
-    compiled_dynamical_model: CompiledDynamicalModel,
-    runtime: PriorRuntimeBundle,
-    *,
-    num_samples: int,
-    rng_key: jax.Array,
-) -> dict[str, jnp.ndarray]:
-    """Sample and assemble the parameter layer of a prior predictive run."""
-    constrained_samples = sample_prior_parameters(
-        rng_key,
-        runtime.registry,
-        runtime.priors,
-        n_samples=num_samples,
-    )
-    deterministic_samples = assemble_deterministics_from_registry(
-        constrained_samples,
-        compiled_dynamical_model,
-        n_draws=num_samples,
-    )
-    return {**constrained_samples, **deterministic_samples}
-
-
 def sample_predictive_emissions(
     compiled_dynamical_model: CompiledDynamicalModel,
     samples: Mapping[str, jnp.ndarray],
@@ -397,39 +365,6 @@ def sample_predictive_emissions(
         ),
     )
     return observations, mask, means
-
-
-def sample_prior_predictive_from_runtime(
-    compiled_dynamical_model: CompiledDynamicalModel,
-    runtime: PriorRuntimeBundle,
-    times: jnp.ndarray,
-    *,
-    compute_budget: ComputeBudget,
-    observation_support=None,
-    observation_mask: jnp.ndarray | None = None,
-    num_samples: int = 100,
-    seed: int = 0,
-    input_events=(),
-) -> PredictiveDraws:
-    """Sample prior predictive draws from a prepared runtime bundle."""
-    keys = predictive_keys(seed)
-
-    samples = sample_prior_parameters_from_runtime(
-        compiled_dynamical_model,
-        runtime,
-        num_samples=num_samples,
-        rng_key=keys.parameters,
-    )
-    return simulate_predictive_draws(
-        compiled_dynamical_model,
-        samples,
-        times,
-        compute_budget=compute_budget,
-        observation_support=observation_support,
-        observation_mask=observation_mask,
-        seed=seed,
-        input_events=input_events,
-    )
 
 
 def simulate_predictive_draws(

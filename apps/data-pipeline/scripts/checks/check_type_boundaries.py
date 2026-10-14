@@ -999,7 +999,7 @@ class _CoreVisitor(ast.NodeVisitor):
                 and isinstance(body[-1], ast.Expr)
                 and isinstance(body[-1].value, ast.Call)
                 and self.index.resolve(body[-1].value.func, self.module)
-                == PACKAGE + ".utils.immutability.freeze_fields"
+                == PACKAGE + ".artifacts.immutability.freeze_fields"
                 and len(body[-1].value.args) == 1
                 and isinstance(body[-1].value.args[0], ast.Name)
                 and body[-1].value.args[0].id == "self"
@@ -1202,12 +1202,12 @@ class _CoreVisitor(ast.NodeVisitor):
                 and (
                     self.scope[-1] in {"__init__", "__post_init__"}
                     or (
-                        self.module == PACKAGE + ".utils.immutability"
+                        self.module == PACKAGE + ".artifacts.immutability"
                         and self.scope == ["freeze_fields"]
                     )
                 )
             )
-        if qualified == PACKAGE + ".utils.immutability.freeze_fields":
+        if qualified == PACKAGE + ".artifacts.immutability.freeze_fields":
             bypass = not (
                 self._class_owned()
                 and self.in_function

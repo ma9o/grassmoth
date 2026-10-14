@@ -64,6 +64,9 @@ def run_recovery(
     seed: int,
 ) -> RecoveryBenchmarkResult:
     """Run the current recovery comparison on one GPU worker."""
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime
+
+    initialize_numerical_runtime()
     import jax
     from evaluation.benchmarks import benchmark
 

@@ -19,10 +19,12 @@ from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import run_laps_e
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.posterior_diagnostics import LapsInitializationDiagnostics
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
+        LapsInitializationDiagnostics,
+    )
+    from nof1_causal_lab.artifacts.sampling import LapsInitializationSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
-    from nof1_causal_lab.sampler_config import LapsInitializationSpec
 
 
 @dataclass(frozen=True, eq=False)

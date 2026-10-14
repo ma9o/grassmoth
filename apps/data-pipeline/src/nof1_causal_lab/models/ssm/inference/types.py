@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from xarray import DataTree
 
     from nof1_causal_lab.artifacts.identity import ConstructId
-    from nof1_causal_lab.models.ssm.inference.latent_diagnostics import LatentChainEvidence
+    from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
     from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 
 
@@ -23,9 +23,10 @@ from typing import Self
 import jax.numpy as jnp
 from numpy.typing import NDArray
 
-from nof1_causal_lab.artifacts.parameter import ParameterCoordinate
-from nof1_causal_lab.artifacts.posterior import PosteriorDrawsInfo
-from nof1_causal_lab.artifacts.posterior_diagnostics import (
+from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
+from nof1_causal_lab.artifacts.reports.inference import PosteriorDrawsInfo
+from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ChainDiagnostics,
     LOODiagnostics,
     ParameterDiagnostics,
@@ -35,21 +36,20 @@ from nof1_causal_lab.artifacts.posterior_diagnostics import (
     RankHistogram,
     TraceSeries,
 )
-from nof1_causal_lab.models.ssm.inference.diagnostics_viz import (
+from nof1_causal_lab.models.ssm.inference.diagnostics.plots import (
     ParameterReferences,
     pareto_k_points,
 )
-from nof1_causal_lab.models.ssm.inference.diagnostics_viz import (
+from nof1_causal_lab.models.ssm.inference.diagnostics.plots import (
     build_energy_diagnostics as _build_energy_diagnostics,
 )
-from nof1_causal_lab.models.ssm.inference.diagnostics_viz import (
+from nof1_causal_lab.models.ssm.inference.diagnostics.plots import (
     build_rank_histograms as _build_rank_histograms,
 )
-from nof1_causal_lab.models.ssm.inference.diagnostics_viz import (
+from nof1_causal_lab.models.ssm.inference.diagnostics.plots import (
     build_trace_data as _build_trace_data,
 )
-from nof1_causal_lab.models.ssm.inference.shared import _filter_public_samples
-from nof1_causal_lab.utils.immutability import freeze_fields
+from nof1_causal_lab.models.ssm.inference.sample_projection import _filter_public_samples
 
 logger = logging.getLogger(__name__)
 
@@ -205,7 +205,7 @@ class ParticleMCMCPosterior:
         import numpy as np
         from arviz_stats.sampling_diagnostics import ess, mcse, rhat
 
-        from nof1_causal_lab.models.ssm.inference.latent_diagnostics import latent_chain_diagnostics
+        from nof1_causal_lab.models.ssm.inference.diagnostics.latent import latent_chain_diagnostics
 
         mcmc = self.diagnostics.mcmc
         chain_samples = mcmc.get_samples(group_by_chain=True)

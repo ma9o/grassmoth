@@ -2,6 +2,14 @@
 
 import pytest
 
+from nof1_causal_lab.bootstrap import initialize_numerical_runtime
+
+
+def pytest_configure() -> None:
+    """Initialize numerical policy before collecting scientific fixtures."""
+    initialize_numerical_runtime()
+
+
 pytest_plugins = ["pytester"]
 
 INFERENCE_CONCERNS = ("sampling", "warmup", "simulation", "predictive", "recovery")
@@ -13,7 +21,7 @@ def _fit_on_local_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
     """Tests fit locally whatever config.yaml selects; a test may opt into Modal itself."""
     from dataclasses import replace
 
-    from nof1_causal_lab.utils import config
+    from nof1_causal_lab import config
 
     loaded = config.load_config()
     local = replace(loaded, inference=replace(loaded.inference, compute_backend="local"))

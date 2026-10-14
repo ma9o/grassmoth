@@ -4,24 +4,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.artifacts.expressions import COEFFICIENT_MEANINGS
-from nof1_causal_lab.artifacts.identity import (
-    scientific_id,
-)
-from nof1_causal_lab.artifacts.likelihood import OBSERVATION_FAMILY_SPECS
-from nof1_causal_lab.artifacts.parameter import (
-    SiteKind,
-)
-from nof1_causal_lab.distributions import DistributionFamily
-from nof1_causal_lab.models.ssm.compile import support as numeric
+from nof1_causal_lab.artifacts.identity import scientific_id
+from nof1_causal_lab.artifacts.model.expressions import COEFFICIENT_MEANINGS
+from nof1_causal_lab.artifacts.model.likelihood import OBSERVATION_FAMILY_SPECS
+from nof1_causal_lab.artifacts.model.parameter import SiteKind
+from nof1_causal_lab.artifacts.probability.families import DistributionFamily
+from nof1_causal_lab.models.ssm.compile.layout import axes
 from nof1_causal_lab.models.ssm.structure.sites import WholeSiteSelection
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.identity import ParameterElementId
-    from nof1_causal_lab.artifacts.parameter_spec import ParameterSpec
-    from nof1_causal_lab.models.model_structure import StructuralSelection
+    from nof1_causal_lab.artifacts.model.parameter_spec import ParameterSpec
     from nof1_causal_lab.models.ssm.compile.bindings import CompiledSiteCoordinate
     from nof1_causal_lab.models.ssm.structure.sites import SiteDescriptor, SiteSelection
+    from nof1_causal_lab.models.structure import StructuralSelection
 
 
 SHARED_OBSERVATION_FAMILIES = {
@@ -56,7 +52,7 @@ def component_identity(
         indicators = {
             item.observation.name: item for item in structure.dynamical_model_spec.indicators
         }
-        indicator = indicators[numeric.observation_names(structure)[indices[0]]]
+        indicator = indicators[axes.observation_names(structure)[indices[0]]]
         levels = (
             indicator.observation.ordinal_levels
             if kind in {SiteKind.OBS_ORDERED_BASE, SiteKind.OBS_ORDERED_GAPS}
@@ -90,7 +86,7 @@ def component_identity(
         constructs = {item.name: item.id for item in structure.dynamical_model_spec.constructs}
         position = site.positions[coordinate.flat_index]
         row = position[0] if isinstance(position, tuple) else position
-        basis = [constructs[name] for name in numeric.state_names(structure)[: row + 1]]
+        basis = [constructs[name] for name in axes.state_names(structure)[: row + 1]]
         key = ["cholesky", basis]
     elif any(n > 1 for n in site.shape) and isinstance(selection, WholeSiteSelection):
         raise ValueError(f"Parameter {parameter.name!r} needs explicit scientific component axes")

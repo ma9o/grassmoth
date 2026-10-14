@@ -7,19 +7,17 @@ from typing import TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 
-from nof1_causal_lab.artifacts.expressions import CoefficientExpression, Expression
-from nof1_causal_lab.artifacts.likelihood import Law, LinkFunction, map_law
+from nof1_causal_lab.artifacts.model.expressions import CoefficientExpression, Expression
+from nof1_causal_lab.artifacts.model.likelihood import Law, LinkFunction, map_law
 from nof1_causal_lab.models.ssm.compile.expressions import compile_expression
-from nof1_causal_lab.models.ssm.dynamics.expression import (
-    BoundExpression,
-)
+from nof1_causal_lab.models.ssm.dynamics.expression import BoundExpression
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from nof1_causal_lab.artifacts.identity import ParameterId
-    from nof1_causal_lab.artifacts.parameter import ParameterCoordinate
-    from nof1_causal_lab.models.likelihoods import LikelihoodAnalysis
+    from nof1_causal_lab.artifacts.model.likelihood import LikelihoodAnalysis
+    from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
     from nof1_causal_lab.models.ssm.compile.bindings import CompiledParameterBinding
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.dynamics.expression import OperandEvaluator

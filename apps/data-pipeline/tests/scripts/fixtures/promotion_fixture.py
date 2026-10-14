@@ -6,19 +6,19 @@ from pathlib import Path
 
 import polars as pl
 
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.artifacts.data_preparation import DataPreparationResult
-from nof1_causal_lab.artifacts.dynamical_model_spec import ModelEditResult
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
+from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
+from nof1_causal_lab.llm.traces import LLMTrace, TraceMessage
+from nof1_causal_lab.storage import paths as data_module
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.state import RetractedArtifact
-from nof1_causal_lab.study.store import ArtifactStore
-from nof1_causal_lab.utils import data as data_module
-from nof1_causal_lab.utils.llm import LLMTrace, TraceMessage
-from tests.action_fixtures import applied_record, question_root
-from tests.data_fixtures import metadata_for_model
-from tests.helpers import fixture_entity_id, make_model
 from tests.integration.runner_fixtures import panel_frame
+from tests.support.action import applied_record, question_root
+from tests.support.data import metadata_for_model
+from tests.support.helpers import fixture_entity_id, make_model
 
 
 def seed(root, workspace, options):

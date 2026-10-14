@@ -4,11 +4,14 @@ from datetime import UTC, datetime, timedelta
 
 import polars as pl
 
-from nof1_causal_lab.artifacts.data_preparation import PreparedDataMetadata, SemanticExtractionSpec
-from nof1_causal_lab.artifacts.observations import AuthoredObservationSpec
+from nof1_causal_lab.artifacts.observations.preparation import (
+    PreparedDataMetadata,
+    SemanticExtractionSpec,
+)
+from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
 from nof1_causal_lab.study.state import StudyState
-from tests.helpers import fixture_entity_id
-from tests.model_fixtures import stress_sleep_model
+from tests.support.helpers import fixture_entity_id
+from tests.support.model import stress_sleep_model
 
 
 def panel_frame(n_days=20):
@@ -59,7 +62,7 @@ def seed_panel(store, *, model_revision):
 
 
 def panel_metadata():
-    from nof1_causal_lab.artifacts.data_preparation import (
+    from nof1_causal_lab.artifacts.observations.preparation import (
         DataPreparationSpec,
         DataVariableSpec,
     )

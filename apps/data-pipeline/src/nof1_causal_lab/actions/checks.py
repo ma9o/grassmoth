@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.artifacts.checks import Evaluated, NotEvaluated, SpecificationAssessment
+from nof1_causal_lab.artifacts.reports.checks import (
+    Evaluated,
+    NotEvaluated,
+    SpecificationAssessment,
+)
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from nof1_causal_lab.artifacts.observation_data import ObservationDataset
+    from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
     from nof1_causal_lab.models.ssm.compile.inputs import (
         FitCompilationResult,
         ModelCompilationResult,
@@ -95,8 +99,8 @@ def check_model_data(
 ) -> tuple[SpecificationAssessment, ...]:
     """Evaluate fitting input compatibility without running a sampler or simulator."""
     from nof1_causal_lab.models.ssm.compile.inputs import IncompleteModel
-    from nof1_causal_lab.models.ssm.preflight import validate_observations_for_fit
-    from nof1_causal_lab.models.ssm.runtime import PreparedFit, prepare_fit
+    from nof1_causal_lab.models.ssm.preparation.panel import PreparedFit, prepare_fit
+    from nof1_causal_lab.models.ssm.preparation.preflight import validate_observations_for_fit
 
     prepared = prepare_fit(inputs, panel, time_origin=time_origin)
     if not isinstance(prepared, PreparedFit):

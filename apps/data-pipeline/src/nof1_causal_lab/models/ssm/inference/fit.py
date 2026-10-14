@@ -1,0 +1,60 @@
+"""Inference backends for SSM models.
+
+Separates inference from model definition. CompiledDynamicalModel owns the numerical model; this module provides fit() to run inference with the supported backends.
+
+Method:
+- Marginalized Particle Gibbs: collapsed joint parameter/trajectory updates
+  using the dSMC smoother with exactly corrected aMALA or PAID-mixture leaf
+  proposals.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Literal
+
+from nof1_causal_lab.models.ssm.inference.reparameterization import AutoReparam
+from nof1_causal_lab.models.ssm.preparation.preflight import (
+    ObservationPreflightFailure,
+    validate_observations_for_fit,
+)
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from nof1_causal_lab.artifacts.sampling import SamplerSpec
+    from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
+    from nof1_causal_lab.models.ssm.inference.types import (
+        ParticleMCMCPosterior,
+    )
+    from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
+    from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
+    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
+
+
+def fit(
+    priors: PriorRuntimeBundle,
+    panel: BoundPanel,
+    *,
+    compute_budget: ComputeBudget,
+    sampler: SamplerSpec,
+    reparam: Strategy | Literal["auto"] | None = "auto",
+    clock: Callable[[], float],
+) -> ParticleMCMCPosterior | ObservationPreflightFailure | InitializationFailure:
+    """Run the production particle sampler on resolved numerical controls."""
+    failure = validate_observations_for_fit(priors, panel)
+    if failure is not None:
+        return failure
+    resolved_reparam = AutoReparam(centered=0.0) if reparam == "auto" else reparam
+    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.fit import (
+        fit_marginal_particle_gibbs,
+    )
+
+    return fit_marginal_particle_gibbs(
+        priors,
+        panel,
+        compute_budget=compute_budget,
+        sampler=sampler,
+        reparam=resolved_reparam,
+        clock=clock,
+    )

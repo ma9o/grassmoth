@@ -2,7 +2,7 @@
 
 Usage:
     cd apps/data-pipeline
-    uv run python scripts/codegen/export_distribution_docs.py
+    uv run python -m scripts.codegen.export_distribution_docs
 
 Overwrites generated sections in:
   - docs/reference/statistical-model-spec/parameters.md  (Supported Prior Families, Common Defaults)
@@ -21,16 +21,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
-from nof1_causal_lab.artifacts.likelihood import (
+from nof1_causal_lab.artifacts.model.likelihood import (
     OBSERVATION_FAMILY_SPECS,
     OBSERVATION_LINK_VALUES_BY_DISTRIBUTION,
 )
-from nof1_causal_lab.distributions import (
-    PRIOR_FAMILY_SPECS,
+from nof1_causal_lab.artifacts.observations.dtypes import (
     VALID_LIKELIHOODS_FOR_DTYPE,
-    DistributionFamily,
+)
+from scripts.codegen.distribution_guidance import (
+    PRIOR_FAMILY_SPECS,
     render_prior_parameter_guidance_markdown_table,
 )
+from nof1_causal_lab.artifacts.probability.families import DistributionFamily
 
 
 @dataclass(frozen=True)

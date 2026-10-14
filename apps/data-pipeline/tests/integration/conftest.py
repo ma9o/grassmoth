@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from nof1_causal_lab.study.store import ArtifactStore
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 
 
 @pytest.fixture
 def integration_workspace(monkeypatch, tmp_path) -> str:
-    from nof1_causal_lab.utils import data as data_module
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     return "fixture_workspace"

@@ -105,8 +105,8 @@ uncertainty, rather than merely because it touches a fitting-related file.
 For a file-scoped Python run, invoke pytest directly from `apps/data-pipeline`:
 
 ```bash
-uv run pytest tests/models/ssm/test_laps_initialization.py -m "contract or inference(concern='warmup')" -n 0
-uv run pytest tests/models/ssm/test_emissions.py tests/models/ssm/test_observation_sampling.py -m "contract or inference(concern='sampling') or inference(concern='predictive')"
+uv run pytest tests/models/ssm/inference/test_laps_initialization.py -m "contract or inference(concern='warmup')" -n 0
+uv run pytest tests/models/ssm/execution/test_emissions.py tests/models/ssm/execution/test_observation_sampling.py -m "contract or inference(concern='sampling') or inference(concern='predictive')"
 uv run pytest tests/test_concerns.py -m contract -n 0
 ```
 
@@ -134,7 +134,7 @@ git --git-dir=data/HEALTHDEMO/study/history.git config nof1.format 26
 
 #### Storage format
 
-The [storage owner](../../apps/data-pipeline/src/nof1_causal_lab/study/git_objects.py)
+The [storage owner](../../apps/data-pipeline/src/nof1_causal_lab/study/persistence/git_objects.py)
 requires format 26. Start a new study or restore a format-26 bundle. The application
 reads only this format and does not perform automatic migrations.
 
@@ -175,7 +175,7 @@ processes; check that Temporal is still running afterward.
 
 For local-study GPU fits, set `inference.compute_backend: modal` in
 [`config.yaml`](../../apps/data-pipeline/config.yaml) and restart the worker.
-The [Modal compute adapter](../../apps/data-pipeline/src/nof1_causal_lab/actions/modal_fit.py)
+The [Modal compute adapter](../../apps/data-pipeline/src/nof1_causal_lab/actions/fit/remote.py)
 uses the installed Modal credentials, creates an ephemeral
 `nof1-causal-lab-pipeline` app with the current source, and reuses
 `nof1-cached-fit-cache:/jax`. The study remains local; the
@@ -204,7 +204,7 @@ data/
 └── HEALTHDEMO/                  # Tracked mock fixture workspace (evals + manual sampling)
 ```
 
-Back up the whole workspace directory: Git retains complete action results and their numerical buffers; `store/` retains uploaded input tables. See the [storage owner](../../apps/data-pipeline/src/nof1_causal_lab/study/store.py). Temporary cache entries are safe to delete at any time. `uv run nof1-sweep WORKSPACE_ID` expires telemetry and caches, and offline maintenance can add `--collect-runs` to remove finished run scratch.
+Back up the whole workspace directory: Git retains complete action results and their numerical buffers; `store/` retains uploaded input tables. See the [storage owner](../../apps/data-pipeline/src/nof1_causal_lab/study/persistence/store.py). Temporary cache entries are safe to delete at any time. `uv run nof1-sweep WORKSPACE_ID` expires telemetry and caches, and offline maintenance can add `--collect-runs` to remove finished run scratch.
 
 ### Promoting a workspace to the HEALTHDEMO fixture
 
@@ -231,7 +231,7 @@ bun run fixture:build
 
 The command restores the bundle into an isolated temporary repository and uses the production readers to project artifacts, logs, traces, historical snapshots and workbench comparisons in one pass. It does not read the local `history.git` or the generated projections as inputs. HEALTHDEMO has no numbered artifact directories or separate journal and trace directories.
 
-The bundle preserves the authored and extracted facts through the last model edit. HEALTHDEMO retained no posterior samples or inference report, so it contains no successful fit. Reports and checks load the findings retained with [complete action results](../../apps/data-pipeline/src/nof1_causal_lab/actions/io.py). Regeneration does not fit, simulate, or invent missing scientific artifacts. The [frontend renderer](../../apps/web/src/lib/model-asset/authored-prior-plot.ts) derives authored prior plots from the retained laws.
+The bundle preserves the authored and extracted facts through the last model edit. HEALTHDEMO retained no posterior samples or inference report, so it contains no successful fit. Reports and checks load the findings retained with [complete action results](../../apps/data-pipeline/src/nof1_causal_lab/actions/contracts/bodies.py). Regeneration does not fit, simulate, or invent missing scientific artifacts. The [frontend renderer](../../apps/web/src/lib/model-asset/authored-prior-plot.ts) derives authored prior plots from the retained laws.
 
 ### Publishing a workspace
 
@@ -281,7 +281,7 @@ curl -s "http://localhost:8100/api/studies/$WORKSPACE_ID/$ACTION/$CALL_ID" \
 uv run --directory apps/data-pipeline python - <<'PY'
 from pathlib import Path
 from pprint import pprint
-from nof1_causal_lab.study.result_codec import unpack_result
+from nof1_causal_lab.study.persistence.codec import unpack_result
 result = unpack_result(Path('/tmp/action.msgpack').read_bytes())
 pprint({key: value for key, value in result.items() if key != 'body'})
 PY

@@ -5,11 +5,14 @@ from itertools import product
 import numpyro.distributions as dist
 import pytest
 
-from nof1_causal_lab.actions.io import ModelDiffOutput
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec, apply_model_edit
-from nof1_causal_lab.artifacts.model_document import diff_fields, merge_fields
-from tests.helpers import make_model
-from tests.model_fixtures import load_model_fixture
+from nof1_causal_lab.actions.contracts.bodies import ModelDiffOutput
+from nof1_causal_lab.artifacts.model.document import diff_fields, merge_fields
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import (
+    DynamicalModelSpec,
+    apply_model_edit,
+)
+from tests.support.helpers import make_model
+from tests.support.model import load_model_fixture
 
 pytestmark = pytest.mark.contract
 

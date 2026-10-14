@@ -2,7 +2,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nof1_causal_lab.models.ssm.covariance_utils import symmetrize, symmetrize_with_jitter
+from nof1_causal_lab.models.ssm.covariance import symmetrize, symmetrize_with_jitter
 
 pytestmark = pytest.mark.contract
 

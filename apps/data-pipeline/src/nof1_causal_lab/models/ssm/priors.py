@@ -8,13 +8,13 @@ import numpy as np
 import numpyro.distributions as dist
 from numpyro.distributions import constraints
 
-from nof1_causal_lab.artifacts.parameter import SupportClass
-from nof1_causal_lab.compilation_errors import AggregatedCompileError
-from nof1_causal_lab.distributions import PriorDistributionFamily
-from nof1_causal_lab.prior_distributions import (
+from nof1_causal_lab.artifacts.model.parameter import SupportClass
+from nof1_causal_lab.artifacts.probability.families import PriorDistributionFamily
+from nof1_causal_lab.artifacts.probability.native import (
     distribution_from_params,
     distribution_support_bounds,
 )
+from nof1_causal_lab.compilation_errors import AggregatedCompileError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

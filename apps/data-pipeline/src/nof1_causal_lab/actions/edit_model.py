@@ -4,19 +4,19 @@ from functools import cache
 
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts import EditModelRequest
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.artifacts.dynamical_model_spec import (
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import EditModelRequest
+from nof1_causal_lab.actions.input_resolution import model_edit_state
+from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import (
     DynamicalModelSpec,
     ModelEditResult,
     apply_model_edit,
 )
-from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.models.model_checks import question_edit_reason
-from nof1_causal_lab.study.inputs import model_edit_state
+from nof1_causal_lab.models.causal.question_checks import question_edit_reason
+from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model, read_question
+from nof1_causal_lab.study.persistence.writes import write_model_revision
 from nof1_causal_lab.study.records import Applied, Rejected
-from nof1_causal_lab.study.store import ArtifactStore, read_model, read_question
-from nof1_causal_lab.study.writes import write_model_revision
 
 
 def edit_model(

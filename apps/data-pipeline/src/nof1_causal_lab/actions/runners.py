@@ -12,24 +12,25 @@ import asyncio
 import os
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.actions.contracts import (
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import (
     DataDiffRequest,
     FitRequest,
     ModelDiffRequest,
     SimulateRequest,
 )
-from nof1_causal_lab.actions.effects import ActionEffects
 from nof1_causal_lab.artifacts.simulation import ModelSimulationResult
-from nof1_causal_lab.models.model_structure import StructuralSelection
+from nof1_causal_lab.models.structure import StructuralSelection
 from nof1_causal_lab.study.artifact_files import json_filename
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.store import ArtifactStore
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.actions.io import SimulateInput
-    from nof1_causal_lab.artifacts.data_ref import DataRef
+    from nof1_causal_lab.actions.contracts.bodies import SimulateInput
     from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
-    from nof1_causal_lab.artifacts.posterior import FitSettingsSpec, InferenceEvidence
+    from nof1_causal_lab.artifacts.observations.reference import DataRef
+    from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
+    from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
     from nof1_causal_lab.study.state import StudyState
 
 
@@ -39,15 +40,15 @@ async def _run_fit(
     settings: FitSettingsSpec,
     source: DataRef[GitOid, int],
 ) -> Applied[InferenceEvidence]:
-    from nof1_causal_lab.actions.fit import fit, read_inference_report
-    from nof1_causal_lab.actions.inference.fit import resolve_sampler_spec
-    from nof1_causal_lab.study.data import read_data_history
-    from nof1_causal_lab.utils.config import get_config
+    from nof1_causal_lab.actions.fit.action import fit, read_inference_report
+    from nof1_causal_lab.actions.fit.execution import resolve_sampler_spec
+    from nof1_causal_lab.config import get_config
+    from nof1_causal_lab.study.queries.data import read_data_history
 
     history = read_data_history(store, source)
     from functools import cache
 
-    from nof1_causal_lab.study.store import read_model, read_question
+    from nof1_causal_lab.study.persistence.store import read_model, read_question
 
     dynamical_model_spec = read_model(store, pins["model"])
     selection = StructuralSelection.for_question(
@@ -57,7 +58,7 @@ async def _run_fit(
 
     config = get_config().inference
     if config.compute_backend == "modal" and os.environ.get("DEPLOYMENT_ENV") != "production":
-        from nof1_causal_lab.actions.modal_fit import fit_on_modal
+        from nof1_causal_lab.actions.fit.remote import fit_on_modal
 
         compute_fit = fit_on_modal
     else:
@@ -95,8 +96,8 @@ async def _run_simulate(
     pins: dict[ArtifactId, GitOid],
     request: SimulateInput[GitOid],
 ) -> Applied[ModelSimulationResult]:
-    from nof1_causal_lab.actions.simulate import read_simulation_report, simulate
-    from nof1_causal_lab.study.store import read_model, read_question
+    from nof1_causal_lab.actions.simulate.action import read_simulation_report, simulate
+    from nof1_causal_lab.study.persistence.store import read_model, read_question
 
     dynamical_model_spec = read_model(store, pins["model"])
     selection = StructuralSelection.for_question(
@@ -109,7 +110,7 @@ async def _run_simulate(
         store=store,
     )
     from nof1_causal_lab.actions.errors import ActionExecutionError
-    from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
+    from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 
     if isinstance(report, ObservationPreflightFailure):
         raise ActionExecutionError(report.message)
@@ -132,7 +133,7 @@ async def run_action_locally(
     """Run an action directly against its recorded inputs."""
     store = ArtifactStore(workspace_id)
     if isinstance(request, ModelDiffRequest):
-        from nof1_causal_lab.actions.revisions import model_diff
+        from nof1_causal_lab.actions.model_diff import model_diff
 
         report = await asyncio.to_thread(
             model_diff, workspace_id, request.input.before_ref, request.input.after_ref
@@ -184,7 +185,7 @@ async def run_action(
             },
         )
         from nof1_causal_lab.models.ssm.compile.inputs import compile_executable_model
-        from nof1_causal_lab.study.store import read_model, read_question
+        from nof1_causal_lab.study.persistence.store import read_model, read_question
 
         compile_executable_model(
             StructuralSelection.for_question(

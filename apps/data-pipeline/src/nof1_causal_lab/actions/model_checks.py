@@ -5,18 +5,18 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, overload
 
 from nof1_causal_lab.actions.checks import check_model_data, check_specification
-from nof1_causal_lab.actions.validation.flow import validate_extraction
-from nof1_causal_lab.artifacts.model_checks import ModelCheckReport, QuestionCheckReport
-from nof1_causal_lab.artifacts.posterior import FitCheckReport
-from nof1_causal_lab.models.model_structure import StructuralSelection
-from nof1_causal_lab.models.question_checks import question_findings
+from nof1_causal_lab.artifacts.reports.inference import FitCheckReport
+from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport, QuestionCheckReport
+from nof1_causal_lab.models.causal.question_checks import question_findings
 from nof1_causal_lab.models.ssm.compile.inputs import compile_fit_inputs, compile_model
-from nof1_causal_lab.study.data import read_data_history
+from nof1_causal_lab.models.structure import StructuralSelection
+from nof1_causal_lab.observations.quality.profile import validate_extraction
+from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model, read_question
+from nof1_causal_lab.study.queries.data import read_data_history
 from nof1_causal_lab.study.state import apply_effects
-from nof1_causal_lab.study.store import ArtifactStore, read_model, read_question
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identification import IdentificationReport
+    from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
     from nof1_causal_lab.study.records import Applied
     from nof1_causal_lab.study.state import StudyState
 
@@ -40,6 +40,9 @@ def read_model_checks(
     action: Literal["edit_model", "fit"],
 ) -> tuple[ModelCheckReport, IdentificationReport] | FitCheckReport:
     """Retain model findings for an edit and record-dependent findings for a fit."""
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime
+
+    initialize_numerical_runtime()
     store = ArtifactStore(workspace_id)
     dynamical_model_spec = read_model(store, state.current["model"].revision)
     question = read_question(store, state.current["question"].revision)

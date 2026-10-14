@@ -11,7 +11,7 @@ import numpyro.distributions as dist
 from numpyro.distributions import constraints
 from pydantic import BaseModel
 
-from nof1_causal_lab.artifacts.likelihood import (
+from nof1_causal_lab.artifacts.model.likelihood import (
     OBSERVATION_LAW_TYPES,
     BernoulliLogitsLawSpec,
     BernoulliProbsLawSpec,
@@ -27,7 +27,7 @@ from nof1_causal_lab.artifacts.likelihood import (
     StudentTLawSpec,
     map_law,
 )
-from nof1_causal_lab.models.ssm.covariance_utils import symmetrize_with_jitter
+from nof1_causal_lab.models.ssm.covariance import symmetrize_with_jitter
 from nof1_causal_lab.models.ssm.execution.contracts import NUMERICAL_EPSILON
 
 if TYPE_CHECKING:

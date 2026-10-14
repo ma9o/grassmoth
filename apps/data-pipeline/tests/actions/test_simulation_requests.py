@@ -6,20 +6,17 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts import SimulateRequest
-from nof1_causal_lab.actions.io import SimulateInput
+from nof1_causal_lab.actions.contracts.bodies import SimulateInput
+from nof1_causal_lab.actions.contracts.requests import SimulateRequest
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.predictive_provenance import AuthoredLawProvenance
+from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.scenarios import InterventionSpec
-from nof1_causal_lab.artifacts.simulation import (
-    SimulationReport,
-    SimulationSpec,
-)
-from nof1_causal_lab.study.result_codec import pack_result, unpack_result
-from tests.action_fixtures import empty_simulation_summary
-from tests.inference_fixtures import compile_model_fixture, particle_posterior
-from tests.model_fixtures import x_y_model
+from nof1_causal_lab.artifacts.simulation import SimulationReport, SimulationSpec
+from nof1_causal_lab.study.persistence.codec import pack_result, unpack_result
+from tests.support.action import empty_simulation_summary
+from tests.support.inference import compile_model_fixture, particle_posterior
+from tests.support.model import x_y_model
 
 pytestmark = pytest.mark.contract
 
@@ -180,17 +177,17 @@ def test_runner_uses_model_time_binding_without_reading_panels(
     import jax.numpy as jnp
 
     from nof1_causal_lab.actions.errors import ActionExecutionError
+    from nof1_causal_lab.actions.fit.conditioning import condition_model
     from nof1_causal_lab.actions.runners import run_action
-    from nof1_causal_lab.artifacts.question import QuestionSpec
-    from nof1_causal_lab.models.ssm.inference.persistence import condition_model
+    from nof1_causal_lab.artifacts.model.question import QuestionSpec
     from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
-    from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
+    from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
+    from nof1_causal_lab.storage import paths as data
+    from nof1_causal_lab.study.persistence.store import ArtifactStore
     from nof1_causal_lab.study.state import StudyState
-    from nof1_causal_lab.study.store import ArtifactStore
-    from nof1_causal_lab.utils import data
-    from tests.helpers import run_async, write_question
-    from tests.inference_fixtures import parameter_draws
     from tests.integration.runner_fixtures import panel_frame, panel_metadata
+    from tests.support.helpers import run_async, write_question
+    from tests.support.inference import parameter_draws
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("ORIGIN")
@@ -234,7 +231,7 @@ def test_runner_uses_model_time_binding_without_reading_panels(
     expected_origin = fit_origin if conditioned else design.start_instant
     calls = []
 
-    def generate(_model, *, start, end, assignments, time_origin):
+    def generate(_model, *, start, end, assignments, time_origin, compute_budget):
         calls.append(time_origin)
         assert time_origin == expected_origin
         assert (start, end) == (design.start_day(expected_origin), design.end_day(expected_origin))
@@ -245,9 +242,11 @@ def test_runner_uses_model_time_binding_without_reading_panels(
         pytest.fail("Simulation must not read a data panel")
 
     monkeypatch.setattr(
-        import_module("nof1_causal_lab.actions.simulate"), "generate_simulation_batch", generate
+        import_module("nof1_causal_lab.actions.simulate.action"),
+        "generate_simulation_batch",
+        generate,
     )
-    monkeypatch.setattr("nof1_causal_lab.study.data.read_data_history", unexpected_read)
+    monkeypatch.setattr("nof1_causal_lab.study.queries.data.read_data_history", unexpected_read)
     with pytest.raises(ActionExecutionError, match="checked model-owned coordinates"):
         run_async(
             run_action(

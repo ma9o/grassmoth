@@ -8,7 +8,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from nof1_causal_lab.artifacts.likelihood import (
+from nof1_causal_lab.artifacts.model.likelihood import (
     CategoricalLawSpec,
     GammaLawSpec,
     NormalLawSpec,
@@ -28,9 +28,8 @@ from nof1_causal_lab.models.ssm.execution.observation_operator import compile_ob
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
-    from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
-
-    from .types import PredictiveDraws
+    from nof1_causal_lab.models.ssm.predictive.types import PredictiveDraws
+    from nof1_causal_lab.models.ssm.preparation.observations import ObservationSupportRuntime
 
 
 def observation_signal_and_variance(

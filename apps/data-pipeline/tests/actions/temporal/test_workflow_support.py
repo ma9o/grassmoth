@@ -8,8 +8,8 @@ from uuid import uuid4
 import pytest
 from temporalio.exceptions import ApplicationError, FailureError
 
-from nof1_causal_lab.actions.progress_contracts import StepError, StepEvent
-from nof1_causal_lab.actions.temporal.workflow_support import (
+from nof1_causal_lab.actions.contracts.progress import StepError, StepEvent
+from nof1_causal_lab.actions.temporal.activity_policy import (
     EVENT_RETRY,
     EVENT_TIMEOUT,
     emit_progress,
@@ -21,8 +21,9 @@ pytestmark = pytest.mark.contract
 
 @pytest.mark.parametrize("fails", [False, True])
 def test_openrouter_transport_is_scoped_to_the_worker_lifetime(monkeypatch, fails):
+    from nof1_causal_lab import config
     from nof1_causal_lab.actions.temporal import worker
-    from nof1_causal_lab.utils import config, openrouter_client
+    from nof1_causal_lab.llm import openrouter as openrouter_client
 
     temporal_client = Mock()
     transport = Mock()
@@ -118,7 +119,7 @@ def test_emit_progress_uses_shared_activity_policy(monkeypatch) -> None:
     async def execute_activity(*args: Any, **kwargs: Any) -> None:
         calls.append((args, kwargs))
 
-    from nof1_causal_lab.actions.temporal import workflow_support
+    from nof1_causal_lab.actions.temporal import activity_policy as workflow_support
 
     monkeypatch.setattr(workflow_support.workflow, "execute_activity", execute_activity)
     step = StepEvent(

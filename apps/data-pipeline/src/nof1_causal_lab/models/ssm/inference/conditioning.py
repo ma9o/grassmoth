@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 import jax.numpy as jnp
 import numpy as np
 
-from nof1_causal_lab.artifacts.expressions import StateExpression
-from nof1_causal_lab.artifacts.likelihood import DeltaLawSpec
-from nof1_causal_lab.models.ssm import numerics as numeric
+from nof1_causal_lab.artifacts.model.expressions import StateExpression
+from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec
+from nof1_causal_lab.models.ssm import compiled_access as numeric
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel

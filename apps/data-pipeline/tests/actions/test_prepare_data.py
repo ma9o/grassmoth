@@ -7,20 +7,22 @@ from uuid import uuid4
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.contracts import PrepareDataRequest
+from nof1_causal_lab.actions.contracts.bodies import PrepareDataInput
+from nof1_causal_lab.actions.contracts.requests import PrepareDataRequest
 from nof1_causal_lab.actions.data_checks import evaluate_data_checks
-from nof1_causal_lab.actions.io import PrepareDataInput
 from nof1_causal_lab.actions.messages import preparation_messages
-from nof1_causal_lab.actions.temporal.measurement_activities import (
+from nof1_causal_lab.actions.prepare_data.context import extraction_context
+from nof1_causal_lab.actions.temporal.extraction.activities import (
     finalize_measurements_activity,
     plan_measurements_activity,
 )
-from nof1_causal_lab.actions.temporal.messages import (
+from nof1_causal_lab.actions.temporal.extraction.messages import (
     CompletedExtractionChunk,
     MeasurementsFinalizeInput,
     MeasurementsWorkflowInput,
 )
-from nof1_causal_lab.artifacts.data_preparation import (
+from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.artifacts.observations.preparation import (
     ComputedExtractionSpec,
     DataPreparationSpec,
     DataVariableSpec,
@@ -28,19 +30,18 @@ from nof1_causal_lab.artifacts.data_preparation import (
     FileSourceRef,
     SemanticExtractionSpec,
 )
-from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.observations import AuthoredObservationSpec
-from nof1_causal_lab.study.lineage import read_data_metadata
+from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
+from nof1_causal_lab.storage import backend as storage
+from nof1_causal_lab.study.persistence.store import ArtifactStore
+from nof1_causal_lab.study.queries.lineage import read_data_metadata
 from nof1_causal_lab.study.state import StudyState
-from nof1_causal_lab.study.store import ArtifactStore
-from nof1_causal_lab.utils import storage
-from tests.helpers import run_async
+from tests.support.helpers import run_async
 
 pytestmark = pytest.mark.contract
 
 
 def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypatch, tmp_path):
-    from nof1_causal_lab.utils import data
+    from nof1_causal_lab.storage import paths as data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
 
@@ -77,7 +78,7 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
             ),
         ),
     )
-    from tests.data_fixtures import preparation_input
+    from tests.support.data import preparation_input
 
     prepared_input = preparation_input(
         store, FilePreparationSpec(source={"files": ["diary.csv"]}, definition=preparation)
@@ -195,9 +196,9 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
 def test_declared_categorical_codebook_validates_and_encodes_normalized_labels(
     value, expected_code
 ):
-    from nof1_causal_lab.actions.extraction.materialization import materialize_panel
-    from nof1_causal_lab.utils.observation_rows import annotate_observation_rows
-    from nof1_causal_lab.workers.schemas import validate_worker_output
+    from nof1_causal_lab.actions.prepare_data.materialization import materialize_panel
+    from nof1_causal_lab.actions.prepare_data.worker_output import validate_worker_output
+    from nof1_causal_lab.observations.rows import annotate_observation_rows
 
     preparation = DataPreparationSpec(
         default_window="1d",
@@ -217,11 +218,11 @@ def test_declared_categorical_codebook_validates_and_encodes_normalized_labels(
     )
     from pydantic import TypeAdapter
 
-    from nof1_causal_lab.artifacts.measurements import ObservationRecord
+    from nof1_causal_lab.artifacts.observations.records import ObservationRecord
 
-    context = FilePreparationSpec(
-        source=FileSourceRef(files=("source.csv",)), definition=preparation
-    ).extraction_context()
+    context = extraction_context(
+        FilePreparationSpec(source=FileSourceRef(files=("source.csv",)), definition=preparation)
+    )
     output, errors = validate_worker_output(
         {
             "extractions": [

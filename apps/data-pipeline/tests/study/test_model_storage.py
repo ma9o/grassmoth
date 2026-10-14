@@ -9,29 +9,36 @@ import numpy as np
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.artifacts.construct import CausalEdgeSpec, ConstructSpec, replace_constructs
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.expressions import state
-from nof1_causal_lab.artifacts.identification import IdentificationReport
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
 from nof1_causal_lab.artifacts.identity import ConstructId, IndicatorId
-from nof1_causal_lab.artifacts.likelihood import ObservationLawSpec
-from nof1_causal_lab.artifacts.mechanism import DriftMechanismSpec
-from nof1_causal_lab.artifacts.model_checks import QuestionCheckReport
-from nof1_causal_lab.artifacts.question import QuestionSpec
-from nof1_causal_lab.models.model_structure import StructuralSelection, selected_state_ids
+from nof1_causal_lab.artifacts.model.construct import (
+    CausalEdgeSpec,
+    ConstructSpec,
+    replace_constructs,
+)
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.expressions import state
+from nof1_causal_lab.artifacts.model.likelihood import ObservationLawSpec
+from nof1_causal_lab.artifacts.model.mechanism import DriftMechanismSpec
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.artifacts.probability.serialization import (
+    empirical_atoms,
+    empirical_distribution,
+)
+from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
+from nof1_causal_lab.artifacts.reports.model_checks import QuestionCheckReport
 from nof1_causal_lab.models.ssm.compile.bindings import joint_law_layout, parameter_bindings
-from nof1_causal_lab.numpyro_json import empirical_atoms, empirical_distribution
+from nof1_causal_lab.models.structure import StructuralSelection, selected_state_ids
 from nof1_causal_lab.study.artifact_files import json_filename
 from nof1_causal_lab.study.errors import StudyLookupError
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model, read_question
 from nof1_causal_lab.study.records import Applied, AttemptRecord, EditAttempt, Raised
-from nof1_causal_lab.study.store import ArtifactStore, read_model, read_question
-from tests.action_fixtures import applied_record, question_root
-from tests.git_fixtures import artifact_revision, commit_id
-from tests.helpers import graph_constructs, write_question
-from tests.inference_fixtures import compile_model_fixture
-from tests.model_fixtures import load_model_fixture, x_y_model
+from tests.support.action import applied_record, question_root
+from tests.support.git import artifact_revision, commit_id
+from tests.support.helpers import graph_constructs, write_question
+from tests.support.inference import compile_model_fixture
+from tests.support.model import load_model_fixture, x_y_model
 
 
 def _fitted_snapshot_keeps_joint_arrays_lazy_and_workspace_bound_complete_test_model() -> (
@@ -47,7 +54,7 @@ pytestmark = pytest.mark.contract
 
 @pytest.fixture
 def workspace(monkeypatch, tmp_path):
-    from nof1_causal_lab.utils import data as data_module
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     return "MODELS"
@@ -107,11 +114,11 @@ def _drop_x(model):
 
 
 def test_predictive_findings_use_entity_ids_and_keep_served_reasons(monkeypatch):
-    from nof1_causal_lab.artifacts.checks import NumericCriterionEvidence
+    from nof1_causal_lab.artifacts.reports.checks import NumericCriterionEvidence
+    from nof1_causal_lab.models.ssm.diagnostics.reachability import CheckResult
+    from nof1_causal_lab.models.ssm.diagnostics.simulation import DesignInfo
     from nof1_causal_lab.models.ssm.predictive import simulation
     from nof1_causal_lab.models.ssm.predictive.types import PredictiveDraws, PredictiveTrajectory
-    from nof1_causal_lab.models.ssm.reachability import CheckResult
-    from nof1_causal_lab.models.ssm.simulation_checks import DesignInfo
 
     dynamical_model_spec = x_y_model()
     edge = dynamical_model_spec.edges[0]
@@ -214,7 +221,7 @@ def _identity_owners(model):
 
 
 def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monkeypatch):
-    from nof1_causal_lab.actions.io import EditModelOutput
+    from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
     from nof1_causal_lab.study.records import AttemptRecord, EditAttempt
 
     dynamical_model_spec = (
@@ -365,7 +372,7 @@ def test_planning_preserves_ids_across_name_and_role_edits(workspace):
     _commit(workspace, "model", revised.model_dump(mode="json"))
     assert _published_model(workspace) == revised
     dynamic_ids = selected_state_ids(StructuralSelection(revised, None))
-    from nof1_causal_lab.utils.identifiability import unroll_temporal_dag
+    from nof1_causal_lab.models.causal.identification import unroll_temporal_dag
 
     dag = unroll_temporal_dag(revised.constructs, revised.edges, {"Renamed", "Y"})
     for construct_id in dynamic_ids:
@@ -467,7 +474,7 @@ def test_owned_mechanisms_survive_rename_and_disappear_with_owner(workspace, own
     _measured(workspace)
     payload = _model().model_dump(mode="json")
     field = "dynamics" if owner == "constructs" else "mechanisms"
-    from nof1_causal_lab.artifacts.expressions import hill, restoring_force
+    from nof1_causal_lab.artifacts.model.expressions import hill, restoring_force
 
     entity = next(iter(payload[owner].values()))
     mechanism = DriftMechanismSpec(
@@ -521,8 +528,8 @@ def _identification():
 
 
 def test_identification_keeps_entity_ids_after_rename(workspace):
-    from nof1_causal_lab.actions.io import EditModelOutput
-    from nof1_causal_lab.artifacts.model_checks import ModelCheckReport
+    from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
+    from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport
 
     store, repository = ArtifactStore(workspace), StudyRepository(workspace)
     reports = {

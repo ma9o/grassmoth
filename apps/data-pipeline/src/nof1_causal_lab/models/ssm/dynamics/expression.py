@@ -10,19 +10,17 @@ import equinox as eqx
 import jax.numpy as jnp
 import numpyro
 
-from nof1_causal_lab.artifacts.expressions import (
+from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.artifacts.model.expressions import (
     CoefficientExpression,
     Expression,
     StateExpression,
     expression_coefficients,
     expression_states,
 )
-from nof1_causal_lab.artifacts.parameter import SiteKind
+from nof1_causal_lab.artifacts.model.parameter import SiteKind
 from nof1_causal_lab.models.ssm.compile.expressions import compile_expression
-from nof1_causal_lab.models.ssm.structure.sites import (
-    SiteDescriptor,
-)
-from nof1_causal_lab.utils.immutability import freeze_fields
+from nof1_causal_lab.models.ssm.structure.sites import SiteDescriptor
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -30,10 +28,9 @@ if TYPE_CHECKING:
     from jax import Array
 
     from nof1_causal_lab.artifacts.identity import ConstructId, ParameterId
-    from nof1_causal_lab.artifacts.likelihood import LinkFunction
-    from nof1_causal_lab.artifacts.parameter import ParameterCoordinate
-
-    from .spec import PriorFn
+    from nof1_causal_lab.artifacts.model.likelihood import LinkFunction
+    from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
+    from nof1_causal_lab.models.ssm.dynamics.spec import PriorFn
 
 
 class ExpressionComponent(eqx.Module):

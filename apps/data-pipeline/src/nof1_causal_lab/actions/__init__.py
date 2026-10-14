@@ -1,1 +1,1 @@
-"""Scientific commands: edit_model, prepare_data, fit, and simulate."""
+"""Scientific action orchestration and transport contracts."""

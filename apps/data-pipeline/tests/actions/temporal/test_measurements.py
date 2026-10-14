@@ -5,40 +5,40 @@ from typing import Any, cast
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from nof1_causal_lab.actions.temporal.llm_subroutine_activities import (
+from nof1_causal_lab.actions.prepare_data.worker_output import ExtractionRow, WorkerOutput
+from nof1_causal_lab.actions.temporal.extraction.activities import OpenRouterActivities
+from nof1_causal_lab.actions.temporal.extraction.messages import (
+    ExtractionChunkWorkflowInput,
+    MeasurementChunkRef,
+    ProgressEventInput,
+)
+from nof1_causal_lab.actions.temporal.extraction.workflow import ExtractionChunkWorkflow
+from nof1_causal_lab.actions.temporal.llm.activities import (
     append_llm_repair_message_activity,
     execute_llm_tool_calls_activity,
 )
-from nof1_causal_lab.actions.temporal.llm_subroutine_storage import read_subroutine_json
-from nof1_causal_lab.actions.temporal.llm_subroutine_workflow import LLMSubroutineWorkflow
-from nof1_causal_lab.actions.temporal.measurement_activities import (
-    OpenRouterActivities,
-)
-from nof1_causal_lab.actions.temporal.measurement_workflow import ExtractionChunkWorkflow
-from nof1_causal_lab.actions.temporal.messages import (
+from nof1_causal_lab.actions.temporal.llm.messages import (
     AppendLLMRepairMessageInput,
-    ExtractionChunkWorkflowInput,
     LLMSubroutineInput,
     LLMSubroutineRef,
     LLMToolExecutionInput,
     LLMToolSpec,
-    MeasurementChunkRef,
     OpenRouterCallInput,
-    ProgressEventInput,
     StoredConversation,
 )
-from nof1_causal_lab.llm_specs import EmbeddedLLMSpec, HarnessLLMSpec
-from nof1_causal_lab.utils import storage
-from nof1_causal_lab.utils.openrouter_client import create_openrouter_client
-from nof1_causal_lab.workers.schemas import ExtractionRow, WorkerOutput
-from tests.helpers import run_async
+from nof1_causal_lab.actions.temporal.llm.storage import read_subroutine_json
+from nof1_causal_lab.actions.temporal.llm.workflow import LLMSubroutineWorkflow
+from nof1_causal_lab.llm.openrouter import create_openrouter_client
+from nof1_causal_lab.llm.specs import EmbeddedLLMSpec, HarnessLLMSpec
+from nof1_causal_lab.storage import backend as storage
+from tests.support.helpers import run_async
 
 pytestmark = pytest.mark.timeout(240)
 
 
 @pytest.fixture(autouse=True)
 def isolated_measurement_store(monkeypatch, tmp_path):
-    from nof1_causal_lab.utils import data
+    from nof1_causal_lab.storage import paths as data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path / "data"))
 
@@ -102,7 +102,7 @@ def test_progress_event_variants_round_trip_through_temporal(payload, required_f
 
 @pytest.mark.contract
 def test_call_openrouter_activity_reuses_persisted_call_result(monkeypatch, tmp_path):
-    import nof1_causal_lab.utils.openrouter_client as openrouter_client
+    import nof1_causal_lab.llm.openrouter as openrouter_client
 
     calls: list[list[dict[str, Any]]] = []
     conversation_ref = str(tmp_path / "conversation.json")
@@ -407,7 +407,7 @@ def test_append_llm_repair_message_activity_persists_repair_turn(tmp_path):
 
 @pytest.mark.contract
 def test_execute_llm_tool_calls_activity_requires_terminal_acknowledgement(tmp_path, monkeypatch):
-    from nof1_causal_lab.actions.temporal import llm_subroutine_activities
+    from nof1_causal_lab.actions.temporal.llm import activities as llm_subroutine_activities
 
     async def incomplete_validation(**_kwargs):
         return "Validation still pending", None
@@ -493,10 +493,10 @@ def test_execute_llm_tool_calls_activity_requires_terminal_acknowledgement(tmp_p
 def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_path, reused):
     from temporalio.testing import WorkflowEnvironment
 
-    import nof1_causal_lab.utils.openrouter_client as openrouter_client
+    import nof1_causal_lab.llm.openrouter as openrouter_client
     from nof1_causal_lab.actions.temporal.client import pydantic_data_converter
     from nof1_causal_lab.actions.temporal.worker import build_openrouter_worker, build_worker
-    from nof1_causal_lab.utils import data as data_module
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     output_json = json.dumps(
@@ -619,7 +619,7 @@ def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_p
         )[0]["value"]
         == "1000"
     )
-    from nof1_causal_lab.utils.llm import LLMTrace
+    from nof1_causal_lab.llm.traces import LLMTrace
 
     trace_path = storage.join(
         data_module.scratch_run_dir(workspace_id, "seq-000001"),
@@ -651,9 +651,9 @@ def test_llm_subroutine_workflow_delegates_harness_tool_to_temporal_activity(
 
     from temporalio.testing import WorkflowEnvironment
 
-    import nof1_causal_lab.utils.harness.claude as claude_harness
-    import nof1_causal_lab.utils.harness.codex as codex_harness
-    import nof1_causal_lab.utils.harness.pi as pi_harness
+    import nof1_causal_lab.llm.harness.claude as claude_harness
+    import nof1_causal_lab.llm.harness.codex as codex_harness
+    import nof1_causal_lab.llm.harness.pi as pi_harness
     from nof1_causal_lab.actions.temporal.client import (
         HARNESS_CLAUDE_TASK_QUEUE,
         HARNESS_CODEX_TASK_QUEUE,
@@ -661,9 +661,9 @@ def test_llm_subroutine_workflow_delegates_harness_tool_to_temporal_activity(
         pydantic_data_converter,
     )
     from nof1_causal_lab.actions.temporal.worker import build_harness_worker, build_worker
-    from nof1_causal_lab.utils import data as data_module
-    from nof1_causal_lab.utils.agent_session import AgentResult, TurnResult
-    from nof1_causal_lab.utils.llm import LLMTrace, TraceMessage, TraceUsage
+    from nof1_causal_lab.llm.sessions import AgentResult, TurnResult
+    from nof1_causal_lab.llm.traces import LLMTrace, TraceMessage, TraceUsage
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     valid_extractions = {

@@ -6,6 +6,9 @@ app = marimo.App(width="medium")
 
 @app.cell
 def imports_marimo():
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime as _initialize_runtime
+
+    _initialize_runtime()
     import marimo as mo
 
     return (mo,)
@@ -47,7 +50,7 @@ def intro(mo):
 
 @app.cell
 def imports_lab():
-    import sbc_support as lab
+    import notebooks.support.sbc as lab
 
     return (lab,)
 
@@ -369,7 +372,7 @@ def bridge_md(mo):
 
     SBC is the acceptance test for an inference *engine*, and it answers a different question
     from the calibration check already in the pipeline. The posterior-predictive
-    `_check_calibration` in `models/posterior_predictive.py` asks *does the fitted model cover
+    `_check_calibration` in `models/diagnostics/history_comparison.py` asks *does the fitted model cover
     the real data?* — a verdict on the **model**, given one dataset. SBC asks *does the
     algorithm recover parameters it was simulated from?* — a verdict on the **computation**,
     averaged over the prior, needing no real data at all. A model can be wrong and pass SBC;

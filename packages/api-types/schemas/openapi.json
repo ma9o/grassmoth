@@ -691,7 +691,7 @@
         ],
         "title": "ActionEffects",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.effects",
+        "x-python-module": "nof1_causal_lab.actions.contracts.effects",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },
@@ -783,7 +783,7 @@
             "$ref": "#/components/schemas/ActionSuccess"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools",
         "description": "A call returns its identity, publication status, scientific body, and accumulated execution messages."
@@ -800,7 +800,7 @@
           "model-diff"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.actions.effects",
+        "x-python-module": "nof1_causal_lab.actions.contracts.effects",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },
@@ -840,7 +840,7 @@
             "$ref": "#/components/schemas/SuccessfulPoll_Literal__model_diff___ModelDiffOutput_"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools",
         "description": "A successful call pairs its action with that action's scientific result body."
@@ -867,7 +867,7 @@
         "title": "Added[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-typescript-parameters": [
           "PayloadT"
         ],
@@ -895,7 +895,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Added<DataPoint>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -1216,7 +1216,7 @@
           }
         ],
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-typescript-parameters": [
           "Subject",
           "Evidence"
@@ -1242,7 +1242,7 @@
         ],
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Assessment<ConvergenceAssessmentSubject, NumericCriterionEvidence>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -1264,7 +1264,7 @@
         ],
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Assessment<IndicatorCheckSubject, NumericCriterionEvidence>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -1862,7 +1862,7 @@
         ],
         "title": "AuthoredLawProvenance",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.predictive_provenance",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.predictive_provenance",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -1888,7 +1888,7 @@
         "title": "BernoulliLogitsLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -1915,7 +1915,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "BernoulliLogitsLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -1940,7 +1940,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "BernoulliLogitsLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -1966,7 +1966,7 @@
         "title": "BernoulliProbsLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -1993,7 +1993,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "BernoulliProbsLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2018,7 +2018,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "BernoulliProbsLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2050,7 +2050,7 @@
         "title": "BetaLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -2081,7 +2081,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "BetaLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2110,7 +2110,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "BetaLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2141,7 +2141,7 @@
         ],
         "title": "BinaryExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2173,7 +2173,7 @@
         ],
         "title": "BinaryExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2187,7 +2187,7 @@
           "maximum"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "A binary operator combines two scalar expression operands."
@@ -2238,7 +2238,7 @@
         ],
         "title": "CallExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2270,7 +2270,7 @@
         ],
         "title": "CallExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2311,7 +2311,7 @@
         "title": "CategoricalLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -2338,7 +2338,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "CategoricalLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2363,7 +2363,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "CategoricalLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2466,7 +2466,7 @@
         ],
         "title": "CausalEdgeSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.construct",
+        "x-python-module": "nof1_causal_lab.artifacts.model.construct",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2532,7 +2532,7 @@
         ],
         "title": "CausalEdgeSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.construct",
+        "x-python-module": "nof1_causal_lab.artifacts.model.construct",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2760,7 +2760,7 @@
         ],
         "title": "ChainDiagnostics",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -2785,7 +2785,7 @@
           }
         ],
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-typescript-parameters": [
           "PayloadT"
         ],
@@ -2814,7 +2814,7 @@
         ],
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Change<DataPoint>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -2862,7 +2862,7 @@
         ],
         "title": "CoefficientExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2913,7 +2913,7 @@
         ],
         "title": "CoefficientExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -2946,7 +2946,7 @@
           "initial_correlation"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "A coefficient role identifies an expression operand\u2019s scientific quantity and support."
@@ -2982,7 +2982,7 @@
         ],
         "title": "CompletedExtractionWorker",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -3068,7 +3068,7 @@
         ],
         "title": "ComputedExtractionSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -3158,7 +3158,7 @@
         ],
         "title": "ComputedExtractionSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -3307,7 +3307,7 @@
         ],
         "title": "ConstructSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.construct",
+        "x-python-module": "nof1_causal_lab.artifacts.model.construct",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -3397,7 +3397,7 @@
         ],
         "title": "ConstructSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.construct",
+        "x-python-module": "nof1_causal_lab.artifacts.model.construct",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -3417,7 +3417,7 @@
             "type": "string"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -3467,7 +3467,7 @@
         ],
         "title": "ConvergenceReport",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -3489,7 +3489,7 @@
         ],
         "title": "ConvergenceSubject",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -3499,7 +3499,7 @@
           "paid_mix"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.sampler_config",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -3536,7 +3536,7 @@
         ],
         "title": "DataComparisonReport",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -3559,7 +3559,7 @@
         "title": "DataDiffInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -3586,7 +3586,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataDiffInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -3610,7 +3610,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "DataDiffInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -3628,7 +3628,7 @@
         ],
         "title": "DataDiffOutput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -3668,7 +3668,7 @@
         "title": "DataDiffRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -3712,7 +3712,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataDiffRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -3751,7 +3751,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "DataDiffRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -3771,7 +3771,7 @@
             "$ref": "#/components/schemas/NotEvaluated_Union_IndicatorRef__Literal__dataset____"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.validation_report",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_quality",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -3828,7 +3828,7 @@
         ],
         "title": "DataPoint",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -3863,7 +3863,7 @@
         ],
         "title": "DataPreparationResult",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -3897,7 +3897,7 @@
         ],
         "title": "DataPreparationSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -3929,7 +3929,7 @@
         ],
         "title": "DataProfileReport",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.validation_report",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_quality",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -3954,7 +3954,7 @@
         "title": "DataRef[Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-typescript-parameters": [
           "RevisionT",
           "IndexT"
@@ -3992,7 +3992,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataRef<RevisionT, number | null>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4018,7 +4018,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataRef<RevisionT, number>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4050,7 +4050,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataRef<GitOid, number | null>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4074,7 +4074,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataRef<GitOid, number>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4105,7 +4105,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "DataRef<RevisionSelector, number | null>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4129,7 +4129,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "DataRef<RevisionSelector, number>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4141,7 +4141,7 @@
         "minItems": 1,
         "type": "array",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -4157,7 +4157,7 @@
         "type": "array",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataSelection<GitOid>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4170,7 +4170,7 @@
         "type": "array",
         "x-typescript-mode": "validation",
         "x-typescript-type": "DataSelection<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_ref",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4195,7 +4195,7 @@
             "$ref": "#/components/schemas/ProportionComparison"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -4216,7 +4216,7 @@
         ],
         "title": "DataVariableSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4242,7 +4242,7 @@
         "title": "DeltaLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -4269,7 +4269,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "DeltaLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4294,7 +4294,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DeltaLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4326,7 +4326,7 @@
         ],
         "title": "DensityCurve",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -4367,7 +4367,7 @@
         ],
         "title": "DescriptiveIndicatorComparison",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -4409,7 +4409,7 @@
         ],
         "title": "DriftMechanismSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.mechanism",
+        "x-python-module": "nof1_causal_lab.artifacts.model.mechanism",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4437,7 +4437,7 @@
         ],
         "title": "DriftMechanismSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.mechanism",
+        "x-python-module": "nof1_causal_lab.artifacts.model.mechanism",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4673,10 +4673,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -4701,7 +4701,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -4840,10 +4840,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -4868,7 +4868,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -4995,10 +4995,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -5023,7 +5023,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -5162,10 +5162,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -5190,7 +5190,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -5317,10 +5317,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -5345,7 +5345,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -5472,10 +5472,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -5500,7 +5500,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -5639,10 +5639,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -5667,7 +5667,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -5806,10 +5806,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -5834,7 +5834,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -5961,10 +5961,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -5989,7 +5989,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -6128,10 +6128,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -6156,7 +6156,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -6295,10 +6295,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -6323,7 +6323,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -6462,10 +6462,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -6490,7 +6490,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -6617,10 +6617,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -6645,7 +6645,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -6784,10 +6784,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -6812,7 +6812,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -6939,10 +6939,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -6967,7 +6967,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -7106,10 +7106,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -7134,7 +7134,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -7261,10 +7261,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -7289,7 +7289,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -7428,10 +7428,10 @@
                                                         "type": "string"
                                                       },
                                                       "left": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       },
                                                       "right": {
-                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                       }
                                                     },
                                                     "type": "object"
@@ -7456,7 +7456,7 @@
                                                       },
                                                       "arguments": {
                                                         "items": {
-                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                                         },
                                                         "type": "array"
                                                       }
@@ -7666,10 +7666,10 @@
                                             "type": "string"
                                           },
                                           "left": {
-                                            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                           },
                                           "right": {
-                                            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                           }
                                         },
                                         "type": "object"
@@ -7694,7 +7694,7 @@
                                           },
                                           "arguments": {
                                             "items": {
-                                              "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                              "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                             },
                                             "type": "array"
                                           }
@@ -7832,10 +7832,10 @@
                                             "type": "string"
                                           },
                                           "left": {
-                                            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                           },
                                           "right": {
-                                            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                           }
                                         },
                                         "type": "object"
@@ -7860,7 +7860,7 @@
                                           },
                                           "arguments": {
                                             "items": {
-                                              "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                              "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                             },
                                             "type": "array"
                                           }
@@ -8139,10 +8139,10 @@
                                         "type": "string"
                                       },
                                       "left": {
-                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                       },
                                       "right": {
-                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                        "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                       }
                                     },
                                     "type": "object"
@@ -8167,7 +8167,7 @@
                                       },
                                       "arguments": {
                                         "items": {
-                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                                          "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                                         },
                                         "type": "array"
                                       }
@@ -8528,7 +8528,7 @@
         },
         "title": "DynamicalModelSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.dynamical_model_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.dynamical_model_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -13520,11 +13520,11 @@
         ],
         "title": "DynamicalModelSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.dynamical_model_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.dynamical_model_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__BinaryExpression-Input__1_": {
+      "DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__BinaryExpression-Input__1_": {
         "additionalProperties": false,
         "description": "A supported scalar operation composing two expressions.",
         "properties": {
@@ -13544,19 +13544,19 @@
             "type": "string"
           },
           "left": {
-            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
           },
           "right": {
-            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
           }
         },
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.dynamical_model_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.dynamical_model_spec",
         "x-typescript-mode": "validation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_": {
+      "DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_": {
         "anyOf": [
           {
             "additionalProperties": false,
@@ -13655,7 +13655,7 @@
             "type": "object"
           },
           {
-            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__BinaryExpression-Input__1_"
+            "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__BinaryExpression-Input__1_"
           },
           {
             "additionalProperties": false,
@@ -13677,7 +13677,7 @@
               },
               "arguments": {
                 "items": {
-                  "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"
+                  "$ref": "#/components/schemas/DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"
                 },
                 "type": "array"
               }
@@ -13685,7 +13685,7 @@
             "type": "object"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.dynamical_model_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.dynamical_model_spec",
         "x-typescript-mode": "validation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
@@ -13706,7 +13706,7 @@
             "$ref": "#/components/schemas/PotentialMechanismSpec-Input"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.mechanism",
+        "x-python-module": "nof1_causal_lab.artifacts.model.mechanism",
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "A dynamics mechanism declares one contribution to continuous-time drift."
@@ -13727,7 +13727,7 @@
             "$ref": "#/components/schemas/PotentialMechanismSpec-Output"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.mechanism",
+        "x-python-module": "nof1_causal_lab.artifacts.model.mechanism",
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "A dynamics mechanism declares one contribution to continuous-time drift."
@@ -13794,7 +13794,7 @@
         "title": "EditModelInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -13821,7 +13821,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "EditModelInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -13845,7 +13845,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "EditModelInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -13878,7 +13878,7 @@
         ],
         "title": "EditModelOutput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -13918,7 +13918,7 @@
         "title": "EditModelRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -13962,7 +13962,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "EditModelRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14001,7 +14001,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "EditModelRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14019,7 +14019,7 @@
         ],
         "title": "EditQuestionInput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14037,7 +14037,7 @@
         ],
         "title": "EditQuestionInput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14055,7 +14055,7 @@
         ],
         "title": "EditQuestionOutput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14093,7 +14093,7 @@
         ],
         "title": "EditQuestionRequest",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14133,7 +14133,7 @@
         ],
         "title": "EditQuestionRequest",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14173,7 +14173,7 @@
         ],
         "title": "EffectSummary",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.effects",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.effects",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -14198,7 +14198,7 @@
         ],
         "title": "EmpiricalPoint",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.empirical",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.empirical",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -14227,7 +14227,7 @@
         ],
         "title": "EnergyDiagnostics",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -14302,7 +14302,7 @@
         "title": "Evaluated[Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-typescript-parameters": [
           "Subject",
           "Evidence"
@@ -14349,7 +14349,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Evaluated<ConvergenceAssessmentSubject, NumericCriterionEvidence>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -14392,7 +14392,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Evaluated<IndicatorCheckSubject, NumericCriterionEvidence>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -14439,7 +14439,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Evaluated<PredictiveSubject, readonly (NumericCriterionEvidence)[]>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -14483,7 +14483,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Evaluated<QuestionSubject, string>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -14536,7 +14536,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Evaluated<IndicatorRef | \"dataset\", string>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -14581,7 +14581,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Evaluated<string, string>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -14609,7 +14609,7 @@
             "$ref": "#/components/schemas/FailureMessage"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.logs",
+        "x-python-module": "nof1_causal_lab.actions.contracts.logs",
         "x-layer": "transport",
         "x-concern": "execution_history",
         "description": "An execution message retains a lifecycle entry, structured progress, an LLM trace, or failure details."
@@ -14642,7 +14642,7 @@
             "$ref": "#/components/schemas/CallExpression-Input"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "A scalar expression composes supported arithmetic with scientific state and coefficient references."
@@ -14675,7 +14675,7 @@
             "$ref": "#/components/schemas/CallExpression-Output"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "A scalar expression composes supported arithmetic with scientific state and coefficient references."
@@ -14689,7 +14689,7 @@
           "category_logits"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "An expression function transforms scalar operands or constructs structured observation arguments."
@@ -14742,7 +14742,7 @@
         ],
         "title": "ExtractionPlanEvent",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.progress_contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -14804,7 +14804,7 @@
         ],
         "title": "ExtractionSnapshotEvent",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.progress_contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -14824,7 +14824,7 @@
             "$ref": "#/components/schemas/SemanticExtractionSpec-Input"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -14844,7 +14844,7 @@
             "$ref": "#/components/schemas/SemanticExtractionSpec-Output"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -14940,7 +14940,7 @@
         ],
         "title": "ExtractionWorkerEvent",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.progress_contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -14960,7 +14960,7 @@
             "$ref": "#/components/schemas/FailedExtractionChunk"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -15026,7 +15026,7 @@
         ],
         "title": "FailedExtractionChunk",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -15080,7 +15080,7 @@
         ],
         "title": "FailedPoll",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15125,7 +15125,7 @@
         ],
         "title": "FailureMessage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.logs",
+        "x-python-module": "nof1_causal_lab.actions.contracts.logs",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },
@@ -15187,7 +15187,7 @@
         ],
         "title": "FileSourceRef",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -15215,7 +15215,7 @@
             "$ref": "#/components/schemas/QuestionSubject"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -15244,7 +15244,7 @@
         ],
         "title": "FitCheckReport",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -15274,7 +15274,7 @@
         "title": "FitInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -15306,7 +15306,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "FitInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15334,7 +15334,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "FitInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15362,7 +15362,7 @@
         ],
         "title": "FitOutput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15414,7 +15414,7 @@
         "title": "FitRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -15458,7 +15458,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "FitRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15497,7 +15497,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "FitRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15573,7 +15573,7 @@
         },
         "title": "FitSettingsSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -15656,7 +15656,7 @@
         ],
         "title": "FitSettingsSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -15693,7 +15693,7 @@
         ],
         "title": "FittedLawProvenance",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.predictive_provenance",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.predictive_provenance",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -15725,7 +15725,7 @@
         "title": "GammaLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -15756,7 +15756,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "GammaLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -15785,7 +15785,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "GammaLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -15819,7 +15819,7 @@
         ],
         "title": "GaussianReferenceTemperingSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.sampler_config",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -15881,7 +15881,7 @@
         ],
         "title": "HistogramBin",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.effects",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.effects",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -15931,7 +15931,7 @@
         ],
         "title": "IdentificationReport",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.identification",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.identification",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -15975,7 +15975,7 @@
         ],
         "title": "IdentifiedTreatmentStatus",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.identification",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.identification",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -15992,7 +15992,7 @@
         },
         "title": "IdentityTransformSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16012,7 +16012,7 @@
         ],
         "title": "IdentityTransformSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16045,7 +16045,7 @@
         ],
         "title": "IndicatorAudit",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.validation_report",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_quality",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16062,7 +16062,7 @@
         ],
         "title": "IndicatorCheckSubject",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16075,7 +16075,7 @@
             "$ref": "#/components/schemas/PredictiveIndicatorComparison"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16165,7 +16165,7 @@
         ],
         "title": "IndicatorEmpiricalProfile",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.validation_report",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_quality",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16194,7 +16194,7 @@
         ],
         "title": "IndicatorPolarity",
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.indicator",
+        "x-python-module": "nof1_causal_lab.artifacts.model.indicator",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16251,7 +16251,7 @@
         ],
         "title": "IndicatorSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.indicator",
+        "x-python-module": "nof1_causal_lab.artifacts.model.indicator",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16285,7 +16285,7 @@
         ],
         "title": "IndicatorSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.indicator",
+        "x-python-module": "nof1_causal_lab.artifacts.model.indicator",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16401,7 +16401,7 @@
         ],
         "title": "InferenceEvidence",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
         "x-layer": "artifacts",
         "x-concern": "scientific_model"
       },
@@ -16451,7 +16451,7 @@
         ],
         "title": "InferenceMetadata",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16476,7 +16476,7 @@
         ],
         "title": "InferenceReport",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16540,7 +16540,7 @@
         ],
         "title": "InferenceReportCore",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16589,7 +16589,7 @@
         ],
         "title": "InferenceReportDetail",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16606,7 +16606,7 @@
         },
         "title": "InitialCorrelationTransformSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16626,7 +16626,7 @@
         ],
         "title": "InitialCorrelationTransformSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16659,7 +16659,7 @@
         ],
         "title": "IntervalEffectTransformSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16693,7 +16693,7 @@
         ],
         "title": "IntervalEffectTransformSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16840,7 +16840,7 @@
         ],
         "title": "JointLawLayout",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.models.ssm.joint_layout",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.joint_layout",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16917,7 +16917,7 @@
         ],
         "title": "JointLawLayout",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.models.ssm.joint_layout",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.joint_layout",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17051,7 +17051,7 @@
         ],
         "title": "LLMTrace",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.utils.llm",
+        "x-python-module": "nof1_causal_lab.llm.traces",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -17122,7 +17122,7 @@
         ],
         "title": "LOODiagnostics",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -17145,7 +17145,7 @@
         ],
         "title": "LOOPITPoint",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -17198,7 +17198,7 @@
         ],
         "title": "LapsInitializationDiagnostics",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -17253,7 +17253,7 @@
         ],
         "title": "LapsInitializationSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.sampler_config",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17275,7 +17275,7 @@
         ],
         "title": "LatentConvergenceSubject",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -17350,7 +17350,7 @@
         ],
         "title": "LatentDiagnostics",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -17387,7 +17387,7 @@
         ],
         "title": "LikelihoodSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17426,7 +17426,7 @@
         ],
         "title": "LikelihoodSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17450,7 +17450,7 @@
         ],
         "title": "LiteralExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17475,7 +17475,7 @@
         ],
         "title": "LiteralExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17513,7 +17513,7 @@
         ],
         "title": "LiteratureSource",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.evidence",
+        "x-python-module": "nof1_causal_lab.artifacts.model.evidence",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17552,7 +17552,7 @@
         ],
         "title": "LiteratureSource",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.evidence",
+        "x-python-module": "nof1_causal_lab.artifacts.model.evidence",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17779,7 +17779,7 @@
         ],
         "title": "MarginalParticleGibbsSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.sampler_config",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17792,7 +17792,7 @@
           "categorical"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.measurement_types",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.dtypes",
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "A measurement dtype defines the observed value domain of an indicator."
@@ -17870,7 +17870,7 @@
         ],
         "title": "MixedLawProvenance",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.predictive_provenance",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.predictive_provenance",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -17895,7 +17895,7 @@
         ],
         "title": "ModelCheckReport",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.model_checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.model_checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -17922,7 +17922,7 @@
         "title": "ModelDiffInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -17949,7 +17949,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "ModelDiffInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -17973,7 +17973,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "ModelDiffInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -17991,7 +17991,7 @@
         ],
         "title": "ModelDiffOutput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -18031,7 +18031,7 @@
         "title": "ModelDiffRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -18075,7 +18075,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "ModelDiffRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -18114,7 +18114,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "ModelDiffRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -18163,7 +18163,7 @@
         ],
         "title": "ModelEditResult",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.dynamical_model_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.dynamical_model_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -18320,7 +18320,7 @@
         ],
         "title": "ModelSnapshot",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.snapshot_models",
+        "x-python-module": "nof1_causal_lab.study.snapshot",
         "x-layer": "read_models",
         "x-concern": "read_models"
       },
@@ -18352,7 +18352,7 @@
         "title": "NegativeBinomial2LawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -18383,7 +18383,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "NegativeBinomial2LawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -18412,7 +18412,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NegativeBinomial2LawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -18455,7 +18455,7 @@
         ],
         "title": "NonIdentifiableTreatmentStatus",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.identification",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.identification",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18487,7 +18487,7 @@
         "title": "NormalLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -18518,7 +18518,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "NormalLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -18547,7 +18547,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NormalLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -18583,7 +18583,7 @@
             "type": "string"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18623,7 +18623,7 @@
         "title": "NotEvaluated[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-typescript-parameters": [
           "Subject"
         ],
@@ -18665,7 +18665,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NotEvaluated<ConvergenceAssessmentSubject>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18704,7 +18704,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NotEvaluated<IndicatorCheckSubject>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18743,7 +18743,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NotEvaluated<IndicatorRef>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18784,7 +18784,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NotEvaluated<\"causal_effect\">",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18823,7 +18823,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NotEvaluated<PredictiveSubject>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18862,7 +18862,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NotEvaluated<QuestionSubject>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18910,7 +18910,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NotEvaluated<IndicatorRef | \"dataset\">",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18950,7 +18950,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NotEvaluated<string>",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -18959,7 +18959,7 @@
           "$ref": "#/components/schemas/NumPyroValue-Input"
         },
         "type": "array",
-        "x-python-module": "nof1_causal_lab.numpyro_json",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.serialization",
         "x-layer": "transport",
         "x-concern": "scientific_model"
       },
@@ -18968,7 +18968,7 @@
           "$ref": "#/components/schemas/NumPyroValue-Output"
         },
         "type": "array",
-        "x-python-module": "nof1_causal_lab.numpyro_json",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.serialization",
         "x-layer": "transport",
         "x-concern": "scientific_model"
       },
@@ -18992,7 +18992,7 @@
           "params"
         ],
         "type": "object",
-        "x-python-module": "nof1_causal_lab.numpyro_json",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.serialization",
         "x-layer": "transport",
         "x-concern": "scientific_model",
         "description": "A native NumPyro probability distribution serialized by its constructor tree."
@@ -19017,7 +19017,7 @@
           "params"
         ],
         "type": "object",
-        "x-python-module": "nof1_causal_lab.numpyro_json",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.serialization",
         "x-layer": "transport",
         "x-concern": "scientific_model",
         "description": "A native NumPyro probability distribution serialized by its constructor tree."
@@ -19027,7 +19027,7 @@
           "$ref": "#/components/schemas/NumPyroValue-Input"
         },
         "type": "object",
-        "x-python-module": "nof1_causal_lab.numpyro_json",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.serialization",
         "x-layer": "transport",
         "x-concern": "scientific_model"
       },
@@ -19036,7 +19036,7 @@
           "$ref": "#/components/schemas/NumPyroValue-Output"
         },
         "type": "object",
-        "x-python-module": "nof1_causal_lab.numpyro_json",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.serialization",
         "x-layer": "transport",
         "x-concern": "scientific_model"
       },
@@ -19055,7 +19055,7 @@
             "$ref": "#/components/schemas/NumPyroObject-Input"
           }
         ],
-        "x-python-module": "nof1_causal_lab.numpyro_json",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.serialization",
         "x-layer": "transport",
         "x-concern": "scientific_model"
       },
@@ -19074,7 +19074,7 @@
             "$ref": "#/components/schemas/NumPyroObject-Output"
           }
         ],
-        "x-python-module": "nof1_causal_lab.numpyro_json",
+        "x-python-module": "nof1_causal_lab.artifacts.probability.serialization",
         "x-layer": "transport",
         "x-concern": "scientific_model"
       },
@@ -19153,7 +19153,7 @@
         ],
         "title": "NumericCriterionEvidence",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -19186,7 +19186,7 @@
           "$ref": "#/components/schemas/IndicatorId-Output"
         },
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.observation_history",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.history",
         "x-layer": "authored",
         "x-concern": "read_models"
       },
@@ -19227,7 +19227,7 @@
         ],
         "title": "ObservationHistory",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.observation_history",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.history",
         "x-layer": "authored",
         "x-concern": "read_models"
       },
@@ -19283,7 +19283,7 @@
             "$ref": "#/components/schemas/CategoricalLawSpec_Expression_-Input"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -19339,7 +19339,7 @@
             "$ref": "#/components/schemas/CategoricalLawSpec_Expression_-Output"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -19414,7 +19414,7 @@
         "title": "ObservationSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.observations",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.spec",
         "x-typescript-parameters": [
           "WindowT"
         ],
@@ -19496,7 +19496,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "ObservationSpec<ObservationWindow | null>",
-        "x-python-module": "nof1_causal_lab.artifacts.observations",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -19578,7 +19578,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "ObservationSpec<ObservationWindow | null>",
-        "x-python-module": "nof1_causal_lab.artifacts.observations",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -19652,13 +19652,13 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "ObservationSpec<ObservationWindow>",
-        "x-python-module": "nof1_causal_lab.artifacts.observations",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "ObservationWindow": {
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.observations",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -19690,7 +19690,7 @@
         "title": "OrderedLogisticLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -19721,7 +19721,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "OrderedLogisticLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -19750,7 +19750,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "OrderedLogisticLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -19767,7 +19767,7 @@
         ],
         "title": "OutcomeSubject",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -19875,7 +19875,7 @@
         ],
         "title": "PPCOverlay",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -19960,7 +19960,7 @@
         ],
         "title": "PPCTestStat",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -20070,7 +20070,7 @@
         ],
         "title": "ParameterDiagnostics",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -20191,7 +20191,7 @@
         ],
         "title": "ParameterSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20261,7 +20261,7 @@
         ],
         "title": "ParameterSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20289,7 +20289,7 @@
             "$ref": "#/components/schemas/InitialCorrelationTransformSpec-Input"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20317,7 +20317,7 @@
             "$ref": "#/components/schemas/InitialCorrelationTransformSpec-Output"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20362,7 +20362,7 @@
         ],
         "title": "ParetoKPoint",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -20372,7 +20372,7 @@
         "properties": {},
         "title": "ParticleMCMCEvidence",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -20585,7 +20585,7 @@
         ],
         "title": "ParticleSamplerDiagnostics",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -20618,7 +20618,7 @@
         ],
         "title": "PersistenceTransformSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20652,7 +20652,7 @@
         ],
         "title": "PersistenceTransformSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.parameter_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20678,7 +20678,7 @@
         "title": "PoissonLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -20705,7 +20705,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "PoissonLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20730,7 +20730,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "PoissonLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20801,7 +20801,7 @@
         ],
         "title": "PosteriorMarginal",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -20844,7 +20844,7 @@
         ],
         "title": "PosteriorPredictiveChecks",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -20871,7 +20871,7 @@
         ],
         "title": "PotentialMechanismSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.mechanism",
+        "x-python-module": "nof1_causal_lab.artifacts.model.mechanism",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20899,7 +20899,7 @@
         ],
         "title": "PotentialMechanismSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.mechanism",
+        "x-python-module": "nof1_causal_lab.artifacts.model.mechanism",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -20919,7 +20919,7 @@
             "$ref": "#/components/schemas/NotEvaluated_PredictiveSubject_"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -20933,7 +20933,7 @@
           "ARCHIVED_MEASUREMENT_NOT_RETAINED"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model",
         "description": "A predictive check reason explains why a battery could not be evaluated for the selected model and observations."
@@ -20968,7 +20968,7 @@
         ],
         "title": "PredictiveComparison",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -21013,7 +21013,7 @@
         ],
         "title": "PredictiveIndicatorComparison",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -21041,7 +21041,7 @@
             "$ref": "#/components/schemas/UnknownLawProvenance"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.predictive_provenance",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.predictive_provenance",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -21082,7 +21082,7 @@
         ],
         "title": "PredictiveSubject",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -21129,7 +21129,7 @@
         "title": "PrepareDataInput[Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-typescript-parameters": [
           "RevisionT",
           "SourceT"
@@ -21177,7 +21177,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "PrepareDataInput<GitOid, FileSourceRef>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -21220,7 +21220,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "PrepareDataInput<RevisionSelector, SourceFolder>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -21253,7 +21253,7 @@
         ],
         "title": "PrepareDataOutput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -21293,7 +21293,7 @@
         "title": "PrepareDataRequest[Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT",
           "SourceT"
@@ -21338,7 +21338,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "PrepareDataRequest<GitOid, FileSourceRef>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -21377,7 +21377,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "PrepareDataRequest<RevisionSelector, SourceFolder>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -21411,7 +21411,7 @@
         ],
         "title": "PreparedDataMetadata",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -21439,7 +21439,7 @@
             "$ref": "#/components/schemas/ExtractionSnapshotEvent"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.progress_contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history",
         "description": "A progress event records one running attempt's step status or extraction telemetry."
@@ -21470,7 +21470,7 @@
         ],
         "title": "ProgressMessage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.logs",
+        "x-python-module": "nof1_causal_lab.actions.contracts.logs",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },
@@ -21525,14 +21525,14 @@
         ],
         "title": "ProportionComparison",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "QueryName": {
         "minLength": 1,
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.question",
+        "x-python-module": "nof1_causal_lab.artifacts.model.question",
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "A query name labels one contrast of the study question."
@@ -21555,7 +21555,7 @@
         ],
         "title": "QueryTargetSubject",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -21573,7 +21573,7 @@
         ],
         "title": "QueryWindowSubject",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -21593,7 +21593,7 @@
             "$ref": "#/components/schemas/NotEvaluated_QuestionSubject_"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.model_checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.model_checks",
         "x-layer": "findings",
         "x-concern": "scientific_model",
         "description": "A question assessment records one check of the question against the model or the record."
@@ -21615,7 +21615,7 @@
         ],
         "title": "QuestionCheckReport",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.model_checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.model_checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -21651,7 +21651,7 @@
         ],
         "title": "QuestionSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.question",
+        "x-python-module": "nof1_causal_lab.artifacts.model.question",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -21688,7 +21688,7 @@
         ],
         "title": "QuestionSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.question",
+        "x-python-module": "nof1_causal_lab.artifacts.model.question",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -21704,7 +21704,7 @@
             "$ref": "#/components/schemas/QueryWindowSubject"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model",
         "description": "A question check subject names the outcome, one query's window, or one query's intervention target."
@@ -21781,7 +21781,7 @@
         ],
         "title": "RankHistogram",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -21874,7 +21874,7 @@
         "title": "Removed[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-typescript-parameters": [
           "PayloadT"
         ],
@@ -21902,7 +21902,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Removed<DataPoint>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -21925,7 +21925,7 @@
         ],
         "title": "ReplicaSwapCounts",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -21979,7 +21979,7 @@
         "title": "Revised[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-typescript-parameters": [
           "PayloadT"
         ],
@@ -22011,7 +22011,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Revised<DataPoint>",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -22038,7 +22038,7 @@
         ],
         "title": "Role",
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.construct",
+        "x-python-module": "nof1_causal_lab.artifacts.model.construct",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -22082,7 +22082,7 @@
         ],
         "title": "RunningAction",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -22133,7 +22133,7 @@
         ],
         "title": "RunningPoll",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -22191,7 +22191,7 @@
         ],
         "title": "SamplerSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.sampler_config",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -22247,7 +22247,7 @@
         ],
         "title": "ScalarStatisticComparison",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_comparison",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -22317,7 +22317,7 @@
             "$ref": "#/components/schemas/SimulateRequest_GitOid_"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -22352,7 +22352,7 @@
         ],
         "title": "SemanticExtractionSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -22389,7 +22389,7 @@
         ],
         "title": "SemanticExtractionSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -22414,7 +22414,7 @@
         "title": "SimulateInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -22441,7 +22441,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SimulateInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -22465,7 +22465,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "SimulateInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -22493,7 +22493,7 @@
         ],
         "title": "SimulateOutput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.io",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -22533,7 +22533,7 @@
         "title": "SimulateRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -22577,7 +22577,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SimulateRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -22616,7 +22616,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "SimulateRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -22979,7 +22979,7 @@
         "description": "Folder of ready-to-use CSV or Parquet tables under data/{workspace_id}/, such as input. Every table must have a date or datetime timestamp column.",
         "minLength": 1,
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.data_preparation",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -22999,7 +22999,7 @@
             "$ref": "#/components/schemas/NotEvaluated_str_"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.checks",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -23050,7 +23050,7 @@
         ],
         "title": "StateExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -23074,7 +23074,7 @@
         ],
         "title": "StateExpression",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.model.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -23097,7 +23097,7 @@
         ],
         "title": "StepError",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.progress_contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -23145,7 +23145,7 @@
         ],
         "title": "StepEvent",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.progress_contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -23156,7 +23156,7 @@
           "failed"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.actions.progress_contracts",
+        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -23194,7 +23194,7 @@
         "title": "StudentTLawSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-typescript-parameters": [
           "A"
         ],
@@ -23229,7 +23229,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "StudentTLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -23262,7 +23262,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "StudentTLawSpec<Expression>",
-        "x-python-module": "nof1_causal_lab.artifacts.likelihood",
+        "x-python-module": "nof1_causal_lab.artifacts.model.likelihood",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -23375,7 +23375,7 @@
         "title": "SuccessfulPoll[Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-typescript-parameters": [
           "ActionT",
           "BodyT"
@@ -23426,7 +23426,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"data_diff\", DataDiffOutput>",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23473,7 +23473,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"edit_model\", EditModelOutput>",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23520,7 +23520,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"edit_question\", EditQuestionOutput>",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23567,7 +23567,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"fit\", FitOutput>",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23614,7 +23614,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"model_diff\", ModelDiffOutput>",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23661,7 +23661,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"prepare_data\", PrepareDataOutput>",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23708,7 +23708,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"simulate\", SimulateOutput>",
-        "x-python-module": "nof1_causal_lab.actions.results",
+        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23724,7 +23724,7 @@
         ],
         "title": "SummaryOperator",
         "type": "string",
-        "x-python-module": "nof1_causal_lab.utils.observation_semantics",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.semantics",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -23761,7 +23761,7 @@
         ],
         "title": "TemperingDiagnostics",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -23773,7 +23773,7 @@
         ],
         "title": "TemporalStatus",
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.construct",
+        "x-python-module": "nof1_causal_lab.artifacts.model.construct",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -23816,7 +23816,7 @@
         ],
         "title": "TimelineRecord",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study_api",
+        "x-python-module": "nof1_causal_lab.api.studies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23856,7 +23856,7 @@
         ],
         "title": "TimelineResponse",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study_api",
+        "x-python-module": "nof1_causal_lab.api.studies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23896,7 +23896,7 @@
         ],
         "title": "TimelineRevision",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study_api",
+        "x-python-module": "nof1_causal_lab.api.studies",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23931,7 +23931,7 @@
         ],
         "title": "TraceLogMessage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.logs",
+        "x-python-module": "nof1_causal_lab.actions.contracts.logs",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },
@@ -24028,7 +24028,7 @@
         ],
         "title": "TraceMessage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.utils.llm",
+        "x-python-module": "nof1_causal_lab.llm.traces",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24053,7 +24053,7 @@
         ],
         "title": "TraceSeries",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.posterior_diagnostics",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -24081,7 +24081,7 @@
         ],
         "title": "TraceToolCall",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.utils.llm",
+        "x-python-module": "nof1_causal_lab.llm.traces",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24119,7 +24119,7 @@
         ],
         "title": "TraceUsage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.utils.llm",
+        "x-python-module": "nof1_causal_lab.llm.traces",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24147,7 +24147,7 @@
         ],
         "title": "UnknownLawProvenance",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.predictive_provenance",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.predictive_provenance",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -24194,7 +24194,7 @@
       "WindowExpression": {
         "description": "Deterministic support-window expression that returns one scalar per window. Use Python-like syntax over source_columns with arithmetic, comparisons, if/else, and helper functions such as any(), sum(), mean(), std(), first(), last(), count_true(), count_non_null(), lower(), contains(), and contains_any(). Use None for missing values.",
         "type": "string",
-        "x-python-module": "nof1_causal_lab.utils.window_expressions",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.expressions",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -24263,7 +24263,7 @@
         },
         "title": "_ModelEntities",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.dynamical_model_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.dynamical_model_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -24350,7 +24350,7 @@
         ],
         "title": "_ModelEntities",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.dynamical_model_spec",
+        "x-python-module": "nof1_causal_lab.artifacts.model.dynamical_model_spec",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       }

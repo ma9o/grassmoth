@@ -6,9 +6,11 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.utils.immutability import freeze_fields
-
-from .spec import compile_dynamics, pack_component_params_from_samples
+from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.models.ssm.dynamics.spec import (
+    compile_dynamics,
+    pack_component_params_from_samples,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -16,8 +18,7 @@ if TYPE_CHECKING:
     from jax import Array
 
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
-
-    from .vector_field import VectorField
+    from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField
 
 
 @dataclass(frozen=True)

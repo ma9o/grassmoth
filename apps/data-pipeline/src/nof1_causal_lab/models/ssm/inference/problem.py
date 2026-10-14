@@ -10,8 +10,9 @@ import equinox as eqx
 import jax.numpy as jnp
 import numpy as np
 
-from nof1_causal_lab.distributions import DistributionFamily
-from nof1_causal_lab.models.ssm import numerics as numeric
+from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.artifacts.probability.families import DistributionFamily
+from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.compile.interval_tree import compile_interval_tree
 from nof1_causal_lab.models.ssm.execution.dynamical_model import build_dynamical_model
 from nof1_causal_lab.models.ssm.execution.observation_operator import compile_observation_operator
@@ -20,23 +21,20 @@ from nof1_causal_lab.models.ssm.inference.conditioning import (
     ExactStateConstraints,
     compile_exact_state_constraints,
 )
+from nof1_causal_lab.models.ssm.inference.parameter_tracing import prepare_model_parameters
 from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
 from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
-from nof1_causal_lab.models.ssm.inference.utils import (
-    prepare_model_parameters,
-)
 from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
-from nof1_causal_lab.utils.immutability import freeze_fields
 
 if TYPE_CHECKING:
     import jax
 
-    from nof1_causal_lab.models.ssm.autoreparam import Strategy
+    from nof1_causal_lab.models.ssm.inference.parameter_tracing import SiteInfo
+    from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext
-    from nof1_causal_lab.models.ssm.inference.utils import SiteInfo
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
-    from nof1_causal_lab.models.ssm.runtime import BoundPanel
+    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
 
 
 @dataclass(frozen=True)

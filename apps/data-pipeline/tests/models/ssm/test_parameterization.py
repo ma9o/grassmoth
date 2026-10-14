@@ -11,28 +11,28 @@ import numpyro.distributions as dist
 import pytest
 from numpyro import handlers
 
-from nof1_causal_lab.artifacts.construct import replace_constructs
-from nof1_causal_lab.artifacts.expressions import Expression, coefficient, state
 from nof1_causal_lab.artifacts.identity import DistributionId, ParameterId
-from nof1_causal_lab.artifacts.likelihood import (
-    NormalLawSpec,
-)
-from nof1_causal_lab.artifacts.parameter import SiteKind, SupportClass
-from nof1_causal_lab.artifacts.parameter_spec import ParameterSpec
-from nof1_causal_lab.distributions import DistributionFamily
-from nof1_causal_lab.models.ssm import numerics as numeric
+from nof1_causal_lab.artifacts.model.construct import replace_constructs
+from nof1_causal_lab.artifacts.model.expressions import Expression, coefficient, state
+from nof1_causal_lab.artifacts.model.likelihood import NormalLawSpec
+from nof1_causal_lab.artifacts.model.parameter import SiteKind, SupportClass
+from nof1_causal_lab.artifacts.model.parameter_spec import ParameterSpec
+from nof1_causal_lab.artifacts.probability.families import DistributionFamily
+from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.execution.parameters import sample_sites
-from nof1_causal_lab.models.ssm.inference.utils import _discover_sites, _DummyLikelihoodBackend
-from nof1_causal_lab.models.ssm.model import sample_parameters
+from nof1_causal_lab.models.ssm.inference.parameter_tracing import (
+    _discover_sites,
+    _DummyLikelihoodBackend,
+)
+from nof1_causal_lab.models.ssm.inference.prior_program import sample_parameters
 from nof1_causal_lab.models.ssm.parameterization import (
     assemble_deterministics_from_registry,
     build_site_registry,
     process_sites,
-    sample_prior_parameters,
 )
 from nof1_causal_lab.models.ssm.priors import resolve_site_priors
-from tests.inference_fixtures import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
-from tests.model_fixtures import (
+from tests.support.inference import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
+from tests.support.model import (
     _two_state_fixed_drift_model,
     construct_named,
     indicator_named,
@@ -187,7 +187,7 @@ def _assemble_deterministics_repairs_invalid_initial_correlation_matrix__make_sp
 
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 
 
 # ---------------------------------------------------------------------------
@@ -231,7 +231,7 @@ class TestSiteRegistry:
     @pytest.mark.inference(concern="sampling")
     def test_registry_names_match_trace(self, simple_model):
         """Registry produces the same site names as model tracing."""
-        compiled = simple_model.compiled
+        compiled = simple_model.compiled_dynamical_model
         registry = build_site_registry(compiled)
         backend = _DummyLikelihoodBackend()
         T = 2
@@ -239,7 +239,7 @@ class TestSiteRegistry:
         times = jnp.linspace(0, 1, T)
         site_info = _discover_sites(
             simple_model.prior_runtime_bundle,
-            bind_panel_fixture(simple_model.compiled, obs, times),
+            bind_panel_fixture(simple_model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
             backend,
         )
@@ -248,7 +248,7 @@ class TestSiteRegistry:
     @pytest.mark.inference(concern="sampling")
     def test_registry_names_match_trace_dag(self, dag_model):
         """Registry matches trace for DAG-constrained model with cint."""
-        compiled = dag_model.compiled
+        compiled = dag_model.compiled_dynamical_model
         registry = build_site_registry(compiled)
         backend = _DummyLikelihoodBackend()
         T = 2
@@ -256,7 +256,7 @@ class TestSiteRegistry:
         times = jnp.linspace(0, 1, T)
         site_info = _discover_sites(
             dag_model.prior_runtime_bundle,
-            bind_panel_fixture(dag_model.compiled, obs, times),
+            bind_panel_fixture(dag_model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
             backend,
         )
@@ -522,8 +522,8 @@ class TestDeterministicAssembly:
         )
 
     @pytest.mark.inference(concern="sampling")
-    def test_assemble_deterministics_repairs_invalid_initial_correlation_matrix(self):
-        """Impossible authored initial correlations are repaired to a PSD covariance."""
+    def test_assembly_preserves_initial_correlations_for_density_rejection(self):
+        """Assembly preserves the authored covariance; the model density rejects invalid support."""
         mask = np.zeros((3, 3), dtype=bool)
         mask[1, 0] = True
         mask[2, 0] = True
@@ -547,7 +547,10 @@ class TestDeterministicAssembly:
         min_eig = jnp.min(jnp.linalg.eigvalsh(det["t0_cov"][0]))
 
         assert bool(jnp.isfinite(det["t0_cov"]).all())
-        assert float(min_eig) > -1e-6
+        np.testing.assert_allclose(
+            det["t0_cov"][0], [[1.0, 0.9, 0.9], [0.9, 1.0, -0.9], [0.9, -0.9, 1.0]]
+        )
+        assert float(min_eig) < 0
 
         model = compile_fit_fixture(dynamical_model_spec)
         with handlers.substitute(data={name: value[0] for name, value in samples.items()}):
@@ -589,33 +592,6 @@ class TestNativeRuntimePriors:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.inference(concern="predictive")
-class TestSampling:
-    def test_sample_shapes_and_native_support(self, simple_spec):
-        registry = build_site_registry(compile_model_fixture(simple_spec))
-        state = resolve_site_priors(registry)
-        samples = sample_prior_parameters(random.PRNGKey(0), registry, state, n_samples=4)
-        assert set(samples) == {site.name for site in registry}
-        for site in registry:
-            assert samples[site.name].shape == (4, *site.shape)
-            assert jnp.all(jnp.isfinite(samples[site.name]))
-            if site.support == SupportClass.POSITIVE:
-                assert jnp.all(samples[site.name] > 0)
-
-    def test_site_streams_are_stable_under_registry_reordering(self, simple_spec):
-        registry = build_site_registry(compile_model_fixture(simple_spec))
-        state = resolve_site_priors(registry)
-        samples = sample_prior_parameters(random.PRNGKey(7), registry, state, n_samples=4)
-        reversed_samples = sample_prior_parameters(
-            random.PRNGKey(7), list(reversed(registry)), state, n_samples=4
-        )
-        for site_name in samples:
-            assert jnp.array_equal(samples[site_name], reversed_samples[site_name])
-
-    def test_fixed_model_has_no_sampled_parameters(self):
-        assert sample_prior_parameters(random.PRNGKey(0), [], {}, n_samples=3) == {}
-
-
 # ---------------------------------------------------------------------------
 # Serialization roundtrip
 # ---------------------------------------------------------------------------
@@ -640,8 +616,8 @@ class TestCompiledArtifactIntegration:
 
     @pytest.mark.contract
     def test_ordered_threshold_priors_bind_per_manifest_component_and_row(self):
-        from nof1_causal_lab.models.model_structure import StructuralSelection
         from nof1_causal_lab.models.ssm.compile.prior_compilation import compile_priors
+        from nof1_causal_lab.models.structure import StructuralSelection
 
         priors, bindings, _diagnostics = compile_priors(
             compile_model_fixture(

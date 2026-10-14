@@ -5,7 +5,7 @@ import pytest
 from evaluation.fixtures.synthetic_nonlinear import RecoveryTargetSpec
 from evaluation.recovery import extraction
 
-from nof1_causal_lab.artifacts.parameter import ParameterCoordinate
+from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from nof1_causal_lab.models.ssm.inference.types import (
     JointPosteriorDraws,

@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import jaxtyping
 import pytest
 
-from nof1_causal_lab.models.ssm.covariance_utils import symmetrize
+from nof1_causal_lab.models.ssm.covariance import symmetrize
 
 pytestmark = pytest.mark.contract
 

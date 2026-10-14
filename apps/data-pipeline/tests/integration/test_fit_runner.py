@@ -7,30 +7,29 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 
-from nof1_causal_lab.actions.contracts import FitRequest
-from nof1_causal_lab.actions.io import FitInput
+from nof1_causal_lab.actions.contracts.bodies import FitInput
+from nof1_causal_lab.actions.contracts.requests import FitRequest
 from nof1_causal_lab.actions.runners import run_action_locally
-from nof1_causal_lab.artifacts.data_ref import DataRef
 from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.study.persistence.store import read_model
 from nof1_causal_lab.study.state import apply_effects
-from nof1_causal_lab.study.store import read_model
-from tests.git_fixtures import artifact_revisions
-from tests.helpers import run_async, write_question
-from tests.inference_fixtures import (
+from tests.integration import runner_fixtures as fx
+from tests.support.git import artifact_revisions
+from tests.support.helpers import run_async, write_question
+from tests.support.inference import (
     bind_panel_fixture,
     compile_model_fixture,
     model_draws,
     parameter_draws,
     particle_posterior,
 )
-from tests.integration import runner_fixtures as fx
-from tests.model_fixtures import stress_sleep_model
 
 pytestmark = pytest.mark.contract
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.identity import ArtifactId
-    from nof1_causal_lab.study.store import ArtifactStore
+    from nof1_causal_lab.study.persistence.store import ArtifactStore
 
 
 def test_inference_advances_model_and_uses_the_selected_input(
@@ -40,13 +39,13 @@ def test_inference_advances_model_and_uses_the_selected_input(
 ) -> None:
     import jax.numpy as jnp
 
-    from nof1_causal_lab.actions.inference import fit as stage5_fit
-    from nof1_causal_lab.models.ssm import numerics
+    from nof1_causal_lab.actions.fit import execution as stage5_fit
+    from nof1_causal_lab.models.ssm import compiled_access as numerics
     from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
 
     original = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=original.revision)
-    authored = stress_sleep_model()
+    authored = read_model(artifact_store, original.revision)
     parameters = parameter_draws(authored, 4)
     states = tuple(numerics.state_ids(compile_model_fixture(authored)))
     paths = jnp.arange(4 * 2 * len(states), dtype=jnp.float32).reshape(4, 2, len(states))
@@ -65,7 +64,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
             ),
             "panel": bind_panel_fixture(
                 compile_model_fixture(model),
-                jnp.zeros((2, 2)),
+                jnp.array([[jnp.nan, jnp.nan], [0.0, 0.0]]),
                 jnp.array([0.0, 1.0], dtype=jnp.float32),
             ),
         }
@@ -94,11 +93,11 @@ def test_inference_advances_model_and_uses_the_selected_input(
         # Both provenance and computation follow the selected model revision.
         assert info.derived_from == pins
         assert {
-            "model": applied.result.dynamical_model_spec_ref.revision,
-            "panel": applied.result.data.revision,
+            "model": request.input.dynamical_model_spec_ref,
+            "panel": request.input.data_ref.revision,
             "question": question.revision,
         } == info.derived_from
-        from nof1_causal_lab.artifacts.posterior import InferenceReport
+        from nof1_causal_lab.artifacts.reports.inference import InferenceReport
 
         report = artifact_store.read_report(applied.effects.reports["inference"], InferenceReport)
         assert report.core.inference_diagnostics is not None

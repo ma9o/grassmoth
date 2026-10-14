@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
-from nof1_causal_lab.utils.immutability import freeze_fields
+from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

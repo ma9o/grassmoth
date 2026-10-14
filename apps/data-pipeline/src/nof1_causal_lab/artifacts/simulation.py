@@ -9,15 +9,18 @@ from typing import Annotated, Literal, Self
 
 from pydantic import AwareDatetime, Field, FiniteFloat, model_validator
 
+from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.base import Value
-
-from .arrays import NumericalArray
-from .checks import NotEvaluated, PredictiveAssessment
-from .duration import Duration
-from .identity import ConstructId, IndicatorId
-from .observations import ResolvedObservationSpec
-from .predictive_provenance import PredictiveLawProvenance
-from .scenarios import CausalEffectResult, InterventionSpec, StateAssignment
+from nof1_causal_lab.artifacts.identity import ConstructId, IndicatorId
+from nof1_causal_lab.artifacts.observations.duration import Duration
+from nof1_causal_lab.artifacts.observations.spec import ResolvedObservationSpec
+from nof1_causal_lab.artifacts.reports.checks import NotEvaluated, PredictiveAssessment
+from nof1_causal_lab.artifacts.reports.predictive_provenance import PredictiveLawProvenance
+from nof1_causal_lab.artifacts.scenarios import (
+    CausalEffectResult,
+    InterventionSpec,
+    StateAssignment,
+)
 
 
 class SimulationSpec(Value):
@@ -54,7 +57,7 @@ class SimulationSpec(Value):
 
     def start_day(self, origin: datetime) -> float:
         """The start in model days after the law's bound origin."""
-        from nof1_causal_lab.utils.time_coordinates import ObservationInstant
+        from nof1_causal_lab.artifacts.observations.time import ObservationInstant
 
         return ObservationInstant(self.start_instant).relative_to(ObservationInstant(origin)).days
 

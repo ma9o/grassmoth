@@ -10,22 +10,25 @@ import numpy as np
 import numpyro.distributions as dist
 import scipy.linalg
 
-from nof1_causal_lab.artifacts.parameter import (
+from nof1_causal_lab.artifacts.model.parameter import (
     ParameterCoordinate,
     PriorAuthoringTransform,
     SiteKind,
 )
-from nof1_causal_lab.artifacts.parameter_spec import (
+from nof1_causal_lab.artifacts.model.parameter_spec import (
     InitialCorrelationTransformSpec,
     IntervalEffectTransformSpec,
     PersistenceTransformSpec,
 )
-from nof1_causal_lab.artifacts.prior import (
-    PriorFailureStage,
-    PriorValidationResult,
+from nof1_causal_lab.artifacts.probability.native import (
+    batch_prior_distributions,
+    interval_effect_to_rate,
+    persistence_to_decay,
+    prior_reference_value,
 )
+from nof1_causal_lab.artifacts.reports.prior import PriorFailureStage, PriorValidationResult
 from nof1_causal_lab.compilation_errors import AggregatedCompileError
-from nof1_causal_lab.models.ssm import numerics as numeric
+from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.compile.bindings import (
     CompiledEffectInterval,
     CompiledParameterBinding,
@@ -43,22 +46,16 @@ from nof1_causal_lab.models.ssm.structure.sites import (
     CompiledNodeTarget,
     site_size,
 )
-from nof1_causal_lab.prior_distributions import (
-    batch_prior_distributions,
-    interval_effect_to_rate,
-    persistence_to_decay,
-    prior_reference_value,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
-    from nof1_causal_lab.artifacts.parameter_spec import ParameterSpec
-    from nof1_causal_lab.models.model_structure import StructuralSelection
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.artifacts.model.parameter_spec import ParameterSpec
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.compile.prior_indexing import CompiledBindingRegistry
     from nof1_causal_lab.models.ssm.structure.sites import SiteDescriptor
+    from nof1_causal_lab.models.structure import StructuralSelection
 
 logger = logging.getLogger("nof1_causal_lab.models.ssm.compile.inputs")
 CompileDiagnostic = PriorValidationResult
@@ -107,7 +104,7 @@ def _resolve_transform_interval_days(
     dynamical_model_spec: DynamicalModelSpec,
 ) -> float:
     """Resolve the explicit interval reference once at the law's compiler boundary."""
-    from nof1_causal_lab.models.ssm.compile.support import get_construct_dt_days
+    from nof1_causal_lab.models.ssm.compile.layout.axes import get_construct_dt_days
 
     return (
         get_construct_dt_days(dynamical_model_spec)
@@ -460,7 +457,7 @@ def compile_priors(
     dict[str, dist.Distribution], tuple[CompiledParameterBinding, ...], list[CompileDiagnostic]
 ]:
     """Bind the model's native distributions to their declared execution coordinates."""
-    from nof1_causal_lab.models.model_parameters import execution_parameters
+    from nof1_causal_lab.models.parameters import execution_parameters
 
     authored = selection.dynamical_model_spec
     parameters = {parameter.id: parameter for parameter in execution_parameters(selection)}
@@ -538,9 +535,7 @@ def bind_parameters(
     registry: tuple[SiteDescriptor, ...],
 ) -> tuple[tuple[CompiledParameterBinding, ...], tuple[ParameterCoordinate, ...]]:
     """Compile scientific definitions into explicit scalar execution bindings."""
-    from nof1_causal_lab.models.ssm.compile.parameter_identity import (
-        component_identity,
-    )
+    from nof1_causal_lab.models.ssm.compile.parameter_identity import component_identity
 
     sites = {site.name: site for site in registry}
     definitions = {parameter.id: parameter for parameter in parameters}

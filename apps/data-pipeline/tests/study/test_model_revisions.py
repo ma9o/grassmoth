@@ -4,24 +4,24 @@ import json
 
 import pytest
 
-from nof1_causal_lab.actions.contracts import EditModelRequest
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.actions.contracts.requests import EditModelRequest
 from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.question import QuestionSpec
-from nof1_causal_lab.models.model_inputs import input_fingerprints
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.models.inputs import input_fingerprints
+from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.state import ArtifactRecord, StudyState, is_stale
-from tests.action_fixtures import edit_and_check, question_root
-from tests.git_fixtures import artifact_revision, artifact_revisions, git_oid
-from tests.helpers import fixture_entity_id, make_model
-from tests.model_fixtures import x_y_model
+from tests.support.action import edit_and_check, question_root
+from tests.support.git import artifact_revision, artifact_revisions, git_oid
+from tests.support.helpers import fixture_entity_id, make_model
+from tests.support.model import x_y_model
 
 pytestmark = pytest.mark.contract
 
 
 @pytest.fixture
 def workspace(monkeypatch, tmp_path):
-    from nof1_causal_lab.utils import data as data_module
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     return "additive-revisions"
@@ -47,7 +47,7 @@ def test_full_model_write_keeps_the_named_base_without_a_head_gate(workspace):
     state = root.with_artifacts(effects.effects.produced)
     assert state.current["model"].revision == effects.effects.produced[0].revision
     assert set(state.current) == {"question", "model"}
-    from nof1_causal_lab.study.store import ArtifactStore
+    from nof1_causal_lab.study.persistence.store import ArtifactStore
 
     assert artifact_revisions(ArtifactStore(workspace), "model") == [
         state.current["model"].revision
@@ -90,7 +90,7 @@ def test_model_input_identity_preserves_findings_and_original_pins():
 
 
 def test_statistical_enrichment_preserves_structural_and_measurement_inputs():
-    from tests.helpers import make_model
+    from tests.support.helpers import make_model
 
     measured = make_model(["X", "Y"], [("X", "Y")])
     specified = x_y_model()
@@ -126,11 +126,11 @@ def test_statistical_enrichment_preserves_structural_and_measurement_inputs():
 
 
 def test_model_diff_addresses_question_and_model_without_checkpoint_traversal(workspace):
-    from nof1_causal_lab.actions.revisions import model_diff
+    from nof1_causal_lab.actions.model_diff import model_diff
     from nof1_causal_lab.study.errors import StudyLookupError
+    from nof1_causal_lab.study.persistence.store import ArtifactStore
     from nof1_causal_lab.study.records import AttemptRecord, EditAttempt, Raised
-    from nof1_causal_lab.study.store import ArtifactStore
-    from tests.action_fixtures import applied_record
+    from tests.support.action import applied_record
 
     question = QuestionSpec(text="Does X change Y?", outcome=fixture_entity_id("construct", "Y"))
     root = question_root(workspace, question)

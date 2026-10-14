@@ -20,7 +20,7 @@ from typing import (
 from pydantic import BaseModel, TypeAdapter, WithJsonSchema
 from pydantic.json_schema import GenerateJsonSchema
 
-from nof1_causal_lab.artifacts.duration import Duration
+from nof1_causal_lab.artifacts.observations.duration import Duration
 
 if TYPE_CHECKING:
     from pydantic.json_schema import CoreSchemaOrField, JsonSchemaValue
@@ -165,42 +165,41 @@ CONCERNS = {
     "scientific_model": (
         "Scientific model",
         (
-            "artifacts.question",
-            "artifacts.dynamical_model_spec",
-            "artifacts.construct",
-            "artifacts.evidence",
-            "artifacts.indicator",
-            "artifacts.data_preparation",
-            "artifacts.data_ref",
-            "artifacts.data_comparison",
-            "artifacts.observations",
-            "artifacts.predictive_provenance",
-            "artifacts.likelihood",
-            "artifacts.mechanism",
-            "measurement_types",
-            "utils.observation_semantics",
-            "utils.window_expressions",
-            "artifacts.parameter_spec",
-            "artifacts.expressions",
-            "artifacts.parameter",
-            "distributions",
-            "numpyro_json",
-            "models.ssm.joint_layout",
-            "artifacts.measurements",
-            "artifacts.validation_report",
-            "artifacts.identification",
-            "artifacts.prior",
-            "artifacts.execution",
+            "artifacts.model.question",
+            "artifacts.model.dynamical_model_spec",
+            "artifacts.model.construct",
+            "artifacts.model.evidence",
+            "artifacts.model.indicator",
+            "artifacts.observations.preparation",
+            "artifacts.observations.reference",
+            "artifacts.reports.data_comparison",
+            "artifacts.observations.spec",
+            "artifacts.reports.predictive_provenance",
+            "artifacts.model.likelihood",
+            "artifacts.model.mechanism",
+            "artifacts.observations.dtypes",
+            "artifacts.observations.semantics",
+            "artifacts.observations.expressions",
+            "artifacts.model.parameter_spec",
+            "artifacts.model.expressions",
+            "artifacts.model.parameter",
+            "artifacts.probability.families",
+            "artifacts.probability.serialization",
+            "artifacts.probability.joint_layout",
+            "artifacts.observations.records",
+            "artifacts.reports.data_quality",
+            "artifacts.reports.identification",
+            "artifacts.reports.prior",
             "artifacts.arrays",
-            "artifacts.posterior",
-            "artifacts.posterior_diagnostics",
-            "sampler_config",
-            "artifacts.effects",
-            "artifacts.empirical",
+            "artifacts.reports.inference",
+            "artifacts.reports.posterior_diagnostics",
+            "artifacts.sampling",
+            "artifacts.reports.effects",
+            "artifacts.reports.empirical",
             "artifacts.scenarios",
             "artifacts.simulation",
-            "artifacts.checks",
-            "artifacts.model_checks",
+            "artifacts.reports.checks",
+            "artifacts.reports.model_checks",
         ),
     ),
     "execution_history": (
@@ -208,29 +207,29 @@ CONCERNS = {
         (
             "study.artifact_files",
             "study.state",
-            "actions.effects",
-            "study.store",
+            "actions.contracts.effects",
+            "study.persistence.store",
             "study.records",
-            "actions.progress_contracts",
-            "actions.logs",
+            "actions.contracts.progress",
+            "actions.contracts.logs",
         ),
     ),
     "read_models": (
         "Read models",
-        ("study.snapshot_models", "study.view_models", "artifacts.observation_history"),
+        ("study.snapshot", "artifacts.observations.comparison", "artifacts.observations.history"),
     ),
     "api_tools": (
         "API & tool contracts",
         (
-            "study_api",
-            "actions.contracts",
-            "actions.results",
-            "actions.io",
-            "actions.revisions",
+            "api.studies",
+            "actions.contracts.requests",
+            "actions.contracts.polling",
+            "actions.contracts.bodies",
+            "actions.model_diff",
             "actions.data_diff",
-            "tool_server",
+            "api.app",
             "json_types",
-            "utils.llm",
+            "llm.traces",
         ),
     ),
     "identity": ("Shared identities & references", ("artifacts.identity",)),
@@ -282,10 +281,10 @@ ROLE_SENTENCES = {
 }
 
 ALIAS_MODULES = {
-    "NumPyroDistribution": "numpyro_json",
+    "NumPyroDistribution": "artifacts.probability.serialization",
     "EntityRef": "artifacts.identity",
     "SimulationReport": "artifacts.simulation",
-    "ProgressEvent": "actions.progress_contracts",
+    "ProgressEvent": "actions.contracts.progress",
 }
 
 
@@ -323,11 +322,19 @@ def _layer_for(name: str, module: str) -> str:
         return "artifacts"
     if module.endswith("artifacts.identity") or name == "ParameterCoordinate":
         return "identity"
-    if module.endswith(("study.snapshot_models", "study.view_models")):
+    if module.endswith(("study.snapshot", "artifacts.observations.comparison")):
         return "read_models"
-    if module.startswith("nof1_causal_lab.study.") or module.endswith("actions.progress_contracts"):
+    if module.startswith("nof1_causal_lab.study.") or module.endswith("actions.contracts.progress"):
         return "study"
-    if module.endswith(("study_api", "tool_server", "json_types", "utils.llm", "numpyro_json")):
+    if module.endswith(
+        (
+            "api.studies",
+            "api.app",
+            "json_types",
+            "llm.traces",
+            "artifacts.probability.serialization",
+        )
+    ):
         return "transport"
     if module.endswith("artifacts.scenarios"):
         return (
@@ -337,23 +344,23 @@ def _layer_for(name: str, module: str) -> str:
         )
     if module.endswith("artifacts.simulation"):
         return "authored" if name in {"SimulationSpec"} else "findings"
-    if module.endswith(("artifacts.checks", "artifacts.model_checks")):
+    if module.endswith(("artifacts.reports.checks", "artifacts.reports.model_checks")):
         return "findings"
-    if name == "FitSettingsSpec" or module.endswith("sampler_config"):
+    if name == "FitSettingsSpec" or module.endswith("artifacts.sampling"):
         return "authored"
     if name.endswith("Artifact"):
         return "artifacts"
     if module.endswith(
         (
             "artifacts.arrays",
-            "artifacts.posterior",
-            "artifacts.posterior_diagnostics",
-            "artifacts.effects",
-            "artifacts.data_comparison",
-            "artifacts.empirical",
-            "artifacts.validation_report",
-            "artifacts.prior",
-            "artifacts.identification",
+            "artifacts.reports.inference",
+            "artifacts.reports.posterior_diagnostics",
+            "artifacts.reports.effects",
+            "artifacts.reports.data_comparison",
+            "artifacts.reports.empirical",
+            "artifacts.reports.data_quality",
+            "artifacts.reports.prior",
+            "artifacts.reports.identification",
         )
     ) or name in {
         "IdentificationReport",
@@ -364,14 +371,7 @@ def _layer_for(name: str, module: str) -> str:
         "ObservationRecord",
     }:
         return "findings"
-    if module.startswith("nof1_causal_lab.artifacts.") or module.endswith(
-        (
-            "distributions",
-            "measurement_types",
-            "utils.observation_semantics",
-            "utils.window_expressions",
-        )
-    ):
+    if module.startswith("nof1_causal_lab.artifacts."):
         return "authored"
     if module.startswith("nof1_causal_lab.actions."):
         return "transport"

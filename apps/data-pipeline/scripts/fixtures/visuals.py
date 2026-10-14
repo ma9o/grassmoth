@@ -6,10 +6,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from nof1_causal_lab.actions.io import SimulateOutput
-from nof1_causal_lab.actions.simulation_summaries import simulation_summary
+from nof1_causal_lab.actions.contracts.bodies import SimulateOutput
+from nof1_causal_lab.actions.simulate.summaries import simulation_summary
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.display_frames import central_frame
+from nof1_causal_lab.artifacts.reports.display_frames import central_frame
 from nof1_causal_lab.artifacts.scenarios import CausalEffectResult
 from nof1_causal_lab.artifacts.simulation import (
     PairedArmSimulation,
@@ -17,8 +17,8 @@ from nof1_causal_lab.artifacts.simulation import (
     SimulationReport,
 )
 from nof1_causal_lab.models.ssm.counterfactual.estimands import summarize_draws
-from nof1_causal_lab.study.result_codec import result_payload
-from nof1_causal_lab.study.visuals import simulation_observation_histories
+from nof1_causal_lab.study.persistence.codec import result_payload
+from nof1_causal_lab.study.projections.visuals import simulation_observation_histories
 
 if TYPE_CHECKING:
     from scripts.fixtures.reader import ModelReader
@@ -62,25 +62,39 @@ def workbench_visuals(reader: ModelReader, template):
     starts = np.broadcast_to(time[:, None] - 1, (len(time), len(variables)))
     ends = np.broadcast_to(time[:, None], starts.shape)
     arms = report.evidence.arms
-    assert isinstance(arms, PairedArmSimulation) and isinstance(arms.causal, CausalEffectResult)
+    assert isinstance(arms, PairedArmSimulation)
+    assert isinstance(arms.causal, CausalEffectResult)
     outcome = report.evidence.state_ids.index(arms.causal.outcome)
     contrasts = action[:, :, outcome] - reference[:, :, outcome]
     evidence = report.evidence.revised(
         arms=PairedArmSimulation(
             action=SimulationArm(latent_paths=retain(action), observations=retain(observations)),
-            reference=SimulationArm(latent_paths=retain(reference), observations=retain(reference_observations)),
+            reference=SimulationArm(
+                latent_paths=retain(reference), observations=retain(reference_observations)
+            ),
             causal=arms.causal.revised(
-                differences=retain(contrasts), frame=central_frame(contrasts),
+                differences=retain(contrasts),
+                frame=central_frame(contrasts),
                 summary=summarize_draws(contrasts[:, -1]),
                 reference_mean=float(reference[:, -1, outcome].mean()),
-                manifest_effects={variable.id: float((observations - reference_observations)[:, -1, index].mean()) for index, variable in enumerate(variables)},
+                manifest_effects={
+                    variable.id: float((observations - reference_observations)[:, -1, index].mean())
+                    for index, variable in enumerate(variables)
+                },
             ),
         ),
         observation_layout=report.evidence.observation_layout.revised(
-            mask=retain(mask), support_start_times=retain(starts), support_end_times=retain(ends),
+            mask=retain(mask),
+            support_start_times=retain(starts),
+            support_end_times=retain(ends),
         ),
     )
-    report = report.revised(evidence=evidence, summary=simulation_summary(evidence, action, observations, mask, reference, reference_observations))
+    report = report.revised(
+        evidence=evidence,
+        summary=simulation_summary(
+            evidence, action, observations, mask, reference, reference_observations
+        ),
+    )
     result = SimulateOutput(
         report=report,
         data=simulation_observation_histories(evidence, observations, mask),

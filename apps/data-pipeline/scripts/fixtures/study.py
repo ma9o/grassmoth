@@ -16,16 +16,17 @@ from tempfile import TemporaryDirectory
 from typing import TYPE_CHECKING
 from unittest.mock import patch
 
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.expressions import coefficient
-from nof1_causal_lab.artifacts.expressions import state as expr_state
-from nof1_causal_lab.models.model_inputs import input_fingerprints
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.expressions import coefficient
+from nof1_causal_lab.artifacts.model.expressions import state as expr_state
+from nof1_causal_lab.llm.traces import LLMTrace
+from nof1_causal_lab.models.inputs import input_fingerprints
+from nof1_causal_lab.storage import paths as data_module
+from nof1_causal_lab.storage.traces import trace_log_path
 from nof1_causal_lab.study.artifact_files import artifact_file_spec
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.state import is_stale
-from nof1_causal_lab.study.store import ArtifactStore, trace_log_path
-from nof1_causal_lab.utils import data as data_module
-from nof1_causal_lab.utils.llm import LLMTrace
 from scripts.fixtures.reader import ModelReader
 
 if TYPE_CHECKING:
@@ -76,7 +77,7 @@ def read_fixture_files(repository: StudyRepository, state: StudyState) -> dict[s
             identification.model_dump_json(indent=2) + "\n"
         ).encode()
     if reader.fit_checks is not None:
-        files["artifacts/validation_report.json"] = (
+        files["artifacts/reports/data_quality.json"] = (
             reader.fit_checks.model_dump_json(indent=2) + "\n"
         ).encode()
     report = reader.inference_report
@@ -253,7 +254,7 @@ def build_outputs():
             outputs[HEALTHDEMO_ROOT / "fixture/model_snapshot.json"],
             outputs[HEALTHDEMO_ROOT / "fixture/model_history.json"],
         )
-        from nof1_causal_lab.study.result_codec import result_payload
+        from nof1_causal_lab.study.persistence.codec import result_payload
         from scripts.fixtures.visuals import restore_fixture, workbench_visuals
 
         outputs[WORKBENCH_OUTPUT.with_name("workbench-visuals.json")] = workbench_visuals(

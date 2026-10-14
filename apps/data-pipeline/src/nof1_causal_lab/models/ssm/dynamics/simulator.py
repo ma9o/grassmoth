@@ -18,13 +18,13 @@ import numpyro.distributions as dist
 from dynestyx.solvers import solve_ode_state_path
 from jax import Array
 
-from .vector_field import VectorFieldArgs
+from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorFieldArgs
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .intervention import Intervention
-    from .vector_field import VectorField
+    from nof1_causal_lab.models.ssm.dynamics.intervention import Intervention
+    from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField
 
 
 class ProcessNoise(eqx.Module):

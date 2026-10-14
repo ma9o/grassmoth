@@ -6,6 +6,9 @@ app = marimo.App(width="medium")
 
 @app.cell
 def imports_marimo():
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime as _initialize_runtime
+
+    _initialize_runtime()
     import marimo as mo
 
     return (mo,)
@@ -53,7 +56,7 @@ def intro(mo):
 
 @app.cell
 def imports_lab():
-    import inference_geometry_support as lab
+    import notebooks.support.inference_geometry as lab
     import numpy as np
 
     return lab, np

@@ -15,9 +15,9 @@ import uuid
 
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.actions.progress_contracts import ProgressEvent
-from nof1_causal_lab.utils import data as data_module
-from nof1_causal_lab.utils import storage
+from nof1_causal_lab.actions.contracts.progress import ProgressEvent
+from nof1_causal_lab.storage import backend as storage
+from nof1_causal_lab.storage import paths as data_module
 
 _PROGRESS_EVENT_ADAPTER = TypeAdapter(ProgressEvent)
 

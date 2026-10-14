@@ -12,10 +12,13 @@ import numpyro.distributions as dist
 import pytest
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.numpyro_json import NumPyroDistribution
-from nof1_causal_lab.prior_distributions import interval_effect_to_rate, persistence_to_decay
-from nof1_causal_lab.study.prior_views import prior_density, quantity_prior_densities
-from tests.model_fixtures import construct_named, load_model_fixture
+from nof1_causal_lab.artifacts.probability.native import (
+    interval_effect_to_rate,
+    persistence_to_decay,
+)
+from nof1_causal_lab.artifacts.probability.serialization import NumPyroDistribution
+from nof1_causal_lab.study.projections.priors import prior_density, quantity_prior_densities
+from tests.support.model import construct_named, load_model_fixture
 
 
 def _quantity_curves_put_authored_laws_on_the_posterior_scale_complete_test_model() -> (
@@ -35,7 +38,7 @@ def _quantity_curves_put_authored_laws_on_the_posterior_scale_complete_test_mode
 
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 
 
 pytestmark = [

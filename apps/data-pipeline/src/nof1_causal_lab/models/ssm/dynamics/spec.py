@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from .vector_field import VectorField
+from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -13,9 +13,8 @@ if TYPE_CHECKING:
     import numpyro.distributions as dist
     from jax import Array
 
+    from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponentSpec
     from nof1_causal_lab.models.ssm.structure.sites import SiteDescriptor
-
-    from .expression import ExpressionComponentSpec
 
     type PriorFn = Callable[[str], dist.Distribution]
 

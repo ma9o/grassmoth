@@ -1,10 +1,10 @@
 """Record the study question as the first artifact of its lineage."""
 
-from nof1_causal_lab.actions.contracts import EditQuestionRequest
-from nof1_causal_lab.actions.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import EditQuestionRequest
 from nof1_causal_lab.study.artifact_files import json_filename
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.store import ArtifactStore
 
 
 def edit_question(workspace_id: str, request: EditQuestionRequest) -> Applied[None]:

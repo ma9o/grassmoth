@@ -2,8 +2,8 @@
   "reviews": [
     {
       "category": "class schema",
-      "first": "apps/data-pipeline/src/nof1_causal_lab/utils/harness/stream_json.py::_TraceAccumulator",
-      "second": "apps/data-pipeline/src/nof1_causal_lab/utils/llm.py::LLMTrace",
+      "first": "apps/data-pipeline/src/nof1_causal_lab/llm/harness/events/common.py::_TraceAccumulator",
+      "second": "apps/data-pipeline/src/nof1_causal_lab/llm/traces.py::LLMTrace",
       "fingerprint": "61ae685cf533f2750c485e1b5594397f77c95feb15a727e69d28b1aed6f97c7c",
       "classification": "intentional mirror/parity check",
       "rationale": "The protocol describes the minimum mutable parser-state surface; LLMTrace is the validated persisted result model."

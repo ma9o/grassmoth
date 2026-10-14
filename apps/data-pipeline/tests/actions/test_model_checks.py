@@ -3,19 +3,19 @@
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts import EditModelRequest
+from nof1_causal_lab.actions.contracts.bodies import EditModelInput
+from nof1_causal_lab.actions.contracts.requests import EditModelRequest
 from nof1_causal_lab.actions.edit_model import edit_model
-from nof1_causal_lab.actions.io import EditModelInput
 from nof1_causal_lab.actions.model_checks import evaluate_model_checks
-from nof1_causal_lab.artifacts.data_ref import DataRef
 from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.question import QuestionSpec
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.state import apply_effects
-from tests.action_fixtures import question_root
-from tests.git_fixtures import git_oid
-from tests.model_fixtures import construct_named, stress_sleep_causal_model
+from tests.support.action import question_root
+from tests.support.git import git_oid
+from tests.support.model import construct_named, stress_sleep_causal_model
 
 pytestmark = pytest.mark.contract
 
@@ -23,7 +23,7 @@ pytestmark = pytest.mark.contract
 def test_edit_checks_depend_only_on_model_and_question_inputs(tmp_path, monkeypatch):
     from nof1_causal_lab.actions import model_checks
     from nof1_causal_lab.models.ssm.predictive import simulation
-    from nof1_causal_lab.utils import data
+    from nof1_causal_lab.storage import paths as data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     dynamical_model_spec = stress_sleep_causal_model()

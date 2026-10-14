@@ -1,0 +1,138 @@
+"""Shared utilities for inference backends.
+
+Particle inference and LAPS initialization share NumPyro's prior replay and
+transformations. Application metadata supports initialization proposals and
+reporting; it never reconstructs the prior density or deterministic model sites.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Set
+from dataclasses import dataclass
+from types import MappingProxyType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from nof1_causal_lab.models.ssm.execution.contracts import InitializationLikelihoodBackend
+    from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
+    from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
+    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
+
+import functools
+
+import jax
+import jax.numpy as jnp
+import numpyro.distributions as dist
+from numpyro import handlers
+
+from nof1_causal_lab.models.ssm.constants import INTERNAL_DIAGNOSTIC_SITES
+from nof1_causal_lab.models.ssm.inference.parameter_transform import (
+    ParameterTransform,
+    prepare_parameter_transform,
+)
+from nof1_causal_lab.models.ssm.inference.prior_program import numpyro_model
+from nof1_causal_lab.models.ssm.inference.sample_projection import (
+    _filter_public_samples,
+    _trace_public_sites,
+)
+
+
+@dataclass(frozen=True)
+class SiteInfoEntry:
+    """Typed trace metadata for one unconstrained NumPyro sample site."""
+
+    shape: tuple[int, ...]
+    distribution: dist.Distribution
+    transform: dist.transforms.Transform
+    value: jnp.ndarray
+
+
+type SiteInfo = Mapping[str, SiteInfoEntry]
+
+
+# ---------------------------------------------------------------------------
+# Model tracing
+# ---------------------------------------------------------------------------
+
+
+def _discover_sites(
+    priors: PriorRuntimeBundle,
+    panel: BoundPanel,
+    rng_key: jax.Array,
+    likelihood_backend: InitializationLikelihoodBackend,
+    reparam: Strategy | None = None,
+) -> SiteInfo:
+    """Trace model once to discover sample sites (names, shapes, transforms).
+
+    Site discovery is structural: it only needs the latent sample/deterministic
+    sites emitted by ``numpyro_model``. Discovery replays the model with a zero
+    likelihood; the particle target owns the exact joint likelihood used by
+    LAPS and sampling.
+    """
+    _ = likelihood_backend
+    model_fn = functools.partial(
+        numpyro_model, panel, priors, likelihood_backend=_DummyLikelihoodBackend()
+    )
+    if reparam is not None:
+        model_fn = handlers.reparam(model_fn, config=reparam)
+    with handlers.seed(rng_seed=rng_key):
+        trace = handlers.trace(model_fn).get_trace()
+
+    site_info: dict[str, SiteInfoEntry] = {}
+    for name, site in trace.items():
+        if (
+            site["type"] == "sample"
+            and not site.get("is_observed", False)
+            and name not in INTERNAL_DIAGNOSTIC_SITES
+        ):
+            d = site["fn"]
+            site_info[name] = SiteInfoEntry(
+                shape=site["value"].shape,
+                distribution=d,
+                transform=dist.transforms.biject_to(d.support),
+                value=site["value"],
+            )
+    return MappingProxyType(site_info)
+
+
+# ---------------------------------------------------------------------------
+# Pure-JAX deterministic site assembly
+# ---------------------------------------------------------------------------
+
+
+class _DummyLikelihoodBackend:
+    """Dummy backend for model replay — returns zero log-likelihood."""
+
+    def compute_log_likelihood(self, *_args: object, **_kwargs: object) -> jax.Array:
+        return jnp.array(0.0)
+
+
+def prepare_model_parameters(
+    priors: PriorRuntimeBundle, panel: BoundPanel, trace_key: jax.Array, reparam: Strategy | None
+) -> tuple[ParameterTransform, SiteInfo, frozenset[str]]:
+    """Use NumPyro's prior replay and transformations for every inference path."""
+    prior_model = functools.partial(
+        numpyro_model, panel, priors, likelihood_backend=_DummyLikelihoodBackend()
+    )
+    public_sites = _trace_public_sites(prior_model)
+    site_info = _discover_sites(
+        priors, panel, trace_key, _DummyLikelihoodBackend(), reparam=reparam
+    )
+    if reparam is not None:
+        prior_model = handlers.reparam(prior_model, config=reparam)
+    parameters = prepare_parameter_transform(
+        prior_model,
+        trace_key,
+        model_args=(),
+        initial_values={name: info.value for name, info in site_info.items()},
+    )
+    return parameters, site_info, public_sites
+
+
+def extract_constrained_samples(
+    particles: jnp.ndarray,
+    parameters: ParameterTransform,
+    public_sites: Set[str],
+) -> dict[str, jnp.ndarray]:
+    """Replay the prior program and retain its authored parameter/deterministic sites."""
+    return _filter_public_samples(jax.vmap(parameters.constrain)(particles), public_sites)

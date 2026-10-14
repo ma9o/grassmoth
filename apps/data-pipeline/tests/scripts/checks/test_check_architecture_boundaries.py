@@ -63,7 +63,7 @@ def test_type_only_dependencies_do_not_initialize_forbidden_layers(tmp_path: Pat
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.utils.storage import read_text
+    from nof1_causal_lab.storage.backend import read_text
 """,
     )
     _write_module(
@@ -76,7 +76,7 @@ if typing.TYPE_CHECKING:
     import time
 """,
     )
-    _write_module(source_root, "utils/storage.py", "")
+    _write_module(source_root, "storage/backend.py", "")
 
     assert checker.find_violations(source_root) == ()
 
@@ -104,10 +104,10 @@ def test_execution_rejects_partial_sampler_inputs(tmp_path: Path, annotation: st
         f"""
 from typing import TypedDict
 import polars as pl
-from nof1_causal_lab.artifacts.posterior import FitSettingsSpec
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.likelihood import ObservationLawSpec, LikelihoodSpec
-from nof1_causal_lab.sampler_config import SamplerSpec
+from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.likelihood import ObservationLawSpec, LikelihoodSpec
+from nof1_causal_lab.artifacts.sampling import SamplerSpec
 type SettingsAlias = FitSettingsSpec
 class Options(TypedDict, total=False):
     num_samples: int
@@ -126,7 +126,7 @@ def test_execution_accepts_resolved_sampler_alias(tmp_path: Path) -> None:
         source_root,
         "models/ssm/inference/new_sampler.py",
         """
-from nof1_causal_lab.sampler_config import SamplerSpec as Resolved
+from nof1_causal_lab.artifacts.sampling import SamplerSpec as Resolved
 
 def run(*, sampler: Resolved) -> None:
     pass
@@ -142,24 +142,27 @@ def test_pure_roles_reject_transitive_function_local_acquisition(tmp_path: Path)
         "artifacts/new_value.py",
         "models/new_compiler.py",
         "models/ssm/new_engine.py",
-        "workers/prompts/new_projection.py",
+        "study/projections/new_projection.py",
     )
     for relative in producers:
-        _write_module(source_root, relative, "from nof1_causal_lab.utils.shared import read\n")
+        _write_module(source_root, relative, "from nof1_causal_lab.models.shared import read\n")
     _write_module(
         source_root,
-        "utils/shared.py",
-        "def read():\n    from nof1_causal_lab.utils.storage import read_text\n",
+        "models/shared.py",
+        "def read():\n    from nof1_causal_lab.storage.backend import read_text\n",
     )
-    _write_module(source_root, "utils/storage.py", "import time\n")
+    _write_module(source_root, "storage/backend.py", "import time\n")
 
     violations = checker.find_violations(source_root)
 
     for relative in producers:
         findings = [item for item in violations if item.ref.path == source_root / relative]
-        assert {item.ref.imported for item in findings} == {"nof1_causal_lab.utils.storage", "time"}
+        assert {item.ref.imported for item in findings} == {
+            "nof1_causal_lab.storage.backend",
+            "time",
+        }
         assert all(item.code == "ARCH008" for item in findings)
-        assert all("nof1_causal_lab.utils.shared ->" in item.message for item in findings)
+        assert all("nof1_causal_lab.models.shared ->" in item.message for item in findings)
     assert all(
         "role=" in item.diagnostic(source_root) and "fix at" in item.diagnostic(source_root)
         for item in violations
@@ -172,7 +175,7 @@ def test_pure_roles_reject_transitive_function_local_acquisition(tmp_path: Path)
         "artifacts/new_value.py",
         "models/new_compiler.py",
         "models/ssm/new_engine.py",
-        "workers/prompts/new_projection.py",
+        "study/projections/new_projection.py",
     ],
 )
 def test_pure_roles_reject_primitive_acquisition_and_aliases(tmp_path: Path, relative: str) -> None:
@@ -411,3 +414,27 @@ def acquire():
     )
 
     assert checker.find_violations(source_root) == ()
+
+
+@pytest.mark.parametrize("type_only", [False, True])
+def test_runtime_cycles_are_rejected_but_type_only_edges_are_excluded(
+    tmp_path: Path, type_only: bool
+) -> None:
+    checker = _load_checker()
+    source_root = tmp_path / "nof1_causal_lab"
+    _write_module(
+        source_root, "artifacts/first.py", "from nof1_causal_lab.artifacts import second\n"
+    )
+    prefix = (
+        "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n"
+        if type_only
+        else "def local_import():\n"
+    )
+    _write_module(
+        source_root,
+        "artifacts/second.py",
+        prefix + "    from nof1_causal_lab.artifacts import first\n",
+    )
+    violations = checker.find_violations(source_root)
+    cycles = [violation for violation in violations if violation.code == "ARCH010"]
+    assert len(cycles) == (0 if type_only else 1)

@@ -7,7 +7,8 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, Field
 
-from nof1_causal_lab.actions.contracts import (
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import (
     DataDiffRequest,
     EditModelRequest,
     EditQuestionRequest,
@@ -17,20 +18,19 @@ from nof1_causal_lab.actions.contracts import (
     ScientificActionRequest,
     SimulateRequest,
 )
-from nof1_causal_lab.actions.effects import ActionEffects
 from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.checks import FindingSubject
-from nof1_causal_lab.artifacts.data_preparation import DataPreparationResult, FileSourceRef
-from nof1_causal_lab.artifacts.dynamical_model_spec import ModelEditResult
 from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.posterior import InferenceEvidence
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
+from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult, FileSourceRef
+from nof1_causal_lab.artifacts.reports.checks import FindingSubject
+from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
 from nof1_causal_lab.artifacts.simulation import ModelSimulationResult
 from nof1_causal_lab.study.state import StudyState
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from nof1_causal_lab.artifacts.data_ref import DataRef
+    from nof1_causal_lab.artifacts.observations.reference import DataRef
 
 
 class ActionMessage(Value):

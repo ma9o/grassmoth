@@ -6,6 +6,9 @@ app = marimo.App(width="medium")
 
 @app.cell
 def imports_marimo():
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime as _initialize_runtime
+
+    _initialize_runtime()
     import marimo as mo
 
     return (mo,)
@@ -22,7 +25,7 @@ def intro(mo):
 
     This notebook keeps one toy N-of-1 study fixed and changes one modeling choice at a time.
     Every red verdict is produced by the production functions in
-    `nof1_causal_lab.models.ssm.reachability`; the notebook only manufactures small,
+    `nof1_causal_lab.models.ssm.diagnostics.reachability`; the notebook only manufactures small,
     deterministic prior-predictive arrays and draws the evidence, so each failure appears in
     isolation, with nothing fitted.
 
@@ -41,8 +44,7 @@ def imports():
     import networkx as nx
     import numpy as np
 
-    from nof1_causal_lab.actions.validation.rules import indicator_findings
-    from nof1_causal_lab.models.ssm.reachability import (
+    from nof1_causal_lab.models.ssm.diagnostics.reachability import (
         check_confinement,
         check_coverage,
         check_edge_share,
@@ -51,6 +53,7 @@ def imports():
         check_scale,
         check_transmission,
     )
+    from nof1_causal_lab.observations.quality.rules import indicator_findings
 
     return (
         indicator_findings,

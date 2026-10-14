@@ -18,9 +18,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.artifacts.parameter import SiteKind, SupportClass
+from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.artifacts.model.parameter import SiteKind, SupportClass
 from nof1_causal_lab.models.ssm.structure.sites import SiteDescriptor
-from nof1_causal_lab.utils.immutability import freeze_fields
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

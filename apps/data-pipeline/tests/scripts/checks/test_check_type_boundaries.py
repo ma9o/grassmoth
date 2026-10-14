@@ -240,7 +240,7 @@ def test_core_bypasses_reject_self_updates_and_allow_validated_revisions() -> No
 """
     violations = checker.scan_text(
         source,
-        path="src/nof1_causal_lab/artifacts/dynamical_model_spec.py",
+        path="src/nof1_causal_lab/artifacts/model/dynamical_model_spec.py",
         rules=frozenset({"CORE001"}),
     )
     assert [item.target for item in violations] == ["model_copy", "model_copy", "__setattr__"]
@@ -380,7 +380,7 @@ class DynamicalModelSpec(Value):
 class Request:
     entries: dict[str, int]
 """,
-        path="src/nof1_causal_lab/artifacts/dynamical_model_spec.py",
+        path="src/nof1_causal_lab/artifacts/model/dynamical_model_spec.py",
         rules=frozenset({"CORE002"}),
     )
     assert [(v.code, v.target) for v in violations] == [
@@ -409,7 +409,9 @@ def test_pure_projection_scope_rejects_revalidation(operation: str) -> None:
     assert [
         v.code
         for v in checker.scan_text(
-            source, path="src/nof1_causal_lab/study/visuals.py", rules=frozenset({"VIEW001"})
+            source,
+            path="src/nof1_causal_lab/study/projections/visuals.py",
+            rules=frozenset({"VIEW001"}),
         )
     ] == ["VIEW001"]
     assert checker.scan_text(source, path="src/boundary.py", rules=frozenset({"VIEW001"})) == []
@@ -420,7 +422,7 @@ def test_projection_allows_exhaustiveness() -> None:
     assert (
         checker.scan_text(
             "def project(value):\n    assert_never(value)\n",
-            path="src/nof1_causal_lab/study/visuals.py",
+            path="src/nof1_causal_lab/study/projections/visuals.py",
             rules=frozenset({"VIEW001"}),
         )
         == []
@@ -437,7 +439,7 @@ def test_projection_allows_exhaustiveness() -> None:
 def test_suppress_obeys_the_same_builtin_error_rule(prefix: str, call: str) -> None:
     source = f"{prefix}\nwith {call}(ValueError, KeyError):\n    classify_science()\n"
     violations = _load_checker().scan_text(
-        source, path="src/nof1_causal_lab/artifacts/checks.py", rules=frozenset({"ERR001"})
+        source, path="src/nof1_causal_lab/artifacts/reports/checks.py", rules=frozenset({"ERR001"})
     )
     assert [v.code for v in violations] == ["ERR001"]
 
@@ -445,7 +447,7 @@ def test_suppress_obeys_the_same_builtin_error_rule(prefix: str, call: str) -> N
 @pytest.mark.parametrize("role", ["models/ssm/compile", "models/ssm/execution", "study"])
 def test_constructor_parsing_stays_with_the_target_owner_or_edge(role: str) -> None:
     violations = _load_checker().scan_text(
-        """from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec as Authored
+        """from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec as Authored
 from pydantic import TypeAdapter
 
 def read(payload):
@@ -496,14 +498,21 @@ def compile_model() -> {result}:
 
 
 @pytest.mark.parametrize(
-    "directory", ["utils", "actions", "study/visuals", "models/ssm/compile", "models/ssm/execution"]
+    "directory",
+    [
+        "observations",
+        "actions",
+        "study/projections/visuals",
+        "models/ssm/compile",
+        "models/ssm/execution",
+    ],
 )
 def test_json_decoding_obeys_whole_role_parse_rules(directory: str) -> None:
     checker = _load_checker()
-    # study/visuals is explicitly projection-owned; actions and utils use their directory role.
+    # study/projections/visuals is explicitly projection-owned; actions and utils use their directory role.
     path = (
-        "src/nof1_causal_lab/study/visuals.py"
-        if directory == "study/visuals"
+        "src/nof1_causal_lab/study/projections/visuals.py"
+        if directory == "study/projections/visuals"
         else f"src/nof1_causal_lab/{directory}/new_consumer.py"
     )
     violations = checker.scan_text(
@@ -571,7 +580,7 @@ def test_compiled_records_must_own_nested_mapping_and_numpy_storage(annotation: 
     source = f"""from dataclasses import dataclass
 from collections.abc import Mapping
 import numpy as np
-from nof1_causal_lab.utils.immutability import freeze_fields as own_fields
+from nof1_causal_lab.artifacts.immutability import freeze_fields as own_fields
 
 @dataclass(frozen=True)
 class Compiled:
@@ -649,7 +658,7 @@ def test_field_ownership_cannot_be_reused_for_later_mutation() -> None:
     violations = _load_checker().scan_text(
         """from dataclasses import dataclass
 from collections.abc import Mapping
-from nof1_causal_lab.utils.immutability import freeze_fields
+from nof1_causal_lab.artifacts.immutability import freeze_fields
 @dataclass(frozen=True)
 class Compiled:
     values: Mapping[str, int]

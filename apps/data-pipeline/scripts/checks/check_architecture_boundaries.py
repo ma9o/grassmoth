@@ -18,6 +18,10 @@ here follow the module roles owned by ``architecture_roles``:
     explicitly seeded local generators are allowed. This checks primitive calls,
     not arbitrary callback effects or ownership of mutable generator arguments.
 
+``ARCH010``
+    Runtime imports between production modules form a directed acyclic graph.
+    Shared values and helpers belong below their consumers, never behind a cycle.
+
 Imports guarded by ``TYPE_CHECKING`` are excluded because these rules constrain
 runtime ownership and initialization, not type annotation dependencies.
 """
@@ -33,11 +37,17 @@ from pathlib import Path
 from typing import override
 
 import grimp
+import networkx as nx
 
-from scripts.checks.architecture_roles import PACKAGE, fix_owner, role_for_module, role_inventory
+from scripts.checks.architecture_roles import (
+    PACKAGE,
+    PURE_ROLES,
+    fix_owner,
+    role_for_module,
+    role_inventory,
+)
 
 _PACKAGE = PACKAGE
-_PURE_ROLES = frozenset({"domain", "compiler", "execution", "projection"})
 _INPUT_CALLS = frozenset(
     {
         "builtins.open",
@@ -392,10 +402,10 @@ def find_violations(source_root: Path) -> tuple[Violation, ...]:
     ]
     index = TypeIndex(sources)
     raw = {
-        f"{_PACKAGE}.artifacts.dynamical_model_spec.DynamicalModelSpec",
-        f"{_PACKAGE}.artifacts.likelihood.ObservationLawSpec",
-        f"{_PACKAGE}.artifacts.likelihood.LikelihoodSpec",
-        f"{_PACKAGE}.artifacts.posterior.FitSettingsSpec",
+        f"{_PACKAGE}.artifacts.model.dynamical_model_spec.DynamicalModelSpec",
+        f"{_PACKAGE}.artifacts.model.likelihood.ObservationLawSpec",
+        f"{_PACKAGE}.artifacts.model.likelihood.LikelihoodSpec",
+        f"{_PACKAGE}.artifacts.sampling.FitSettingsSpec",
         "polars.DataFrame",
         "pandas.DataFrame",
         "pyarrow.Table",
@@ -459,7 +469,7 @@ def find_violations(source_root: Path) -> tuple[Violation, ...]:
             and any(
                 isinstance(part, ast.Constant) and part.value is None for part in ast.walk(node)
             )
-            and f"{_PACKAGE}.sampler_config.SamplerSpec" in index.return_variants(node, module)
+            and f"{_PACKAGE}.artifacts.sampling.SamplerSpec" in index.return_variants(node, module)
         ):
             return True
         return any(
@@ -470,7 +480,7 @@ def find_violations(source_root: Path) -> tuple[Violation, ...]:
 
     for (relative, tree), (path, role) in zip(sources, inventory.items(), strict=True):
         importer = index.module(relative)
-        if role in _PURE_ROLES:
+        if role in PURE_ROLES:
             effects = _RuntimeEffects(tree)
             effects.visit(tree)
             violations.extend(
@@ -530,6 +540,32 @@ def find_violations(source_root: Path) -> tuple[Violation, ...]:
         ): path
         for path in inventory
     }
+    dependencies = nx.DiGraph()
+    dependencies.add_nodes_from(modules)
+    dependencies.add_edges_from(
+        (importer, imported)
+        for importer in modules
+        for imported in graph.find_modules_directly_imported_by(importer)
+        if imported in modules
+    )
+    for component in sorted(
+        nx.strongly_connected_components(dependencies), key=lambda c: sorted(c)
+    ):
+        if len(component) == 1 and not any(dependencies.has_edge(m, m) for m in component):
+            continue
+        cycle = nx.find_cycle(dependencies.subgraph(sorted(component)), source=min(component))
+        importer, imported = cycle[0]
+        details = graph.get_import_details(importer=importer, imported=imported)
+        chain = [edge[0] for edge in cycle] + [cycle[0][0]]
+        violations.append(
+            Violation(
+                ImportRef(modules[importer], details[0]["line_number"], importer, imported),
+                "ARCH010",
+                "runtime imports must be acyclic; move shared ownership below its consumers: "
+                + " -> ".join(chain),
+            )
+        )
+
     acquisition = {
         "os",
         "time",
@@ -552,7 +588,7 @@ def find_violations(source_root: Path) -> tuple[Violation, ...]:
         "zipfile",
     }
     for importer, path in sorted(modules.items()):
-        if role_for_module(importer) not in _PURE_ROLES:
+        if role_for_module(importer) not in PURE_ROLES:
             continue
         for imported in sorted(graph.find_upstream_modules(importer)):
             if imported in acquisition or (

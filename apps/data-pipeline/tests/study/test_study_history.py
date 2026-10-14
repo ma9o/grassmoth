@@ -9,32 +9,32 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from nof1_causal_lab.actions.contracts import EditModelRequest, PrepareDataRequest
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.actions.io import (
+from nof1_causal_lab.actions.contracts.bodies import (
     DataDiffInput,
     EditModelInput,
     FitInput,
     ModelDiffInput,
     SimulateInput,
 )
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import EditModelRequest, PrepareDataRequest
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.data_preparation import DataPreparationResult, FileSourceRef
-from nof1_causal_lab.artifacts.data_ref import DataRef
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.identity import GitOid, GitRef
-from nof1_causal_lab.artifacts.predictive_provenance import AuthoredLawProvenance
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult, FileSourceRef
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
     SimulationArm,
     SimulationEvidence,
     SingleArmSimulation,
 )
+from nof1_causal_lab.storage import paths as data_module
 from nof1_causal_lab.study.errors import StudyLookupError
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.records import Applied, AttemptRecord, PrepareAttempt, Raised, Rejected
-from nof1_causal_lab.study.store import ArtifactStore
-from nof1_causal_lab.utils import data as data_module
-from tests.action_fixtures import applied_record, empty_simulation_summary
+from tests.support.action import applied_record, empty_simulation_summary
 
 pytestmark = pytest.mark.contract
 
@@ -101,26 +101,27 @@ def test_failed_attempt_and_invalid_publication_do_not_advance_scientific_state(
 def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, comparison_action):
     from temporalio.exceptions import ActivityError, ApplicationError
 
-    from nof1_causal_lab.actions import data_diff, revisions
-    from nof1_causal_lab.actions.contracts import DataDiffRequest, ModelDiffRequest
-    from nof1_causal_lab.actions.io import DataDiffOutput, ModelDiffOutput
-    from nof1_causal_lab.actions.temporal import workflow as study_workflow
-    from nof1_causal_lab.actions.temporal.activities import (
+    from nof1_causal_lab.actions import data_diff
+    from nof1_causal_lab.actions import model_diff as revisions
+    from nof1_causal_lab.actions.contracts.bodies import DataDiffOutput, ModelDiffOutput
+    from nof1_causal_lab.actions.contracts.requests import DataDiffRequest, ModelDiffRequest
+    from nof1_causal_lab.actions.temporal.study import workflow as study_workflow
+    from nof1_causal_lab.actions.temporal.study.activities import (
         journal_activity,
         read_inputs_activity,
         run_action_activity,
     )
-    from nof1_causal_lab.actions.temporal.messages import ActionRequest, StudyInit
-    from nof1_causal_lab.artifacts.checks import Evaluated
-    from nof1_causal_lab.artifacts.data_comparison import (
+    from nof1_causal_lab.actions.temporal.study.messages import ActionRequest, StudyInit
+    from nof1_causal_lab.artifacts.identity import IndicatorRef
+    from nof1_causal_lab.artifacts.reports.checks import Evaluated
+    from nof1_causal_lab.artifacts.reports.data_comparison import (
         DataComparisonReport,
         DescriptiveIndicatorComparison,
     )
-    from nof1_causal_lab.artifacts.identity import IndicatorRef
-    from tests.helpers import run_async
+    from tests.support.helpers import run_async
 
     repository, store = study
-    from tests.action_fixtures import question_root
+    from tests.support.action import question_root
 
     root = question_root("STUDY").commit_id
     head = repository.append(
@@ -182,7 +183,7 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
         if name == "run_action_activity":
             return await run_action_activity(payload)
         if name == "complete_result_activity":
-            from nof1_causal_lab.actions.temporal.activities import complete_result_activity
+            from nof1_causal_lab.actions.temporal.study.activities import complete_result_activity
 
             return await complete_result_activity(payload)
         if name == "journal_activity":
@@ -243,7 +244,7 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
             assert announcements[0].severity == "warning"
             assert announcements[0].subject == finding.subject
             assert announcements[0].detail == finding.evidence
-        from nof1_causal_lab.study.result_codec import unpack_result
+        from nof1_causal_lab.study.persistence.codec import unpack_result
 
         assert (
             type(report).model_validate(
@@ -266,7 +267,7 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
         assert restarted.read_file(leaf.commit_id, "result.msgpack") == repository.read_file(
             leaf.commit_id, "result.msgpack"
         )
-        from nof1_causal_lab.tool_server import app
+        from nof1_causal_lab.api.app import app
 
         monkeypatch.setenv("READ_ONLY_FACADE", "1")
         with TestClient(app) as client:
@@ -295,7 +296,7 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
 
     from datetime import date
 
-    from nof1_causal_lab.actions.contracts import (
+    from nof1_causal_lab.actions.contracts.requests import (
         DataDiffRequest,
         FitRequest,
         ModelDiffRequest,
@@ -330,7 +331,7 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
             for artifact_id, n, derived in produced
         )
         if action == "edit_model":
-            from nof1_causal_lab.artifacts.dynamical_model_spec import ModelEditResult
+            from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
 
             result = Applied(
                 result=ModelEditResult(),
@@ -417,7 +418,7 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
                     ),
                 )
             else:
-                from nof1_causal_lab.artifacts.posterior import InferenceEvidence
+                from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
 
                 result = InferenceEvidence()
                 record = dependency_record(

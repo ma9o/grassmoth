@@ -4,23 +4,23 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.artifacts.data_ref import DataRef
 from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.compilation_errors import IncompleteModelError
-from nof1_causal_lab.study.data import read_data_history
+from nof1_causal_lab.study.persistence.store import ArtifactStore
+from nof1_causal_lab.study.queries.data import read_data_history
 from nof1_causal_lab.study.state import apply_effects
-from nof1_causal_lab.study.store import ArtifactStore
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.data_preparation import DataPreparationResult
-    from nof1_causal_lab.artifacts.validation_report import DataProfileReport
+    from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
+    from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
     from nof1_causal_lab.study.records import Applied
     from nof1_causal_lab.study.state import StudyState
 
 
 def read_data_profile(store: ArtifactStore, source: DataRef[GitOid, int]) -> DataProfileReport:
     """Compute the empirical data profile for one exact replicate selection."""
-    from nof1_causal_lab.actions.validation.flow import profile_data
+    from nof1_causal_lab.observations.quality.profile import profile_data
 
     def render() -> DataProfileReport:
         history = read_data_history(store, source)

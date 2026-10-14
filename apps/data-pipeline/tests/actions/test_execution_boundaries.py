@@ -7,21 +7,21 @@ from unittest.mock import Mock
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.contracts import EditModelRequest, FitRequest
-from nof1_causal_lab.actions.io import EditModelOutput, FitInput
+from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, FitInput
+from nof1_causal_lab.actions.contracts.requests import EditModelRequest, FitRequest
 from nof1_causal_lab.actions.runners import run_action
-from nof1_causal_lab.artifacts.data_ref import DataRef
 from nof1_causal_lab.artifacts.identity import ARTIFACT_IDS, GitOid
-from nof1_causal_lab.artifacts.posterior import FitSettingsSpec
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
 from nof1_causal_lab.compilation_errors import IncompleteModelError
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.state import StudyState
-from nof1_causal_lab.study.store import ArtifactStore
-from tests.action_fixtures import applied_record, edit_and_check, question_root
-from tests.data_fixtures import metadata_for_model
-from tests.git_fixtures import artifact_revision, artifact_revisions
-from tests.helpers import fixture_entity_id, make_model, run_async, write_question
-from tests.model_fixtures import x_y_model
+from tests.support.action import applied_record, edit_and_check, question_root
+from tests.support.data import metadata_for_model
+from tests.support.git import artifact_revision, artifact_revisions
+from tests.support.helpers import fixture_entity_id, make_model, run_async, write_question
+from tests.support.model import x_y_model
 
 pytestmark = pytest.mark.contract
 
@@ -31,8 +31,8 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def workspace(monkeypatch, tmp_path):
-    from nof1_causal_lab.utils import data as data_module
-    from nof1_causal_lab.utils import storage
+    from nof1_causal_lab.storage import backend as storage
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setenv("DEPLOYMENT_ENV", "development")
     monkeypatch.setattr(storage, "is_remote", lambda: False)
@@ -48,7 +48,7 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
         parameters=tuple(p.revised(distribution=None) for p in complete.parameters),
     )
     journal = StudyRepository(workspace)
-    from nof1_causal_lab.artifacts.question import QuestionSpec
+    from nof1_causal_lab.artifacts.model.question import QuestionSpec
 
     question = QuestionSpec(text="Does X change Y?", outcome=fixture_entity_id("construct", "Y"))
     state = journal.state(question_root(workspace, question).commit_id)
@@ -97,7 +97,7 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
 
 
 def test_incomplete_model_is_rejected_before_inference(workspace, monkeypatch):
-    from nof1_causal_lab.actions import fit as flow
+    from nof1_causal_lab.actions.fit import action as flow
 
     local = Mock()
     monkeypatch.setattr(flow, "fit", local)
@@ -133,9 +133,9 @@ def test_incomplete_model_is_rejected_before_inference(workspace, monkeypatch):
 
 
 def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(workspace, monkeypatch):
-    from nof1_causal_lab.actions import fit as flow
+    from nof1_causal_lab.actions.fit import action as flow
     from nof1_causal_lab.actions.runners import _run_fit
-    from nof1_causal_lab.study.store import read_model
+    from nof1_causal_lab.study.persistence.store import read_model
 
     prior = x_y_model()
     fitted = prior
@@ -181,10 +181,10 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(workspac
 
     import jax.numpy as jnp
 
-    from nof1_causal_lab.artifacts.posterior import InferenceEvidence
-    from nof1_causal_lab.models.ssm.inference.persistence import condition_model
+    from nof1_causal_lab.actions.fit.conditioning import condition_model
+    from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
     from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
-    from tests.inference_fixtures import (
+    from tests.support.inference import (
         compile_model_fixture,
         inference_metadata,
         parameter_draws,

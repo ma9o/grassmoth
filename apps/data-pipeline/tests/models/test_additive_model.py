@@ -6,26 +6,16 @@ import numpyro.distributions as dist
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from nof1_causal_lab.artifacts.construct import replace_constructs
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.expressions import (
-    coefficient,
-    hill,
-    state,
-)
-from nof1_causal_lab.artifacts.identity import (
-    ConstructId,
-    IndicatorId,
-    scientific_id,
-)
-from nof1_causal_lab.artifacts.likelihood import ObservationLawSpec
-from nof1_causal_lab.models.model_parameters import require_priors
-from nof1_causal_lab.models.model_structure import StructuralSelection
-from tests.helpers import graph_constructs
-from tests.inference_fixtures import compile_model_fixture
-from tests.model_fixtures import (
-    load_model_fixture,
-)
+from nof1_causal_lab.artifacts.identity import ConstructId, IndicatorId, scientific_id
+from nof1_causal_lab.artifacts.model.construct import replace_constructs
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.expressions import coefficient, hill, state
+from nof1_causal_lab.artifacts.model.likelihood import ObservationLawSpec
+from nof1_causal_lab.models.parameters import require_priors
+from nof1_causal_lab.models.structure import StructuralSelection
+from tests.support.helpers import graph_constructs
+from tests.support.inference import compile_model_fixture
+from tests.support.model import load_model_fixture
 
 
 def _entities_gain_detail_with_one_owner_and_native_prior_with_parameter_distributions() -> (
@@ -202,7 +192,7 @@ def test_inconsistent_enrichment_is_rejected(change):
 
 
 def test_shared_endpoints_round_trip_once_and_resolve_forward_references():
-    from tests.helpers import make_model
+    from tests.support.helpers import make_model
 
     dynamical_model_spec = make_model(["A", "B", "Y"], [("A", "Y"), ("B", "Y")])
     assert dynamical_model_spec.edges[0].effect is dynamical_model_spec.edges[1].effect
@@ -231,7 +221,7 @@ def test_shared_endpoints_round_trip_once_and_resolve_forward_references():
 
 
 def test_endpoint_identity_rejects_conflicting_definitions():
-    from tests.helpers import make_model
+    from tests.support.helpers import make_model
 
     dynamical_model_spec = make_model(["A", "B", "Y"], [("A", "Y"), ("B", "Y")])
     payload = dynamical_model_spec.model_dump(mode="json")
@@ -241,7 +231,7 @@ def test_endpoint_identity_rejects_conflicting_definitions():
 
 
 def test_graph_membership_follows_edges_and_revisions_preserve_connectivity():
-    from tests.helpers import make_model
+    from tests.support.helpers import make_model
 
     dynamical_model_spec = make_model(["A", "B", "C", "D"], [("A", "B"), ("B", "C"), ("C", "D")])
     with pytest.raises(ValidationError, match="connected causal graph"):

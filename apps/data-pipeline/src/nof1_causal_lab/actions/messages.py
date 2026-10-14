@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from nof1_causal_lab.artifacts.checks import (
+from nof1_causal_lab.artifacts.identity import ConstructRef
+from nof1_causal_lab.artifacts.reports.checks import (
     Assessment,
     FindingSubject,
     NotEvaluated,
     NumericCriterionEvidence,
     QueryTargetSubject,
 )
-from nof1_causal_lab.artifacts.data_comparison import PredictiveIndicatorComparison
-from nof1_causal_lab.artifacts.identity import ConstructRef
+from nof1_causal_lab.artifacts.reports.data_comparison import PredictiveIndicatorComparison
 from nof1_causal_lab.artifacts.simulation import PairedArmSimulation
 from nof1_causal_lab.study.records import ActionMessage
 
@@ -20,14 +20,14 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
     from datetime import datetime
 
-    from nof1_causal_lab.artifacts.data_comparison import DataComparisonReport
-    from nof1_causal_lab.artifacts.data_preparation import DataPreparationResult
-    from nof1_causal_lab.artifacts.dynamical_model_spec import ModelEditResult
-    from nof1_causal_lab.artifacts.identification import IdentificationReport
-    from nof1_causal_lab.artifacts.model_checks import ModelCheckReport
-    from nof1_causal_lab.artifacts.posterior import FitCheckReport, InferenceReport
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
+    from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
+    from nof1_causal_lab.artifacts.reports.data_comparison import DataComparisonReport
+    from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
+    from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
+    from nof1_causal_lab.artifacts.reports.inference import FitCheckReport, InferenceReport
+    from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport
     from nof1_causal_lab.artifacts.simulation import SimulationReport
-    from nof1_causal_lab.artifacts.validation_report import DataProfileReport
 
 
 type FindingEvidence = str | NumericCriterionEvidence | tuple[NumericCriterionEvidence, ...]

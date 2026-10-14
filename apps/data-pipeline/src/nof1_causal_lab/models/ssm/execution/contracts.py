@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from dynestyx import StochasticContinuousTimeStateEvolution
     from numpyro.distributions import MultivariateNormal
 
-    from nof1_causal_lab.artifacts.likelihood import Law
+    from nof1_causal_lab.artifacts.model.likelihood import Law
     from nof1_causal_lab.models.ssm.dynamics.expression import BoundExpression
     from nof1_causal_lab.models.ssm.shapes import Array, Float
 

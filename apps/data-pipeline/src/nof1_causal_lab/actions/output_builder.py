@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from nof1_causal_lab.actions.io import (
+from nof1_causal_lab.actions.contracts.bodies import (
     DataDiffOutput,
     EditModelOutput,
     EditQuestionOutput,
@@ -16,23 +16,27 @@ from nof1_causal_lab.actions.io import (
     PrepareDataOutput,
     SimulateOutput,
 )
+from nof1_causal_lab.actions.input_resolution import input_state
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.study.artifact_files import parquet_filename
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model, read_question
 from nof1_causal_lab.study.records import ActionAttempt, Applied, StagedActionAttempt
-from nof1_causal_lab.study.store import ArtifactStore, read_model, read_question
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.actions.effects import ActionEffects
-    from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec, ModelEditResult
-    from nof1_causal_lab.artifacts.identification import IdentificationReport
-    from nof1_causal_lab.artifacts.model_checks import ModelCheckReport
-    from nof1_causal_lab.artifacts.question import QuestionSpec
+    from nof1_causal_lab.actions.contracts.effects import ActionEffects
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import (
+        DynamicalModelSpec,
+        ModelEditResult,
+    )
+    from nof1_causal_lab.artifacts.model.question import QuestionSpec
+    from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
+    from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport
     from nof1_causal_lab.artifacts.simulation import SimulationReport
-    from nof1_causal_lab.study.results import ActionOutput
+    from nof1_causal_lab.study.queries.results import ActionOutput
 
 
-from nof1_causal_lab.artifacts.data_ref import DataRef
+from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.study.state import StudyState, apply_effects
 
 
@@ -51,8 +55,8 @@ class OutputBuilder:
         self,
     ) -> tuple[ModelCheckReport, IdentificationReport]:
         """Checks computed by this action, without searching another call's reports."""
-        from nof1_causal_lab.artifacts.identification import IdentificationReport
-        from nof1_causal_lab.artifacts.model_checks import ModelCheckReport
+        from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
+        from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport
 
         reports = self.applied.effects.reports
         return (
@@ -100,9 +104,12 @@ def build_output(
     workspace_id: str, attempt: StagedActionAttempt, state: StudyState
 ) -> ActionOutput:
     """Complete one action's result using only its inputs and staged execution evidence."""
-    from nof1_causal_lab.artifacts.validation_report import DataProfileReport
-    from nof1_causal_lab.study.lineage import read_data_metadata
-    from nof1_causal_lab.study.visuals import observation_history, simulation_observation_histories
+    from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
+    from nof1_causal_lab.study.projections.visuals import (
+        observation_history,
+        simulation_observation_histories,
+    )
+    from nof1_causal_lab.study.queries.lineage import read_data_metadata
 
     assert isinstance(attempt.outcome, Applied)
     store = ArtifactStore(workspace_id)
@@ -141,7 +148,7 @@ def build_output(
                 },
             )
         case "fit":
-            from nof1_causal_lab.artifacts.posterior import FitCheckReport, InferenceReport
+            from nof1_causal_lab.artifacts.reports.inference import FitCheckReport, InferenceReport
 
             dynamical_model_spec = read_model(store, state.current["model"].revision)
             inference = store.read_report(effects.reports["inference"], InferenceReport)
@@ -170,7 +177,7 @@ def complete_attempt(workspace_id: str, attempt: StagedActionAttempt) -> ActionA
     assert attempt.request is not None
     if not isinstance(attempt.outcome, Applied):
         return failed_attempt(attempt.request, attempt.outcome)
-    inputs = StudyRepository(workspace_id).input_state(attempt.request)
+    inputs = input_state(StudyRepository(workspace_id), attempt.request)
     state = staged_state(inputs, attempt.outcome.effects)
     result = build_output(workspace_id, attempt, state)
     store = ArtifactStore(workspace_id)

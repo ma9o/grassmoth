@@ -23,15 +23,15 @@ from blackjax.mcmc.integrators import (
     omelyan_coefficients,
 )
 
-from nof1_causal_lab.artifacts.posterior_diagnostics import LapsInitializationDiagnostics
+from nof1_causal_lab.artifacts.reports.posterior_diagnostics import LapsInitializationDiagnostics
 from nof1_causal_lab.compute.batching import compiled_memory
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from nof1_causal_lab.artifacts.sampling import LapsInitializationSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
-    from nof1_causal_lab.sampler_config import LapsInitializationSpec
 
 
 @dataclass(frozen=True)

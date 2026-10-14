@@ -3,7 +3,7 @@
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
-    "dev": "uv run uvicorn nof1_causal_lab.tool_server:app --reload --port 8100",
+    "dev": "uv run uvicorn nof1_causal_lab.api.app:app --reload --port 8100",
     "notebooks": "uv run marimo edit notebooks/",
     "lint": "bun run --parallel --no-exit-on-error lint:ruff format:check lint:deptry lint:config lint:type-boundaries lint:type-boundaries:tests lint:architecture lint:imports lint:vulture lint:fields lint:ty lint:basedpyright lint:annotations lint:source-rules lint:duplicates",
     "lint:ty": "uv run ty check",
@@ -25,7 +25,7 @@
     "test:all": "bun run test -m=",
     "complexity": "uv run complexipy . --failed --sort desc --plain --ignore-complexity",
     "similarity": "uv run python -m scripts.checks.find_ast_similarities",
-    "docs:distribution": "uv run python scripts/codegen/export_distribution_docs.py",
+    "docs:distribution": "uv run python -m scripts.codegen.export_distribution_docs",
     "docs:distribution:check": "bun run docs:distribution --check",
     "lint:annotations": "uv run python -m scripts.checks.architecture_roles",
     "lint:source-rules": "uv run ruff check src --no-fix --select FBT001,FBT002,PGH003"

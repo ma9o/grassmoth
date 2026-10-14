@@ -10,16 +10,17 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts import FitRequest, PrepareDataRequest
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.actions.io import FitInput
+from nof1_causal_lab.actions.contracts.bodies import FitInput
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import FitRequest, PrepareDataRequest
 from nof1_causal_lab.actions.runners import run_action
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.construct import replace_constructs
-from nof1_causal_lab.artifacts.data_preparation import FileSourceRef
-from nof1_causal_lab.artifacts.data_ref import DataRef
 from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.predictive_provenance import AuthoredLawProvenance
+from nof1_causal_lab.artifacts.model.construct import replace_constructs
+from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.artifacts.observations.semantics import SummaryOperator
+from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
     ModelSimulationResult,
     SimulationArm,
@@ -29,22 +30,21 @@ from nof1_causal_lab.artifacts.simulation import (
     SimulationSpec,
     SingleArmSimulation,
 )
-from nof1_causal_lab.models.ssm import numerics as numeric
-from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
-from nof1_causal_lab.models.ssm.runtime import project_observation_data
-from nof1_causal_lab.study.data import read_data_history, read_simulation_observations
+from nof1_causal_lab.models.ssm import compiled_access as numeric
+from nof1_causal_lab.models.ssm.preparation.panel import project_observation_data
+from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 from nof1_causal_lab.study.errors import StudyLookupError
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore
+from nof1_causal_lab.study.queries.data import read_data_history, read_simulation_observations
 from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.state import StudyState
-from nof1_causal_lab.study.store import ArtifactStore
-from nof1_causal_lab.utils.observation_semantics import SummaryOperator
-from tests.action_fixtures import applied_record, empty_simulation_summary
-from tests.data_fixtures import metadata_for_model, simulation_layout
-from tests.git_fixtures import git_oid
-from tests.helpers import make_model, run_async
-from tests.inference_fixtures import compile_model_fixture
-from tests.model_fixtures import construct_named, indicator_named, x_y_model
+from tests.support.action import applied_record, empty_simulation_summary
+from tests.support.data import metadata_for_model, simulation_layout
+from tests.support.git import git_oid
+from tests.support.helpers import make_model, run_async
+from tests.support.inference import compile_model_fixture
+from tests.support.model import construct_named, indicator_named, x_y_model
 
 
 def _recorded_replicate_becomes_a_compatible_panel_complete_test_model() -> DynamicalModelSpec:
@@ -73,7 +73,7 @@ def _recorded_replicate_becomes_a_compatible_panel_complete_test_model() -> Dyna
 
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 
 
 pytestmark = pytest.mark.contract
@@ -100,7 +100,7 @@ def _model(**observation_changes):
 
 
 def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypatch):
-    from nof1_causal_lab.utils import data as data_module
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, history = ArtifactStore("TEST"), StudyRepository("TEST")
@@ -111,7 +111,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
         produced_by="edit_model",
         json_files={"model.json": dynamical_model_spec.model_dump(mode="json")},
     )
-    from tests.helpers import write_question
+    from tests.support.helpers import write_question
 
     state = StudyState().with_artifacts([write_question(store), model_info])
     model_commit = history.append(
@@ -222,9 +222,9 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     assert panel["anchor_time"].min() == datetime(2026, 1, 6)
     assert set(panel["support_kind"]) == {"point"}
 
-    from nof1_causal_lab.actions import fit as fit_module
-    from nof1_causal_lab.artifacts.posterior import InferenceEvidence
-    from tests.inference_fixtures import _report
+    from nof1_causal_lab.actions.fit import action as fit_module
+    from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
+    from tests.support.inference import _report
 
     def fit(**kwargs):
         assert kwargs["data_for_model"].recorded.frame.equals(panel)

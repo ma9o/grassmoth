@@ -6,9 +6,7 @@ from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 
-from nof1_causal_lab.artifacts.effects import (
-    EffectSummary,
-)
+from nof1_causal_lab.artifacts.reports.effects import EffectSummary
 
 if TYPE_CHECKING:
     from jax import Array

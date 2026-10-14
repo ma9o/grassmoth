@@ -7,11 +7,11 @@ from unittest.mock import Mock
 
 import pytest
 
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.storage import backend as storage
+from nof1_causal_lab.storage import paths as data_module
+from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.records import AttemptRecord, EditAttempt, Raised
 from nof1_causal_lab.study.sweep import sweep_workspace
-from nof1_causal_lab.utils import data as data_module
-from nof1_causal_lab.utils import storage
 
 pytestmark = pytest.mark.contract
 

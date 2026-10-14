@@ -20,7 +20,7 @@ if TYPE_CHECKING:
         EmissionLogProbFn,
         ObservationKernel,
     )
-    from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
+    from nof1_causal_lab.models.ssm.preparation.observations import ObservationSupportRuntime
 
 _POINT_SUPPORT_CODE = 0
 _INTERVAL_SUPPORT_CODE = 1

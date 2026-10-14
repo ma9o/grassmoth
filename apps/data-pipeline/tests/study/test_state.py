@@ -10,7 +10,7 @@ from nof1_causal_lab.study.state import (
     apply_effects,
     is_stale,
 )
-from tests.git_fixtures import git_oid
+from tests.support.git import git_oid
 
 pytestmark = pytest.mark.contract
 

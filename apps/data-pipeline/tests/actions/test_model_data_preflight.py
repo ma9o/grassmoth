@@ -8,28 +8,28 @@ import polars as pl
 import pytest
 
 from nof1_causal_lab.actions.checks import check_model_data, check_specification
-from nof1_causal_lab.actions.contracts import EditModelRequest
+from nof1_causal_lab.actions.contracts.bodies import EditModelInput
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import EditModelRequest
 from nof1_causal_lab.actions.data_checks import evaluate_data_checks
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.actions.io import EditModelInput
 from nof1_causal_lab.actions.messages import edit_messages
-from nof1_causal_lab.artifacts.data_preparation import DataPreparationResult
-from nof1_causal_lab.artifacts.data_ref import DataRef
 from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.observation_data import ObservationDataset
-from nof1_causal_lab.artifacts.question import QuestionSpec
-from nof1_causal_lab.models.model_structure import StructuralSelection
-from nof1_causal_lab.models.ssm.inference import fit
-from nof1_causal_lab.sampler_config import SamplerSpec
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
+from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.artifacts.sampling import SamplerSpec
+from nof1_causal_lab.models.ssm.inference.fit import fit
+from nof1_causal_lab.models.structure import StructuralSelection
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.state import StudyState
-from nof1_causal_lab.study.store import ArtifactStore
-from tests.action_fixtures import edit_and_check
-from tests.compute_fixtures import COMPUTE_BUDGET
-from tests.helpers import write_question
-from tests.inference_fixtures import compile_fit_fixture
 from tests.integration.runner_fixtures import panel_frame, panel_metadata
-from tests.model_fixtures import construct_named, stress_sleep_causal_model
+from tests.support.action import edit_and_check
+from tests.support.compute import COMPUTE_BUDGET
+from tests.support.helpers import write_question
+from tests.support.inference import compile_fit_fixture
+from tests.support.model import construct_named, stress_sleep_causal_model
 
 pytestmark = pytest.mark.contract
 
@@ -58,7 +58,9 @@ def test_specification_reports_each_distinct_fit_law_reason_once(monkeypatch):
 
 
 def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypatch):
-    from nof1_causal_lab.models.ssm.inference.methods import marginal_particle_gibbs
+    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs import (
+        fit as marginal_particle_gibbs,
+    )
 
     dispatch = Mock(return_value=object())
     monkeypatch.setattr(marginal_particle_gibbs, "fit_marginal_particle_gibbs", dispatch)
@@ -75,7 +77,7 @@ def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypat
     assert finding.code == "fit_preflight"
     assert finding.kind == "evaluated"
     assert finding.outcome == "passed"
-    from nof1_causal_lab.models.ssm.runtime import PreparedFit, prepare_fit
+    from nof1_causal_lab.models.ssm.preparation.panel import PreparedFit, prepare_fit
 
     prepared = prepare_fit(inputs, panel, time_origin=panel_metadata().time_origin)
     assert isinstance(prepared, PreparedFit)
@@ -102,7 +104,7 @@ def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypat
 
 
 def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeypatch):
-    from nof1_causal_lab.utils import data as data_module
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("TEST")

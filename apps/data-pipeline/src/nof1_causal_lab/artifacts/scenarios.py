@@ -6,12 +6,11 @@ from collections.abc import Mapping
 
 from pydantic import ConfigDict, Field, FiniteFloat
 
+from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.base import Value
-
-from .arrays import NumericalArray
-from .duration import Duration
-from .effects import EffectSummary
-from .identity import ConstructId, IndicatorId
+from nof1_causal_lab.artifacts.identity import ConstructId, IndicatorId
+from nof1_causal_lab.artifacts.observations.duration import Duration
+from nof1_causal_lab.artifacts.reports.effects import EffectSummary
 
 
 class InterventionSpec(Value):

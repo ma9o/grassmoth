@@ -8,22 +8,17 @@ from typing import TYPE_CHECKING
 
 from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.identity import ConstructId
+from nof1_causal_lab.artifacts.probability.families import DistributionFamily
+from nof1_causal_lab.artifacts.probability.joint_layout import JointLawLayout
 from nof1_causal_lab.compilation_errors import AggregatedCompileError, IncompleteModelError
-from nof1_causal_lab.distributions import DistributionFamily
-from nof1_causal_lab.models.model_parameters import execution_parameters
-from nof1_causal_lab.models.model_structure import selected_edges
-from nof1_causal_lab.models.ssm.compile.prior_compilation import (
-    bind_parameters,
-    compile_priors,
-)
-from nof1_causal_lab.models.ssm.compile.prior_indexing import (
-    build_site_bindings,
-)
-from nof1_causal_lab.models.ssm.joint_layout import JointLawLayout
+from nof1_causal_lab.models.parameters import execution_parameters
+from nof1_causal_lab.models.ssm.compile.prior_compilation import bind_parameters, compile_priors
+from nof1_causal_lab.models.ssm.compile.prior_indexing import build_site_bindings
 from nof1_causal_lab.models.ssm.parameterization import (
     PriorRuntimeBundle,
     build_prior_runtime_bundle,
 )
+from nof1_causal_lab.models.structure import selected_edges
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -31,27 +26,27 @@ if TYPE_CHECKING:
     import jax
     import numpyro.distributions as dist
 
-    from nof1_causal_lab.artifacts.identity import (
-        EdgeId,
-        IndicatorId,
+    from nof1_causal_lab.artifacts.identity import EdgeId, IndicatorId
+    from nof1_causal_lab.artifacts.model.likelihood import Law
+    from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
+    from nof1_causal_lab.artifacts.observations.semantics import IndicatorObservationSemantics
+    from nof1_causal_lab.artifacts.observations.spec import (
+        ObservationWindow,
+        ResolvedObservationSpec,
     )
-    from nof1_causal_lab.artifacts.likelihood import Law
-    from nof1_causal_lab.artifacts.observations import ObservationWindow, ResolvedObservationSpec
-    from nof1_causal_lab.artifacts.parameter import ParameterCoordinate
-    from nof1_causal_lab.artifacts.prior import PriorValidationResult
-    from nof1_causal_lab.models.model_structure import StructuralSelection
+    from nof1_causal_lab.artifacts.reports.prior import PriorValidationResult
     from nof1_causal_lab.models.ssm.compile.bindings import CompiledParameterBinding
     from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
     from nof1_causal_lab.models.ssm.dynamics.expression import BoundExpression
     from nof1_causal_lab.models.ssm.dynamics.spec import CompiledDynamics
-    from nof1_causal_lab.models.ssm.structure import (
+    from nof1_causal_lab.models.ssm.structure.blocks import (
         DiffusionBlockSpec,
         ManifestCholBlockSpec,
         SparseBlockSpec,
         T0CholBlockSpec,
     )
     from nof1_causal_lab.models.ssm.structure.sites import SiteDescriptor
-    from nof1_causal_lab.utils.observation_semantics import IndicatorObservationSemantics
+    from nof1_causal_lab.models.structure import StructuralSelection
 
 
 @dataclass(frozen=True)
@@ -225,20 +220,26 @@ def compile_model(
     selection: StructuralSelection,
 ) -> ModelCompilationResult:
     """Compile shared execution facts without imposing fitting's prior-engine limits."""
-    from nof1_causal_lab.models.model_parameters import require_priors
-    from nof1_causal_lab.models.ssm.compile import support as numeric
+    from nof1_causal_lab.models.parameters import require_priors
+    from nof1_causal_lab.models.ssm.compile.layout import (
+        axes,
+        observations,
+        parameters,
+        states,
+        static_factors,
+    )
     from nof1_causal_lab.models.ssm.compile.state_space import compile_state_space
     from nof1_causal_lab.models.ssm.dynamics.spec import compile_dynamics
 
     dynamical_model_spec = selection.dynamical_model_spec
     try:
-        numeric._require_execution_choices(selection)
+        parameters._require_execution_choices(selection)
         require_priors(selection)
-        state_ids = tuple(numeric.state_ids(selection))
-        indicators = numeric.observed_indicators(selection)
-        blocks = numeric.parameter_blocks(selection)
-        dynamics_spec = numeric.dynamics_components(selection)
-        static_names = tuple(numeric.static_factor_names(selection))
+        state_ids = tuple(axes.state_ids(selection))
+        indicators = axes.observed_indicators(selection)
+        blocks = parameters.parameter_blocks(selection)
+        dynamics_spec = states.dynamics_components(selection)
+        static_names = tuple(static_factors.static_factor_names(selection))
         sites = tuple(
             sorted(
                 (
@@ -248,7 +249,7 @@ def compile_model(
                         for site in component.iter_sites(f"vf_{index}", n_latent=len(state_ids))
                     ),
                     *(site for block in blocks for site in block.iter_sites()),
-                    *numeric.likelihood_sites(selection),
+                    *observations.likelihood_sites(selection),
                 ),
                 key=lambda site: site.name,
             )
@@ -267,13 +268,11 @@ def compile_model(
                     if edge.effect.id == identity
                 ),
             )
-            for identity, family in zip(
-                state_ids, numeric.diffusion_families(selection), strict=True
-            )
+            for identity, family in zip(state_ids, axes.diffusion_families(selection), strict=True)
         )
         state_index = {state.id: index for index, state in enumerate(states)}
-        anchors = numeric.categorical_anchors(selection)
-        clock_days = numeric.get_construct_dt_days(dynamical_model_spec)
+        anchors = observations.categorical_anchors(selection)
+        clock_days = axes.get_construct_dt_days(dynamical_model_spec)
         assert dynamical_model_spec.measurement_clock is not None
 
         parameters = execution_parameters(selection)
@@ -286,7 +285,7 @@ def compile_model(
         from nof1_causal_lab.models.ssm.compile.observations import bind_observation_law
 
         binding_index = {binding.parameter_id: binding for binding in bindings}
-        max_levels = max(numeric.observation_level_counts(selection), default=0)
+        max_levels = max(axes.observation_level_counts(selection), default=0)
         observations = tuple(
             CompiledObservation(
                 indicator.observation.resolved(
@@ -320,7 +319,7 @@ def compile_model(
             static_factors=tuple(
                 CompiledState(identity, name, False, True, DistributionFamily.GAUSSIAN, ())
                 for identity, name in zip(
-                    numeric.static_factor_ids(selection), static_names, strict=True
+                    static_factors.static_factor_ids(selection), static_names, strict=True
                 )
             ),
             diffusion_block=blocks[0],
@@ -330,7 +329,7 @@ def compile_model(
             initial_mean_block=blocks[4],
             initial_covariance_block=blocks[5],
             static_scale_block=blocks[6],
-            static_factor_loadings=numeric.static_factor_loadings(selection),
+            static_factor_loadings=static_factors.static_factor_loadings(selection),
             dynamics=compile_dynamics(dynamics_spec),
             site_registry=sites,
             bindings=bindings,
@@ -340,7 +339,7 @@ def compile_model(
             state_space=compile_state_space(
                 blocks[0],
                 blocks[5],
-                numeric.static_factor_loadings(selection),
+                static_factors.static_factor_loadings(selection),
                 tuple(index for index, state in enumerate(states) if state.is_input),
                 tuple(
                     index
@@ -361,7 +360,7 @@ def _compile_input_trajectories(
 ) -> tuple[CompiledInputTrajectory, ...]:
     import numpy as np
 
-    from nof1_causal_lab.numpyro_json import materialize_distribution
+    from nof1_causal_lab.artifacts.probability.serialization import materialize_distribution
 
     dynamical_model_spec = selection.dynamical_model_spec
     result = []
@@ -391,10 +390,10 @@ def _compile_laws(
     bindings: tuple[CompiledParameterBinding, ...],
     states: tuple[CompiledState, ...],
 ) -> tuple[CompiledLaw, ...]:
-    from nof1_causal_lab.artifacts.parameter import PriorAuthoringTransform
+    from nof1_causal_lab.artifacts.model.parameter import PriorAuthoringTransform
+    from nof1_causal_lab.artifacts.probability.serialization import distribution_shape
     from nof1_causal_lab.models.ssm.compile.bindings import joint_law_layout
     from nof1_causal_lab.models.ssm.compile.prior_compilation import quantity_parameter_law
-    from nof1_causal_lab.numpyro_json import distribution_shape
 
     dynamical_model_spec = selection.dynamical_model_spec
     parameters = execution_parameters(selection)

@@ -2,11 +2,11 @@
 /**
  * AUTO-GENERATED — DO NOT EDIT
  *
- * Generated from Python distribution catalog via:
+ * Generated from Python contract owners via:
  *   cd apps/data-pipeline && uv run python -m scripts.codegen.export_api
  *   cd packages/api-types && bun run scripts/generate.ts
  *
- * Source of truth: apps/data-pipeline/src/nof1_causal_lab/distributions.py
+ * Metadata exporter: apps/data-pipeline/scripts/codegen/export_api.py
  */
 
 import type { ArtifactId } from "./models";

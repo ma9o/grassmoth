@@ -10,8 +10,8 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from nof1_causal_lab.distributions import PriorDistributionFamily
-from nof1_causal_lab.numpyro_json import encode_distribution
+from nof1_causal_lab.artifacts.probability.families import PriorDistributionFamily
+from nof1_causal_lab.artifacts.probability.serialization import encode_distribution
 
 pytestmark = pytest.mark.inference(concern="sampling")
 

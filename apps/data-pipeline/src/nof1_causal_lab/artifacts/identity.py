@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Annotated, ClassVar, Literal, Self, get_args, 
 from pydantic import Field, GetCoreSchemaHandler, GetJsonSchemaHandler
 from pydantic_core import core_schema
 
-from .base import Value
+from nof1_causal_lab.artifacts.base import Value
 
 if TYPE_CHECKING:
     from pydantic.json_schema import JsonSchemaValue

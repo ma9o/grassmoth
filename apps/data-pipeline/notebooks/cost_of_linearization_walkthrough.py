@@ -6,6 +6,9 @@ app = marimo.App(width="medium")
 
 @app.cell
 def imports_marimo():
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime as _initialize_runtime
+
+    _initialize_runtime()
     import marimo as mo
 
     return (mo,)
@@ -45,7 +48,7 @@ def intro(mo):
 
 @app.cell
 def imports_lab():
-    import cost_of_linearization_support as lab
+    import notebooks.support.cost_of_linearization as lab
 
     return (lab,)
 

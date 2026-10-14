@@ -10,17 +10,19 @@ import polars as pl
 import pytest
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.actions.temporal.llm_subroutine_storage import read_subroutine_json
-from nof1_causal_lab.actions.temporal.measurement_activities import (
+from nof1_causal_lab.actions.prepare_data.context import extraction_context
+from nof1_causal_lab.actions.prepare_data.worker_output import ExtractionRow
+from nof1_causal_lab.actions.temporal.extraction.activities import (
     finalize_extraction_chunk_activity,
     plan_measurements_activity,
 )
-from nof1_causal_lab.actions.temporal.messages import (
+from nof1_causal_lab.actions.temporal.extraction.messages import (
     ExtractionChunkFinalizeInput,
     MeasurementChunkContext,
     MeasurementsWorkflowInput,
 )
-from nof1_causal_lab.artifacts.data_preparation import (
+from nof1_causal_lab.actions.temporal.llm.storage import read_subroutine_json
+from nof1_causal_lab.artifacts.observations.preparation import (
     ComputedExtractionSpec,
     DataPreparationSpec,
     DataVariableSpec,
@@ -28,13 +30,13 @@ from nof1_causal_lab.artifacts.data_preparation import (
     FileSourceRef,
     SemanticExtractionSpec,
 )
-from nof1_causal_lab.artifacts.observations import AuthoredObservationSpec
-from nof1_causal_lab.study.store import ArtifactStore
-from nof1_causal_lab.utils import data, storage
-from nof1_causal_lab.utils.aggregations import compute_indicators
-from nof1_causal_lab.workers.schemas import ExtractionRow
-from tests.data_fixtures import preparation_input
-from tests.helpers import run_async
+from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
+from nof1_causal_lab.observations.aggregations import compute_indicators
+from nof1_causal_lab.storage import backend as storage
+from nof1_causal_lab.storage import paths as data
+from nof1_causal_lab.study.persistence.store import ArtifactStore
+from tests.support.data import preparation_input
+from tests.support.helpers import run_async
 
 pytestmark = pytest.mark.contract
 
@@ -43,7 +45,7 @@ pytestmark = pytest.mark.contract
 def test_remote_cache_uses_the_conditional_write_winner_only(code, monkeypatch):
     from botocore.exceptions import ClientError
 
-    from nof1_causal_lab.utils.content_cache import publish
+    from nof1_causal_lab.storage.cache import publish
 
     def conflict(path, value, *, mode):
         assert (path, value, mode) == ("s3://cache/key", b"loser", "create")
@@ -168,7 +170,7 @@ def test_extraction_cache_is_shared_and_only_changed_effective_requests_miss(tmp
     )
     assert all(chunk.cached_result_ref is None for chunk in changed.chunks)
 
-    from nof1_causal_lab.actions.temporal import preparation_cache
+    from nof1_causal_lab.actions.temporal.extraction import cache as preparation_cache
 
     with monkeypatch.context() as policy:
         policy.setattr(preparation_cache, "EXTRACTION_POLICY_VERSION", "changed-extraction")
@@ -200,19 +202,25 @@ def test_span_keeps_complete_windows_and_never_fills_from_excluded_history():
             how_to_measure="Read the daily score", source_columns=("x",), fill_null="forward"
         )
     )
-    context = FilePreparationSpec(
-        source=FileSourceRef(files=("source.csv",), start=date(2026, 1, 2), end=date(2026, 1, 4)),
-        definition=DataPreparationSpec(default_window="1d", variables=(variable,)),
-    ).extraction_context()
+    context = extraction_context(
+        FilePreparationSpec(
+            source=FileSourceRef(
+                files=("source.csv",), start=date(2026, 1, 2), end=date(2026, 1, 4)
+            ),
+            definition=DataPreparationSpec(default_window="1d", variables=(variable,)),
+        )
+    )
     bounded = compute_indicators(raw, context, "timestamp")
     assert bounded["timestamp"].to_list() == ["2026-01-02T00:00:00", "2026-01-03T00:00:00"]
     assert bounded["value"].to_list() == [None, "2"]
-    from nof1_causal_lab.actions.extraction.planning import prepare_semantic_chunks
+    from nof1_causal_lab.actions.prepare_data.planning import prepare_semantic_chunks
 
-    semantic_context = FilePreparationSpec(
-        source=context.source,
-        definition=DataPreparationSpec(default_window="1d", variables=(_variable("x"),)),
-    ).extraction_context()
+    semantic_context = extraction_context(
+        FilePreparationSpec(
+            source=context.source,
+            definition=DataPreparationSpec(default_window="1d", variables=(_variable("x"),)),
+        )
+    )
     texts, windows, _, empty_output = prepare_semantic_chunks(
         raw_df=raw,
         measurement_structure=semantic_context,
@@ -224,7 +232,7 @@ def test_span_keeps_complete_windows_and_never_fills_from_excluded_history():
     assert empty_output.to_dataframe().to_dicts() == [
         {"indicator_id": "indicator:x", "timestamp": "2026-01-02T00:00:00", "value": None}
     ]
-    from nof1_causal_lab.utils.observation_rows import prepared_time_origin
+    from nof1_causal_lab.observations.rows import prepared_time_origin
 
     assert prepared_time_origin(pl.DataFrame(), date(2026, 1, 2)) == datetime(
         2026, 1, 2, tzinfo=UTC
@@ -235,11 +243,11 @@ def test_span_keeps_complete_windows_and_never_fills_from_excluded_history():
 def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
     tmp_path, monkeypatch, aggregation, offset
 ):
-    from nof1_causal_lab.actions.temporal.measurement_activities import (
+    from nof1_causal_lab.actions.temporal.extraction.activities import (
         finalize_measurements_activity,
     )
-    from nof1_causal_lab.actions.temporal.messages import MeasurementsFinalizeInput
-    from nof1_causal_lab.study.lineage import read_data_metadata
+    from nof1_causal_lab.actions.temporal.extraction.messages import MeasurementsFinalizeInput
+    from nof1_causal_lab.study.queries.lineage import read_data_metadata
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     raw = pl.DataFrame(
@@ -332,12 +340,14 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
             source_columns=variable.extraction.source_columns,
         ),
     )
-    computed_context = FilePreparationSpec(
-        source=preparation.source,
-        definition=DataPreparationSpec(default_window="2d", variables=(computed_variable,)),
-    ).extraction_context()
+    computed_context = extraction_context(
+        FilePreparationSpec(
+            source=preparation.source,
+            definition=DataPreparationSpec(default_window="2d", variables=(computed_variable,)),
+        )
+    )
     computed = compute_indicators(raw, computed_context, "timestamp")
-    from nof1_causal_lab.utils.observation_rows import annotate_observation_rows
+    from nof1_causal_lab.observations.rows import annotate_observation_rows
 
     rows = annotate_observation_rows(computed, preparation.definition.observation_schema())
     assert rows["anchor_time"].to_list() == [value.isoformat() for value in panel["anchor_time"]]

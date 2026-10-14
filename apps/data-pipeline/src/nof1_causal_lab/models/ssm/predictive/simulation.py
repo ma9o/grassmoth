@@ -10,37 +10,37 @@ import jax.numpy as jnp
 import jax.random as random
 import numpy as np
 
-from nof1_causal_lab.artifacts.checks import (
+from nof1_causal_lab.artifacts.identity import ConstructRef, EdgeRef, IndicatorRef
+from nof1_causal_lab.artifacts.model.expressions import hill_applications
+from nof1_causal_lab.artifacts.observations.time import ModelTime, ObservationInstant
+from nof1_causal_lab.artifacts.reports.checks import (
     NotEvaluated,
     PredictiveAssessment,
     PredictiveSubject,
 )
-from nof1_causal_lab.artifacts.expressions import hill_applications
-from nof1_causal_lab.artifacts.identity import ConstructRef, EdgeRef, IndicatorRef
-from nof1_causal_lab.models.posterior_predictive import measure_predictive_checks
-from nof1_causal_lab.models.ssm import numerics as numeric
+from nof1_causal_lab.models.diagnostics.history_comparison import measure_predictive_checks
+from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.counterfactual.orchestration import ResolvedIntervention
+from nof1_causal_lab.models.ssm.diagnostics.simulation import (
+    ConstructSimulationTarget,
+    DesignInfo,
+    measure_construct_simulation,
+)
 from nof1_causal_lab.models.ssm.predictive.parameters import sample_model_laws
 from nof1_causal_lab.models.ssm.predictive.registry_runtime import (
     predictive_keys,
     simulate_latent_histories,
     simulate_predictive_draws,
 )
-from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
-from nof1_causal_lab.models.ssm.runtime import BoundPanel, input_trajectory_events
-from nof1_causal_lab.models.ssm.simulation_checks import (
-    ConstructSimulationTarget,
-    DesignInfo,
-    measure_construct_simulation,
-)
-from nof1_causal_lab.utils.observation_rows import observation_window_boundaries
-from nof1_causal_lab.utils.time_coordinates import ModelTime, ObservationInstant
+from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel, input_trajectory_events
+from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
+from nof1_causal_lab.observations.rows import observation_window_boundaries
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
-    from nof1_causal_lab.artifacts.posterior_diagnostics import PosteriorPredictiveChecks
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import PosteriorPredictiveChecks
     from nof1_causal_lab.artifacts.scenarios import StateAssignment
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
@@ -243,7 +243,7 @@ def generate_simulation_batch(
                 compute_budget=compute_budget,
             )
             initial = history[:, -1, :]
-    from nof1_causal_lab.models.ssm.observation_support import simulation_observation_support
+    from nof1_causal_lab.models.ssm.preparation.observations import simulation_observation_support
 
     if support is None:
         support = simulation_observation_support(

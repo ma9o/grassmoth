@@ -11,14 +11,12 @@ import jax.numpy as jnp
 import numpy as np
 from jax import Array
 
-from nof1_causal_lab.models.ssm.dynamics import (
+from nof1_causal_lab.models.ssm.dynamics.intervention import (
     ConstantValueFn,
     Intervention,
-    ProcessNoise,
-    SimulationConfig,
     VariableOverride,
-    simulate,
 )
+from nof1_causal_lab.models.ssm.dynamics.simulator import ProcessNoise, SimulationConfig, simulate
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

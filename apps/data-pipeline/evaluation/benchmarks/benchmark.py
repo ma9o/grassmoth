@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from nof1_causal_lab.compute.resources import read_compute_budget
-from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
+from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior
@@ -69,7 +69,7 @@ def _parse_proposals(raw: str) -> tuple[LeafProposal, ...]:
 
 
 def _parse_metrics(raw: str) -> tuple[str, ...]:
-    from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.diagnostics import (
+    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.diagnostics import (
         MPGIBBS_DIAGNOSTIC_METRIC_VALUES,
     )
 
@@ -130,12 +130,9 @@ def _run_one(
 ) -> BenchmarkRecord:
     from evaluation.recovery.extraction import parameter_recovery, scalar_posterior_ess
 
-    from nof1_causal_lab.models.ssm.inference import fit
+    from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec, SamplerSpec
+    from nof1_causal_lab.models.ssm.inference.fit import fit
     from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
-    from nof1_causal_lab.sampler_config import (
-        MarginalParticleGibbsSpec,
-        SamplerSpec,
-    )
 
     logger.info("starting dSMC/%s", proposal)
     started = time.monotonic()
@@ -232,6 +229,9 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime
+
+    initialize_numerical_runtime()
     args = _build_parser().parse_args()
     logging.basicConfig(
         level=getattr(logging, args.log_level.upper()),

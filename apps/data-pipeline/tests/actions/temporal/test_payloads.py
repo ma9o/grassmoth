@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from nof1_causal_lab.artifacts.identity import scientific_id
-from tests.helpers import graph_constructs, make_model
+from tests.support.helpers import graph_constructs, make_model
 
 pytestmark = pytest.mark.contract
 
@@ -61,17 +61,17 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
                 from temporalio.worker.workflow_sandbox._importer import Importer
                 from temporalio.worker.workflow_sandbox._restrictions import RestrictionContext
 
-                from nof1_causal_lab.actions.contracts import FitRequest, SimulateRequest
-                from nof1_causal_lab.actions.io import FitInput, SimulateInput
+                from nof1_causal_lab.actions.contracts.requests import FitRequest, SimulateRequest
+                from nof1_causal_lab.actions.contracts.bodies import FitInput, SimulateInput
                 from nof1_causal_lab.artifacts.identity import GitOid
                 from nof1_causal_lab.artifacts.simulation import SimulationSpec
-                from nof1_causal_lab.artifacts.dynamical_model_spec import ModelEditResult
+                from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
                 from nof1_causal_lab.study.records import AttemptRecord, Applied, EditAttempt
-                from nof1_causal_lab.actions.temporal.messages import (
+                from nof1_causal_lab.actions.temporal.study.messages import (
                     ActionInput, ActionRequest, EditModelActivityInput, EvaluateChecksInput, AttemptPublication,
                 )
                 from nof1_causal_lab.study.state import ArtifactRecord, StudyState
-                from nof1_causal_lab.actions.effects import ActionEffects
+                from nof1_causal_lab.actions.contracts.effects import ActionEffects
                 from nof1_causal_lab.actions.temporal.worker import study_workflow_runner
 
                 payload = Payload(metadata={"encoding": b"json/plain"}, data=sys.stdin.buffer.read())
@@ -134,7 +134,7 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
                 async def import_fitter():
                     module = await asyncio.to_thread(
                         importlib.import_module,
-                        "nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs",
+                        "nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.fit",
                     )
                     assert callable(module.fit_marginal_particle_gibbs)
 
@@ -157,10 +157,10 @@ def test_numerical_results_cross_workflows_only_as_saved_report_references(actio
     import numpy as np
     from pydantic import TypeAdapter
 
-    from nof1_causal_lab.actions.contracts import FitRequest, SimulateRequest
-    from nof1_causal_lab.actions.effects import ActionEffects
+    from nof1_causal_lab.actions.contracts.effects import ActionEffects
+    from nof1_causal_lab.actions.contracts.requests import FitRequest, SimulateRequest
     from nof1_causal_lab.artifacts.arrays import NumericalArray
-    from nof1_causal_lab.artifacts.posterior import InferenceEvidence
+    from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
     from nof1_causal_lab.artifacts.simulation import ModelSimulationResult, SimulationEvidence
     from nof1_causal_lab.study.records import Applied, StagedActionAttempt, applied_attempt
 

@@ -4,24 +4,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.artifacts.construct import CausalEdgeSpec
-from nof1_causal_lab.artifacts.expressions import (
-    expression_states,
-    linear_coefficient,
-)
+from nof1_causal_lab.artifacts.model.construct import CausalEdgeSpec
+from nof1_causal_lab.artifacts.model.expressions import expression_states, linear_coefficient
+from nof1_causal_lab.artifacts.model.parameter_context import coefficient_value
 from nof1_causal_lab.compilation_errors import AggregatedCompileError, IncompleteModelError
-from nof1_causal_lab.models.model_parameters import coefficient_value
-from nof1_causal_lab.models.model_structure import selected_edges, selected_state_ids
 from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponentSpec
+from nof1_causal_lab.models.structure import selected_edges, selected_state_ids
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterator, Sequence
 
-    from nof1_causal_lab.artifacts.construct import ConstructSpec
-    from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
     from nof1_causal_lab.artifacts.identity import ConstructId
-    from nof1_causal_lab.artifacts.mechanism import DynamicsMechanismSpec
-    from nof1_causal_lab.models.model_structure import StructuralSelection
+    from nof1_causal_lab.artifacts.model.construct import ConstructSpec
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.artifacts.model.mechanism import DynamicsMechanismSpec
+    from nof1_causal_lab.models.structure import StructuralSelection
 
 
 def _is_projected_loading(

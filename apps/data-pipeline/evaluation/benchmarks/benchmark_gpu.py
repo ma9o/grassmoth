@@ -176,6 +176,9 @@ def _run_benchmark(
     and commits any Volume. ``synthetic_nonlinear`` must be importable (callers put
     its directory on ``sys.path`` first); JAX picks the device from its environment.
     """
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime
+
+    initialize_numerical_runtime()
     import jax
     import jax.random as random
     from evaluation.fixtures.synthetic_nonlinear import (
@@ -184,18 +187,18 @@ def _run_benchmark(
         simulate_synthetic_nonlinear_data,
     )
 
+    from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec
     from nof1_causal_lab.compute.resources import read_compute_budget
-    from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.kernel import (
+    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.kernel import (
         build_marginal_particle_gibbs_kernel,
     )
-    from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.runner import (
+    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.runner import (
         run_marginal_particle_gibbs,
     )
     from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
     from nof1_causal_lab.models.ssm.inference.warmup.laps import prepare_laps_initialization
     from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
     from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
-    from nof1_causal_lab.sampler_config import MarginalParticleGibbsSpec
 
     total_steps = warmup_steps + sample_steps
     print("JAX devices:", jax.devices(), "| config:", cfg.tag, flush=True)
@@ -233,7 +236,7 @@ def _run_benchmark(
         pilot_wide_vars=options.paid_mix_wide_mult * initialization.pilot_proposal_variance,
     )
     started = time.monotonic()
-    from nof1_causal_lab.actions.inference.fit import (
+    from nof1_causal_lab.actions.fit.execution import (
         dump_compiled_analysis,
         resolve_profile_dir,
         start_trace,

@@ -6,6 +6,9 @@ app = marimo.App(width="medium")
 
 @app.cell
 def imports_marimo():
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime as _initialize_runtime
+
+    _initialize_runtime()
     import marimo as mo
 
     return (mo,)
@@ -53,7 +56,7 @@ def intro(mo):
     matplotlib. Part II implements Particle-mGRAD (Corenflos–Finke Algorithm 7), the aGRAD and
     twisted leaves, and the c-dSMC tree stitch in the notebook, and drives the production
     `amala_exact` leaf through the real `dsmc.step` in
-    [`smoothers/dsmc.py`](../src/nof1_causal_lab/models/ssm/inference/methods/marginal_particle_gibbs/smoothers/dsmc.py).
+    [`smoothers/dsmc.py`](../src/nof1_causal_lab/models/ssm/inference/marginal_particle_gibbs/dsmc.py).
     Its JAX chains run up to 60,000 sweeps, so Part II takes far longer than Part I.
     """)
     return
@@ -71,10 +74,10 @@ def imports():
     from matplotlib.colors import LogNorm
     from matplotlib.patches import FancyBboxPatch
 
-    from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs._contract import (
+    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs import dsmc
+    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs._contract import (
         SmootherContext,
     )
-    from nof1_causal_lab.models.ssm.inference.methods.marginal_particle_gibbs.smoothers import dsmc
 
     return FancyBboxPatch, LogNorm, SmootherContext, dsmc, jax, jnp, math, np, plt, random
 
@@ -885,7 +888,7 @@ def replacement_md(mo):
     seam and trees to `O(log T)`. Our production smoother is exactly that replacement:
     `amala_exact` and `paid_mix` are the corrected
     **leaf proposals inside the conditional de-sequentialized SMC tree**
-    ([the app's `smoothers/dsmc.py`](../src/nof1_causal_lab/models/ssm/inference/methods/marginal_particle_gibbs/smoothers/dsmc.py)).
+    ([the app's `smoothers/dsmc.py`](../src/nof1_causal_lab/models/ssm/inference/marginal_particle_gibbs/dsmc.py)).
 
     This section runs the real thing. It builds a toy **nonlinear** state-space model,
     then puts four latent-path kernels on the *same* posterior at growing horizons `T`:

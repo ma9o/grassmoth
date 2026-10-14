@@ -12,7 +12,7 @@ from pydantic import (
     model_validator,
 )
 
-from nof1_causal_lab.utils.immutability import freeze
+from nof1_causal_lab.artifacts.immutability import freeze
 
 
 def _serialization_collections(value: object) -> object:

@@ -8,10 +8,10 @@ from typing import TypeAliasType
 
 from pydantic import BaseModel
 
-from nof1_causal_lab.artifacts.data_preparation import PreparedDataMetadata
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.identity import ArtifactId
-from nof1_causal_lab.artifacts.question import QuestionSpec
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.artifacts.observations.preparation import PreparedDataMetadata
 
 ARTIFACT_CONTRACTS: dict[ArtifactId, type[BaseModel] | TypeAliasType] = {
     "question": QuestionSpec,

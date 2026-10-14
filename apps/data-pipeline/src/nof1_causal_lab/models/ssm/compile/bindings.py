@@ -10,8 +10,8 @@ from pydantic import Field
 
 from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.identity import ParameterElementId, ParameterId
-from nof1_causal_lab.artifacts.parameter import ParameterCoordinate, PriorAuthoringTransform
-from nof1_causal_lab.models.ssm.joint_layout import JointLawLayout
+from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate, PriorAuthoringTransform
+from nof1_causal_lab.artifacts.probability.joint_layout import JointLawLayout
 from nof1_causal_lab.models.ssm.structure.sites import (
     CompiledBindingTarget,
     CompiledEdgeTarget,

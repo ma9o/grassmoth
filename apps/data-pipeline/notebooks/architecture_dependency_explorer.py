@@ -18,17 +18,15 @@ def intro(mo):
 
     This notebook turns the Python source tree into an **executable architecture map**. It
     parses imports without importing application modules, so exploring the graph does not
-    initialize JAX, NumPyro, Temporal, Prefect, or any service clients.
+    initialize JAX, NumPyro, Temporal, or any service clients.
 
     Use the two lenses together:
 
     - **Current package layout** shows the physical organization that exists today.
-    - **Proposed responsibility boundaries** classifies the same files into the candidate
-      domain, identification, structural front, SSM model, exact inference, analysis, and
-      application layers.
+    - **Enforced module roles** classifies the same files into the roles maintained in `scripts/checks/architecture_roles.py`.
 
-    Every arrow points from the **importer to the module it imports**. In the proposed view,
-    red arrows violate the candidate dependency policy. The context-footprint section treats
+    Every arrow points from the **importer to the module it imports**. In the role view,
+    red arrows violate the core purity rule. The context-footprint section treats
     another cluster as an opaque public boundary, giving an estimate of how much implementation
     context a hard package seam could remove.
     """)
@@ -205,110 +203,51 @@ def dependency_model(ast, importlib):
 
 @app.cell
 def cluster_model():
-    proposed_order = (
-        "domain",
-        "identification",
-        "structural-front",
-        "ssm-model",
-        "ssm-inference",
-        "analysis",
-        "application",
+    from scripts.checks.architecture_roles import PURE_ROLES as _PURE_ROLES
+    from scripts.checks.architecture_roles import role_for_module as _role_for_module
+
+    role_order = ("domain", "compiler", "execution", "projection", "edge", "shell")
+    role_colors = dict(
+        zip(
+            role_order,
+            ("#4C78A8", "#54A24B", "#F58518", "#B279A2", "#72B7B2", "#9D755D"),
+            strict=True,
+        )
     )
-    proposed_colors = {
-        "domain": "#4C78A8",
-        "identification": "#72B7B2",
-        "structural-front": "#54A24B",
-        "ssm-model": "#F2CF5B",
-        "ssm-inference": "#F58518",
-        "analysis": "#B279A2",
-        "application": "#9D755D",
-    }
     current_colors = {
         "actions": "#54A24B",
+        "api": "#E45756",
         "artifacts": "#4C78A8",
+        "compute": "#EECA3B",
+        "llm": "#FF9DA6",
         "models.ssm": "#F2CF5B",
         "models.other": "#B279A2",
-        "flows": "#E45756",
-        "machine": "#9D755D",
-        "recipes": "#EECA3B",
-        "workers": "#FF9DA6",
-        "utils": "#72B7B2",
+        "observations": "#72B7B2",
+        "storage": "#9D755D",
+        "study": "#F58518",
         "package root": "#BAB0AC",
     }
-    allowed_proposed_dependencies = {
-        "domain": frozenset({"domain"}),
-        "identification": frozenset({"domain", "identification"}),
-        "structural-front": frozenset({"domain", "identification", "structural-front"}),
-        "ssm-model": frozenset({"domain", "ssm-model"}),
-        "ssm-inference": frozenset({"domain", "ssm-model", "ssm-inference"}),
-        "analysis": frozenset(
-            {"domain", "identification", "ssm-model", "ssm-inference", "analysis"}
-        ),
-        "application": frozenset(proposed_order),
+    allowed_role_dependencies = {
+        role: _PURE_ROLES if role in _PURE_ROLES else frozenset(role_order) for role in role_order
     }
 
     def current_cluster(module):
-        prefix = "nof1_causal_lab."
-        if not module.startswith(prefix):
-            return "package root"
-        relative = module.removeprefix(prefix)
+        relative = module.removeprefix("nof1_causal_lab.")
         first = relative.split(".", maxsplit=1)[0]
-        if relative == "models" or relative.startswith("models."):
+        if first == "models":
             return "models.ssm" if relative.startswith("models.ssm") else "models.other"
-        if first in {"actions", "artifacts", "flows", "machine", "recipes", "workers", "utils"}:
-            return first
-        return "package root"
+        return first if first in current_colors else "package root"
 
-    def proposed_cluster(module):
-        domain_prefixes = (
-            "nof1_causal_lab.artifacts",
-            "nof1_causal_lab.compilation_errors",
-            "nof1_causal_lab.distributions",
-            "nof1_causal_lab.json_types",
-            "nof1_causal_lab.measurement_types",
-            "nof1_causal_lab.utils.observation_semantics",
-            "nof1_causal_lab.utils.model_structure",
-        )
-        identification_prefixes = (
-            "nof1_causal_lab.utils.causal_design",
-            "nof1_causal_lab.utils.identifiability",
-        )
-        structural_front_prefixes = ("nof1_causal_lab.models.structural",)
-        analysis_prefixes = (
-            "nof1_causal_lab.models.causal_proofs",
-            "nof1_causal_lab.models.posterior_predictive",
-            "nof1_causal_lab.models.predictive_simulation",
-            "nof1_causal_lab.models.ssm.counterfactual",
-            "nof1_causal_lab.models.ssm.predictive",
-        )
-        ssm_model_prefixes = (
-            "nof1_causal_lab.models.model_semantics",
-            "nof1_causal_lab.models.ssm",
-        )
-
-        if module.startswith(domain_prefixes):
-            return "domain"
-        if module.startswith(identification_prefixes):
-            return "identification"
-        if module.startswith(structural_front_prefixes):
-            return "structural-front"
-        if module.startswith("nof1_causal_lab.models.ssm.inference") or module.startswith(
-            "nof1_causal_lab.sampler_config"
-        ):
-            return "ssm-inference"
-        if module.startswith(analysis_prefixes):
-            return "analysis"
-        if module.startswith(ssm_model_prefixes):
-            return "ssm-model"
-        return "application"
+    def role_cluster(module):
+        return _role_for_module(module)
 
     return (
-        allowed_proposed_dependencies,
+        allowed_role_dependencies,
         current_cluster,
         current_colors,
-        proposed_cluster,
-        proposed_colors,
-        proposed_order,
+        role_cluster,
+        role_colors,
+        role_order,
     )
 
 
@@ -750,9 +689,9 @@ def controls(import_refs, mo):
     scheme_control = mo.ui.radio(
         options={
             "Current package layout": "current",
-            "Proposed responsibility boundaries": "proposed",
+            "Enforced module roles": "role",
         },
-        value="Proposed responsibility boundaries",
+        value="Enforced module roles",
         inline=True,
         label="Organization lens",
     )
@@ -786,7 +725,7 @@ def controls(import_refs, mo):
 @app.cell
 def active_architecture(
     aggregate_clusters,
-    allowed_proposed_dependencies,
+    allowed_role_dependencies,
     build_module_graph,
     cluster_sort,
     current_cluster,
@@ -794,20 +733,20 @@ def active_architecture(
     import_refs,
     import_scope_control,
     module_infos,
-    proposed_cluster,
-    proposed_colors,
-    proposed_order,
+    role_cluster,
+    role_colors,
+    role_order,
     scheme_control,
 ):
     active_import_refs = tuple(
         ref for ref in import_refs if import_scope_control.value == "all" or ref.kind == "runtime"
     )
-    if scheme_control.value == "proposed":
-        clusterer = proposed_cluster
-        cluster_colors = proposed_colors
-        allowed_dependencies = allowed_proposed_dependencies
-        preferred_order = proposed_order
-        scheme_label = "Proposed responsibility boundaries"
+    if scheme_control.value == "role":
+        clusterer = role_cluster
+        cluster_colors = role_colors
+        allowed_dependencies = allowed_role_dependencies
+        preferred_order = role_order
+        scheme_label = "Enforced module roles"
     else:
         clusterer = current_cluster
         cluster_colors = current_colors
@@ -862,7 +801,7 @@ def overview_metrics(
     _policy_note = (
         "Current layout is descriptive, so no edges are marked forbidden."
         if not forbidden_pairs and scheme_label == "Current package layout"
-        else "Forbidden references are evaluated against the candidate dependency policy."
+        else "Forbidden references are evaluated against the core purity rule."
     )
     mo.md(
         f"""
@@ -942,26 +881,19 @@ def overview_views(
 @app.cell(hide_code=True)
 def boundary_policy_md(mo):
     mo.md(r"""
-    ### Candidate policy used by the proposed view
+    ### Enforced role policy
 
-    - `domain` imports only itself.
-    - `identification` imports `domain`.
-    - `structural-front` imports `identification` and `domain`, then emits `DynamicalModelSpec`.
-    - `ssm-model` imports `domain`, but not identification or inference implementations.
-    - `ssm-inference` imports `ssm-model` and `domain`.
-    - `analysis` may join identification, model, inference, and domain evidence.
-    - `application` may orchestrate every lower layer.
-
-    The classifier is intentionally an architectural hypothesis over today's files. A mixed
-    module remains classified as one unit, so a red edge can mean that the file itself needs to
-    be split—for example, worker/UI prior metadata versus the compiler's authored-prior contract.
+    Roles come directly from `scripts/checks/architecture_roles.py`. Red edges show a
+    pure module reaching an edge or shell. The checker also enforces transitive purity
+    and rejects runtime import cycles. Package-specific dependency contracts remain in
+    `pyproject.toml`; this role lens does not replace those checks.
     """)
     return
 
 
 @app.cell(hide_code=True)
 def cluster_picker(clusters, mo, scheme_control):
-    _preferred = "ssm-model" if scheme_control.value == "proposed" else "models.ssm"
+    _preferred = "execution" if scheme_control.value == "role" else "models.ssm"
     cluster_control = mo.ui.dropdown(
         options=clusters,
         value=_preferred,
@@ -1091,7 +1023,7 @@ def interpretation_md(mo):
 
     1. the dependency matrix is close to triangular;
     2. few high-weight red edges must be moved or inverted;
-    3. strongly connected components do not cross the proposed boundary;
+    3. strongly connected components do not cross the role boundary;
     4. boundary-scoped context is materially smaller than the full transitive closure; and
     5. the external first-contact modules form a small API that can be documented and tested.
 

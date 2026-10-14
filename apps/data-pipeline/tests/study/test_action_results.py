@@ -8,19 +8,19 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from nof1_causal_lab.actions.contracts import EditQuestionRequest, call_identity
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.actions.io import EditQuestionInput, EditQuestionOutput
+from nof1_causal_lab.actions.contracts.bodies import EditQuestionInput, EditQuestionOutput
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import EditQuestionRequest, call_identity
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.question import QuestionSpec
-from nof1_causal_lab.study.action_outputs import completed_call_msgpack
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.storage import paths as data_module
+from nof1_causal_lab.storage.arrays import encode_array
+from nof1_causal_lab.study.persistence.codec import pack_result, unpack_result
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore, read_question
+from nof1_causal_lab.study.queries.action_outputs import completed_call_msgpack
 from nof1_causal_lab.study.records import Applied, AttemptRecord, EditQuestionAttempt
-from nof1_causal_lab.study.result_codec import pack_result, unpack_result
-from nof1_causal_lab.study.store import ArtifactStore, read_question
-from nof1_causal_lab.utils import data as data_module
-from nof1_causal_lab.utils.arrays import encode_array
-from tests.helpers import fixture_entity_id
+from tests.support.helpers import fixture_entity_id
 
 pytestmark = pytest.mark.contract
 
@@ -32,8 +32,8 @@ def _array_value(values):
 
 def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeypatch, tmp_path):
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
-    from nof1_causal_lab import study_api
     from nof1_causal_lab.actions import output_builder
+    from nof1_causal_lab.api import studies as study_api
 
     workspace = "RESULTS"
     store = ArtifactStore(workspace)
@@ -97,7 +97,7 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
 
 def test_numerical_result_preserves_dtype_shape_missingness_and_vector_selection():
     from nof1_causal_lab.artifacts.arrays import ArrayVector
-    from nof1_causal_lab.study.action_arrays import resolve_vector
+    from nof1_causal_lab.study.projections.observations import resolve_vector
 
     values = np.asarray([[1, np.nan, np.inf], [2, -np.inf, 4]], dtype=np.float64)
     saved = _array_value(values)
@@ -137,18 +137,21 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
     import polars as pl
     from polars.testing import assert_frame_equal
 
-    from nof1_causal_lab.actions.contracts import PrepareDataRequest
-    from nof1_causal_lab.actions.io import PrepareDataInput
+    from nof1_causal_lab.actions.contracts.bodies import PrepareDataInput
+    from nof1_causal_lab.actions.contracts.requests import PrepareDataRequest
     from nof1_causal_lab.actions.output_builder import complete_attempt
-    from nof1_causal_lab.actions.validation.flow import profile_data
-    from nof1_causal_lab.artifacts.data_preparation import DataPreparationResult, FileSourceRef
-    from nof1_causal_lab.artifacts.data_ref import DataRef
     from nof1_causal_lab.artifacts.identity import GitOid
-    from nof1_causal_lab.study.data import read_data_history
+    from nof1_causal_lab.artifacts.observations.preparation import (
+        DataPreparationResult,
+        FileSourceRef,
+    )
+    from nof1_causal_lab.artifacts.observations.reference import DataRef
+    from nof1_causal_lab.observations.quality.profile import profile_data
+    from nof1_causal_lab.study.queries.data import read_data_history
     from nof1_causal_lab.study.records import applied_attempt
     from nof1_causal_lab.study.state import ArtifactResult
-    from tests.action_fixtures import question_root
     from tests.integration.runner_fixtures import panel_frame, panel_metadata, seed_model
+    from tests.support.action import question_root
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     workspace = "PREPARED"
@@ -210,14 +213,14 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
 
 
 def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch, tmp_path):
-    from nof1_causal_lab.actions.contracts import EditModelRequest
-    from nof1_causal_lab.actions.io import EditModelInput
+    from nof1_causal_lab.actions.contracts.bodies import EditModelInput
+    from nof1_causal_lab.actions.contracts.requests import EditModelRequest
+    from nof1_causal_lab.actions.model_diff import model_diff
     from nof1_causal_lab.actions.output_builder import complete_attempt
-    from nof1_causal_lab.actions.revisions import model_diff
     from nof1_causal_lab.artifacts.identity import GitOid
     from nof1_causal_lab.study.records import applied_attempt
-    from tests.action_fixtures import edit_and_check, question_root
-    from tests.helpers import make_model
+    from tests.support.action import edit_and_check, question_root
+    from tests.support.helpers import make_model
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     workspace = "MODEL_REFS"
@@ -262,12 +265,12 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
 def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
     monkeypatch, tmp_path, values
 ):
-    from nof1_causal_lab.actions.contracts import EditModelRequest
-    from nof1_causal_lab.actions.io import EditModelInput, EditModelOutput
-    from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.actions.contracts.bodies import EditModelInput, EditModelOutput
+    from nof1_causal_lab.actions.contracts.requests import EditModelRequest
     from nof1_causal_lab.artifacts.identity import GitOid
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from nof1_causal_lab.study.records import EditAttempt
-    from tests.git_fixtures import git_oid
+    from tests.support.git import git_oid
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, repository = ArtifactStore("BUFFERS"), StudyRepository("BUFFERS")
@@ -332,7 +335,7 @@ def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
 def test_domain_views_share_one_wire_buffer_and_decode_without_a_store():
     from nof1_causal_lab.artifacts.arrays import ArrayVector
     from nof1_causal_lab.artifacts.base import Value
-    from nof1_causal_lab.study.action_arrays import resolve_vector
+    from nof1_causal_lab.study.projections.observations import resolve_vector
 
     class NumericalViews(Value):
         owner: NumericalArray

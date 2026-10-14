@@ -6,18 +6,21 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts import EditModelRequest
+from nof1_causal_lab.actions.contracts.bodies import EditModelInput
+from nof1_causal_lab.actions.contracts.requests import EditModelRequest
 from nof1_causal_lab.actions.edit_model import edit_model
-from nof1_causal_lab.actions.io import EditModelInput
 from nof1_causal_lab.actions.messages import edit_messages
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec, apply_model_edit
-from nof1_causal_lab.artifacts.expressions import coefficient, state
 from nof1_causal_lab.artifacts.identity import GitOid, scientific_id
-from nof1_causal_lab.artifacts.mechanism import DriftMechanismSpec
-from nof1_causal_lab.artifacts.question import QuestionSpec
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import (
+    DynamicalModelSpec,
+    apply_model_edit,
+)
+from nof1_causal_lab.artifacts.model.expressions import coefficient, state
+from nof1_causal_lab.artifacts.model.mechanism import DriftMechanismSpec
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model
 from nof1_causal_lab.study.records import Applied, Rejected
-from nof1_causal_lab.study.store import ArtifactStore, read_model
-from tests.helpers import make_model, write_question
+from tests.support.helpers import make_model, write_question
 
 pytestmark = pytest.mark.contract
 
@@ -93,8 +96,8 @@ def test_null_edge_prunes_ancestors_and_their_owned_parameters_and_laws():
     assert result.pruning.edges == (parent.edges[0].id,)
     assert result.pruning.parameters == (identity,)
     assert result.pruning.distributions == ("distribution:initial",)
-    from nof1_causal_lab.artifacts.identification import IdentificationReport
-    from nof1_causal_lab.artifacts.model_checks import ModelCheckReport, QuestionCheckReport
+    from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
+    from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport, QuestionCheckReport
 
     (warning,) = edit_messages(
         ModelCheckReport(specification=(), question=QuestionCheckReport(findings=())),
@@ -152,7 +155,7 @@ def test_retained_invalid_edits_fail_only_at_materialization(violation):
 
 
 def test_action_uses_selected_parent_and_rejects_without_writing(tmp_path, monkeypatch):
-    from nof1_causal_lab.utils import data
+    from nof1_causal_lab.storage import paths as data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("EDIT")

@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 import jax.numpy as jnp
 import jax.random as random
 
-from nof1_causal_lab.models.ssm.inference.shared import assemble_parameter_draws
 from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
+from nof1_causal_lab.models.ssm.parameter_draws import assemble_parameter_draws
 
 if TYPE_CHECKING:
     import jax

@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 
 from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.identity import ParameterId
-from nof1_causal_lab.artifacts.parameter import SiteKind
+from nof1_causal_lab.artifacts.model.parameter import SiteKind
 from nof1_causal_lab.compilation_errors import AggregatedCompileError
-from nof1_causal_lab.models.ssm.compile import support as numeric
+from nof1_causal_lab.models.ssm.compile.layout import axes, static_factors
 from nof1_causal_lab.models.ssm.structure.sites import (
     CompiledBlockTarget,
     CompiledEdgeTarget,
@@ -22,14 +22,14 @@ from nof1_causal_lab.models.ssm.structure.sites import (
 )
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.parameter_spec import ParameterSpec
-    from nof1_causal_lab.models.model_structure import StructuralSelection
+    from nof1_causal_lab.artifacts.model.parameter_spec import ParameterSpec
     from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponentSpec
     from nof1_causal_lab.models.ssm.structure.sites import (
         SiteDescriptor,
         SitePosition,
         SiteSelection,
     )
+    from nof1_causal_lab.models.structure import StructuralSelection
 
 
 class PriorIndexingError(AggregatedCompileError):
@@ -83,10 +83,8 @@ def build_site_bindings(
 
     dynamical_model_spec = structure.dynamical_model_spec
     bindings = _native_dynamics_bindings(components, {site.name: site for site in sites})
-    latent = {identity: index for index, identity in enumerate(numeric.state_ids(structure))}
-    manifest = {
-        identity: index for index, identity in enumerate(numeric.observation_ids(structure))
-    }
+    latent = {identity: index for index, identity in enumerate(axes.state_ids(structure))}
+    manifest = {identity: index for index, identity in enumerate(axes.observation_ids(structure))}
     errors: list[str] = []
 
     for parameter in parameters:
@@ -116,11 +114,13 @@ def build_site_bindings(
                 ]
         else:
             if kind == SiteKind.STATIC_STATE_SD:
-                factor_ids = construct_ids & set(numeric.static_factor_ids(structure))
+                factor_ids = construct_ids & set(static_factors.static_factor_ids(structure))
                 if len(factor_ids) == 1:
                     position = {
                         identity: index
-                        for index, identity in enumerate(numeric.static_factor_ids(structure))
+                        for index, identity in enumerate(
+                            static_factors.static_factor_ids(structure)
+                        )
                     }[next(iter(factor_ids))]
             elif kind == SiteKind.LOADING:
                 if len(indicator_indices) == 1 and len(state_indices) == 1:

@@ -6,6 +6,9 @@ app = marimo.App(width="medium")
 
 @app.cell
 def imports_marimo():
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime as _initialize_runtime
+
+    _initialize_runtime()
     import marimo as mo
 
     return (mo,)
@@ -35,15 +38,14 @@ def imports():
     import numpy as np
     import plotly.graph_objects as go
     import scipy.optimize as spo
-    from plotly.subplots import make_subplots
-    from samplers import (
+    from notebooks.support.samplers import (
         MultiPathfinderConfig,
         PathfinderConfig,
         run_multipath_pathfinder,
         run_pathfinder,
         run_pathfinder_sampler,
     )
-    from synthetic_posteriors import (
+    from notebooks.support.synthetic_posteriors import (
         Bend,
         Cauchy,
         Chain,
@@ -60,6 +62,7 @@ def imports():
         TransformedTarget,
         invariance,
     )
+    from plotly.subplots import make_subplots
 
     # ── swap sampler + default config here ──────────────────────────────────
     # Available sampler entry points in `samplers` (each returns a SamplerTrace):

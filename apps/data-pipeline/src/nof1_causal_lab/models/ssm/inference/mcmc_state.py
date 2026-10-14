@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, NamedTuple
 import jax
 import jax.numpy as jnp
 
-from nof1_causal_lab.utils.immutability import freeze_fields
+from nof1_causal_lab.artifacts.immutability import freeze_fields
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

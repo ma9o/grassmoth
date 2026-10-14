@@ -4,16 +4,16 @@ from datetime import date
 
 import pytest
 
-from nof1_causal_lab.actions.contracts import FitRequest, SimulateRequest
-from nof1_causal_lab.actions.io import FitInput, SimulateInput
+from nof1_causal_lab.actions.contracts.bodies import FitInput, SimulateInput
+from nof1_causal_lab.actions.contracts.requests import FitRequest, SimulateRequest
 from nof1_causal_lab.actions.temporal.client import pydantic_data_converter
-from nof1_causal_lab.actions.temporal.messages import ActionInput
-from nof1_causal_lab.artifacts.data_ref import DataRef
+from nof1_causal_lab.actions.temporal.study.messages import ActionInput
 from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.simulation import SimulationSpec
 from nof1_causal_lab.study.state import StudyState
-from tests.git_fixtures import git_oid
-from tests.helpers import run_async
+from tests.support.git import git_oid
+from tests.support.helpers import run_async
 
 pytestmark = pytest.mark.contract
 

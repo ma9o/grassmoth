@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 from sympy import Float, Integer, Poly
 
-from nof1_causal_lab.artifacts.expressions import (
+from nof1_causal_lab.artifacts.model.expressions import (
     CoefficientExpression,
     StateExpression,
     symbolic_expression,

@@ -15,7 +15,7 @@ import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
 
-from nof1_causal_lab.models.ssm import numerics as numeric
+from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.dynamics.intervention import Intervention
 from nof1_causal_lab.models.ssm.dynamics.spec import (
     compile_dynamics,
@@ -35,9 +35,7 @@ if TYPE_CHECKING:
 
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.dynamics.spec import DynamicsSpec
-    from nof1_causal_lab.models.ssm.execution.contracts import (
-        ObservationLaws,
-    )
+    from nof1_causal_lab.models.ssm.execution.contracts import ObservationLaws
     from nof1_causal_lab.models.ssm.execution.observation_dispatch import ObservationSampleFn
     from nof1_causal_lab.models.ssm.execution.observation_model import ObservationKernel
 
@@ -119,7 +117,10 @@ class _ObservationDistribution(dist.Distribution):
     @property
     def mean(self) -> jax.Array:
         """Actual scalar moments; a category law's mean is its expected category code."""
-        from nof1_causal_lab.artifacts.likelihood import CategoricalLawSpec, OrderedLogisticLawSpec
+        from nof1_causal_lab.artifacts.model.likelihood import (
+            CategoricalLawSpec,
+            OrderedLogisticLawSpec,
+        )
         from nof1_causal_lab.models.ssm.execution.observation_distributions import (
             evaluate_law,
             law_moments,

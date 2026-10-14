@@ -5,15 +5,15 @@ from datetime import UTC, date, datetime
 import numpy as np
 import pytest
 
-from nof1_causal_lab.actions.contracts import SimulateRequest
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.actions.io import SimulateInput, SimulateOutput
-from nof1_causal_lab.actions.simulation_summaries import simulation_summary
+from nof1_causal_lab.actions.contracts.bodies import SimulateInput, SimulateOutput
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import SimulateRequest
+from nof1_causal_lab.actions.simulate.summaries import simulation_summary
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.checks import NotEvaluated
-from nof1_causal_lab.artifacts.construct import replace_constructs
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.predictive_provenance import AuthoredLawProvenance
+from nof1_causal_lab.artifacts.model.construct import replace_constructs
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.reports.checks import NotEvaluated
+from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
     ModelSimulationResult,
     PairedArmSimulation,
@@ -23,23 +23,23 @@ from nof1_causal_lab.artifacts.simulation import (
     SimulationReport,
     SimulationSpec,
 )
-from nof1_causal_lab.models.model_structure import StructuralSelection, selected_state_ids
 from nof1_causal_lab.models.ssm.predictive.simulation import generate_simulation_batch
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.models.structure import StructuralSelection, selected_state_ids
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.store import ArtifactStore
-from tests.action_fixtures import applied_record, empty_simulation_summary
-from tests.compute_fixtures import COMPUTE_BUDGET
-from tests.data_fixtures import metadata_for_model
-from tests.helpers import make_model, write_question
-from tests.inference_fixtures import compile_model_fixture
-from tests.model_fixtures import x_y_model
+from tests.support.action import applied_record, empty_simulation_summary
+from tests.support.compute import COMPUTE_BUDGET
+from tests.support.data import metadata_for_model
+from tests.support.helpers import make_model, write_question
+from tests.support.inference import compile_model_fixture
+from tests.support.model import x_y_model
 
 pytestmark = pytest.mark.inference(concern="simulation")
 
 
 def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
-    from nof1_causal_lab.utils import data
+    from nof1_causal_lab.storage import paths as data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     dynamical_model_spec = make_model(
@@ -199,7 +199,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
     assert evidence.draws == 3
     assert evidence.times == (5, 7)
     assert evidence.arms.kind == "paired"
-    from nof1_causal_lab.study.action_arrays import resolve_vector
+    from nof1_causal_lab.study.projections.observations import resolve_vector
 
     np.testing.assert_array_equal(evidence.arms.action.latent_paths.values, states)
     np.testing.assert_array_equal(evidence.arms.reference.latent_paths.values, states - 1)

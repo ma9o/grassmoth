@@ -9,11 +9,11 @@ import polars as pl
 import pytest
 
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.checks import NotEvaluated
 from nof1_causal_lab.artifacts.identity import ConstructId, IndicatorId
-from nof1_causal_lab.artifacts.observations import ResolvedObservationSpec
-from nof1_causal_lab.study.visuals import observation_history
-from tests.helpers import fixture_entity_id
+from nof1_causal_lab.artifacts.observations.spec import ResolvedObservationSpec
+from nof1_causal_lab.artifacts.reports.checks import NotEvaluated
+from nof1_causal_lab.study.projections.visuals import observation_history
+from tests.support.helpers import fixture_entity_id
 
 
 @pytest.mark.contract
@@ -38,7 +38,7 @@ def test_observations_keep_irregular_anchors_support_missingness_and_empirical_m
 
 @pytest.mark.contract
 def test_full_draw_summaries_preserve_modes_and_masked_category_counts():
-    from nof1_causal_lab.actions.simulation_summaries import simulation_summary
+    from nof1_causal_lab.actions.simulate.summaries import simulation_summary
 
     state_id = ConstructId("construct:state")
     indicator = IndicatorId("indicator:observed")

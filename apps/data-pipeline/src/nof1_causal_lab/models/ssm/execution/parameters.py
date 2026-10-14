@@ -7,10 +7,8 @@ from typing import TYPE_CHECKING
 import jax.numpy as jnp
 import numpyro
 
-from nof1_causal_lab.models.ssm import numerics as numeric
-from nof1_causal_lab.models.ssm.covariance_utils import (
-    symmetrize,
-)
+from nof1_causal_lab.models.ssm import compiled_access as numeric
+from nof1_causal_lab.models.ssm.covariance import symmetrize
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable

@@ -1294,14 +1294,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1328,14 +1328,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                             readonly scale?: {
                                 /** @constant */
@@ -1359,14 +1359,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1393,14 +1393,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                             readonly loc?: {
                                 /** @constant */
@@ -1424,14 +1424,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                             readonly scale?: {
                                 /** @constant */
@@ -1455,14 +1455,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1489,14 +1489,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1523,14 +1523,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                             readonly rate?: {
                                 /** @constant */
@@ -1554,14 +1554,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1588,14 +1588,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1622,14 +1622,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1656,14 +1656,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                             readonly concentration?: {
                                 /** @constant */
@@ -1687,14 +1687,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1721,14 +1721,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                             readonly concentration0?: {
                                 /** @constant */
@@ -1752,14 +1752,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1786,14 +1786,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                             readonly cutpoints?: {
                                 /** @constant */
@@ -1817,14 +1817,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         } | {
                             /** @constant */
@@ -1851,14 +1851,14 @@ export interface components {
                                 readonly kind?: "binary";
                                 /** @enum {string} */
                                 readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                                readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                                readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                             } | {
                                 /** @constant */
                                 readonly kind?: "call";
                                 /** @enum {string} */
                                 readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                                readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                             };
                         };
                         /** @description Whether observations are mean-centered and scaled before fitting. */
@@ -1903,14 +1903,14 @@ export interface components {
                         readonly kind?: "binary";
                         /** @enum {string} */
                         readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                        readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                        readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                        readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                        readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                     } | {
                         /** @constant */
                         readonly kind?: "call";
                         /** @enum {string} */
                         readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                        readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                        readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                     };
                     /** @constant */
                     readonly kind?: "drift";
@@ -1937,14 +1937,14 @@ export interface components {
                         readonly kind?: "binary";
                         /** @enum {string} */
                         readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                        readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                        readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                        readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                        readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                     } | {
                         /** @constant */
                         readonly kind?: "call";
                         /** @enum {string} */
                         readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                        readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                        readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                     };
                     /** @constant */
                     readonly kind?: "potential";
@@ -1998,14 +1998,14 @@ export interface components {
                         readonly kind?: "binary";
                         /** @enum {string} */
                         readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-                        readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-                        readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+                        readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+                        readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
                     } | {
                         /** @constant */
                         readonly kind?: "call";
                         /** @enum {string} */
                         readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-                        readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+                        readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
                     };
                     /** @constant */
                     readonly kind?: "drift";
@@ -3456,15 +3456,15 @@ export interface components {
             readonly measurement_clock: string | null;
         };
         /** @description A supported scalar operation composing two expressions. */
-        readonly "DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__BinaryExpression-Input__1_": {
+        readonly "DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__BinaryExpression-Input__1_": {
             /** @constant */
             readonly kind?: "binary";
             /** @enum {string} */
             readonly operator?: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
-            readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
-            readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"];
+            readonly left?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
+            readonly right?: components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"];
         };
-        readonly "DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_": {
+        readonly "DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_": {
             /** @constant */
             readonly kind?: "literal";
             readonly value?: number;
@@ -3481,12 +3481,12 @@ export interface components {
             readonly value?: number | `parameter:${string}` | null;
             /** @description Additional constructs participating in this coefficient use. */
             readonly construct_ids?: readonly `construct:${string}`[];
-        } | components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__BinaryExpression-Input__1_"] | {
+        } | components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__BinaryExpression-Input__1_"] | {
             /** @constant */
             readonly kind?: "call";
             /** @enum {string} */
             readonly function?: "exp" | "sigmoid" | "normal_cdf" | "ordered_cutpoints" | "category_logits";
-            readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__expressions__Expression-Input__1_"][];
+            readonly arguments?: readonly components["schemas"]["DynamicalModelSpecDocument___components_schemas_nof1_causal_lab__artifacts__model__expressions__Expression-Input__1_"][];
         };
         /** @description A dynamics mechanism declares one contribution to continuous-time drift. */
         readonly "DynamicsMechanismSpec-Output": components["schemas"]["DriftMechanismSpec-Output"] | components["schemas"]["PotentialMechanismSpec-Output"];

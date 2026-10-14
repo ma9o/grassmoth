@@ -8,26 +8,25 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts import EditModelRequest, EditQuestionRequest
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.actions.temporal.messages import FailedExtractionChunk
-from nof1_causal_lab.artifacts.construct import replace_constructs
-from nof1_causal_lab.artifacts.data_preparation import FileSourceRef
-from nof1_causal_lab.artifacts.data_ref import DataRef
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import EditModelRequest, EditQuestionRequest
 from nof1_causal_lab.artifacts.identity import ConstructId, GitOid
-from nof1_causal_lab.artifacts.likelihood import DeltaLawSpec
-from nof1_causal_lab.artifacts.question import QuestionSpec
-from nof1_causal_lab.models.identification import identify_model
-from nof1_causal_lab.models.model_structure import StructuralSelection, selected_state_ids
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.artifacts.model.construct import replace_constructs
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.artifacts.observations.preparation import FailedExtractionChunk, FileSourceRef
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.models.causal.analysis import identify_model
+from nof1_causal_lab.models.structure import StructuralSelection, selected_state_ids
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.records import Applied
 from nof1_causal_lab.study.state import StudyState, apply_effects
-from nof1_causal_lab.study.store import ArtifactStore
-from tests.action_fixtures import applied_record, edit_and_check, question_root
-from tests.data_fixtures import metadata_for_model
-from tests.git_fixtures import artifact_revision, artifact_revisions
-from tests.helpers import make_model
+from tests.support.action import applied_record, edit_and_check, question_root
+from tests.support.data import metadata_for_model
+from tests.support.git import artifact_revision, artifact_revisions
+from tests.support.helpers import make_model
 
 pytestmark = pytest.mark.contract
 
@@ -37,7 +36,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def workspace(monkeypatch, tmp_path):
-    from nof1_causal_lab.utils import data as data_module
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     return "test_workspace"
@@ -60,8 +59,8 @@ def _rooted(workspace):
 
 
 def _exact_measurement(model):
-    from nof1_causal_lab.artifacts.expressions import state
-    from nof1_causal_lab.artifacts.likelihood import LikelihoodSpec
+    from nof1_causal_lab.artifacts.model.expressions import state
+    from nof1_causal_lab.artifacts.model.likelihood import LikelihoodSpec
 
     owner = model.constructs[0]
     indicator = owner.indicators[0].revised(
@@ -107,8 +106,8 @@ def test_identification_records_positive_and_absent_queries():
 def test_identification_preserves_negative_findings(monkeypatch):
     from dataclasses import replace
 
-    from nof1_causal_lab.models import identification
-    from nof1_causal_lab.utils.identifiability import UnidentifiedQuery
+    from nof1_causal_lab.models.causal import analysis as identification
+    from nof1_causal_lab.models.causal.identification import UnidentifiedQuery
 
     dynamical_model_spec = _model()
     result = identification.check_identifiability(
@@ -136,12 +135,10 @@ def test_identification_preserves_negative_findings(monkeypatch):
 
 @pytest.mark.parametrize("nonempty", [False, True])
 def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
-    from nof1_causal_lab.actions.temporal.measurement_activities import (
+    from nof1_causal_lab.actions.temporal.extraction.activities import (
         finalize_measurements_activity,
     )
-    from nof1_causal_lab.actions.temporal.messages import (
-        MeasurementsFinalizeInput,
-    )
+    from nof1_causal_lab.actions.temporal.extraction.messages import MeasurementsFinalizeInput
 
     store = ArtifactStore(workspace)
     dynamical_model_spec = _model()
@@ -150,7 +147,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
         [raw, _write(store, "model", dynamical_model_spec.model_dump(mode="json"))]
     )
     pins: dict[ArtifactId, GitOid] = {"raw_data": raw.revision}
-    from nof1_causal_lab.workers.context import MeasurementContext
+    from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
 
     metadata = metadata_for_model(dynamical_model_spec)
     context = MeasurementContext(
@@ -220,7 +217,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
     )
     assert worker.status == "failed"
     assert worker.error == "No usable extraction"
-    from nof1_causal_lab.study.history import StudyRepository
+    from nof1_causal_lab.study.persistence.history import StudyRepository
 
     journal = StudyRepository(workspace)
     record = applied_record(workspace, effects, seq=1, ts="2026-01-01T00:00:00Z", trace_ids=[])
@@ -342,7 +339,7 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
         parquet_files={"panel.parquet": frame},
     )
     from nof1_causal_lab.actions.data_checks import evaluate_data_checks
-    from nof1_causal_lab.artifacts.data_preparation import DataPreparationResult
+    from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
 
     evaluate_data_checks(
         workspace,
@@ -375,7 +372,7 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
 
 
 def test_failed_check_publishes_no_state(workspace, monkeypatch):
-    from nof1_causal_lab.models import identification
+    from nof1_causal_lab.models.causal import analysis as identification
 
     def fail(*_args, **_kwargs):
         raise RuntimeError("identification failed")
@@ -416,7 +413,7 @@ def test_invalid_model_rejected_before_any_write(workspace):
 
 
 def test_failed_tree_write_publishes_no_artifact(workspace, monkeypatch):
-    from nof1_causal_lab.study import store as store_module
+    from nof1_causal_lab.study.persistence import store as store_module
 
     def fail_tree(*_args, **_kwargs):
         raise OSError("cannot write metadata")

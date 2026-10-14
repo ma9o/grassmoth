@@ -9,12 +9,12 @@ import jax
 import jax.numpy as jnp
 from sympy import Symbol, evaluate, lambdify, preorder_traversal
 
-from nof1_causal_lab.artifacts.expressions import symbolic_expression
+from nof1_causal_lab.artifacts.model.expressions import symbolic_expression
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from nof1_causal_lab.artifacts.expressions import (
+    from nof1_causal_lab.artifacts.model.expressions import (
         CoefficientExpression,
         Expression,
         StateExpression,

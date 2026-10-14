@@ -11,7 +11,7 @@ binding keys used by compile-time and runtime layers.
 from __future__ import annotations
 
 from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.parameter import SiteKind, SupportClass
+from nof1_causal_lab.artifacts.model.parameter import SiteKind, SupportClass
 
 type SitePosition = int | tuple[int, ...]
 

@@ -10,14 +10,15 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 
-from nof1_causal_lab.artifacts.construct import replace_constructs
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.likelihood import DistributionFamily, LinkFunction
-from nof1_causal_lab.artifacts.parameter import ParameterCoordinate, SiteKind
+from nof1_causal_lab.artifacts.model.construct import replace_constructs
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.likelihood import LinkFunction
+from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate, SiteKind
+from nof1_causal_lab.artifacts.probability.families import DistributionFamily
+from nof1_causal_lab.artifacts.probability.joint_layout import JointLawLayout
 from nof1_causal_lab.models.ssm.compile.observation_windows import compile_window_plan
-from nof1_causal_lab.models.ssm.joint_layout import JointLawLayout
-from nof1_causal_lab.models.ssm.observation_support import ObservationSupportRuntime
-from nof1_causal_lab.models.ssm.preflight import ObservationPreflightFailure
+from nof1_causal_lab.models.ssm.preparation.observations import ObservationSupportRuntime
+from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledFitInputs
@@ -291,11 +292,11 @@ def load_synthetic_nonlinear_spec(
 def load_synthetic_nonlinear_model(
     *, T: int = 32, diffusion_scale: float = 1.0
 ) -> CompiledFitInputs:
-    from nof1_causal_lab.models.model_structure import StructuralSelection
     from nof1_causal_lab.models.ssm.compile.inputs import (
         CompiledFitInputs,
         compile_ssm_inputs_from_model,
     )
+    from nof1_causal_lab.models.structure import StructuralSelection
 
     inputs = compile_ssm_inputs_from_model(
         StructuralSelection(
@@ -312,10 +313,10 @@ def bind_synthetic_nonlinear_panel(inputs: CompiledFitInputs, data: SyntheticNon
 
     import polars as pl
 
-    from nof1_causal_lab.artifacts.observation_data import ObservationDataset
-    from nof1_causal_lab.models.ssm.runtime import BoundPanel, bind_panel
-    from nof1_causal_lab.utils.observation_rows import indicator_window_bounds
-    from nof1_causal_lab.utils.observation_semantics import AnchorPolicy
+    from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
+    from nof1_causal_lab.artifacts.observations.semantics import AnchorPolicy
+    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel, bind_panel
+    from nof1_causal_lab.observations.rows import indicator_window_bounds
 
     time_origin = datetime(2026, 1, 1, tzinfo=UTC)
 

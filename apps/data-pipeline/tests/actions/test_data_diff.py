@@ -7,23 +7,24 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts import DataDiffRequest, SimulateRequest
+from nof1_causal_lab.actions.contracts.bodies import DataDiffInput, SimulateInput
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import DataDiffRequest, SimulateRequest
 from nof1_causal_lab.actions.data_diff import read_data_diff
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.actions.io import DataDiffInput, SimulateInput
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.checks import NotEvaluated
-from nof1_causal_lab.artifacts.data_comparison import (
+from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
+from nof1_causal_lab.artifacts.observations.preparation import PreparedDataMetadata
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.artifacts.observations.semantics import AnchorPolicy
+from nof1_causal_lab.artifacts.observations.spec import ResolvedObservationSpec
+from nof1_causal_lab.artifacts.reports.checks import NotEvaluated
+from nof1_causal_lab.artifacts.reports.data_comparison import (
     DescriptiveIndicatorComparison,
     PredictiveIndicatorComparison,
 )
-from nof1_causal_lab.artifacts.data_preparation import PreparedDataMetadata
-from nof1_causal_lab.artifacts.data_ref import DataRef
-from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.observation_data import ObservationDataset
-from nof1_causal_lab.artifacts.observations import ResolvedObservationSpec
-from nof1_causal_lab.artifacts.posterior_diagnostics import PosteriorPredictiveChecks
-from nof1_causal_lab.artifacts.predictive_provenance import AuthoredLawProvenance
+from nof1_causal_lab.artifacts.reports.posterior_diagnostics import PosteriorPredictiveChecks
+from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
     ModelSimulationResult,
     SimulationArm,
@@ -33,14 +34,14 @@ from nof1_causal_lab.artifacts.simulation import (
     SimulationSpec,
     SingleArmSimulation,
 )
-from nof1_causal_lab.models.posterior_predictive import compare_data_variables
+from nof1_causal_lab.models.diagnostics.history_comparison import compare_data_variables
 from nof1_causal_lab.study.errors import StudyLookupError
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore
+from nof1_causal_lab.study.projections.observations import read_dataset
 from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.store import ArtifactStore, read_dataset
-from nof1_causal_lab.utils.observation_semantics import AnchorPolicy
-from tests.action_fixtures import applied_record, empty_simulation_summary
-from tests.git_fixtures import artifact_revisions, git_oid
+from tests.support.action import applied_record, empty_simulation_summary
+from tests.support.git import artifact_revisions, git_oid
 
 
 def _dataset(values, *, number=1, times=None, variable=None):
@@ -263,13 +264,13 @@ def test_invalid_histories_and_duplicate_sources_are_rejected_before_comparison(
 
 @pytest.mark.inference(concern="predictive")
 def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkeypatch):
-    from nof1_causal_lab.artifacts.data_preparation import (
+    from nof1_causal_lab.artifacts.observations.preparation import (
         DataPreparationSpec,
         DataVariableSpec,
         SemanticExtractionSpec,
     )
-    from nof1_causal_lab.utils import data as data_module
-    from tests.helpers import make_model
+    from nof1_causal_lab.storage import paths as data_module
+    from tests.support.helpers import make_model
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, history = ArtifactStore("DIFF"), StudyRepository("DIFF")
@@ -401,7 +402,7 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
         read_data_diff("DIFF", bad)
 
     # Saved histories keep absolute model days, and materialization keeps their dates.
-    from nof1_causal_lab.study.data import read_simulation_observations
+    from nof1_causal_lab.study.queries.data import read_simulation_observations
 
     origin = datetime(2026, 1, 1, tzinfo=UTC)
     commits = []

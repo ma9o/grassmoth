@@ -15,15 +15,7 @@ import pytest
 from fastapi import Response
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.actions.call_state import CallProgress, RunningCall
-from nof1_causal_lab.actions.contracts import (
-    EditModelRequest,
-    EditQuestionRequest,
-    FitRequest,
-    PrepareDataRequest,
-    SimulateRequest,
-)
-from nof1_causal_lab.actions.io import (
+from nof1_causal_lab.actions.contracts.bodies import (
     EditModelInput,
     EditModelOutput,
     EditQuestionInput,
@@ -32,19 +24,27 @@ from nof1_causal_lab.actions.io import (
     PrepareDataOutput,
     SimulateInput,
 )
-from nof1_causal_lab.actions.results import ActionPoll, RunningPoll
-from nof1_causal_lab.actions.temporal.workflow import StudyWorkflow
-from nof1_causal_lab.artifacts.data_preparation import SourceFolder
-from nof1_causal_lab.artifacts.data_ref import DataRef
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.actions.contracts.call_state import CallProgress, RunningCall
+from nof1_causal_lab.actions.contracts.polling import ActionPoll, RunningPoll
+from nof1_causal_lab.actions.contracts.requests import (
+    EditModelRequest,
+    EditQuestionRequest,
+    FitRequest,
+    PrepareDataRequest,
+    SimulateRequest,
+)
+from nof1_causal_lab.actions.temporal.study.workflow import StudyWorkflow
 from nof1_causal_lab.artifacts.identity import GitOid, RevisionSelector
-from nof1_causal_lab.artifacts.question import QuestionSpec
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.artifacts.observations.preparation import SourceFolder
+from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.simulation import SimulationSpec
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.llm.openrouter import create_openrouter_client
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model
 from nof1_causal_lab.study.records import ActionMessage, Rejected
-from nof1_causal_lab.study.store import ArtifactStore, read_model
-from nof1_causal_lab.utils.openrouter_client import create_openrouter_client
-from tests.helpers import graph_constructs
+from tests.support.helpers import graph_constructs
 
 pytestmark = [pytest.mark.workflow, pytest.mark.timeout(60, method="thread")]
 _QUESTION = "does exercise improve sleep?"
@@ -105,8 +105,8 @@ def _measured_model() -> dict[str, Any]:
 
 @pytest.fixture
 def machine_env(monkeypatch, tmp_path):
-    import nof1_causal_lab.utils.openrouter_client as openrouter_client
-    from nof1_causal_lab.utils import data as data_module
+    import nof1_causal_lab.llm.openrouter as openrouter_client
+    from nof1_causal_lab.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     workspace_id = f"ws-{uuid.uuid4().hex[:8]}"
@@ -129,13 +129,13 @@ def test_study_workflow_journey(machine_env, monkeypatch):
     async def scenario():
         from temporalio.testing import WorkflowEnvironment
 
-        from nof1_causal_lab import study_api
         from nof1_causal_lab.actions.temporal.client import pydantic_data_converter
         from nof1_causal_lab.actions.temporal.worker import (
             build_model_checks_worker,
             build_openrouter_worker,
             build_worker,
         )
+        from nof1_causal_lab.api import studies as study_api
 
         env = await WorkflowEnvironment.start_local(data_converter=pydantic_data_converter)
         try:
@@ -342,7 +342,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                     store.read_result(edited.record.attempt.outcome.result, EditModelOutput)
                     == saved_model
                 )
-                from nof1_causal_lab.actions.contracts import ModelDiffRequest
+                from nof1_causal_lab.actions.contracts.requests import ModelDiffRequest
 
                 head = StudyRepository(workspace_id).head()
                 comparison_request = ModelDiffRequest[GitOid](
@@ -400,7 +400,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
 
 
 def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, monkeypatch):
-    from nof1_causal_lab.actions.temporal import source_data_activity
+    from nof1_causal_lab.actions.temporal.extraction import source_data as source_data_activity
 
     workspace_id = machine_env
     read_sources = source_data_activity.read_source_data_activity
@@ -408,7 +408,6 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
     async def scenario():
         from temporalio.testing import WorkflowEnvironment
 
-        from nof1_causal_lab import study_api
         from nof1_causal_lab.actions.temporal.client import (
             RUNNING_ACTION_MEMO,
             pydantic_data_converter,
@@ -418,14 +417,15 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
             build_openrouter_worker,
             build_worker,
         )
+        from nof1_causal_lab.api import studies as study_api
 
         # Source reading waits here, so preparation stays in flight until released.
         release = asyncio.Event()
 
         from temporalio import activity
 
-        from nof1_causal_lab.actions.temporal import activities
-        from nof1_causal_lab.actions.temporal.messages import ReadSourceDataInput
+        from nof1_causal_lab.actions.temporal.extraction.messages import ReadSourceDataInput
+        from nof1_causal_lab.actions.temporal.study import activities
         from nof1_causal_lab.study.state import ArtifactRecord
 
         @activity.defn(name="read_source_data_activity")

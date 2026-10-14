@@ -9,21 +9,19 @@ the prior density; this module does not define a second inference target.
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
-import jax.random as random
 
+from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.models.ssm.execution.parameters import assemble_model_matrices
 from nof1_causal_lab.models.ssm.priors import resolve_site_priors
-from nof1_causal_lab.utils.immutability import freeze_fields
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
     import numpyro.distributions as dist
 
@@ -109,37 +107,6 @@ def assemble_deterministics_from_registry(
 # ---------------------------------------------------------------------------
 # Prior sampling
 # ---------------------------------------------------------------------------
-
-
-def _stable_site_key(rng_key: jnp.ndarray, site_name: str) -> jnp.ndarray:
-    """Derive a site stream that is unchanged by registry insertion or reordering."""
-    digest = hashlib.sha256(site_name.encode()).digest()
-    first = int.from_bytes(digest[:4], "little")
-    second = int.from_bytes(digest[4:8], "little")
-    return random.fold_in(random.fold_in(rng_key, first), second)
-
-
-def sample_prior_parameters(
-    rng_key: jnp.ndarray,
-    registry: Sequence[SiteDescriptor],
-    priors: Mapping[str, dist.Distribution],
-    n_samples: int = 200,
-) -> dict[str, jnp.ndarray]:
-    """Draw authored parameters directly from their NumPyro distributions.
-
-    Each (draw index, site name) keeps its independent stream. Prior prediction
-    consumes constrained values, so no inference coordinate transform is needed.
-    """
-    draws = {}
-    for site in registry:
-        distribution = priors[site.name]
-        draws[site.name] = jnp.stack(
-            [
-                distribution.sample(_stable_site_key(random.fold_in(rng_key, index), site.name))
-                for index in range(n_samples)
-            ]
-        )
-    return draws
 
 
 def build_prior_runtime_bundle(

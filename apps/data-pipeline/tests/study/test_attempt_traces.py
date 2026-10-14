@@ -9,20 +9,20 @@ from uuid import UUID
 import pytest
 
 from nof1_causal_lab.actions.call_logs import collect_call_log, read_call_log
-from nof1_causal_lab.actions.contracts import EditModelRequest, call_identity
-from nof1_causal_lab.actions.io import EditModelInput
+from nof1_causal_lab.actions.contracts.bodies import EditModelInput
+from nof1_causal_lab.actions.contracts.progress import StepEvent
+from nof1_causal_lab.actions.contracts.requests import EditModelRequest, call_identity
 from nof1_causal_lab.actions.progress import emit_event
-from nof1_causal_lab.actions.progress_contracts import StepEvent
-from nof1_causal_lab.actions.temporal.activities import journal_activity, read_inputs_activity
-from nof1_causal_lab.actions.temporal.messages import AttemptPublication, ReadInputsInput
-from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.actions.temporal.study.activities import journal_activity, read_inputs_activity
+from nof1_causal_lab.actions.temporal.study.messages import AttemptPublication, ReadInputsInput
 from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.llm.traces import LLMTrace, TraceMessage, TraceUsage
+from nof1_causal_lab.storage import backend as storage
+from nof1_causal_lab.storage import paths as data_module
+from nof1_causal_lab.storage.traces import collect_run_traces, trace_log_path
+from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.records import ActionMessage, AttemptRecord, EditAttempt, Raised
-from nof1_causal_lab.study.store import collect_run_traces, trace_log_path
-from nof1_causal_lab.utils import data as data_module
-from nof1_causal_lab.utils import storage
-from nof1_causal_lab.utils.llm import LLMTrace, TraceMessage, TraceUsage
 
 if TYPE_CHECKING:
     from nof1_causal_lab.json_types import JsonObject
@@ -69,8 +69,8 @@ def test_collects_finalized_traces_and_validates_commit_paths(data_root):
 
 def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_root):
     del data_root
-    from nof1_causal_lab.study.store import ArtifactStore
-    from tests.helpers import write_question
+    from nof1_causal_lab.study.persistence.store import ArtifactStore
+    from tests.support.helpers import write_question
 
     question = write_question(ArtifactStore("ws-trace"))
     base = asyncio.run(
@@ -148,20 +148,17 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
 
 
 def test_subroutine_retains_conversation_before_a_tool_failure(data_root, monkeypatch):
-    from nof1_causal_lab.actions.temporal import llm_subroutine_workflow as subroutine_workflow
-    from nof1_causal_lab.actions.temporal.llm_subroutine_activities import (
+    from nof1_causal_lab.actions.temporal.llm import workflow as subroutine_workflow
+    from nof1_causal_lab.actions.temporal.llm.activities import (
         finalize_llm_subroutine_trace_activity,
     )
-    from nof1_causal_lab.actions.temporal.llm_subroutine_storage import (
-        subroutine_root,
-        write_subroutine_json,
-    )
-    from nof1_causal_lab.actions.temporal.messages import (
+    from nof1_causal_lab.actions.temporal.llm.messages import (
         LLMSubroutineInput,
         LLMSubroutineRef,
         LLMToolSpec,
     )
-    from nof1_causal_lab.llm_specs import EmbeddedLLMSpec
+    from nof1_causal_lab.actions.temporal.llm.storage import subroutine_root, write_subroutine_json
+    from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
 
     subroutine = LLMSubroutineRef(
         workspace_id="ws-trace",

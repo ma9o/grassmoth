@@ -7,8 +7,8 @@ import time
 
 from pydantic import BaseModel, ConfigDict
 
-from nof1_causal_lab.utils import data as data_module
-from nof1_causal_lab.utils import storage
+from nof1_causal_lab.storage import backend as storage
+from nof1_causal_lab.storage import paths as data_module
 
 DEFAULT_EVENT_RETENTION_SECONDS = 24 * 60 * 60
 DEFAULT_CACHE_RETENTION_SECONDS = 30 * 24 * 60 * 60

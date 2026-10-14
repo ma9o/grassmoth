@@ -5,38 +5,35 @@ from __future__ import annotations
 from functools import cache, cached_property
 from typing import TYPE_CHECKING, cast
 
-from nof1_causal_lab.actions.io import EditModelOutput, FitOutput, PrepareDataOutput, SimulateOutput
-from nof1_causal_lab.study.history import StudyRepository
+from nof1_causal_lab.actions.contracts.bodies import (
+    EditModelOutput,
+    FitOutput,
+    PrepareDataOutput,
+    SimulateOutput,
+)
+from nof1_causal_lab.actions.input_resolution import input_state
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model
 from nof1_causal_lab.study.records import Applied, StudyRevision, inference_record
-from nof1_causal_lab.study.snapshot_models import ModelSnapshot
-from nof1_causal_lab.study.store import ArtifactStore, read_model
+from nof1_causal_lab.study.snapshot import ModelSnapshot
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.construct import CausalEdgeSpec, ConstructSpec
-    from nof1_causal_lab.artifacts.data_preparation import PreparedDataMetadata
-    from nof1_causal_lab.artifacts.dynamical_model_spec import DynamicalModelSpec
-    from nof1_causal_lab.artifacts.identification import IdentificationReport
-    from nof1_causal_lab.artifacts.identity import (
-        ArtifactId,
-        EntityRef,
-        GitOid,
-        IndicatorId,
-    )
-    from nof1_causal_lab.artifacts.indicator import IndicatorSpec
-    from nof1_causal_lab.artifacts.observation_history import (
-        ObservationHistory,
-    )
-    from nof1_causal_lab.artifacts.parameter_spec import ParameterSpec
-    from nof1_causal_lab.artifacts.posterior import (
+    from nof1_causal_lab.artifacts.identity import ArtifactId, EntityRef, GitOid, IndicatorId
+    from nof1_causal_lab.artifacts.model.construct import CausalEdgeSpec, ConstructSpec
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.artifacts.model.indicator import IndicatorSpec
+    from nof1_causal_lab.artifacts.model.parameter_spec import ParameterSpec
+    from nof1_causal_lab.artifacts.model.question import QuestionSpec
+    from nof1_causal_lab.artifacts.observations.history import ObservationHistory
+    from nof1_causal_lab.artifacts.observations.preparation import PreparedDataMetadata
+    from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
+    from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
+    from nof1_causal_lab.artifacts.reports.inference import (
         FitCheckReport,
         InferenceReport,
         InferenceReportCore,
     )
-    from nof1_causal_lab.artifacts.question import QuestionSpec
     from nof1_causal_lab.artifacts.simulation import SimulationReport
-    from nof1_causal_lab.artifacts.validation_report import (
-        DataProfileReport,
-    )
     from nof1_causal_lab.study.state import StudyState
 
 
@@ -65,7 +62,7 @@ class ModelReader:
         attempt = self.records[-1].record.attempt
         if attempt.request is None:
             return checkpoint
-        inputs = self.repository.input_state(attempt.request)
+        inputs = input_state(self.repository, attempt.request)
         context = checkpoint.with_artifacts(tuple(inputs.current.values()))
         if attempt.action in {"fit", "edit_model"}:
             context = context.revised(data=inputs.data)
@@ -191,8 +188,8 @@ class ModelReader:
         """The preparation result owning the selected panel, with no lookup in unrelated calls."""
         if self.state.data is None:
             return None
-        from nof1_causal_lab.artifacts.data_preparation import PreparedDataMetadata
-        from nof1_causal_lab.study.data import panel_revision, read_data_source
+        from nof1_causal_lab.artifacts.observations.preparation import PreparedDataMetadata
+        from nof1_causal_lab.study.queries.data import panel_revision, read_data_source
 
         if not isinstance(
             read_data_source(self.store, self.state.data.revision), PreparedDataMetadata

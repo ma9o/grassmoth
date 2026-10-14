@@ -51,7 +51,7 @@ processes:
   tool-server:
     working_dir: apps/data-pipeline
     # One process per CPU: reads are CPU-bound Python, so workers run them in parallel.
-    command: uv run uvicorn nof1_causal_lab.tool_server:app --port 8100 --workers $(getconf _NPROCESSORS_ONLN)
+    command: uv run uvicorn nof1_causal_lab.api.app:app --port 8100 --workers $(getconf _NPROCESSORS_ONLN)
     environment:
       - TEMPORAL_ADDRESS=localhost:7233
     depends_on:

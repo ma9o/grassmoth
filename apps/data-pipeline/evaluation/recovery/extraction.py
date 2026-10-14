@@ -19,7 +19,7 @@ from evaluation.fixtures.synthetic_nonlinear import RECOVERY_TARGETS
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from nof1_causal_lab.artifacts.parameter import ParameterCoordinate
+    from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
     from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior
 
 type PosteriorSampleMap = Mapping[str, jax.Array]

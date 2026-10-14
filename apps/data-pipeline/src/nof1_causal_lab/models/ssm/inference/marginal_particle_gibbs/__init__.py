@@ -1,0 +1,1 @@
+"""Marginal particle gibbs package."""

@@ -11,40 +11,43 @@ import polars as pl
 import pygit2
 import pytest
 
-from nof1_causal_lab.actions.contracts import (
+from nof1_causal_lab.actions.contracts.bodies import (
+    EditModelInput,
+    FitInput,
+    PrepareDataInput,
+    SimulateInput,
+)
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
+from nof1_causal_lab.actions.contracts.requests import (
     EditModelRequest,
     FitRequest,
     PrepareDataRequest,
     SimulateRequest,
 )
-from nof1_causal_lab.actions.effects import ActionEffects
-from nof1_causal_lab.actions.io import EditModelInput, FitInput, PrepareDataInput, SimulateInput
-from nof1_causal_lab.actions.temporal.activities import (
+from nof1_causal_lab.actions.temporal.study.activities import (
     evaluate_data_checks_activity,
     evaluate_model_checks_activity,
     journal_activity,
 )
-from nof1_causal_lab.actions.temporal.messages import AttemptPublication, EvaluateChecksInput
+from nof1_causal_lab.actions.temporal.study.messages import AttemptPublication, EvaluateChecksInput
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.checks import Evaluated
-from nof1_causal_lab.artifacts.data_preparation import DataPreparationResult, FileSourceRef
-from nof1_causal_lab.artifacts.data_ref import DataRef
-from nof1_causal_lab.artifacts.dynamical_model_spec import ModelEditResult
-from nof1_causal_lab.artifacts.identification import IdentificationReport
 from nof1_causal_lab.artifacts.identity import DistributionId, GitOid
-from nof1_causal_lab.artifacts.model_checks import (
-    ModelCheckReport,
-    QuestionCheckReport,
-)
-from nof1_causal_lab.artifacts.posterior import (
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
+from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult, FileSourceRef
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.artifacts.reports.checks import Evaluated
+from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
+from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
+from nof1_causal_lab.artifacts.reports.inference import (
     InferenceEvidence,
     InferenceMetadata,
     InferenceReport,
     InferenceReportCore,
     InferenceReportDetail,
 )
-from nof1_causal_lab.artifacts.posterior_diagnostics import ConvergenceReport
-from nof1_causal_lab.artifacts.predictive_provenance import AuthoredLawProvenance
+from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport, QuestionCheckReport
+from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ConvergenceReport
+from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
     ModelSimulationResult,
     SimulationArm,
@@ -53,17 +56,14 @@ from nof1_causal_lab.artifacts.simulation import (
     SimulationSpec,
     SingleArmSimulation,
 )
-from nof1_causal_lab.artifacts.validation_report import (
-    DataProfileReport,
-)
-from nof1_causal_lab.study.history import StudyRepository
-from nof1_causal_lab.study.lineage import fitted_law_report
+from nof1_causal_lab.storage import paths as data
+from nof1_causal_lab.study.persistence.history import StudyRepository
+from nof1_causal_lab.study.persistence.store import ArtifactStore
+from nof1_causal_lab.study.queries.lineage import fitted_law_report
 from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.store import ArtifactStore
-from nof1_causal_lab.utils import data
-from tests.action_fixtures import applied_record, empty_simulation_summary, question_root
 from tests.integration.runner_fixtures import panel_frame, panel_metadata, seed_model
-from tests.model_fixtures import x_y_model
+from tests.support.action import applied_record, empty_simulation_summary, question_root
+from tests.support.model import x_y_model
 
 pytestmark = pytest.mark.contract
 
@@ -182,7 +182,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     edit_checks = checks
 
     identification = IdentificationReport(outcome=None)
-    from nof1_causal_lab.artifacts.posterior import FitCheckReport
+    from nof1_causal_lab.artifacts.reports.inference import FitCheckReport
 
     validation = FitCheckReport(
         question=QuestionCheckReport(findings=()),
@@ -212,7 +212,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         derived_from={"model": authored.revision, "panel": panel.revision},
         json_files={"model.json": dynamical_model_spec.model_dump(mode="json", round_trip=True)},
     )
-    from nof1_causal_lab.artifacts.posterior_diagnostics import ParticleMCMCEvidence
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleMCMCEvidence
 
     initial_delta = NumericalArray.from_numpy(np.asarray([[1.0, 2.0]]))
     divergent = NumericalArray.from_numpy(np.asarray([False, True]))
@@ -242,7 +242,9 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     def unexpected_evaluation(*_args, **_kwargs):
         pytest.fail("Saved result reads and publication must not run checks")
 
-    monkeypatch.setattr("nof1_causal_lab.actions.fit.read_inference_report", unexpected_evaluation)
+    monkeypatch.setattr(
+        "nof1_causal_lab.actions.fit.action.read_inference_report", unexpected_evaluation
+    )
     fit_publication, fit_revision = publish(
         Applied(
             result=evidence,
@@ -299,7 +301,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         fit_reliability="not_fitted",
     )
     monkeypatch.setattr(
-        "nof1_causal_lab.actions.simulate.read_simulation_report", unexpected_evaluation
+        "nof1_causal_lab.actions.simulate.action.read_simulation_report", unexpected_evaluation
     )
     simulation_publication, simulated = publish(
         Applied(
@@ -323,17 +325,17 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     for owner in (
         "model_checks.read_model_checks",
         "data_checks.read_data_profile",
-        "fit.read_inference_report",
-        "simulate.read_simulation_report",
+        "fit.action.read_inference_report",
+        "simulate.action.read_simulation_report",
     ):
         monkeypatch.setattr(f"nof1_causal_lab.actions.{owner}", unexpected_evaluation)
     assert asyncio.run(journal_activity(fit_publication)) == fit_revision
     assert asyncio.run(journal_activity(simulation_publication)) == simulated
     from pydantic import TypeAdapter, ValidationError
 
-    from nof1_causal_lab.actions.results import ActionPoll
-    from nof1_causal_lab.study.action_outputs import completed_call_msgpack
-    from nof1_causal_lab.study.result_codec import unpack_result
+    from nof1_causal_lab.actions.contracts.polling import ActionPoll
+    from nof1_causal_lab.study.persistence.codec import unpack_result
+    from nof1_causal_lab.study.queries.action_outputs import completed_call_msgpack
 
     def completed_call(workspace_id, revision):
         return TypeAdapter(ActionPoll).validate_python(
@@ -378,7 +380,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     prepared_history = prepared_response.body.data[panel_metadata().variables[0].id]
     assert isinstance(response.body.data, tuple)
     assert len(response.body.data) == 2
-    from nof1_causal_lab.study.action_arrays import resolve_vector
+    from nof1_causal_lab.study.projections.observations import resolve_vector
 
     def values(value):
         return resolve_vector(value)
