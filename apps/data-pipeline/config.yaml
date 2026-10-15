@@ -53,7 +53,7 @@ extraction_workers:
 # --- Inference -------------------------------------------------------------
 inference:
   # Local studies retain their store/history here; only numerical fitting runs on GPU.
-  compute_backend: modal
+  hardware: L40S
   compute_loo_diagnostics: false
   sampler:
     num_warmup: 4000
@@ -61,7 +61,9 @@ inference:
     num_chains: 4
     seed: 0
     num_particles: 64
-    marginal_particle_gibbs:
+    # Select {method: nuts_da} for joint state/parameter NUTS with dual averaging.
+    algorithm:
+      method: custom
       n_parameter_particles: 2
       # The indexed production method: parallel-in-time c-dSMC tree smoother with the
       # paid mixture leaf (amala_exact z-component + fixed LAPS-pilot component + wide

@@ -33,7 +33,6 @@ MALA step of ``h = 0.1`` corresponds to ``param_step_size = 0.025`` here.
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING, Literal, NamedTuple
 
 import jax
@@ -229,20 +228,14 @@ def build_marginal_particle_gibbs_kernel(
     )
     latent_context_runtime_fn = target.context
     log_prior_unc_fn = target.log_prior
-    local_target = (
-        replace(target, state_projection=target.fixed_recurrences, intervals=None)
-        if target.state_space.requires_replay
-        else target
-    )
+    local_target = target.tree_target()
 
-    def obs_increment_fn(context, state, index, observations):
-        # A hard likelihood at an artificial accumulator value can exclude valid
-        # paths. Replay models therefore defer every observation factor to the
-        # exact root target. Gaussian dynamics and paid auxiliary potentials
-        # define the intermediate targets on the independent path coordinates.
-        if target.state_space.requires_replay:
+    def obs_increment_fn(context, state, index, _observations):
+        # Only replay-dependent factors are deferred. An independent hard
+        # likelihood is already evaluated on its exact coordinates at the leaf.
+        if not target.observation_partition.local:
             return jnp.asarray(0.0, dtype=state.dtype)
-        return local_target.observation_increment(context, state, index, observations)
+        return local_target.observation_increment(context, state, index, local_target.observations)
 
     trajectory_log_prob_fn = target.path_log_prob
     runtime_observations = target.observations
@@ -392,12 +385,9 @@ def build_marginal_particle_gibbs_kernel(
             if not target.state_space.requires_replay:
                 return jnp.zeros(num_parameter_particles, dtype=traj_dtype)
             return jnp.asarray(
-                jax.vmap(
-                    lambda context: (
-                        target.path_log_prob(context, path, runtime_observations)
-                        - local_target.prior_path_log_prob(context, path)
-                    )
-                )(contexts)
+                jax.vmap(lambda context: target.replay_correction(local_target, context, path))(
+                    contexts
+                )
             )
 
         with jax.named_scope("dsmc_smoother_full"):

@@ -212,7 +212,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         derived_from={"model": authored.revision, "panel": panel.revision},
         json_files={"model.json": dynamical_model_spec.model_dump(mode="json", round_trip=True)},
     )
-    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleMCMCEvidence
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import MCMCEvidence
 
     initial_delta = NumericalArray.from_numpy(np.asarray([[1.0, 2.0]]))
     divergent = NumericalArray.from_numpy(np.asarray([False, True]))
@@ -228,7 +228,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
                 num_samples_total=2,
                 num_chains=1,
                 duration_seconds=3,
-                engine=ParticleMCMCEvidence(),
+                engine=MCMCEvidence(),
                 sampler_diagnostics=None,
             ),
             inference_diagnostics=None,

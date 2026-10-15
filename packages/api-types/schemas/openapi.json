@@ -15503,8 +15503,19 @@
       },
       "FitSettingsSpec-Input": {
         "additionalProperties": false,
-        "description": "Optional numerical controls applied to the configured particle sampler.",
+        "description": "Optional numerical controls applied to the configured joint sampler.",
         "properties": {
+          "algorithm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InferenceAlgorithmSpec-Input"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "num_samples_per_chain": {
             "anyOf": [
               {
@@ -15579,8 +15590,19 @@
       },
       "FitSettingsSpec-Output": {
         "additionalProperties": false,
-        "description": "Optional numerical controls applied to the configured particle sampler.",
+        "description": "Optional numerical controls applied to the configured joint sampler.",
         "properties": {
+          "algorithm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InferenceAlgorithmSpec-Output"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "num_samples_per_chain": {
             "anyOf": [
               {
@@ -15648,6 +15670,7 @@
           }
         },
         "required": [
+          "algorithm",
           "num_samples_per_chain",
           "num_warmup",
           "num_chains",
@@ -15789,7 +15812,36 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "GaussianReferenceTemperingSpec": {
+      "GaussianReferenceTemperingSpec-Input": {
+        "additionalProperties": false,
+        "description": "Optional replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.",
+        "properties": {
+          "num_temperatures": {
+            "default": 48,
+            "minimum": 2,
+            "title": "Num Temperatures",
+            "type": "integer"
+          },
+          "reference_scale": {
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "title": "Reference Scale",
+            "type": "number"
+          },
+          "adaptation_interval": {
+            "default": 500,
+            "minimum": 2,
+            "title": "Adaptation Interval",
+            "type": "integer"
+          }
+        },
+        "title": "GaussianReferenceTemperingSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "GaussianReferenceTemperingSpec-Output": {
         "additionalProperties": false,
         "description": "Optional replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.",
         "properties": {
@@ -16289,6 +16341,46 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "InferenceAlgorithmSpec-Input": {
+        "discriminator": {
+          "mapping": {
+            "custom": "#/components/schemas/MarginalParticleGibbsSpec-Input",
+            "nuts_da": "#/components/schemas/NutsDASpec-Input"
+          },
+          "propertyName": "method"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NutsDASpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/MarginalParticleGibbsSpec-Input"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "InferenceAlgorithmSpec-Output": {
+        "discriminator": {
+          "mapping": {
+            "custom": "#/components/schemas/MarginalParticleGibbsSpec-Output",
+            "nuts_da": "#/components/schemas/NutsDASpec-Output"
+          },
+          "propertyName": "method"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NutsDASpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/MarginalParticleGibbsSpec-Output"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "InferenceEvidence": {
         "additionalProperties": false,
         "description": "Native telemetry buffers; posterior atoms and coordinates belong to the model.",
@@ -16428,7 +16520,7 @@
             "type": "number"
           },
           "engine": {
-            "$ref": "#/components/schemas/ParticleMCMCEvidence"
+            "$ref": "#/components/schemas/MCMCEvidence"
           },
           "sampler_diagnostics": {
             "anyOf": [
@@ -16436,9 +16528,13 @@
                 "$ref": "#/components/schemas/ParticleSamplerDiagnostics"
               },
               {
+                "$ref": "#/components/schemas/NutsDADiagnostics"
+              },
+              {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Sampler Diagnostics"
           }
         },
         "required": [
@@ -17202,7 +17298,54 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "LapsInitializationSpec": {
+      "LapsInitializationSpec-Input": {
+        "additionalProperties": false,
+        "description": "Joint ensemble initialization; its draws are never reported as posterior samples.",
+        "properties": {
+          "ensemble_size": {
+            "default": 1024,
+            "minimum": 2,
+            "title": "Ensemble Size",
+            "type": "integer"
+          },
+          "num_unadjusted_steps": {
+            "default": 10000,
+            "minimum": 10,
+            "title": "Num Unadjusted Steps",
+            "type": "integer"
+          },
+          "num_adjusted_steps": {
+            "default": 100,
+            "minimum": 1,
+            "title": "Num Adjusted Steps",
+            "type": "integer"
+          },
+          "steps_per_sample": {
+            "default": 15,
+            "minimum": 1,
+            "title": "Steps Per Sample",
+            "type": "integer"
+          },
+          "initial_scale": {
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "title": "Initial Scale",
+            "type": "number"
+          },
+          "covariance_regularization": {
+            "default": 0.0001,
+            "exclusiveMinimum": 0,
+            "title": "Covariance Regularization",
+            "type": "number"
+          }
+        },
+        "title": "LapsInitializationSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "LapsInitializationSpec-Output": {
         "additionalProperties": false,
         "description": "Joint ensemble initialization; its draws are never reported as posterior samples.",
         "properties": {
@@ -17556,10 +17699,39 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "MarginalParticleGibbsSpec": {
+      "MCMCEvidence": {
         "additionalProperties": false,
-        "description": "Marginalized Particle Gibbs inference settings.",
+        "description": "The algorithm that sampled the exact joint state and parameter target.",
         "properties": {
+          "method": {
+            "default": "custom",
+            "enum": [
+              "nuts_da",
+              "custom"
+            ],
+            "title": "Method",
+            "type": "string"
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "title": "MCMCEvidence",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "MarginalParticleGibbsSpec-Input": {
+        "additionalProperties": false,
+        "description": "Custom inference seam, currently backed by LAPS and marginalized Particle Gibbs.",
+        "properties": {
+          "method": {
+            "const": "custom",
+            "default": "custom",
+            "title": "Method",
+            "type": "string"
+          },
           "n_parameter_particles": {
             "default": 2,
             "title": "N Parameter Particles",
@@ -17568,7 +17740,7 @@
           "tempering": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/GaussianReferenceTemperingSpec"
+                "$ref": "#/components/schemas/GaussianReferenceTemperingSpec-Input"
               },
               {
                 "type": "null"
@@ -17650,6 +17822,7 @@
                 "type": "string"
               }
             ],
+            "default": "infinity",
             "title": "Amala Grad Clip"
           },
           "dsmc_leaf_proposal": {
@@ -17736,7 +17909,208 @@
             "type": "string"
           },
           "laps": {
-            "$ref": "#/components/schemas/LapsInitializationSpec"
+            "$ref": "#/components/schemas/LapsInitializationSpec-Input"
+          },
+          "compute_latent_posterior_summary": {
+            "default": true,
+            "title": "Compute Latent Posterior Summary",
+            "type": "boolean"
+          }
+        },
+        "title": "MarginalParticleGibbsSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "MarginalParticleGibbsSpec-Output": {
+        "additionalProperties": false,
+        "description": "Custom inference seam, currently backed by LAPS and marginalized Particle Gibbs.",
+        "properties": {
+          "method": {
+            "const": "custom",
+            "default": "custom",
+            "title": "Method",
+            "type": "string"
+          },
+          "n_parameter_particles": {
+            "default": 2,
+            "title": "N Parameter Particles",
+            "type": "integer"
+          },
+          "tempering": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GaussianReferenceTemperingSpec-Output"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "latent_delta": {
+            "default": 0.2,
+            "title": "Latent Delta",
+            "type": "number"
+          },
+          "parameter_proposal": {
+            "default": "pseudo_langevin",
+            "enum": [
+              "random_walk",
+              "pseudo_langevin"
+            ],
+            "title": "Parameter Proposal",
+            "type": "string"
+          },
+          "amala_delta_init": {
+            "default": 0.01,
+            "title": "Amala Delta Init",
+            "type": "number"
+          },
+          "amala_delta_min": {
+            "default": 1e-05,
+            "title": "Amala Delta Min",
+            "type": "number"
+          },
+          "amala_delta_max": {
+            "default": 10.0,
+            "title": "Amala Delta Max",
+            "type": "number"
+          },
+          "amala_target_accept": {
+            "default": 0.75,
+            "title": "Amala Target Accept",
+            "type": "number"
+          },
+          "amala_adaptation_window": {
+            "default": 100,
+            "title": "Amala Adaptation Window",
+            "type": "integer"
+          },
+          "amala_adaptation_tolerance": {
+            "default": 0.05,
+            "title": "Amala Adaptation Tolerance",
+            "type": "number"
+          },
+          "amala_adaptation_rho": {
+            "default": 0.5,
+            "title": "Amala Adaptation Rho",
+            "type": "number"
+          },
+          "amala_adaptation_rho_min": {
+            "default": 0.001,
+            "title": "Amala Adaptation Rho Min",
+            "type": "number"
+          },
+          "amala_adaptation_gamma": {
+            "default": -0.5,
+            "title": "Amala Adaptation Gamma",
+            "type": "number"
+          },
+          "amala_kappa": {
+            "default": 0.75,
+            "title": "Amala Kappa",
+            "type": "number"
+          },
+          "amala_grad_clip": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "const": "infinity",
+                "type": "string"
+              }
+            ],
+            "default": "infinity",
+            "title": "Amala Grad Clip"
+          },
+          "dsmc_leaf_proposal": {
+            "$ref": "#/components/schemas/DSMCLeafProposal",
+            "default": "amala_exact"
+          },
+          "latent_block_coords": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Latent Block Coords"
+          },
+          "paid_mix_z_weight": {
+            "default": 0.85,
+            "title": "Paid Mix Z Weight",
+            "type": "number"
+          },
+          "paid_mix_pilot_weight": {
+            "default": 0.1,
+            "title": "Paid Mix Pilot Weight",
+            "type": "number"
+          },
+          "paid_mix_pilot_var_scale": {
+            "default": 0.25,
+            "title": "Paid Mix Pilot Var Scale",
+            "type": "number"
+          },
+          "paid_mix_wide_mult": {
+            "default": 4.0,
+            "title": "Paid Mix Wide Mult",
+            "type": "number"
+          },
+          "diagnostic_metrics_all": {
+            "default": false,
+            "title": "Diagnostic Metrics All",
+            "type": "boolean"
+          },
+          "diagnostic_metrics": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Diagnostic Metrics",
+            "type": "array"
+          },
+          "param_step_size": {
+            "default": 0.02,
+            "title": "Param Step Size",
+            "type": "number"
+          },
+          "param_step_size_min": {
+            "default": 1e-06,
+            "title": "Param Step Size Min",
+            "type": "number"
+          },
+          "param_step_size_max": {
+            "default": 1000.0,
+            "title": "Param Step Size Max",
+            "type": "number"
+          },
+          "param_target_accept": {
+            "default": 0.35,
+            "title": "Param Target Accept",
+            "type": "number"
+          },
+          "adaptation_rate": {
+            "default": 0.05,
+            "title": "Adaptation Rate",
+            "type": "number"
+          },
+          "adaptation_scheme": {
+            "default": "simple",
+            "enum": [
+              "simple",
+              "dual_averaging"
+            ],
+            "title": "Adaptation Scheme",
+            "type": "string"
+          },
+          "laps": {
+            "$ref": "#/components/schemas/LapsInitializationSpec-Output"
           },
           "compute_latent_posterior_summary": {
             "default": true,
@@ -17745,6 +18119,7 @@
           }
         },
         "required": [
+          "method",
           "n_parameter_particles",
           "tempering",
           "latent_delta",
@@ -19178,6 +19553,119 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "NutsDADiagnostics": {
+        "additionalProperties": false,
+        "description": "Realized NUTS adaptation and retained-tree saturation by vectorized chain.",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/SamplerSpec"
+          },
+          "mcmc_phase_seconds": {
+            "title": "Mcmc Phase Seconds",
+            "type": "number"
+          },
+          "final_step_size": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Final Step Size",
+            "type": "array"
+          },
+          "max_tree_depth_fraction": {
+            "title": "Max Tree Depth Fraction",
+            "type": "number"
+          }
+        },
+        "required": [
+          "settings",
+          "mcmc_phase_seconds",
+          "final_step_size",
+          "max_tree_depth_fraction"
+        ],
+        "title": "NutsDADiagnostics",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "NutsDASpec-Input": {
+        "additionalProperties": false,
+        "description": "Joint state/parameter NUTS with dual averaging and diagonal mass adaptation.",
+        "properties": {
+          "method": {
+            "const": "nuts_da",
+            "default": "nuts_da",
+            "title": "Method",
+            "type": "string"
+          },
+          "target_accept_prob": {
+            "default": 0.8,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Target Accept Prob",
+            "type": "number"
+          },
+          "max_tree_depth": {
+            "default": 10,
+            "minimum": 1,
+            "title": "Max Tree Depth",
+            "type": "integer"
+          },
+          "initial_step_size": {
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "title": "Initial Step Size",
+            "type": "number"
+          }
+        },
+        "title": "NutsDASpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "NutsDASpec-Output": {
+        "additionalProperties": false,
+        "description": "Joint state/parameter NUTS with dual averaging and diagonal mass adaptation.",
+        "properties": {
+          "method": {
+            "const": "nuts_da",
+            "default": "nuts_da",
+            "title": "Method",
+            "type": "string"
+          },
+          "target_accept_prob": {
+            "default": 0.8,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Target Accept Prob",
+            "type": "number"
+          },
+          "max_tree_depth": {
+            "default": 10,
+            "minimum": 1,
+            "title": "Max Tree Depth",
+            "type": "integer"
+          },
+          "initial_step_size": {
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "title": "Initial Step Size",
+            "type": "number"
+          }
+        },
+        "required": [
+          "method",
+          "target_accept_prob",
+          "max_tree_depth",
+          "initial_step_size"
+        ],
+        "title": "NutsDASpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "ObservationData": {
         "additionalProperties": {
           "$ref": "#/components/schemas/ObservationHistory"
@@ -20361,16 +20849,6 @@
           "status"
         ],
         "title": "ParetoKPoint",
-        "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "ParticleMCMCEvidence": {
-        "additionalProperties": false,
-        "description": "The production particle-MCMC target and its exact latent transition.",
-        "properties": {},
-        "title": "ParticleMCMCEvidence",
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
@@ -22139,7 +22617,7 @@
       },
       "SamplerSpec": {
         "additionalProperties": false,
-        "description": "Fully resolved controls for the exact particle sampler.",
+        "description": "Fully resolved controls for exact joint state and parameter inference.",
         "properties": {
           "num_warmup": {
             "default": 4000,
@@ -22176,8 +22654,8 @@
             "title": "Retain Latent Paths",
             "type": "boolean"
           },
-          "marginal_particle_gibbs": {
-            "$ref": "#/components/schemas/MarginalParticleGibbsSpec"
+          "algorithm": {
+            "$ref": "#/components/schemas/InferenceAlgorithmSpec-Output"
           }
         },
         "required": [
@@ -22187,7 +22665,7 @@
           "seed",
           "num_particles",
           "retain_latent_paths",
-          "marginal_particle_gibbs"
+          "algorithm"
         ],
         "title": "SamplerSpec",
         "type": "object",

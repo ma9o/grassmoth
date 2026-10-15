@@ -11,6 +11,7 @@ import numpyro.distributions as dist
 
 from nof1_causal_lab.artifacts.probability.families import DistributionFamily
 from nof1_causal_lab.models.ssm.compile.interval_tree import compile_interval_tree
+from nof1_causal_lab.models.ssm.compile.observation_partition import CompiledObservationPartition
 from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
 from nof1_causal_lab.models.ssm.execution.contracts import MeasurementParams
 from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
@@ -116,6 +117,7 @@ def interval_target(
             (),
             ParallelRecurrences(()),
         ),
+        CompiledObservationPartition(tuple(range(channels)), ()),
         intervals=intervals,
     )
 

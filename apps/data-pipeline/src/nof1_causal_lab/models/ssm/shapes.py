@@ -28,8 +28,8 @@ Axis        Meaning
 Conventions
 -----------
 - Dtypes stay generic: ``Float`` / ``Int``, never bit-width pinned.
-  The runtime is float32 but some parameter paths are float64, and ``Float``
-  accepts both.
+  Production JAX defaults to float32; explicit reference calculations can use
+  float64, and ``Float`` accepts both.
 - A floating-point scalar is ``Float[Array, ""]`` — exported as :data:`FloatScalar`.
 - PRNG keys are :data:`PRNGKeyArray` (accepts old ``uint32[2]`` and typed keys).
 - Rank-polymorphic helpers use ``*batch`` for leading axes they pass through.

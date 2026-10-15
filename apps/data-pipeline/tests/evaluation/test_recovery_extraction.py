@@ -9,7 +9,7 @@ from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from nof1_causal_lab.models.ssm.inference.types import (
     JointPosteriorDraws,
-    ParticleMCMCPosterior,
+    MCMCPosterior,
     ProductionDiagnostics,
 )
 
@@ -41,7 +41,7 @@ def test_recovery_and_ess_share_target_coordinates_and_scales(monkeypatch):
         num_chains=1,
         num_samples=4,
     )
-    result = ParticleMCMCPosterior.from_run(
+    result = MCMCPosterior.from_run(
         draws=JointPosteriorDraws(mcmc.get_samples()),
         diagnostics=ProductionDiagnostics(
             mcmc=mcmc, observation_log_probs=jnp.zeros((mcmc.num_chains, mcmc.num_samples, 0))

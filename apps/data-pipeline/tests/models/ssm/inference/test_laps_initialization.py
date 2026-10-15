@@ -10,18 +10,19 @@ import pytest
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.model.expressions import state
 from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec
+from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
 from nof1_causal_lab.artifacts.sampling import (
     LapsInitializationSpec,
     MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from nof1_causal_lab.models.ssm.inference.fit import fit
+from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
-from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior
+from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
 from nof1_causal_lab.models.ssm.inference.warmup import laps_ensemble
 from nof1_causal_lab.models.ssm.inference.warmup.laps import (
     LapsInitializationResult,
-    build_laps_coordinates,
     prepare_laps_initialization,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import run_laps_ensemble
@@ -61,8 +62,8 @@ def test_laps_chart_preserves_exact_density_and_directional_gradients(nonlinear)
         ).runtime
     else:
         target, _, _ = gaussian_interval_case()
-    chart = build_laps_coordinates(target)
-    point = jnp.linspace(-0.4, 0.5, chart.sampling_dimension)
+    chart = build_joint_coordinates(target)
+    point = jnp.linspace(-0.4, 0.5, chart.dimension)
 
     def native_coordinates(q):
         parameters, path = chart.decode(q)
@@ -110,8 +111,8 @@ def test_laps_chart_excludes_fixed_states_and_replays_static_and_accumulated_sta
     target = problem.runtime
     assert target.exact_constraints is not None
     values = target.exact_constraints.values
-    chart = build_laps_coordinates(target)
-    _, path = jax.jit(chart.decode)(jnp.linspace(-0.5, 0.5, chart.sampling_dimension))
+    chart = build_joint_coordinates(target)
+    _, path = jax.jit(chart.decode)(jnp.linspace(-0.5, 0.5, chart.dimension))
     assert chart.dimension == target.initial_position.size + int(
         jnp.sum(target.independent_mask & jnp.isnan(values))
     )
@@ -202,7 +203,7 @@ def test_production_fit_consumes_laps_package(leaf):
             num_chains=2,
             num_particles=4,
             seed=7,
-            marginal_particle_gibbs=MarginalParticleGibbsSpec(
+            algorithm=MarginalParticleGibbsSpec(
                 dsmc_leaf_proposal=leaf,
                 laps=LapsInitializationSpec(
                     ensemble_size=128, num_unadjusted_steps=1000, num_adjusted_steps=20
@@ -212,9 +213,9 @@ def test_production_fit_consumes_laps_package(leaf):
         reparam=None,
         clock=time.monotonic,
     )
-    assert isinstance(result, ParticleMCMCPosterior)
-    evidence = result.diagnostics.marginal_particle_gibbs
-    assert evidence is not None
+    assert isinstance(result, MCMCPosterior)
+    evidence = result.diagnostics.sampler_diagnostics
+    assert isinstance(evidence, ParticleSamplerDiagnostics)
     assert evidence.initialization.ensemble_size == 128
     assert evidence.parameter_preconditioned
     assert result.draws.latent_paths is not None

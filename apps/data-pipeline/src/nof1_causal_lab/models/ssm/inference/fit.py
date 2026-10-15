@@ -2,7 +2,9 @@
 
 Separates inference from model definition. CompiledDynamicalModel owns the numerical model; this module provides fit() to run inference with the supported backends.
 
-Method:
+Methods:
+- NUTS-DA: joint parameter/trajectory updates with dual averaging and diagonal
+  mass adaptation, with independent chains advanced together.
 - Marginalized Particle Gibbs: collapsed joint parameter/trajectory updates
   using the dSMC smoother with exactly corrected aMALA or PAID-mixture leaf
   proposals.
@@ -12,6 +14,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
+from nof1_causal_lab.artifacts.sampling import NutsDASpec
 from nof1_causal_lab.models.ssm.inference.reparameterization import AutoReparam
 from nof1_causal_lab.models.ssm.preparation.preflight import (
     ObservationPreflightFailure,
@@ -25,7 +28,7 @@ if TYPE_CHECKING:
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.inference.types import (
-        ParticleMCMCPosterior,
+        MCMCPosterior,
     )
     from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
@@ -40,12 +43,23 @@ def fit(
     sampler: SamplerSpec,
     reparam: Strategy | Literal["auto"] | None = "auto",
     clock: Callable[[], float],
-) -> ParticleMCMCPosterior | ObservationPreflightFailure | InitializationFailure:
-    """Run the production particle sampler on resolved numerical controls."""
+) -> MCMCPosterior | ObservationPreflightFailure | InitializationFailure:
+    """Dispatch exact joint inference through the selected algorithm's owned settings."""
     failure = validate_observations_for_fit(priors, panel)
     if failure is not None:
         return failure
     resolved_reparam = AutoReparam(centered=0.0) if reparam == "auto" else reparam
+    if isinstance(sampler.algorithm, NutsDASpec):
+        from nof1_causal_lab.models.ssm.inference.nuts_da import fit_nuts_da
+
+        return fit_nuts_da(
+            priors,
+            panel,
+            compute_budget=compute_budget,
+            sampler=sampler,
+            reparam=resolved_reparam,
+            clock=clock,
+        )
     from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.fit import (
         fit_marginal_particle_gibbs,
     )

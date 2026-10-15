@@ -176,8 +176,19 @@ class LOODiagnostics(Value):
     pareto_failure_limit: float = 0.7
 
 
-class ParticleMCMCEvidence(Value):
-    """The production particle-MCMC target and its exact latent transition."""
+class MCMCEvidence(Value):
+    """The algorithm that sampled the exact joint state and parameter target."""
+
+    method: Literal["nuts_da", "custom"] = "custom"
+
+
+class NutsDADiagnostics(Value):
+    """Realized NUTS adaptation and retained-tree saturation by vectorized chain."""
+
+    settings: SamplerSpec
+    mcmc_phase_seconds: float
+    final_step_size: tuple[float, ...]
+    max_tree_depth_fraction: float
 
 
 class PosteriorMarginal(Value):

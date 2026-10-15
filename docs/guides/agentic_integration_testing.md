@@ -75,6 +75,10 @@ numerical child, including tests that also carry `contract`. Web unit tests belo
 the separate `visual` project owns screenshot stories. The root
 `test:fixture-promotion` command owns fixture-promotion checks.
 
+The [shared pytest fixtures](../../apps/data-pipeline/conftest.py) force fitting onto
+`local` and reject live Modal app runs. Hardware routing contracts exercise the
+production selector with a mocked Modal boundary.
+
 ### Choosing tests for a change
 
 Before testing, identify the behavior changed and its direct consumers, then choose
@@ -173,8 +177,12 @@ process — no need to bounce the whole stack. If the supervisor was started wit
 `up --no-deps web`, `process-compose project update` can disable its dependency
 processes; check that Temporal is still running afterward.
 
-For local-study GPU fits, set `inference.compute_backend: modal` in
+For local-study GPU fits, select `inference.hardware: L40S` (the default) in
 [`config.yaml`](../../apps/data-pipeline/config.yaml) and restart the worker.
+Use `local` to fit on this machine; the other
+[hardware enum values](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/sampling.py)
+select Modal GPUs. Select `inference.sampler.algorithm: {method: nuts_da}` for
+joint parameter/state NUTS, or `method: custom` with the custom sampler's settings.
 The [Modal compute adapter](../../apps/data-pipeline/src/nof1_causal_lab/actions/fit/remote.py)
 uses the installed Modal credentials, creates an ephemeral
 `nof1-causal-lab-pipeline` app with the current source, and reuses

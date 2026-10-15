@@ -23,6 +23,7 @@ const extraction = {
 const source = { files: ["input/test.csv"] as const, hashes: {}, start: null, end: null };
 const design = { start: "2026-01-01", horizon: "1d", interventions: [] };
 const settings = {
+  algorithm: null,
   num_samples_per_chain: null,
   num_warmup: null,
   num_chains: null,

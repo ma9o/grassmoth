@@ -4071,9 +4071,11 @@ export interface components {
         };
         /**
          * FitSettingsSpec
-         * @description Optional numerical controls applied to the configured particle sampler.
+         * @description Optional numerical controls applied to the configured joint sampler.
          */
         readonly "FitSettingsSpec-Input": {
+            /** @default null */
+            readonly algorithm?: components["schemas"]["InferenceAlgorithmSpec-Input"] | null;
             /**
              * Num Samples Per Chain
              * @default null
@@ -4102,9 +4104,11 @@ export interface components {
         };
         /**
          * FitSettingsSpec
-         * @description Optional numerical controls applied to the configured particle sampler.
+         * @description Optional numerical controls applied to the configured joint sampler.
          */
         readonly "FitSettingsSpec-Output": {
+            /** @default null */
+            readonly algorithm: components["schemas"]["InferenceAlgorithmSpec-Output"] | null;
             /**
              * Num Samples Per Chain
              * @default null
@@ -4168,7 +4172,33 @@ export interface components {
          *     swaps alternate. Rejection-based ladder adaptation runs during the first half
          *     of warmup, leaving the rest to settle before retaining posterior draws.
          */
-        readonly GaussianReferenceTemperingSpec: {
+        readonly "GaussianReferenceTemperingSpec-Input": {
+            /**
+             * Num Temperatures
+             * @default 48
+             */
+            readonly num_temperatures?: number;
+            /**
+             * Reference Scale
+             * @default 1
+             */
+            readonly reference_scale?: number;
+            /**
+             * Adaptation Interval
+             * @default 500
+             */
+            readonly adaptation_interval?: number;
+        };
+        /**
+         * GaussianReferenceTemperingSpec
+         * @description Optional replica exchange; each ladder retains only its exact beta-one chain.
+         *
+         *     The ladder spans beta one to zero. The reference is fixed at initialization,
+         *     its endpoint is independently refreshed every sweep, and even/odd neighboring
+         *     swaps alternate. Rejection-based ladder adaptation runs during the first half
+         *     of warmup, leaving the rest to settle before retaining posterior draws.
+         */
+        readonly "GaussianReferenceTemperingSpec-Output": {
             /**
              * Num Temperatures
              * @default 48
@@ -4331,6 +4361,8 @@ export interface components {
             /** @description Whether higher values move with (positive) or against (negative) the construct. */
             readonly construct_polarity: components["schemas"]["IndicatorPolarity"];
         };
+        readonly "InferenceAlgorithmSpec-Input": components["schemas"]["NutsDASpec-Input"] | components["schemas"]["MarginalParticleGibbsSpec-Input"];
+        readonly "InferenceAlgorithmSpec-Output": components["schemas"]["NutsDASpec-Output"] | components["schemas"]["MarginalParticleGibbsSpec-Output"];
         /**
          * InferenceEvidence
          * @description Native telemetry buffers; posterior atoms and coordinates belong to the model.
@@ -4373,8 +4405,9 @@ export interface components {
             readonly num_chains: number;
             /** Duration Seconds */
             readonly duration_seconds: number;
-            readonly engine: components["schemas"]["ParticleMCMCEvidence"];
-            readonly sampler_diagnostics: components["schemas"]["ParticleSamplerDiagnostics"] | null;
+            readonly engine: components["schemas"]["MCMCEvidence"];
+            /** Sampler Diagnostics */
+            readonly sampler_diagnostics: components["schemas"]["ParticleSamplerDiagnostics"] | components["schemas"]["NutsDADiagnostics"] | null;
         };
         /**
          * InferenceReport
@@ -4601,7 +4634,43 @@ export interface components {
          * LapsInitializationSpec
          * @description Joint ensemble initialization; its draws are never reported as posterior samples.
          */
-        readonly LapsInitializationSpec: {
+        readonly "LapsInitializationSpec-Input": {
+            /**
+             * Ensemble Size
+             * @default 1024
+             */
+            readonly ensemble_size?: number;
+            /**
+             * Num Unadjusted Steps
+             * @default 10000
+             */
+            readonly num_unadjusted_steps?: number;
+            /**
+             * Num Adjusted Steps
+             * @default 100
+             */
+            readonly num_adjusted_steps?: number;
+            /**
+             * Steps Per Sample
+             * @default 15
+             */
+            readonly steps_per_sample?: number;
+            /**
+             * Initial Scale
+             * @default 1
+             */
+            readonly initial_scale?: number;
+            /**
+             * Covariance Regularization
+             * @default 0.0001
+             */
+            readonly covariance_regularization?: number;
+        };
+        /**
+         * LapsInitializationSpec
+         * @description Joint ensemble initialization; its draws are never reported as posterior samples.
+         */
+        readonly "LapsInitializationSpec-Output": {
             /**
              * Ensemble Size
              * @default 1024
@@ -4720,17 +4789,192 @@ export interface components {
             readonly snippet: string;
         };
         /**
-         * MarginalParticleGibbsSpec
-         * @description Marginalized Particle Gibbs inference settings.
+         * MCMCEvidence
+         * @description The algorithm that sampled the exact joint state and parameter target.
          */
-        readonly MarginalParticleGibbsSpec: {
+        readonly MCMCEvidence: {
+            /**
+             * Method
+             * @default custom
+             * @enum {string}
+             */
+            readonly method: "nuts_da" | "custom";
+        };
+        /**
+         * MarginalParticleGibbsSpec
+         * @description Custom inference seam, currently backed by LAPS and marginalized Particle Gibbs.
+         */
+        readonly "MarginalParticleGibbsSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "custom";
+            /**
+             * N Parameter Particles
+             * @default 2
+             */
+            readonly n_parameter_particles?: number;
+            /** @default null */
+            readonly tempering?: components["schemas"]["GaussianReferenceTemperingSpec-Input"] | null;
+            /**
+             * Latent Delta
+             * @default 0.2
+             */
+            readonly latent_delta?: number;
+            /**
+             * Parameter Proposal
+             * @default pseudo_langevin
+             * @enum {string}
+             */
+            readonly parameter_proposal?: "random_walk" | "pseudo_langevin";
+            /**
+             * Amala Delta Init
+             * @default 0.01
+             */
+            readonly amala_delta_init?: number;
+            /**
+             * Amala Delta Min
+             * @default 0.00001
+             */
+            readonly amala_delta_min?: number;
+            /**
+             * Amala Delta Max
+             * @default 10
+             */
+            readonly amala_delta_max?: number;
+            /**
+             * Amala Target Accept
+             * @default 0.75
+             */
+            readonly amala_target_accept?: number;
+            /**
+             * Amala Adaptation Window
+             * @default 100
+             */
+            readonly amala_adaptation_window?: number;
+            /**
+             * Amala Adaptation Tolerance
+             * @default 0.05
+             */
+            readonly amala_adaptation_tolerance?: number;
+            /**
+             * Amala Adaptation Rho
+             * @default 0.5
+             */
+            readonly amala_adaptation_rho?: number;
+            /**
+             * Amala Adaptation Rho Min
+             * @default 0.001
+             */
+            readonly amala_adaptation_rho_min?: number;
+            /**
+             * Amala Adaptation Gamma
+             * @default -0.5
+             */
+            readonly amala_adaptation_gamma?: number;
+            /**
+             * Amala Kappa
+             * @default 0.75
+             */
+            readonly amala_kappa?: number;
+            /**
+             * Amala Grad Clip
+             * @default infinity
+             */
+            readonly amala_grad_clip?: number | "infinity";
+            /** @default amala_exact */
+            readonly dsmc_leaf_proposal?: components["schemas"]["DSMCLeafProposal"];
+            /**
+             * Latent Block Coords
+             * @default null
+             */
+            readonly latent_block_coords?: number | null;
+            /**
+             * Paid Mix Z Weight
+             * @default 0.85
+             */
+            readonly paid_mix_z_weight?: number;
+            /**
+             * Paid Mix Pilot Weight
+             * @default 0.1
+             */
+            readonly paid_mix_pilot_weight?: number;
+            /**
+             * Paid Mix Pilot Var Scale
+             * @default 0.25
+             */
+            readonly paid_mix_pilot_var_scale?: number;
+            /**
+             * Paid Mix Wide Mult
+             * @default 4
+             */
+            readonly paid_mix_wide_mult?: number;
+            /**
+             * Diagnostic Metrics All
+             * @default false
+             */
+            readonly diagnostic_metrics_all?: boolean;
+            /**
+             * Diagnostic Metrics
+             * @default []
+             */
+            readonly diagnostic_metrics?: readonly string[];
+            /**
+             * Param Step Size
+             * @default 0.02
+             */
+            readonly param_step_size?: number;
+            /**
+             * Param Step Size Min
+             * @default 0.000001
+             */
+            readonly param_step_size_min?: number;
+            /**
+             * Param Step Size Max
+             * @default 1000
+             */
+            readonly param_step_size_max?: number;
+            /**
+             * Param Target Accept
+             * @default 0.35
+             */
+            readonly param_target_accept?: number;
+            /**
+             * Adaptation Rate
+             * @default 0.05
+             */
+            readonly adaptation_rate?: number;
+            /**
+             * Adaptation Scheme
+             * @default simple
+             * @enum {string}
+             */
+            readonly adaptation_scheme?: "simple" | "dual_averaging";
+            readonly laps?: components["schemas"]["LapsInitializationSpec-Input"];
+            /**
+             * Compute Latent Posterior Summary
+             * @default true
+             */
+            readonly compute_latent_posterior_summary?: boolean;
+        };
+        /**
+         * MarginalParticleGibbsSpec
+         * @description Custom inference seam, currently backed by LAPS and marginalized Particle Gibbs.
+         */
+        readonly "MarginalParticleGibbsSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "custom";
             /**
              * N Parameter Particles
              * @default 2
              */
             readonly n_parameter_particles: number;
             /** @default null */
-            readonly tempering: components["schemas"]["GaussianReferenceTemperingSpec"] | null;
+            readonly tempering: components["schemas"]["GaussianReferenceTemperingSpec-Output"] | null;
             /**
              * Latent Delta
              * @default 0.2
@@ -4792,7 +5036,10 @@ export interface components {
              * @default 0.75
              */
             readonly amala_kappa: number;
-            /** Amala Grad Clip */
+            /**
+             * Amala Grad Clip
+             * @default infinity
+             */
             readonly amala_grad_clip: number | "infinity";
             /** @default amala_exact */
             readonly dsmc_leaf_proposal: components["schemas"]["DSMCLeafProposal"];
@@ -4862,7 +5109,7 @@ export interface components {
              * @enum {string}
              */
             readonly adaptation_scheme: "simple" | "dual_averaging";
-            readonly laps: components["schemas"]["LapsInitializationSpec"];
+            readonly laps: components["schemas"]["LapsInitializationSpec-Output"];
             /**
              * Compute Latent Posterior Summary
              * @default true
@@ -5283,6 +5530,71 @@ export interface components {
              */
             readonly npy: Uint8Array;
         };
+        /**
+         * NutsDADiagnostics
+         * @description Realized NUTS adaptation and retained-tree saturation by vectorized chain.
+         */
+        readonly NutsDADiagnostics: {
+            readonly settings: components["schemas"]["SamplerSpec"];
+            /** Mcmc Phase Seconds */
+            readonly mcmc_phase_seconds: number;
+            /** Final Step Size */
+            readonly final_step_size: readonly number[];
+            /** Max Tree Depth Fraction */
+            readonly max_tree_depth_fraction: number;
+        };
+        /**
+         * NutsDASpec
+         * @description Joint state/parameter NUTS with dual averaging and diagonal mass adaptation.
+         */
+        readonly "NutsDASpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "nuts_da";
+            /**
+             * Target Accept Prob
+             * @default 0.8
+             */
+            readonly target_accept_prob?: number;
+            /**
+             * Max Tree Depth
+             * @default 10
+             */
+            readonly max_tree_depth?: number;
+            /**
+             * Initial Step Size
+             * @default 1
+             */
+            readonly initial_step_size?: number;
+        };
+        /**
+         * NutsDASpec
+         * @description Joint state/parameter NUTS with dual averaging and diagonal mass adaptation.
+         */
+        readonly "NutsDASpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "nuts_da";
+            /**
+             * Target Accept Prob
+             * @default 0.8
+             */
+            readonly target_accept_prob: number;
+            /**
+             * Max Tree Depth
+             * @default 10
+             */
+            readonly max_tree_depth: number;
+            /**
+             * Initial Step Size
+             * @default 1
+             */
+            readonly initial_step_size: number;
+        };
         readonly ObservationData: Readonly<Partial<Record<components["schemas"]["IndicatorId-Output"], components["schemas"]["ObservationHistory"]>>>;
         /**
          * ObservationHistory
@@ -5538,11 +5850,6 @@ export interface components {
              */
             readonly status: "passed" | "failed" | "not_evaluated";
         };
-        /**
-         * ParticleMCMCEvidence
-         * @description The production particle-MCMC target and its exact latent transition.
-         */
-        readonly ParticleMCMCEvidence: Record<string, never>;
         /**
          * ParticleSamplerDiagnostics
          * @description Typed exact-sampler settings and transition telemetry from the native producer.
@@ -6122,7 +6429,7 @@ export interface components {
         };
         /**
          * SamplerSpec
-         * @description Fully resolved controls for the exact particle sampler.
+         * @description Fully resolved controls for exact joint state and parameter inference.
          */
         readonly SamplerSpec: {
             /**
@@ -6155,7 +6462,7 @@ export interface components {
              * @default true
              */
             readonly retain_latent_paths: boolean;
-            readonly marginal_particle_gibbs: components["schemas"]["MarginalParticleGibbsSpec"];
+            readonly algorithm: components["schemas"]["InferenceAlgorithmSpec-Output"];
         };
         /**
          * ScalarStatisticComparison

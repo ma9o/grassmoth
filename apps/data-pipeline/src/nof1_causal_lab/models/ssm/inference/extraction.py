@@ -1,4 +1,4 @@
-"""Posterior sample extraction shared by particle MCMC methods."""
+"""Posterior sample extraction shared by exact joint MCMC methods."""
 
 from __future__ import annotations
 

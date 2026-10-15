@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.identity import ConstructId
     from nof1_causal_lab.artifacts.observations.spec import ResolvedObservationSpec
     from nof1_causal_lab.artifacts.probability.serialization import ArrayLoader
-    from nof1_causal_lab.artifacts.sampling import SamplerSpec
+    from nof1_causal_lab.artifacts.sampling import InferenceHardware, SamplerSpec
     from nof1_causal_lab.models.structure import StructuralSelection
 
 _FIT_CPU_CORES = 8
@@ -109,10 +109,12 @@ def _fit_gpu(payload: FitComputeInput) -> FitComputeResult:
     return result
 
 
-def _dispatch_fit(payload: FitComputeInput, *, timeout: int = 10800) -> FitComputeResult:
+def _dispatch_fit(
+    payload: FitComputeInput, *, hardware: InferenceHardware, timeout: int = 14400
+) -> FitComputeResult:
     import modal
 
-    from nof1_causal_lab.compute.modal_images import GPU_A100_80GB, gpu_image
+    from nof1_causal_lab.compute.modal_images import gpu_image
 
     # A separate ephemeral app per call supports concurrent local study workers
     # and ships their current source; no deployed production function is replaced.
@@ -134,7 +136,7 @@ def _dispatch_fit(payload: FitComputeInput, *, timeout: int = 10800) -> FitCompu
             "OMP_NUM_THREADS": "1",
             "MKL_NUM_THREADS": "1",
         },
-        gpu=GPU_A100_80GB,
+        gpu=hardware.value,
         cpu=_FIT_CPU_CORES,
         memory=_FIT_HOST_MEMORY_MIB,
         timeout=timeout,
@@ -146,6 +148,7 @@ def _dispatch_fit(payload: FitComputeInput, *, timeout: int = 10800) -> FitCompu
 
 
 def fit_on_modal(
+    hardware: InferenceHardware,
     *,
     selection: StructuralSelection,
     data_for_model: ObservationDataset,
@@ -169,7 +172,8 @@ def fit_on_modal(
             time_origin=time_origin,
             sampler=sampler,
             compute_loo_diagnostics=compute_loo_diagnostics,
-        )
+        ),
+        hardware=hardware,
     )
     # Validate the complete response before the first local write. Exceptions
     # propagate to the action's normal error path; there is no local retry.

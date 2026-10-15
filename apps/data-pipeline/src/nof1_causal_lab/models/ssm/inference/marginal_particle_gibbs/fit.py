@@ -12,9 +12,10 @@ import numpy as np
 
 from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
+from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec
 from nof1_causal_lab.models.ssm.compile.state_space import SequentialRecurrences
 from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.extraction import (
+from nof1_causal_lab.models.ssm.inference.extraction import (
     build_pmcmc_mcmc_result,
     extract_grouped_public_samples,
 )
@@ -31,8 +32,8 @@ from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.tempering impo
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.inference.types import (
     JointPosteriorDraws,
-    ParticleMCMCEvidence,
-    ParticleMCMCPosterior,
+    MCMCEvidence,
+    MCMCPosterior,
     ProductionDiagnostics,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
@@ -61,7 +62,7 @@ def fit_marginal_particle_gibbs(
     sampler: SamplerSpec,
     reparam: Strategy | None = None,
     clock: Callable[[], float],
-) -> ParticleMCMCPosterior | InitializationFailure:
+) -> MCMCPosterior | InitializationFailure:
     """Run exact particle inference with resolved choices and owned warmup outputs."""
     recurrence = panel.compiled_dynamical_model.state_space.recurrence
     if isinstance(recurrence, SequentialRecurrences):
@@ -74,7 +75,8 @@ def fit_marginal_particle_gibbs(
             + ", ".join(names)
         )
     observations = panel.observations
-    options = sampler.marginal_particle_gibbs
+    options = sampler.algorithm
+    assert isinstance(options, MarginalParticleGibbsSpec)
     overall_t0 = clock()
     logger.info(
         "marginal_particle_gibbs entry: chains=%d warmup=%d samples=%d T=%d "
@@ -294,8 +296,8 @@ def fit_marginal_particle_gibbs(
         )
         if run_result.latent_paths is not None
         else None,
-        marginal_particle_gibbs=kernel_diagnostics,
-        marginal_particle_gibbs_phase_extra_fields={
+        sampler_diagnostics=kernel_diagnostics,
+        phase_extra_fields={
             "warmup": run_result.warmup_chain_extra_fields,
             "post_warmup": run_result.chain_extra_fields,
             "all": run_result.all_chain_extra_fields,
@@ -317,7 +319,7 @@ def fit_marginal_particle_gibbs(
         (clock() - overall_t0),
     )
     latent_paths = run_result.latent_paths
-    return ParticleMCMCPosterior.from_run(
+    return MCMCPosterior.from_run(
         draws=JointPosteriorDraws(
             parameters=mcmc.get_samples(),
             latent_paths=latent_paths.reshape((-1, *latent_paths.shape[2:]))
@@ -327,5 +329,5 @@ def fit_marginal_particle_gibbs(
         diagnostics=diagnostics,
         initial_latent_delta=run_result.initial_latent_delta,
         final_latent_delta=run_result.final_latent_delta,
-        evidence=ParticleMCMCEvidence(),
+        evidence=MCMCEvidence(),
     )

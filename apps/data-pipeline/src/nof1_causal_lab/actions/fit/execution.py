@@ -18,7 +18,7 @@ from nof1_causal_lab.artifacts.sampling import SamplerSpec
 from nof1_causal_lab.compute.resources import read_compute_budget
 from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.compile.observation_windows import compile_observation_scan
-from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior
+from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel, PreparedFit, prepare_fit
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
@@ -41,7 +41,7 @@ class FittedModelResult(TypedDict, closed=True):
 
     fitted: Literal[True]
     duration_seconds: float
-    result: ParticleMCMCPosterior
+    result: MCMCPosterior
     panel: BoundPanel
 
 
@@ -69,7 +69,7 @@ def resolve_sampler_spec(settings: FitSettingsSpec) -> SamplerSpec:
         if settings.num_particles is None
         else settings.num_particles,
         retain_latent_paths=True,
-        marginal_particle_gibbs=configured.marginal_particle_gibbs,
+        algorithm=configured.algorithm if settings.algorithm is None else settings.algorithm,
     )
 
 
@@ -77,7 +77,7 @@ def fit_prepared_model(
     prepared: PreparedFit,
     *,
     sampler: SamplerSpec,
-) -> ParticleMCMCPosterior | ObservationPreflightFailure | InitializationFailure:
+) -> MCMCPosterior | ObservationPreflightFailure | InitializationFailure:
     """Run on resolved sampler choices and the sampler's owned initialization."""
     from nof1_causal_lab.bootstrap import initialize_numerical_runtime
 
@@ -149,7 +149,7 @@ def fit_model(
     time_origin: datetime,
     sampler: SamplerSpec,
 ) -> FittedModelResult | ModelFitFailure:
-    """Fit the selected SSM to one observation history with the production particle sampler.
+    """Fit the selected SSM to one observation history with the selected joint sampler.
 
     Args:
         selection: Pinned scientific model scoped to the study question's outcome.
@@ -169,7 +169,7 @@ def fit_model(
         "Fitting model: rows=%d indicators=%d sampler=%s",
         sum(len(series.rows) for series in data_for_model.series.values()),
         len(data_for_model.series),
-        "marginal_particle_gibbs",
+        sampler.algorithm.method,
     )
     t0 = time.monotonic()
 
@@ -203,7 +203,7 @@ def fit_model(
         _format_name_preview(numeric.observation_names(panel.compiled_dynamical_model), limit=6),
     )
 
-    # Fit the model — returns a production particle posterior.
+    # Fit the model and retain the exact joint posterior.
     logger.info("Starting inference kernel...")
     fit_t0 = time.monotonic()
     result = fit_prepared_model(prepared, sampler=sampler)
@@ -214,7 +214,7 @@ def fit_model(
             "duration_seconds": _fit_elapsed_seconds(t0),
         }
     logger.info(
-        "Particle inference complete in %.1fs: wide_rows=%d manifest_vars=%d",
+        "Inference complete in %.1fs: wide_rows=%d manifest_vars=%d",
         _fit_elapsed_seconds(fit_t0),
         len(panel.times),
         len(numeric.observation_names(panel.compiled_dynamical_model)),

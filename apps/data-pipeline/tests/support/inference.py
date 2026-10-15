@@ -71,12 +71,12 @@ def inference_log(
 def inference_metadata(model):
     """Metadata for an explicit test-owned joint law with one retained chain."""
     from nof1_causal_lab.artifacts.reports.inference import InferenceMetadata
-    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleMCMCEvidence
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import MCMCEvidence
 
     identity = next(iter(model.law_layouts))
     return InferenceMetadata(
         distribution=identity,
-        engine=ParticleMCMCEvidence(),
+        engine=MCMCEvidence(),
         duration_seconds=0,
         num_samples_total=len(empirical_atoms(model.distributions[identity])),
         num_chains=1,
@@ -95,8 +95,8 @@ def _report(model):
     from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
         ChainDiagnostics,
         LatentDiagnostics,
+        MCMCEvidence,
         ParameterDiagnostics,
-        ParticleMCMCEvidence,
     )
     from nof1_causal_lab.models.ssm.compile.bindings import parameter_bindings
     from nof1_causal_lab.models.ssm.inference.diagnostics.convergence import chain_convergence
@@ -139,7 +139,7 @@ def _report(model):
                 num_samples_total=12,
                 num_chains=4,
                 duration_seconds=0,
-                engine=ParticleMCMCEvidence(),
+                engine=MCMCEvidence(),
                 sampler_diagnostics=None,
             ),
             inference_diagnostics=diagnostics,
@@ -155,13 +155,13 @@ def particle_posterior(draws):
     """Publish explicit single-chain test telemetry with fixed supplied draws."""
     from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
     from nof1_causal_lab.models.ssm.inference.types import (
-        ParticleMCMCPosterior,
+        MCMCPosterior,
         ProductionDiagnostics,
     )
 
     chain_samples = {name: values[None, ...] for name, values in draws.parameters.items()}
     n_samples = draws.describe().n_draws
-    return ParticleMCMCPosterior.from_run(
+    return MCMCPosterior.from_run(
         draws=draws,
         diagnostics=ProductionDiagnostics(
             mcmc=TrajectoryMCMCResult(

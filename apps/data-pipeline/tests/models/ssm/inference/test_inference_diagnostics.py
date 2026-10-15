@@ -71,7 +71,7 @@ def particle_posterior():
     from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
     from nof1_causal_lab.models.ssm.inference.types import (
         JointPosteriorDraws,
-        ParticleMCMCPosterior,
+        MCMCPosterior,
     )
 
     rng = np.random.default_rng(1)
@@ -87,6 +87,7 @@ def particle_posterior():
         chain_extra_fields={
             "diverging": jnp.asarray(divergences),
             "num_steps": jnp.full((2, 64), 4),
+            "tree_depth": jnp.full((2, 64), 3),
             "accept_prob": jnp.full((2, 64), 0.84),
             "energy": jnp.asarray(4.0 + rng.normal(size=(2, 64))),
         },
@@ -94,7 +95,7 @@ def particle_posterior():
         num_samples=64,
         backend="marginal_particle_gibbs",
     )
-    return ParticleMCMCPosterior.from_run(
+    return MCMCPosterior.from_run(
         draws=JointPosteriorDraws(parameters=mcmc.get_samples()),
         diagnostics=ProductionDiagnostics(
             mcmc=mcmc, observation_log_probs=jnp.zeros((mcmc.num_chains, mcmc.num_samples, 0))
@@ -112,7 +113,7 @@ def test_mcmc_report_preserves_coordinate_metrics_chains_and_sampler_statistics(
     assert report.num_samples_per_chain == 64
     assert report.num_divergences == 1
     assert report.divergence_rate == pytest.approx(1 / 128)
-    assert report.tree_depth_mean == report.tree_depth_max == 4
+    assert report.tree_depth_mean == report.tree_depth_max == 3
     assert report.accept_prob_mean == pytest.approx(0.84)
     assert len(report.energy.bfmi) == 2
     assert all(np.isfinite(value) and value > 0 for value in report.energy.bfmi)

@@ -9,7 +9,7 @@ or changing pinned versions. The enclosing action evaluates its checks before pu
 from __future__ import annotations
 
 import asyncio
-import os
+from functools import partial
 from typing import TYPE_CHECKING
 
 from nof1_causal_lab.actions.contracts.effects import ActionEffects
@@ -19,6 +19,7 @@ from nof1_causal_lab.actions.contracts.requests import (
     ModelDiffRequest,
     SimulateRequest,
 )
+from nof1_causal_lab.artifacts.sampling import InferenceHardware
 from nof1_causal_lab.artifacts.simulation import ModelSimulationResult
 from nof1_causal_lab.models.structure import StructuralSelection
 from nof1_causal_lab.study.artifact_files import json_filename
@@ -57,10 +58,10 @@ async def _run_fit(
     sampler = resolve_sampler_spec(settings)
 
     config = get_config().inference
-    if config.compute_backend == "modal" and os.environ.get("DEPLOYMENT_ENV") != "production":
+    if config.hardware != InferenceHardware.LOCAL:
         from nof1_causal_lab.actions.fit.remote import fit_on_modal
 
-        compute_fit = fit_on_modal
+        compute_fit = partial(fit_on_modal, config.hardware)
     else:
         compute_fit = fit
     result = await asyncio.to_thread(

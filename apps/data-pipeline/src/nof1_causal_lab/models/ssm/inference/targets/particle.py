@@ -22,6 +22,9 @@ if TYPE_CHECKING:
 
     from dynestyx.models.core import DiscreteStateTransition
 
+    from nof1_causal_lab.models.ssm.compile.observation_partition import (
+        CompiledObservationPartition,
+    )
     from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
     from nof1_causal_lab.models.ssm.inference.conditioning import ExactStateConstraints
     from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
@@ -52,10 +55,52 @@ class ParticleTarget:
     observations: jax.Array
     times: jax.Array
     state_space: StateSpace
+    observation_partition: CompiledObservationPartition
     intervals: ParticleIntervalObservations | None = None
     exact_constraints: ExactStateConstraints | None = None
     bridge: GaussianReferenceBridge | None = None
     state_projection: Callable[[ParticleContext, jax.Array], jax.Array] = identity_state
+
+    def tree_target(self) -> ParticleTarget:
+        """Keep replay-independent observations in the exact intermediate tree target."""
+        if not self.state_space.requires_replay:
+            return self
+        channels = jnp.asarray(self.observation_partition.local, dtype=jnp.int32)
+        observations = (
+            jnp.full_like(self.observations, jnp.nan)
+            .at[:, channels]
+            .set(self.observations[:, channels])
+        )
+        return replace(
+            self,
+            observations=observations,
+            state_projection=self.fixed_recurrences,
+            intervals=None
+            if self.intervals is None
+            else self.intervals.select_channels(self.observation_partition.local),
+        )
+
+    def replay_correction(
+        self, local_target: ParticleTarget, context: ParticleContext, path: jax.Array
+    ) -> jax.Array:
+        """Pay only the exact recurrence correction and deferred observation factors."""
+        if not self.state_space.requires_replay:
+            return jnp.zeros((), dtype=path.dtype)
+        replayed = self.replay_path(context, path)
+        correction = self.prior_path_log_prob(context, replayed) - local_target.prior_path_log_prob(
+            context, path
+        )
+        if self.observation_partition.replayed:
+            channels = jnp.asarray(self.observation_partition.replayed, dtype=jnp.int32)
+            observations = (
+                jnp.full_like(self.observations, jnp.nan)
+                .at[:, channels]
+                .set(self.observations[:, channels])
+            )
+            correction = correction + jnp.sum(
+                self.observation_log_probs(context, replayed, observations)
+            )
+        return jnp.asarray(correction)
 
     def project_state(self, context: ParticleContext, state: jax.Array) -> jax.Array:
         """Bind global static coordinates before evaluating a local model factor."""

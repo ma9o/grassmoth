@@ -12,7 +12,7 @@ from nof1_causal_lab.actions.contracts.requests import EditModelRequest, FitRequ
 from nof1_causal_lab.actions.runners import run_action
 from nof1_causal_lab.artifacts.identity import ARTIFACT_IDS, GitOid
 from nof1_causal_lab.artifacts.observations.reference import DataRef
-from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
+from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, InferenceHardware
 from nof1_causal_lab.compilation_errors import IncompleteModelError
 from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.persistence.store import ArtifactStore
@@ -132,8 +132,15 @@ def test_incomplete_model_is_rejected_before_inference(workspace, monkeypatch):
     assert artifact_revisions(store, "model") == [model.revision]
 
 
-def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(workspace, monkeypatch):
+@pytest.mark.parametrize("hardware", [InferenceHardware.LOCAL, InferenceHardware.L40S])
+def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
+    workspace, monkeypatch, hardware
+):
+    from dataclasses import replace
+
+    from nof1_causal_lab import config
     from nof1_causal_lab.actions.fit import action as flow
+    from nof1_causal_lab.actions.fit import remote
     from nof1_causal_lab.actions.runners import _run_fit
     from nof1_causal_lab.study.persistence.store import read_model
 
@@ -211,7 +218,16 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(workspac
             "metadata": inference_metadata(conditioned),
         }
 
-    monkeypatch.setattr(flow, "fit", fit)
+    configured = config.get_config()
+    monkeypatch.setattr(
+        config,
+        "get_config",
+        lambda: replace(configured, inference=replace(configured.inference, hardware=hardware)),
+    )
+    local_fit = Mock(side_effect=fit)
+    modal_fit = Mock(side_effect=lambda _hardware, **kwargs: fit(**kwargs))
+    monkeypatch.setattr(flow, "fit", local_fit)
+    monkeypatch.setattr(remote, "fit_on_modal", modal_fit)
     pins: dict[ArtifactId, GitOid] = {
         "model": artifact_revision(workspace, "model", 3),
         "panel": artifact_revision(workspace, "panel", 1),
@@ -226,6 +242,13 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(workspac
         )
     )
     assert effects.effects.produced[0].derived_from == pins
+    if hardware is InferenceHardware.LOCAL:
+        local_fit.assert_called_once()
+        modal_fit.assert_not_called()
+    else:
+        local_fit.assert_not_called()
+        modal_fit.assert_called_once()
+        assert modal_fit.call_args.args == (hardware,)
     assert (
         read_model(store, effects.effects.produced[0].revision).edges[0].description
         == edited.edges[0].description

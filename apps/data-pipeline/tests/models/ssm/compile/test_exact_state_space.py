@@ -1,5 +1,7 @@
 """Declared deterministic state semantics survive compilation and posterior sampling."""
 
+from dataclasses import replace
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -16,6 +18,7 @@ from nof1_causal_lab.artifacts.model.expressions import LiteralExpression, coeff
 from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec, NormalLawSpec
 from nof1_causal_lab.artifacts.model.mechanism import DriftMechanismSpec, PotentialMechanismSpec
 from nof1_causal_lab.artifacts.sampling import SamplerSpec
+from nof1_causal_lab.models.ssm.compile.observation_partition import compile_observation_partition
 from nof1_causal_lab.models.ssm.compile.state_space import (
     ParallelRecurrences,
     SequentialRecurrences,
@@ -497,6 +500,89 @@ def test_parallel_accumulator_preserves_an_exact_random_initial_value():
         jnp.concatenate((jnp.array([0.7]), 0.7 + jnp.cumsum(path[:-1, indices["driver"]]))),
         atol=1e-6,
     )
+
+
+@pytest.mark.parametrize("accumulator_observation", ["gaussian", "delta", "delta_fixed_initial"])
+def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients(
+    accumulator_observation,
+):
+    model = _model()
+    if accumulator_observation == "delta_fixed_initial":
+        driver = next(c for c in model.constructs if c.name == "driver")
+        driver = driver.revised(
+            coefficients=tuple(
+                coefficient(0.0, "initial_scale") if c.role == "initial_scale" else c
+                for c in driver.coefficients
+            )
+        )
+        model = model.with_entities(edges=replace_constructs(model.edges, (driver,)))
+    total = next(c for c in model.constructs if c.name == "total")
+    if accumulator_observation.startswith("delta"):
+        total = total.revised(
+            indicators=tuple(
+                indicator.revised(
+                    likelihood=LikelihoodSpec(
+                        law=DeltaLawSpec(v=state(total.id)),
+                        reasoning="Exact initial accumulator reading",
+                        standardized=False,
+                    )
+                )
+                for indicator in total.indicators
+            )
+        )
+    model = model.with_entities(edges=replace_constructs(model.edges, (total,)))
+    compiled = compile_fit_fixture(model).compiled_dynamical_model
+    observations = jnp.full((4, len(compiled.observations)), 0.15)
+    if accumulator_observation.startswith("delta"):
+        column = next(
+            i
+            for i, observation in enumerate(compiled.observations)
+            if compiled.states[observation.state_index].name == "total"
+        )
+        observations = observations.at[:, column].set(jnp.nan).at[0, column].set(0.0)
+    _, problem = _problem(model, observations)
+    target = problem.runtime
+    local = target.tree_target()
+    expected_local = {"gaussian": 0, "delta": 3, "delta_fixed_initial": 0}[accumulator_observation]
+    assert len(target.observation_partition.local) == expected_local
+    position = target.initial_position.at[-1].set(0.2)
+    path = jnp.arange(16.0).reshape(4, 4) / 25
+
+    def split_score(z, x):
+        context = target.context(z, target.times)
+        return local.factor_log_prob(context, x, local.observations) + target.replay_correction(
+            local, context, x
+        )
+
+    actual = jax.jit(jax.value_and_grad(split_score, argnums=(0, 1)))(position, path)
+    expected = jax.value_and_grad(
+        lambda z, x: target.path_log_prob(target.context(z, target.times), x, target.observations),
+        argnums=(0, 1),
+    )(position, path)
+    for measured, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        assert np.isfinite(measured).all()
+        np.testing.assert_allclose(measured, reference, rtol=2e-5, atol=2e-5)
+
+
+def test_observation_partition_keeps_free_loadings_and_joint_gaussian_blocks():
+    compiled, _ = _problem(_model())
+    state_space = compiled.state_space
+    recurrence = state_space.recurrence.indices[0]
+    # A free loading with a zero template still depends on the recurrence.
+    template = jnp.zeros_like(compiled.loading_block.template)
+    support = np.zeros_like(compiled.loading_block.free_support)
+    support[0, recurrence] = True
+    loading = replace(
+        compiled.loading_block,
+        template=template,
+        free_support=support,
+        free_positions=((0, recurrence),),
+    )
+    partition = compile_observation_partition(
+        loading, tuple(observation.law for observation in compiled.observations), state_space
+    )
+    assert partition.local == ()
+    assert partition.replayed == tuple(range(len(compiled.observations)))
 
 
 def test_exact_static_readings_share_one_value_and_inconsistent_constraints_are_rejected():

@@ -13,6 +13,7 @@ import numpyro.distributions as dist
 import pytest
 
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
+from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
 from nof1_causal_lab.artifacts.sampling import (
     LapsInitializationSpec,
     MarginalParticleGibbsSpec,
@@ -131,7 +132,7 @@ def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(in
             seed=9,
             num_particles=4,
             retain_latent_paths=True,
-            marginal_particle_gibbs=MarginalParticleGibbsSpec(
+            algorithm=MarginalParticleGibbsSpec(
                 n_parameter_particles=2,
                 parameter_proposal="pseudo_langevin",
                 dsmc_leaf_proposal="paid_mix",
@@ -148,11 +149,12 @@ def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(in
     )
     assert not isinstance(result, (ObservationPreflightFailure, InitializationFailure))
     assert not hasattr(result.diagnostics, "likelihood_backend")
-    diagnostics = result.diagnostics.marginal_particle_gibbs
-    assert diagnostics is not None
+    diagnostics = result.diagnostics.sampler_diagnostics
+    assert isinstance(diagnostics, ParticleSamplerDiagnostics)
+    assert isinstance(diagnostics.settings.algorithm, MarginalParticleGibbsSpec)
     assert diagnostics.parameter_kernel == "m_pgibbs_pseudo_langevin"
     assert diagnostics.dsmc_leaf_proposal == "paid_mix"
-    assert diagnostics.settings.marginal_particle_gibbs.adaptation_scheme == "dual_averaging"
+    assert diagnostics.settings.algorithm.adaptation_scheme == "dual_averaging"
     latent_paths = result.draws.latent_paths
     assert latent_paths is not None
     assert latent_paths.shape == (4, len(times), 1)

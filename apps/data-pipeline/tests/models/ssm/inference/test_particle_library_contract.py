@@ -11,8 +11,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from nof1_causal_lab.models.ssm.compile.observation_partition import CompiledObservationPartition
 from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.extraction import (
+from nof1_causal_lab.models.ssm.inference.extraction import (
     extract_grouped_public_samples,
 )
 from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.runner import (
@@ -25,7 +26,7 @@ from nof1_causal_lab.models.ssm.inference.problem import ParticleProblem
 from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 from nof1_causal_lab.models.ssm.inference.types import (
     JointPosteriorDraws,
-    ParticleMCMCPosterior,
+    MCMCPosterior,
     ProductionDiagnostics,
 )
 from tests.support.inference import particle_posterior
@@ -79,6 +80,7 @@ def test_library_parameter_output_preserves_public_vector_sites_and_chain_order(
         observations=jnp.zeros((4, 1)),
         times=jnp.arange(4.0),
         state_space=StateSpace(1, (), (0,), (0,), (), ParallelRecurrences(())),
+        observation_partition=CompiledObservationPartition((0,), ()),
     )
     problem = ParticleProblem(runtime=runtime, site_info={}, public_sites=frozenset({"beta"}))
     samples = extract_grouped_public_samples(positions, bundle=problem, num_chains=2, num_samples=3)
@@ -143,7 +145,7 @@ def test_loo_uses_joint_emissions_and_omits_only_completely_missing_rows(monkeyp
     factors = jnp.arange(24.0).reshape(2, 3, 4) / -10
     observations = jnp.array([[1.0, 2.0], [jnp.nan, jnp.nan], [3.0, jnp.nan], [jnp.nan, 4.0]])
     mcmc = TrajectoryMCMCResult(samples, {}, num_chains=2, num_samples=3)
-    posterior = ParticleMCMCPosterior.from_run(
+    posterior = MCMCPosterior.from_run(
         draws=JointPosteriorDraws(parameters=mcmc.get_samples()),
         diagnostics=ProductionDiagnostics(mcmc=mcmc, observation_log_probs=factors),
     )
@@ -184,7 +186,7 @@ def test_loo_uses_joint_emissions_and_omits_only_completely_missing_rows(monkeyp
 
 
 def test_loo_all_missing_rows_have_no_predictive_estimate():
-    posterior = ParticleMCMCPosterior.from_run(
+    posterior = MCMCPosterior.from_run(
         draws=JointPosteriorDraws(parameters={}),
         diagnostics=ProductionDiagnostics(
             observation_log_probs=jnp.zeros((2, 3, 4)),
@@ -195,7 +197,7 @@ def test_loo_all_missing_rows_have_no_predictive_estimate():
 
 
 def test_loo_cannot_reweight_away_an_exact_state_constraint():
-    posterior = ParticleMCMCPosterior.from_run(
+    posterior = MCMCPosterior.from_run(
         draws=JointPosteriorDraws(parameters={}),
         diagnostics=ProductionDiagnostics(
             observation_log_probs=jnp.zeros((2, 3, 2)),

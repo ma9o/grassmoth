@@ -314,6 +314,7 @@ function preparation(seq: number): PrepareDataRequest<GitOid, FileSourceRef> {
   };
 }
 const settings = (seed: number) => ({
+  algorithm: null,
   num_samples_per_chain: null,
   num_warmup: null,
   num_chains: null,

@@ -9,7 +9,9 @@ from nof1_causal_lab.actions.fit.execution import resolve_sampler_spec
 from nof1_causal_lab.actions.temporal.llm.messages import LLMSubroutineInput, LLMSubroutineRef
 from nof1_causal_lab.artifacts.sampling import (
     FitSettingsSpec,
+    InferenceHardware,
     MarginalParticleGibbsSpec,
+    NutsDASpec,
     SamplerSpec,
 )
 from nof1_causal_lab.config import (
@@ -42,7 +44,8 @@ class TestSamplerSpec:
     def test_marginal_particle_gibbs_defaults(self):
         result = InferenceConfig().sampler
         assert result.num_particles == 64
-        options = result.marginal_particle_gibbs
+        options = result.algorithm
+        assert isinstance(options, MarginalParticleGibbsSpec)
         assert options.n_parameter_particles == 2
         assert options.dsmc_leaf_proposal == "amala_exact"
         assert options.latent_delta == 0.2
@@ -64,7 +67,7 @@ class TestSamplerSpec:
             num_chains=2,
             seed=3,
             num_particles=8,
-            marginal_particle_gibbs=MarginalParticleGibbsSpec(latent_delta=0.31),
+            algorithm=MarginalParticleGibbsSpec(latent_delta=0.31),
         )
         config = _make_pipeline_config()
         monkeypatch.setattr(
@@ -91,8 +94,9 @@ class TestSamplerSpec:
             resolved.seed,
             resolved.num_particles,
         ) == (0, 30, 4, 0, 16)
-        assert resolved.marginal_particle_gibbs is configured.marginal_particle_gibbs
-        assert resolved.marginal_particle_gibbs.latent_delta == 0.31
+        assert resolved.algorithm is configured.algorithm
+        assert isinstance(resolved.algorithm, MarginalParticleGibbsSpec)
+        assert resolved.algorithm.latent_delta == 0.31
         assert (
             configured.num_warmup,
             configured.num_samples_per_chain,
@@ -101,8 +105,24 @@ class TestSamplerSpec:
             configured.num_particles,
         ) == (10, 20, 2, 3, 8)
         assert resolve_sampler_spec(FitSettingsSpec()) == configured
+        assert (
+            resolve_sampler_spec(FitSettingsSpec(algorithm=NutsDASpec())).algorithm == NutsDASpec()
+        )
         with pytest.raises(ValidationError, match="frozen"):
             resolved.seed = 8  # ty: ignore[invalid-assignment] -- Exercise runtime rejection of a frozen field.
+
+    @pytest.mark.parametrize("hardware", tuple(InferenceHardware))
+    @pytest.mark.parametrize("algorithm", [NutsDASpec(), MarginalParticleGibbsSpec()])
+    def test_hardware_and_algorithm_are_independent(self, hardware, algorithm):
+        config = TypeAdapter(InferenceConfig).validate_python(
+            {
+                "hardware": hardware.value,
+                "sampler": {"algorithm": algorithm.model_dump()},
+            }
+        )
+        assert config.hardware is hardware
+        assert config.sampler.algorithm == algorithm
+        assert InferenceConfig().hardware is InferenceHardware.L40S
 
     def test_custom_chains_and_seed(self):
         result = InferenceConfig(sampler=SamplerSpec(num_chains=8, seed=42)).sampler
@@ -153,7 +173,8 @@ FULL_CONFIG = textwrap.dedent("""\
         num_chains: 2
         seed: 123
         num_particles: 24
-        marginal_particle_gibbs:
+        algorithm:
+          method: custom
           n_parameter_particles: 3
           latent_delta: 0.29
           amala_kappa: 0.2
@@ -176,7 +197,9 @@ class TestLoadConfig:
         [
             "llm:\n  embedded:\n    reasoning_effort: invalid\n",
             "llm:\n  codex:\n    reasoning_effort: invalid\n",
-            "inference:\n  method: map\n",
+            "inference:\n  hardware: imaginary_gpu\n",
+            "inference:\n  sampler:\n    algorithm:\n      method: map\n",
+            "inference:\n  sampler:\n    algorithm:\n      method: nuts_da\n      target_accept_prob: 1.0\n",
             "inference:\n  sampler:\n    marginal_particle_gibbs:\n      init_method: invalid\n",
             "inference:\n  sampler:\n    num_chains: many\n",
             "inference:\n  unknown_setting: true\n",
@@ -230,18 +253,19 @@ class TestLoadConfig:
         assert cfg.inference.sampler.seed == 123
         assert cfg.inference.compute_loo_diagnostics is False
         assert cfg.inference.sampler.num_particles == 24
-        assert cfg.inference.sampler.marginal_particle_gibbs.n_parameter_particles == 3
-        assert cfg.inference.sampler.marginal_particle_gibbs.latent_delta == 0.29
-        assert cfg.inference.sampler.marginal_particle_gibbs.amala_kappa == 0.2
-        assert cfg.inference.sampler.marginal_particle_gibbs.amala_grad_clip == 77.0
-        assert cfg.inference.sampler.marginal_particle_gibbs.param_step_size == 0.03
-        assert cfg.inference.sampler.marginal_particle_gibbs.param_step_size_min == 1e-6
-        assert cfg.inference.sampler.marginal_particle_gibbs.param_step_size_max == 0.7
-        assert cfg.inference.sampler.marginal_particle_gibbs.param_target_accept == 0.4
-        assert cfg.inference.sampler.marginal_particle_gibbs.adaptation_rate == 0.03
-        assert cfg.inference.sampler.marginal_particle_gibbs.laps.ensemble_size == 256
-        assert cfg.inference.sampler.marginal_particle_gibbs.laps.num_unadjusted_steps == 1000
-        assert cfg.inference.sampler.marginal_particle_gibbs.laps.num_adjusted_steps == 20
+        assert isinstance(cfg.inference.sampler.algorithm, MarginalParticleGibbsSpec)
+        assert cfg.inference.sampler.algorithm.n_parameter_particles == 3
+        assert cfg.inference.sampler.algorithm.latent_delta == 0.29
+        assert cfg.inference.sampler.algorithm.amala_kappa == 0.2
+        assert cfg.inference.sampler.algorithm.amala_grad_clip == 77.0
+        assert cfg.inference.sampler.algorithm.param_step_size == 0.03
+        assert cfg.inference.sampler.algorithm.param_step_size_min == 1e-6
+        assert cfg.inference.sampler.algorithm.param_step_size_max == 0.7
+        assert cfg.inference.sampler.algorithm.param_target_accept == 0.4
+        assert cfg.inference.sampler.algorithm.adaptation_rate == 0.03
+        assert cfg.inference.sampler.algorithm.laps.ensemble_size == 256
+        assert cfg.inference.sampler.algorithm.laps.num_unadjusted_steps == 1000
+        assert cfg.inference.sampler.algorithm.laps.num_adjusted_steps == 20
         assert cfg.llm.embedded.max_tokens == 4096
         assert cfg.llm.embedded.reasoning_effort == "low"
         assert cfg.llm.claude_code.effort == "medium"
@@ -264,7 +288,8 @@ class TestLoadConfig:
         cfg = load_config()
         sampler = cfg.inference.sampler
         assert sampler.num_warmup == 500
-        assert sampler.marginal_particle_gibbs.laps.ensemble_size == 256
+        assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
+        assert sampler.algorithm.laps.ensemble_size == 256
 
         load_config.cache_clear()
 

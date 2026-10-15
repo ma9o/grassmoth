@@ -21,13 +21,13 @@ if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from nof1_causal_lab.artifacts.probability.serialization import ArrayLoader
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
-    from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior
+    from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
 
 
 def condition_model(
     dynamical_model_spec: DynamicalModelSpec,
     compiled_dynamical_model: CompiledDynamicalModel,
-    result: ParticleMCMCPosterior,
+    result: MCMCPosterior,
     *,
     times: ArrayLike,
     time_origin: datetime,

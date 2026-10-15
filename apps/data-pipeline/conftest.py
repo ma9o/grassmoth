@@ -1,5 +1,7 @@
 """Require explicit concern owners before pytest applies marker selection."""
 
+from typing import NoReturn
+
 import pytest
 
 from nof1_causal_lab.bootstrap import initialize_numerical_runtime
@@ -18,14 +20,24 @@ TEST_CONCERNS = frozenset({"contract", "inference", "workflow"})
 
 @pytest.fixture(autouse=True)
 def _fit_on_local_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Tests fit locally whatever config.yaml selects; a test may opt into Modal itself."""
+    """Tests fit locally; hardware routing contracts must mock the Modal boundary."""
     from dataclasses import replace
 
+    import modal
+
     from nof1_causal_lab import config
+    from nof1_causal_lab.artifacts.sampling import InferenceHardware
 
     loaded = config.load_config()
-    local = replace(loaded, inference=replace(loaded.inference, compute_backend="local"))
+    local = replace(loaded, inference=replace(loaded.inference, hardware=InferenceHardware.LOCAL))
     monkeypatch.setattr(config, "get_config", lambda: local)
+
+    def reject_modal_run(*_args: object, **_kwargs: object) -> NoReturn:
+        pytest.fail(
+            "Live Modal execution is disabled in pytest; mock the Modal boundary.", pytrace=False
+        )
+
+    monkeypatch.setattr(modal.App, "run", reject_modal_run)
 
 
 @pytest.hookimpl(tryfirst=True)

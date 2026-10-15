@@ -46,6 +46,7 @@
 # Data Pipeline
 
 - Budget GPU benchmarks carefully: a B200 on Modal costs $6/hour.
+- Run independent GPU benchmark scenarios concurrently on separate GPUs. Do not serialize them on one L40S; isolate each scenario's GPU so timing comparisons remain meaningful, and preserve shared initialization dependencies.
 
 - Represent structural assumptions as DAGs with explicit latent confounders. ADMGs are only for internal projection into y0's identification algorithm, never user-facing.
 

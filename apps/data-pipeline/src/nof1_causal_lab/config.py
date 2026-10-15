@@ -7,14 +7,14 @@ import shutil
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal, assert_never
+from typing import assert_never
 
 import yaml
 from dotenv import load_dotenv
 from pydantic import ConfigDict, TypeAdapter, with_config
 
 from nof1_causal_lab.actions.errors import execution_failure_handler
-from nof1_causal_lab.artifacts.sampling import SamplerSpec
+from nof1_causal_lab.artifacts.sampling import InferenceHardware, SamplerSpec
 from nof1_causal_lab.llm.specs import (
     EmbeddedLLMSpec,
     EmbeddedReasoningEffort,
@@ -120,7 +120,7 @@ class ExtractionWorkersConfig:
 class InferenceConfig:
     """Shell settings alongside the single owned sampler specification."""
 
-    compute_backend: Literal["local", "modal"] = "local"
+    hardware: InferenceHardware = InferenceHardware.L40S
     compute_loo_diagnostics: bool = True
     sampler: SamplerSpec = field(default_factory=SamplerSpec)
 

@@ -126,10 +126,10 @@ def test_conditioning_rejects_warmup_statically(tmp_path):
             from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
             from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
             from nof1_causal_lab.actions.fit.conditioning import condition_model
-            from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior
+            from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
             from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
 
-            def condition(model: DynamicalModelSpec, compiled: CompiledDynamicalModel, posterior: ParticleMCMCPosterior, warmup: LapsInitializationResult, times: Array):
+            def condition(model: DynamicalModelSpec, compiled: CompiledDynamicalModel, posterior: MCMCPosterior, warmup: LapsInitializationResult, times: Array):
                 condition_model(model, compiled, posterior, times=times, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
                 condition_model(model, compiled, warmup, times=times, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
             """)
@@ -151,7 +151,7 @@ def test_conditioning_rejects_warmup_statically(tmp_path):
     assert checked.returncode == 1
     assert checked.stdout.count("error[") == 1, checked.stdout + checked.stderr
     assert "invalid-argument-type" in checked.stdout
-    assert "ParticleMCMCPosterior" in checked.stdout
+    assert "MCMCPosterior" in checked.stdout
     assert "LapsInitializationResult" in checked.stdout
 
 

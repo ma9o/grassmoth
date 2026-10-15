@@ -42,9 +42,10 @@
 #     The same target/product-of-children ratio below remains valid for these
 #     nonlocal factors, without adding singular accumulator states to the SDE.
 #   * For replayed state coordinates, intermediate targets retain only Gaussian
-#     initial/transition factors and the paid auxiliary potentials. Observations
-#     and the recurrence correction are paid at the root, so a hard likelihood
-#     at an artificial recurrence value cannot exclude a valid complete path.
+#     initial/transition factors, replay-independent observations and the paid
+#     auxiliary potentials. Replay-dependent observations and the recurrence
+#     correction are paid at the root, so a hard likelihood at an artificial
+#     recurrence value cannot exclude a valid complete path.
 
 from __future__ import annotations
 

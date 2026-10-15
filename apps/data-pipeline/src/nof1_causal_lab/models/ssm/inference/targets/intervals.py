@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from nof1_causal_lab.models.ssm.execution.observation_model import compile_observation_model
 from nof1_causal_lab.models.ssm.execution.observation_operator import (
@@ -37,6 +38,22 @@ class ParticleIntervalObservations:
     tree: CompiledIntervalTree
     state_projection: Callable[[ParticleContext, jax.Array], jax.Array]
     power: jax.Array | None = None
+
+    def select_channels(self, channels: tuple[int, ...]) -> ParticleIntervalObservations | None:
+        """Retain complete selected factors while preserving their window schedules."""
+        if not set(channels).intersection(self.operator.interval_summary_indices):
+            return None
+        selected = np.isin(np.arange(self.tree.leaf_weights.shape[-1]), channels)
+        return replace(
+            self,
+            tree=replace(
+                self.tree,
+                leaf_weights=self.tree.leaf_weights * selected,
+                levels=tuple(
+                    replace(level, masks=level.masks & selected) for level in self.tree.levels
+                ),
+            ),
+        )
 
     def response(self, context: ParticleContext, state: jax.Array) -> jax.Array:
         """Evaluate the authored response before temporal aggregation or noise."""

@@ -3,7 +3,7 @@
 Lifted out of the synthetic-nonlinear benchmark CLI so the recovery math is
 reusable by the evaluation registry's recovery scorer rather than buried in an
 83 KB script. ``parameter_recovery`` and ``scalar_posterior_ess`` are the public
-entry points; both read a ``ParticleMCMCPosterior`` and compute per-target coverage /
+entry points; both read a ``MCMCPosterior`` and compute per-target coverage /
 ESS against the fixture's ``RECOVERY_TARGETS``.
 """
 
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
-    from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior
+    from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
 
 type PosteriorSampleMap = Mapping[str, jax.Array]
 type RecoveryRow = dict[str, Any]
@@ -118,7 +118,7 @@ def _summarize_recovery_rows(rows: list[RecoveryRow]) -> RecoverySummary:
     }
 
 
-def parameter_recovery(result: ParticleMCMCPosterior, *, elapsed_seconds: float) -> RecoverySummary:
+def parameter_recovery(result: MCMCPosterior, *, elapsed_seconds: float) -> RecoverySummary:
     grouped_samples = result.diagnostics.mcmc.get_samples(group_by_chain=True)
     site_rows: dict[str, RecoveryRow] = {}
     missing_targets: RecoverySummary = {}
@@ -187,7 +187,7 @@ def parameter_recovery(result: ParticleMCMCPosterior, *, elapsed_seconds: float)
 
 
 def scalar_posterior_ess(
-    result: ParticleMCMCPosterior,
+    result: MCMCPosterior,
     *,
     max_sites: int,
     elapsed_seconds: float,

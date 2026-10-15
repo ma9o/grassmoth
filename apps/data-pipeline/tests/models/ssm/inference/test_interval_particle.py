@@ -26,6 +26,23 @@ from tests.support.interval_particle import (
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
+def _interval_tree_score(intervals, contexts, bank):
+    stats = intervals.leaf_statistics(contexts, bank)
+    total = jnp.zeros((bank.shape[1], jax.tree.leaves(contexts)[0].shape[0]))
+    for level in intervals.tree.levels[1:]:
+        stats = jax.vmap(
+            lambda left, right, node, level=level: (
+                gather_interval_statistics(left, jnp.asarray(level.left_slots)[node])
+                + gather_interval_statistics(right, jnp.asarray(level.right_slots)[node])
+            )
+        )(stats[::2], stats[1::2], jnp.arange(len(level.left_slots)))
+        if level.emission_slots.shape[1]:
+            total = total + jax.vmap(
+                lambda s, node, level=level: intervals.emission_log_probs(contexts, s, level, node)
+            )(stats, jnp.arange(len(level.left_slots))).sum(axis=0)
+    return total
+
+
 def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree():
     times = np.array([0.0, 0.5, 1.5, 2.0, 3.0, 4.5, 5.0])
     summaries = ("last", "sum", "mean", "std")
@@ -104,19 +121,7 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
     # label-dependent responses, slot reuse, overlapping windows, and padding.
     contexts = jax.vmap(lambda z: target.context(z, target.times))(jnp.array([[0.15], [-0.4]]))
     bank = jnp.stack([path, path + 0.6], axis=1)
-    stats = intervals.leaf_statistics(contexts, bank)
-    total = jnp.zeros((2, 2))
-    for level in intervals.tree.levels[1:]:
-        stats = jax.vmap(
-            lambda left, right, node, level=level: (
-                gather_interval_statistics(left, jnp.asarray(level.left_slots)[node])
-                + gather_interval_statistics(right, jnp.asarray(level.right_slots)[node])
-            )
-        )(stats[::2], stats[1::2], jnp.arange(len(level.left_slots)))
-        if level.emission_slots.shape[1]:
-            total = total + jax.vmap(
-                lambda s, node, level=level: intervals.emission_log_probs(contexts, s, level, node)
-            )(stats, jnp.arange(len(level.left_slots))).sum(axis=0)
+    total = _interval_tree_score(intervals, contexts, bank)
     reference = jax.vmap(
         lambda x: jax.vmap(
             lambda bound: (
@@ -126,6 +131,24 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
         )(contexts)
     )(jnp.swapaxes(bank, 0, 1))
     np.testing.assert_allclose(total, reference, atol=2e-5)
+    for channels in ((0, 1), (2, 3)):
+        selected = intervals.select_channels(channels)
+        assert selected is not None
+        selected_observations = jnp.where(
+            jnp.asarray(np.isin(np.arange(4), channels)), target.observations, jnp.nan
+        )
+        selected_reference = jax.vmap(
+            lambda x, selected_observations=selected_observations: jax.vmap(
+                lambda bound: (
+                    target.observation_log_probs(bound, x, selected_observations).sum()
+                    - target.observation_increment(bound, x[1], 1, selected_observations)
+                )
+            )(contexts)
+        )(jnp.swapaxes(bank, 0, 1))
+        np.testing.assert_allclose(
+            _interval_tree_score(selected, contexts, bank), selected_reference, atol=2e-5
+        )
+    assert intervals.select_channels((0,)) is None
 
 
 @pytest.mark.inference(concern="recovery")

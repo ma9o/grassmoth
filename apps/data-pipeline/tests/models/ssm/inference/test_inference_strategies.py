@@ -19,7 +19,7 @@ from nof1_causal_lab.models.ssm.execution.observation_operator import (
 )
 from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.ssm.inference.parameter_tracing import _discover_sites
-from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws, ParticleMCMCPosterior
+from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws, MCMCPosterior
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.inference import (
@@ -300,7 +300,7 @@ class TestDefaultMethodRouting:
         )
         assert not isinstance(result, ObservationPreflightFailure)
 
-        assert isinstance(result, ParticleMCMCPosterior)
+        assert isinstance(result, MCMCPosterior)
 
 
 if __name__ == "__main__":

@@ -29,9 +29,10 @@ from nof1_causal_lab.artifacts.reports.inference import PosteriorDrawsInfo
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ChainDiagnostics,
     LOODiagnostics,
+    MCMCEvidence,
+    NutsDADiagnostics,
     ParameterDiagnostics,
     ParetoKPoint,
-    ParticleMCMCEvidence,
     ParticleSamplerDiagnostics,
     RankHistogram,
     TraceSeries,
@@ -87,10 +88,8 @@ class ProductionDiagnostics:
     latent_posterior_summary: Mapping[str, jnp.ndarray] | None = None
     warmup_latent_paths: jnp.ndarray | None = None
     all_latent_paths: jnp.ndarray | None = None
-    marginal_particle_gibbs: ParticleSamplerDiagnostics | None = None
-    marginal_particle_gibbs_phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]] | None = (
-        None
-    )
+    sampler_diagnostics: ParticleSamplerDiagnostics | NutsDADiagnostics | None = None
+    phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]] | None = None
     warmup_complete_log_posterior_history: jnp.ndarray | None = None
     all_complete_log_posterior_history: jnp.ndarray | None = None
 
@@ -102,14 +101,14 @@ class ProductionDiagnostics:
                 "latent_posterior_summary",
                 MappingProxyType(dict(self.latent_posterior_summary)),
             )
-        if self.marginal_particle_gibbs_phase_extra_fields is not None:
+        if self.phase_extra_fields is not None:
             object.__setattr__(
                 self,
-                "marginal_particle_gibbs_phase_extra_fields",
+                "phase_extra_fields",
                 MappingProxyType(
                     {
                         phase: MappingProxyType(dict(values))
-                        for phase, values in self.marginal_particle_gibbs_phase_extra_fields.items()
+                        for phase, values in self.phase_extra_fields.items()
                     }
                 ),
             )
@@ -158,16 +157,16 @@ class JointPosteriorDraws:
         )
 
 
-_PARTICLE_ENGINE_EVIDENCE = ParticleMCMCEvidence()
+_PARTICLE_ENGINE_EVIDENCE = MCMCEvidence()
 
 
 @dataclass(frozen=True)
-class ParticleMCMCPosterior:
-    """Joint posterior draws produced by the invariant particle-MCMC engine."""
+class MCMCPosterior:
+    """Joint posterior draws produced by an exact state and parameter MCMC engine."""
 
     draws: JointPosteriorDraws
     diagnostics: ProductionDiagnostics
-    evidence: ParticleMCMCEvidence = field(default_factory=ParticleMCMCEvidence)
+    evidence: MCMCEvidence = field(default_factory=MCMCEvidence)
     initial_latent_delta: jnp.ndarray | None = None
     final_latent_delta: jnp.ndarray | None = None
 
@@ -177,7 +176,7 @@ class ParticleMCMCPosterior:
         *,
         draws: JointPosteriorDraws,
         diagnostics: ProductionDiagnostics,
-        evidence: ParticleMCMCEvidence = _PARTICLE_ENGINE_EVIDENCE,
+        evidence: MCMCEvidence = _PARTICLE_ENGINE_EVIDENCE,
         initial_latent_delta: jnp.ndarray | None = None,
         final_latent_delta: jnp.ndarray | None = None,
     ) -> Self:
@@ -256,8 +255,8 @@ class ParticleMCMCPosterior:
             else None,
             num_divergences=int(jnp.sum(extra["diverging"])) if "diverging" in extra else None,
             divergence_rate=average("diverging"),
-            tree_depth_mean=average("num_steps"),
-            tree_depth_max=int(jnp.max(extra["num_steps"])) if "num_steps" in extra else None,
+            tree_depth_mean=average("tree_depth"),
+            tree_depth_max=int(jnp.max(extra["tree_depth"])) if "tree_depth" in extra else None,
             accept_prob_mean=average("accept_prob"),
             latent_accept_prob_mean=average("latent_accept_prob"),
             parameter_accept_prob_mean=average("parameter_accept_prob"),

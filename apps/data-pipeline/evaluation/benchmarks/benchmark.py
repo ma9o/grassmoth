@@ -26,7 +26,7 @@ from nof1_causal_lab.compute.resources import read_compute_budget
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.models.ssm.inference.types import ParticleMCMCPosterior
+    from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
 
 LeafProposal = Literal["amala_exact", "paid_mix"]
 LEAF_PROPOSALS: tuple[LeafProposal, ...] = ("amala_exact", "paid_mix")
@@ -102,9 +102,13 @@ def _json_ready(value: Any) -> Any:
     return array.tolist()
 
 
-def _diagnostic_summary(result: ParticleMCMCPosterior) -> BenchmarkRecord:
-    diagnostics = result.diagnostics.marginal_particle_gibbs
-    assert diagnostics is not None
+def _diagnostic_summary(result: MCMCPosterior) -> BenchmarkRecord:
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
+    from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec
+
+    diagnostics = result.diagnostics.sampler_diagnostics
+    assert isinstance(diagnostics, ParticleSamplerDiagnostics)
+    assert isinstance(diagnostics.settings.algorithm, MarginalParticleGibbsSpec)
     return {
         "dsmc_leaf_proposal": _json_ready(diagnostics.dsmc_leaf_proposal),
         "parameter_kernel": _json_ready(diagnostics.parameter_kernel),
@@ -117,7 +121,7 @@ def _diagnostic_summary(result: ParticleMCMCPosterior) -> BenchmarkRecord:
         "diagnostic_metrics": _json_ready(diagnostics.diagnostic_metrics),
         "diagnostic_summary_phase": _json_ready(diagnostics.diagnostic_summary_phase),
         "final_param_step_size": _json_ready(diagnostics.final_param_step_size),
-        "latent_delta": _json_ready(diagnostics.settings.marginal_particle_gibbs.latent_delta),
+        "latent_delta": _json_ready(diagnostics.settings.algorithm.latent_delta),
     }
 
 
@@ -146,7 +150,7 @@ def _run_one(
             seed=args.seed,
             num_particles=args.num_particles,
             retain_latent_paths=args.retain_latent_paths,
-            marginal_particle_gibbs=MarginalParticleGibbsSpec(
+            algorithm=MarginalParticleGibbsSpec(
                 n_parameter_particles=args.n_parameter_particles,
                 dsmc_leaf_proposal=proposal,
                 latent_block_coords=args.latent_block_coords,

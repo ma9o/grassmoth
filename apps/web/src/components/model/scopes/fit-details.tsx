@@ -16,9 +16,9 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
   return (
     <Section title="Chain convergence">
       <Hint>
-        Marginal particle Gibbs · {mcmc?.num_chains ?? "Unavailable"} chains ×{" "}
-        {mcmc?.num_samples_per_chain ?? "Unavailable"} draws ·{" "}
-        {report.inference_metadata.duration_seconds.toLocaleString()} s
+        {report.inference_metadata.engine.method === "nuts_da" ? "NUTS-DA" : "Custom sampler"} ·{" "}
+        {mcmc?.num_chains ?? "Unavailable"} chains × {mcmc?.num_samples_per_chain ?? "Unavailable"}{" "}
+        draws · {report.inference_metadata.duration_seconds.toLocaleString()} s
       </Hint>
       <div className="flex items-center gap-2">
         <StatusIcon status={convergence.status} />
@@ -44,11 +44,27 @@ export function FitDetails({ context }: { context: ScopeContext }) {
   const report = fit;
   const plot = detail.data?.detail;
   const mcmc = report.inference_diagnostics;
-  const gibbs = report.inference_metadata.sampler_diagnostics;
+  const sampler = report.inference_metadata.sampler_diagnostics;
+  const gibbs = sampler && "tempering" in sampler ? sampler : null;
+  const nuts = sampler && "final_step_size" in sampler ? sampler : null;
   const tempering = gibbs?.tempering;
   return (
     <>
       <FitCalibration context={context} />
+      {nuts && (
+        <Section title="NUTS adaptation">
+          <KeyValue
+            rows={[
+              ["Divergences", String(mcmc?.num_divergences ?? "Unavailable")],
+              ["Maximum tree depth reached", formatSignificant(nuts.max_tree_depth_fraction)],
+              [
+                "Final step sizes",
+                nuts.final_step_size.map((value) => formatSignificant(value)).join(", "),
+              ],
+            ]}
+          />
+        </Section>
+      )}
       {tempering && (
         <Section title="Parallel tempering" wide>
           <Hint>

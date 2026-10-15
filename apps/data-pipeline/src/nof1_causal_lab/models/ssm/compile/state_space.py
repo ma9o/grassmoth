@@ -52,12 +52,19 @@ class StateSpace:
         return tuple(index for index in self.initial if index not in self.static)
 
     @property
+    def replayed_coordinates(self) -> tuple[int, ...]:
+        """Endogenous coordinates reconstructed initially or at later time points."""
+        return tuple(
+            index
+            for index in range(self.size)
+            if index not in (*self.inputs, *self.static)
+            and (index not in self.initial or index not in self.transition)
+        )
+
+    @property
     def requires_replay(self) -> bool:
         """Whether endogenous coordinates must be reconstructed along a whole path."""
-        endogenous = self.size - len(self.inputs) - len(self.static)
-        return (
-            len(self.initial_path_coordinates) != endogenous or len(self.transition) != endogenous
-        )
+        return bool(self.replayed_coordinates)
 
 
 def compile_state_space(

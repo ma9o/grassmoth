@@ -80,7 +80,7 @@ def fit(
         duration_seconds=fitted["duration_seconds"],
         num_chains=native.mcmc.num_chains,
         num_samples_total=native.mcmc.num_chains * native.mcmc.num_samples,
-        sampler_diagnostics=native.marginal_particle_gibbs,
+        sampler_diagnostics=native.sampler_diagnostics,
     )
     evidence = InferenceEvidence(
         chain_extra_fields={
@@ -99,7 +99,7 @@ def fit(
                 name: NumericalArray.from_numpy(np.asarray(values))
                 for name, values in buffers.items()
             }
-            for phase, buffers in (native.marginal_particle_gibbs_phase_extra_fields or {}).items()
+            for phase, buffers in (native.phase_extra_fields or {}).items()
         },
         warmup_complete_log_posterior_history=retain(native.warmup_complete_log_posterior_history),
         all_complete_log_posterior_history=retain(native.all_complete_log_posterior_history),
@@ -128,7 +128,7 @@ def read_inference_report(
         from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
         from nof1_causal_lab.models.ssm.inference.types import (
             JointPosteriorDraws,
-            ParticleMCMCPosterior,
+            MCMCPosterior,
             ProductionDiagnostics,
         )
 
@@ -162,7 +162,7 @@ def read_inference_report(
             chains = metadata.num_chains
             if count % chains:
                 raise ValueError("Retained atoms do not match their original chain count")
-            posterior = ParticleMCMCPosterior.from_run(
+            posterior = MCMCPosterior.from_run(
                 draws=JointPosteriorDraws(parameters=samples),
                 diagnostics=ProductionDiagnostics(
                     mcmc=TrajectoryMCMCResult(
@@ -172,6 +172,7 @@ def read_inference_report(
                         chain_extra_fields=extra,
                         num_chains=chains,
                         num_samples=count // chains,
+                        backend=metadata.engine.method,
                     ),
                     observation_log_probs=jnp.asarray(evidence.observation_log_probs.values)
                     if evidence.observation_log_probs is not None
@@ -180,6 +181,7 @@ def read_inference_report(
                     if evidence.exact_observation_rows is not None
                     else None,
                 ),
+                evidence=metadata.engine,
             )
             diagnostics = posterior.get_inference_diagnostics(references)
             traces, ranks = posterior.get_chain_detail(references)
