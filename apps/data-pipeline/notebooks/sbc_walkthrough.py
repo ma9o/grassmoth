@@ -382,16 +382,18 @@ def bridge_md(mo):
 
     | in this toy | in the codebase |
     |---|---|
-    | the candidate posterior $q$ under test | the marginalized particle Gibbs posterior (`fit_marginal_particle_gibbs`), whose latent paths come from the conditional-SMC smoother in `smoothers/dsmc.py` |
-    | the exact sampler → uniform ranks | the exact engines: particle/SMC over the true emission, Euler–Maruyama over the true drift, and the exactly-corrected `amala_exact` proposal |
-    | a deformed sampler → non-uniform ranks | the biased *uncorrected* proposals `amala` / `amala_plus`, or any linearized surrogate (IEKS/Laplace) standing in on a *reported* path |
+    | the candidate posterior $q$ under test | the marginalized particle Gibbs posterior (`fit_marginal_particle_gibbs`), whose latent paths come from the conditional-SMC smoother in `samplers/particle/dsmc.py` |
+    | the exact sampler → uniform ranks | the exact engines: particle/SMC over the true emission, Euler–Maruyama over the true drift, and the auxiliary-corrected `amala` / `amala_plus` proposals |
+    | a deformed sampler → non-uniform ranks | a proposal missing its auxiliary correction, or any linearized surrogate (IEKS/Laplace) standing in on a *reported* path |
     | the under-thinned ρ chain → a fake ∪ | an MCMC/SMC posterior read off without enough thinning |
 
     Two takeaways land straight on the project's invariants. First, the
     [linearization-is-init-only policy](../../../AGENTS.md): a linearized engine biases the
     posterior on a reported path, and SBC is exactly the end-to-end instrument that would
-    catch that bias as non-uniform ranks — the same reason `amala` / `amala_plus` stay
-    non-default and "must never gate a reported result." Second, because the production
+    catch that bias as non-uniform ranks. The current aMALA kernels retain their
+    auxiliary correction; their contract is owned by the
+    [sampler implementation](../src/nof1_causal_lab/models/ssm/inference/samplers/particle/auxiliary.py).
+    Second, because the production
     posterior is sampled by MCMC/SMC, §9 is not a curiosity: ranks must be built from
     near-independent draws or the histogram lies in the direction of overconfidence.
 

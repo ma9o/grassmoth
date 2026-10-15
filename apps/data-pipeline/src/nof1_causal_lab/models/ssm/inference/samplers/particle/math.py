@@ -41,7 +41,9 @@ def _value_and_grad_by_param[Context](
     return value.astype(value_dtype), grad.astype(grad_dtype)
 
 
-def _masked_normal_log_prob(values, mean, variance, free_mask):
+def _masked_normal_log_prob(
+    values: jax.Array, mean: jax.Array, variance: jax.Array, free_mask: jax.Array
+) -> jax.Array:
     """Density with respect to the free coordinates, including its normalization."""
     per_coordinate = -0.5 * (
         jnp.log(2.0 * jnp.pi * variance) + jnp.square(values - mean) / variance
@@ -49,7 +51,7 @@ def _masked_normal_log_prob(values, mean, variance, free_mask):
     return jnp.sum(jnp.where(free_mask, per_coordinate, 0.0), axis=-1)
 
 
-def _masked_mean(values, mask, *, axis=None):
+def _masked_mean(values: jax.Array, mask: jax.Array, *, axis: int | None = None) -> jax.Array:
     """Average diagnostics over sampled coordinates; an empty selection contributes zero."""
     return jnp.sum(jnp.where(mask, values, 0.0), axis=axis) / jnp.maximum(
         jnp.sum(mask, axis=axis), 1

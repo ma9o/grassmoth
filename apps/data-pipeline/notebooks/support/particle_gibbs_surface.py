@@ -1,104 +1,81 @@
-"""Support code for the particle-sampler surface walkthrough.
+"""Toy probability laws and adapters to the production inference engines.
 
-The notebook re-runs every sampler family of the 2026-10-14 T=512 warmup benchmark
-on a posterior with two coordinates, ``theta`` (a parameter) and ``x`` (the latent
-path, collapsed to one coordinate), so each move can be drawn on the surface
-``p(theta, x | y)``.
-
-The particle kernels follow production one-to-one at a single time step:
-
-- ``dsmc_leaf`` is the conditional DSMC sweep of
-  ``models/ssm/inference/marginal_particle_gibbs/dsmc.py`` with ``T = 1``: an auxiliary
-  point ``z ~ N(x_ref, delta/2)``, ``N - 1`` particles around a gradient-shifted ``z``,
-  weights against the posterior mixture over the parameter labels, and one draw.
-- ``mpgibbs_sweep`` is the collapsed parameter/path move of
-  ``marginal_particle_gibbs/kernel.py``: an auxiliary parameter proposal with the
-  Barker label correction, the smoother above against both labels, then the label draw.
-- ``run_laps`` replays ``warmup/laps_ensemble.py`` (BlackJAX LAPS with the production
-  settings) while recording the ensemble at every step.
-
-Everything else (exact conditionals, marginals and diagnostics) is closed form or a
-fine one-dimensional grid, so each sampler can be checked against the exact answer.
+The two-coordinate target has one parameter and one latent state at a single time.
+Production mPGibbs, DSMC, LAPS initialization and NUTS execute that declared target;
+this module only constructs inputs and projects their returned data for plotting.
+Analytic Gibbs and grid quadrature are explicitly separate mathematical references.
 """
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
-from functools import partial
-from typing import Literal, Protocol
+from functools import lru_cache, partial
+from typing import TYPE_CHECKING, Literal
 
-import blackjax
+import dynestyx as dsx
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpy as np
-from blackjax.adaptation import laps, laps_burn_in
-from blackjax.mcmc.adjusted_mclmc import build_kernel as build_adjusted_kernel
-from blackjax.mcmc.hmc import HMCState
-from blackjax.mcmc.integrators import (
-    IntegratorState,
-    generate_isokinetic_integrator,
-    mclachlan_coefficients,
-)
+import numpyro.distributions as dist
 from numpy.typing import NDArray
-from scipy.special import logsumexp
+
+from nof1_causal_lab.artifacts.sampling import (
+    DsmcSpec,
+    LapsInitializationSpec,
+    MarginalParticleGibbsSpec,
+    NutsDASpec,
+    SamplerSpec,
+)
+from nof1_causal_lab.compute.budget import ComputeBudget, SharedMemoryBudget
+from nof1_causal_lab.models.ssm.compile.observation_partition import CompiledObservationPartition
+from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
+from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
+from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
+    build_marginal_particle_gibbs_kernel,
+)
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
+    _initialize_chain_state,
+)
+from nof1_causal_lab.models.ssm.inference.samplers.nuts import NutsDARun, run_nuts_da
+from nof1_causal_lab.models.ssm.inference.samplers.particle.context import (
+    build_smoother_context,
+)
+from nof1_causal_lab.models.ssm.inference.samplers.particle.contract import SmootherSetup
+from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import step as dsmc_step
+from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import (
+    trace_step as dsmc_trace_step,
+)
+from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
+from nof1_causal_lab.models.ssm.inference.warmup.laps import (
+    LapsInitializationResult,
+    prepare_laps_initialization,
+)
+from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import LapsTraceRecord
+from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCState
+    from nof1_causal_lab.models.ssm.inference.tracing import (
+        CategoricalTraceRecord,
+        SmootherTraceRecord,
+    )
 
 FloatArray = NDArray[np.float64]
 BoolArray = NDArray[np.bool_]
-WorldKind = Literal["ridge", "funnel"]
-SmootherKind = Literal["dsmc", "exact"]
+WorldKind = Literal["ridge", "bounded_scale"]
 ParameterProposal = Literal["random_walk", "pseudo_langevin"]
-LeafProposal = Literal["auxiliary", "bootstrap"]
-
 _LOG_2PI = float(np.log(2.0 * np.pi))
+_DEFAULTS = MarginalParticleGibbsSpec()
+_BUDGET = ComputeBudget(memory=SharedMemoryBudget(available_bytes=512 * 1024**2))
 
 
 def _normal_logpdf(value: FloatArray | float, mean: FloatArray | float, var: FloatArray | float):
     return -0.5 * (_LOG_2PI + np.log(var) + np.square(np.subtract(value, mean)) / var)
-
-
-def _normalize(logits: FloatArray) -> FloatArray:
-    return logits - logsumexp(logits)
-
-
-def _draw_index(rng: np.random.Generator, log_probs: FloatArray) -> int:
-    probs = np.exp(_normalize(log_probs))
-    return int(rng.choice(probs.size, p=probs / probs.sum()))
-
-
-# ── Worlds ────────────────────────────────────────────────────────────────────
-
-
-class World(Protocol):
-    """A two-coordinate posterior ``p(theta) p(x | theta) p(y | x)``."""
-
-    @property
-    def kind(self) -> WorldKind: ...
-
-    def log_prior(self, theta: FloatArray | float) -> FloatArray: ...
-
-    def log_latent(self, x: FloatArray | float, theta: FloatArray | float) -> FloatArray: ...
-
-    def log_obs(self, x: FloatArray | float) -> FloatArray: ...
-
-    def grad_theta(self, theta: FloatArray | float, x: FloatArray | float) -> FloatArray: ...
-
-    def grad_x(self, theta: FloatArray | float, x: FloatArray | float) -> FloatArray: ...
-
-    def x_given_theta(self, theta: FloatArray | float) -> tuple[FloatArray, FloatArray]: ...
-
-    def draw_latent_prior(
-        self, theta: float, rng: np.random.Generator, size: int
-    ) -> FloatArray: ...
-
-    def draw_theta(self, x: float, rng: np.random.Generator) -> float: ...
-
-    def log_evidence(self, theta: FloatArray | float) -> FloatArray: ...
-
-    def theta_box(self) -> tuple[float, float]: ...
-
-    def x_box(self) -> tuple[float, float]: ...
-
-    def jax_params(self) -> jax.Array: ...
 
 
 @dataclass(frozen=True)
@@ -127,14 +104,6 @@ class Ridge:
     def log_obs(self, x: FloatArray | float) -> FloatArray:
         return np.asarray(_normal_logpdf(self.y, x, self.sigma**2))
 
-    def grad_theta(self, theta: FloatArray | float, x: FloatArray | float) -> FloatArray:
-        return np.asarray(-np.divide(theta, self.prior_sd**2) + np.subtract(x, theta) / self.tau**2)
-
-    def grad_x(self, theta: FloatArray | float, x: FloatArray | float) -> FloatArray:
-        return np.asarray(
-            -np.subtract(x, theta) / self.tau**2 + np.subtract(self.y, x) / self.sigma**2
-        )
-
     def x_given_theta(self, theta: FloatArray | float) -> tuple[FloatArray, FloatArray]:
         var = 1.0 / (1.0 / self.tau**2 + 1.0 / self.sigma**2)
         mean = var * (np.divide(theta, self.tau**2) + self.y / self.sigma**2)
@@ -145,9 +114,6 @@ class Ridge:
         var = 1.0 / (1.0 / self.prior_sd**2 + 1.0 / self.tau**2)
         mean = var * np.divide(x, self.tau**2)
         return np.asarray(mean), np.full(np.shape(mean), var)
-
-    def draw_latent_prior(self, theta: float, rng: np.random.Generator, size: int) -> FloatArray:
-        return theta + self.tau * rng.standard_normal(size)
 
     def draw_theta(self, x: float, rng: np.random.Generator) -> float:
         mean, var = self.theta_given_x(x)
@@ -177,19 +143,14 @@ class Ridge:
         half = 4.2 * float(np.sqrt(cov[1, 1]))
         return float(mean[1]) - half, float(mean[1]) + half
 
-    def jax_params(self) -> jax.Array:
-        return jnp.asarray([self.tau, self.sigma, self.y, self.prior_sd])
-
-
-_FUNNEL_GRID = np.linspace(-7.0, 4.0, 4001)
-
 
 @dataclass(frozen=True)
-class Funnel:
-    """``theta`` is the log spread of the latent (a noise scale); ``y`` reads the latent.
+class BoundedScale:
+    """``theta`` controls a latent standard deviation between 1/2 and 2.
 
     With ``y = 0`` the posterior is symmetric in ``x``: the linear correlation of
-    ``theta`` and ``x`` is zero, yet each one sets the other's scale.
+    ``theta`` and ``x`` is zero, yet their dependence is nonlinear. The smooth
+    bounded scale removes the funnel's arbitrarily narrow neck.
     """
 
     sigma: float
@@ -199,63 +160,56 @@ class Funnel:
 
     @property
     def kind(self) -> WorldKind:
-        return "funnel"
+        return "bounded_scale"
+
+    def latent_variance(self, theta: jax.Array) -> jax.Array:
+        """The shared scale law for production inference and display evaluations."""
+        return jnp.exp(np.log(4.0) * jnp.tanh(theta))
+
+    def parameter_grid(self) -> FloatArray:
+        """Finite reference quadrature covering six prior standard deviations."""
+        return np.linspace(
+            self.prior_mean - 6 * self.prior_sd, self.prior_mean + 6 * self.prior_sd, 4001
+        )
 
     def log_prior(self, theta: FloatArray | float) -> FloatArray:
         return np.asarray(_normal_logpdf(theta, self.prior_mean, self.prior_sd**2))
 
     def log_latent(self, x: FloatArray | float, theta: FloatArray | float) -> FloatArray:
-        return np.asarray(_normal_logpdf(x, 0.0, np.exp(np.multiply(2.0, theta))))
+        variance = np.asarray(self.latent_variance(jnp.asarray(theta)))
+        return np.asarray(_normal_logpdf(x, 0.0, variance))
 
     def log_obs(self, x: FloatArray | float) -> FloatArray:
         return np.asarray(_normal_logpdf(self.y, x, self.sigma**2))
 
-    def grad_theta(self, theta: FloatArray | float, x: FloatArray | float) -> FloatArray:
-        return np.asarray(
-            -np.subtract(theta, self.prior_mean) / self.prior_sd**2
-            - 1.0
-            + np.square(x) * np.exp(np.multiply(-2.0, theta))
-        )
-
-    def grad_x(self, theta: FloatArray | float, x: FloatArray | float) -> FloatArray:
-        return np.asarray(
-            -np.multiply(x, np.exp(np.multiply(-2.0, theta))) + np.subtract(self.y, x) / self.sigma**2
-        )
-
     def x_given_theta(self, theta: FloatArray | float) -> tuple[FloatArray, FloatArray]:
-        var = 1.0 / (np.exp(np.multiply(-2.0, theta)) + 1.0 / self.sigma**2)
+        variance = np.asarray(self.latent_variance(jnp.asarray(theta)))
+        var = 1.0 / (1.0 / variance + 1.0 / self.sigma**2)
         return np.asarray(var * self.y / self.sigma**2), np.asarray(var)
 
-    def theta_logpdf_given_x(self, x: float) -> FloatArray:
-        """Unnormalized parameter conditional on the shared grid."""
-        return np.asarray(self.log_prior(_FUNNEL_GRID) + self.log_latent(x, _FUNNEL_GRID))
-
-    def draw_latent_prior(self, theta: float, rng: np.random.Generator, size: int) -> FloatArray:
-        return np.exp(theta) * rng.standard_normal(size)
-
     def draw_theta(self, x: float, rng: np.random.Generator) -> float:
-        log_density = self.theta_logpdf_given_x(x)
+        grid = self.parameter_grid()
+        log_density = self.log_prior(grid) + self.log_latent(x, grid)
         density = np.exp(log_density - log_density.max())
-        cdf = np.cumsum(0.5 * (density[1:] + density[:-1]) * np.diff(_FUNNEL_GRID))
+        cdf = np.cumsum(0.5 * (density[1:] + density[:-1]) * np.diff(grid))
         cdf = np.concatenate(([0.0], cdf / cdf[-1]))
-        return float(np.interp(rng.uniform(), cdf, _FUNNEL_GRID))
+        return float(np.interp(rng.uniform(), cdf, grid))
 
     def log_evidence(self, theta: FloatArray | float) -> FloatArray:
-        return np.asarray(
-            _normal_logpdf(self.y, 0.0, np.exp(np.multiply(2.0, theta)) + self.sigma**2)
-        )
+        variance = np.asarray(self.latent_variance(jnp.asarray(theta)))
+        return np.asarray(_normal_logpdf(self.y, 0.0, variance + self.sigma**2))
 
     def theta_box(self) -> tuple[float, float]:
-        low, high = np.interp([0.002, 0.998], _marginal_cdf(self), _FUNNEL_GRID)
+        low, high = np.interp([0.002, 0.998], _marginal_cdf(self), self.parameter_grid())
         return float(low) - 0.4, float(high) + 0.4
 
     def x_box(self) -> tuple[float, float]:
         _, var = self.x_given_theta(self.theta_box()[1])
-        half = 3.6 * float(np.sqrt(var))
+        half = 4.2 * float(np.sqrt(var))
         return self.y - half, self.y + half
 
-    def jax_params(self) -> jax.Array:
-        return jnp.asarray([self.sigma, self.y, self.prior_mean, self.prior_sd])
+
+type World = Ridge | BoundedScale
 
 
 def log_joint(world: World, theta: FloatArray | float, x: FloatArray | float) -> FloatArray:
@@ -265,7 +219,7 @@ def log_joint(world: World, theta: FloatArray | float, x: FloatArray | float) ->
 
 @dataclass(frozen=True)
 class Surface:
-    """The joint density on a grid with its exact parameter marginal."""
+    """Exact joint and marginal density evaluations, normalized over a finite display grid."""
 
     theta: FloatArray
     x: FloatArray
@@ -288,25 +242,12 @@ def surface(world: World, resolution: int = 161) -> Surface:
     return Surface(theta, x, np.asarray(log_density), marginal)
 
 
-def _marginal_cdf(world: Funnel) -> FloatArray:
-    log_marginal = world.log_prior(_FUNNEL_GRID) + world.log_evidence(_FUNNEL_GRID)
+def _marginal_cdf(world: BoundedScale) -> FloatArray:
+    grid = world.parameter_grid()
+    log_marginal = world.log_prior(grid) + world.log_evidence(grid)
     density = np.exp(log_marginal - log_marginal.max())
     cdf = np.concatenate(([0.0], np.cumsum(0.5 * (density[1:] + density[:-1]))))
     return cdf / cdf[-1]
-
-
-def exact_draws(world: World, size: int, seed: int) -> tuple[FloatArray, FloatArray]:
-    """Independent posterior draws: ``theta`` from its marginal, then ``x | theta``."""
-    rng = np.random.default_rng(seed)
-    if isinstance(world, Ridge):
-        mean, cov = world.moments()
-        theta = mean[0] + np.sqrt(cov[0, 0]) * rng.standard_normal(size)
-    elif isinstance(world, Funnel):
-        theta = np.interp(rng.uniform(size=size), _marginal_cdf(world), _FUNNEL_GRID)
-    else:
-        raise TypeError(world)
-    x_mean, x_var = world.x_given_theta(theta)
-    return theta, x_mean + np.sqrt(x_var) * rng.standard_normal(size)
 
 
 @dataclass(frozen=True)
@@ -333,28 +274,25 @@ class Coupling:
 
 
 def coupling(world: World) -> Coupling:
-    """Exact marginal moments of ``theta`` and its mean conditional variance."""
+    """Analytic ridge moments; deterministic quadrature for the bounded-scale model."""
     if isinstance(world, Ridge):
         mean, cov = world.moments()
         conditional = float(world.theta_given_x(0.0)[1])
         return Coupling(float(mean[0]), float(cov[0, 0]), conditional)
-    if isinstance(world, Funnel):
-        weights = np.diff(_marginal_cdf(world), prepend=0.0)
-        mean = float(np.sum(weights * _FUNNEL_GRID))
-        var = float(np.sum(weights * np.square(_FUNNEL_GRID - mean)))
-        _, latent = exact_draws(world, 600, seed=0)
-        log_density = world.log_prior(_FUNNEL_GRID)[None, :] + world.log_latent(
-            latent[:, None], _FUNNEL_GRID[None, :]
-        )
-        density = np.exp(log_density - log_density.max(axis=1, keepdims=True))
-        density /= density.sum(axis=1, keepdims=True)
-        centers = density @ _FUNNEL_GRID
-        spreads = np.sum(density * np.square(_FUNNEL_GRID[None, :] - centers[:, None]), axis=1)
-        return Coupling(mean, var, float(np.mean(spreads)))
+    if isinstance(world, BoundedScale):
+        theta = world.parameter_grid()[::4]
+        x = np.linspace(*world.x_box(), 401)
+        log_density = log_joint(world, theta[None, :], x[:, None])
+        density = np.exp(log_density - log_density.max())
+        marginal_x = np.trapezoid(density, theta, axis=1)
+        mass = np.trapezoid(marginal_x, x)
+        marginal_theta = np.trapezoid(density, x, axis=0) / mass
+        mean = float(np.trapezoid(theta * marginal_theta, theta))
+        var = float(np.trapezoid(np.square(theta - mean) * marginal_theta, theta))
+        centers = np.trapezoid(density * theta, theta, axis=1) / marginal_x
+        spreads = np.trapezoid(density * np.square(theta - centers[:, None]), theta, axis=1)
+        return Coupling(mean, var, float(np.trapezoid(spreads, x) / mass))
     raise TypeError(world)
-
-
-# ── Samplers ──────────────────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True)
@@ -378,301 +316,32 @@ class Sweep:
 
     thetas: FloatArray  # parameter labels; index 0 is the current value
     label_log_prior: FloatArray  # normalized label prior (with the Barker correction)
-    aux: float  # auxiliary point z of the local proposal
-    center: float  # proposal centre after the gradient shift
+    aux: float  # auxiliary point drawn around the drifted reference
+    center: float  # aMALA+ proposes around the auxiliary point
+    kappa: float  # gradient multiplier used by this sweep
     particles: FloatArray  # index 0 is the reference
-    psi: FloatArray  # (particles, labels) potentials
     weights: FloatArray  # selection probabilities
     chosen: int
     label_probs: FloatArray  # label probabilities given the chosen latent
     label: int
+    parameter_aux: float | None  # no parameter proposal in a fixed-theta smoothing sweep
 
 
-def dsmc_leaf(
-    world: World,
-    thetas: FloatArray,
-    label_log_prior: FloatArray,
-    x_ref: float,
-    rng: np.random.Generator,
-    *,
-    particles: int,
-    delta: float,
-    kappa: float,
-) -> tuple[float, float, float, FloatArray, FloatArray, FloatArray, int]:
-    """Conditional DSMC at one time step against the mixture over parameter labels.
-
-    Returns the new latent, the auxiliary point, the proposal centre, the particles,
-    their per-label potentials, the selection probabilities and the chosen index.
-    """
-    var = 0.5 * delta
-    aux = x_ref + np.sqrt(var) * rng.standard_normal()
-    # Mixture-weighted gradient at the auxiliary point, as in production's leaf.
-    component = label_log_prior + world.log_latent(aux, thetas) + world.log_obs(aux)
-    gradient = float(np.sum(np.exp(_normalize(component)) * world.grad_x(thetas, aux)))
-    center = aux + kappa * var * gradient
-    free = center + np.sqrt(var) * rng.standard_normal(particles - 1)
-    bank = np.concatenate(([x_ref], free))
-    proposal = _normal_logpdf(bank, center, var)
-    pseudo_observation = _normal_logpdf(bank, aux, var)
-    psi = (
-        world.log_latent(bank[:, None], thetas[None, :])
-        + world.log_obs(bank)[:, None]
-        - proposal[:, None]
-        + pseudo_observation[:, None]
-    )
-    evidence = logsumexp(label_log_prior[None, :] + psi, axis=1)
-    weights = np.exp(_normalize(evidence))
-    chosen = _draw_index(rng, evidence)
-    return float(bank[chosen]), float(aux), float(center), bank, np.asarray(psi), weights, chosen
-
-
-def bootstrap_leaf(
-    world: World, theta: float, x_ref: float, rng: np.random.Generator, *, particles: int
-) -> tuple[float, FloatArray, FloatArray, int]:
-    """Classic particle Gibbs at one time step: propose from ``p(x | theta)``."""
-    bank = np.concatenate(([x_ref], world.draw_latent_prior(theta, rng, particles - 1)))
-    log_weights = world.log_obs(bank)
-    chosen = _draw_index(rng, log_weights)
-    return float(bank[chosen]), bank, np.exp(_normalize(log_weights)), chosen
-
-
-def gibbs(world: World, sweeps: int, start: tuple[float, float], seed: int) -> Chain:
-    """Exact two-block Gibbs: ``theta ~ p(theta | x)``, then ``x ~ p(x | theta, y)``."""
+def gibbs(
+    world: World, sweeps: int, start: tuple[float, float], seed: int, *, warmup: int = 0
+) -> Chain:
+    """Conditional-draw reference: analytic ridge or bounded-scale grid quadrature."""
     rng = np.random.default_rng(seed)
     theta, x = start
-    thetas, xs = np.empty(sweeps), np.empty(sweeps)
-    for sweep in range(sweeps):
+    total = sweeps + warmup
+    thetas, xs = np.empty(total), np.empty(total)
+    for sweep in range(total):
         theta = world.draw_theta(x, rng)
         mean, var = world.x_given_theta(theta)
         x = float(mean + np.sqrt(var) * rng.standard_normal())
         thetas[sweep], xs[sweep] = theta, x
-    moved = np.ones(sweeps, dtype=bool)
-    return Chain(thetas, xs, moved, moved, blocked=True)
-
-
-def _adapt(value: float, hit: bool, target: float, warm: bool) -> float:
-    """Production's simple rule during warmup: ``value * exp(0.05 (hit - target))``."""
-    return value * float(np.exp(0.05 * (float(hit) - target))) if warm else value
-
-
-def particle_gibbs(
-    world: World,
-    sweeps: int,
-    start: tuple[float, float],
-    seed: int,
-    *,
-    particles: int,
-    delta: float,
-    kappa: float,
-    leaf: LeafProposal = "auxiliary",
-    warmup: int = 0,
-) -> Chain:
-    """Exact parameter draw, then one conditional particle sweep for the latent.
-
-    With the auxiliary leaf this is the benchmark's arm G (exact Gaussian parameters
-    + conditional DSMC); arms D and F replace the exact draw by LAPS or NUTS. During
-    ``warmup`` sweeps ``delta`` adapts towards production's 0.75 latent move rate;
-    the returned chain excludes them.
-    """
-    rng = np.random.default_rng(seed)
-    theta, x = start
-    thetas, xs = np.empty(sweeps), np.empty(sweeps)
-    x_moved = np.zeros(sweeps, dtype=bool)
-    for sweep in range(-warmup, sweeps):
-        theta = world.draw_theta(x, rng)
-        if leaf == "auxiliary":
-            new_x = dsmc_leaf(
-                world,
-                np.array([theta]),
-                np.zeros(1),
-                x,
-                rng,
-                particles=particles,
-                delta=delta,
-                kappa=kappa,
-            )[0]
-        else:
-            new_x = bootstrap_leaf(world, theta, x, rng, particles=particles)[0]
-        delta = _adapt(delta, new_x != x, 0.75, sweep < 0)
-        if sweep >= 0:
-            x_moved[sweep] = new_x != x
-            thetas[sweep], xs[sweep] = theta, new_x
-        x = new_x
-    return Chain(thetas, xs, np.ones(sweeps, dtype=bool), x_moved, blocked=True)
-
-
-def mpgibbs_sweep(
-    world: World,
-    theta: float,
-    x_ref: float,
-    rng: np.random.Generator,
-    *,
-    particles: int,
-    delta: float,
-    kappa: float,
-    step: float,
-    scale: float,
-    proposal: ParameterProposal,
-    anchor_x: float,
-    smoother: SmootherKind,
-) -> Sweep:
-    """One marginalized particle Gibbs move with two parameter labels.
-
-    ``u | theta ~ N(theta + 2 step scale^2 g(theta), 2 step scale^2)`` and
-    ``theta' | u ~ N(u, 2 step scale^2)``, with ``g`` the complete-data gradient at
-    the fixed ``anchor_x`` (production's fixed pilot path) for pseudo-Langevin and
-    ``g = 0`` for the random walk. The latent is then updated against the mixture
-    over ``{theta, theta'}`` and a label is drawn given the new latent.
-    ``smoother="exact"`` replaces the particle sweep by an exact mixture draw, the
-    infinite-particle limit.
-    """
-    var = 2.0 * step * scale**2
-    drift = var * float(world.grad_theta(theta, anchor_x)) if proposal == "pseudo_langevin" else 0.0
-    u = theta + drift + np.sqrt(var) * rng.standard_normal()
-    thetas = np.array([theta, u + np.sqrt(var) * rng.standard_normal()])
-    if proposal == "pseudo_langevin":
-        gradients = world.grad_theta(thetas, anchor_x)
-        correction = gradients * (u - thetas) - step * np.square(scale * gradients)
-    else:
-        correction = np.zeros(2)
-    parameter_log_probs = world.log_prior(thetas) + correction
-    label_log_prior = _normalize(parameter_log_probs)
-    if smoother == "exact":
-        # Infinite particles: pick a mixture component by evidence, draw its slice.
-        component = _draw_index(rng, label_log_prior + world.log_evidence(thetas))
-        mean, var_x = world.x_given_theta(float(thetas[component]))
-        new_x = float(mean + np.sqrt(var_x) * rng.standard_normal())
-        aux = center = new_x
-        bank, psi, weights, chosen = np.array([new_x]), np.zeros((1, 2)), np.ones(1), 0
-    else:
-        new_x, aux, center, bank, psi, weights, chosen = dsmc_leaf(
-            world,
-            thetas,
-            label_log_prior,
-            x_ref,
-            rng,
-            particles=particles,
-            delta=delta,
-            kappa=kappa,
-        )
-    label_logits = parameter_log_probs + world.log_latent(new_x, thetas) + world.log_obs(new_x)
-    label = _draw_index(rng, label_logits)
-    return Sweep(
-        thetas=thetas,
-        label_log_prior=label_log_prior,
-        aux=aux,
-        center=center,
-        particles=bank,
-        psi=psi,
-        weights=weights,
-        chosen=chosen,
-        label_probs=np.exp(_normalize(label_logits)),
-        label=label,
-    )
-
-
-@dataclass(frozen=True)
-class MPGibbsChain:
-    """An mPGibbs chain with the tuning it froze after warmup."""
-
-    chain: Chain
-    step: float
-    delta: float
-
-
-def mpgibbs(
-    world: World,
-    sweeps: int,
-    start: tuple[float, float],
-    seed: int,
-    *,
-    particles: int,
-    delta: float,
-    kappa: float,
-    step: float,
-    scale: float,
-    proposal: ParameterProposal,
-    smoother: SmootherKind,
-    anchor_x: float,
-    warmup: int = 0,
-) -> MPGibbsChain:
-    """Chain of ``mpgibbs_sweep`` moves.
-
-    During ``warmup`` sweeps the parameter step adapts towards production's 0.35
-    label-switch rate and ``delta`` towards the 0.75 latent move rate; both are then
-    frozen and the warmup sweeps are dropped from the chain.
-    """
-    rng = np.random.default_rng(seed)
-    theta, x = start
-    thetas, xs = np.empty(sweeps), np.empty(sweeps)
-    theta_moved, x_moved = np.zeros(sweeps, dtype=bool), np.zeros(sweeps, dtype=bool)
-    for sweep in range(-warmup, sweeps):
-        move = mpgibbs_sweep(
-            world,
-            theta,
-            x,
-            rng,
-            particles=particles,
-            delta=delta,
-            kappa=kappa,
-            step=step,
-            scale=scale,
-            proposal=proposal,
-            anchor_x=anchor_x,
-            smoother=smoother,
-        )
-        new_theta, new_x = float(move.thetas[move.label]), float(move.particles[move.chosen])
-        step = _adapt(step, move.label == 1, 0.35, sweep < 0)
-        delta = _adapt(delta, new_x != x, 0.75, sweep < 0 and smoother == "dsmc")
-        if sweep >= 0:
-            theta_moved[sweep], x_moved[sweep] = move.label == 1, new_x != x
-            thetas[sweep], xs[sweep] = new_theta, new_x
-        theta, x = new_theta, new_x
-    return MPGibbsChain(Chain(thetas, xs, theta_moved, x_moved, blocked=False), step, delta)
-
-
-def pmmh(
-    world: World,
-    sweeps: int,
-    start: tuple[float, float],
-    seed: int,
-    *,
-    particles: int,
-    step: float,
-) -> Chain:
-    """Particle marginal Metropolis–Hastings with a bootstrap likelihood estimate."""
-    rng = np.random.default_rng(seed)
-
-    def estimate(theta: float) -> tuple[float, FloatArray, FloatArray]:
-        bank = world.draw_latent_prior(theta, rng, particles)
-        log_weights = world.log_obs(bank)
-        return float(logsumexp(log_weights) - np.log(particles)), bank, log_weights
-
-    theta, x = start
-    log_evidence, bank, log_weights = estimate(theta)
-    thetas, xs = np.empty(sweeps), np.empty(sweeps)
-    theta_moved = np.zeros(sweeps, dtype=bool)
-    for sweep in range(sweeps):
-        proposal = theta + step * rng.standard_normal()
-        proposal_evidence, proposal_bank, proposal_weights = estimate(proposal)
-        log_ratio = (
-            float(world.log_prior(proposal)) + proposal_evidence
-            - float(world.log_prior(theta)) - log_evidence
-        )
-        if np.log(rng.uniform()) < log_ratio:
-            theta, log_evidence, bank, log_weights = (
-                proposal,
-                proposal_evidence,
-                proposal_bank,
-                proposal_weights,
-            )
-            theta_moved[sweep] = True
-            x = float(bank[_draw_index(rng, log_weights)])
-        thetas[sweep], xs[sweep] = theta, x
-    return Chain(thetas, xs, theta_moved, theta_moved.copy(), blocked=False)
-
-
-# ── Diagnostics ───────────────────────────────────────────────────────────────
+    moved = np.ones(total, dtype=bool)
+    return _project_chain((thetas, xs, moved, moved), warmup, blocked=True)
 
 
 def autocorrelation(values: FloatArray, max_lag: int) -> FloatArray:
@@ -700,177 +369,356 @@ def ess(values: FloatArray) -> float:
     return float(size / tau)
 
 
-def pooled_ess(chains: FloatArray) -> float:
-    """Sum of per-chain ESS over the leading axis of ``chains``."""
-    return float(sum(ess(chain) for chain in chains))
+@lru_cache(maxsize=8)
+def production_target(world: World) -> ParticleTarget:
+    """Declare the one-time-point toy through the same target contract used by fitting."""
+    initial = jnp.asarray([0.0 if isinstance(world, Ridge) else world.prior_mean])
 
-
-# ── Joint gradient samplers (BlackJAX) ────────────────────────────────────────
-
-
-def _jax_log_joint(kind: WorldKind, params: jax.Array, position: jax.Array) -> jax.Array:
-    theta, x = position[0], position[1]
-
-    def normal(value: jax.Array, mean: jax.Array, var: jax.Array) -> jax.Array:
-        return -0.5 * (_LOG_2PI + jnp.log(var) + jnp.square(value - mean) / var)
-
-    if kind == "ridge":
-        tau, sigma, y, prior_sd = params[0], params[1], params[2], params[3]
-        return normal(theta, jnp.asarray(0.0), prior_sd**2) + normal(x, theta, tau**2) + normal(
-            y, x, sigma**2
+    def _model(position: jax.Array) -> dsx.DynamicalModel:
+        mean = position if isinstance(world, Ridge) else jnp.zeros(1)
+        variance = world.tau**2 if isinstance(world, Ridge) else world.latent_variance(position[0])
+        return dsx.DynamicalModel(
+            initial_condition=dist.MultivariateNormal(
+                mean, covariance_matrix=jnp.full((1, 1), variance)
+            ),
+            # T=1 has no transition factors. A declared transition is still part of
+            # the model contract and of shape tracing inside the production kernel.
+            state_evolution=dsx.LinearGaussianStateEvolution(jnp.zeros((1, 1)), jnp.ones((1, 1))),
+            observation_model=dsx.LinearGaussianObservation(
+                jnp.ones((1, 1)), jnp.full((1, 1), world.sigma**2)
+            ),
+            t0=0.0,
         )
-    sigma, y, prior_mean, prior_sd = params[0], params[1], params[2], params[3]
-    return (
-        normal(theta, prior_mean, prior_sd**2)
-        + normal(x, jnp.asarray(0.0), jnp.exp(2.0 * theta))
-        + normal(y, x, sigma**2)
+
+    _, static = eqx.partition(_model(initial), eqx.is_array)
+
+    def _context(position: jax.Array, grid: jax.Array) -> ParticleContext:
+        return eqx.filter(_model(position), eqx.is_array), grid, jnp.zeros(1)
+
+    def _declared(context: ParticleContext) -> dsx.DynamicalModel:
+        return eqx.combine(context[0], static)
+
+    prior_mean = 0.0 if isinstance(world, Ridge) else world.prior_mean
+    return ParticleTarget(
+        parameters=ParameterTransform(
+            initial,
+            lambda position: {"theta": position[0]},
+            lambda position: {"theta": position[0]},
+            lambda position: dist.Normal(prior_mean, world.prior_sd).log_prob(position[0]),
+        ),
+        context=_context,
+        dynamical_model=_declared,
+        observations=jnp.asarray([[world.y]]),
+        times=jnp.asarray([0.0]),
+        state_space=StateSpace(1, (), (0,), (0,), (), ParallelRecurrences(())),
+        observation_partition=CompiledObservationPartition((0,), ()),
     )
+
+
+def _initial_state(
+    target: ParticleTarget,
+    start: tuple[float, float],
+    delta: float,
+    step: float,
+    parameter_gradient_fn: Callable[[jax.Array], jax.Array],
+) -> TrajectoryMCMCState:
+    return _initialize_chain_state(
+        jnp.asarray([start[0]]),
+        observations=target.observations,
+        times=target.times,
+        target=target,
+        parameter_gradient_fn=parameter_gradient_fn,
+        initial_latent_delta=jnp.asarray([delta]),
+        param_step_size=step,
+        param_min_scale=_DEFAULTS.param_step_size_min,
+        param_max_scale=_DEFAULTS.param_step_size_max,
+        param_target_accept=_DEFAULTS.param_target_accept,
+        initial_latent_trajectory=jnp.asarray([[start[1]]]),
+    )
+
+
+@lru_cache(maxsize=16)
+def _marginal_kernel(
+    world: World,
+    particles: int,
+    kappa: float,
+    scale: float,
+    proposal: ParameterProposal,
+    anchor_x: float,
+):
+    return build_marginal_particle_gibbs_kernel(
+        production_target(world),
+        num_particles=particles,
+        num_parameter_particles=2,
+        param_step_size=_DEFAULTS.param_step_size,
+        parameter_preconditioner_chol=jnp.asarray([[scale]]),
+        parameter_proposal=proposal,
+        parameter_reference_path=jnp.asarray([[anchor_x]]),
+        dsmc=DsmcSpec(dsmc_leaf_proposal="amala_plus", amala_kappa=kappa),
+    )
+
+
+@partial(jax.jit, static_argnames=("step_fn", "sweeps"))
+def _chain_program(state, key, *, step_fn, sweeps: int):
+    def _step(current, step_key):
+        updated, info = step_fn(current, step_key)
+        return updated, (
+            updated.position[0],
+            updated.latent_trajectory[0, 0],
+            info["parameter_accepted"].astype(bool),
+            jnp.any(updated.latent_trajectory != current.latent_trajectory),
+        )
+
+    return jax.lax.scan(_step, state, jax.random.split(key, sweeps))
+
+
+def _project_chain(values, discarded: int, *, blocked: bool) -> Chain:
+    theta, latent, theta_moved, x_moved = values
+    return Chain(
+        np.asarray(theta[discarded:], dtype=np.float64),
+        np.asarray(latent[discarded:], dtype=np.float64),
+        np.asarray(theta_moved[discarded:], dtype=bool),
+        np.asarray(x_moved[discarded:], dtype=bool),
+        blocked=blocked,
+    )
+
+
+def mpgibbs(
+    world: World,
+    sweeps: int,
+    start: tuple[float, float],
+    seed: int,
+    *,
+    particles: int,
+    delta: float,
+    kappa: float = _DEFAULTS.dsmc.amala_kappa,
+    step: float,
+    scale: float = 1.0,
+    proposal: ParameterProposal,
+    anchor_x: float = 0.0,
+    warmup: int = 0,
+) -> Chain:
+    """Run the production joint transition with fixed tuning; discard ``warmup`` moves."""
+    kernel = _marginal_kernel(world, particles, kappa, scale, proposal, anchor_x)
+    initial = _initial_state(
+        production_target(world), start, delta, step, kernel.parameter_gradient_fn
+    )
+    _, values = _chain_program(
+        initial, jax.random.key(seed), step_fn=kernel.step_fn, sweeps=sweeps + warmup
+    )
+    return _project_chain(values, warmup, blocked=False)
+
+
+def mpgibbs_sweep(
+    world: World,
+    theta: float,
+    x_ref: float,
+    seed: int,
+    *,
+    particles: int,
+    delta: float,
+    kappa: float = _DEFAULTS.dsmc.amala_kappa,
+    step: float,
+    scale: float = 1.0,
+    proposal: ParameterProposal,
+    anchor_x: float = 0.0,
+) -> Sweep:
+    """Project one recorded production transition; all displayed weights were used by it."""
+    kernel = _marginal_kernel(world, particles, kappa, scale, proposal, anchor_x)
+    initial = _initial_state(
+        production_target(world), (theta, x_ref), delta, step, kernel.parameter_gradient_fn
+    )
+    traced = _recorded_step(initial, jax.random.key(seed), step_fn=kernel.trace_step_fn)
+    trace = traced.trace
+    return _project_sweep(
+        trace.smoother,
+        trace.parameters.candidates,
+        trace.parameters.label_log_prior,
+        trace.label_selection,
+        parameter_aux=float(trace.parameters.auxiliary[0]),
+        kappa=kappa,
+    )
+
+
+def _project_sweep(
+    smoother: SmootherTraceRecord,
+    parameters: jax.Array,
+    label_log_prior: jax.Array,
+    label_selection: CategoricalTraceRecord,
+    *,
+    parameter_aux: float | None,
+    kappa: float,
+) -> Sweep:
+    """Select the toy's single time and coordinate from the production trace axes."""
+    return Sweep(
+        thetas=np.asarray(parameters[:, 0], dtype=np.float64),
+        label_log_prior=np.asarray(label_log_prior, dtype=np.float64),
+        aux=float(smoother.auxiliary[0, 0]),
+        center=float(smoother.proposal_centers[0, 0]),
+        kappa=kappa,
+        particles=np.asarray(smoother.particles[0, :, 0], dtype=np.float64),
+        weights=np.asarray(jnp.exp(smoother.root_selection.log_weights), dtype=np.float64),
+        chosen=int(smoother.selected_particles[0]),
+        label_probs=np.asarray(jnp.exp(label_selection.log_weights), dtype=np.float64),
+        label=int(label_selection.selected),
+        parameter_aux=parameter_aux,
+    )
+
+
+@partial(jax.jit, static_argnames=("step_fn",))
+def _recorded_step(state, key, *, step_fn):
+    return step_fn(state, key)
+
+
+def _smoother_static(target: ParticleTarget, particles: int, kappa: float) -> SmootherSetup:
+    return SmootherSetup(
+        latent_context_runtime_fn=target.context,
+        log_prior_unc_fn=target.log_prior,
+        obs_increment_fn=target.observation_increment,
+        trajectory_log_prob_fn=target.path_log_prob,
+        runtime_observations=target.observations,
+        runtime_times=target.times,
+        latent_free_mask=target.independent_mask,
+        num_particles=particles,
+        num_parameter_particles=1,
+        dsmc_leaf_proposal="amala_plus",
+        amala_kappa=kappa,
+        amala_grad_clip=_DEFAULTS.dsmc.amala_grad_clip,
+        latent_block_coords=None,
+        paid_mix=None,
+        target=target,
+        transition_initial_log_prob_fn=target.initial_log_prob,
+        transition_log_prob_fn=target.transition_log_prob,
+        transition_pairwise_log_probs_fn=target.pairwise_transition_log_prob,
+        diagnostic_metrics=frozenset(),
+        intervals=None,
+        local_auxiliary_exact=False,
+    )
+
+
+def dsmc_sweep(
+    world: World,
+    theta: float,
+    x_ref: float,
+    seed: int,
+    *,
+    particles: int,
+    delta: float,
+    kappa: float = _DEFAULTS.dsmc.amala_kappa,
+) -> Sweep:
+    """Record the production conditional smoother at one fixed parameter value."""
+    from nof1_causal_lab.models.ssm.inference.tracing import CategoricalTraceRecord
+
+    target = production_target(world)
+    initial = _initial_state(
+        target, (theta, x_ref), delta, _DEFAULTS.param_step_size, jnp.zeros_like
+    )
+    candidates = initial.position[None]
+    ctx = build_smoother_context(
+        _smoother_static(target, particles, kappa),
+        candidates,
+        jnp.zeros(1),
+        reference=initial.latent_trajectory,
+        delta=initial.latent_delta,
+        trajectory_dtype=initial.trajectory_log_prob.dtype,
+    )
+    traced = dsmc_trace_step(
+        ctx, jax.random.key(seed), initial.latent_trajectory, lambda _: jnp.zeros(1)
+    )
+    return _project_sweep(
+        traced.trace,
+        candidates,
+        ctx.initial_label_log_probs,
+        CategoricalTraceRecord(traced.result.label_scores.log_probs, jnp.asarray(0)),
+        parameter_aux=None,
+        kappa=kappa,
+    )
+
+
+@lru_cache(maxsize=8)
+def _conditional_kernel(world: World, particles: int, kappa: float):
+    """Compose a mathematical parameter reference with the production conditional smoother."""
+    target = production_target(world)
+    static = _smoother_static(target, particles, kappa)
+
+    def _draw_parameter(x, key):
+        if isinstance(world, Ridge):
+            mean_per_x, variance = world.theta_given_x(1.0)
+            return float(mean_per_x) * x + np.sqrt(float(variance)) * jax.random.normal(key)
+        grid = jnp.asarray(world.parameter_grid())
+        log_density = jax.vmap(
+            lambda theta: target.log_posterior(
+                theta[None], x.reshape(1, 1), target.observations, target.times
+            )
+        )(grid)
+        density = jnp.exp(log_density - jnp.max(log_density))
+        cdf = jnp.concatenate((jnp.zeros(1), jnp.cumsum((density[1:] + density[:-1]) / 2)))
+        return jnp.interp(jax.random.uniform(key), cdf / cdf[-1], grid)
+
+    def _step(state, key):
+        parameter_key, path_key = jax.random.split(key)
+        position = _draw_parameter(state.latent_trajectory[0, 0], parameter_key)[None]
+        context = target.context(position, target.times)
+        bound = state._replace(position=position, latent_context=context)
+        smoother_context = build_smoother_context(
+            static,
+            position[None],
+            jnp.zeros(1),
+            reference=bound.latent_trajectory,
+            delta=bound.latent_delta,
+            trajectory_dtype=bound.trajectory_log_prob.dtype,
+        )
+        result = dsmc_step(
+            smoother_context, path_key, state.latent_trajectory, lambda _: jnp.zeros(1)
+        )
+        path = result.latent_path
+        return bound._replace(
+            latent_trajectory=path,
+            trajectory_log_prob=result.label_scores.trajectory_log_probs[0],
+            complete_log_posterior=result.label_scores.log_posteriors[0],
+        ), {"parameter_accepted": jnp.any(position != state.position)}
+
+    return _step
+
+
+def particle_gibbs(
+    world: World,
+    sweeps: int,
+    start: tuple[float, float],
+    seed: int,
+    *,
+    particles: int,
+    delta: float,
+    kappa: float = _DEFAULTS.dsmc.amala_kappa,
+    warmup: int = 0,
+) -> Chain:
+    """Reference parameter conditional plus real DSMC; frozen tuning, discarded burn-in.
+
+    Ridge parameters are drawn analytically. Bounded-scale parameters use numerical
+    inverse-CDF quadrature, so that comparison is not an exact continuous kernel.
+    """
+    initial = _initial_state(
+        production_target(world), start, delta, _DEFAULTS.param_step_size, jnp.zeros_like
+    )
+    _, values = _chain_program(
+        initial,
+        jax.random.key(seed),
+        step_fn=_conditional_kernel(world, particles, kappa),
+        sweeps=sweeps + warmup,
+    )
+    return _project_chain(values, warmup, blocked=True)
 
 
 @dataclass(frozen=True)
 class LapsRun:
-    """The LAPS ensemble at every step, and what it hands to the particle sampler."""
+    """Recorded production initialization, decoded into the displayed scientific coordinates."""
 
-    positions: FloatArray  # (steps, members, 2): unadjusted steps, then adjusted
-    step_size: FloatArray  # (steps,)
-    active: BoolArray  # unadjusted steps actually executed before the early stop
-    unadjusted_steps: int  # length of the unadjusted block in ``positions``
-    acceptance: FloatArray  # adjusted-phase acceptance per step
-    inverse_mass: FloatArray  # (2,) diagonal preconditioner learned in burn-in
-    samples: FloatArray  # (chains, draws, 2) frozen adjusted kernel, for mixing only
-
-
-@partial(
-    jax.jit,
-    static_argnames=(
-        "kind",
-        "members",
-        "unadjusted",
-        "adjusted",
-        "steps_per_sample",
-        "chains",
-        "draws",
-    ),
-)
-def _laps_program(
-    kind: WorldKind,
-    params: jax.Array,
-    key: jax.Array,
-    *,
-    members: int,
-    unadjusted: int,
-    adjusted: int,
-    steps_per_sample: int,
-    chains: int,
-    draws: int,
-):
-    def log_density(position: jax.Array) -> jax.Array:
-        return _jax_log_joint(kind, params, position)
-
-    dimension = 2
-    initial_key, burn_key, adjusted_key, sample_key = jax.random.split(key, 4)
-    positions = jax.random.normal(initial_key, (members, dimension))
-    values, gradients = jax.vmap(jax.value_and_grad(log_density))(positions)
-    signs = jnp.where(jnp.mean(-positions * gradients, axis=0) < 1, -1.0, 1.0)
-    scaled = gradients / jnp.max(jnp.abs(gradients), axis=-1, keepdims=True)
-    momentum = signs * scaled / jnp.linalg.norm(scaled, axis=-1, keepdims=True)
-    state = IntegratorState(positions, momentum, values, gradients)
-
-    adaptation = laps_burn_in.Adaptation(
-        dimension,
-        microcanonical=True,
-        alpha=1.9,
-        C=0.1,
-        r_end=0.01,
-        bias_type=3,
-        save_num=max(2, round(0.2 * unadjusted)),
-    )
-    burn_kernel = laps_burn_in.build_kernel(log_density, dimension, microcanonical=True)
-
-    def burn(carry, index):
-        current, tuning, active = carry
-        sampling_key, summary_key = jax.random.split(jax.random.fold_in(burn_key, index))
-        moved, info = jax.vmap(lambda member_key, member: burn_kernel(member_key, member, tuning))(
-            jax.random.split(sampling_key, members), current
-        )
-        summaries = jax.vmap(adaptation.summary_statistics_fn, in_axes=(0, 0, None))(
-            moved, info, summary_key
-        )
-        new_tuning, summary = adaptation.update(
-            tuning, jax.tree.map(lambda leaf: jnp.mean(leaf, axis=0), summaries)
-        )
-        keep_going = (
-            adaptation.while_cond(summary, index)
-            & jnp.isfinite(new_tuning.step_size)
-            & (new_tuning.step_size > 0)
-        )
-        current = jax.tree.map(lambda new, old: jnp.where(active, new, old), moved, current)
-        tuning = jax.tree.map(lambda new, old: jnp.where(active, new, old), new_tuning, tuning)
-        return (current, tuning, active & keep_going), (current.position, tuning.step_size, active)
-
-    (state, burn_tuning, _), (burn_positions, burn_steps, burn_active) = jax.lax.scan(
-        burn, (state, adaptation.initial_state, jnp.asarray(True)), jnp.arange(unadjusted)
-    )
-
-    adjusted_kernel = build_adjusted_kernel(
-        integrator=generate_isokinetic_integrator(mclachlan_coefficients)
-    )
-    inverse_mass = burn_tuning.inverse_mass_matrix
-    adjusted_adaptation = laps.Adaptation(
-        burn_tuning._replace(step_size=burn_tuning.step_size / jnp.sqrt(jnp.mean(inverse_mass))),
-        num_adaptation_samples=adjusted,
-        steps_per_sample=steps_per_sample,
-        acc_prob_target=0.7,
-    )
-
-    def move(chain_key, chain_state, step_size):
-        return adjusted_kernel(
-            rng_key=chain_key,
-            state=chain_state,
-            logdensity_fn=log_density,
-            step_size=step_size,
-            integration_steps_params=(steps_per_sample,),
-            inverse_mass_matrix=inverse_mass,
-            L_proposal_factor=1.25,
-        )
-
-    def refine(carry, index):
-        current, tuning = carry
-        sampling_key, summary_key = jax.random.split(jax.random.fold_in(adjusted_key, index))
-        current, info = jax.vmap(lambda chain_key, chain: move(chain_key, chain, tuning.step_size))(
-            jax.random.split(sampling_key, members), current
-        )
-        summaries = jax.vmap(adjusted_adaptation.summary_statistics_fn, in_axes=(0, 0, None))(
-            current, info, summary_key
-        )
-        tuning, summary = adjusted_adaptation.update(
-            tuning, jax.tree.map(lambda leaf: jnp.mean(leaf, axis=0), summaries)
-        )
-        return (current, tuning), (current.position, tuning.step_size, summary["acc_prob"])
-
-    adjusted_state = HMCState(state.position, state.logdensity, state.logdensity_grad)
-    (adjusted_state, tuning), (adjusted_positions, adjusted_steps, acceptance) = jax.lax.scan(
-        refine, (adjusted_state, adjusted_adaptation.initial_state), jnp.arange(adjusted)
-    )
-
-    # Mixing check only: production discards LAPS draws and samples with the particle kernel.
-    sampler_state = jax.tree.map(lambda leaf: leaf[:chains], adjusted_state)
-
-    def sample(current, index):
-        current, _ = jax.vmap(lambda chain_key, chain: move(chain_key, chain, tuning.step_size))(
-            jax.random.split(jax.random.fold_in(sample_key, index), chains), current
-        )
-        return current, current.position
-
-    _, samples = jax.lax.scan(sample, sampler_state, jnp.arange(draws))
-    return (
-        jnp.concatenate([burn_positions, adjusted_positions]),
-        jnp.concatenate([burn_steps, adjusted_steps]),
-        burn_active,
-        acceptance,
-        inverse_mass,
-        jnp.swapaxes(samples, 0, 1),
-    )
+    positions: FloatArray
+    step_size: FloatArray
+    boundary: int
+    acceptance: FloatArray
+    starts: FloatArray
+    parameter_chol: float
 
 
 def run_laps(
@@ -882,69 +730,147 @@ def run_laps(
     adjusted: int = 50,
     steps_per_sample: int = 15,
     chains: int = 4,
-    draws: int = 1000,
-) -> LapsRun:
-    """Production LAPS settings (benchmark budget by default), recording every step."""
-    positions, step_size, active, acceptance, inverse_mass, samples = _laps_program(
-        world.kind,
-        world.jax_params(),
-        jax.random.key(seed),
-        members=members,
-        unadjusted=unadjusted,
-        adjusted=adjusted,
-        steps_per_sample=steps_per_sample,
-        chains=chains,
-        draws=draws,
+) -> LapsRun | InitializationFailure:
+    """Run the real LAPS initializer; all history is discarded warmup, never posterior draws."""
+    target = production_target(world)
+    result = prepare_laps_initialization(
+        target,
+        spec=LapsInitializationSpec(
+            ensemble_size=members,
+            num_unadjusted_steps=unadjusted,
+            num_adjusted_steps=adjusted,
+            steps_per_sample=steps_per_sample,
+        ),
+        key=jax.random.key(seed),
+        num_chains=chains,
+        compute_budget=_BUDGET,
+        record_trace=True,
     )
+    if isinstance(result, InitializationFailure):
+        return result
+    assert isinstance(result, LapsInitializationResult)
+    trace = result.trace
+    assert isinstance(trace, LapsTraceRecord)
+    coordinates = build_joint_coordinates(target)
+    raw = jnp.concatenate((trace.unadjusted.positions, trace.adjusted.positions))
+    theta, paths = jax.jit(jax.vmap(jax.vmap(coordinates.decode)))(raw)
+    positions = jnp.stack((theta[..., 0], paths[..., 0, 0]), axis=-1)
+    count = trace.unadjusted.positions.shape[0]
     return LapsRun(
         positions=np.asarray(positions, dtype=np.float64),
-        step_size=np.asarray(step_size, dtype=np.float64),
-        active=np.asarray(active, dtype=bool),
-        unadjusted_steps=unadjusted,
-        acceptance=np.asarray(acceptance, dtype=np.float64),
-        inverse_mass=np.asarray(inverse_mass, dtype=np.float64),
-        samples=np.asarray(samples, dtype=np.float64),
+        step_size=np.asarray(
+            jnp.concatenate((trace.unadjusted.step_sizes, trace.adjusted.step_sizes)),
+            dtype=np.float64,
+        ),
+        boundary=count,
+        acceptance=np.asarray(trace.adjusted_acceptance, dtype=np.float64),
+        starts=np.asarray(
+            jnp.stack((result.positions[:, 0], result.paths[:, 0, 0]), axis=-1), dtype=np.float64
+        ),
+        parameter_chol=float(result.parameter_chol[0, 0]),
     )
 
 
-@partial(jax.jit, static_argnames=("kind", "warmup", "draws"))
-def _nuts_program(
-    kind: WorldKind, params: jax.Array, key: jax.Array, start: jax.Array, *, warmup: int, draws: int
-):
-    def log_density(position: jax.Array) -> jax.Array:
-        return _jax_log_joint(kind, params, position)
+@dataclass(frozen=True)
+class CouplingRow:
+    """A single-chain ESS estimate for one deliberately small comparison run."""
 
-    warmup_key, sample_key = jax.random.split(key)
-    adaptation = blackjax.window_adaptation(
-        blackjax.nuts, log_density, is_mass_matrix_diagonal=False
-    )
-    (state, tuned), _ = adaptation.run(warmup_key, start, num_steps=warmup)
-    kernel = blackjax.nuts(log_density, **tuned)
+    sampler: Literal["gibbs", "dsmc", "mpgibbs"]
+    share: float
+    theta_ess_per_sweep: float
 
-    def step(current, step_key):
-        current, info = kernel.step(step_key, current)
-        return current, (current.position, info.num_integration_steps)
 
-    _, (positions, integration) = jax.lax.scan(step, state, jax.random.split(sample_key, draws))
-    return positions, integration
+def coupling_sweep(
+    *,
+    sigma: float,
+    taus: FloatArray,
+    particles: int,
+    delta: float,
+    step: float,
+    proposal: ParameterProposal,
+) -> tuple[CouplingRow, ...]:
+    """Compare fixed-tuning toy chains; ESS per sweep does not measure computational cost."""
+    rows = []
+    for index, tau in enumerate(taus):
+        world = Ridge(tau=float(tau), sigma=sigma)
+        mean, _ = world.moments()
+        start = float(mean[0]), float(mean[1])
+        seed = 300 + index
+        draws, discarded = 800, 200
+        chains = (
+            ("gibbs", gibbs(world, draws, start, seed=seed, warmup=discarded)),
+            (
+                "dsmc",
+                particle_gibbs(
+                    world,
+                    draws,
+                    start,
+                    seed=seed,
+                    particles=particles,
+                    delta=delta,
+                    warmup=discarded,
+                ),
+            ),
+            (
+                "mpgibbs",
+                mpgibbs(
+                    world,
+                    draws,
+                    start,
+                    seed=seed,
+                    particles=particles,
+                    delta=delta,
+                    step=step,
+                    proposal=proposal,
+                    warmup=discarded,
+                ),
+            ),
+        )
+        share = coupling(world).share
+        rows.extend(CouplingRow(name, share, ess(chain.theta) / draws) for name, chain in chains)
+    return tuple(rows)
+
+
+@dataclass(frozen=True)
+class NutsRun:
+    """Production NUTS draws and the diagnostics needed to interpret their movement."""
+
+    chain: Chain
+    integration_steps: FloatArray
+    divergences: BoolArray
 
 
 def run_nuts(
-    world: World, seed: int, start: tuple[float, float], *, warmup: int = 500, draws: int = 2000
-) -> tuple[Chain, float]:
-    """Joint NUTS on ``(theta, x)``: the 2D analogue of the golden reference.
-
-    Returns the chain and the mean number of gradient evaluations per draw.
-    """
-    positions, integration = _nuts_program(
-        world.kind,
-        world.jax_params(),
-        jax.random.key(seed),
-        jnp.asarray(start),
-        warmup=warmup,
-        draws=draws,
+    world: World,
+    seed: int,
+    *,
+    warmup: int = 500,
+    draws: int = 1000,
+) -> NutsRun | InitializationFailure:
+    """Run the production NumPyro NUTS adapter on the same exact toy target."""
+    result = run_nuts_da(
+        production_target(world),
+        sampler=SamplerSpec(
+            algorithm=NutsDASpec(),
+            num_warmup=warmup,
+            num_samples_per_chain=draws,
+            num_chains=1,
+            retain_latent_paths=True,
+        ),
+        compute_budget=_BUDGET,
+        key=jax.random.key(seed),
+        clock=time.monotonic,
     )
-    positions = np.asarray(positions, dtype=np.float64)
-    moved = np.ones(draws, dtype=bool)
-    chain = Chain(positions[:, 0], positions[:, 1], moved, moved, blocked=False)
-    return chain, float(np.mean(np.asarray(integration)))
+    if isinstance(result, InitializationFailure):
+        return result
+    assert isinstance(result, NutsDARun)
+    assert result.paths is not None
+    theta = np.asarray(result.positions[0, :, 0], dtype=np.float64)
+    latent = np.asarray(result.paths[0, :, 0, 0], dtype=np.float64)
+    moved = np.concatenate(([True], (np.diff(theta) != 0) | (np.diff(latent) != 0)))
+    extra = result.phase_extra_fields["post_warmup"]
+    return NutsRun(
+        chain=Chain(theta, latent, moved, moved, blocked=False),
+        integration_steps=np.asarray(extra["num_steps"][0], dtype=np.float64),
+        divergences=np.asarray(extra["diverging"][0], dtype=bool),
+    )

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import dynestyx as dsx
 import equinox as eqx
 import jax
@@ -16,10 +18,10 @@ from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, 
 from nof1_causal_lab.models.ssm.execution.contracts import MeasurementParams
 from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from nof1_causal_lab.models.ssm.execution.observation_operator import compile_observation_operator
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.runner import (
+from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
 )
-from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
 from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 from nof1_causal_lab.models.ssm.inference.targets.particle import (
     ParticleContext,
@@ -28,6 +30,11 @@ from nof1_causal_lab.models.ssm.inference.targets.particle import (
 )
 from tests.support.inference import make_observation_support_runtime
 from tests.support.observation import observation_laws
+
+if TYPE_CHECKING:
+    from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
+        MarginalParticleGibbsKernel,
+    )
 
 
 def interval_target(
@@ -155,13 +162,16 @@ def gaussian_interval_case():
     return target, gain @ values, prior - gain @ design @ prior
 
 
-def initialize_interval_chain(target: ParticleTarget, joint: jax.Array):
+def initialize_interval_chain(
+    target: ParticleTarget, joint: jax.Array, *, kernel: MarginalParticleGibbsKernel
+):
     """Initialize the production joint kernel from explicit parameter and path coordinates."""
     return _initialize_chain_state(
         joint[:1],
         observations=target.observations,
         times=target.times,
         target=target,
+        parameter_gradient_fn=kernel.parameter_gradient_fn,
         initial_latent_delta=jnp.full(target.times.shape, 0.6),
         param_step_size=0.3,
         param_min_scale=1e-6,

@@ -1,8 +1,9 @@
 """Modal GPU parameter-recovery comparison for current dSMC leaf proposals.
 
 The worker invokes ``evaluation/benchmarks/benchmark.py`` so local and GPU runs
-exercise the same production inference path. It compares ``amala_exact`` with
-``paid_mix``; both use the exact Euler-Maruyama posterior target.
+exercise the same production inference path. It compares ``amala_plus`` with
+and without ``paid_mix`` on separate GPUs; both use the exact Euler-Maruyama
+posterior target.
 
 Running this entry point provisions a paid GPU:
 
@@ -62,6 +63,7 @@ def run_recovery(
     num_particles: int,
     n_parameter_particles: int,
     seed: int,
+    paid_mix: bool,
 ) -> RecoveryBenchmarkResult:
     """Run the current recovery comparison on one GPU worker."""
     from nof1_causal_lab.bootstrap import initialize_numerical_runtime
@@ -75,7 +77,8 @@ def run_recovery(
     sys.argv = [
         "benchmark.py",
         "--proposals",
-        "amala_exact,paid_mix",
+        "amala_plus",
+        "--paid-mix" if paid_mix else "--no-paid-mix",
         "--num-warmup",
         str(num_warmup),
         "--num-samples",
@@ -110,17 +113,22 @@ def main(
     n_parameter_particles: int = 2,
     seed: int = 1009,
 ) -> None:
-    out = run_recovery.remote(
-        num_warmup,
-        num_samples,
-        t,
-        num_particles,
-        n_parameter_particles,
-        seed,
-    )
+    pending = {
+        name: run_recovery.spawn(
+            num_warmup,
+            num_samples,
+            t,
+            num_particles,
+            n_parameter_particles,
+            seed,
+            paid_mix,
+        )
+        for name, paid_mix in (("amala_plus", False), ("amala_plus+paid_mix", True))
+    }
+    out = {name: call.get() for name, call in pending.items()}
     print(f"\n========= recovery [{GPU}] warmup={num_warmup} samples={num_samples} =========")
-    for proposal in ("amala_exact", "paid_mix"):
-        run = out["runs"][f"point:{proposal}"]
+    for proposal, result in out.items():
+        run = result["runs"]["point:amala_plus"]
         recovery = run["parameter_recovery"]
         summary = recovery["summary"]
         ess = run["posterior_ess"]

@@ -134,7 +134,7 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
                 async def import_fitter():
                     module = await asyncio.to_thread(
                         importlib.import_module,
-                        "nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.fit",
+                        "nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.fit",
                     )
                     assert callable(module.fit_marginal_particle_gibbs)
 

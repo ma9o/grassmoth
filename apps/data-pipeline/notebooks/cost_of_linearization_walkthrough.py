@@ -534,7 +534,7 @@ def bridge_md(mo):
     the §9 left edge shows the *nonlinearity* cost is nearly free where curvature is small,
     which is exactly where warm-starting lives — but it **biases a reported result** wherever
     the cost map is hot, and only an exact engine (particle/SMC, Euler–Maruyama, the
-    exactly-corrected `amala_exact` proposal — never the biased `amala` / `amala_plus`) may
+    auxiliary-corrected `amala` / `amala_plus` proposals) may
     stand on a reported path. The guard test
     `tests/models/ssm/test_linearization_init_only.py` enforces that the linearization backend
     is importable only from the warmup path. The persistent noise floor in §9's left column is

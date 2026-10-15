@@ -182,7 +182,10 @@ For local-study GPU fits, select `inference.hardware: L40S` (the default) in
 Use `local` to fit on this machine; the other
 [hardware enum values](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/sampling.py)
 select Modal GPUs. Select `inference.sampler.algorithm: {method: nuts_da}` for
-joint parameter/state NUTS, or `method: custom` with the custom sampler's settings.
+joint parameter/state NUTS. The particle samplers are `method: mpgibbs` and
+`method: pgibbs`; the latter selects conditional MH or NUTS through
+`parameter_kernel: {method: mh}` or `{method: nuts_da}`. Both use the shared
+`dsmc` settings in the [sampler contract](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/sampling.py).
 The [Modal compute adapter](../../apps/data-pipeline/src/nof1_causal_lab/actions/fit/remote.py)
 uses the installed Modal credentials, creates an ephemeral
 `nof1-causal-lab-pipeline` app with the current source, and reuses

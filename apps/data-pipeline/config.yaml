@@ -62,14 +62,21 @@ inference:
     seed: 0
     num_particles: 64
     # Select {method: nuts_da} for joint state/parameter NUTS with dual averaging.
+    # Select {method: pgibbs, parameter_kernel: {method: mh}} for blocked PG;
+    # parameter_kernel: {method: nuts_da} uses conditional NUTS instead.
     algorithm:
-      method: custom
+      method: mpgibbs
       n_parameter_particles: 2
-      # The indexed production method: parallel-in-time c-dSMC tree smoother with the
-      # paid mixture leaf (amala_exact z-component + fixed LAPS-pilot component + wide
-      # tail). Benchmarked in notebooks/sampler_audit.py §15-§16.
-      dsmc_leaf_proposal: paid_mix
-      latent_delta: 0.2
+      dsmc:
+        # Paper aMALA+ smoothing-gradient auxiliary law, with a fixed pilot mixture.
+        # Set paid_mix: null to use only the auxiliary Gaussian particle proposal.
+        dsmc_leaf_proposal: amala_plus
+        paid_mix:
+          local_weight: 0.85
+          pilot_weight: 0.10
+          pilot_var_scale: 0.25
+          wide_mult: 4.0
+        amala_delta_init: 0.01
       parameter_proposal: pseudo_langevin
       param_step_size: 0.02
       param_target_accept: 0.35

@@ -16,9 +16,16 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
   return (
     <Section title="Chain convergence">
       <Hint>
-        {report.inference_metadata.engine.method === "nuts_da" ? "NUTS-DA" : "Custom sampler"} ·{" "}
-        {mcmc?.num_chains ?? "Unavailable"} chains × {mcmc?.num_samples_per_chain ?? "Unavailable"}{" "}
-        draws · {report.inference_metadata.duration_seconds.toLocaleString()} s
+        {
+          {
+            nuts_da: "Joint NUTS-DA",
+            mpgibbs: "Marginalized Particle Gibbs",
+            pgibbs: "Particle Gibbs",
+          }[report.inference_metadata.engine.method]
+        }{" "}
+        · {mcmc?.num_chains ?? "Unavailable"} chains ×{" "}
+        {mcmc?.num_samples_per_chain ?? "Unavailable"} draws ·{" "}
+        {report.inference_metadata.duration_seconds.toLocaleString()} s
       </Hint>
       <div className="flex items-center gap-2">
         <StatusIcon status={convergence.status} />
@@ -45,14 +52,20 @@ export function FitDetails({ context }: { context: ScopeContext }) {
   const plot = detail.data?.detail;
   const mcmc = report.inference_diagnostics;
   const sampler = report.inference_metadata.sampler_diagnostics;
-  const gibbs = sampler && "tempering" in sampler ? sampler : null;
-  const nuts = sampler && "final_step_size" in sampler ? sampler : null;
-  const tempering = gibbs?.tempering;
+  const gibbs = sampler && "latent_update_fraction" in sampler ? sampler : null;
+  const parameters = sampler && "parameters" in sampler ? sampler.parameters : null;
+  const nuts =
+    sampler && "max_tree_depth_fraction" in sampler
+      ? sampler
+      : parameters?.method === "nuts_da"
+        ? parameters
+        : null;
+  const tempering = sampler && "tempering" in sampler ? sampler.tempering : null;
   return (
     <>
       <FitCalibration context={context} />
       {nuts && (
-        <Section title="NUTS adaptation">
+        <Section title={parameters ? "Conditional NUTS adaptation" : "NUTS adaptation"}>
           <KeyValue
             rows={[
               ["Divergences", String(mcmc?.num_divergences ?? "Unavailable")],
@@ -60,6 +73,19 @@ export function FitDetails({ context }: { context: ScopeContext }) {
               [
                 "Final step sizes",
                 nuts.final_step_size.map((value) => formatSignificant(value)).join(", "),
+              ],
+            ]}
+          />
+        </Section>
+      )}
+      {parameters?.method === "mh" && (
+        <Section title="Conditional MH adaptation">
+          <KeyValue
+            rows={[
+              ["Parameter acceptance", formatSignificant(parameters.acceptance_rate)],
+              [
+                "Final step sizes",
+                parameters.final_step_size.map((value) => formatSignificant(value)).join(", "),
               ],
             ]}
           />

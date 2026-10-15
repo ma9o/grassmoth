@@ -654,7 +654,8 @@ def callback(decide):
     assert all(item.scope == "caller" for item in violations)
 
 
-def test_field_ownership_cannot_be_reused_for_later_mutation() -> None:
+@pytest.mark.parametrize("directory", ["models", "actions"])
+def test_field_ownership_cannot_be_reused_for_later_mutation(directory: str) -> None:
     violations = _load_checker().scan_text(
         """from dataclasses import dataclass
 from collections.abc import Mapping
@@ -669,7 +670,7 @@ class Compiled:
 def compile_values() -> Compiled:
     return Compiled(values)
 """,
-        path="src/nof1_causal_lab/models/new_owner.py",
+        path=f"src/nof1_causal_lab/{directory}/new_owner.py",
         rules=frozenset({"CORE001"}),
     )
     assert [item.target for item in violations] == ["freeze_fields"]

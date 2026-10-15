@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from blackjax.adaptation.step_size import DualAveragingAdaptationState
-    from jax.typing import DTypeLike
 
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext
 
@@ -23,6 +22,8 @@ class TrajectoryMCMCState(NamedTuple):
     """Joint position and context carried between offline kernel calls."""
 
     position: jnp.ndarray
+    # Fixed-pilot parameter oracle at this position and this replica's target.
+    parameter_gradient: jnp.ndarray
     latent_context: ParticleContext
     latent_trajectory: jnp.ndarray
     trajectory_log_prob: jnp.ndarray
@@ -160,16 +161,3 @@ def _stack_chain_states(states: list[TrajectoryMCMCState]) -> TrajectoryMCMCStat
         lambda *values: jnp.stack(values, axis=0), *states
     )
     return stacked
-
-
-def _stack_sample_history(
-    history: list[jnp.ndarray],
-    *,
-    num_chains: int,
-    trailing_shape: tuple[int, ...],
-    dtype: DTypeLike,
-) -> jnp.ndarray:
-    if not history:
-        return jnp.zeros((num_chains, 0, *trailing_shape), dtype=dtype)
-    stacked = jnp.stack(history, axis=0)
-    return jnp.swapaxes(stacked, 0, 1)

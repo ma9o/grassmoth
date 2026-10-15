@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, NamedTuple, overload
+from typing import TYPE_CHECKING, Literal, NamedTuple, overload
 
 import jax
 import jax.numpy as jnp
@@ -21,6 +21,8 @@ if TYPE_CHECKING:
         ObservationKernel,
     )
     from nof1_causal_lab.models.ssm.preparation.observations import ObservationSupportRuntime
+
+type ObservationGradient = Literal["full", "current"]
 
 _POINT_SUPPORT_CODE = 0
 _INTERVAL_SUPPORT_CODE = 1
@@ -242,6 +244,8 @@ def summarize_support_observation(
 def _project_response_trajectory_with_operator(
     response_trajectory: jnp.ndarray,
     observation_operator: ObservationOperator,
+    *,
+    gradient: ObservationGradient = "full",
 ) -> tuple[jnp.ndarray, jnp.ndarray]:
     """Project response trajectories onto the operator's emitted measurement supports.
 
@@ -249,6 +253,7 @@ def _project_response_trajectory_with_operator(
         response_trajectory: Expected responses with shape ``(time, indicator)``.
         observation_operator: Resolved support schedule, integration weights, and
             summary operators for those time and indicator axes.
+        gradient: Differentiate all responses or only each emission's current response.
 
     Returns:
         Expected observation means and a numeric emission mask, both with shape
@@ -304,6 +309,20 @@ def _project_response_trajectory_with_operator(
     # Composition is associative, including reused slots and overlapping windows.
     _, after_reset = jax.lax.associative_scan(compose, (keep, keep * increments))
     before_reset = jnp.concatenate((jnp.zeros_like(after_reset[:1]), after_reset[:-1])) + increments
+    if gradient == "current":
+        # Filtering differentiates an observation at t only with respect to x_t.
+        # Preserve the exact accumulated values, but hold every past contribution
+        # fixed. This extracts the causal Jacobian diagonal in linear work instead
+        # of materializing a time-by-time Jacobian.
+        current_moments = jnp.stack(
+            (
+                curr_coeffs[1:] * current,
+                curr_coeffs[1:] * current**2,
+                jnp.zeros_like(current * curr_coeffs[1:]),
+            ),
+            axis=-1,
+        )
+        before_reset = jax.lax.stop_gradient(before_reset - current_moments) + current_moments
 
     def summarize(response, statistics, emission):
         summary = summarize_support_observation(
@@ -349,6 +368,8 @@ def trajectory_observation_log_probs(
     obs_kernel: ObservationKernel,
     mean_log_prob_fn: EmissionLogProbFn | None = None,
     observation_support: ObservationSupportRuntime | None = None,
+    *,
+    gradient: ObservationGradient = "full",
 ) -> jnp.ndarray:
     """Return per-timestep log-likelihood contributions for a latent trajectory."""
     if obs_mask is None:
@@ -374,7 +395,9 @@ def trajectory_observation_log_probs(
     point_like_mask = observation_operator.point_like_mask(mask_float.dtype)
     interval_summary_mask = observation_operator.interval_summary_mask(mask_float.dtype)
     responses = jax.vmap(lambda z_t: obs_kernel.response_fn(H @ z_t + d_meas))(latent_trajectory)
-    expected_means, semantic_mask = observation_operator.project_response_trajectory(responses)
+    expected_means, semantic_mask = _project_response_trajectory_with_operator(
+        responses, observation_operator, gradient=gradient
+    )
 
     point_ll = jax.vmap(
         lambda y_t, z_t, mask_t: obs_kernel.log_prob_fn(

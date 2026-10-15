@@ -1,6 +1,6 @@
-"""Latent-smoother contract types and per-step context for MPGibbs."""
+"""Shared dSMC contract types and per-step conditional or marginalized targets."""
 
-# References: see kernel.py and smoothers/dsmc.py for algorithm provenance.
+# References: see dsmc.py and ../mpgibbs/kernel.py for algorithm provenance.
 
 from __future__ import annotations
 
@@ -15,7 +15,9 @@ if TYPE_CHECKING:
     from jax.typing import DTypeLike
     from jaxtyping import Array, Float
 
+    from nof1_causal_lab.artifacts.sampling import DSMCLeafProposal, PaidMixSpec
     from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
+    from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
 
 type ParticleContextRuntimeFn = Callable[[jnp.ndarray, jnp.ndarray], ParticleContext]
@@ -27,25 +29,34 @@ type TransitionLogProbFn = Callable[
     [ParticleContext, jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray
 ]
 
-# Paid mixture leaf: the amala_exact z-anchored component plus a FIXED pilot
-# component (LAPS ensemble moments) and a wide tail, all inside one paid proposal
-# density. Any component that is useless on a given fit costs only its share of
-# proposal mass — never correctness — so the mixture strictly generalizes
-# amala_exact (its z-component alone).
-_DSMC_LEAF_PROPOSAL_PAID_MIX = "paid_mix"
+
+class PaidMixture(NamedTuple):
+    """Fixed initialization moments and the owned mixture specification."""
+
+    spec: PaidMixSpec
+    mean: jnp.ndarray
+    variance: jnp.ndarray
 
 
-class MPGibbsLatentSmootherResult(NamedTuple):
-    """Production result contract for MPGibbs latent smoothers."""
+class TrajectoryLabelScores(NamedTuple):
+    """Exact per-label densities and the corrected conditional label law."""
+
+    log_probs: Float[Array, " K"]
+    trajectory_log_probs: Float[Array, " K"]
+    log_posteriors: Float[Array, " K"]
+
+
+class ParticleSmootherResult(NamedTuple):
+    """A trajectory draw and parameter-label weights from conditional dSMC."""
 
     latent_path: Float[Array, "T D"]
-    final_label_log_probs: Float[Array, " K"]
+    label_scores: TrajectoryLabelScores
     origin_path: jnp.ndarray
     proposal_mask: jnp.ndarray
     diagnostics: Mapping[str, jnp.ndarray]
 
 
-class MPGibbsStatic(NamedTuple):
+class SmootherSetup(NamedTuple):
     """Build-time configuration and target callables for the smoother context."""
 
     latent_context_runtime_fn: ParticleContextRuntimeFn
@@ -57,7 +68,7 @@ class MPGibbsStatic(NamedTuple):
     latent_free_mask: jnp.ndarray
     num_particles: int
     num_parameter_particles: int
-    latent_delta: float
+    dsmc_leaf_proposal: DSMCLeafProposal
     amala_kappa: float
     amala_grad_clip: float
     # Number of latent coordinates proposed per sweep (None = all). Restricting the
@@ -66,18 +77,14 @@ class MPGibbsStatic(NamedTuple):
     # seams still pay the full transition density, so this is exactly the
     # coordinate-conditional cSMC on the same target.
     latent_block_coords: int | None
-    # paid_mix leaf: mixture weights (wide weight = 1 - z - pilot) and the FIXED
-    # per-time pilot moments derived from the LAPS ensemble paths.
-    paid_mix_z_weight: float
-    paid_mix_pilot_weight: float
-    # Present only for paid_mix: means, pilot variances, wide-tail variances.
-    pilot_moments: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray] | None
+    paid_mix: PaidMixture | None
+    target: ParticleTarget
     transition_initial_log_prob_fn: Callable[[ParticleContext, jnp.ndarray], jnp.ndarray]
     transition_log_prob_fn: TransitionLogProbFn
-    transition_log_probs_for_pairs_fn: TransitionLogProbFn
     transition_pairwise_log_probs_fn: TransitionLogProbFn
     diagnostic_metrics: frozenset[str]
     intervals: ParticleIntervalObservations | None
+    local_auxiliary_exact: bool
 
 
 class SmootherContext(NamedTuple):
@@ -98,18 +105,19 @@ class SmootherContext(NamedTuple):
     obs_increment_fn: ObservationIncrementLogProbRuntimeFn
     runtime_observations: jnp.ndarray
     latent_free_mask: jnp.ndarray
-    amala_delta: Float[Array, " D"]
+    amala_delta: Float[Array, " T"]
+    dsmc_leaf_proposal: DSMCLeafProposal
     amala_kappa: float
     amala_grad_clip: float
     latent_block_coords: int | None
-    paid_mix_z_weight: float
-    paid_mix_pilot_weight: float
-    # Present only for paid_mix: means, pilot variances, wide-tail variances.
-    pilot_moments: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray] | None
+    paid_mix: PaidMixture | None
+    smoothing_gradient: Callable[[jnp.ndarray], jnp.ndarray]
+    filtering_gradient: Callable[[jnp.ndarray], jnp.ndarray]
     initial_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
     transition_current_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
     transition_next_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
-    selected_transition_log_probs: Callable[..., jnp.ndarray]
     pairwise_transition_log_probs: Callable[..., jnp.ndarray]
-    trajectory_label_log_probs: Callable[..., jnp.ndarray]
+    score_labels: Callable[[jnp.ndarray], TrajectoryLabelScores]
     intervals: ParticleIntervalObservations | None
+    local_auxiliary_exact: bool
+    diagnostic_weights: bool

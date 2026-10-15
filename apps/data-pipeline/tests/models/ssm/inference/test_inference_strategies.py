@@ -286,8 +286,7 @@ class TestDefaultMethodRouting:
             )
 
         monkeypatch.setattr(
-            "nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.fit"
-            ".fit_marginal_particle_gibbs",
+            "nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.fit.fit_marginal_particle_gibbs",
             fake_fit_marginal_particle_gibbs,
         )
 

@@ -19,17 +19,23 @@ from nof1_causal_lab.models.ssm.inference.extraction import (
     build_pmcmc_mcmc_result,
     extract_grouped_public_samples,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.kernel import (
+from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
     build_marginal_particle_gibbs_kernel,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.runner import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
     run_marginal_particle_gibbs,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.tempering import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.tempering import (
     ReplicaExchangeKernel,
 )
-from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
+from nof1_causal_lab.models.ssm.inference.samplers.particle.contract import PaidMixture
+from nof1_causal_lab.models.ssm.inference.samplers.particle.diagnostics import (
+    build_particle_diagnostic_flags,
+)
+from nof1_causal_lab.models.ssm.inference.samplers.particle.weights import summarize_dsmc_weights
+from nof1_causal_lab.models.ssm.inference.samplers.progress import inference_phase
 from nof1_causal_lab.models.ssm.inference.types import (
     JointPosteriorDraws,
     MCMCEvidence,
@@ -44,6 +50,7 @@ from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import DiagnosticPhase
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
@@ -98,13 +105,14 @@ def fit_marginal_particle_gibbs(
     # The model is a continuous-time nonlinear SDE; the particle smoother always
     # discretizes it with the nonlinearity-preserving Euler-Maruyama scheme.
     scheme = LATENT_TRANSITION_EULER_MARUYAMA
-    bundle = build_particle_problem(
-        priors,
-        panel,
-        scheme=scheme,
-        trace_key=trace_key,
-        reparam=reparam,
-    )
+    with inference_phase("mpgibbs", "building_target", clock=clock):
+        bundle = build_particle_problem(
+            priors,
+            panel,
+            scheme=scheme,
+            trace_key=trace_key,
+            reparam=reparam,
+        )
     logger.info(
         "phase 1/4: bundle ready in %.1fs (dim=%d, public_sites=%d)",
         (clock() - phase_t0),
@@ -114,13 +122,14 @@ def fit_marginal_particle_gibbs(
 
     phase_t0 = clock()
     logger.info("phase 2/4: joint LAPS initialization (ensemble=%d)", options.laps.ensemble_size)
-    initialization = prepare_laps_initialization(
-        bundle.runtime,
-        compute_budget=compute_budget,
-        spec=options.laps,
-        key=laps_key,
-        num_chains=sampler.num_chains,
-    )
+    with inference_phase("mpgibbs", "preparing_initialization", clock=clock):
+        initialization = prepare_laps_initialization(
+            bundle.runtime,
+            compute_budget=compute_budget,
+            spec=options.laps,
+            key=laps_key,
+            num_chains=sampler.num_chains,
+        )
     if isinstance(initialization, InitializationFailure):
         return initialization
     measured = initialization.diagnostics
@@ -138,12 +147,13 @@ def fit_marginal_particle_gibbs(
         measured.adjusted_acceptance,
     )
 
-    pilot_means = pilot_vars = pilot_wide_vars = None
-    if options.dsmc_leaf_proposal == "paid_mix" or options.tempering is not None:
-        pilot_means = initialization.pilot_mean
-        core_var = initialization.pilot_proposal_variance
-        pilot_vars = options.paid_mix_pilot_var_scale * core_var
-        pilot_wide_vars = options.paid_mix_wide_mult * core_var
+    paid_mix = (
+        None
+        if options.dsmc.paid_mix is None
+        else PaidMixture(
+            options.dsmc.paid_mix, initialization.pilot_mean, initialization.pilot_proposal_variance
+        )
+    )
 
     phase_t0 = clock()
     logger.info("phase 3/4: building marginalized Particle Gibbs joint kernel...")
@@ -160,30 +170,11 @@ def fit_marginal_particle_gibbs(
             max_scale=options.param_step_size_max,
             parameter_preconditioner_chol=initialization.parameter_chol,
             parameter_proposal=options.parameter_proposal,
-            latent_delta=options.latent_delta,
-            amala_delta_init=options.amala_delta_init,
-            amala_delta_min=options.amala_delta_min,
-            amala_delta_max=options.amala_delta_max,
-            amala_target_accept=options.amala_target_accept,
-            amala_adaptation_window=options.amala_adaptation_window,
-            amala_adaptation_tolerance=options.amala_adaptation_tolerance,
-            amala_adaptation_rho=options.amala_adaptation_rho,
-            amala_adaptation_rho_min=options.amala_adaptation_rho_min,
-            amala_adaptation_gamma=options.amala_adaptation_gamma,
-            amala_kappa=options.amala_kappa,
-            amala_grad_clip=options.amala_grad_clip,
-            dsmc_leaf_proposal=options.dsmc_leaf_proposal,
-            latent_block_coords=options.latent_block_coords,
-            paid_mix_z_weight=options.paid_mix_z_weight,
-            paid_mix_pilot_weight=options.paid_mix_pilot_weight,
-            pilot_means=pilot_means,
-            pilot_vars=pilot_vars,
-            pilot_wide_vars=pilot_wide_vars,
-            # LAPS also supplies a fixed proposal oracle. It
-            # stays fixed across chains and never follows the sampled trajectory.
+            paid_mix=paid_mix,
             parameter_reference_path=initialization.paths[0],
             diagnostic_metrics_all=options.diagnostic_metrics_all,
             diagnostic_metrics=options.diagnostic_metrics,
+            dsmc=options.dsmc,
         )
 
     kernel = make_kernel(bundle.runtime)
@@ -200,6 +191,7 @@ def fit_marginal_particle_gibbs(
     run_result = run_marginal_particle_gibbs(
         bundle.runtime,
         kernel=kernel,
+        compute_budget=compute_budget,
         num_warmup=sampler.num_warmup,
         num_samples=sampler.num_samples_per_chain,
         num_chains=sampler.num_chains,
@@ -236,14 +228,16 @@ def fit_marginal_particle_gibbs(
         if sampler.num_samples_per_chain > 0
         else run_result.warmup_chain_extra_fields
     )
-    diagnostic_summary_phase = "post_warmup" if sampler.num_samples_per_chain > 0 else "warmup"
+    diagnostic_summary_phase: DiagnosticPhase = (
+        "post_warmup" if sampler.num_samples_per_chain > 0 else "warmup"
+    )
     kernel_diagnostics = ParticleSamplerDiagnostics(
         settings=sampler,
         parameter_kernel="m_pgibbs_random_walk"
         if options.parameter_proposal == "random_walk"
         else "m_pgibbs_pseudo_langevin",
         mcmc_phase_seconds=float(mcmc_phase_seconds),
-        dsmc_leaf_proposal=kernel.dsmc_leaf_proposal,
+        dsmc_leaf_proposal=kernel.dsmc.dsmc_leaf_proposal,
         diagnostic_metrics=tuple(sorted(kernel.diagnostic_metrics)),
         param_target_accept=float(kernel.target_accept),
         parameter_preconditioned=bool(kernel.preconditioned),
@@ -251,13 +245,23 @@ def fit_marginal_particle_gibbs(
         parameter_accept_rate=float(jnp.mean(summary_extra_fields["parameter_accept_prob"])),
         latent_update_fraction=float(jnp.mean(summary_extra_fields["latent_accept_prob"])),
         latent_frozen_fraction=float(jnp.mean(summary_extra_fields["latent_frozen_frac"])),
-        latent_block_coords=kernel.latent_block_coords,
+        latent_block_coords=kernel.dsmc.latent_block_coords,
         initial_param_step_size=jax.device_get(run_result.initial_param_step_size).tolist(),
         final_param_step_size=jax.device_get(run_result.final_param_step_size).tolist(),
         chain_post_warmup_complete_log_posterior_mean=jax.device_get(
             run_result.post_warmup_complete_log_posterior_mean
         ).tolist(),
         initialization=initialization.diagnostics,
+        dsmc_weights=summarize_dsmc_weights(
+            summary_extra_fields,
+            num_steps=len(bundle.runtime.times),
+            num_particles=sampler.num_particles,
+            phase=diagnostic_summary_phase,
+        )
+        if build_particle_diagnostic_flags(
+            diagnostic_metrics=kernel.diagnostic_metrics
+        ).particle_weights
+        else None,
         tempering=run_result.tempering,
         latent_move_rms_mean=float(jnp.mean(summary_extra_fields["latent_move_rms"]))
         if "latent_move_rms" in summary_extra_fields
@@ -310,8 +314,6 @@ def fit_marginal_particle_gibbs(
         )
         if bundle.exact_constraints is not None
         else None,
-        warmup_latent_paths=run_result.warmup_latent_paths,
-        all_latent_paths=run_result.all_latent_paths,
     )
     logger.info(
         "phase 4/4: posterior extraction complete in %.1fs. marginal_particle_gibbs total: %.1fs",

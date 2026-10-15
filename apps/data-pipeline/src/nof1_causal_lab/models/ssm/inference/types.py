@@ -33,6 +33,7 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     NutsDADiagnostics,
     ParameterDiagnostics,
     ParetoKPoint,
+    ParticleGibbsDiagnostics,
     ParticleSamplerDiagnostics,
     RankHistogram,
     TraceSeries,
@@ -86,9 +87,9 @@ class ProductionDiagnostics:
     public_sites: tuple[str, ...] | None = None
     exact_observation_rows: jnp.ndarray | None = None
     latent_posterior_summary: Mapping[str, jnp.ndarray] | None = None
-    warmup_latent_paths: jnp.ndarray | None = None
-    all_latent_paths: jnp.ndarray | None = None
-    sampler_diagnostics: ParticleSamplerDiagnostics | NutsDADiagnostics | None = None
+    sampler_diagnostics: (
+        ParticleSamplerDiagnostics | NutsDADiagnostics | ParticleGibbsDiagnostics | None
+    ) = None
     phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]] | None = None
     warmup_complete_log_posterior_history: jnp.ndarray | None = None
     all_complete_log_posterior_history: jnp.ndarray | None = None

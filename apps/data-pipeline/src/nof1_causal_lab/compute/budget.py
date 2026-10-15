@@ -14,6 +14,9 @@ class MemoryDemand(Value):
     device_bytes: int = Field(ge=0)
 
 
+NO_MEMORY_DEMAND = MemoryDemand(host_bytes=0, device_bytes=0)
+
+
 class SharedMemoryBudget(Value):
     """CPU execution and Python workspaces share one memory allocation."""
 
@@ -32,13 +35,32 @@ class ComputeBudget(Value):
 
     memory: SharedMemoryBudget | AcceleratorMemoryBudget
 
-    def capacity(self, demand: MemoryDemand, *, limit: int) -> int:
-        """Count operations that fit, including shared host/device memory on CPUs."""
+    def capacity(
+        self,
+        demand: MemoryDemand,
+        *,
+        limit: int,
+        overhead: MemoryDemand = NO_MEMORY_DEMAND,
+    ) -> int:
+        """Count operations after reserving fixed host/device buffers once."""
         if isinstance(self.memory, SharedMemoryBudget):
-            pools = ((self.memory.available_bytes, demand.host_bytes + demand.device_bytes),)
+            pools = (
+                (
+                    self.memory.available_bytes,
+                    demand.host_bytes + demand.device_bytes,
+                    overhead.host_bytes + overhead.device_bytes,
+                ),
+            )
         else:
             pools = (
-                (self.memory.host_bytes, demand.host_bytes),
-                (self.memory.device_bytes, demand.device_bytes),
+                (self.memory.host_bytes, demand.host_bytes, overhead.host_bytes),
+                (self.memory.device_bytes, demand.device_bytes, overhead.device_bytes),
             )
-        return min((limit, *(available // needed for available, needed in pools if needed)))
+        if any(available < fixed for available, _, fixed in pools):
+            return 0
+        return min(
+            (
+                limit,
+                *((available - fixed) // needed for available, needed, fixed in pools if needed),
+            )
+        )

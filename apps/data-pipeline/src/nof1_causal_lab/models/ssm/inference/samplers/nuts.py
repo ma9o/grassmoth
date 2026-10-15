@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -15,13 +14,14 @@ from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import MCMCEvidence, NutsDADiagnostics
 from nof1_causal_lab.artifacts.sampling import NutsDASpec, SamplerSpec
-from nof1_causal_lab.compute.batching import compiled_memory
-from nof1_causal_lab.compute.budget import MemoryDemand
 from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 from nof1_causal_lab.models.ssm.inference.extraction import extract_grouped_public_samples
 from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
+from nof1_causal_lab.models.ssm.inference.samplers.progress import inference_phase
+from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import compile_sweeps
+from nof1_causal_lab.models.ssm.inference.samplers.sweeps import run_sweeps
 from nof1_causal_lab.models.ssm.inference.types import (
     JointPosteriorDraws,
     MCMCPosterior,
@@ -37,11 +37,10 @@ if TYPE_CHECKING:
 
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
+    from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepStage
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -107,7 +106,9 @@ def run_nuts_da(
             rng_key=chain_key,
         )
 
-    states = jax.jit(jax.vmap(initialize_chain))(jax.random.split(key, sampler.num_chains))
+    with inference_phase("nuts_da", "initializing_chains", clock=clock):
+        states = jax.jit(jax.vmap(initialize_chain))(jax.random.split(key, sampler.num_chains))
+        jax.block_until_ready(states)
     if not all(
         np.isfinite(np.asarray(value)).all() for value in (states.potential_energy, states.z_grad)
     ):
@@ -115,81 +116,60 @@ def run_nuts_da(
             "NUTS-DA requires a finite exact joint density and gradient at its starting point"
         )
 
-    compiled_step = jax.jit(jax.vmap(step)).lower(states).compile()
-    memory = compiled_memory(compiled_step)
-    path_size = coordinates.path_center.size if sampler.retain_latent_paths else 0
-    retained_size = (
-        sampler.num_chains
-        * sampler.num_samples_per_chain
-        * (coordinates.parameter_dimension + path_size + target.times.size)
-    )
-    telemetry_size = sampler.num_chains * (sampler.num_warmup + sampler.num_samples_per_chain) * 8
-    # History, stacking and the returned device buffers coexist during projection.
-    retained_bytes = (retained_size + telemetry_size) * initial.dtype.itemsize
-    demand = MemoryDemand(
-        host_bytes=memory.host_bytes + 2 * retained_bytes,
-        device_bytes=memory.device_bytes + retained_bytes,
-    )
-    if compute_budget.capacity(demand, limit=1) == 0:
-        raise MemoryError(
-            "Parallel NUTS chains and retained draws exceed the compute memory budget"
-        )
-
-    def project(point: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+    def project(point: jax.Array) -> dict[str, jax.Array]:
         parameters, path = coordinates.decode(point)
         context = target.context(parameters, target.times)
-        return (
-            parameters,
-            path,
-            jnp.asarray(target.observation_log_probs(context, path, target.observations)),
+        record = {
+            "positions": parameters,
+            "observation_log_probs": jnp.asarray(
+                target.observation_log_probs(context, path, target.observations)
+            ),
+        }
+        if sampler.retain_latent_paths:
+            record = {**record, "paths": path}
+        return record
+
+    def step_factory(
+        _batch_size: int, stage: SweepStage
+    ) -> Callable[[HMCState], tuple[HMCState, dict[str, jax.Array]]]:
+        def sweep(current: HMCState) -> tuple[HMCState, dict[str, jax.Array]]:
+            updated = jax.vmap(step)(current)
+            record = dict(_extra_fields(updated, max_tree_depth=options.max_tree_depth))
+            if stage == "posterior":
+                record = {**record, **jax.vmap(project)(updated.z)}
+            return updated, record
+
+        return sweep
+
+    with inference_phase("nuts_da", "compiling_sweeps", clock=clock):
+        plan = compile_sweeps(
+            step_factory,
+            states,
+            num_warmup=sampler.num_warmup,
+            num_samples=sampler.num_samples_per_chain,
+            max_batch_size=1,
+            budget=compute_budget,
         )
-
-    project_chains = jax.jit(jax.vmap(project))
-    telemetry = jax.jit(
-        lambda current: _extra_fields(current, max_tree_depth=options.max_tree_depth)
-    )
-    positions: list[np.ndarray] = []
-    paths: list[np.ndarray] = []
-    log_probs: list[np.ndarray] = []
-    extras: list[Mapping[str, np.ndarray]] = []
-    started = clock()
-    total = sampler.num_warmup + sampler.num_samples_per_chain
-    logger.info(
-        "nuts_da: %d vectorized chains, %d joint coordinates, %d warmup, %d retained per chain",
-        sampler.num_chains,
-        coordinates.dimension,
-        sampler.num_warmup,
-        sampler.num_samples_per_chain,
-    )
-    for index in range(total):
-        states = compiled_step(states)
-        extras.append(jax.device_get(telemetry(states)))
-        if index >= sampler.num_warmup:
-            parameters, path, observation_log_probs = jax.device_get(project_chains(states.z))
-            positions.append(parameters)
-            log_probs.append(observation_log_probs)
-            if sampler.retain_latent_paths:
-                paths.append(path)
-        if index == 0 or (index + 1) % 25 == 0 or index + 1 == total:
-            logger.info("nuts_da: step %d/%d, %.1fs elapsed", index + 1, total, clock() - started)
-
-    def stack(history: list[np.ndarray]) -> jax.Array:
-        return jnp.asarray(np.stack(history, axis=1))
-
-    all_extra = {name: stack([item[name] for item in extras]) for name in extras[0]}
+    run = run_sweeps(plan, states, clock=clock, label="nuts_da")
+    draw_fields = frozenset(("positions", "paths", "observation_log_probs"))
+    posterior = {
+        name: value for name, value in run.history.posterior.items() if name not in draw_fields
+    }
+    all_extra = {
+        name: jnp.concatenate((run.history.warmup[name], value), axis=1)
+        for name, value in posterior.items()
+    }
     return NutsDARun(
-        positions=stack(positions),
-        paths=stack(paths) if sampler.retain_latent_paths else None,
-        observation_log_probs=stack(log_probs),
+        positions=run.history.posterior["positions"],
+        paths=run.history.posterior["paths"] if sampler.retain_latent_paths else None,
+        observation_log_probs=run.history.posterior["observation_log_probs"],
         phase_extra_fields={
-            "warmup": {name: value[:, : sampler.num_warmup] for name, value in all_extra.items()},
-            "post_warmup": {
-                name: value[:, sampler.num_warmup :] for name, value in all_extra.items()
-            },
+            "warmup": run.history.warmup,
+            "post_warmup": posterior,
             "all": all_extra,
         },
-        final_step_size=states.adapt_state.step_size,
-        compiled_step=compiled_step,
+        final_step_size=run.state.adapt_state.step_size,
+        compiled_step=plan.compiled_step,
     )
 
 
@@ -204,13 +184,14 @@ def fit_nuts_da(
 ) -> MCMCPosterior | InitializationFailure:
     """Fit the production exact target and expose the shared posterior/report contract."""
     trace_key, sampling_key = jax.random.split(jax.random.key(sampler.seed))
-    bundle = build_particle_problem(
-        priors,
-        panel,
-        scheme=LATENT_TRANSITION_EULER_MARUYAMA,
-        trace_key=trace_key,
-        reparam=reparam,
-    )
+    with inference_phase("nuts_da", "building_target", clock=clock):
+        bundle = build_particle_problem(
+            priors,
+            panel,
+            scheme=LATENT_TRANSITION_EULER_MARUYAMA,
+            trace_key=trace_key,
+            reparam=reparam,
+        )
     started = clock()
     run = run_nuts_da(
         bundle.runtime,

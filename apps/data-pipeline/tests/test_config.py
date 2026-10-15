@@ -8,10 +8,12 @@ from pydantic import TypeAdapter, ValidationError
 from nof1_causal_lab.actions.fit.execution import resolve_sampler_spec
 from nof1_causal_lab.actions.temporal.llm.messages import LLMSubroutineInput, LLMSubroutineRef
 from nof1_causal_lab.artifacts.sampling import (
+    DsmcSpec,
     FitSettingsSpec,
     InferenceHardware,
     MarginalParticleGibbsSpec,
     NutsDASpec,
+    ParticleGibbsSpec,
     SamplerSpec,
 )
 from nof1_causal_lab.config import (
@@ -37,6 +39,21 @@ pytestmark = pytest.mark.contract
 
 
 class TestSamplerSpec:
+    @pytest.mark.parametrize(
+        "algorithm",
+        [
+            {"method": "custom"},
+            {"method": "csmc"},
+            {"method": "pgibbs", "ancestor_sampling": True},
+            {"method": "pgibbs", "dsmc": {"ancestor_sampling": True}},
+            {"method": "pgibbs", "dsmc": {"dsmc_leaf_proposal": "amala_exact"}},
+            {"method": "mpgibbs", "dsmc": {"dsmc_leaf_proposal": "amala_exact"}},
+        ],
+    )
+    def test_sampler_choices_reject_removed_or_unsupported_algorithms(self, algorithm):
+        with pytest.raises(ValidationError):
+            SamplerSpec.model_validate({"algorithm": algorithm})
+
     def test_runtime_contract_rejects_unknown_fields(self):
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
             SamplerSpec.model_validate({"unknown_option": True})
@@ -47,10 +64,12 @@ class TestSamplerSpec:
         options = result.algorithm
         assert isinstance(options, MarginalParticleGibbsSpec)
         assert options.n_parameter_particles == 2
-        assert options.dsmc_leaf_proposal == "amala_exact"
-        assert options.latent_delta == 0.2
-        assert options.amala_kappa == 0.75
-        assert options.amala_grad_clip == float("inf")
+        assert options.dsmc.dsmc_leaf_proposal == "amala_plus"
+        assert options.dsmc.paid_mix is not None
+        assert options.dsmc.paid_mix.local_weight == 0.85
+        assert options.dsmc.amala_delta_init == 0.01
+        assert options.dsmc.amala_kappa == 0.75
+        assert options.dsmc.amala_grad_clip == float("inf")
         encoded = result.model_dump_json()
         assert '"amala_grad_clip":"infinity"' in encoded
         assert SamplerSpec.model_validate_json(encoded) == result
@@ -67,7 +86,7 @@ class TestSamplerSpec:
             num_chains=2,
             seed=3,
             num_particles=8,
-            algorithm=MarginalParticleGibbsSpec(latent_delta=0.31),
+            algorithm=MarginalParticleGibbsSpec(dsmc=DsmcSpec(amala_delta_init=0.31)),
         )
         config = _make_pipeline_config()
         monkeypatch.setattr(
@@ -96,7 +115,7 @@ class TestSamplerSpec:
         ) == (0, 30, 4, 0, 16)
         assert resolved.algorithm is configured.algorithm
         assert isinstance(resolved.algorithm, MarginalParticleGibbsSpec)
-        assert resolved.algorithm.latent_delta == 0.31
+        assert resolved.algorithm.dsmc.amala_delta_init == 0.31
         assert (
             configured.num_warmup,
             configured.num_samples_per_chain,
@@ -112,7 +131,9 @@ class TestSamplerSpec:
             resolved.seed = 8  # ty: ignore[invalid-assignment] -- Exercise runtime rejection of a frozen field.
 
     @pytest.mark.parametrize("hardware", tuple(InferenceHardware))
-    @pytest.mark.parametrize("algorithm", [NutsDASpec(), MarginalParticleGibbsSpec()])
+    @pytest.mark.parametrize(
+        "algorithm", [NutsDASpec(), MarginalParticleGibbsSpec(), ParticleGibbsSpec()]
+    )
     def test_hardware_and_algorithm_are_independent(self, hardware, algorithm):
         config = TypeAdapter(InferenceConfig).validate_python(
             {
@@ -174,11 +195,12 @@ FULL_CONFIG = textwrap.dedent("""\
         seed: 123
         num_particles: 24
         algorithm:
-          method: custom
+          method: mpgibbs
           n_parameter_particles: 3
-          latent_delta: 0.29
-          amala_kappa: 0.2
-          amala_grad_clip: 77.0
+          dsmc:
+            amala_delta_init: 0.29
+            amala_kappa: 0.2
+            amala_grad_clip: 77.0
           param_step_size: 0.03
           param_step_size_min: 0.000001
           param_step_size_max: 0.7
@@ -255,9 +277,9 @@ class TestLoadConfig:
         assert cfg.inference.sampler.num_particles == 24
         assert isinstance(cfg.inference.sampler.algorithm, MarginalParticleGibbsSpec)
         assert cfg.inference.sampler.algorithm.n_parameter_particles == 3
-        assert cfg.inference.sampler.algorithm.latent_delta == 0.29
-        assert cfg.inference.sampler.algorithm.amala_kappa == 0.2
-        assert cfg.inference.sampler.algorithm.amala_grad_clip == 77.0
+        assert cfg.inference.sampler.algorithm.dsmc.amala_delta_init == 0.29
+        assert cfg.inference.sampler.algorithm.dsmc.amala_kappa == 0.2
+        assert cfg.inference.sampler.algorithm.dsmc.amala_grad_clip == 77.0
         assert cfg.inference.sampler.algorithm.param_step_size == 0.03
         assert cfg.inference.sampler.algorithm.param_step_size_min == 1e-6
         assert cfg.inference.sampler.algorithm.param_step_size_max == 0.7

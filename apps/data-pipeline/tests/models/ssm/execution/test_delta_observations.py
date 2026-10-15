@@ -21,19 +21,21 @@ from nof1_causal_lab.artifacts.model.likelihood import (
 )
 from nof1_causal_lab.artifacts.model.parameter_context import iter_coefficient_uses
 from nof1_causal_lab.artifacts.probability.families import DistributionFamily
+from nof1_causal_lab.artifacts.sampling import DsmcSpec, PaidMixSpec
 from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.execution.observation_model import compile_observation_model
 from nof1_causal_lab.models.ssm.inference import problem as problem_module
 from nof1_causal_lab.models.ssm.inference.conditioning import compile_exact_state_constraints
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs._math import (
-    _masked_mean,
-    _masked_normal_log_prob,
-)
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.kernel import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.runner import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
+)
+from nof1_causal_lab.models.ssm.inference.samplers.particle.contract import PaidMixture
+from nof1_causal_lab.models.ssm.inference.samplers.particle.math import (
+    _masked_mean,
+    _masked_normal_log_prob,
 )
 from nof1_causal_lab.models.structure import (
     StructuralSelection,
@@ -399,7 +401,7 @@ def test_multiple_exact_indicators_must_agree_at_shared_times(exact_model):
 @pytest.mark.parametrize("mask", [[True, False], [False, True], [True, True], [False, False]])
 def test_proposal_density_uses_the_free_coordinate_measure(mask):
     values, mean, variance = jnp.array([1.5, -2.0]), jnp.array([0.2, 0.4]), jnp.array([0.3, 2.0])
-    free = np.asarray(mask)
+    free = jnp.asarray(mask)
     expected = dist.Normal(mean[free], jnp.sqrt(variance[free])).log_prob(values[free]).sum()
     np.testing.assert_allclose(
         _masked_normal_log_prob(values, mean, variance, free), expected, atol=1e-6
@@ -435,11 +437,19 @@ def point_problem(exact_model):
 
 def _conditioned_initial_state(problem):
     runtime = problem.runtime
+    kernel = build_marginal_particle_gibbs_kernel(
+        runtime,
+        num_particles=4,
+        num_parameter_particles=2,
+        param_step_size=0.01,
+        exact_constraints=problem.exact_constraints,
+    )
     return _initialize_chain_state(
         runtime.initial_position,
         observations=runtime.observations,
         times=runtime.times,
         target=runtime,
+        parameter_gradient_fn=kernel.parameter_gradient_fn,
         initial_latent_delta=jnp.full(runtime.times.shape, 0.2),
         param_step_size=0.01,
         param_min_scale=1e-6,
@@ -489,7 +499,7 @@ def test_conditioned_target_preserves_initial_and_transition_evidence(point_prob
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize("proposal", ["amala_exact", "paid_mix"])
+@pytest.mark.parametrize("proposal", ["amala", "amala_plus"])
 def test_conditioned_smoother_traces_with_missing_and_observed_coordinates(point_problem, proposal):
     runtime = point_problem.runtime
     state = _conditioned_initial_state(point_problem)
@@ -500,18 +510,15 @@ def test_conditioned_smoother_traces_with_missing_and_observed_coordinates(point
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        dsmc_leaf_proposal=proposal,
-        latent_block_coords=1,
-        pilot_means=path if proposal == "paid_mix" else None,
-        pilot_vars=jnp.ones_like(path) if proposal == "paid_mix" else None,
-        pilot_wide_vars=jnp.ones_like(path) * 4 if proposal == "paid_mix" else None,
+        paid_mix=PaidMixture(PaidMixSpec(), path, jnp.ones_like(path)),
+        dsmc=DsmcSpec(dsmc_leaf_proposal=proposal, latent_block_coords=1),
     )
     shape, _ = jax.eval_shape(kernel.step_fn, state, jax.random.key(1))
     assert shape.latent_trajectory.shape == (3, 2)
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize("proposal", ["amala_exact", "paid_mix"])
+@pytest.mark.parametrize("proposal", ["amala", "amala_plus"])
 def test_particle_updates_keep_exact_readings_and_move_missing_states(point_problem, proposal):
     runtime = point_problem.runtime
     state = _conditioned_initial_state(point_problem)
@@ -522,11 +529,8 @@ def test_particle_updates_keep_exact_readings_and_move_missing_states(point_prob
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        dsmc_leaf_proposal=proposal,
-        latent_block_coords=1,
-        pilot_means=path,
-        pilot_vars=jnp.ones_like(path),
-        pilot_wide_vars=jnp.ones_like(path) * 4,
+        paid_mix=PaidMixture(PaidMixSpec(), path, jnp.ones_like(path)),
+        dsmc=DsmcSpec(dsmc_leaf_proposal=proposal, latent_block_coords=1),
     )
     step = jax.jit(kernel.step_fn)
     missing_values = []

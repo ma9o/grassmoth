@@ -10,7 +10,7 @@ import pytest
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import NutsDADiagnostics
 from nof1_causal_lab.artifacts.sampling import NutsDASpec, SamplerSpec
 from nof1_causal_lab.models.ssm.inference.fit import fit
-from nof1_causal_lab.models.ssm.inference.nuts_da import NutsDARun, run_nuts_da
+from nof1_causal_lab.models.ssm.inference.samplers.nuts import NutsDARun, run_nuts_da
 from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
 from tests.models.ssm.inference.test_laps_initialization import _nonlinear_fixture
 from tests.support.compute import COMPUTE_BUDGET

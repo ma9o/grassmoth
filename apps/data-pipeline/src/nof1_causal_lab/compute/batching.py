@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol, cast
 
-from nof1_causal_lab.compute.budget import MemoryDemand
+from nof1_causal_lab.compute.budget import NO_MEMORY_DEMAND, MemoryDemand
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -62,21 +62,46 @@ def compile_batched[Executable](
     *,
     max_batch_size: int,
     budget: ComputeBudget,
+    overhead: MemoryDemand = NO_MEMORY_DEMAND,
 ) -> CompiledBatch[Executable]:
     """Estimate a width from one lane, then verify compiled memory before execution.
 
     Scaling the complete one-lane footprint conservatively includes fixed buffers.
+    Separately supplied retained buffers are reserved once, independent of width.
     Compiler fusion can change that scaling, so each proposed width is compiled and
     checked. Halving is a compile-time search; no simulation or OOM retry is run.
     """
     single, single_memory = compile_batch(1)
-    capacity = budget.capacity(single_memory, limit=max_batch_size)
-    if capacity == 0:
-        raise MemoryError("One batch lane exceeds the numerical execution memory budget")
-    size = max_batch_size if capacity == max_batch_size else 1 << (capacity.bit_length() - 1)
-    while size > 1:
+    return compile_from_estimate(
+        lambda size: (single, single_memory) if size == 1 else compile_batch(size),
+        single_memory=single_memory,
+        max_batch_size=max_batch_size,
+        budget=budget,
+        overhead=overhead,
+    )
+
+
+def compile_from_estimate[Executable](
+    compile_batch: Callable[[int], tuple[Executable, MemoryDemand]],
+    *,
+    single_memory: MemoryDemand,
+    max_batch_size: int,
+    budget: ComputeBudget,
+    overhead: MemoryDemand = NO_MEMORY_DEMAND,
+) -> CompiledBatch[Executable]:
+    """Size arithmetically, then verify the actual executable before accepting it.
+
+    An estimate can overstate memory, so even an estimated zero capacity gets one
+    minimum-width compilation. Only actual compiled demand can reject that lane.
+    """
+    capacity = budget.capacity(single_memory, limit=max_batch_size, overhead=overhead)
+    size = (
+        max_batch_size if capacity == max_batch_size else 1 << (max(1, capacity).bit_length() - 1)
+    )
+    while True:
         executable, memory = compile_batch(size)
-        if budget.capacity(memory, limit=1):
+        if budget.capacity(memory, limit=1, overhead=overhead):
             return CompiledBatch(executable, size, memory)
+        if size == 1:
+            raise MemoryError("One batch lane exceeds the numerical execution memory budget")
         size //= 2
-    return CompiledBatch(single, 1, single_memory)

@@ -7,7 +7,7 @@ update, regardless of the batch width selected from compiler memory estimates.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, cast
 
 import jax
@@ -25,6 +25,7 @@ from blackjax.mcmc.integrators import (
 
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import LapsInitializationDiagnostics
 from nof1_causal_lab.compute.batching import compiled_memory
+from nof1_causal_lab.models.ssm.inference.tracing import EnsemblePhaseTraceRecord
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
@@ -35,11 +36,30 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class NoLapsTrace:
+    """Initialization ran without retaining its ensemble history."""
+
+
+@dataclass(frozen=True)
+class LapsTraceRecord:
+    """Actual warmup transitions in the initializer's frozen affine coordinates.
+
+    Positions are recorded after each move; step sizes are those used for that
+    move. These adaptive and unadjusted positions are never posterior draws.
+    """
+
+    unadjusted: EnsemblePhaseTraceRecord  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.
+    adjusted: EnsemblePhaseTraceRecord  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.
+    adjusted_acceptance: jax.Array
+
+
+@dataclass(frozen=True)
 class LapsEnsemble:
     """Final joint positions and measurements of both initialization phases."""
 
     positions: jax.Array
     diagnostics: LapsInitializationDiagnostics
+    trace: LapsTraceRecord | NoLapsTrace = field(default_factory=NoLapsTrace)
 
 
 def _execute[State, Result](
@@ -74,6 +94,7 @@ def run_laps_ensemble(
     key: jax.Array,
     spec: LapsInitializationSpec,
     compute_budget: ComputeBudget,
+    record_trace: bool = False,
 ) -> LapsEnsemble | InitializationFailure:
     """Run unadjusted LAPS burn-in followed by its Metropolis-adjusted refinement."""
     initial_key, burn_key, adjusted_key = jax.random.split(key, 3)
@@ -109,7 +130,7 @@ def run_laps_ensemble(
 
     def burn(initial: IntegratorState, batch_size: int):
         def condition(carry):
-            _, tuning, index, keep_going = carry
+            _, tuning, index, keep_going, _, _ = carry
             return (
                 (index < spec.num_unadjusted_steps)
                 & keep_going
@@ -118,28 +139,46 @@ def run_laps_ensemble(
             )
 
         def step(carry):
-            current, tuning, index, _ = carry
+            current, tuning, index, _, history, step_sizes = carry
             sampling_key, summary_key = jax.random.split(jax.random.fold_in(burn_key, index))
             current, info = jax.lax.map(
                 lambda member: burn_kernel(member[0], member[1], tuning),
                 (jax.random.split(sampling_key, spec.ensemble_size), current),
                 batch_size=batch_size,
             )
+            if record_trace:
+                history = history.at[index].set(current.position)
+                step_sizes = step_sizes.at[index].set(tuning.step_size)
             summaries = jax.vmap(adaptation.summary_statistics_fn, in_axes=(0, 0, None))(
                 current, info, summary_key
             )
             tuning, summary = adaptation.update(
                 tuning, jax.tree.map(lambda values: jnp.mean(values, axis=0), summaries)
             )
-            return current, tuning, index + 1, adaptation.while_cond(summary, index)
+            return (
+                current,
+                tuning,
+                index + 1,
+                adaptation.while_cond(summary, index),
+                history,
+                step_sizes,
+            )
 
+        history_size = spec.num_unadjusted_steps if record_trace else 0
         return jax.lax.while_loop(
             condition,
             step,
-            (initial, adaptation.initial_state, jnp.asarray(0), jnp.asarray(True)),
+            (
+                initial,
+                adaptation.initial_state,
+                jnp.asarray(0),
+                jnp.asarray(True),
+                jnp.zeros((history_size, spec.ensemble_size, dimension), dtype=positions.dtype),
+                jnp.zeros(history_size, dtype=positions.dtype),
+            ),
         )
 
-    state, burn_tuning, steps, _ = _execute(
+    state, burn_tuning, steps, _, burn_positions, burn_step_sizes = _execute(
         burn, state, compute_budget, max_batch_size=spec.ensemble_size
     )
     burn_step = float(burn_tuning.step_size)
@@ -185,13 +224,18 @@ def run_laps_ensemble(
                 (jax.random.split(sampling_key, spec.ensemble_size), current),
                 batch_size=batch_size,
             )
+            used_step_size = tuning.step_size
             summaries = jax.vmap(adjusted_adaptation.summary_statistics_fn, in_axes=(0, 0, None))(
                 current, info, summary_key
             )
             tuning, summary = adjusted_adaptation.update(
                 tuning, jax.tree.map(lambda values: jnp.mean(values, axis=0), summaries)
             )
-            return (current, tuning), summary["acc_prob"]
+            return (current, tuning), (
+                summary["acc_prob"],
+                current.position if record_trace else jnp.empty((0,), dtype=positions.dtype),
+                used_step_size if record_trace else jnp.empty((0,), dtype=positions.dtype),
+            )
 
         return jax.lax.scan(
             step,
@@ -199,7 +243,7 @@ def run_laps_ensemble(
             jnp.arange(spec.num_adjusted_steps),
         )
 
-    (final, tuning), acceptance = _execute(
+    (final, tuning), (acceptance, adjusted_positions, adjusted_step_sizes) = _execute(
         refine,
         HMCState(state.position, state.logdensity, state.logdensity_grad),
         compute_budget,
@@ -231,4 +275,17 @@ def run_laps_ensemble(
             adjusted_acceptance=mean_acceptance,
             early_stopped=int(steps) < spec.num_unadjusted_steps,
         ),
+        trace=LapsTraceRecord(
+            unadjusted=EnsemblePhaseTraceRecord(
+                positions=burn_positions[: int(steps)],
+                step_sizes=burn_step_sizes[: int(steps)],
+            ),
+            adjusted=EnsemblePhaseTraceRecord(
+                positions=adjusted_positions,
+                step_sizes=adjusted_step_sizes,
+            ),
+            adjusted_acceptance=acceptance,
+        )
+        if record_trace
+        else NoLapsTrace(),
     )

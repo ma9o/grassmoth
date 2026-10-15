@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs._math import (
+from nof1_causal_lab.models.ssm.inference.samplers.particle.math import (
     _value_and_grad_by_param,
 )
 

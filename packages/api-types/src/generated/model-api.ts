@@ -877,6 +877,40 @@ export interface components {
              */
             readonly fill_null_limit: number | null;
         };
+        /**
+         * ConditionalMetropolisDiagnostics
+         * @description Realized MH acceptance and frozen scales for the conditional parameter block.
+         */
+        readonly ConditionalMetropolisDiagnostics: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "mh";
+            /** Acceptance Rate */
+            readonly acceptance_rate: number;
+            /** Final Step Size */
+            readonly final_step_size: readonly number[];
+        };
+        /**
+         * ConditionalNutsDiagnostics
+         * @description Realized conditional NUTS adaptation, with tree diagnostics confined to parameters.
+         */
+        readonly ConditionalNutsDiagnostics: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "nuts_da";
+            /** Acceptance Rate */
+            readonly acceptance_rate: number;
+            /** Final Step Size */
+            readonly final_step_size: readonly number[];
+            /** Max Tree Depth Fraction */
+            readonly max_tree_depth_fraction: number;
+        };
+        readonly "ConditionalParameterSpec-Input": components["schemas"]["MetropolisHastingsSpec-Input"] | components["schemas"]["NutsDASpec-Input"];
+        readonly "ConditionalParameterSpec-Output": components["schemas"]["MetropolisHastingsSpec-Output"] | components["schemas"]["NutsDASpec-Output"];
         /** @description A persistent construct identity survives changes to its display name. */
         readonly "ConstructId-Input": `construct:${string}`;
         /** @description A persistent construct identity survives changes to its display name. */
@@ -976,7 +1010,7 @@ export interface components {
             readonly label: string;
         };
         /** @enum {string} */
-        readonly DSMCLeafProposal: "amala_exact" | "paid_mix";
+        readonly DSMCLeafProposal: "amala" | "amala_plus";
         /**
          * DataComparisonReport
          * @description Statistical comparison of two nonempty selections of immutable saved histories.
@@ -1221,6 +1255,8 @@ export interface components {
             /** Findings */
             readonly findings: readonly components["schemas"]["DataFinding"][];
         };
+        /** @enum {string} */
+        readonly DiagnosticPhase: "warmup" | "post_warmup";
         readonly "DistributionId-Input": `distribution:${string}`;
         readonly "DistributionId-Output": `distribution:${string}`;
         /**
@@ -1235,6 +1271,174 @@ export interface components {
              * @enum {string}
              */
             readonly kind: "drift";
+        };
+        /**
+         * DsmcNodeWeightDiagnostics
+         * @description One tree node before resampling; level zero is a leaf, stop is exclusive.
+         *
+         *     Entirely padded nodes are omitted. A partial node's range contains only real
+         *     time indices, while its candidate count includes the algorithm's padding.
+         */
+        readonly DsmcNodeWeightDiagnostics: {
+            /** Level */
+            readonly level: number;
+            /** Start */
+            readonly start: number;
+            /** Stop */
+            readonly stop: number;
+            readonly weights: components["schemas"]["ParticleWeightDiagnostics"];
+        };
+        /**
+         * DsmcSpec
+         * @description Conditional dSMC auxiliary law, particle proposal, and warmup adaptation.
+         */
+        readonly "DsmcSpec-Input": {
+            /**
+             * Amala Delta Init
+             * @default 0.01
+             */
+            readonly amala_delta_init?: number;
+            /**
+             * Amala Delta Min
+             * @default 0.00001
+             */
+            readonly amala_delta_min?: number;
+            /**
+             * Amala Delta Max
+             * @default 10
+             */
+            readonly amala_delta_max?: number;
+            /**
+             * Amala Target Accept
+             * @default 0.75
+             */
+            readonly amala_target_accept?: number;
+            /**
+             * Amala Adaptation Window
+             * @default 100
+             */
+            readonly amala_adaptation_window?: number;
+            /**
+             * Amala Adaptation Tolerance
+             * @default 0.05
+             */
+            readonly amala_adaptation_tolerance?: number;
+            /**
+             * Amala Adaptation Rho
+             * @default 0.5
+             */
+            readonly amala_adaptation_rho?: number;
+            /**
+             * Amala Adaptation Rho Min
+             * @default 0.001
+             */
+            readonly amala_adaptation_rho_min?: number;
+            /**
+             * Amala Adaptation Gamma
+             * @default -0.5
+             */
+            readonly amala_adaptation_gamma?: number;
+            /**
+             * Amala Kappa
+             * @default 0.75
+             */
+            readonly amala_kappa?: number;
+            /**
+             * Amala Grad Clip
+             * @default infinity
+             */
+            readonly amala_grad_clip?: number | "infinity";
+            /** @default amala_plus */
+            readonly dsmc_leaf_proposal?: components["schemas"]["DSMCLeafProposal"];
+            readonly paid_mix?: components["schemas"]["PaidMixSpec-Input"] | null;
+            /**
+             * Latent Block Coords
+             * @default null
+             */
+            readonly latent_block_coords?: number | null;
+        };
+        /**
+         * DsmcSpec
+         * @description Conditional dSMC auxiliary law, particle proposal, and warmup adaptation.
+         */
+        readonly "DsmcSpec-Output": {
+            /**
+             * Amala Delta Init
+             * @default 0.01
+             */
+            readonly amala_delta_init: number;
+            /**
+             * Amala Delta Min
+             * @default 0.00001
+             */
+            readonly amala_delta_min: number;
+            /**
+             * Amala Delta Max
+             * @default 10
+             */
+            readonly amala_delta_max: number;
+            /**
+             * Amala Target Accept
+             * @default 0.75
+             */
+            readonly amala_target_accept: number;
+            /**
+             * Amala Adaptation Window
+             * @default 100
+             */
+            readonly amala_adaptation_window: number;
+            /**
+             * Amala Adaptation Tolerance
+             * @default 0.05
+             */
+            readonly amala_adaptation_tolerance: number;
+            /**
+             * Amala Adaptation Rho
+             * @default 0.5
+             */
+            readonly amala_adaptation_rho: number;
+            /**
+             * Amala Adaptation Rho Min
+             * @default 0.001
+             */
+            readonly amala_adaptation_rho_min: number;
+            /**
+             * Amala Adaptation Gamma
+             * @default -0.5
+             */
+            readonly amala_adaptation_gamma: number;
+            /**
+             * Amala Kappa
+             * @default 0.75
+             */
+            readonly amala_kappa: number;
+            /**
+             * Amala Grad Clip
+             * @default infinity
+             */
+            readonly amala_grad_clip: number | "infinity";
+            /** @default amala_plus */
+            readonly dsmc_leaf_proposal: components["schemas"]["DSMCLeafProposal"];
+            readonly paid_mix: components["schemas"]["PaidMixSpec-Output"] | null;
+            /**
+             * Latent Block Coords
+             * @default null
+             */
+            readonly latent_block_coords: number | null;
+        };
+        /**
+         * DsmcWeightDiagnostics
+         * @description Shared PGibbs/mPGibbs tree and terminal weight diagnostics.
+         *
+         *     Tree nodes are ordered by increasing level, then start time. Terminal weights
+         *     include the exact full-path correction and precede the modified Gibbs move;
+         *     their reference probability is not that move's rejection probability.
+         */
+        readonly DsmcWeightDiagnostics: {
+            readonly phase: components["schemas"]["DiagnosticPhase"];
+            /** Tree */
+            readonly tree: readonly components["schemas"]["DsmcNodeWeightDiagnostics"][];
+            readonly terminal: components["schemas"]["ParticleWeightDiagnostics"];
         };
         /**
          * DynamicalModelSpec
@@ -4153,6 +4357,17 @@ export interface components {
              */
             readonly interpretation: "in_sample_posterior_predictive" | "posterior_predictive";
         };
+        /**
+         * FixedParameterDiagnostics
+         * @description A model with no free parameter coordinates needs only trajectory updates.
+         */
+        readonly FixedParameterDiagnostics: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "fixed";
+        };
         /** GammaLawSpec[Expression] */
         readonly "GammaLawSpec_Expression_-Output": {
             /**
@@ -4361,8 +4576,8 @@ export interface components {
             /** @description Whether higher values move with (positive) or against (negative) the construct. */
             readonly construct_polarity: components["schemas"]["IndicatorPolarity"];
         };
-        readonly "InferenceAlgorithmSpec-Input": components["schemas"]["NutsDASpec-Input"] | components["schemas"]["MarginalParticleGibbsSpec-Input"];
-        readonly "InferenceAlgorithmSpec-Output": components["schemas"]["NutsDASpec-Output"] | components["schemas"]["MarginalParticleGibbsSpec-Output"];
+        readonly "InferenceAlgorithmSpec-Input": components["schemas"]["NutsDASpec-Input"] | components["schemas"]["MarginalParticleGibbsSpec-Input"] | components["schemas"]["ParticleGibbsSpec-Input"];
+        readonly "InferenceAlgorithmSpec-Output": components["schemas"]["NutsDASpec-Output"] | components["schemas"]["MarginalParticleGibbsSpec-Output"] | components["schemas"]["ParticleGibbsSpec-Output"];
         /**
          * InferenceEvidence
          * @description Native telemetry buffers; posterior atoms and coordinates belong to the model.
@@ -4407,7 +4622,7 @@ export interface components {
             readonly duration_seconds: number;
             readonly engine: components["schemas"]["MCMCEvidence"];
             /** Sampler Diagnostics */
-            readonly sampler_diagnostics: components["schemas"]["ParticleSamplerDiagnostics"] | components["schemas"]["NutsDADiagnostics"] | null;
+            readonly sampler_diagnostics: components["schemas"]["ParticleSamplerDiagnostics"] | components["schemas"]["NutsDADiagnostics"] | components["schemas"]["ParticleGibbsDiagnostics"] | null;
         };
         /**
          * InferenceReport
@@ -4795,21 +5010,21 @@ export interface components {
         readonly MCMCEvidence: {
             /**
              * Method
-             * @default custom
+             * @default mpgibbs
              * @enum {string}
              */
-            readonly method: "nuts_da" | "custom";
+            readonly method: "nuts_da" | "mpgibbs" | "pgibbs";
         };
         /**
          * MarginalParticleGibbsSpec
-         * @description Custom inference seam, currently backed by LAPS and marginalized Particle Gibbs.
+         * @description Marginalized parameter ensemble and conditional dSMC trajectory updates.
          */
         readonly "MarginalParticleGibbsSpec-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            readonly method: "custom";
+            readonly method: "mpgibbs";
             /**
              * N Parameter Particles
              * @default 2
@@ -4817,99 +5032,13 @@ export interface components {
             readonly n_parameter_particles?: number;
             /** @default null */
             readonly tempering?: components["schemas"]["GaussianReferenceTemperingSpec-Input"] | null;
-            /**
-             * Latent Delta
-             * @default 0.2
-             */
-            readonly latent_delta?: number;
+            readonly dsmc?: components["schemas"]["DsmcSpec-Input"];
             /**
              * Parameter Proposal
              * @default pseudo_langevin
              * @enum {string}
              */
             readonly parameter_proposal?: "random_walk" | "pseudo_langevin";
-            /**
-             * Amala Delta Init
-             * @default 0.01
-             */
-            readonly amala_delta_init?: number;
-            /**
-             * Amala Delta Min
-             * @default 0.00001
-             */
-            readonly amala_delta_min?: number;
-            /**
-             * Amala Delta Max
-             * @default 10
-             */
-            readonly amala_delta_max?: number;
-            /**
-             * Amala Target Accept
-             * @default 0.75
-             */
-            readonly amala_target_accept?: number;
-            /**
-             * Amala Adaptation Window
-             * @default 100
-             */
-            readonly amala_adaptation_window?: number;
-            /**
-             * Amala Adaptation Tolerance
-             * @default 0.05
-             */
-            readonly amala_adaptation_tolerance?: number;
-            /**
-             * Amala Adaptation Rho
-             * @default 0.5
-             */
-            readonly amala_adaptation_rho?: number;
-            /**
-             * Amala Adaptation Rho Min
-             * @default 0.001
-             */
-            readonly amala_adaptation_rho_min?: number;
-            /**
-             * Amala Adaptation Gamma
-             * @default -0.5
-             */
-            readonly amala_adaptation_gamma?: number;
-            /**
-             * Amala Kappa
-             * @default 0.75
-             */
-            readonly amala_kappa?: number;
-            /**
-             * Amala Grad Clip
-             * @default infinity
-             */
-            readonly amala_grad_clip?: number | "infinity";
-            /** @default amala_exact */
-            readonly dsmc_leaf_proposal?: components["schemas"]["DSMCLeafProposal"];
-            /**
-             * Latent Block Coords
-             * @default null
-             */
-            readonly latent_block_coords?: number | null;
-            /**
-             * Paid Mix Z Weight
-             * @default 0.85
-             */
-            readonly paid_mix_z_weight?: number;
-            /**
-             * Paid Mix Pilot Weight
-             * @default 0.1
-             */
-            readonly paid_mix_pilot_weight?: number;
-            /**
-             * Paid Mix Pilot Var Scale
-             * @default 0.25
-             */
-            readonly paid_mix_pilot_var_scale?: number;
-            /**
-             * Paid Mix Wide Mult
-             * @default 4
-             */
-            readonly paid_mix_wide_mult?: number;
             /**
              * Diagnostic Metrics All
              * @default false
@@ -4960,14 +5089,14 @@ export interface components {
         };
         /**
          * MarginalParticleGibbsSpec
-         * @description Custom inference seam, currently backed by LAPS and marginalized Particle Gibbs.
+         * @description Marginalized parameter ensemble and conditional dSMC trajectory updates.
          */
         readonly "MarginalParticleGibbsSpec-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            readonly method: "custom";
+            readonly method: "mpgibbs";
             /**
              * N Parameter Particles
              * @default 2
@@ -4975,99 +5104,13 @@ export interface components {
             readonly n_parameter_particles: number;
             /** @default null */
             readonly tempering: components["schemas"]["GaussianReferenceTemperingSpec-Output"] | null;
-            /**
-             * Latent Delta
-             * @default 0.2
-             */
-            readonly latent_delta: number;
+            readonly dsmc: components["schemas"]["DsmcSpec-Output"];
             /**
              * Parameter Proposal
              * @default pseudo_langevin
              * @enum {string}
              */
             readonly parameter_proposal: "random_walk" | "pseudo_langevin";
-            /**
-             * Amala Delta Init
-             * @default 0.01
-             */
-            readonly amala_delta_init: number;
-            /**
-             * Amala Delta Min
-             * @default 0.00001
-             */
-            readonly amala_delta_min: number;
-            /**
-             * Amala Delta Max
-             * @default 10
-             */
-            readonly amala_delta_max: number;
-            /**
-             * Amala Target Accept
-             * @default 0.75
-             */
-            readonly amala_target_accept: number;
-            /**
-             * Amala Adaptation Window
-             * @default 100
-             */
-            readonly amala_adaptation_window: number;
-            /**
-             * Amala Adaptation Tolerance
-             * @default 0.05
-             */
-            readonly amala_adaptation_tolerance: number;
-            /**
-             * Amala Adaptation Rho
-             * @default 0.5
-             */
-            readonly amala_adaptation_rho: number;
-            /**
-             * Amala Adaptation Rho Min
-             * @default 0.001
-             */
-            readonly amala_adaptation_rho_min: number;
-            /**
-             * Amala Adaptation Gamma
-             * @default -0.5
-             */
-            readonly amala_adaptation_gamma: number;
-            /**
-             * Amala Kappa
-             * @default 0.75
-             */
-            readonly amala_kappa: number;
-            /**
-             * Amala Grad Clip
-             * @default infinity
-             */
-            readonly amala_grad_clip: number | "infinity";
-            /** @default amala_exact */
-            readonly dsmc_leaf_proposal: components["schemas"]["DSMCLeafProposal"];
-            /**
-             * Latent Block Coords
-             * @default null
-             */
-            readonly latent_block_coords: number | null;
-            /**
-             * Paid Mix Z Weight
-             * @default 0.85
-             */
-            readonly paid_mix_z_weight: number;
-            /**
-             * Paid Mix Pilot Weight
-             * @default 0.1
-             */
-            readonly paid_mix_pilot_weight: number;
-            /**
-             * Paid Mix Pilot Var Scale
-             * @default 0.25
-             */
-            readonly paid_mix_pilot_var_scale: number;
-            /**
-             * Paid Mix Wide Mult
-             * @default 4
-             */
-            readonly paid_mix_wide_mult: number;
             /**
              * Diagnostic Metrics All
              * @default false
@@ -5136,6 +5179,48 @@ export interface components {
              */
             readonly kind: "mechanism";
             readonly id: components["schemas"]["MechanismId-Output"];
+        };
+        /**
+         * MetropolisHastingsSpec
+         * @description Conditional Gaussian random walk with LAPS preconditioning and warmup dual averaging.
+         */
+        readonly "MetropolisHastingsSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "mh";
+            /**
+             * Initial Step Size
+             * @default 0.1
+             */
+            readonly initial_step_size?: number;
+            /**
+             * Target Accept Prob
+             * @default 0.3
+             */
+            readonly target_accept_prob?: number;
+        };
+        /**
+         * MetropolisHastingsSpec
+         * @description Conditional Gaussian random walk with LAPS preconditioning and warmup dual averaging.
+         */
+        readonly "MetropolisHastingsSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "mh";
+            /**
+             * Initial Step Size
+             * @default 0.1
+             */
+            readonly initial_step_size: number;
+            /**
+             * Target Accept Prob
+             * @default 0.3
+             */
+            readonly target_accept_prob: number;
         };
         /**
          * MixedLawProvenance
@@ -5545,7 +5630,7 @@ export interface components {
         };
         /**
          * NutsDASpec
-         * @description Joint state/parameter NUTS with dual averaging and diagonal mass adaptation.
+         * @description NUTS with dual averaging and diagonal mass adaptation, joint or conditional.
          */
         readonly "NutsDASpec-Input": {
             /**
@@ -5571,7 +5656,7 @@ export interface components {
         };
         /**
          * NutsDASpec
-         * @description Joint state/parameter NUTS with dual averaging and diagonal mass adaptation.
+         * @description NUTS with dual averaging and diagonal mass adaptation, joint or conditional.
          */
         readonly "NutsDASpec-Output": {
             /**
@@ -5752,6 +5837,58 @@ export interface components {
             ] | null;
         };
         /**
+         * PaidMixSpec
+         * @description Optional fixed pilot and wide proposals mixed with an auxiliary particle proposal.
+         */
+        readonly "PaidMixSpec-Input": {
+            /**
+             * Local Weight
+             * @default 0.85
+             */
+            readonly local_weight?: number;
+            /**
+             * Pilot Weight
+             * @default 0.1
+             */
+            readonly pilot_weight?: number;
+            /**
+             * Pilot Var Scale
+             * @default 0.25
+             */
+            readonly pilot_var_scale?: number;
+            /**
+             * Wide Mult
+             * @default 4
+             */
+            readonly wide_mult?: number;
+        };
+        /**
+         * PaidMixSpec
+         * @description Optional fixed pilot and wide proposals mixed with an auxiliary particle proposal.
+         */
+        readonly "PaidMixSpec-Output": {
+            /**
+             * Local Weight
+             * @default 0.85
+             */
+            readonly local_weight: number;
+            /**
+             * Pilot Weight
+             * @default 0.1
+             */
+            readonly pilot_weight: number;
+            /**
+             * Pilot Var Scale
+             * @default 0.25
+             */
+            readonly pilot_var_scale: number;
+            /**
+             * Wide Mult
+             * @default 4
+             */
+            readonly wide_mult: number;
+        };
+        /**
          * PairedArmSimulation
          * @description Intervention and natural-course histories with matched draw indices.
          */
@@ -5851,6 +5988,63 @@ export interface components {
             readonly status: "passed" | "failed" | "not_evaluated";
         };
         /**
+         * ParticleGibbsDiagnostics
+         * @description Blocked parameter and dSMC trajectory telemetry from the native producer.
+         */
+        readonly ParticleGibbsDiagnostics: {
+            readonly settings: components["schemas"]["SamplerSpec"];
+            /** Mcmc Phase Seconds */
+            readonly mcmc_phase_seconds: number;
+            readonly initialization: components["schemas"]["LapsInitializationDiagnostics"];
+            /** Parameters */
+            readonly parameters: components["schemas"]["FixedParameterDiagnostics"] | components["schemas"]["ConditionalMetropolisDiagnostics"] | components["schemas"]["ConditionalNutsDiagnostics"];
+            /** Latent Update Fraction */
+            readonly latent_update_fraction: number;
+            /** Latent Frozen Fraction */
+            readonly latent_frozen_fraction: number;
+            /** Latent Move Rms Mean */
+            readonly latent_move_rms_mean: number;
+            readonly dsmc_weights: components["schemas"]["DsmcWeightDiagnostics"] | null;
+        };
+        /**
+         * ParticleGibbsSpec
+         * @description Conditional MH or NUTS parameters and dSMC trajectories on the exact joint posterior.
+         */
+        readonly "ParticleGibbsSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "pgibbs";
+            readonly parameter_kernel?: components["schemas"]["ConditionalParameterSpec-Input"];
+            readonly dsmc?: components["schemas"]["DsmcSpec-Input"];
+            readonly laps?: components["schemas"]["LapsInitializationSpec-Input"];
+            /**
+             * Diagnostic Metrics All
+             * @default false
+             */
+            readonly diagnostic_metrics_all?: boolean;
+        };
+        /**
+         * ParticleGibbsSpec
+         * @description Conditional MH or NUTS parameters and dSMC trajectories on the exact joint posterior.
+         */
+        readonly "ParticleGibbsSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "pgibbs";
+            readonly parameter_kernel: components["schemas"]["ConditionalParameterSpec-Output"];
+            readonly dsmc: components["schemas"]["DsmcSpec-Output"];
+            readonly laps: components["schemas"]["LapsInitializationSpec-Output"];
+            /**
+             * Diagnostic Metrics All
+             * @default false
+             */
+            readonly diagnostic_metrics_all: boolean;
+        };
+        /**
          * ParticleSamplerDiagnostics
          * @description Typed exact-sampler settings and transition telemetry from the native producer.
          */
@@ -5868,8 +6062,7 @@ export interface components {
             readonly param_target_accept: number;
             /** Parameter Preconditioned */
             readonly parameter_preconditioned: boolean;
-            /** Diagnostic Summary Phase */
-            readonly diagnostic_summary_phase: string;
+            readonly diagnostic_summary_phase: components["schemas"]["DiagnosticPhase"];
             /** Parameter Accept Rate */
             readonly parameter_accept_rate: number;
             /** Latent Update Fraction */
@@ -5920,8 +6113,48 @@ export interface components {
              */
             readonly amala_grad_norm_max: number | null;
             readonly initialization: components["schemas"]["LapsInitializationDiagnostics"];
+            readonly dsmc_weights: components["schemas"]["DsmcWeightDiagnostics"] | null;
             /** @default null */
             readonly tempering: components["schemas"]["TemperingDiagnostics"] | null;
+        };
+        /**
+         * ParticleWeightDiagnostics
+         * @description Candidate count and weight measurements for one resampling distribution.
+         */
+        readonly ParticleWeightDiagnostics: {
+            /** Candidates */
+            readonly candidates: number;
+            /** Metrics */
+            readonly metrics: Readonly<Partial<Record<components["schemas"]["ParticleWeightMetric"], components["schemas"]["ParticleWeightSummary"]>>>;
+        };
+        /**
+         * ParticleWeightMetric
+         * @description Measurements of a categorical particle law, before resampling.
+         *
+         *     ESS counts weighted candidates, not independent MCMC draws. Entropy uses
+         *     natural logarithms. Reference probability is the mass of candidate zero,
+         *     including pair (0, 0) at merges, not the mass of all duplicate paths.
+         *     Log-weight range and variance use finite log weights only; finite_fraction
+         *     separately records their share of candidates. Invalid laws remain nonfinite.
+         * @enum {string}
+         */
+        readonly ParticleWeightMetric: "ess" | "ess_fraction" | "entropy" | "max_probability" | "reference_probability" | "finite_log_weight_range" | "finite_log_weight_variance" | "finite_fraction";
+        /**
+         * ParticleWeightSummary
+         * @description Aggregate across chains and sweeps, without dropping nonfinite measurements.
+         *
+         *     An undefined or infinite aggregate is null; nonfinite_fraction retains the
+         *     frequency of nonfinite measurements instead of concealing them in an average.
+         */
+        readonly ParticleWeightSummary: {
+            /** Mean */
+            readonly mean: number | null;
+            /** Minimum */
+            readonly minimum: number | null;
+            /** Maximum */
+            readonly maximum: number | null;
+            /** Nonfinite Fraction */
+            readonly nonfinite_fraction: number;
         };
         /**
          * PersistenceTransformSpec

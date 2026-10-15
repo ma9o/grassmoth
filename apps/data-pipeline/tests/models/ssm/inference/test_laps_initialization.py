@@ -12,6 +12,7 @@ from nof1_causal_lab.artifacts.model.expressions import state
 from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
 from nof1_causal_lab.artifacts.sampling import (
+    DsmcSpec,
     LapsInitializationSpec,
     MarginalParticleGibbsSpec,
     SamplerSpec,
@@ -190,7 +191,7 @@ def test_laps_batch_width_preserves_members_and_global_adaptation(monkeypatch):
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize("leaf", ["amala_exact", "paid_mix"])
+@pytest.mark.parametrize("leaf", ["amala", "amala_plus"])
 def test_production_fit_consumes_laps_package(leaf):
     prepared, panel = _nonlinear_fixture()
     result = fit(
@@ -203,11 +204,13 @@ def test_production_fit_consumes_laps_package(leaf):
             num_chains=2,
             num_particles=4,
             seed=7,
+            retain_latent_paths=leaf == "amala_plus",
             algorithm=MarginalParticleGibbsSpec(
-                dsmc_leaf_proposal=leaf,
+                diagnostic_metrics_all=leaf == "amala_plus",
                 laps=LapsInitializationSpec(
                     ensemble_size=128, num_unadjusted_steps=1000, num_adjusted_steps=20
                 ),
+                dsmc=DsmcSpec(dsmc_leaf_proposal=leaf),
             ),
         ),
         reparam=None,
@@ -216,8 +219,22 @@ def test_production_fit_consumes_laps_package(leaf):
     assert isinstance(result, MCMCPosterior)
     evidence = result.diagnostics.sampler_diagnostics
     assert isinstance(evidence, ParticleSamplerDiagnostics)
+    assert result.diagnostics.phase_extra_fields is not None
+    retained = result.diagnostics.phase_extra_fields["post_warmup"]
+    if leaf == "amala_plus":
+        assert evidence.dsmc_weights is not None
+        assert evidence.dsmc_weights.phase == "post_warmup"
+        assert evidence.dsmc_weights.terminal.candidates == 4
+        assert retained["dsmc_weight_ess"].shape == (2, 3, len(evidence.dsmc_weights.tree) + 1)
+    else:
+        assert evidence.dsmc_weights is None
+        assert not any(key.startswith("dsmc_weight_") for key in retained)
     assert evidence.initialization.ensemble_size == 128
     assert evidence.parameter_preconditioned
-    assert result.draws.latent_paths is not None
-    assert result.draws.latent_paths.shape == (6, len(panel.times), 1)
+    if leaf == "amala_plus":
+        assert result.draws.latent_paths is not None
+        assert result.draws.latent_paths.shape == (6, len(panel.times), 1)
+    else:
+        assert result.draws.latent_paths is None
+    assert result.diagnostics.latent_posterior_summary is not None
     assert np.isfinite(result.diagnostics.observation_log_probs).all()

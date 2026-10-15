@@ -13,7 +13,8 @@ import numpyro.distributions as dist
 import pytest
 
 from nof1_causal_lab.artifacts.probability.families import DistributionFamily
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.kernel import (
+from nof1_causal_lab.artifacts.sampling import DsmcSpec
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from nof1_causal_lab.models.ssm.inference.targets.intervals import gather_interval_statistics
@@ -30,6 +31,24 @@ def _interval_tree_score(intervals, contexts, bank):
     stats = intervals.leaf_statistics(contexts, bank)
     total = jnp.zeros((bank.shape[1], jax.tree.leaves(contexts)[0].shape[0]))
     for level in intervals.tree.levels[1:]:
+        if level.emission_slots.shape[1]:
+            # Pairwise selection must preserve every crossed path and parameter
+            # label, including zero-padded child slots and joint channel noise.
+            def compare_pairs(left, right, node, level=level):
+                full_left = gather_interval_statistics(left, jnp.asarray(level.left_slots)[node])
+                full_right = gather_interval_statistics(right, jnp.asarray(level.right_slots)[node])
+                expected = jax.vmap(
+                    lambda row: intervals.emission_log_probs(
+                        contexts, row[None] + full_right, level, node
+                    )
+                )(full_left)
+                actual = intervals.pairwise_emission_log_probs(contexts, left, right, level, node)
+                return actual, expected
+
+            actual, expected = jax.vmap(compare_pairs)(
+                stats[::2], stats[1::2], jnp.arange(len(level.left_slots))
+            )
+            np.testing.assert_allclose(actual, expected, atol=2e-5)
         stats = jax.vmap(
             lambda left, right, node, level=level: (
                 gather_interval_statistics(left, jnp.asarray(level.left_slots)[node])
@@ -117,6 +136,15 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
 
     intervals = target.intervals
     assert intervals is not None
+    current_gradient = jax.grad(
+        lambda x: intervals.trajectory_log_probs(
+            context, x, target.observations, gradient="current"
+        ).sum()
+    )(path)
+    observation_jacobian = jax.jacrev(lambda x: independent(position, x))(path)
+    np.testing.assert_allclose(
+        current_gradient, observation_jacobian[jnp.arange(7), jnp.arange(7)], atol=2e-5
+    )
     # Two parameter labels, two distinct paths, and seven real leaves exercise
     # label-dependent responses, slot reuse, overlapping windows, and padding.
     contexts = jax.vmap(lambda z: target.context(z, target.times))(jnp.array([[0.15], [-0.4]]))
@@ -152,7 +180,8 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
 
 
 @pytest.mark.inference(concern="recovery")
-def test_interval_particle_kernel_recovers_analytic_joint_posterior():
+@pytest.mark.parametrize("method", ["amala", "amala_plus"])
+def test_interval_particle_kernel_recovers_analytic_joint_posterior(method):
     target, mean, covariance = gaussian_interval_case()
     kernel = build_marginal_particle_gibbs_kernel(
         target,
@@ -160,12 +189,12 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior():
         num_parameter_particles=3,
         param_step_size=0.3,
         parameter_proposal="random_walk",
-        dsmc_leaf_proposal="amala_exact",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
+        dsmc=DsmcSpec(dsmc_leaf_proposal=method),
     )
     chains = 4
     joint = jnp.asarray(np.random.default_rng(24).normal(size=(chains, len(mean))))
-    initial = jax.vmap(lambda point: initialize_interval_chain(target, point))(joint)
+    initial = jax.vmap(lambda point: initialize_interval_chain(target, point, kernel=kernel))(joint)
 
     @jax.jit
     def sample(states, keys):
@@ -228,19 +257,7 @@ def test_joint_interval_noise_with_different_windows_keeps_cross_channel_covaria
     contexts = jax.vmap(lambda z: target.context(z, target.times))(jnp.zeros((1, 1)))
     intervals = target.intervals
     assert intervals is not None
-    stats = intervals.leaf_statistics(contexts, path[:, None, :])
-    density = jnp.zeros((1, 1))
-    for level in intervals.tree.levels[1:]:
-        stats = jax.vmap(
-            lambda a, b, node, level=level: (
-                gather_interval_statistics(a, jnp.asarray(level.left_slots)[node])
-                + gather_interval_statistics(b, jnp.asarray(level.right_slots)[node])
-            )
-        )(stats[::2], stats[1::2], jnp.arange(len(level.left_slots)))
-        if level.emission_slots.shape[1]:
-            density = density + jax.vmap(
-                lambda s, node, level=level: intervals.emission_log_probs(contexts, s, level, node)
-            )(stats, jnp.arange(len(level.left_slots))).sum(axis=0)
+    density = _interval_tree_score(intervals, contexts, path[:, None, :])
     means = jnp.array([jnp.trapezoid(path[:, 0]) / 3, jnp.trapezoid(path[1:, 0]) / 2])
     expected = dist.MultivariateNormal(means, covariance_matrix=jnp.asarray(covariance)).log_prob(
         observations[3]

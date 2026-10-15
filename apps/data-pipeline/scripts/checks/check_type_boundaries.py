@@ -1209,7 +1209,8 @@ class _CoreVisitor(ast.NodeVisitor):
             )
         if qualified == PACKAGE + ".artifacts.immutability.freeze_fields":
             bypass = not (
-                self._class_owned()
+                self.class_name is not None
+                and self.index.frozen(self.module + "." + self.class_name)
                 and self.in_function
                 and self.scope[-1] == "__post_init__"
                 and len(node.args) == 1

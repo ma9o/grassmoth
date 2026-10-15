@@ -16,10 +16,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from nof1_causal_lab.artifacts.sampling import GaussianReferenceTemperingSpec
-    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.kernel import (
+    from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCState
+    from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
         MarginalParticleGibbsKernel,
     )
-    from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCState
     from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import GaussianReference
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
@@ -84,7 +84,7 @@ class ReplicaExchangeKernel:
     spec: GaussianReferenceTemperingSpec
 
     def rebind(self, states: TrajectoryMCMCState, betas: jax.Array) -> TrajectoryMCMCState:
-        """Recompute parameter contexts, replayed paths, and both density caches."""
+        """Bind contexts and density/gradient caches to each replica's temperature."""
 
         def one(state: TrajectoryMCMCState, beta: jax.Array) -> TrajectoryMCMCState:
             target = self.target.at_temperature(self.reference, beta)
@@ -94,6 +94,9 @@ class ReplicaExchangeKernel:
                 state.position, context, path, target.observations
             )
             return state._replace(
+                parameter_gradient=self.kernel_for_target(target).parameter_gradient_fn(
+                    state.position
+                ),
                 latent_context=context,
                 latent_trajectory=path,
                 trajectory_log_prob=trajectory,
@@ -108,6 +111,8 @@ class ReplicaExchangeKernel:
         keys: jax.Array,
         betas: jax.Array,
         index: jax.Array,
+        *,
+        batch_size: int | None = None,
     ) -> tuple[TrajectoryMCMCState, dict[str, jax.Array], ExchangeRecord]:
         """Update local replicas, independently refresh beta zero, then exchange states."""
         levels = betas.size
@@ -116,7 +121,7 @@ class ReplicaExchangeKernel:
             lambda value: value.reshape((chains, levels, *value.shape[1:])), states
         )
         moved, info, record = jax.vmap(
-            lambda state, key: self._ladder_step(state, key, betas, index)
+            lambda state, key: self._ladder_step(state, key, betas, index, batch_size=batch_size)
         )(population, keys.reshape((chains, levels, *keys.shape[1:])))
 
         def flatten(value: jax.Array) -> jax.Array:
@@ -132,12 +137,14 @@ class ReplicaExchangeKernel:
         keys: jax.Array,
         betas: jax.Array,
         index: jax.Array,
+        *,
+        batch_size: int | None = None,
     ) -> tuple[TrajectoryMCMCState, dict[str, jax.Array], ExchangeRecord]:
         def local(
             state: TrajectoryMCMCState, key: jax.Array, beta: jax.Array
         ) -> tuple[TrajectoryMCMCState, dict[str, jax.Array]]:
             return self.kernel_for_target(self.target.at_temperature(self.reference, beta)).step_fn(
-                state, key
+                state, key, batch_size=batch_size
             )
 
         local_states, local_info = jax.vmap(local)(
@@ -163,9 +170,18 @@ class ReplicaExchangeKernel:
         reference_path = jax.vmap(self.reference.path_log_prob)(paths)
         reference = jax.vmap(self.reference.parameter_log_prob)(positions) + reference_path
         permutation, record = exchange_permutation(betas, exact - reference, index % 2, swap_key)
+        # A cached pilot gradient belongs to a position AND a temperature. Swaps
+        # keep tuning in each slot but must bind the arriving position's oracle
+        # to that slot's target, including positions arriving from beta zero.
+        gradients = jax.vmap(
+            lambda position, beta: self.kernel_for_target(
+                self.target.at_temperature(self.reference, beta)
+            ).parameter_gradient_fn(position)
+        )(positions[permutation], betas)
         return (
             moved._replace(
                 position=positions[permutation],
+                parameter_gradient=gradients,
                 latent_context=jax.tree.map(lambda value: value[permutation], contexts),
                 latent_trajectory=paths[permutation],
                 trajectory_log_prob=_bridge_density(

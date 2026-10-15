@@ -16,13 +16,13 @@ from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, 
 from nof1_causal_lab.models.ssm.inference.extraction import (
     extract_grouped_public_samples,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.runner import (
-    _initialize_chain_state,
-)
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from nof1_causal_lab.models.ssm.inference.parameter_tracing import extract_constrained_samples
 from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
 from nof1_causal_lab.models.ssm.inference.problem import ParticleProblem
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
+    _initialize_chain_state,
+)
 from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 from nof1_causal_lab.models.ssm.inference.types import (
     JointPosteriorDraws,
@@ -105,6 +105,7 @@ def test_supplied_initial_path_does_not_compute_a_predictive_rollout():
         observations=jnp.zeros((3, 1)),
         times=jnp.arange(3.0),
         target=target,
+        parameter_gradient_fn=jnp.zeros_like,
         initial_latent_delta=jnp.full(3, 0.1),
         param_step_size=0.01,
         param_min_scale=1e-6,

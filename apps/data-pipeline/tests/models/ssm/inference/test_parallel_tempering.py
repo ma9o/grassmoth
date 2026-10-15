@@ -13,13 +13,13 @@ from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.model.expressions import state
 from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec
 from nof1_causal_lab.artifacts.sampling import GaussianReferenceTemperingSpec
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.kernel import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.runner import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
     run_marginal_particle_gibbs,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.tempering import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.tempering import (
     ReplicaExchangeKernel,
     adapt_temperature_ladder,
     exchange_permutation,
@@ -28,6 +28,7 @@ from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import Gaus
 from nof1_causal_lab.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
 from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
 from tests.models.ssm.compile.test_exact_state_space import _initial, _model, _problem
+from tests.support.compute import COMPUTE_BUDGET
 from tests.support.inference import compile_fit_fixture
 from tests.support.interval_particle import gaussian_interval_case, initialize_interval_chain
 
@@ -149,9 +150,10 @@ def test_reference_and_swaps_preserve_static_accumulator_and_exact_coordinates()
     assert not reference.free_mask[:, total].any()
     assert not reference.free_mask[2, driver]
     parameters, coordinates = jax.vmap(reference.sample)(jax.random.split(jax.random.key(12), 3))
-    states = jax.vmap(lambda position, path: _initial(target, path, position=position))(
-        parameters, coordinates
-    )
+    kernel = _local_kernel(target)
+    states = jax.vmap(
+        lambda position, path: _initial(target, path, kernel=kernel, position=position)
+    )(parameters, coordinates)
     betas = jnp.array([1.0, 0.4, 0.0])
     exchange = ReplicaExchangeKernel(
         target, reference, _local_kernel, GaussianReferenceTemperingSpec(num_temperatures=3)
@@ -256,7 +258,8 @@ def test_local_moves_refresh_and_swaps_preserve_all_analytic_bridge_moments():
         ],
         axis=1,
     )
-    states = jax.vmap(lambda q: initialize_interval_chain(target, q))(
+    kernel = _local_kernel(target)
+    states = jax.vmap(lambda q: initialize_interval_chain(target, q, kernel=kernel))(
         jnp.asarray(joint.reshape(-1, dimension))
     )
     states = exchange.rebind(states, betas)
@@ -264,13 +267,14 @@ def test_local_moves_refresh_and_swaps_preserve_all_analytic_bridge_moments():
     states = states._replace(param_step_size=jnp.tile(jnp.array([0.2, 0.5, 0.9]), repeats))
     step = jax.jit(exchange.step)
     for parity in (0, 1):
-        after, _, _ = step(
+        after, _, swaps = step(
             states,
             jax.random.split(jax.random.key(81 + parity), repeats * 3),
             betas,
             jnp.asarray(parity),
         )
         np.testing.assert_array_equal(after.param_step_size, states.param_step_size)
+        assert swaps.accepted.any()
         states = after
     samples = np.concatenate(
         (np.asarray(states.position), np.asarray(states.latent_trajectory[:, :, 0])), axis=1
@@ -285,11 +289,30 @@ def test_local_moves_refresh_and_swaps_preserve_all_analytic_bridge_moments():
     np.testing.assert_allclose(
         states.complete_log_posterior, rebound.complete_log_posterior, atol=2e-4, rtol=2e-5
     )
+    # A fixed zero pilot gives an independent analytic parameter-gradient
+    # oracle. Check it after exchanges and after changing the interior beta;
+    # gradients must follow the arriving theta and the receiving temperature.
+    adapted_betas = jnp.array([1.0, 0.7, 0.0])
+    adapted = exchange.rebind(states, adapted_betas)
+    for cached, ladder in ((states, betas), (adapted, adapted_betas)):
+        position = np.asarray(cached.position[:, 0])
+        exact_gradient = (posterior_precision @ posterior_mean)[0] - posterior_precision[
+            0, 0
+        ] * position
+        beta = np.tile(ladder, repeats)
+        expected_gradient = beta * exact_gradient - (1 - beta) * position
+        np.testing.assert_allclose(
+            cached.parameter_gradient[:, 0], expected_gradient, rtol=2e-5, atol=2e-4
+        )
 
 
 @pytest.mark.inference(concern="warmup")
-@pytest.mark.parametrize("tempered", [False, True])
-def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(tempered):
+@pytest.mark.parametrize(
+    ("tempered", "adaptation_scheme"), [(False, "dual_averaging"), (True, "simple")]
+)
+def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
+    tempered, adaptation_scheme
+):
     target, _, _ = gaussian_interval_case()
     reference = _reference(target)
     spec = GaussianReferenceTemperingSpec(num_temperatures=3, adaptation_interval=2)
@@ -297,11 +320,13 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(tem
     result = run_marginal_particle_gibbs(
         target,
         kernel=_local_kernel(target),
+        compute_budget=COMPUTE_BUDGET,
         num_warmup=4,
-        num_samples=6,
+        num_samples=27,
         num_chains=2,
         key=jax.random.PRNGKey(711),
         adaptation_rate=0.05,
+        adaptation_scheme=adaptation_scheme,
         initialization=Mock(
             spec=LapsInitializationResult,
             positions=jnp.broadcast_to(target.initial_position, (2, 1)),
@@ -311,9 +336,9 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(tem
         tempering=exchange if tempered else None,
         clock=perf_counter,
     )
-    assert result.grouped_positions.shape == (2, 6, 1)
+    assert result.grouped_positions.shape == (2, 27, 1)
     assert result.latent_paths is not None
-    assert result.latent_paths.shape == (2, 6, 9, 1)
+    assert result.latent_paths.shape == (2, 27, 9, 1)
     assert result.initial_param_step_size.shape == result.final_param_step_size.shape == (2,)
     assert result.final_latent_delta.shape == (2, 9)
     if tempered:
@@ -324,8 +349,8 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(tem
         assert tuple(
             tuple(edge.attempted for edge in chain) for chain in result.tempering.swaps
         ) == (
-            (3, 3),
-            (3, 3),
+            (14, 13),
+            (14, 13),
         )
         assert sum(edge.accepted for chain in result.tempering.swaps for edge in chain) > 0
     else:

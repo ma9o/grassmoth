@@ -19,6 +19,7 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     MCMCEvidence,
     NutsDADiagnostics,
     ParetoKPoint,
+    ParticleGibbsDiagnostics,
     ParticleSamplerDiagnostics,
     PosteriorMarginal,
     RankHistogram,
@@ -34,7 +35,9 @@ class InferenceMetadata(Value):
     num_chains: int = Field(ge=1)
     duration_seconds: float = Field(ge=0)
     engine: MCMCEvidence
-    sampler_diagnostics: ParticleSamplerDiagnostics | NutsDADiagnostics | None
+    sampler_diagnostics: (
+        ParticleSamplerDiagnostics | NutsDADiagnostics | ParticleGibbsDiagnostics | None
+    )
 
 
 class PosteriorDrawsInfo(Value):

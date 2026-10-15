@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from nof1_causal_lab.compute.batching import compile_batched
+from nof1_causal_lab.compute.batching import compile_batched, compile_from_estimate
 from nof1_causal_lab.compute.budget import (
     AcceleratorMemoryBudget,
     ComputeBudget,
@@ -21,6 +21,17 @@ def test_shared_memory_adds_host_and_device_workspaces():
     separate = ComputeBudget(memory=AcceleratorMemoryBudget(host_bytes=200, device_bytes=200))
     assert shared.capacity(demand, limit=4) == 2
     assert separate.capacity(demand, limit=4) == 4
+    overhead = MemoryDemand(host_bytes=100, device_bytes=10)
+    assert shared.capacity(demand, limit=4, overhead=overhead) == 1
+    assert separate.capacity(demand, limit=4, overhead=overhead) == 3
+    assert (
+        shared.capacity(
+            MemoryDemand(host_bytes=0, device_bytes=0),
+            limit=4,
+            overhead=MemoryDemand(host_bytes=201, device_bytes=0),
+        )
+        == 0
+    )
 
 
 def test_batch_width_adapts_to_memory_and_workload_without_executing():
@@ -68,6 +79,58 @@ def test_impossible_single_lane_fails_before_execution():
             budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=50)),
         )
     executable.assert_not_called()
+
+
+def test_arithmetic_sizing_compiles_only_selected_width_and_checks_actual_memory():
+    widths = []
+
+    def compile_batch(size):
+        widths.append(size)
+        return size, MemoryDemand(host_bytes=0, device_bytes=20 * size)
+
+    batch = compile_from_estimate(
+        compile_batch,
+        single_memory=MemoryDemand(host_bytes=0, device_bytes=10),
+        max_batch_size=32,
+        budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=100)),
+    )
+    assert widths == [8, 4]
+    assert batch.batch_size == 4
+    # An unfused estimate can overstate memory: only compiled demand rejects size 1.
+    widths.clear()
+    batch = compile_from_estimate(
+        compile_batch,
+        single_memory=MemoryDemand(host_bytes=0, device_bytes=1000),
+        max_batch_size=32,
+        budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=100)),
+    )
+    assert widths == [1]
+    assert batch.batch_size == 1
+
+
+def test_traced_memory_scales_parallel_arrays_and_reuses_sequential_workspace():
+    import jax
+    import jax.numpy as jnp
+
+    from nof1_causal_lab.compute.traced_memory import traced_memory
+
+    def dense_markers(values):
+        return jnp.sin(values[:, None] * values[None, :]).sum(axis=1)
+
+    single = jax.make_jaxpr(dense_markers)(jax.ShapeDtypeStruct((16,), jnp.float32))
+    parallel = jax.make_jaxpr(jax.vmap(dense_markers))(jax.ShapeDtypeStruct((4, 16), jnp.float32))
+    assert traced_memory(parallel).device_bytes == 4 * traced_memory(single).device_bytes
+
+    def loop(size):
+        return jax.make_jaxpr(
+            lambda initial: jax.lax.scan(
+                lambda carry, _: (dense_markers(carry), carry), initial, None, length=size
+            )
+        )(jax.ShapeDtypeStruct((16,), jnp.float32))
+
+    small, large = traced_memory(loop(2)), traced_memory(loop(20))
+    assert large.device_bytes - small.device_bytes == 18 * 16 * 4
+    assert small.device_bytes > 16 * 16 * 4  # Nested pairwise workspace is included.
 
 
 def test_predictive_compiled_batch_preserves_aligned_draws_with_a_stub_solver(monkeypatch):

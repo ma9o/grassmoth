@@ -26,6 +26,7 @@ if TYPE_CHECKING:
         CompiledIntervalTreeLevel,
     )
     from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
+    from nof1_causal_lab.models.ssm.execution.observation_operator import ObservationGradient
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext
 
 
@@ -63,7 +64,12 @@ class ParticleIntervalObservations:
         return observation(self.state_projection(context, state), None, 0).response
 
     def trajectory_log_probs(
-        self, context: ParticleContext, path: jax.Array, observations: jax.Array
+        self,
+        context: ParticleContext,
+        path: jax.Array,
+        observations: jax.Array,
+        *,
+        gradient: ObservationGradient = "full",
     ) -> jax.Array:
         """Report each exact emission at its recorded anchor, including missing rows."""
         observation = cast(
@@ -85,6 +91,7 @@ class ParticleIntervalObservations:
             compiled.kernel,
             compiled.mean_log_prob_fn,
             self.operator.observation_support,
+            gradient=gradient,
         )
         return (
             densities
@@ -116,6 +123,36 @@ class ParticleIntervalObservations:
         """Score emitted statistics for aligned particles, preserving parameter labels."""
         slots = jnp.asarray(level.emission_slots)[node]
         selected = jnp.take(statistics, slots, axis=-3)
+        return self._emission_log_probs(contexts, selected, level, node)
+
+    def pairwise_emission_log_probs(
+        self,
+        contexts: ParticleContext,
+        left: jax.Array,
+        right: jax.Array,
+        level: CompiledIntervalTreeLevel,
+        node: jax.Array,
+    ) -> jax.Array:
+        """Score all child pairs, expanding only slots emitted at this node."""
+        slots = jnp.asarray(level.emission_slots)[node]
+        left_emitted = gather_interval_statistics(left, jnp.asarray(level.left_slots)[node][slots])
+        right_emitted = gather_interval_statistics(
+            right, jnp.asarray(level.right_slots)[node][slots]
+        )
+        return jax.vmap(
+            lambda stats: self._emission_log_probs(
+                contexts, stats[None] + right_emitted, level, node
+            )
+        )(left_emitted)
+
+    def _emission_log_probs(
+        self,
+        contexts: ParticleContext,
+        statistics: jax.Array,
+        level: CompiledIntervalTreeLevel,
+        node: jax.Array,
+    ) -> jax.Array:
+        """Evaluate already selected emissions with their joint channel laws."""
         values = jnp.asarray(level.observations, dtype=statistics.dtype)[node]
         masks = jnp.asarray(level.masks, dtype=statistics.dtype)[node]
         weights = jnp.asarray(level.weights, dtype=statistics.dtype)[node]
@@ -147,7 +184,7 @@ class ParticleIntervalObservations:
             )
 
         densities = jax.vmap(jax.vmap(density, in_axes=(0, 0)), in_axes=(None, 0))(
-            contexts, selected
+            contexts, statistics
         )
         return (
             densities

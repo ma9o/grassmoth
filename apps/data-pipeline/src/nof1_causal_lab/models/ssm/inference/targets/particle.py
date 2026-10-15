@@ -9,6 +9,7 @@ import dynestyx as dsx
 import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
+from jax.scipy.linalg import solve_triangular
 
 from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences
 from nof1_causal_lab.models.ssm.execution.affine import compose_affine_maps
@@ -284,19 +285,57 @@ class ParticleTarget:
         )
         return jnp.asarray(distribution.mean), jnp.asarray(distribution.covariance_matrix)
 
-    def aligned_transition_log_prob(self, context, previous, current, index):
-        """Evaluate transition densities for aligned predecessor and successor particle pairs."""
-        return jax.vmap(lambda a, b: self.transition_log_prob(context, a, b, index))(
-            previous, current
-        )
-
     def pairwise_transition_log_prob(self, context, previous, current, index):
-        """Evaluate every predecessor-to-successor particle transition as a pairwise matrix."""
-        return jax.vmap(
+        """Score all Gaussian pairs with per-ancestor factors and matrix products.
+
+        The declared nonlinear transition and its state-dependent covariance are
+        evaluated once per ancestor. Expanding the exact Gaussian quadratic avoids
+        N squared triangular solves and N-by-N-by-state residual workspaces.
+        """
+
+        def exact():
+            if not self.state_space.transition:
+                return jnp.zeros((previous.shape[0], current.shape[0]), dtype=current.dtype)
+            indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
+            values = self.project_state(context, current)[:, indices]
+            anchor = jnp.mean(values, axis=0)
+            centered = values - anchor
+            dimension = len(self.state_space.transition)
+
+            def row(ancestor):
+                distribution = cast(
+                    "dist.MultivariateNormal",
+                    self._transition_distribution(context, ancestor, index),
+                )
+                chol = jnp.asarray(distribution.scale_tril)[jnp.ix_(indices, indices)]
+                inverse = solve_triangular(chol, jnp.eye(dimension, dtype=chol.dtype), lower=True)
+                precision = inverse.T @ inverse
+                mean = distribution.mean[indices] - anchor
+                whitened = inverse @ mean
+                linear = inverse.T @ whitened
+                constant = (
+                    -0.5 * jnp.sum(whitened**2)
+                    - jnp.sum(jnp.log(jnp.diag(chol)))
+                    - 0.5 * dimension * jnp.log(2 * jnp.pi)
+                )
+                return precision, linear, constant
+
+            precision, linear, constant = jax.vmap(row)(previous)
+            outer = jnp.einsum("ni,nj->nij", centered, centered).reshape(
+                current.shape[0], dimension**2
+            )
+            quadratic = precision.reshape(previous.shape[0], dimension**2) @ outer.T
+            return constant[:, None] + linear @ centered.T - 0.5 * quadratic
+
+        bridge = self.bridge
+        if bridge is None:
+            return exact()
+        reference = jax.vmap(
             lambda ancestor: jax.vmap(
-                lambda descendant: self.transition_log_prob(context, ancestor, descendant, index)
+                lambda descendant: bridge.reference.transition_log_prob(ancestor, descendant, index)
             )(current)
         )(previous)
+        return bridge.combine(exact, reference)
 
     def initial_path(self, context, *, exact_constraints: ExactStateConstraints | None = None):
         """Build an initialization path from successive transition means and any exact state constraints."""
@@ -318,7 +357,13 @@ class ParticleTarget:
         _, tail = jax.lax.scan(step, initial, jnp.arange(1, context[1].size))
         return jnp.concatenate([initial[None], tail])
 
-    def observation_increment(self, context, state, index, observations):
+    def observation_increment(
+        self,
+        context: ParticleContext,
+        state: jax.Array,
+        index: jax.Array | int,
+        observations: jax.Array,
+    ) -> jax.Array:
         """Score point factors at one leaf; interval factors belong to enclosing tree nodes."""
         if self.intervals is not None:
             observations = jnp.where(
@@ -330,7 +375,7 @@ class ParticleTarget:
             self.project_state(context, state), None, context[1][index]
         )
 
-        def exact():
+        def exact() -> jax.Array:
             return jnp.sum(distribution.log_prob(observations[index]))
 
         return exact() if self.bridge is None else self.bridge.observation(exact)
@@ -352,6 +397,46 @@ class ParticleTarget:
         path = self.replay_path(context, path)
         return self.factor_log_prob(context, path, observations)
 
+    def filtering_log_prob_and_grad(
+        self, context: ParticleContext, path: jax.Array, observations: jax.Array
+    ) -> tuple[jax.Array, jax.Array]:
+        """Return causal increments and their gradients with respect to the current state.
+
+        Each increment contains its incoming transition and observations anchored
+        at that time, including completed intervals. Deterministic recurrences
+        at t depend on earlier independent coordinates; those are held fixed in
+        the filtering derivative. Prefix sums therefore recover log pi_t and
+        its last-coordinate derivative without a quadratic trajectory Jacobian.
+        """
+        history = jax.lax.stop_gradient(self.replay_path(context, path))
+        free = self.independent_mask
+        if self.exact_constraints is not None:
+            free = free & self.exact_constraints.free_mask
+
+        def density(coordinates: jax.Array) -> tuple[jax.Array, jax.Array]:
+            current = jnp.where(free, coordinates, history)
+            transitions = jax.vmap(
+                lambda previous, state, index: self.transition_log_prob(
+                    context, previous, state, index
+                )
+            )(history[:-1], current[1:], jnp.arange(1, path.shape[0]))
+            prior = jnp.concatenate((self.initial_log_prob(context, current[0])[None], transitions))
+            emissions = (
+                self.observation_log_probs(context, current, observations)
+                if self.intervals is None
+                else self.intervals.trajectory_log_probs(
+                    context, current, observations, gradient="current"
+                )
+            )
+            increments: jax.Array = prior + emissions
+            return jnp.sum(increments), increments
+
+        evaluate: Callable[[jax.Array], tuple[tuple[jax.Array, jax.Array], jax.Array]] = (
+            jax.value_and_grad(density, has_aux=True)
+        )
+        (_, increments), gradient = evaluate(path)
+        return increments, gradient
+
     def factor_log_prob(self, context, path, observations):
         """Sum local factors on supplied coordinates, without a path reconstruction."""
         return self.prior_path_log_prob(context, path) + jnp.sum(
@@ -367,12 +452,25 @@ class ParticleTarget:
         )(path[:-1], path[1:], jnp.arange(1, path.shape[0]))
         return self.initial_log_prob(context, path[0]) + jnp.sum(transitions)
 
-    def log_posterior_from_context(self, position, context, path, observations):
+    def log_posterior_from_context(
+        self,
+        position: jax.Array,
+        context: ParticleContext,
+        path: jax.Array,
+        observations: jax.Array,
+    ) -> tuple[jax.Array, jax.Array]:
         """Return joint posterior and path log densities using an already bound model context."""
-        path_density = self.path_log_prob(context, path, observations)
-        return self.log_prior(position) + path_density, path_density
+        path_density: jax.Array = self.path_log_prob(context, path, observations)
+        joint_density: jax.Array = self.log_prior(position) + path_density
+        return joint_density, path_density
 
-    def log_posterior(self, position, path, observations, times):
+    def log_posterior(
+        self,
+        position: jax.Array,
+        path: jax.Array,
+        observations: jax.Array,
+        times: jax.Array,
+    ) -> jax.Array:
         """Bind the parameter context and evaluate the joint parameter-and-path posterior density."""
         return self.log_posterior_from_context(
             position, self.context(position, times), path, observations

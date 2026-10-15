@@ -9,13 +9,17 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec, SamplerSpec
+from nof1_causal_lab.artifacts.sampling import (
+    DsmcSpec,
+    MarginalParticleGibbsSpec,
+    PaidMixSpec,
+    SamplerSpec,
+)
 from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
 from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs import runner
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.kernel import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs import runner
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
-    build_marginal_particle_gibbs_kernel,
 )
 from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
@@ -27,23 +31,10 @@ from tests.support.compute import COMPUTE_BUDGET
 pytestmark = pytest.mark.contract
 
 
-@pytest.mark.parametrize(
-    ("options", "error"),
-    [
-        ({"dsmc_leaf_proposal": "paid_mix"}, "requires pilot"),
-    ],
-)
-def test_kernel_rejects_invalid_configuration_before_accessing_target(options, error):
-    # No target attributes are available: validation must precede numerical setup.
-    target = Mock(spec_set=[])
-    with pytest.raises(ValueError, match=error):
-        build_marginal_particle_gibbs_kernel(
-            target,
-            num_particles=2,
-            num_parameter_particles=2,
-            param_step_size=0.1,
-            **options,
-        )
+@pytest.mark.parametrize("weights", [(0.9, 0.2), (1.0, 0.1), (0.8, 0.0)])
+def test_paid_mixture_owns_positive_component_weights(weights):
+    with pytest.raises(ValidationError):
+        PaidMixSpec(local_weight=weights[0], pilot_weight=weights[1])
 
 
 @pytest.mark.parametrize(
@@ -59,7 +50,7 @@ def test_kernel_rejects_invalid_configuration_before_accessing_target(options, e
     ],
 )
 def test_sampler_boundary_rejects_unknown_modes(field):
-    raw = {field: "bogus"}
+    raw = {"dsmc": {field: "bogus"}} if field == "dsmc_leaf_proposal" else {field: "bogus"}
     with pytest.raises(ValidationError, match=field):
         MarginalParticleGibbsSpec.model_validate(raw)
 
@@ -102,19 +93,21 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
     )
     kernel = Mock(
         spec=MarginalParticleGibbsKernel,
+        parameter_gradient_fn=jnp.zeros_like,
         target_accept=0.35,
         exact_constraints=None,
         initial_param_step_size=0.01,
-        amala_delta_init=0.1,
+        dsmc=DsmcSpec(amala_delta_init=0.1),
         min_scale=1e-6,
         max_scale=1.0,
     )
     step = Mock(side_effect=AssertionError("Invalid initial states must fail before sampling"))
-    monkeypatch.setattr(runner, "_run_batched_step", step)
+    monkeypatch.setattr(runner, "compile_sweeps", step)
     with pytest.raises(ValueError, match=error):
         runner.run_marginal_particle_gibbs(
             target,
             kernel=kernel,
+            compute_budget=COMPUTE_BUDGET,
             num_warmup=0,
             num_samples=1,
             num_chains=2,
@@ -135,7 +128,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
 def test_laps_failure_stops_production_before_sampling(monkeypatch):
     from importlib import import_module
 
-    fitting = import_module("nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.fit")
+    fitting = import_module("nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.fit")
     target = Mock(spec=ParticleTarget, initial_position=jnp.zeros(1))
     monkeypatch.setattr(
         fitting, "build_particle_problem", Mock(return_value=Mock(runtime=target, public_sites=()))

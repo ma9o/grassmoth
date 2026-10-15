@@ -1,5 +1,7 @@
 """Predictive findings and scientific posterior summaries."""
 
+from collections.abc import Mapping
+from enum import StrEnum
 from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, ConfigDict, Field, FiniteFloat, computed_field, model_validator
@@ -179,7 +181,7 @@ class LOODiagnostics(Value):
 class MCMCEvidence(Value):
     """The algorithm that sampled the exact joint state and parameter target."""
 
-    method: Literal["nuts_da", "custom"] = "custom"
+    method: Literal["nuts_da", "mpgibbs", "pgibbs"] = "mpgibbs"
 
 
 class NutsDADiagnostics(Value):
@@ -187,6 +189,29 @@ class NutsDADiagnostics(Value):
 
     settings: SamplerSpec
     mcmc_phase_seconds: float
+    final_step_size: tuple[float, ...]
+    max_tree_depth_fraction: float
+
+
+class FixedParameterDiagnostics(Value):
+    """A model with no free parameter coordinates needs only trajectory updates."""
+
+    method: Literal["fixed"] = "fixed"
+
+
+class ConditionalMetropolisDiagnostics(Value):
+    """Realized MH acceptance and frozen scales for the conditional parameter block."""
+
+    method: Literal["mh"] = "mh"
+    acceptance_rate: float
+    final_step_size: tuple[float, ...]
+
+
+class ConditionalNutsDiagnostics(Value):
+    """Realized conditional NUTS adaptation, with tree diagnostics confined to parameters."""
+
+    method: Literal["nuts_da"] = "nuts_da"
+    acceptance_rate: float
     final_step_size: tuple[float, ...]
     max_tree_depth_fraction: float
 
@@ -294,6 +319,99 @@ class LapsInitializationDiagnostics(Value):
     early_stopped: bool
 
 
+class ParticleWeightMetric(StrEnum):
+    """Measurements of a categorical particle law, before resampling.
+
+    ESS counts weighted candidates, not independent MCMC draws. Entropy uses
+    natural logarithms. Reference probability is the mass of candidate zero,
+    including pair (0, 0) at merges, not the mass of all duplicate paths.
+    Log-weight range and variance use finite log weights only; finite_fraction
+    separately records their share of candidates. Invalid laws remain nonfinite.
+    """
+
+    ESS = "ess"
+    ESS_FRACTION = "ess_fraction"
+    ENTROPY = "entropy"
+    MAX_PROBABILITY = "max_probability"
+    REFERENCE_PROBABILITY = "reference_probability"
+    FINITE_LOG_WEIGHT_RANGE = "finite_log_weight_range"
+    FINITE_LOG_WEIGHT_VARIANCE = "finite_log_weight_variance"
+    FINITE_FRACTION = "finite_fraction"
+
+    @property
+    def history_key(self) -> str:
+        """Native history field with axes chain, sweep, and weight stage.
+
+        Stages are real tree nodes in level order, followed by terminal selection.
+        The matching node coordinates belong to DsmcWeightDiagnostics.
+        """
+        return f"dsmc_weight_{self.value}"
+
+
+class ParticleWeightSummary(Value):
+    """Aggregate across chains and sweeps, without dropping nonfinite measurements.
+
+    An undefined or infinite aggregate is null; nonfinite_fraction retains the
+    frequency of nonfinite measurements instead of concealing them in an average.
+    """
+
+    mean: FiniteFloat | None  # noqa: FIELD003 -- External benchmark analysis reads this diagnostic mean from the payload.
+    minimum: FiniteFloat | None  # noqa: FIELD003 -- External benchmark analysis reads this diagnostic lower extreme from the payload.
+    maximum: FiniteFloat | None  # noqa: FIELD003 -- External benchmark analysis reads this diagnostic upper extreme from the payload.
+    nonfinite_fraction: float = Field(ge=0, le=1)  # noqa: FIELD003 -- External benchmark analysis reads the frequency of invalid measurements from the payload.
+
+
+class ParticleWeightDiagnostics(Value):
+    """Candidate count and weight measurements for one resampling distribution."""
+
+    candidates: int = Field(ge=1)
+    metrics: Mapping[ParticleWeightMetric, ParticleWeightSummary]
+
+
+class DsmcNodeWeightDiagnostics(Value):
+    """One tree node before resampling; level zero is a leaf, stop is exclusive.
+
+    Entirely padded nodes are omitted. A partial node's range contains only real
+    time indices, while its candidate count includes the algorithm's padding.
+    """
+
+    level: int = Field(ge=0)
+    start: int = Field(ge=0)
+    stop: int = Field(ge=1)
+    weights: ParticleWeightDiagnostics
+
+
+type DiagnosticPhase = Literal["warmup", "post_warmup"]
+
+
+class DsmcWeightDiagnostics(Value):
+    """Shared PGibbs/mPGibbs tree and terminal weight diagnostics.
+
+    Tree nodes are ordered by increasing level, then start time. Terminal weights
+    include the exact full-path correction and precede the modified Gibbs move;
+    their reference probability is not that move's rejection probability.
+    """
+
+    phase: DiagnosticPhase
+    tree: tuple[DsmcNodeWeightDiagnostics, ...]
+    terminal: ParticleWeightDiagnostics
+
+
+class ParticleGibbsDiagnostics(Value):
+    """Blocked parameter and dSMC trajectory telemetry from the native producer."""
+
+    settings: SamplerSpec
+    mcmc_phase_seconds: float
+    initialization: LapsInitializationDiagnostics
+    parameters: (
+        FixedParameterDiagnostics | ConditionalMetropolisDiagnostics | ConditionalNutsDiagnostics
+    ) = Field(discriminator="method")
+    latent_update_fraction: float
+    latent_frozen_fraction: float
+    latent_move_rms_mean: float
+    dsmc_weights: DsmcWeightDiagnostics | None
+
+
 class ReplicaSwapCounts(Value):
     """Accepted and attempted exchanges at one neighboring temperature pair."""
 
@@ -319,7 +437,7 @@ class ParticleSamplerDiagnostics(Value):
     diagnostic_metrics: tuple[str, ...]
     param_target_accept: float
     parameter_preconditioned: bool
-    diagnostic_summary_phase: str
+    diagnostic_summary_phase: DiagnosticPhase
     parameter_accept_rate: float
     latent_update_fraction: float
     latent_frozen_fraction: float
@@ -335,4 +453,5 @@ class ParticleSamplerDiagnostics(Value):
     amala_grad_norm_mean: float | None = None
     amala_grad_norm_max: float | None = None
     initialization: LapsInitializationDiagnostics
+    dsmc_weights: DsmcWeightDiagnostics | None
     tempering: TemperingDiagnostics | None = None

@@ -58,7 +58,7 @@ def test_specification_reports_each_distinct_fit_law_reason_once(monkeypatch):
 
 
 def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypatch):
-    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs import (
+    from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs import (
         fit as marginal_particle_gibbs,
     )
 

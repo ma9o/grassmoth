@@ -1,14 +1,14 @@
 """Parameter-recovery benchmark for the production particle-MCMC sampler.
 
-The benchmark compares the two supported dSMC leaf proposals on the synthetic
-nonlinear fixture. Both proposals target the exact Euler-Maruyama transition;
-LAPS supplies paired starts and fixed proposal moments for both methods.
+The benchmark compares the supported auxiliary laws with optional paid mixtures on the synthetic
+nonlinear fixture. All proposals target the exact Euler-Maruyama transition;
+LAPS supplies paired starts and fixed proposal moments for all methods.
 
 This is an evaluation entry point, not a test. Running it performs inference
 and can be expensive:
 
     uv run python evaluation/benchmarks/benchmark.py
-    uv run python evaluation/benchmarks/benchmark.py --proposals paid_mix --T 24
+    uv run python evaluation/benchmarks/benchmark.py --proposals amala,amala_plus --paid-mix --T 24
 """
 
 from __future__ import annotations
@@ -20,16 +20,17 @@ import os
 import time
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
+from nof1_causal_lab.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec
 from nof1_causal_lab.compute.resources import read_compute_budget
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 
 if TYPE_CHECKING:
+    from nof1_causal_lab.artifacts.sampling import DSMCLeafProposal
     from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
 
-LeafProposal = Literal["amala_exact", "paid_mix"]
-LEAF_PROPOSALS: tuple[LeafProposal, ...] = ("amala_exact", "paid_mix")
+LEAF_PROPOSALS: tuple[DSMCLeafProposal, ...] = ("amala", "amala_plus")
 type BenchmarkRecord = dict[str, Any]
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ def _configure_jax_cache() -> None:
     os.environ["JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES"] = "0"
 
 
-def _parse_proposals(raw: str) -> tuple[LeafProposal, ...]:
+def _parse_proposals(raw: str) -> tuple[DSMCLeafProposal, ...]:
     values = tuple(item.strip() for item in raw.split(",") if item.strip())
     unknown = sorted(set(values) - set(LEAF_PROPOSALS))
     if unknown:
@@ -65,20 +66,20 @@ def _parse_proposals(raw: str) -> tuple[LeafProposal, ...]:
         )
     if not values:
         raise argparse.ArgumentTypeError("at least one proposal is required")
-    return cast("tuple[LeafProposal, ...]", values)
+    return cast("tuple[DSMCLeafProposal, ...]", values)
 
 
 def _parse_metrics(raw: str) -> tuple[str, ...]:
-    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.diagnostics import (
-        MPGIBBS_DIAGNOSTIC_METRIC_VALUES,
+    from nof1_causal_lab.models.ssm.inference.samplers.particle.diagnostics import (
+        PARTICLE_DIAGNOSTIC_METRIC_VALUES,
     )
 
     values = tuple(item.strip() for item in raw.split(",") if item.strip())
-    unknown = sorted(set(values) - set(MPGIBBS_DIAGNOSTIC_METRIC_VALUES))
+    unknown = sorted(set(values) - set(PARTICLE_DIAGNOSTIC_METRIC_VALUES))
     if unknown:
         raise argparse.ArgumentTypeError(
             "unknown diagnostic metrics: "
-            f"{unknown}; allowed: {list(MPGIBBS_DIAGNOSTIC_METRIC_VALUES)}"
+            f"{unknown}; allowed: {list(PARTICLE_DIAGNOSTIC_METRIC_VALUES)}"
         )
     return values
 
@@ -120,21 +121,27 @@ def _diagnostic_summary(result: MCMCPosterior) -> BenchmarkRecord:
         "mcmc_phase_seconds": _json_ready(diagnostics.mcmc_phase_seconds),
         "diagnostic_metrics": _json_ready(diagnostics.diagnostic_metrics),
         "diagnostic_summary_phase": _json_ready(diagnostics.diagnostic_summary_phase),
+        "dsmc_weights": None
+        if diagnostics.dsmc_weights is None
+        else diagnostics.dsmc_weights.model_dump(mode="json"),
         "final_param_step_size": _json_ready(diagnostics.final_param_step_size),
-        "latent_delta": _json_ready(diagnostics.settings.algorithm.latent_delta),
+        "amala_delta_init": _json_ready(diagnostics.settings.algorithm.dsmc.amala_delta_init),
     }
 
 
 def _run_one(
     *,
-    proposal: LeafProposal,
+    proposal: DSMCLeafProposal,
     model: Any,
     panel: Any,
     args: argparse.Namespace,
 ) -> BenchmarkRecord:
     from evaluation.recovery.extraction import parameter_recovery, scalar_posterior_ess
 
-    from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec, SamplerSpec
+    from nof1_causal_lab.artifacts.sampling import (
+        PaidMixSpec,
+        SamplerSpec,
+    )
     from nof1_causal_lab.models.ssm.inference.fit import fit
     from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
@@ -152,23 +159,29 @@ def _run_one(
             retain_latent_paths=args.retain_latent_paths,
             algorithm=MarginalParticleGibbsSpec(
                 n_parameter_particles=args.n_parameter_particles,
-                dsmc_leaf_proposal=proposal,
-                latent_block_coords=args.latent_block_coords,
                 diagnostic_metrics=args.diagnostic_metrics,
                 param_step_size=args.param_step_size,
                 param_step_size_min=args.param_step_size_min,
                 param_step_size_max=args.param_step_size_max,
                 param_target_accept=args.param_target_accept,
                 adaptation_rate=args.adaptation_rate,
-                amala_delta_init=args.amala_delta_init,
-                amala_delta_min=args.amala_delta_min,
-                amala_delta_max=args.amala_delta_max,
-                amala_target_accept=args.amala_target_accept,
-                paid_mix_z_weight=args.paid_mix_z_weight,
-                paid_mix_pilot_weight=args.paid_mix_pilot_weight,
-                paid_mix_pilot_var_scale=args.paid_mix_pilot_var_scale,
-                paid_mix_wide_mult=args.paid_mix_wide_mult,
                 compute_latent_posterior_summary=not args.skip_latent_posterior_summary,
+                dsmc=DsmcSpec(
+                    dsmc_leaf_proposal=proposal,
+                    latent_block_coords=args.latent_block_coords,
+                    amala_delta_init=args.amala_delta_init,
+                    amala_delta_min=args.amala_delta_min,
+                    amala_delta_max=args.amala_delta_max,
+                    amala_target_accept=args.amala_target_accept,
+                    paid_mix=PaidMixSpec(
+                        local_weight=args.paid_mix_local_weight,
+                        pilot_weight=args.paid_mix_pilot_weight,
+                        pilot_var_scale=args.paid_mix_pilot_var_scale,
+                        wide_mult=args.paid_mix_wide_mult,
+                    )
+                    if args.paid_mix
+                    else None,
+                ),
             ),
         ),
         clock=time.monotonic,
@@ -203,7 +216,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--num-samples", type=int, default=500)
     parser.add_argument("--num-chains", type=int, default=1)
     parser.add_argument("--seed", type=int, default=1009)
-    parser.add_argument("--n-particles", type=int, default=64)
+    parser.add_argument("--n-particles", dest="num_particles", type=int, default=64)
     parser.add_argument("--n-parameter-particles", type=int, default=2)
     parser.add_argument("--latent-block-coords", type=int)
     parser.add_argument(
@@ -214,13 +227,16 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--param-step-size", type=float, default=0.02)
     parser.add_argument("--param-step-size-min", type=float, default=1e-6)
     parser.add_argument("--param-step-size-max", type=float, default=1e3)
-    parser.add_argument("--param-target-accept", type=float)
+    parser.add_argument(
+        "--param-target-accept", type=float, default=MarginalParticleGibbsSpec().param_target_accept
+    )
     parser.add_argument("--adaptation-rate", type=float, default=0.05)
     parser.add_argument("--amala-delta-init", type=float, default=0.2)
     parser.add_argument("--amala-delta-min", type=float, default=1e-4)
     parser.add_argument("--amala-delta-max", type=float, default=1e2)
     parser.add_argument("--amala-target-accept", type=float, default=0.574)
-    parser.add_argument("--paid-mix-z-weight", type=float, default=0.85)
+    parser.add_argument("--paid-mix", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument("--paid-mix-local-weight", type=float, default=0.85)
     parser.add_argument("--paid-mix-pilot-weight", type=float, default=0.10)
     parser.add_argument("--paid-mix-pilot-var-scale", type=float, default=0.25)
     parser.add_argument("--paid-mix-wide-mult", type=float, default=4.0)

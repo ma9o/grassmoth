@@ -8,7 +8,7 @@ an approximate marginal likelihood is evaluated here.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import jax
@@ -16,7 +16,11 @@ import jax.numpy as jnp
 import numpy as np
 
 from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
-from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import run_laps_ensemble
+from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import (
+    LapsTraceRecord,
+    NoLapsTrace,
+    run_laps_ensemble,
+)
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
@@ -38,6 +42,7 @@ class LapsInitializationResult:
     pilot_mean: jax.Array
     pilot_variance: jax.Array
     diagnostics: LapsInitializationDiagnostics
+    trace: LapsTraceRecord | NoLapsTrace = field(default_factory=NoLapsTrace)
 
     @property
     def pilot_proposal_variance(self) -> jax.Array:
@@ -54,6 +59,7 @@ def prepare_laps_initialization(
     key: jax.Array,
     num_chains: int,
     compute_budget: ComputeBudget,
+    record_trace: bool = False,
 ) -> LapsInitializationResult | InitializationFailure:
     """Produce one initialization package without executing a particle smoother."""
     if num_chains > spec.ensemble_size:
@@ -76,6 +82,7 @@ def prepare_laps_initialization(
         key=ensemble_key,
         spec=spec,
         compute_budget=compute_budget,
+        record_trace=record_trace,
     )
     if isinstance(ensemble, InitializationFailure):
         return ensemble
@@ -100,4 +107,5 @@ def prepare_laps_initialization(
         pilot_mean=jnp.mean(paths, axis=0),
         pilot_variance=jnp.var(paths, axis=0),
         diagnostics=ensemble.diagnostics,
+        trace=ensemble.trace,
     )

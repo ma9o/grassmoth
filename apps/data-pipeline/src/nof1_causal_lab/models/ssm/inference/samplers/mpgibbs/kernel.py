@@ -33,47 +33,70 @@ MALA step of ``h = 0.1`` corresponds to ``param_step_size = 0.025`` here.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol
 
 import jax
 import jax.numpy as jnp
 from jax import random
 
-from nof1_causal_lab.artifacts.sampling import DSMCLeafProposal, MarginalParticleGibbsSpec
+from nof1_causal_lab.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec
 from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs._context import (
+from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCState, _clip_scale
+from nof1_causal_lab.models.ssm.inference.samplers.particle.context import (
     build_smoother_context,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs._contract import (
-    _DSMC_LEAF_PROPOSAL_PAID_MIX,
-    MPGibbsStatic,
+from nof1_causal_lab.models.ssm.inference.samplers.particle.diagnostics import (
+    build_particle_diagnostic_flags,
+    resolve_particle_diagnostic_metrics,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs._math import (
+from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import step as dsmc_step
+from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import (
+    trace_step as dsmc_trace_step,
+)
+from nof1_causal_lab.models.ssm.inference.samplers.particle.math import (
     _masked_mean,
     _select_pytree,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.diagnostics import (
-    build_mpgibbs_diagnostic_flags,
-    resolve_mpgibbs_diagnostic_metrics,
+from nof1_causal_lab.models.ssm.inference.samplers.particle.setup import build_smoother_setup
+from nof1_causal_lab.models.ssm.inference.tracing import (
+    CategoricalTraceRecord,
+    MarginalParticleTraceRecord,
+    ParameterProposalTraceRecord,
+    TracedResult,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.dsmc import step as dsmc_step
-from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCState, _clip_scale
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from nof1_causal_lab.models.ssm.inference.conditioning import ExactStateConstraints
+    from nof1_causal_lab.models.ssm.inference.samplers.particle.contract import (
+        PaidMixture,
+    )
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
 
 _DEFAULT_OPTIONS = MarginalParticleGibbsSpec()
+type MarginalParticleStepResult = tuple[TrajectoryMCMCState, dict[str, jnp.ndarray]]
+
+
+class MarginalParticleStep(Protocol):
+    """A joint transition with a static dSMC concurrency limit."""
+
+    def __call__(
+        self, state: TrajectoryMCMCState, key: jnp.ndarray, *, batch_size: int | None = None
+    ) -> MarginalParticleStepResult:
+        """Advance once with all nodes parallel unless a batch limit is supplied."""
+        ...
 
 
 class MarginalParticleGibbsKernel(NamedTuple):
     """Callable joint kernel and static metadata."""
 
-    step_fn: Callable[
-        [TrajectoryMCMCState, jnp.ndarray], tuple[TrajectoryMCMCState, dict[str, jnp.ndarray]]
+    step_fn: MarginalParticleStep
+    parameter_gradient_fn: Callable[[jnp.ndarray], jnp.ndarray]
+    trace_step_fn: Callable[  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.
+        [TrajectoryMCMCState, jnp.ndarray],
+        TracedResult[MarginalParticleStepResult, MarginalParticleTraceRecord],
     ]
     num_particles: int
     num_parameter_particles: int
@@ -82,20 +105,7 @@ class MarginalParticleGibbsKernel(NamedTuple):
     min_scale: float
     max_scale: float
     preconditioned: bool
-    latent_delta: float
-    amala_delta_init: float
-    amala_delta_min: float
-    amala_delta_max: float
-    amala_target_accept: float
-    amala_adaptation_window: int
-    amala_adaptation_tolerance: float
-    amala_adaptation_rho: float
-    amala_adaptation_rho_min: float
-    amala_adaptation_gamma: float
-    amala_kappa: float
-    amala_grad_clip: float
-    dsmc_leaf_proposal: DSMCLeafProposal
-    latent_block_coords: int | None
+    dsmc: DsmcSpec
     diagnostic_metrics: frozenset[str]
     exact_constraints: ExactStateConstraints | None
 
@@ -113,36 +123,19 @@ def build_marginal_particle_gibbs_kernel(
     parameter_proposal: Literal[
         "random_walk", "pseudo_langevin"
     ] = _DEFAULT_OPTIONS.parameter_proposal,
-    latent_delta: float = _DEFAULT_OPTIONS.latent_delta,
-    amala_delta_init: float = _DEFAULT_OPTIONS.amala_delta_init,
-    amala_delta_min: float = _DEFAULT_OPTIONS.amala_delta_min,
-    amala_delta_max: float = _DEFAULT_OPTIONS.amala_delta_max,
-    amala_target_accept: float = _DEFAULT_OPTIONS.amala_target_accept,
-    amala_adaptation_window: int = _DEFAULT_OPTIONS.amala_adaptation_window,
-    amala_adaptation_tolerance: float = _DEFAULT_OPTIONS.amala_adaptation_tolerance,
-    amala_adaptation_rho: float = _DEFAULT_OPTIONS.amala_adaptation_rho,
-    amala_adaptation_rho_min: float = _DEFAULT_OPTIONS.amala_adaptation_rho_min,
-    amala_adaptation_gamma: float = _DEFAULT_OPTIONS.amala_adaptation_gamma,
-    amala_kappa: float = _DEFAULT_OPTIONS.amala_kappa,
-    amala_grad_clip: float = _DEFAULT_OPTIONS.amala_grad_clip,
-    dsmc_leaf_proposal: DSMCLeafProposal = _DEFAULT_OPTIONS.dsmc_leaf_proposal,
-    latent_block_coords: int | None = _DEFAULT_OPTIONS.latent_block_coords,
-    paid_mix_z_weight: float = _DEFAULT_OPTIONS.paid_mix_z_weight,
-    paid_mix_pilot_weight: float = _DEFAULT_OPTIONS.paid_mix_pilot_weight,
-    pilot_means: jnp.ndarray | None = None,
-    pilot_vars: jnp.ndarray | None = None,
-    pilot_wide_vars: jnp.ndarray | None = None,
+    dsmc: DsmcSpec = _DEFAULT_OPTIONS.dsmc,
+    paid_mix: PaidMixture | None = None,
     parameter_reference_path: jnp.ndarray | None = None,
     exact_constraints: ExactStateConstraints | None = None,
     diagnostic_metrics_all: bool = _DEFAULT_OPTIONS.diagnostic_metrics_all,
     diagnostic_metrics: tuple[str, ...] | list[str] | None = _DEFAULT_OPTIONS.diagnostic_metrics,
 ) -> MarginalParticleGibbsKernel:
     """Build a marginalized Particle Gibbs joint state update."""
-    resolved_diagnostic_metrics = resolve_mpgibbs_diagnostic_metrics(
+    resolved_diagnostic_metrics = resolve_particle_diagnostic_metrics(
         diagnostic_metrics_all=diagnostic_metrics_all,
         diagnostic_metrics=diagnostic_metrics,
     )
-    diagnostic_flags = build_mpgibbs_diagnostic_flags(
+    diagnostic_flags = build_particle_diagnostic_flags(
         diagnostic_metrics=resolved_diagnostic_metrics,
     )
     if num_particles < 2:
@@ -154,71 +147,6 @@ def build_marginal_particle_gibbs_kernel(
             "marginal_particle_gibbs min_scale must be <= max_scale; "
             f"got {min_scale} > {max_scale}."
         )
-    if amala_delta_init <= 0.0:
-        raise ValueError(
-            f"marginal_particle_gibbs amala_delta_init must be positive; got {amala_delta_init}."
-        )
-    if amala_delta_min <= 0.0 or amala_delta_max <= 0.0 or amala_delta_min > amala_delta_max:
-        raise ValueError(
-            "marginal_particle_gibbs requires 0 < amala_delta_min <= amala_delta_max; "
-            f"got {amala_delta_min} and {amala_delta_max}."
-        )
-    if not (amala_delta_min <= amala_delta_init <= amala_delta_max):
-        raise ValueError(
-            "marginal_particle_gibbs requires amala_delta_init inside "
-            f"[amala_delta_min, amala_delta_max]; got {amala_delta_init}."
-        )
-    if not (0.0 < amala_target_accept < 1.0):
-        raise ValueError(
-            "marginal_particle_gibbs amala_target_accept must be in (0, 1); "
-            f"got {amala_target_accept}."
-        )
-    if amala_adaptation_window < 1:
-        raise ValueError(
-            "marginal_particle_gibbs amala_adaptation_window must be positive; "
-            f"got {amala_adaptation_window}."
-        )
-    if amala_adaptation_tolerance < 0.0:
-        raise ValueError(
-            "marginal_particle_gibbs amala_adaptation_tolerance must be non-negative; "
-            f"got {amala_adaptation_tolerance}."
-        )
-    if amala_adaptation_rho <= 0.0 or amala_adaptation_rho_min <= 0.0:
-        raise ValueError(
-            "marginal_particle_gibbs amala adaptation rates must be positive; "
-            f"got rho={amala_adaptation_rho}, rho_min={amala_adaptation_rho_min}."
-        )
-    if amala_kappa < 0.0:
-        raise ValueError(
-            f"marginal_particle_gibbs amala_kappa must be non-negative; got {amala_kappa}."
-        )
-    if amala_grad_clip <= 0.0:
-        raise ValueError(
-            f"marginal_particle_gibbs amala_grad_clip must be positive; got {amala_grad_clip}."
-        )
-    if latent_block_coords is not None and latent_block_coords < 1:
-        raise ValueError(
-            "marginal_particle_gibbs latent_block_coords must be a positive coordinate "
-            f"count or None (all coordinates); got {latent_block_coords}."
-        )
-    pilot_moments: tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray] | None = None
-    if dsmc_leaf_proposal == _DSMC_LEAF_PROPOSAL_PAID_MIX:
-        if not (0.0 < paid_mix_z_weight < 1.0) or not (0.0 < paid_mix_pilot_weight < 1.0):
-            raise ValueError(
-                "marginal_particle_gibbs paid_mix weights must lie in (0, 1); got "
-                f"z={paid_mix_z_weight}, pilot={paid_mix_pilot_weight}."
-            )
-        if paid_mix_z_weight + paid_mix_pilot_weight >= 1.0:
-            raise ValueError(
-                "marginal_particle_gibbs paid_mix weights must leave a positive wide-tail "
-                f"share; got z + pilot = {paid_mix_z_weight + paid_mix_pilot_weight}."
-            )
-        if pilot_means is None or pilot_vars is None or pilot_wide_vars is None:
-            raise ValueError(
-                "marginal_particle_gibbs dsmc_leaf_proposal='paid_mix' requires pilot "
-                "moments (pilot_means, pilot_vars, pilot_wide_vars) from a fixed pilot initializer."
-            )
-        pilot_moments = (pilot_means, pilot_vars, pilot_wide_vars)
     use_gradient_drift = parameter_proposal == "pseudo_langevin"
     if target_accept is None:
         target_accept = _DEFAULT_OPTIONS.param_target_accept
@@ -226,18 +154,8 @@ def build_marginal_particle_gibbs_kernel(
     assert isinstance(target.state_space.recurrence, ParallelRecurrences), (
         "The fitting preflight must establish an associative deterministic recurrence"
     )
-    latent_context_runtime_fn = target.context
-    log_prior_unc_fn = target.log_prior
     local_target = target.tree_target()
 
-    def obs_increment_fn(context, state, index, _observations):
-        # Only replay-dependent factors are deferred. An independent hard
-        # likelihood is already evaluated on its exact coordinates at the leaf.
-        if not target.observation_partition.local:
-            return jnp.asarray(0.0, dtype=state.dtype)
-        return local_target.observation_increment(context, state, index, local_target.observations)
-
-    trajectory_log_prob_fn = target.path_log_prob
     runtime_observations = target.observations
     runtime_times = target.times
 
@@ -257,6 +175,8 @@ def build_marginal_particle_gibbs_kernel(
     def _theta_logpost_grad(z: jnp.ndarray) -> jnp.ndarray:
         # q(u | theta) uses a theta-only oracle, fixed for every kernel call.
         # Conditioning this oracle on the current path invalidates the label correction.
+        if not use_gradient_drift:
+            return jnp.zeros_like(z)
         evaluate: Callable[[jnp.ndarray], jnp.ndarray] = jax.grad(
             lambda zz: target.log_posterior(zz, fixed_path, runtime_observations, runtime_times)
         )
@@ -273,9 +193,10 @@ def build_marginal_particle_gibbs_kernel(
 
     def _propose_parameter_ensemble(
         current_position: jnp.ndarray,
+        current_gradient: jnp.ndarray,
         key: jnp.ndarray,
         step_size: jnp.ndarray,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         dim = int(current_position.shape[0])
         step = jnp.asarray(step_size, dtype=current_position.dtype)
         proposal_scale = jnp.sqrt(jnp.asarray(2.0, dtype=current_position.dtype) * step)
@@ -291,7 +212,7 @@ def build_marginal_particle_gibbs_kernel(
         # halves reproduce preconditioned MALA; random-walk is the zero-drift case.
         if use_gradient_drift:
             with jax.named_scope("propose_grad_drift"):
-                grad_ref = _theta_logpost_grad(current_position)
+                grad_ref = current_gradient
                 drift = (jnp.asarray(2.0, dtype=step.dtype) * step) * (chol @ (chol.T @ grad_ref))
         else:
             grad_ref = jnp.zeros_like(current_position)
@@ -331,59 +252,62 @@ def build_marginal_particle_gibbs_kernel(
                 drift_dot = jnp.sum(grads * (u[None, :] - ensemble), axis=1)
                 label_correction = drift_dot - step * whitened_sq
         else:
+            grads = jnp.zeros_like(ensemble)
             label_correction = jnp.zeros((num_parameter_particles,), dtype=current_position.dtype)
 
-        return ensemble, label_correction
+        return ensemble, label_correction, u, grads
 
-    static = MPGibbsStatic(
-        latent_context_runtime_fn=latent_context_runtime_fn,
-        log_prior_unc_fn=log_prior_unc_fn,
-        obs_increment_fn=obs_increment_fn,
-        trajectory_log_prob_fn=trajectory_log_prob_fn,
-        runtime_observations=runtime_observations,
-        runtime_times=runtime_times,
-        latent_free_mask=latent_free_mask,
+    static = build_smoother_setup(
+        target,
+        dsmc,
         num_particles=num_particles,
         num_parameter_particles=num_parameter_particles,
-        latent_delta=latent_delta,
-        amala_kappa=amala_kappa,
-        amala_grad_clip=amala_grad_clip,
-        latent_block_coords=latent_block_coords,
-        paid_mix_z_weight=paid_mix_z_weight,
-        paid_mix_pilot_weight=paid_mix_pilot_weight,
-        pilot_moments=pilot_moments,
-        transition_initial_log_prob_fn=local_target.initial_log_prob,
-        transition_log_prob_fn=local_target.transition_log_prob,
-        transition_log_probs_for_pairs_fn=local_target.aligned_transition_log_prob,
-        transition_pairwise_log_probs_fn=local_target.pairwise_transition_log_prob,
+        free_mask=latent_free_mask,
+        paid_mix=paid_mix,
         diagnostic_metrics=resolved_diagnostic_metrics,
-        intervals=local_target.intervals,
     )
 
-    def _step_fn(state: TrajectoryMCMCState, key: jnp.ndarray):
+    def _step(
+        state: TrajectoryMCMCState,
+        key: jnp.ndarray,
+        *,
+        record_trace: bool,
+        batch_size: int | None = None,
+    ) -> (
+        MarginalParticleStepResult
+        | TracedResult[MarginalParticleStepResult, MarginalParticleTraceRecord]
+    ):
         param_key, block_key, label_key = random.split(key, 3)
         x_ref = state.latent_trajectory
         traj_dtype = state.trajectory_log_prob.dtype
         complete_dtype = state.complete_log_posterior.dtype
 
         with jax.named_scope("propose_parameters"):
-            parameter_particles, label_correction = _propose_parameter_ensemble(
-                state.position,
-                param_key,
-                _clip_scale(
-                    state.param_step_size,
-                    min_scale=min_scale,
-                    max_scale=max_scale,
-                ),
+            parameter_particles, label_correction, parameter_auxiliary, parameter_gradients = (
+                _propose_parameter_ensemble(
+                    state.position,
+                    state.parameter_gradient,
+                    param_key,
+                    _clip_scale(
+                        state.param_step_size,
+                        min_scale=min_scale,
+                        max_scale=max_scale,
+                    ),
+                )
             )
 
         with jax.named_scope("build_context"):
-            ctx = build_smoother_context(static, state, parameter_particles, label_correction)
+            ctx = build_smoother_context(
+                static,
+                parameter_particles,
+                label_correction,
+                reference=state.latent_trajectory,
+                delta=state.latent_delta,
+                trajectory_dtype=state.trajectory_log_prob.dtype,
+            )
         contexts = ctx.contexts
 
         def root_correction(path: jax.Array) -> jax.Array:
-            if not target.state_space.requires_replay:
-                return jnp.zeros(num_parameter_particles, dtype=traj_dtype)
             return jnp.asarray(
                 jax.vmap(lambda context: target.replay_correction(local_target, context, path))(
                     contexts
@@ -391,35 +315,27 @@ def build_marginal_particle_gibbs_kernel(
             )
 
         with jax.named_scope("dsmc_smoother_full"):
-            smoother_result = dsmc_step(ctx, block_key, x_ref, root_correction)
+            smoother = (dsmc_trace_step if record_trace else dsmc_step)(
+                ctx,
+                block_key,
+                x_ref,
+                root_correction if target.state_space.requires_replay else None,
+                batch_size=batch_size,
+            )
+            smoother_result = smoother.result if isinstance(smoother, TracedResult) else smoother
 
         with jax.named_scope("postprocess"):
             latent_path = smoother_result.latent_path
-            final_label_log_probs = smoother_result.final_label_log_probs
+            scores = smoother_result.label_scores
+            final_label_log_probs = scores.log_probs
             origin_path = smoother_result.origin_path
             zero_scalar = jnp.asarray(0.0, dtype=traj_dtype)
-            amala_grad_norm_mean = smoother_result.diagnostics.get(
-                "amala_grad_norm_mean",
-                zero_scalar,
-            )
-            amala_grad_norm_max = smoother_result.diagnostics.get(
-                "amala_grad_norm_max",
-                zero_scalar,
-            )
             selected_label = random.categorical(label_key, final_label_log_probs).astype(jnp.int32)
             next_position = parameter_particles[selected_label]
             next_context = _select_pytree(contexts, selected_label)
             latent_path = target.replay_path(next_context, latent_path)
-            next_traj_lp = jnp.asarray(
-                trajectory_log_prob_fn(
-                    next_context,
-                    latent_path,
-                    runtime_observations,
-                ),
-                dtype=traj_dtype,
-            )
-            next_complete = jnp.asarray(log_prior_unc_fn(next_position), dtype=complete_dtype)
-            next_complete = next_complete + next_traj_lp.astype(complete_dtype)
+            next_traj_lp = scores.trajectory_log_probs[selected_label].astype(traj_dtype)
+            next_complete = scores.log_posteriors[selected_label].astype(complete_dtype)
             latent_move = latent_path - x_ref
             latent_move_rms_per_t = jnp.sqrt(
                 _masked_mean(latent_move * latent_move, latent_free_mask, axis=-1)
@@ -442,7 +358,8 @@ def build_marginal_particle_gibbs_kernel(
             latent_frozen_frac = _masked_mean(latent_frozen, latent_free_mask)
             latent_frozen_frac_by_d = _masked_mean(latent_frozen, latent_free_mask, axis=0)
 
-            step_info = {
+            step_info: dict[str, jax.Array] = {
+                **smoother_result.diagnostics,
                 "parameter_accepted": parameter_accepted,
                 "latent_accepted": latent_updated,
                 "latent_proposed": jnp.any(smoother_result.proposal_mask, axis=-1),
@@ -454,8 +371,6 @@ def build_marginal_particle_gibbs_kernel(
                 "latent_move_max_abs": latent_move_max_abs,
                 "latent_move_rms_per_t": latent_move_rms_per_t,
                 "final_label_log_probs": final_label_log_probs.astype(jnp.float32),
-                "amala_grad_norm_mean": amala_grad_norm_mean.astype(jnp.float32),
-                "amala_grad_norm_max": amala_grad_norm_max.astype(jnp.float32),
             }
             if diagnostic_flags.parameter_movement:
                 parameter_jump = next_position - state.position
@@ -480,9 +395,10 @@ def build_marginal_particle_gibbs_kernel(
                     }
                 )
 
-        return (
+        result = (
             state._replace(
                 position=next_position,
+                parameter_gradient=parameter_gradients[selected_label],
                 latent_context=next_context,
                 latent_trajectory=latent_path,
                 trajectory_log_prob=next_traj_lp,
@@ -490,9 +406,42 @@ def build_marginal_particle_gibbs_kernel(
             ),
             step_info,
         )
+        if isinstance(smoother, TracedResult):
+            return TracedResult(
+                result,
+                MarginalParticleTraceRecord(
+                    parameters=ParameterProposalTraceRecord(
+                        candidates=parameter_particles,
+                        auxiliary=parameter_auxiliary,
+                        label_log_prior=ctx.initial_label_log_probs,
+                    ),
+                    smoother=smoother.trace,
+                    label_selection=CategoricalTraceRecord(
+                        log_weights=final_label_log_probs,
+                        selected=selected_label,
+                    ),
+                ),
+            )
+        return result
+
+    def _step_fn(
+        state: TrajectoryMCMCState, key: jnp.ndarray, *, batch_size: int | None = None
+    ) -> MarginalParticleStepResult:
+        result = _step(state, key, record_trace=False, batch_size=batch_size)
+        assert not isinstance(result, TracedResult)
+        return result
+
+    def _trace_step_fn(
+        state: TrajectoryMCMCState, key: jnp.ndarray
+    ) -> TracedResult[MarginalParticleStepResult, MarginalParticleTraceRecord]:
+        result = _step(state, key, record_trace=True)
+        assert isinstance(result, TracedResult)
+        return result
 
     return MarginalParticleGibbsKernel(
         step_fn=_step_fn,
+        parameter_gradient_fn=_theta_logpost_grad,
+        trace_step_fn=_trace_step_fn,
         num_particles=num_particles,
         num_parameter_particles=num_parameter_particles,
         initial_param_step_size=param_step_size,
@@ -500,20 +449,7 @@ def build_marginal_particle_gibbs_kernel(
         min_scale=min_scale,
         max_scale=max_scale,
         preconditioned=parameter_preconditioner_chol is not None,
-        latent_delta=latent_delta,
-        amala_delta_init=amala_delta_init,
-        amala_delta_min=amala_delta_min,
-        amala_delta_max=amala_delta_max,
-        amala_target_accept=amala_target_accept,
-        amala_adaptation_window=amala_adaptation_window,
-        amala_adaptation_tolerance=amala_adaptation_tolerance,
-        amala_adaptation_rho=amala_adaptation_rho,
-        amala_adaptation_rho_min=amala_adaptation_rho_min,
-        amala_adaptation_gamma=amala_adaptation_gamma,
-        amala_kappa=amala_kappa,
-        amala_grad_clip=amala_grad_clip,
-        dsmc_leaf_proposal=dsmc_leaf_proposal,
-        latent_block_coords=latent_block_coords,
+        dsmc=dsmc,
         diagnostic_metrics=resolved_diagnostic_metrics,
         exact_constraints=exact_constraints,
     )

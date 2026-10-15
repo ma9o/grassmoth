@@ -17,23 +17,23 @@ from nof1_causal_lab.artifacts.model.construct import (
 from nof1_causal_lab.artifacts.model.expressions import LiteralExpression, coefficient, state
 from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec, NormalLawSpec
 from nof1_causal_lab.artifacts.model.mechanism import DriftMechanismSpec, PotentialMechanismSpec
-from nof1_causal_lab.artifacts.sampling import SamplerSpec
+from nof1_causal_lab.artifacts.sampling import DsmcSpec, SamplerSpec
 from nof1_causal_lab.models.ssm.compile.observation_partition import compile_observation_partition
 from nof1_causal_lab.models.ssm.compile.state_space import (
     ParallelRecurrences,
     SequentialRecurrences,
 )
 from nof1_causal_lab.models.ssm.execution.supported_normal import SupportedNormal
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.fit import (
+from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.fit import (
     fit_marginal_particle_gibbs,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.kernel import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
-from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.runner import (
+from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
 )
-from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.helpers import make_model
@@ -136,12 +136,13 @@ def _problem(model, observations=None):
     )
 
 
-def _initial(target, path, *, position=None):
+def _initial(target, path, *, kernel, position=None):
     return _initialize_chain_state(
         target.initial_position if position is None else position,
         observations=target.observations,
         times=target.times,
         target=target,
+        parameter_gradient_fn=kernel.parameter_gradient_fn,
         initial_latent_delta=jnp.full(target.times.size, 0.1),
         param_step_size=0.01,
         param_min_scale=1e-6,
@@ -192,11 +193,12 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="random_walk",
-        dsmc_leaf_proposal="amala_exact",
-        latent_block_coords=1,
         exact_constraints=problem.exact_constraints,
+        dsmc=DsmcSpec(dsmc_leaf_proposal="amala_plus", latent_block_coords=1),
     )
-    after, info = jax.jit(kernel.step_fn)(_initial(target, coordinates), jax.random.key(4))
+    after, info = jax.jit(kernel.step_fn)(
+        _initial(target, coordinates, kernel=kernel), jax.random.key(4)
+    )
     np.testing.assert_array_equal(
         after.latent_trajectory[:, b], np.repeat(after.latent_trajectory[0, b], 4)
     )
@@ -205,6 +207,13 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
     )
     assert np.isfinite(after.complete_log_posterior)
     assert np.any(info["latent_proposed"])
+    expected_complete, expected_path = target.log_posterior_from_context(
+        after.position, after.latent_context, after.latent_trajectory, target.observations
+    )
+    np.testing.assert_allclose(after.trajectory_log_prob, expected_path, rtol=2e-6, atol=2e-5)
+    np.testing.assert_allclose(
+        after.complete_log_posterior, expected_complete, rtol=2e-6, atol=2e-5
+    )
 
 
 def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
@@ -224,11 +233,10 @@ def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="random_walk",
-        dsmc_leaf_proposal="amala_exact",
-        latent_block_coords=1,
         exact_constraints=problem.exact_constraints,
+        dsmc=DsmcSpec(dsmc_leaf_proposal="amala_plus", latent_block_coords=1),
     )
-    after, info = jax.jit(kernel.step_fn)(_initial(target, path), jax.random.key(6))
+    after, info = jax.jit(kernel.step_fn)(_initial(target, path, kernel=kernel), jax.random.key(6))
     np.testing.assert_array_equal(after.latent_trajectory[:, input_index], path[:, input_index])
     np.testing.assert_array_equal(
         info["latent_accepted"], jnp.any(after.latent_trajectory != path, axis=-1)
@@ -284,12 +292,11 @@ def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="pseudo_langevin",
-        dsmc_leaf_proposal="amala_exact",
-        latent_block_coords=1,
+        dsmc=DsmcSpec(dsmc_leaf_proposal="amala_plus", latent_block_coords=1),
     )
 
     def chain(key):
-        initial = _initial(target, jnp.zeros((4, 1)))
+        initial = _initial(target, jnp.zeros((4, 1)), kernel=kernel)
 
         def step(current, draw_key):
             after, _ = kernel.step_fn(current, draw_key)
@@ -413,19 +420,19 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
 
 
 @pytest.mark.inference(concern="recovery")
-def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution():
+@pytest.mark.parametrize("method", ["amala", "amala_plus"])
+def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(method):
     compiled, problem = _problem(_model())
     target = problem.runtime
     indices = {item.name: i for i, item in enumerate(compiled.states)}
     b, x, a, y = (indices[name] for name in ("baseline", "driver", "total", "outcome"))
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        # Cross a root-score batch boundary and exercise its final partial batch.
         num_particles=9,
         num_parameter_particles=2,
         param_step_size=0.1,
         parameter_proposal="random_walk",
-        dsmc_leaf_proposal="amala_exact",
+        dsmc=DsmcSpec(dsmc_leaf_proposal=method),
     )
 
     def draw_and_step(key):
@@ -437,7 +444,7 @@ def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution():
             path = path.at[t, x].set(path[t - 1, x] + path[0, b] + 0.4 * noises[t, 1])
             path = path.at[t, a].set(path[t - 1, a] + path[t - 1, x])
             path = path.at[t, y].set(path[t - 1, y] + path[t - 1, a] + 0.4 * noises[t, 2])
-        initial = _initial(target, path, position=path[0, b : b + 1])._replace(
+        initial = _initial(target, path, kernel=kernel, position=path[0, b : b + 1])._replace(
             latent_delta=jnp.full(4, 0.5)
         )
         after, _ = kernel.step_fn(initial, step_key)
@@ -491,7 +498,7 @@ def test_parallel_accumulator_preserves_an_exact_random_initial_value():
         param_step_size=0.01,
         exact_constraints=target.exact_constraints,
     )
-    initial = _initial(target, jnp.zeros((4, len(compiled.states))))
+    initial = _initial(target, jnp.zeros((4, len(compiled.states))), kernel=kernel)
     after, _ = jax.jit(kernel.step_fn)(initial, jax.random.key(582))
     path = after.latent_trajectory
     assert np.isfinite(after.complete_log_posterior)
@@ -562,6 +569,30 @@ def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients
     for measured, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
         assert np.isfinite(measured).all()
         np.testing.assert_allclose(measured, reference, rtol=2e-5, atol=2e-5)
+
+    context = target.context(position, target.times)
+
+    def prefixes(coordinates):
+        replayed = target.replay_path(context, coordinates)
+        incoming = jax.vmap(
+            lambda previous, current, t: target.transition_log_prob(context, previous, current, t)
+        )(replayed[:-1], replayed[1:], jnp.arange(1, len(path)))
+        return jnp.cumsum(
+            jnp.concatenate((target.initial_log_prob(context, replayed[0])[None], incoming))
+            + target.observation_log_probs(context, replayed, target.observations)
+        )
+
+    increments, filtering_gradient = target.filtering_log_prob_and_grad(
+        context, path, target.observations
+    )
+    jacobian = jax.jacrev(prefixes)(path)
+    np.testing.assert_allclose(jnp.cumsum(increments), prefixes(path), rtol=2e-5, atol=2e-5)
+    np.testing.assert_allclose(
+        filtering_gradient,
+        jacobian[jnp.arange(len(path)), jnp.arange(len(path))],
+        rtol=2e-5,
+        atol=2e-5,
+    )
 
 
 def test_observation_partition_keeps_free_loadings_and_joint_gaussian_blocks():

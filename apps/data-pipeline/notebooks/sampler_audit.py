@@ -51,12 +51,21 @@ def intro(mo):
     as are the few side results the prose quotes without a cell behind them (for example the
     extra `δ` and `P` sweeps behind §14.1).
 
+    **Historical scope.** The recorded timings and recommendations below describe the
+    earlier implementation. The `uncorrected_drift` experiment reproduces the defective
+    historical leaf; it is not the paper-correct aMALA+ now implemented in the sampler.
+    The removed `amala_exact` kernel appears only in historical discussion below.
+    Executable comparisons now use the current **aMALA+** kernel, labeled `amala_plus`.
+    The recorded numerical findings have **not** been rerun for aMALA+ and are not
+    measurements of it. Current method and mixture defaults are owned by
+    [`config.yaml`](../config.yaml). Paid mixtures now compose with each auxiliary law.
+
     **Knobs and code.** There is no global switch: each experiment's horizon `T`, particle count
     `P`, step size `δ`, sweep budget, and seeds sit in its run cell. Part I uses only NumPy and
     matplotlib. Part II implements Particle-mGRAD (Corenflos–Finke Algorithm 7), the aGRAD and
     twisted leaves, and the c-dSMC tree stitch in the notebook, and drives the production
-    `amala_exact` leaf through the real `dsmc.step` in
-    [`smoothers/dsmc.py`](../src/nof1_causal_lab/models/ssm/inference/marginal_particle_gibbs/dsmc.py).
+    `amala_plus` leaf through the real `dsmc.step` in
+    [`smoothers/dsmc.py`](../src/nof1_causal_lab/models/ssm/inference/samplers/particle/dsmc.py).
     Its JAX chains run up to 60,000 sweeps, so Part II takes far longer than Part I.
     """)
     return
@@ -74,12 +83,25 @@ def imports():
     from matplotlib.colors import LogNorm
     from matplotlib.patches import FancyBboxPatch
 
-    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs import dsmc
-    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs._contract import (
+    from nof1_causal_lab.models.ssm.inference.samplers.particle import dsmc
+    from nof1_causal_lab.models.ssm.inference.samplers.particle.contract import (
         SmootherContext,
+        TrajectoryLabelScores,
     )
 
-    return FancyBboxPatch, LogNorm, SmootherContext, dsmc, jax, jnp, math, np, plt, random
+    return (
+        FancyBboxPatch,
+        LogNorm,
+        SmootherContext,
+        TrajectoryLabelScores,
+        dsmc,
+        jax,
+        jnp,
+        math,
+        np,
+        plt,
+        random,
+    )
 
 
 @app.cell
@@ -883,12 +905,17 @@ def replacement_md(mo):
     mo.md(r"""
     ## 11. Does the parallelizable replacement pay off?
 
+    **Historical experiment, updated executable baseline.** The design and recorded
+    findings below describe the removed `amala_exact` kernel. Run cells now call
+    aMALA+ instead; their `amala_plus` output must be assessed afresh and cannot be
+    interpreted using the original kernel's timings or mixing conclusions.
+
     Part I argues on paper that published **Particle-mGRAD** cannot re-bracket into a tree
     (the `v̄_t` obstruction), whereas an **auxiliary target-correct** kernel keeps a bounded
-    seam and trees to `O(log T)`. Our production smoother is exactly that replacement:
-    `amala_exact` and `paid_mix` are the corrected
+    seam and trees to `O(log T)`. At the time of this audit, `amala_exact` and its
+    `paid_mix` extension were the corrected
     **leaf proposals inside the conditional de-sequentialized SMC tree**
-    ([the app's `smoothers/dsmc.py`](../src/nof1_causal_lab/models/ssm/inference/marginal_particle_gibbs/dsmc.py)).
+    ([the app's `smoothers/dsmc.py`](../src/nof1_causal_lab/models/ssm/inference/samplers/particle/dsmc.py)).
 
     This section runs the real thing. It builds a toy **nonlinear** state-space model,
     then puts four latent-path kernels on the *same* posterior at growing horizons `T`:
@@ -907,14 +934,14 @@ def replacement_md(mo):
     - **`amala_exact`** — the real source leaf proposal, driven through the actual
       `dsmc.step` c-dSMC tree. Auxiliary trajectory kept ⇒ exact; isotropic (does not fold
       the prior); bounded seam ⇒ trees. It is the z-anchored core of `paid_mix`, the
-      production default.
-    - **`amala_plus`** — the *biased* leaf that `dsmc.py` shipped until it was removed for
+      production default at the time of this audit.
+    - **`uncorrected_drift`** — the *biased* leaf that `dsmc.py` shipped until it was removed for
       the defect §11.1 measures: a gradient step linearised on the reference path, with no
       auxiliary correction. Reproduced here on the notebook's tree; no invariance
       guarantee.
 
     So the parallel family is graded: aGRAD folds the prior (best mixing), `amala_exact` is
-    its isotropic cousin, `amala_plus` drops exactness. mGRAD is the thing that *can't* tree.
+    its isotropic cousin, `uncorrected_drift` drops exactness. mGRAD is the thing that *can't* tree.
 
     The model is deliberately 1-D so the horizon `T` is the only axis that moves — the
     audit is about `T`, not `D`. It is nonlinear in the drift and conditionally Gaussian
@@ -1004,6 +1031,7 @@ def toy_kernels(
     OBS_SD,
     PROC_SD,
     SmootherContext,
+    TrajectoryLabelScores,
     dsmc,
     jax,
     jnp,
@@ -1030,8 +1058,7 @@ def toy_kernels(
 
     def _build_ctx(y_obs, delta, kappa):
         # Hand-assemble the real SmootherContext that dsmc.step consumes, for K=1 parameter
-        # particle (fixed parameters); fields the amala_exact leaf never reads are unused
-        # plumbing.
+        # particle (fixed parameters).
         _t_len = int(y_obs.shape[0])
         _k = 1
 
@@ -1062,57 +1089,75 @@ def toy_kernels(
                 jnp.broadcast_to(_g, (_k, _D)).astype(_DT),
             )
 
-        def _selected_transition_log_probs(prev, nxt, seam):
-            _lp = jnp.where(seam < _t_len, jax.vmap(_log_trans)(prev, nxt), 0.0)
-            return jnp.broadcast_to(_lp[:, None], (prev.shape[0], _k)).astype(_DT)
-
         def _pairwise_transition_log_probs(prev, nxt, seam):
             _lp = jax.vmap(lambda a: jax.vmap(lambda b: _log_trans(a, b))(nxt))(prev)
             _lp = jnp.where(seam < _t_len, _lp, 0.0)
             return jnp.broadcast_to(_lp[:, :, None], (prev.shape[0], nxt.shape[0], _k)).astype(_DT)
 
-        def _trajectory_label_log_probs(path):
-            del path
-            return jnp.zeros((_k,), dtype=_DT)
+        def _trajectory_density(values):
+            return (
+                _log_init(values[0])
+                + jax.vmap(_log_trans)(values[:-1], values[1:]).sum()
+                + jax.vmap(_log_obs)(values, y_obs.reshape(_t_len, 1)).sum()
+            )
+
+        def _score_labels(path):
+            _density = jnp.asarray([_trajectory_density(path)], dtype=_DT)
+            return TrajectoryLabelScores(jnp.zeros((_k,), dtype=_DT), _density, _density)
+
+        def _smoothing_gradient(path):
+            return jax.grad(_trajectory_density)(path)
+
+        def _filtering_gradient(path):
+            _previous = jax.lax.stop_gradient(path[:-1])
+
+            def _density(values):
+                return (
+                    _log_init(values[0])
+                    + jax.vmap(_log_trans)(_previous, values[1:]).sum()
+                    + jax.vmap(_log_obs)(values, y_obs.reshape(_t_len, 1)).sum()
+                )
+
+            return jax.grad(_density)(path)
 
         return SmootherContext(
             contexts=jnp.zeros((_k, 1), dtype=_DT),
             initial_label_log_probs=jnp.zeros((_k,), dtype=_DT),
             num_steps=_t_len,
-            num_free_particles=0,  # set by run_amala_exact
+            num_free_particles=0,  # set by run_amala_plus
             num_parameter_particles=_k,
             latent_dtype=_DT,
             traj_dtype=_DT,
             obs_increment_fn=_obs_increment_fn,
             runtime_observations=jnp.asarray(y_obs).reshape(_t_len, 1),
             latent_free_mask=jnp.ones((_t_len, _D), dtype=bool),
-            amala_delta=jnp.full((_D,), delta, dtype=_DT),
+            amala_delta=jnp.full((_t_len,), delta, dtype=_DT),
             amala_kappa=jnp.asarray(kappa, dtype=_DT),
             amala_grad_clip=jnp.asarray(jnp.inf, dtype=_DT),
-            dsmc_leaf_proposal="amala_exact",
+            dsmc_leaf_proposal="amala_plus",
             latent_block_coords=None,
-            paid_mix_z_weight=0.85,
-            paid_mix_pilot_weight=0.1,
-            pilot_means=None,
-            pilot_vars=None,
-            pilot_wide_vars=None,
+            paid_mix=None,
+            smoothing_gradient=_smoothing_gradient,
+            filtering_gradient=_filtering_gradient,
             initial_value_grad_by_param=_initial_value_grad_by_param,
             transition_current_value_grad_by_param=_transition_current_value_grad_by_param,
             transition_next_value_grad_by_param=_transition_next_value_grad_by_param,
-            selected_transition_log_probs=_selected_transition_log_probs,
             pairwise_transition_log_probs=_pairwise_transition_log_probs,
-            trajectory_label_log_probs=_trajectory_label_log_probs,
+            score_labels=_score_labels,
+            intervals=None,
+            local_auxiliary_exact=False,
+            diagnostic_weights=False,
         )
 
-    def run_amala_exact(y_obs, num_particles=16, delta=0.7, kappa=0.75, n_iter=700, seed=0):
+    def run_amala_plus(y_obs, num_particles=16, delta=0.7, kappa=0.75, n_iter=700, seed=0):
         """MCMC chain of latent paths from the REAL dsmc.step c-dSMC tree and its
-        amala_exact leaf."""
+        paper-correct aMALA+ leaf."""
         _t_len = int(y_obs.shape[0])
         _ctx = _build_ctx(y_obs, delta, kappa)._replace(num_free_particles=num_particles - 1)
         _x0 = jnp.asarray(y_obs).reshape(_t_len, 1)
 
         def _body(x_ref, key):
-            _x = dsmc.step(_ctx, key, x_ref).latent_path
+            _x = dsmc.step(_ctx, key, x_ref, None).latent_path
             return _x, _x
 
         _keys = random.split(random.PRNGKey(seed), n_iter)
@@ -1218,7 +1263,7 @@ def toy_kernels(
         _, _chain = jax.lax.scan(_sweep, _y, _keys)
         return np.asarray(_chain)
 
-    return run_amala_exact, run_mgrad
+    return run_amala_plus, run_mgrad
 
 
 @app.cell
@@ -1387,11 +1432,11 @@ def agrad_kernel(
 
 
 @app.cell
-def amala_plus_kernel(
+def uncorrected_drift_kernel(
     INIT_SD, OBS_SD, dsmc_prior_mean, dsmc_prior_var, jax, jnp, make_dsmc_tree, np, random
 ):
-    def run_amala_plus(y_obs, num_particles=16, delta=0.7, kappa=0.75, n_iter=700, seed=0):
-        """The historical amala_plus leaf on the c-dSMC tree: biased by construction.
+    def run_uncorrected_drift(y_obs, num_particles=16, delta=0.7, kappa=0.75, n_iter=700, seed=0):
+        """The historical uncorrected_drift leaf on the c-dSMC tree: biased by construction.
 
         Production dsmc.py shipped this leaf until it was removed for the bias §11.1
         measures. The proposal is one MALA step on the local smoothing target — the
@@ -1445,7 +1490,7 @@ def amala_plus_kernel(
         _, _chain = jax.lax.scan(_body, _y.reshape(_t_len, 1), _keys)
         return np.asarray(_chain)[:, :, 0]
 
-    return (run_amala_plus,)
+    return (run_uncorrected_drift,)
 
 
 @app.cell
@@ -1492,7 +1537,7 @@ def replacement_exactness_md(mo):
     Particle-mGRAD keeps its auxiliary variable in the weights and is exact. Particle-aGRAD
     keeps `u` too (only the marginalisation is dropped) — also exact. `amala_exact` keeps the
     auxiliary trajectory `z ~ N(x_ref, (δ/2)I)` and pays the matching pseudo-observation
-    potential — also exact. `amala_plus` linearises on the reference path with **no**
+    potential — also exact. `uncorrected_drift` linearises on the reference path with **no**
     auxiliary correction: cheap, parallel, and only approximately invariant.
     """)
     return
@@ -1500,20 +1545,20 @@ def replacement_exactness_md(mo):
 
 @app.cell
 def replacement_exactness_run(
-    grid_smoother, np, run_agrad, run_amala_exact, run_amala_plus, run_mgrad, simulate_ssm
+    grid_smoother, np, run_agrad, run_amala_plus, run_uncorrected_drift, run_mgrad, simulate_ssm
 ):
     _x_true, _y = simulate_ssm(0, 64)
     _gold = grid_smoother(_y)
     _deltas = [0.25, 0.5, 1.0, 2.0, 4.0]
-    _names = ("mgrad", "agrad", "amala_exact", "amala_plus")
+    _names = ("mgrad", "agrad", "amala_plus", "uncorrected_drift")
     _rmse = {_n: [] for _n in _names}
     _cov = {_n: [] for _n in _names}
     for _delta in _deltas:
         _chains = {
             "mgrad": run_mgrad(_y, delta=_delta, n_iter=700, seed=5),
             "agrad": run_agrad(_y, delta=_delta, n_iter=700, seed=5),
-            "amala_exact": run_amala_exact(_y, delta=_delta, n_iter=700, seed=5),
             "amala_plus": run_amala_plus(_y, delta=_delta, n_iter=700, seed=5),
+            "uncorrected_drift": run_uncorrected_drift(_y, delta=_delta, n_iter=700, seed=5),
         }
         for _name, _chain in _chains.items():
             _burn = _chain[350:]
@@ -1527,18 +1572,18 @@ def replacement_exactness_run(
 
 @app.cell
 def replacement_exactness_fig(bias_results, mo, palette, plt):
-    _order = ("mgrad", "agrad", "amala_exact", "amala_plus")
+    _order = ("mgrad", "agrad", "amala_plus", "uncorrected_drift")
     _colors = {
         "mgrad": palette["state"],
         "agrad": palette["belief"],
-        "amala_exact": palette["seam"],
-        "amala_plus": palette["operator"],
+        "amala_plus": palette["seam"],
+        "uncorrected_drift": palette["operator"],
     }
     _labels = {
         "mgrad": "Particle-mGRAD — exact, sequential",
         "agrad": "Particle-aGRAD — exact, parallel",
-        "amala_exact": "amala_exact — exact, parallel (isotropic)",
-        "amala_plus": "amala_plus — biased, parallel",
+        "amala_plus": "aMALA+ — auxiliary-corrected, parallel",
+        "uncorrected_drift": "uncorrected_drift — biased, parallel",
     }
     _d = bias_results["delta"]
     _fig, (_a0, _a1) = plt.subplots(1, 2, figsize=(11.0, 4.1))
@@ -1576,7 +1621,7 @@ def replacement_exactness_fig(bias_results, mo, palette, plt):
 def replacement_exactness_caption(mo):
     mo.md(r"""
     mGRAD, aGRAD, and `amala_exact` all track the gold standard at every δ here (their
-    curves sit on top of each other near zero, with only Monte-Carlo wobble). `amala_plus`
+    curves sit on top of each other near zero, with only Monte-Carlo wobble). `uncorrected_drift`
     is fine while δ is small, but its bias blows up once the steps get aggressive: the
     posterior mean detaches from the true posterior and the 90% intervals cover far less
     than 90%. That is the concrete cost of dropping the auxiliary correction to buy a
@@ -1586,7 +1631,7 @@ def replacement_exactness_caption(mo):
     only bounds a bias below the ≈0.03 Monte-Carlo floor. §12.2 repeats this check with
     20,000-sweep chains and finds our hand-built aGRAD leaf is itself *not* exactly
     invariant — it adapts its proposal to the reference path without paying the matching
-    auxiliary potential, a mild version of the `amala_plus` sin. mGRAD (whose marginal
+    auxiliary potential, a mild version of the `uncorrected_drift` sin. mGRAD (whose marginal
     weights *are* the correction) and the production `amala_exact` (which pays the
     pseudo-observation potential) both pass the same stress test.
     """)
@@ -1605,7 +1650,7 @@ def replacement_scaling_md(mo):
       says how many sweeps are needed for one independent path; and
     - **depth** — the sequential rounds inside one sweep: `T` for the Particle-mGRAD
       forward filter (the `v̄_t` chain), `⌈log₂ T⌉` for the c-dSMC tree that carries aGRAD,
-      `amala_exact`, and `amala_plus`.
+      `amala_exact`, and `uncorrected_drift`.
 
     The decisive quantity on parallel hardware is **ESS per unit of sequential depth**:
     statistical progress divided by the critical-path length that progress cost. This is
@@ -1616,10 +1661,10 @@ def replacement_scaling_md(mo):
 
 @app.cell
 def replacement_scaling_run(
-    ess_per_sweep, math, run_agrad, run_amala_exact, run_amala_plus, run_mgrad, simulate_ssm
+    ess_per_sweep, math, run_agrad, run_amala_plus, run_uncorrected_drift, run_mgrad, simulate_ssm
 ):
     _t_lens = [16, 32, 64, 128, 256]
-    _names = ("mgrad", "agrad", "amala_exact", "amala_plus")
+    _names = ("mgrad", "agrad", "amala_plus", "uncorrected_drift")
     _ess = {_n: [] for _n in _names}
     _ess_depth = {_n: [] for _n in _names}
     _depth_seq = []
@@ -1629,8 +1674,8 @@ def replacement_scaling_run(
         _chains = {
             "mgrad": run_mgrad(_y, delta=0.7, n_iter=700, seed=3),
             "agrad": run_agrad(_y, delta=0.7, n_iter=700, seed=3),
-            "amala_exact": run_amala_exact(_y, delta=0.7, n_iter=700, seed=3),
             "amala_plus": run_amala_plus(_y, delta=0.7, n_iter=700, seed=3),
+            "uncorrected_drift": run_uncorrected_drift(_y, delta=0.7, n_iter=700, seed=3),
         }
         _dseq = _t_len
         _dtree = math.ceil(math.log2(_t_len))
@@ -1652,18 +1697,18 @@ def replacement_scaling_run(
 
 @app.cell
 def replacement_scaling_fig(mo, palette, plt, scaling_results):
-    _order = ("mgrad", "agrad", "amala_exact", "amala_plus")
+    _order = ("mgrad", "agrad", "amala_plus", "uncorrected_drift")
     _colors = {
         "mgrad": palette["state"],
         "agrad": palette["belief"],
-        "amala_exact": palette["seam"],
-        "amala_plus": palette["operator"],
+        "amala_plus": palette["seam"],
+        "uncorrected_drift": palette["operator"],
     }
     _labels = {
         "mgrad": "Particle-mGRAD",
         "agrad": "Particle-aGRAD",
-        "amala_exact": "amala_exact",
         "amala_plus": "amala_plus",
+        "uncorrected_drift": "uncorrected_drift",
     }
     _t = scaling_results["T"]
     _fig, (_a0, _a1, _a2) = plt.subplots(1, 3, figsize=(13.5, 4.0))
@@ -1734,7 +1779,7 @@ def replacement_recovery_md(mo):
     smoother's own posterior mean (the *best achievable* recovery — no sampler can do better).
 
     At T=1000 the depth gap is no longer academic. One Particle-mGRAD sweep is a chain of
-    **1000** sequential steps; one c-dSMC sweep (aGRAD, `amala_exact`, `amala_plus`) is a tree
+    **1000** sequential steps; one c-dSMC sweep (aGRAD, `amala_exact`, `uncorrected_drift`) is a tree
     of **⌈log₂ 1000⌉ = 10**.
     """)
     return
@@ -1747,8 +1792,8 @@ def replacement_recovery_run(
     math,
     np,
     run_agrad,
-    run_amala_exact,
     run_amala_plus,
+    run_uncorrected_drift,
     run_mgrad,
     simulate_ssm,
 ):
@@ -1760,8 +1805,8 @@ def replacement_recovery_run(
     _chains = {
         "mgrad": run_mgrad(_y, delta=_delta, n_iter=500, seed=7),
         "agrad": run_agrad(_y, delta=_delta, n_iter=500, seed=7),
-        "amala_exact": run_amala_exact(_y, delta=_delta, n_iter=500, seed=7),
         "amala_plus": run_amala_plus(_y, delta=_delta, n_iter=500, seed=7),
+        "uncorrected_drift": run_uncorrected_drift(_y, delta=_delta, n_iter=500, seed=7),
     }
     _metrics = {}
     for _name, _chain in _chains.items():
@@ -1795,8 +1840,8 @@ def replacement_recovery_fig(mo, palette, plt, recovery_results):
     _colors = {
         "mgrad": palette["state"],
         "agrad": palette["belief"],
-        "amala_exact": palette["seam"],
-        "amala_plus": palette["operator"],
+        "amala_plus": palette["seam"],
+        "uncorrected_drift": palette["operator"],
     }
     _m = recovery_results["metrics"]
     _w0, _w1 = recovery_results["window"]
@@ -1805,7 +1850,7 @@ def replacement_recovery_fig(mo, palette, plt, recovery_results):
         1, 2, figsize=(12.8, 4.2), gridspec_kw={"width_ratios": [1.55, 1.0]}
     )
 
-    # left — reconstruction window: aGRAD (exact, parallel) tracks truth; amala_plus drifts
+    # left — reconstruction window: aGRAD (exact, parallel) tracks truth; uncorrected_drift drifts
     _a0.plot(
         _t,
         recovery_results["truth"][_w0:_w1],
@@ -1837,11 +1882,11 @@ def replacement_recovery_fig(mo, palette, plt, recovery_results):
     )
     _a0.plot(
         _t,
-        _m["amala_plus"]["pm"][_w0:_w1],
+        _m["uncorrected_drift"]["pm"][_w0:_w1],
         color=palette["operator"],
         lw=1.6,
         ls="--",
-        label="amala_plus mean (biased)",
+        label="uncorrected_drift mean (biased)",
         zorder=3,
     )
     _a0.set_xlabel("time step t")
@@ -1889,15 +1934,15 @@ def replacement_recovery_table(mo, recovery_results):
     _labels = {
         "mgrad": "Particle-mGRAD",
         "agrad": "Particle-aGRAD",
-        "amala_exact": "amala_exact",
         "amala_plus": "amala_plus",
+        "uncorrected_drift": "uncorrected_drift",
     }
     _head = (
         "| kernel | recovers truth (RMSE) | sampler error (vs exact) | 90% coverage "
         "| ESS/sweep | seq. depth |\n|---|:--:|:--:|:--:|:--:|:--:|"
     )
     _rows = []
-    for _k in ("mgrad", "agrad", "amala_exact", "amala_plus"):
+    for _k in ("mgrad", "agrad", "amala_plus", "uncorrected_drift"):
         _r = _m[_k]
         _rows.append(
             f"| **{_labels[_k]}** | {_r['rmse_truth']:.3f} | {_r['rmse_gold']:.3f} | "
@@ -1921,7 +1966,7 @@ def replacement_recovery_caption(mo):
     itself — their *recovers-truth* RMSE sits on the floor, mGRAD and the two tree kernels
     alike. What separates them is **cost**: mGRAD reaches the lowest sampler error, but only by
     paying a 1000-step sequential chain per sweep; aGRAD matches it to within Monte-Carlo noise
-    at depth 10, and `amala_exact` is close behind. `amala_plus` is the lone failure — its bias
+    at depth 10, and `amala_exact` is close behind. `uncorrected_drift` is the lone failure — its bias
     lifts it off the floor even at this modest δ. Recovery quality is a near-tie among the exact
     kernels; **sequential depth is what actually differs, by 100×.**
     """)
@@ -1938,7 +1983,7 @@ def replacement_verdict_md(mo):
     | **Particle-mGRAD** | Alg 7 (this notebook) | ✅ | ✅ | best | ⚠️ ≈ T | worst (falls like 1/T) |
     | **Particle-aGRAD** | tree (this notebook) | ✅ | ⚠️ approximate (§12.2) | ≈ mGRAD | ✅ ≈ log₂ T | **best** |
     | **amala_exact** | dsmc.py (core of the `paid_mix` default) | ❌ (isotropic) | ✅ | good | ✅ ≈ log₂ T | strong |
-    | **amala_plus** | removed from dsmc.py (tree, this notebook) | ❌ | ❌ biased at large δ | good | ✅ ≈ log₂ T | — (biased) |
+    | **uncorrected_drift** | removed from dsmc.py (tree, this notebook) | ❌ | ❌ biased at large δ | good | ✅ ≈ log₂ T | — (biased) |
 
     Particle-mGRAD mixes best **per sweep** — folding the prior dynamics into the proposal is
     worth real ESS. But each sweep is a length-T sequential chain, exactly the `v̄_t`
@@ -1953,7 +1998,7 @@ def replacement_verdict_md(mo):
     magnitude ahead of published mGRAD while remaining exact (it tracks the gold posterior in
     §11.1). `amala_exact`, the production leaf's core, is the isotropic cousin — it forgoes the
     prior-folding for simplicity, so it mixes less per sweep but shares the same exactness and
-    tree depth. `amala_plus` shares the tree depth but not the invariance: cheap, parallel, and
+    tree depth. `uncorrected_drift` shares the tree depth but not the invariance: cheap, parallel, and
     silently wrong once the steps are large.
 
     **This is the audit's recommendation, measured:** do not chase published Particle-mGRAD
@@ -2185,7 +2230,7 @@ def invariance_probe_run(
     mo,
     np,
     run_agrad,
-    run_amala_exact,
+    run_amala_plus,
     run_mgrad,
     run_twisted,
     simulate_ssm,
@@ -2210,8 +2255,8 @@ def invariance_probe_run(
             lambda: run_mgrad(_y, num_particles=4, delta=4.0, n_iter=20000, seed=11),
         ),
         (
-            "amala_exact (production), P=4, δ=4",
-            lambda: run_amala_exact(_y, num_particles=4, delta=4.0, n_iter=20000, seed=11),
+            "aMALA+ (current), P=4, δ=4",
+            lambda: run_amala_plus(_y, num_particles=4, delta=4.0, n_iter=20000, seed=11),
         ),
     )
     _lines = [
@@ -2248,7 +2293,7 @@ def invariance_probe_caption(mo):
     At §11's operating point (P = 16, δ = 0.7) the aGRAD bias is beneath even this
     probe's detection floor, so §11.2–11.3's mixing, depth, and recovery conclusions
     stand as stated. What changes is the label: aGRAD-as-implemented is *approximately*
-    invariant, in exactly the way `amala_plus` is — only much milder.
+    invariant, in exactly the way `uncorrected_drift` is — only much milder.
     """)
     return
 
@@ -2279,18 +2324,18 @@ def twisted_scaling_run(ess_per_sweep, math, run_twisted, scaling_results, simul
 
 @app.cell
 def twisted_scaling_fig(mo, palette, plt, scaling_results, twisted_scaling):
-    _order = ("mgrad", "agrad", "amala_exact", "amala_plus")
+    _order = ("mgrad", "agrad", "amala_plus", "uncorrected_drift")
     _colors = {
         "mgrad": palette["state"],
         "agrad": palette["belief"],
-        "amala_exact": palette["seam"],
-        "amala_plus": palette["operator"],
+        "amala_plus": palette["seam"],
+        "uncorrected_drift": palette["operator"],
     }
     _labels = {
         "mgrad": "Particle-mGRAD",
         "agrad": "aGRAD leaf",
-        "amala_exact": "amala_exact",
         "amala_plus": "amala_plus",
+        "uncorrected_drift": "uncorrected_drift",
     }
     _t = scaling_results["T"]
     _fig, (_a0, _a1) = plt.subplots(1, 2, figsize=(11.0, 4.1))
@@ -2431,14 +2476,14 @@ def twisted_recovery_table(
     _labels = {
         "mgrad": "Particle-mGRAD",
         "agrad": "aGRAD leaf",
-        "amala_exact": "amala_exact",
         "amala_plus": "amala_plus",
+        "uncorrected_drift": "uncorrected_drift",
     }
     _lines = [
         "| kernel | RMSE vs truth | RMSE vs exact posterior | 90% cov | ESS/sweep | depth | ESS/depth |",
         "|---|--:|--:|--:|--:|--:|--:|",
     ]
-    for _k in ("mgrad", "agrad", "amala_exact", "amala_plus"):
+    for _k in ("mgrad", "agrad", "amala_plus", "uncorrected_drift"):
         _m = recovery_results["metrics"][_k]
         _lines.append(
             f"| {_labels[_k]} | {_m['rmse_truth']:.4f} | {_m['rmse_gold']:.4f} "
@@ -2475,7 +2520,7 @@ def twisted_verdict_md(mo):
     | **aGRAD leaf (§11)** | ⚠️ approximate (§12.2) | good, climbs with P | ✅ ≈ log₂ T | strong |
     | **twisted leaf (§12)** | ✅ probe-passed | > aGRAD at every T and P; ≥ mGRAD at P=64 | ✅ ≈ log₂ T | **best** |
 
-    (`amala_exact` and `amala_plus` keep their §11.4 rows; the production `amala_exact`
+    (`amala_exact` and `uncorrected_drift` keep their §11.4 rows; the production `amala_exact`
     also passes the §12.2 stress probe.)
 
     Three upgrades over §11's verdict:
@@ -2494,7 +2539,7 @@ def twisted_verdict_md(mo):
        P = 64 while keeping `⌈log₂ T⌉` depth. mGRAD cannot spend the same coin: at any P
        its sweep is a length-T chain.
     3. **Exactness lives in the potential accounting, not the proposal.** The one pattern
-       to refuse is adapt-without-paying — grossly (`amala_plus`) or subtly (§11's aGRAD
+       to refuse is adapt-without-paying — grossly (`uncorrected_drift`) or subtly (§11's aGRAD
        leaf). Everything that pays passes: fixed proposals, paid auxiliaries, or marginal
        weights that are the payment integrated out.
 
@@ -5210,7 +5255,11 @@ def dimension_verdict_md(mo):
 @app.cell(hide_code=True)
 def production_prescription_md(mo):
     mo.md(r"""
-    ### 16.4 Prescription for production
+    ### 16.4 Historical prescription for production
+
+    This records the recommendation made for the original experiments. It is not
+    the current sampler configuration: `amala_exact` has been removed, and current
+    choices are defined by [the sampler schema](../src/nof1_causal_lab/artifacts/sampling.py).
 
     Our pipeline's regime is `D` = the number of latent constructs (typically ≤ 8),
     long `T`, and — per the effective-unimodality doctrine — mostly unimodal smoothing
@@ -5237,8 +5286,7 @@ def production_prescription_md(mo):
        cell; the attack (segment-level cluster flips, after the nucleation diagnosis)
        lives in [mode_nucleation_lab](mode_nucleation_lab.py).
 
-    Items 1 and 2 have since shipped as the `paid_mix` leaf, the production default in
-    `config.yaml` (with a per-coordinate pilot rather than §16's full-covariance one), and
+    Items 1 and 2 originally shipped as the `paid_mix` leaf (with a per-coordinate pilot rather than §16's full-covariance one), and
     every marginal particle Gibbs fit now traces item 4's frozen-coordinate fraction.
     """)
     return

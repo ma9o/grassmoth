@@ -24,7 +24,7 @@ Two execution targets, same core (`_run_benchmark`):
     BENCHMARK_GPU=H100 modal run evaluation/benchmarks/benchmark_gpu.py --headline-only --no-trace --no-compile-analysis
     BENCHMARK_GPU=H100 modal run evaluation/benchmarks/benchmark_gpu.py --headline-only --force-build
 
-    modal volume get nof1-mpgibbs-prof /H100/dsmc_amala_exact_N512_T1024 ./h100_trace
+    modal volume get nof1-mpgibbs-prof /H100/dsmc_amala_plus_paid_mix_N512_T1024 ./h100_trace
 
   CPU (local, no Modal, no spend). The static rung — HLO, cost-analysis (FLOPs vs
   bytes => roofline), and the gather/dot/triangular-solve/while access-pattern
@@ -49,7 +49,12 @@ import os
 import sys
 import time
 from pathlib import Path
-from typing import Any, Literal, NamedTuple
+from typing import TYPE_CHECKING, Any, Literal, NamedTuple
+
+from nof1_causal_lab.artifacts.sampling import DsmcSpec
+
+if TYPE_CHECKING:
+    from nof1_causal_lab.artifacts.sampling import DSMCLeafProposal
 
 import modal
 
@@ -97,35 +102,39 @@ volume = modal.Volume.from_name("nof1-mpgibbs-prof", create_if_missing=True)
 
 class MethodSpec(NamedTuple):
     smoother: Literal["dsmc"]
-    leaf: Literal["amala_exact", "paid_mix"]
+    leaf: DSMCLeafProposal
     block_coords: int
     trace: bool = False
+    paid_mix: bool = True
 
 
 class BenchmarkConfig(NamedTuple):
     smoother: Literal["dsmc"]
-    leaf: Literal["amala_exact", "paid_mix"]
+    leaf: DSMCLeafProposal
     block_coords: int
     num_particles: int
     t_steps: int
     trace: bool
+    paid_mix: bool
 
     @property
     def tag(self) -> str:
-        return f"{self.smoother}/{self.leaf}/N{self.num_particles}/T{self.t_steps}/bc{self.block_coords}"
+        mixture = "+paid_mix" if self.paid_mix else ""
+        return f"{self.smoother}/{self.leaf}{mixture}/N{self.num_particles}/T{self.t_steps}/bc{self.block_coords}"
 
     @property
     def profile_name(self) -> str:
-        return f"{self.smoother}_{self.leaf}_N{self.num_particles}_T{self.t_steps}"
+        mixture = "_paid_mix" if self.paid_mix else ""
+        return f"{self.smoother}_{self.leaf}{mixture}_N{self.num_particles}_T{self.t_steps}"
 
 
 DEFAULT_BLOCK_COORDS = 256
 
-# dsmc's pure-JAX (num_pairs, P, N, N) combine materialization can OOM on
-# memory-tight cards. The default sweep targets the H100 80GB large-N regime.
+# Merge matrices are batched within each tree level. The default sweep targets
+# the H100 80GB large-N regime; each scenario has its own GPU.
 N_GRID = (512,)
 T_GRID = (1024,)
-METHODS = (MethodSpec("dsmc", "amala_exact", DEFAULT_BLOCK_COORDS, trace=True),)
+METHODS = (MethodSpec("dsmc", "amala_plus", DEFAULT_BLOCK_COORDS, trace=True),)
 
 
 def _config(method: MethodSpec, num_particles: int, t_steps: int) -> BenchmarkConfig:
@@ -136,6 +145,7 @@ def _config(method: MethodSpec, num_particles: int, t_steps: int) -> BenchmarkCo
         num_particles,
         t_steps,
         method.trace,
+        method.paid_mix,
     )
 
 
@@ -187,15 +197,15 @@ def _run_benchmark(
         simulate_synthetic_nonlinear_data,
     )
 
-    from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec
+    from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec, PaidMixSpec
     from nof1_causal_lab.compute.resources import read_compute_budget
-    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.kernel import (
+    from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
+    from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
         build_marginal_particle_gibbs_kernel,
     )
-    from nof1_causal_lab.models.ssm.inference.marginal_particle_gibbs.runner import (
+    from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
         run_marginal_particle_gibbs,
     )
-    from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
     from nof1_causal_lab.models.ssm.inference.warmup.laps import prepare_laps_initialization
     from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
     from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
@@ -212,7 +222,11 @@ def _run_benchmark(
         reparam=None,
     )
     dim = int(bundle.runtime.initial_position.shape[0])
-    options = MarginalParticleGibbsSpec(dsmc_leaf_proposal=cfg.leaf)
+    from nof1_causal_lab.models.ssm.inference.samplers.particle.contract import PaidMixture
+
+    options = MarginalParticleGibbsSpec(
+        dsmc=DsmcSpec(dsmc_leaf_proposal=cfg.leaf, paid_mix=PaidMixSpec() if cfg.paid_mix else None)
+    )
     initialization = prepare_laps_initialization(
         bundle.runtime,
         spec=options.laps,
@@ -227,13 +241,14 @@ def _run_benchmark(
         num_particles=cfg.num_particles,
         num_parameter_particles=num_parameter_particles,
         param_step_size=0.01,
-        dsmc_leaf_proposal=cfg.leaf,
-        latent_block_coords=cfg.block_coords,
         parameter_preconditioner_chol=initialization.parameter_chol,
         parameter_reference_path=initialization.paths[0],
-        pilot_means=initialization.pilot_mean,
-        pilot_vars=options.paid_mix_pilot_var_scale * initialization.pilot_proposal_variance,
-        pilot_wide_vars=options.paid_mix_wide_mult * initialization.pilot_proposal_variance,
+        paid_mix=None
+        if options.dsmc.paid_mix is None
+        else PaidMixture(
+            options.dsmc.paid_mix, initialization.pilot_mean, initialization.pilot_proposal_variance
+        ),
+        dsmc=DsmcSpec(dsmc_leaf_proposal=cfg.leaf, latent_block_coords=cfg.block_coords),
     )
     started = time.monotonic()
     from nof1_causal_lab.actions.fit.execution import (
@@ -250,6 +265,7 @@ def _run_benchmark(
         run = run_marginal_particle_gibbs(
             bundle.runtime,
             kernel=kernel,
+            compute_budget=read_compute_budget(),
             num_warmup=warmup_steps,
             num_samples=sample_steps,
             num_chains=1,
@@ -271,7 +287,7 @@ def _run_benchmark(
     steady_ms = 1000.0 * (loop - first) / max(total_steps - 1, 1)
     row = {
         "smoother": cfg.smoother,
-        "leaf": cfg.leaf,
+        "leaf": cfg.leaf + ("+paid_mix" if cfg.paid_mix else ""),
         "block_coords": cfg.block_coords,
         "N": cfg.num_particles,
         "T": cfg.t_steps,
@@ -325,6 +341,7 @@ def run_config(
     is_headline = (
         cfg.smoother == HEADLINE_CONFIG.smoother
         and cfg.leaf == HEADLINE_CONFIG.leaf
+        and cfg.paid_mix == HEADLINE_CONFIG.paid_mix
         and cfg.block_coords == HEADLINE_CONFIG.block_coords
         and cfg.num_particles == HEADLINE_CONFIG.num_particles
         and cfg.t_steps == HEADLINE_CONFIG.t_steps
@@ -350,7 +367,7 @@ def run_config(
         print("FAIL", cfg.tag, "->", traceback.format_exc(), flush=True)
         return {
             "smoother": cfg.smoother,
-            "leaf": cfg.leaf,
+            "leaf": cfg.leaf + ("+paid_mix" if cfg.paid_mix else ""),
             "block_coords": cfg.block_coords,
             "N": cfg.num_particles,
             "T": cfg.t_steps,
@@ -401,7 +418,7 @@ def main(
     )
     print(f"\n================ MPGibbs GPU benchmark [{GPU}] ================")
     hdr = (
-        f"{'smoother':<11}{'leaf':<16}{'N':>5}{'T':>6}{'bc':>5}"
+        f"{'smoother':<11}{'leaf':<23}{'N':>5}{'T':>6}{'bc':>5}"
         f"{'dim':>5}{'compile_s':>11}{'ms/step':>11}"
     )
     print(hdr)
@@ -409,12 +426,12 @@ def main(
     for r in results:
         if "error" in r:
             print(
-                f"{r['smoother']:<11}{r['leaf']:<16}{r['N']:>5}{r['T']:>6}"
+                f"{r['smoother']:<11}{r['leaf']:<23}{r['N']:>5}{r['T']:>6}"
                 f"{r['block_coords']:>5}{'':>5}  ERROR: {r['error']}"
             )
         else:
             print(
-                f"{r['smoother']:<11}{r['leaf']:<16}{r['N']:>5}{r['T']:>6}"
+                f"{r['smoother']:<11}{r['leaf']:<23}{r['N']:>5}{r['T']:>6}"
                 f"{r['block_coords']:>5}"
                 f"{r['dim']:>5}{r['compile_s']:>11}{r['steady_ms_per_step']:>11}"
             )
@@ -444,7 +461,11 @@ def _run_local() -> int:
     import traceback
 
     parser = argparse.ArgumentParser(
-        description="Local-CPU MPGibbs dsmc/amala_exact profiling (no Modal, no spend)."
+        description="Local-CPU MPGibbs dSMC profiling (no Modal, no spend)."
+    )
+    parser.add_argument("--leaf", choices=("amala", "amala_plus"), default=HEADLINE_METHOD.leaf)
+    parser.add_argument(
+        "--paid-mix", action=argparse.BooleanOptionalAction, default=HEADLINE_METHOD.paid_mix
     )
     parser.add_argument("--local", action="store_true", help="Required: run on local CPU.")
     parser.add_argument(
@@ -480,11 +501,12 @@ def _run_local() -> int:
     method = HEADLINE_METHOD
     cfg = BenchmarkConfig(
         method.smoother,
-        method.leaf,
+        cli.leaf,
         cli.block_coords,
         cli.n,
         cli.t,
         not cli.no_trace,
+        cli.paid_mix,
     )
     profile_dir = f"{cli.out.rstrip('/')}/cpu/{cfg.profile_name}"
     print(

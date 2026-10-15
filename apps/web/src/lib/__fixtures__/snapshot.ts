@@ -64,7 +64,7 @@ const fit: InferenceReportCore = {
     num_samples_total: 3,
     num_chains: 1,
     duration_seconds: 0,
-    engine: { method: "custom" },
+    engine: { method: "mpgibbs" },
     sampler_diagnostics: null,
   },
   inference_diagnostics: null,

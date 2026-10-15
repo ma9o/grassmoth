@@ -15,6 +15,7 @@ import pytest
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
 from nof1_causal_lab.artifacts.sampling import (
+    DsmcSpec,
     LapsInitializationSpec,
     MarginalParticleGibbsSpec,
     SamplerSpec,
@@ -135,13 +136,12 @@ def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(in
             algorithm=MarginalParticleGibbsSpec(
                 n_parameter_particles=2,
                 parameter_proposal="pseudo_langevin",
-                dsmc_leaf_proposal="paid_mix",
                 adaptation_scheme="dual_averaging",
                 param_step_size=0.0005,
-                latent_delta=0.2,
                 laps=LapsInitializationSpec(
                     ensemble_size=128, num_unadjusted_steps=1000, num_adjusted_steps=20
                 ),
+                dsmc=DsmcSpec(dsmc_leaf_proposal="amala_plus"),
             ),
         ),
         clock=time.monotonic,
@@ -153,7 +153,7 @@ def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(in
     assert isinstance(diagnostics, ParticleSamplerDiagnostics)
     assert isinstance(diagnostics.settings.algorithm, MarginalParticleGibbsSpec)
     assert diagnostics.parameter_kernel == "m_pgibbs_pseudo_langevin"
-    assert diagnostics.dsmc_leaf_proposal == "paid_mix"
+    assert diagnostics.dsmc_leaf_proposal == "amala_plus"
     assert diagnostics.settings.algorithm.adaptation_scheme == "dual_averaging"
     latent_paths = result.draws.latent_paths
     assert latent_paths is not None
