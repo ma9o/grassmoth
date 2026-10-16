@@ -210,3 +210,28 @@ def test_latent_convergence_detects_stuck_paths_despite_well_mixed_parameters(pa
         ),
     )
     assert no_parameters.get_mcmc_diagnostics({}).per_parameter == ()
+
+
+@pytest.mark.inference(concern="sampling")
+def test_production_gate_detects_stationary_sd_chain_shift():
+    from nof1_causal_lab.models.ssm.inference.diagnostics.convergence import chain_convergence
+    from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
+    from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws, MCMCPosterior
+
+    rng = np.random.default_rng(712)
+    chains = np.empty((4, 8192))
+    chains[:, 0] = rng.normal(size=4)
+    # Unit stationary SD, not unit innovation SD.
+    for index in range(1, chains.shape[1]):
+        chains[:, index] = .8 * chains[:, index - 1] + np.sqrt(1 - .8**2) * rng.normal(size=4)
+
+    def gate(values):
+        result = TrajectoryMCMCResult(chain_samples={"x": jnp.asarray(values)}, chain_extra_fields={}, num_chains=4, num_samples=values.shape[1])
+        posterior = MCMCPosterior.from_run(draws=JointPosteriorDraws(parameters=result.get_samples()), diagnostics=ProductionDiagnostics(mcmc=result, observation_log_probs=jnp.empty((4, values.shape[1], 0))))
+        diagnostics = posterior.get_mcmc_diagnostics(references([("x", ())])).revised(per_latent=())
+        return chain_convergence(diagnostics)
+
+    assert gate(chains).status == "passed"
+    shifted = chains.copy()
+    shifted[0] += .6
+    assert gate(shifted).status == "failed"
