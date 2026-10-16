@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
 import arviz_base as az
 import numpy as np
 from arviz_stats.sampling_diagnostics import mcse
 
-from evaluation.declarations import Reference, Tolerances
-from nof1_causal_lab.actions.contracts.bodies import FitOutput
 from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms
-from nof1_causal_lab.json_types import JsonValue
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from evaluation.declarations import Reference, Tolerances
+    from nof1_causal_lab.actions.contracts.bodies import FitOutput
+    from nof1_causal_lab.json_types import JsonValue
 
 
 def flattened(value: Mapping[str, JsonValue], prefix: str = "") -> dict[str, JsonValue]:
@@ -26,12 +30,19 @@ def flattened(value: Mapping[str, JsonValue], prefix: str = "") -> dict[str, Jso
     return result
 
 
-def differing_controls(left: Mapping[str, JsonValue], right: Mapping[str, JsonValue], factors: tuple[str, ...]) -> tuple[str, ...]:
+def differing_controls(
+    left: Mapping[str, JsonValue], right: Mapping[str, JsonValue], factors: tuple[str, ...]
+) -> tuple[str, ...]:
     """Assigned controls must match outside the treatment; adapted values are not inputs."""
     a, b = flattened(left), flattened(right)
-    return tuple(sorted(key for key in a.keys() | b.keys()
-                        if a.get(key) != b.get(key)
-                        and not any(key == factor or key.startswith(factor + ".") for factor in factors)))
+    return tuple(
+        sorted(
+            key
+            for key in a.keys() | b.keys()
+            if a.get(key) != b.get(key)
+            and not any(key == factor or key.startswith(factor + ".") for factor in factors)
+        )
+    )
 
 
 def posterior_arrays(result: FitOutput):
@@ -66,7 +77,9 @@ def qualify_reference(result: FitOutput, rule: Reference) -> None:
         raise ValueError("Reference Monte Carlo precision is insufficient")
 
 
-def posterior_equivalence(result: FitOutput, reference: FitOutput, tolerance: Tolerances) -> dict[str, JsonValue]:
+def posterior_equivalence(
+    result: FitOutput, reference: FitOutput, tolerance: Tolerances
+) -> dict[str, JsonValue]:
     """Compare declared marginal means and SDs; this is not full distribution equivalence."""
     layout, mean, scale, error = posterior_arrays(result)
     other_layout, other_mean, other_scale, other_error = posterior_arrays(reference)
@@ -79,7 +92,11 @@ def posterior_equivalence(result: FitOutput, reference: FitOutput, tolerance: To
     sd_error = np.abs(scale[free] / other_scale[free] - 1)
     finite = bool(np.all(np.isfinite(mean_bound)) and np.all(np.isfinite(sd_error)))
     return {
-        "summary_equivalent": finite and fixed_equal and bool(np.all(mean_bound <= tolerance.mean_sd) and np.all(sd_error <= tolerance.sd_relative)),
+        "summary_equivalent": finite
+        and fixed_equal
+        and bool(
+            np.all(mean_bound <= tolerance.mean_sd) and np.all(sd_error <= tolerance.sd_relative)
+        ),
         "max_mean_bound_sd": float(np.max(mean_bound)) if finite and mean_bound.size else None,
         "max_sd_relative_error": float(np.max(sd_error)) if finite and sd_error.size else None,
         "fixed_coordinates_equal": fixed_equal,
@@ -95,6 +112,8 @@ def initializer_scores(result: FitOutput) -> dict[str, JsonValue]:
     return {
         "initializer_finite_fraction": float(np.isfinite(values).mean()),
         "initializer_mean_log_joint": float(values.mean()) if np.isfinite(values).all() else None,
-        "initializer_parameter_spread": float(np.mean(np.std(initial["positions"].values, axis=0))) if initial["positions"].values.shape[-1] else 0.,
+        "initializer_parameter_spread": float(np.mean(np.std(initial["positions"].values, axis=0)))
+        if initial["positions"].values.shape[-1]
+        else 0.0,
         "initializer_state_spread": float(np.mean(np.std(initial["paths"].values, axis=0))),
     }

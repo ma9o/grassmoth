@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import hashlib
 import html
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-from evaluation.declarations import Experiment
-from nof1_causal_lab.json_types import JsonObject
 from nof1_causal_lab.artifacts.base import Value
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from evaluation.declarations import Experiment
+    from nof1_causal_lab.json_types import JsonObject
 
 
 class BillingReport(Value):
@@ -19,21 +23,39 @@ class BillingReport(Value):
     text: str
 
     @classmethod
-    def read(cls, path: Path) -> "BillingReport":
+    def read(cls, path: Path) -> BillingReport:
         """Retain the original output and its digest for cost reconciliation."""
         content = path.read_bytes()
-        return cls(filename=path.name, sha256=hashlib.sha256(content).hexdigest(), text=content.decode())
+        return cls(
+            filename=path.name, sha256=hashlib.sha256(content).hexdigest(), text=content.decode()
+        )
 
 
-def write_report(path: Path, experiment: Experiment, rows: list[JsonObject], billing: BillingReport | None) -> None:
+def write_report(
+    path: Path, experiment: Experiment, rows: list[JsonObject], billing: BillingReport | None
+) -> None:
     """Render saved results and separately supplied Modal billing-report allocations."""
     keys = tuple(dict.fromkeys(key for row in rows for key in row))
-    headers = "".join(f'<th><button data-column="{i}">{html.escape(key)}</button></th>' for i, key in enumerate(keys))
-    cells = "".join("<tr>" + "".join(f"<td>{html.escape(str(row.get(key, '')))}</td>" for key in keys) + "</tr>" for row in rows)
-    reservation = experiment.reservation_usd_per_fit * len(experiment.arms) * len(experiment.seeds) * experiment.repeats * (2 if experiment.probe_samples is not None else 1)
+    headers = "".join(
+        f'<th><button data-column="{i}">{html.escape(key)}</button></th>'
+        for i, key in enumerate(keys)
+    )
+    cells = "".join(
+        "<tr>" + "".join(f"<td>{html.escape(str(row.get(key, '')))}</td>" for key in keys) + "</tr>"
+        for row in rows
+    )
+    reservation = (
+        experiment.reservation_usd_per_fit
+        * len(experiment.arms)
+        * len(experiment.seeds)
+        * experiment.repeats
+        * (2 if experiment.probe_samples is not None else 1)
+    )
     payload = html.escape(experiment.model_dump_json(indent=2))
-    invoices = html.escape(billing.model_dump_json(indent=2) if billing is not None else "Not supplied")
-    path.write_text(f'''<!doctype html><html lang="en"><meta charset="utf-8">
+    invoices = html.escape(
+        billing.model_dump_json(indent=2) if billing is not None else "Not supplied"
+    )
+    path.write_text(f"""<!doctype html><html lang="en"><meta charset="utf-8">
 <title>{html.escape(experiment.name)}</title><style>
 body{{font:14px system-ui;margin:24px;color:#172033}} table{{border-collapse:collapse;display:block;overflow:auto}}
 th,td{{border:1px solid #ddd;padding:8px;text-align:left;white-space:pre-wrap}}th{{position:sticky;top:0;background:#eef2f5}}
@@ -53,4 +75,4 @@ const body=document.querySelector('#results tbody'),i=Number(b.dataset.column),d
 b.dataset.order=direction===1?'asc':'desc';const rows=Array.from(body.rows);
 rows.sort((a,c)=>{{let x=a.cells[i].textContent,y=c.cells[i].textContent;
 return direction*(x.trim()!==''&&y.trim()!==''&&Number.isFinite(Number(x))&&Number.isFinite(Number(y))?Number(x)-Number(y):x.localeCompare(y));}});
-rows.forEach(row=>body.appendChild(row));}});</script></html>''')
+rows.forEach(row=>body.appendChild(row));}});</script></html>""")

@@ -3,18 +3,27 @@
 from __future__ import annotations
 
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 from uuid import uuid4
 
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.actions.contracts.polling import ActionPoll, ActionSuccess, FailedPoll, RunningPoll
-from nof1_causal_lab.actions.contracts.requests import ActionInput, FitRequest, call_identity
 from nof1_causal_lab.actions.contracts.bodies import ContinueFitTarget, NewFitTarget
-from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.actions.contracts.polling import (
+    ActionPoll,
+    ActionSuccess,
+    FailedPoll,
+    RunningPoll,
+)
+from nof1_causal_lab.actions.contracts.requests import ActionInput, FitRequest, call_identity
 from nof1_causal_lab.study.persistence.codec import unpack_result
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from nof1_causal_lab.artifacts.identity import GitOid
 
 _POLL = TypeAdapter(ActionPoll)
 
@@ -38,7 +47,9 @@ class ActionClient:
 
     def saved(self, action: str, call_id: str) -> ActionSuccess:
         """Read a saved call without executing or retrying it."""
-        poll = self._read(Request(f"{self.endpoint}/api/studies/{self.workspace}/{action}/{call_id}"))
+        poll = self._read(
+            Request(f"{self.endpoint}/api/studies/{self.workspace}/{action}/{call_id}")
+        )
         if isinstance(poll, (RunningPoll, FailedPoll)):
             raise ValueError(f"Call {call_id} is {poll.status}; inspect its retained envelope")
         return poll
@@ -55,8 +66,14 @@ class ActionClient:
                     raise
             else:
                 reused = True
-        poll = self._read(Request(url, data=request.model_dump_json(round_trip=True).encode(),
-                                 headers={"Content-Type": "application/json"}, method="POST"))
+        poll = self._read(
+            Request(
+                url,
+                data=request.model_dump_json(round_trip=True).encode(),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+        )
         self.reused[poll.call_id] = reused
         while isinstance(poll, RunningPoll):
             time.sleep(1)
@@ -69,7 +86,9 @@ class ActionClient:
         """Check a saved reference's original inputs against its public journal lineage."""
         from nof1_causal_lab.api.studies import TimelineResponse
 
-        with urlopen(f"{self.endpoint}/api/studies/{self.workspace}/timeline", timeout=60) as response:
+        with urlopen(
+            f"{self.endpoint}/api/studies/{self.workspace}/timeline", timeout=60
+        ) as response:
             payload = response.read()
         timeline = TimelineResponse.model_validate_json(payload)
         (self.output / "timeline.json").write_bytes(payload)
@@ -88,10 +107,21 @@ class ActionClient:
         """Stage source bytes through the same public upload endpoint as study clients."""
         boundary = "nof1-benchmark-" + uuid4().hex
         body = (
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"workspaceId\"\r\n\r\n{self.workspace}\r\n"
-            f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{path.name}\"\r\n"
-            "Content-Type: application/octet-stream\r\n\r\n"
-        ).encode() + path.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
-        with urlopen(Request(self.endpoint + "/api/upload", data=body,
-                             headers={"Content-Type": f"multipart/form-data; boundary={boundary}"}, method="POST"), timeout=60) as response:
+            (
+                f'--{boundary}\r\nContent-Disposition: form-data; name="workspaceId"\r\n\r\n{self.workspace}\r\n'
+                f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{path.name}"\r\n'
+                "Content-Type: application/octet-stream\r\n\r\n"
+            ).encode()
+            + path.read_bytes()
+            + f"\r\n--{boundary}--\r\n".encode()
+        )
+        with urlopen(
+            Request(
+                self.endpoint + "/api/upload",
+                data=body,
+                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
+                method="POST",
+            ),
+            timeout=60,
+        ) as response:
             response.read()

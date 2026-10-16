@@ -327,46 +327,6 @@
           "metal_hours_reading"
         ]
       },
-      "indicator:metal_jobseekers_log": {
-        "computed_rule": null,
-        "fill_null": null,
-        "fill_null_limit": null,
-        "how_to_measure": "Read the explicitly logged source value on its declared date. Preserve blanks; never fill or interpolate.",
-        "kind": "computed",
-        "source_columns": [
-          "metal_jobseekers_log"
-        ]
-      },
-      "indicator:paris_ordinary_wage_annual": {
-        "computed_rule": null,
-        "fill_null": null,
-        "fill_null_limit": null,
-        "how_to_measure": "Read the single published arithmetic mean on its declared whole calendar support. Preserve blanks and the raw hourly-franc value. Do not invent point dates or log-transform this mean.",
-        "kind": "computed",
-        "source_columns": [
-          "paris_ordinary_wage_annual"
-        ]
-      },
-      "indicator:paris_ordinary_wage_quarterly": {
-        "computed_rule": null,
-        "fill_null": null,
-        "fill_null_limit": null,
-        "how_to_measure": "Read the single published arithmetic mean on its declared whole calendar support. Preserve blanks and the raw hourly-franc value. Do not invent point dates or log-transform this mean.",
-        "kind": "computed",
-        "source_columns": [
-          "paris_ordinary_wage_quarterly"
-        ]
-      },
-      "indicator:placement_inverse_log": {
-        "computed_rule": null,
-        "fill_null": null,
-        "fill_null_limit": null,
-        "how_to_measure": "Read the explicitly logged source value on its declared date. Preserve blanks; never fill or interpolate.",
-        "kind": "computed",
-        "source_columns": [
-          "placement_inverse_log"
-        ]
-      },
       "indicator:production_origin": {
         "computed_rule": null,
         "fill_null": null,
@@ -405,16 +365,6 @@
         "kind": "computed",
         "source_columns": [
           "public_aircraft_investment_biennial"
-        ]
-      },
-      "indicator:relief_recipients_log": {
-        "computed_rule": null,
-        "fill_null": null,
-        "fill_null_limit": null,
-        "how_to_measure": "Read the explicitly logged source value on its declared date. Preserve blanks; never fill or interpolate.",
-        "kind": "computed",
-        "source_columns": [
-          "relief_recipients_log"
         ]
       },
       "indicator:settlement_relaxation": {

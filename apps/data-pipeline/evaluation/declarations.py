@@ -11,9 +11,9 @@ from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.identity import IndicatorId
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
 from nof1_causal_lab.artifacts.observations.preparation import ExtractionSpec
+from nof1_causal_lab.artifacts.reports.checks import NotEvaluatedReason
 from nof1_causal_lab.artifacts.sampling import SamplerSpec
 from nof1_causal_lab.artifacts.simulation import SimulationSpec
-from nof1_causal_lab.artifacts.reports.checks import NotEvaluatedReason
 from nof1_causal_lab.json_types import JsonValue
 
 
@@ -109,11 +109,17 @@ class Experiment(Value):
     @model_validator(mode="after")
     def assigned_factors(self) -> Self:
         """Reject ambiguous contrasts and accidental changes before any action runs."""
-        if len(set(self.factors)) != len(self.factors) or len(set(a.name for a in self.arms)) != len(self.arms):
+        if len(set(self.factors)) != len(self.factors) or len({a.name for a in self.arms}) != len(
+            self.arms
+        ):
             raise ValueError("Factor paths and arm names must be unique")
         if (len(self.factors) > 1) != self.interaction:
             raise ValueError("Multiple factors require an explicitly declared interaction")
-        if any(left != right and right.startswith(left + ".") for left in self.factors for right in self.factors):
+        if any(
+            left != right and right.startswith(left + ".")
+            for left in self.factors
+            for right in self.factors
+        ):
             raise ValueError("Factor paths must not overlap")
         if any(path in {"seed", "num_chains", "retain_latent_paths"} for path in self.factors):
             raise ValueError("Seeds, chain layout and draw retention are paired controls")
@@ -124,11 +130,15 @@ class Experiment(Value):
         if len(set(self.seeds)) != len(self.seeds):
             raise ValueError("Use repeats for timing noise; seed pairs must be unique")
         if self.base.hardware == "local" and self.concurrent_arms != 1:
-            raise ValueError("Local timing arms must run serially to avoid shared-device contention")
+            raise ValueError(
+                "Local timing arms must run serially to avoid shared-device contention"
+            )
         if not self.base.retain_latent_paths:
             raise ValueError("Benchmark fits retain joint parameter and state draws")
         if self.probe_samples is not None and self.base.num_samples_per_chain == 0:
             raise ValueError("A probe requires a base fit with retained draws")
-        if self.probe_samples is not None and any(path.startswith("algorithm.laps") for path in self.factors):
+        if self.probe_samples is not None and any(
+            path.startswith("algorithm.laps") for path in self.factors
+        ):
             raise ValueError("Initializer comparisons require fresh fits, not continued probes")
         return self

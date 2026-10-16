@@ -5,7 +5,7 @@ from typing import cast
 import numpy as np
 
 from nof1_causal_lab.actions.contracts.bodies import FitOutput
-from nof1_causal_lab.json_types import JsonObject
+from nof1_causal_lab.json_types import JsonObject, JsonValue
 
 
 def sampler_outcomes(result: FitOutput) -> JsonObject:
@@ -13,14 +13,16 @@ def sampler_outcomes(result: FitOutput) -> JsonObject:
     evidence = result.inference.evidence
     metadata = result.inference.core.inference_metadata
     segment = metadata.segments[-1]
-    row: JsonObject = {
+    row: dict[str, JsonValue] = {
         "draw_start": segment.start,
         "draw_stop": segment.stop,
         "phases": [phase.model_dump(mode="json") for phase in segment.phases],
     }
     diagnostics = metadata.sampler_diagnostics
     if diagnostics is not None and segment.stop > segment.start:
-        row["sampler_outcomes"] = cast("JsonObject", diagnostics.model_dump(mode="json", exclude={"settings"}))
+        row["sampler_outcomes"] = cast(
+            "JsonObject", diagnostics.model_dump(mode="json", exclude={"settings"})
+        )
     if evidence.final_latent_delta is not None:
         row["final_latent_delta"] = np.asarray(evidence.final_latent_delta.values).tolist()
     return row
