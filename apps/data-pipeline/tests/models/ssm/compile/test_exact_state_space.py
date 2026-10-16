@@ -194,7 +194,7 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        dsmc=DsmcSpec(dsmc_leaf_proposal="amala_plus", latent_block_coords=1),
+        dsmc=DsmcSpec(drift="amala_plus", latent_block_coords=1),
     )
     after, info = jax.jit(kernel.step_fn)(
         _initial(target, coordinates, kernel=kernel), jax.random.key(4)
@@ -234,7 +234,7 @@ def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        dsmc=DsmcSpec(dsmc_leaf_proposal="amala_plus", latent_block_coords=1),
+        dsmc=DsmcSpec(drift="amala_plus", latent_block_coords=1),
     )
     after, info = jax.jit(kernel.step_fn)(_initial(target, path, kernel=kernel), jax.random.key(6))
     np.testing.assert_array_equal(after.latent_trajectory[:, input_index], path[:, input_index])
@@ -292,7 +292,7 @@ def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="pseudo_langevin",
-        dsmc=DsmcSpec(dsmc_leaf_proposal="amala_plus", latent_block_coords=1),
+        dsmc=DsmcSpec(drift="amala_plus", latent_block_coords=1),
     )
 
     def chain(key):
@@ -432,7 +432,7 @@ def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(metho
         num_parameter_particles=2,
         param_step_size=0.1,
         parameter_proposal="random_walk",
-        dsmc=DsmcSpec(dsmc_leaf_proposal=method),
+        dsmc=DsmcSpec(drift=method),
     )
 
     def draw_and_step(key):

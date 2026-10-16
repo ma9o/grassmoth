@@ -21,6 +21,7 @@ from nof1_causal_lab.models.ssm.inference.samplers import sweep_plan
 from nof1_causal_lab.models.ssm.inference.samplers.particle.adaptation import (
     adapt_scales,
     initialize_adaptation,
+    ADAPTATION_WINDOW,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.sweeps import run_sweeps
 from tests.support.compute import COMPUTE_BUDGET
@@ -168,24 +169,24 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
 
 
 def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
-    spec = DsmcSpec(amala_adaptation_window=3)
-    state = initialize_adaptation(jnp.ones((2, 3)), spec)
+    spec = DsmcSpec()
+    state = initialize_adaptation(jnp.ones((2, 3)))
     rng = np.random.default_rng(91)
-    proposed = rng.integers(0, 2, (12, 2, 3)).astype(bool)
+    proposed = rng.integers(0, 2, (ADAPTATION_WINDOW + 8, 2, 3)).astype(bool)
     proposed[:, :, -1] = False
     accepted = proposed & rng.integers(0, 2, proposed.shape).astype(bool)
     frozen = state
-    for index in range(12):
+    for index in range(ADAPTATION_WINDOW + 8):
         state = adapt_scales(
-            state, spec, jnp.asarray(accepted[index]), jnp.asarray(proposed[index]), 8
+            state, spec, jnp.asarray(accepted[index]), jnp.asarray(proposed[index]), ADAPTATION_WINDOW + 4
         )
-        end = min(index + 1, 8)
-        start = max(0, end - 3)
+        end = min(index + 1, ADAPTATION_WINDOW + 4)
+        start = max(0, end - ADAPTATION_WINDOW)
         np.testing.assert_array_equal(state.accepted_total, accepted[start:end].sum(axis=0))
         np.testing.assert_array_equal(state.proposed_total, proposed[start:end].sum(axis=0))
         np.testing.assert_array_equal(state.delta[:, -1], np.ones(2))
-        if index == 7:
+        if index == ADAPTATION_WINDOW + 3:
             frozen = state
-        if index >= 8:
+        if index >= ADAPTATION_WINDOW + 4:
             for before, after in zip(frozen, state, strict=True):
                 np.testing.assert_array_equal(before, after)

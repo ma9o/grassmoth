@@ -210,7 +210,7 @@ def test_production_fit_consumes_laps_package(leaf):
                 laps=LapsInitializationSpec(
                     ensemble_size=128, num_unadjusted_steps=1000, num_adjusted_steps=20
                 ),
-                dsmc=DsmcSpec(dsmc_leaf_proposal=leaf),
+                dsmc=DsmcSpec(drift=leaf),
             ),
         ),
         reparam=None,

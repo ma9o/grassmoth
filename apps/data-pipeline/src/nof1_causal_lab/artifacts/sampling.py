@@ -2,31 +2,53 @@
 
 from __future__ import annotations
 
-import math
 from enum import StrEnum
 from typing import Annotated, Literal
 
-from pydantic import Field, FiniteFloat, field_serializer, field_validator, model_validator
+from pydantic import Field
 
 from nof1_causal_lab.artifacts.base import Value
 
-type DSMCLeafProposal = Literal["amala", "amala_plus"]
+type AuxiliaryDrift = Literal["none", "amala", "amala_plus"]
+type LatentBlockSize = Literal[1, 2, "all"]
 
 
-class PaidMixSpec(Value):
-    """Optional fixed pilot and wide proposals mixed with an auxiliary particle proposal."""
+class AdaptedLatentStepSpec(Value):
+    """Warmup adapts the per-time scale towards the assigned movement target."""
 
-    local_weight: float = Field(default=0.85, gt=0, lt=1, allow_inf_nan=False)
-    pilot_weight: float = Field(default=0.10, gt=0, lt=1, allow_inf_nan=False)
-    pilot_var_scale: float = Field(default=0.25, gt=0, allow_inf_nan=False)
-    wide_mult: float = Field(default=4.0, gt=0, allow_inf_nan=False)
+    kind: Literal["adapted"] = "adapted"
+    target: float = Field(default=0.5, gt=0, lt=1, allow_inf_nan=False)
 
-    @model_validator(mode="after")
-    def positive_wide_weight(self) -> PaidMixSpec:
-        """Own the remaining, strictly positive wide-component probability."""
-        if self.local_weight + self.pilot_weight >= 1:
-            raise ValueError("paid_mix local_weight + pilot_weight must be less than one")
-        return self
+
+class FixedLatentStepSpec(Value):
+    """An assigned scale which remains fixed during warmup and sampling."""
+
+    kind: Literal["fixed"] = "fixed"
+    delta: float = Field(default=0.01, gt=0, allow_inf_nan=False)
+
+
+type LatentStepSpec = Annotated[
+    AdaptedLatentStepSpec | FixedLatentStepSpec, Field(discriminator="kind")
+]
+
+
+class NutsTrajectorySpec(Value):
+    """A dynamically terminated trajectory, bounded by tree depth."""
+
+    kind: Literal["nuts"] = "nuts"
+    max_tree_depth: int = Field(default=10, ge=1)
+
+
+class FixedTrajectorySpec(Value):
+    """A fixed number of leapfrog steps with the production jitter policy."""
+
+    kind: Literal["fixed"] = "fixed"
+    steps: int = Field(default=8, ge=1)
+
+
+type JointTrajectorySpec = Annotated[
+    NutsTrajectorySpec | FixedTrajectorySpec, Field(discriminator="kind")
+]
 
 
 class InferenceHardware(StrEnum):
@@ -48,7 +70,16 @@ class InferenceHardware(StrEnum):
 
 
 class NutsDASpec(Value):
-    """NUTS with dual averaging and diagonal mass adaptation, joint or conditional."""
+    """Joint HMC with dual averaging and windowed diagonal mass adaptation."""
+
+    method: Literal["nuts_da"] = "nuts_da"
+    target_accept_prob: float = Field(default=0.8, gt=0, lt=1, allow_inf_nan=False)
+    trajectory: JointTrajectorySpec = Field(default_factory=NutsTrajectorySpec)
+    initial_step_size: float = Field(default=1.0, gt=0, allow_inf_nan=False)
+
+
+class ConditionalNutsSpec(Value):
+    """Conditional NUTS parameter updates within Particle Gibbs."""
 
     method: Literal["nuts_da"] = "nuts_da"
     target_accept_prob: float = Field(default=0.8, gt=0, lt=1, allow_inf_nan=False)
@@ -82,47 +113,12 @@ class LapsInitializationSpec(Value):
 
 
 class DsmcSpec(Value):
-    """Conditional dSMC auxiliary law, particle proposal, and warmup adaptation."""
+    """Conditional dSMC auxiliary law, particle proposal, and assigned scale policy."""
 
-    amala_delta_init: float = Field(default=1e-2, gt=0, allow_inf_nan=False)
-    amala_delta_min: float = Field(default=1e-5, gt=0, allow_inf_nan=False)
-    amala_delta_max: float = Field(default=1e1, gt=0, allow_inf_nan=False)
-    amala_target_accept: float = Field(default=0.75, gt=0, lt=1, allow_inf_nan=False)
-    amala_adaptation_window: int = Field(default=100, ge=1)
-    amala_adaptation_tolerance: float = Field(default=0.05, ge=0, allow_inf_nan=False)
-    amala_adaptation_rho: float = Field(default=0.5, gt=0, allow_inf_nan=False)
-    amala_adaptation_rho_min: float = Field(default=1e-3, gt=0, allow_inf_nan=False)
-    amala_adaptation_gamma: float = Field(default=-0.5, le=0, allow_inf_nan=False)
-    amala_kappa: float = Field(default=0.75, ge=0, allow_inf_nan=False)
-    amala_grad_clip: float = Field(
-        default=math.inf, gt=0, json_schema_extra={"default": "infinity"}
-    )
-    dsmc_leaf_proposal: DSMCLeafProposal = "amala_plus"
-    paid_mix: PaidMixSpec | None = Field(default_factory=PaidMixSpec)
-    # Coordinate-block proposals: number of latent coordinates proposed per sweep
-    # (None = all). Blocks of 2-4 sidestep the joint-coherence weight degeneracy of
-    # full-state proposals at higher latent dimension.
-    latent_block_coords: int | None = Field(default=None, ge=1)
-
-    @model_validator(mode="after")
-    def ordered_delta_bounds(self) -> DsmcSpec:
-        """Own the positive, ordered adaptation interval and its initial value."""
-        if not self.amala_delta_min <= self.amala_delta_init <= self.amala_delta_max:
-            raise ValueError("amala_delta_init must be inside [amala_delta_min, amala_delta_max]")
-        return self
-
-    @field_validator(
-        "amala_grad_clip", mode="before", json_schema_input_type=FiniteFloat | Literal["infinity"]
-    )
-    @classmethod
-    def parse_gradient_clip(cls, value: float | Literal["infinity"]) -> float:
-        """Decode the JSON string ``infinity`` as an unbounded gradient-clipping threshold."""
-        return math.inf if value == "infinity" else value
-
-    @field_serializer("amala_grad_clip")
-    def serialize_gradient_clip(self, value: float) -> FiniteFloat | Literal["infinity"]:
-        """Encode an infinite gradient-clipping threshold as the JSON-safe string ``infinity``."""
-        return "infinity" if math.isinf(value) else value
+    drift: AuxiliaryDrift = "none"
+    latent_step: LatentStepSpec = Field(default_factory=AdaptedLatentStepSpec)
+    latent_block_coords: LatentBlockSize = 1
+    pilot_mixture: bool = True
 
 
 class MetropolisHastingsSpec(Value):
@@ -134,7 +130,7 @@ class MetropolisHastingsSpec(Value):
 
 
 type ConditionalParameterSpec = Annotated[
-    MetropolisHastingsSpec | NutsDASpec, Field(discriminator="method")
+    MetropolisHastingsSpec | ConditionalNutsSpec, Field(discriminator="method")
 ]
 
 
@@ -152,10 +148,10 @@ class MarginalParticleGibbsSpec(Value):
     """Marginalized parameter ensemble and conditional dSMC trajectory updates."""
 
     method: Literal["mpgibbs"] = "mpgibbs"
-    n_parameter_particles: int = 2
+    n_parameter_particles: int = Field(default=2, ge=2)
     tempering: GaussianReferenceTemperingSpec | None = None
     dsmc: DsmcSpec = Field(default_factory=DsmcSpec)
-    parameter_proposal: Literal["random_walk", "pseudo_langevin"] = "pseudo_langevin"
+    parameter_proposal: Literal["random_walk", "pseudo_langevin"] = "random_walk"
     diagnostic_metrics_all: bool = False
     diagnostic_metrics: tuple[str, ...] = ()
     param_step_size: float = 0.02

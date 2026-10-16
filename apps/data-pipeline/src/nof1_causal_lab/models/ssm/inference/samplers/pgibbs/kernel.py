@@ -17,6 +17,7 @@ from nof1_causal_lab.models.ssm.inference.samplers.particle.adaptation import (
     DsmcAdaptation,
     adapt_scales,
     initialize_adaptation,
+    initial_delta,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.particle.context import build_smoother_context
 from nof1_causal_lab.models.ssm.inference.samplers.particle.diagnostics import (
@@ -96,11 +97,11 @@ def build_particle_gibbs_kernel[State](
     ) -> ParticleGibbsState[State]:
         context = target.context(position, target.times)
         path = target.replay_path(context, path)
-        delta = jnp.full((len(path),), spec.amala_delta_init, dtype=path.dtype)
+        delta = jnp.full((len(path),), initial_delta(spec), dtype=path.dtype)
         return ParticleGibbsState(
             parameters.initialize(position, path, key),
             path,
-            initialize_adaptation(delta, spec),
+            initialize_adaptation(delta),
             target.log_posterior(position, path, target.observations, target.times),
         )
 

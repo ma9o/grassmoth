@@ -149,9 +149,9 @@ def fit_marginal_particle_gibbs(
 
     paid_mix = (
         None
-        if options.dsmc.paid_mix is None
+        if not options.dsmc.pilot_mixture
         else PaidMixture(
-            options.dsmc.paid_mix, initialization.pilot_mean, initialization.pilot_proposal_variance
+            initialization.pilot_mean, initialization.pilot_proposal_variance
         )
     )
 
@@ -237,7 +237,7 @@ def fit_marginal_particle_gibbs(
         if options.parameter_proposal == "random_walk"
         else "m_pgibbs_pseudo_langevin",
         mcmc_phase_seconds=float(mcmc_phase_seconds),
-        dsmc_leaf_proposal=kernel.dsmc.dsmc_leaf_proposal,
+        drift=kernel.dsmc.drift,
         diagnostic_metrics=tuple(sorted(kernel.diagnostic_metrics)),
         param_target_accept=float(kernel.target_accept),
         parameter_preconditioned=bool(kernel.preconditioned),

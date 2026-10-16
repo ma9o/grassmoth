@@ -1105,21 +1105,6 @@ def toy_kernels(
             _density = jnp.asarray([_trajectory_density(path)], dtype=_DT)
             return TrajectoryLabelScores(jnp.zeros((_k,), dtype=_DT), _density, _density)
 
-        def _smoothing_gradient(path):
-            return jax.grad(_trajectory_density)(path)
-
-        def _filtering_gradient(path):
-            _previous = jax.lax.stop_gradient(path[:-1])
-
-            def _density(values):
-                return (
-                    _log_init(values[0])
-                    + jax.vmap(_log_trans)(_previous, values[1:]).sum()
-                    + jax.vmap(_log_obs)(values, y_obs.reshape(_t_len, 1)).sum()
-                )
-
-            return jax.grad(_density)(path)
-
         return SmootherContext(
             contexts=jnp.zeros((_k, 1), dtype=_DT),
             initial_label_log_probs=jnp.zeros((_k,), dtype=_DT),
@@ -1132,24 +1117,19 @@ def toy_kernels(
             runtime_observations=jnp.asarray(y_obs).reshape(_t_len, 1),
             latent_free_mask=jnp.ones((_t_len, _D), dtype=bool),
             amala_delta=jnp.full((_t_len,), delta, dtype=_DT),
-            amala_kappa=jnp.asarray(kappa, dtype=_DT),
-            amala_grad_clip=jnp.asarray(jnp.inf, dtype=_DT),
-            dsmc_leaf_proposal="amala_plus",
-            latent_block_coords=None,
+            drift="amala_plus" if kappa else "none",
+            latent_block_coords="all",
             paid_mix=None,
-            smoothing_gradient=_smoothing_gradient,
-            filtering_gradient=_filtering_gradient,
             initial_value_grad_by_param=_initial_value_grad_by_param,
             transition_current_value_grad_by_param=_transition_current_value_grad_by_param,
             transition_next_value_grad_by_param=_transition_next_value_grad_by_param,
             pairwise_transition_log_probs=_pairwise_transition_log_probs,
             score_labels=_score_labels,
             intervals=None,
-            local_auxiliary_exact=False,
             diagnostic_weights=False,
         )
 
-    def run_amala_plus(y_obs, num_particles=16, delta=0.7, kappa=0.75, n_iter=700, seed=0):
+    def run_amala_plus(y_obs, num_particles=16, delta=0.7, kappa=1, n_iter=700, seed=0):
         """MCMC chain of latent paths from the REAL dsmc.step c-dSMC tree and its
         paper-correct aMALA+ leaf."""
         _t_len = int(y_obs.shape[0])
@@ -1435,7 +1415,7 @@ def agrad_kernel(
 def uncorrected_drift_kernel(
     INIT_SD, OBS_SD, dsmc_prior_mean, dsmc_prior_var, jax, jnp, make_dsmc_tree, np, random
 ):
-    def run_uncorrected_drift(y_obs, num_particles=16, delta=0.7, kappa=0.75, n_iter=700, seed=0):
+    def run_uncorrected_drift(y_obs, num_particles=16, delta=0.7, kappa=1, n_iter=700, seed=0):
         """The historical uncorrected_drift leaf on the c-dSMC tree: biased by construction.
 
         Production dsmc.py shipped this leaf until it was removed for the bias §11.1

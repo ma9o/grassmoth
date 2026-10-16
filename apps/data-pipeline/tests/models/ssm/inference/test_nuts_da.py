@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import NutsDADiagnostics
-from nof1_causal_lab.artifacts.sampling import NutsDASpec, SamplerSpec
+from nof1_causal_lab.artifacts.sampling import FixedTrajectorySpec, NutsDASpec, NutsTrajectorySpec, SamplerSpec
 from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.ssm.inference.samplers.nuts import NutsDARun, run_nuts_da
 from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
@@ -20,12 +20,13 @@ pytestmark = pytest.mark.inference(concern="sampling")
 
 
 @pytest.mark.inference(concern="recovery")
-def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance():
+@pytest.mark.parametrize("trajectory", [NutsTrajectorySpec(), FixedTrajectorySpec()])
+def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(trajectory):
     target, mean, covariance = gaussian_interval_case()
     run = run_nuts_da(
         target,
         sampler=SamplerSpec(
-            algorithm=NutsDASpec(),
+            algorithm=NutsDASpec(trajectory=trajectory),
             num_warmup=250,
             num_samples_per_chain=750,
             num_chains=4,
@@ -50,7 +51,10 @@ def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance():
     np.testing.assert_allclose(
         extra["step_size"], np.broadcast_to(run.final_step_size[:, None], (4, 750))
     )
-    np.testing.assert_array_equal(extra["tree_depth"], np.ceil(np.log2(extra["num_steps"] + 1)))
+    if isinstance(trajectory, NutsTrajectorySpec):
+        np.testing.assert_array_equal(extra["tree_depth"], np.ceil(np.log2(extra["num_steps"] + 1)))
+    else:
+        np.testing.assert_array_equal(extra["num_steps"], 8)
     for chain in range(4):
         context = target.context(run.positions[chain, 0], target.times)
         expected = target.observation_log_probs(context, run.paths[chain, 0], target.observations)
@@ -64,7 +68,7 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
         prepared.prior_runtime_bundle,
         panel,
         sampler=SamplerSpec(
-            algorithm=NutsDASpec(max_tree_depth=3, initial_step_size=0.01),
+            algorithm=NutsDASpec(trajectory=NutsTrajectorySpec(max_tree_depth=3), initial_step_size=0.01),
             num_warmup=0,
             num_samples_per_chain=4,
             num_chains=2,

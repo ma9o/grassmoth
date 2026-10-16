@@ -183,7 +183,7 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
 @pytest.mark.inference(concern="recovery")
 @pytest.mark.parametrize(
     ("method", "kappa"),
-    [("amala", 0.75), ("amala_plus", 0.75), ("amala_plus", 0.0)],
+    [("amala", 1.0), ("amala_plus", 1.0), ("amala_plus", 0.0)],
 )
 def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kappa):
     target, mean, covariance = gaussian_interval_case()
@@ -194,7 +194,7 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        dsmc=DsmcSpec(dsmc_leaf_proposal=method, amala_kappa=kappa),
+        dsmc=DsmcSpec(drift=method, drift=method if kappa else "none"),
     )
     chains = 4
     joint = jnp.asarray(np.random.default_rng(24).normal(size=(chains, len(mean))))
@@ -226,7 +226,7 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
 
 @pytest.mark.parametrize(
     ("method", "kappa"),
-    [("amala", 0.75), ("amala_plus", 0.75), ("amala_plus", 0.0)],
+    [("amala", 1.0), ("amala_plus", 1.0), ("amala_plus", 0.0)],
 )
 def test_reusable_tree_levels_preserve_joint_posterior_with_padding(method, kappa):
     """An unbalanced 33-time tree exercises multiple shared upper levels and ancestry."""
@@ -241,7 +241,7 @@ def test_reusable_tree_levels_preserve_joint_posterior_with_padding(method, kapp
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        dsmc=DsmcSpec(dsmc_leaf_proposal=method, amala_kappa=kappa, paid_mix=None),
+        dsmc=DsmcSpec(drift=method, drift=method if kappa else "none", pilot_mixture=False),
     )
 
     def advance(point, key):

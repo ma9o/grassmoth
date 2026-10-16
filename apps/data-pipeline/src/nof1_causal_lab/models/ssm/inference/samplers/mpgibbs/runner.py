@@ -34,6 +34,7 @@ from nof1_causal_lab.models.ssm.inference.samplers.particle.adaptation import (
     DsmcAdaptation,
     adapt_scales,
     initialize_adaptation,
+    initial_delta,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.particle.diagnostics import (
     build_particle_diagnostic_flags,
@@ -216,7 +217,7 @@ def run_marginal_particle_gibbs(
             f"{chain_initial_latents.shape[0]} with num_chains={num_chains}."
         )
 
-    initial_latent_delta_value = kernel.dsmc.amala_delta_init
+    initial_latent_delta_value = initial_delta(kernel.dsmc)
     initial_latent_delta = jnp.full(
         (num_steps,),
         jnp.asarray(initial_latent_delta_value, dtype=observations.dtype),
@@ -274,7 +275,7 @@ def run_marginal_particle_gibbs(
         states,
         jnp.asarray(0),
         betas,
-        initialize_adaptation(states.latent_delta, kernel.dsmc),
+        initialize_adaptation(states.latent_delta),
         swap_accepted,
         swap_attempted,
         warmup_attempts,

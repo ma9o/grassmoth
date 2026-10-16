@@ -190,7 +190,7 @@ class NutsDADiagnostics(Value):
     settings: SamplerSpec
     mcmc_phase_seconds: float
     final_step_size: tuple[float, ...]
-    max_tree_depth_fraction: float
+    max_tree_depth_fraction: float | None
 
 
 class FixedParameterDiagnostics(Value):
@@ -213,7 +213,7 @@ class ConditionalNutsDiagnostics(Value):
     method: Literal["nuts_da"] = "nuts_da"
     acceptance_rate: float
     final_step_size: tuple[float, ...]
-    max_tree_depth_fraction: float
+    max_tree_depth_fraction: float | None
 
 
 class PosteriorMarginal(Value):
@@ -433,7 +433,7 @@ class ParticleSamplerDiagnostics(Value):
     settings: SamplerSpec
     parameter_kernel: str
     mcmc_phase_seconds: float
-    dsmc_leaf_proposal: str
+    drift: str
     diagnostic_metrics: tuple[str, ...]
     param_target_accept: float
     parameter_preconditioned: bool
@@ -441,7 +441,7 @@ class ParticleSamplerDiagnostics(Value):
     parameter_accept_rate: float
     latent_update_fraction: float
     latent_frozen_fraction: float
-    latent_block_coords: int | None
+    latent_block_coords: Literal[1, 2, "all"]
     initial_param_step_size: tuple[float, ...]
     final_param_step_size: tuple[float, ...]
     latent_sign_flip_moves: bool | None = None

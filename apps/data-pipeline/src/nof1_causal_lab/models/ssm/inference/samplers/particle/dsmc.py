@@ -127,7 +127,7 @@ def _step(
     padded = 1 << depth
     logpi = ctx.initial_label_log_probs
     intervals = ctx.intervals
-    method = ctx.dsmc_leaf_proposal
+    method = ctx.drift
     aux_key, mask_key, leaf_key, tree_key, _root_key, select_key = jax.random.split(key, 6)
     mask = coordinate_proposal_mask(mask_key, ctx.latent_free_mask, ctx.latent_block_coords)
     auxiliary = build_auxiliary(ctx, aux_key, x_ref, mask)
@@ -146,7 +146,7 @@ def _step(
     paid_auxiliary = jax.vmap(auxiliary.guide_log_density)(particles, jnp.arange(steps)).astype(
         ctx.traj_dtype
     )
-    if ctx.amala_kappa != 0 and (method == "amala" or steps == 1):
+    if ctx.drift != "none" and (method == "amala" or steps == 1):
         initial_auxiliary = jax.vmap(
             lambda value: local_log_density(value, value, value, jnp.asarray(0))
         )(particles[0]).astype(ctx.traj_dtype)
@@ -170,7 +170,7 @@ def _step(
         left: _Segment, right: _Segment, seam: jax.Array, width: jax.Array
     ) -> jax.Array:
         zeros = jnp.zeros((count, count), dtype=ctx.traj_dtype)
-        if ctx.amala_kappa == 0:
+        if ctx.drift == "none":
             # The guide is the actual factor: all auxiliary density was paid at leaves.
             return zeros
 

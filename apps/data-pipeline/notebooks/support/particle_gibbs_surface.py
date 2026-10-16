@@ -454,7 +454,7 @@ def _marginal_kernel(
         parameter_preconditioner_chol=jnp.asarray([[scale]]),
         parameter_proposal=proposal,
         parameter_reference_path=jnp.asarray([[anchor_x]]),
-        dsmc=DsmcSpec(dsmc_leaf_proposal="amala_plus", amala_kappa=kappa),
+        dsmc=DsmcSpec(drift="amala_plus" if kappa else "none"),
     )
 
 
@@ -491,7 +491,7 @@ def mpgibbs(
     *,
     particles: int,
     delta: float,
-    kappa: float = _DEFAULTS.dsmc.amala_kappa,
+    kappa: float = 0.0,
     step: float,
     scale: float = 1.0,
     proposal: ParameterProposal,
@@ -517,7 +517,7 @@ def mpgibbs_sweep(
     *,
     particles: int,
     delta: float,
-    kappa: float = _DEFAULTS.dsmc.amala_kappa,
+    kappa: float = 0.0,
     step: float,
     scale: float = 1.0,
     proposal: ParameterProposal,
@@ -581,18 +581,14 @@ def _smoother_static(target: ParticleTarget, particles: int, kappa: float) -> Sm
         latent_free_mask=target.independent_mask,
         num_particles=particles,
         num_parameter_particles=1,
-        dsmc_leaf_proposal="amala_plus",
-        amala_kappa=kappa,
-        amala_grad_clip=_DEFAULTS.dsmc.amala_grad_clip,
-        latent_block_coords=None,
+        drift="amala_plus" if kappa else "none",
+        latent_block_coords="all",
         paid_mix=None,
-        target=target,
         transition_initial_log_prob_fn=target.initial_log_prob,
         transition_log_prob_fn=target.transition_log_prob,
         transition_pairwise_log_probs_fn=target.pairwise_transition_log_prob,
         diagnostic_metrics=frozenset(),
         intervals=None,
-        local_auxiliary_exact=False,
     )
 
 
@@ -604,7 +600,7 @@ def dsmc_sweep(
     *,
     particles: int,
     delta: float,
-    kappa: float = _DEFAULTS.dsmc.amala_kappa,
+    kappa: float = 0.0,
 ) -> Sweep:
     """Record the production conditional smoother at one fixed parameter value."""
     from nof1_causal_lab.models.ssm.inference.tracing import CategoricalTraceRecord
@@ -689,7 +685,7 @@ def particle_gibbs(
     *,
     particles: int,
     delta: float,
-    kappa: float = _DEFAULTS.dsmc.amala_kappa,
+    kappa: float = 0.0,
     warmup: int = 0,
 ) -> Chain:
     """Reference parameter conditional plus real DSMC; frozen tuning, discarded burn-in.

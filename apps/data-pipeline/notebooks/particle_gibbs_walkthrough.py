@@ -385,8 +385,7 @@ def dsmc_md(mo):
     (`samplers/particle/dsmc.py`). At one time step it reduces to its leaf:
 
     1. Form the aMALA+ auxiliary mean $b(x) = x + \kappa\,\tfrac{\delta}{2}\,
-       \nabla_x \log\text{target}(x)$, with $\kappa = 0.75$ and the production
-       gradient clipping.
+       \nabla_x \log\text{target}(x)$, with $\kappa = 0$ by default or $\kappa = 1$ for local drift.
     2. Draw $z \sim N(b(x_{\text{ref}}), \delta/2)$ around the drifted reference.
     3. Propose $N-1$ particles $x_i \sim N(z, \delta/2)$. Particle 0 is the reference.
     4. Weight each by $\text{target}(x_i)\,N(z; b(x_i), \delta/2) / N(x_i; z, \delta/2)$.

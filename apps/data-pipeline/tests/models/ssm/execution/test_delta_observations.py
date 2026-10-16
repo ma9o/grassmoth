@@ -21,7 +21,7 @@ from nof1_causal_lab.artifacts.model.likelihood import (
 )
 from nof1_causal_lab.artifacts.model.parameter_context import iter_coefficient_uses
 from nof1_causal_lab.artifacts.probability.families import DistributionFamily
-from nof1_causal_lab.artifacts.sampling import DsmcSpec, PaidMixSpec
+from nof1_causal_lab.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
 from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.execution.observation_model import compile_observation_model
 from nof1_causal_lab.models.ssm.inference import problem as problem_module
@@ -510,8 +510,8 @@ def test_conditioned_smoother_traces_with_missing_and_observed_coordinates(point
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        paid_mix=PaidMixture(PaidMixSpec(), path, jnp.ones_like(path)),
-        dsmc=DsmcSpec(dsmc_leaf_proposal=proposal, latent_block_coords=1),
+        paid_mix=PaidMixture(path, jnp.ones_like(path)),
+        dsmc=DsmcSpec(drift=proposal, latent_block_coords=1),
     )
     shape, _ = jax.eval_shape(kernel.step_fn, state, jax.random.key(1))
     assert shape.latent_trajectory.shape == (3, 2)
@@ -529,8 +529,8 @@ def test_particle_updates_keep_exact_readings_and_move_missing_states(point_prob
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        paid_mix=PaidMixture(PaidMixSpec(), path, jnp.ones_like(path)),
-        dsmc=DsmcSpec(dsmc_leaf_proposal=proposal, latent_block_coords=1),
+        paid_mix=PaidMixture(path, jnp.ones_like(path)),
+        dsmc=DsmcSpec(drift=proposal, latent_block_coords=1),
     )
     step = jax.jit(kernel.step_fn)
     missing_values = []

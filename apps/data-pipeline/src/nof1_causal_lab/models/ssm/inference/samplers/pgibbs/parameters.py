@@ -20,7 +20,7 @@ from numpyro.infer.hmc import HMCState, hmc
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from nof1_causal_lab.artifacts.sampling import MetropolisHastingsSpec, NutsDASpec
+    from nof1_causal_lab.artifacts.sampling import MetropolisHastingsSpec, ConditionalNutsSpec
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
 
@@ -102,7 +102,7 @@ def metropolis_kernel(
 
 def nuts_kernel(
     target: ParticleTarget,
-    spec: NutsDASpec,
+    spec: ConditionalNutsSpec,
     parameter_chol: jax.Array,
     num_warmup: int,
 ) -> ParameterKernel[HMCState]:

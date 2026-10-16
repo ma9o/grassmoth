@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from jax.typing import DTypeLike
     from jaxtyping import Array, Float
 
-    from nof1_causal_lab.artifacts.sampling import DSMCLeafProposal, PaidMixSpec
+    from nof1_causal_lab.artifacts.sampling import AuxiliaryDrift, LatentBlockSize
     from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 
 
@@ -32,7 +32,6 @@ type TransitionLogProbFn = Callable[
 class PaidMixture(NamedTuple):
     """Fixed initialization moments and the owned mixture specification."""
 
-    spec: PaidMixSpec
     mean: jnp.ndarray
     variance: jnp.ndarray
 
@@ -67,15 +66,13 @@ class SmootherSetup(NamedTuple):
     latent_free_mask: jnp.ndarray
     num_particles: int
     num_parameter_particles: int
-    dsmc_leaf_proposal: DSMCLeafProposal
-    amala_kappa: float
-    amala_grad_clip: float
-    # Number of latent coordinates proposed per sweep (None = all). Restricting the
+    drift: AuxiliaryDrift
+    # Number of latent coordinates proposed per sweep ("all" = all). Restricting the
     # per-sweep update to a random coordinate block sidesteps the joint-coherence
     # weight degeneracy of full-state proposals at higher latent dimension; the tree
     # seams still pay the full transition density, so this is exactly the
     # coordinate-conditional cSMC on the same target.
-    latent_block_coords: int | None
+    latent_block_coords: LatentBlockSize
     paid_mix: PaidMixture | None
     transition_initial_log_prob_fn: Callable[[ParticleContext, jnp.ndarray], jnp.ndarray]
     transition_log_prob_fn: TransitionLogProbFn
@@ -103,10 +100,8 @@ class SmootherContext(NamedTuple):
     runtime_observations: jnp.ndarray
     latent_free_mask: jnp.ndarray
     amala_delta: Float[Array, " T"]
-    dsmc_leaf_proposal: DSMCLeafProposal
-    amala_kappa: float
-    amala_grad_clip: float
-    latent_block_coords: int | None
+    drift: AuxiliaryDrift
+    latent_block_coords: LatentBlockSize
     paid_mix: PaidMixture | None
     initial_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
     transition_current_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]

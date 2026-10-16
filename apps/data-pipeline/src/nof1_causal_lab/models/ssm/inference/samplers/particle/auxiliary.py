@@ -27,17 +27,20 @@ if TYPE_CHECKING:
     )
 
 
+# Fixed proposal recipe; its complete mixture density is always paid.
+PILOT_WEIGHTS = (0.85, 0.10, 0.05)
+PILOT_VARIANCE_SCALE = 0.25
+WIDE_VARIANCE_SCALE = 4.0
+
+
 def _drift(
     gradient: jax.Array,
     variance: jax.Array,
     mask: jax.Array,
-    kappa: float,
-    clip: float,
 ) -> tuple[jax.Array, jax.Array]:
     gradient = jnp.where(mask, gradient, 0.0)
     norms: jax.Array = jnp.linalg.norm(gradient, axis=-1, keepdims=True)
-    scale = jnp.minimum(1.0, clip / jnp.maximum(norms, jnp.finfo(gradient.dtype).tiny))
-    return kappa * variance * gradient * scale, norms[..., 0]
+    return variance * gradient, norms[..., 0]
 
 
 def _local_gradient(
@@ -64,7 +67,7 @@ def _local_gradient(
     )
     logits = ctx.initial_label_log_probs + prior + observation
     gradients = prior_gradient + observation_gradient
-    if ctx.dsmc_leaf_proposal == "amala_plus":
+    if ctx.drift == "amala_plus":
         future, future_gradient = jax.lax.cond(
             index + 1 < ctx.num_steps,
             lambda: ctx.transition_next_value_grad_by_param(
@@ -116,15 +119,13 @@ class AuxiliaryKernel:
         independently of this bounded-window proposal drift.
         """
         ctx = self.context
-        if ctx.amala_kappa == 0:
+        if ctx.drift == "none":
             return self.guide_log_density(current, index)
         gradient = _local_gradient(ctx, previous, current, following, index)
         drift, _ = _drift(
             gradient,
             self.variance[index],
             self.mask[index],
-            ctx.amala_kappa,
-            ctx.amala_grad_clip,
         )
         center = current + drift
         return _masked_normal_log_prob(
@@ -143,16 +144,15 @@ class AuxiliaryKernel:
         values = self.auxiliary[:, None] + jnp.sqrt(self.variance[:, None]) * noise
         mixture = ctx.paid_mix
         if mixture is not None:
-            spec = mixture.spec
             weights = jnp.asarray(
-                (spec.local_weight, spec.pilot_weight, 1 - spec.local_weight - spec.pilot_weight),
+                PILOT_WEIGHTS,
                 dtype=ctx.latent_dtype,
             )
             components = jax.random.categorical(
                 component_key, jnp.log(weights), shape=(ctx.num_steps, ctx.num_free_particles)
             )
-            pilot_variance = spec.pilot_var_scale * mixture.variance
-            wide_variance = spec.wide_mult * mixture.variance
+            pilot_variance = PILOT_VARIANCE_SCALE * mixture.variance
+            wide_variance = WIDE_VARIANCE_SCALE * mixture.variance
             pilot = mixture.mean[:, None] + jnp.sqrt(pilot_variance[:, None]) * noise
             wide = mixture.mean[:, None] + jnp.sqrt(wide_variance[:, None]) * noise
             values = jnp.where(
@@ -172,21 +172,20 @@ class AuxiliaryKernel:
         mixture = self.context.paid_mix
         if mixture is None:
             return proposal
-        spec = mixture.spec
         weights = jnp.asarray(
-            (spec.local_weight, spec.pilot_weight, 1 - spec.local_weight - spec.pilot_weight),
+            PILOT_WEIGHTS,
             dtype=self.context.latent_dtype,
         )
         pilot_density = _masked_normal_log_prob(
             particles,
             mixture.mean[:, None],
-            spec.pilot_var_scale * mixture.variance[:, None],
+            PILOT_VARIANCE_SCALE * mixture.variance[:, None],
             self.mask[:, None],
         )
         wide_density = _masked_normal_log_prob(
             particles,
             mixture.mean[:, None],
-            spec.wide_mult * mixture.variance[:, None],
+            WIDE_VARIANCE_SCALE * mixture.variance[:, None],
             self.mask[:, None],
         )
         return jax.scipy.special.logsumexp(
@@ -201,13 +200,13 @@ def build_auxiliary(
     """Refresh the chosen auxiliary law before drawing any free particles."""
     variance = 0.5 * jnp.asarray(context.amala_delta, dtype=context.latent_dtype)[:, None]
     noise = jnp.sqrt(variance) * jax.random.normal(key, reference.shape, dtype=context.latent_dtype)
-    if context.amala_kappa == 0:
+    if context.drift == "none":
         drift = jnp.zeros_like(reference)
         norms = jnp.zeros(reference.shape[0], dtype=reference.dtype)
     else:
         gradient = _path_local_gradient(context, reference)
         drift, norms = _drift(
-            gradient, variance, mask, context.amala_kappa, context.amala_grad_clip
+            gradient, variance, mask
         )
     auxiliary = jnp.where(mask, reference + drift + noise, reference)
     return AuxiliaryKernel(context, reference, mask, variance, auxiliary, norms)

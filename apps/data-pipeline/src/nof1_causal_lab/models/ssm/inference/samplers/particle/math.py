@@ -7,15 +7,17 @@ import jax.numpy as jnp
 from jax.typing import DTypeLike
 from jaxtyping import Array, Float, Int
 
+from nof1_causal_lab.artifacts.sampling import LatentBlockSize
+
 FloatScalar = Float[Array, ""]
 
 
 def coordinate_proposal_mask(
-    key: jax.Array, free_mask: jax.Array, block_coords: int | None
+    key: jax.Array, free_mask: jax.Array, block_coords: LatentBlockSize
 ) -> jax.Array:
     """Choose only coordinates with independent, unobserved values to propose."""
     dimension = free_mask.shape[-1]
-    if block_coords is None or block_coords >= dimension:
+    if block_coords == "all" or block_coords >= dimension:
         return free_mask
     scores = jnp.where(jnp.any(free_mask, axis=0), jax.random.uniform(key, (dimension,)), -jnp.inf)
     chosen = jnp.argsort(scores)[-block_coords:]

@@ -68,16 +68,13 @@ inference:
       method: mpgibbs
       n_parameter_particles: 2
       dsmc:
-        # Paper aMALA+ smoothing-gradient auxiliary law, with a fixed pilot mixture.
-        # Set paid_mix: null to use only the auxiliary Gaussian particle proposal.
-        dsmc_leaf_proposal: amala_plus
-        paid_mix:
-          local_weight: 0.85
-          pilot_weight: 0.10
-          pilot_var_scale: 0.25
-          wide_mult: 4.0
-        amala_delta_init: 0.01
-      parameter_proposal: pseudo_langevin
+        drift: none
+        latent_block_coords: 1
+        latent_step:
+          kind: adapted
+          target: 0.5
+        pilot_mixture: true
+      parameter_proposal: random_walk
       param_step_size: 0.02
       param_target_accept: 0.35
       adaptation_rate: 0.05

@@ -3,15 +3,28 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import TYPE_CHECKING, NamedTuple
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
 
 from nof1_causal_lab.models.ssm.inference.mcmc_state import _clip_scale
 
-if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.sampling import DsmcSpec
+from nof1_causal_lab.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
+
+INITIAL_DELTA = 0.01
+ADAPTATION_WINDOW = 100
+ADAPTATION_TOLERANCE = 0.05
+ADAPTATION_RHO = 0.5
+ADAPTATION_RHO_MIN = 1e-3
+ADAPTATION_GAMMA = -0.5
+DELTA_MIN = 1e-5
+DELTA_MAX = 10.0
+
+
+def initial_delta(spec: DsmcSpec) -> float:
+    """Resolve the assigned fixed scale or the adaptation starting value."""
+    return spec.latent_step.delta if isinstance(spec.latent_step, FixedLatentStepSpec) else INITIAL_DELTA
 
 
 class DsmcAdaptation(NamedTuple):
@@ -25,9 +38,9 @@ class DsmcAdaptation(NamedTuple):
     proposed_total: jax.Array
 
 
-def initialize_adaptation(delta: jax.Array, spec: DsmcSpec) -> DsmcAdaptation:
+def initialize_adaptation(delta: jax.Array) -> DsmcAdaptation:
     """Initialize one scale vector or a batch of scale vectors."""
-    shape = (*delta.shape[:-1], spec.amala_adaptation_window, delta.shape[-1])
+    shape = (*delta.shape[:-1], ADAPTATION_WINDOW, delta.shape[-1])
     window = jnp.zeros(shape, dtype=delta.dtype)
     return DsmcAdaptation(
         delta, window, window, jnp.asarray(0), jnp.zeros_like(delta), jnp.zeros_like(delta)
@@ -44,8 +57,12 @@ def adapt_scales(
 ) -> DsmcAdaptation:
     """Adapt only proposed coordinates; freeze scales and windows after warmup."""
 
+    if isinstance(spec.latent_step, FixedLatentStepSpec):
+        return state
+    target = spec.latent_step.target
+
     def update() -> DsmcAdaptation:
-        slot = state.iteration % spec.amala_adaptation_window
+        slot = state.iteration % ADAPTATION_WINDOW
         accept_window = state.accepted.at[..., slot, :].set(accepted)
         proposal_window = state.proposed.at[..., slot, :].set(proposed)
         accepted_total = state.accepted_total - state.accepted[..., slot, :] + accepted
@@ -53,25 +70,25 @@ def adapt_scales(
         rate = accepted_total / jnp.maximum(count, 1)
         iteration = state.iteration + 1
         learning_rate = jnp.maximum(
-            iteration.astype(state.delta.dtype) ** spec.amala_adaptation_gamma
-            * spec.amala_adaptation_rho,
-            spec.amala_adaptation_rho_min,
+            iteration.astype(state.delta.dtype) ** ADAPTATION_GAMMA
+            * ADAPTATION_RHO,
+            ADAPTATION_RHO_MIN,
         )
         change = (
             learning_rate
             * state.delta
-            * (rate - spec.amala_target_accept)
-            / spec.amala_target_accept
+            * (rate - target)
+            / target
         )
         active = (
-            (jnp.abs(rate - spec.amala_target_accept) >= spec.amala_adaptation_tolerance)
-            & (iteration > spec.amala_adaptation_window)
+            (jnp.abs(rate - target) >= ADAPTATION_TOLERANCE)
+            & (iteration > ADAPTATION_WINDOW)
             & (count > 0)
         )
         delta = _clip_scale(
             jnp.where(active, state.delta + change, state.delta),
-            min_scale=spec.amala_delta_min,
-            max_scale=spec.amala_delta_max,
+            min_scale=DELTA_MIN,
+            max_scale=DELTA_MAX,
         )
         return DsmcAdaptation(
             delta, accept_window, proposal_window, iteration, accepted_total, count

@@ -18,8 +18,8 @@ from nof1_causal_lab.artifacts.sampling import (
     DsmcSpec,
     LapsInitializationSpec,
     MetropolisHastingsSpec,
-    NutsDASpec,
-    PaidMixSpec,
+    ConditionalNutsSpec,
+    FixedLatentStepSpec,
     ParticleGibbsSpec,
     SamplerSpec,
 )
@@ -63,14 +63,14 @@ def test_pg_replays_static_and_accumulated_states_with_or_without_parameters(fix
         if fixed_parameters
         else nuts_kernel(
             target,
-            NutsDASpec(initial_step_size=0.02, max_tree_depth=3),
+            ConditionalNutsSpec(initial_step_size=0.02, max_tree_depth=3),
             jnp.eye(target.initial_position.size),
             2,
         )
     )
     kernel = build_particle_gibbs_kernel(
         target,
-        DsmcSpec(amala_delta_init=0.1, amala_adaptation_window=1, paid_mix=None),
+        DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.1), pilot_mixture=False),
         parameters,
         num_particles=8,
         num_warmup=2,
@@ -104,14 +104,14 @@ def test_pg_replays_static_and_accumulated_states_with_or_without_parameters(fix
 @pytest.mark.parametrize("method", ["mh", "nuts"])
 def test_blocked_pg_preserves_exact_joint_interval_target(method):
     target, mean, covariance = gaussian_interval_case()
-    options = DsmcSpec(amala_delta_init=0.3)
+    options = DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.3))
     chol = jnp.linalg.cholesky(jnp.asarray(covariance))
     parameter_chol = jnp.sqrt(jnp.asarray(covariance[:1, :1]))
     parameters = (
         metropolis_kernel(target, MetropolisHastingsSpec(initial_step_size=1.0), parameter_chol, 0)
         if method == "mh"
         else nuts_kernel(
-            target, NutsDASpec(initial_step_size=0.3, max_tree_depth=4), parameter_chol, 0
+            target, ConditionalNutsSpec(initial_step_size=0.3, max_tree_depth=4), parameter_chol, 0
         )
     )
     kernel = build_particle_gibbs_kernel(
@@ -121,7 +121,7 @@ def test_blocked_pg_preserves_exact_joint_interval_target(method):
         num_particles=8,
         num_warmup=0,
         paid_mix=PaidMixture(
-            PaidMixSpec(), jnp.asarray(mean[1:, None]), jnp.asarray(np.diag(covariance)[1:, None])
+            jnp.asarray(mean[1:, None]), jnp.asarray(np.diag(covariance)[1:, None])
         ),
     )
     reference_key, init_key, step_key = jax.random.split(jax.random.key(518), 3)
@@ -151,8 +151,8 @@ def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method, retain_p
                 diagnostic_metrics_all=method == "mh",
                 parameter_kernel=MetropolisHastingsSpec()
                 if method == "mh"
-                else NutsDASpec(max_tree_depth=3, initial_step_size=0.01),
-                dsmc=DsmcSpec(amala_adaptation_window=1),
+                else ConditionalNutsSpec(max_tree_depth=3, initial_step_size=0.01),
+                dsmc=DsmcSpec(),
                 laps=LapsInitializationSpec(
                     ensemble_size=32, num_unadjusted_steps=100, num_adjusted_steps=5
                 ),

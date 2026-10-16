@@ -11,7 +11,7 @@ import pytest
 from scipy.special import logsumexp
 from scipy.stats import norm
 
-from nof1_causal_lab.artifacts.sampling import DsmcSpec, PaidMixSpec
+from nof1_causal_lab.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
 from nof1_causal_lab.models.ssm.inference.samplers.particle.auxiliary import build_auxiliary
 from nof1_causal_lab.models.ssm.inference.samplers.particle.context import (
     build_smoother_context,
@@ -30,11 +30,11 @@ def _context(target, method, *, mixture=False, count=4):
     path = jnp.linspace(-0.2, 0.4, target.times.size + 1)[1:, None]
     static = build_smoother_setup(
         target,
-        DsmcSpec(dsmc_leaf_proposal=method, amala_kappa=1.0),
+        DsmcSpec(drift=method),
         num_particles=count,
         num_parameter_particles=2,
         free_mask=target.independent_mask,
-        paid_mix=PaidMixture(PaidMixSpec(), jnp.zeros_like(path), jnp.ones_like(path))
+        paid_mix=PaidMixture(jnp.zeros_like(path), jnp.ones_like(path))
         if mixture else None,
         diagnostic_metrics=frozenset(),
     )
@@ -188,7 +188,7 @@ def _stationarity_features(paths, mean, chol):
 @pytest.mark.parametrize("interval", [False, True], ids=["point", "overlapping_intervals"])
 @pytest.mark.parametrize("parameter_count", [1, 2], ids=["fixed_parameter", "fixed_mixture"])
 @pytest.mark.parametrize(
-    ("method", "kappa"), [("amala", 0.75), ("amala_plus", 0.75), ("amala_plus", 0.0)]
+    ("method", "kappa"), [("amala", 1.0), ("amala_plus", 1.0), ("amala_plus", 0.0)]
 )
 @pytest.mark.parametrize("mixture", [False, True], ids=["paid_off", "paid_on"])
 def test_conditional_tree_preserves_analytic_posterior(
@@ -216,7 +216,7 @@ def test_conditional_tree_preserves_analytic_posterior(
         (means[labels] + rng.normal(size=(size, len(mean))) @ conditional_chol.T)[..., None]
     )
     spec = DsmcSpec(
-        dsmc_leaf_proposal=method, amala_kappa=kappa, paid_mix=PaidMixSpec() if mixture else None
+        drift=method if kappa else "none", pilot_mixture=mixture
     )
     setup = build_smoother_setup(
         target,
@@ -224,8 +224,8 @@ def test_conditional_tree_preserves_analytic_posterior(
         num_particles=4,
         num_parameter_particles=parameter_count,
         free_mask=target.independent_mask,
-        paid_mix=PaidMixture(spec.paid_mix, jnp.zeros_like(before[0]), jnp.ones_like(before[0]))
-        if spec.paid_mix is not None
+        paid_mix=PaidMixture(jnp.zeros_like(before[0]), jnp.ones_like(before[0]))
+        if spec.pilot_mixture
         else None,
         diagnostic_metrics=frozenset(),
     )
@@ -296,7 +296,7 @@ def test_zero_drift_uses_leaf_factors_without_path_or_transition_gradients():
         raise AssertionError("Zero drift must not evaluate unused gradients")
 
     ctx = _context(target, "amala_plus", count=5)._replace(
-        amala_kappa=0.0,
+        drift="none",
         transition_current_value_grad_by_param=forbidden,
         transition_next_value_grad_by_param=forbidden,
     )
@@ -356,14 +356,14 @@ def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, s
     times = np.arange(float(steps))
     target = interval_target(times, np.full((steps, 1), 0.2), times[:, None], ("last",))
     reference = jnp.linspace(-0.2, 0.3, steps)[:, None]
-    options = DsmcSpec(dsmc_leaf_proposal=method, amala_grad_clip=2.0)
+    options = DsmcSpec(drift=method)
     setup = build_smoother_setup(
         target,
         options,
         num_particles=5,
         num_parameter_particles=1,
         free_mask=target.independent_mask,
-        paid_mix=PaidMixture(PaidMixSpec(), jnp.zeros_like(reference), jnp.ones_like(reference))
+        paid_mix=PaidMixture(jnp.zeros_like(reference), jnp.ones_like(reference))
         if mixture
         else None,
         diagnostic_metrics=frozenset(),
@@ -401,7 +401,7 @@ def test_dsmc_batching_preserves_nonlocal_mixture_transition(method, kappa, step
     times = np.arange(float(steps))
     target = interval_target(times, np.full((steps, 1), 0.2), times[:, None], ("last",))
     ctx = _context(target, method, count=5, mixture=True)._replace(
-        amala_kappa=kappa, diagnostic_weights=True
+        drift=method if kappa else "none", diagnostic_weights=True
     )
     path = jnp.linspace(-0.2, 0.3, steps)[:, None]
     key = jax.random.key(711)

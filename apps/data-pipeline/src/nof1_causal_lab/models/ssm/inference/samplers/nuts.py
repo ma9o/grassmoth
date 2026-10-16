@@ -13,7 +13,7 @@ from numpyro.infer.hmc import HMCState, hmc
 from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import MCMCEvidence, NutsDADiagnostics
-from nof1_causal_lab.artifacts.sampling import NutsDASpec, SamplerSpec
+from nof1_causal_lab.artifacts.sampling import FixedTrajectorySpec, NutsDASpec, NutsTrajectorySpec, SamplerSpec
 from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 from nof1_causal_lab.models.ssm.inference.extraction import extract_grouped_public_samples
 from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
@@ -59,13 +59,17 @@ class NutsDARun:
         freeze_fields(self)
 
 
-def _extra_fields(state: HMCState, *, max_tree_depth: int) -> Mapping[str, jax.Array]:
+def _extra_fields(state: HMCState, *, trajectory: NutsTrajectorySpec | FixedTrajectorySpec) -> Mapping[str, jax.Array]:
+    tree_depth = jnp.ceil(jnp.log2(state.num_steps + 1)).astype(jnp.int32)
+    tree_fields = {
+        "tree_depth": tree_depth,
+        "max_tree_depth_reached": jnp.asarray(state.num_steps) >= 2**trajectory.max_tree_depth - 1,
+    } if isinstance(trajectory, NutsTrajectorySpec) else {}
     return {
+        **tree_fields,
         "diverging": jnp.asarray(state.diverging),
         "accept_prob": jnp.asarray(state.accept_prob),
         "num_steps": jnp.asarray(state.num_steps),
-        "tree_depth": jnp.ceil(jnp.log2(state.num_steps + 1)).astype(jnp.int32),
-        "max_tree_depth_reached": jnp.asarray(state.num_steps) >= 2**max_tree_depth - 1,
         "energy": jnp.asarray(state.energy),
         "potential_energy": jnp.asarray(state.potential_energy),
         "step_size": jnp.asarray(state.adapt_state.step_size),
@@ -91,7 +95,28 @@ def run_nuts_da(
     coordinates = build_joint_coordinates(target)
     # A fully fixed model can still use one independent normal auxiliary.
     initial = jnp.zeros(max(1, coordinates.dimension), dtype=target.initial_position.dtype)
-    initialize, step = hmc(lambda point: -coordinates.log_density(point), algo="NUTS")
+    trajectory = options.trajectory
+    initialize, raw_step = hmc(
+        lambda point: -coordinates.log_density(point),
+        algo="HMC" if isinstance(trajectory, FixedTrajectorySpec) else "NUTS",
+    )
+
+    def step(state: HMCState) -> HMCState:
+        if isinstance(trajectory, NutsTrajectorySpec):
+            return raw_step(state)
+        # A mixture of exact Metropolis-adjusted HMC kernels avoids resonances.
+        # The ±20% jitter belongs to this proposal, never to frozen base tuning.
+        kernel_key, jitter_key = jax.random.split(state.rng_key)
+        multiplier = jax.random.uniform(jitter_key, (), minval=0.8, maxval=1.2)
+        varied = state._replace(
+            rng_key=kernel_key,
+            adapt_state=state.adapt_state._replace(step_size=state.adapt_state.step_size * multiplier),
+        )
+        moved = raw_step(varied)
+        adaptation = jax.lax.cond(
+            state.i < sampler.num_warmup, lambda: moved.adapt_state, lambda: state.adapt_state
+        )
+        return moved._replace(adapt_state=adaptation)
 
     def initialize_chain(chain_key: jax.Array) -> HMCState:
         return initialize(
@@ -102,7 +127,9 @@ def run_nuts_da(
             adapt_mass_matrix=True,
             dense_mass=False,
             target_accept_prob=options.target_accept_prob,
-            max_tree_depth=options.max_tree_depth,
+            max_tree_depth=trajectory.max_tree_depth if isinstance(trajectory, NutsTrajectorySpec) else 10,
+            num_steps=trajectory.steps if isinstance(trajectory, FixedTrajectorySpec) else None,
+            trajectory_length=None,
             rng_key=chain_key,
         )
 
@@ -134,7 +161,7 @@ def run_nuts_da(
     ) -> Callable[[HMCState], tuple[HMCState, dict[str, jax.Array]]]:
         def sweep(current: HMCState) -> tuple[HMCState, dict[str, jax.Array]]:
             updated = jax.vmap(step)(current)
-            record = dict(_extra_fields(updated, max_tree_depth=options.max_tree_depth))
+            record = dict(_extra_fields(updated, trajectory=trajectory))
             if stage == "posterior":
                 record = {**record, **jax.vmap(project)(updated.z)}
             return updated, record
@@ -249,7 +276,8 @@ def fit_nuts_da(
                 settings=sampler,
                 mcmc_phase_seconds=clock() - started,
                 final_step_size=tuple(float(value) for value in run.final_step_size),
-                max_tree_depth_fraction=float(jnp.mean(extra["max_tree_depth_reached"])),
+                max_tree_depth_fraction=float(jnp.mean(extra["max_tree_depth_reached"]))
+                if isinstance(sampler.algorithm.trajectory, NutsTrajectorySpec) else None,
             ),
             phase_extra_fields=run.phase_extra_fields,
         ),

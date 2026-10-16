@@ -99,9 +99,8 @@ def fit_particle_gibbs(
         return initialization
     paid_mix = (
         None
-        if options.dsmc.paid_mix is None
+        if not options.dsmc.pilot_mixture
         else PaidMixture(
-            options.dsmc.paid_mix,
             initialization.pilot_mean,
             initialization.pilot_proposal_variance,
         )

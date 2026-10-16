@@ -12,7 +12,7 @@ from pydantic import ValidationError
 from nof1_causal_lab.artifacts.sampling import (
     DsmcSpec,
     MarginalParticleGibbsSpec,
-    PaidMixSpec,
+    FixedLatentStepSpec,
     SamplerSpec,
 )
 from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
@@ -31,10 +31,14 @@ from tests.support.compute import COMPUTE_BUDGET
 pytestmark = pytest.mark.contract
 
 
-@pytest.mark.parametrize("weights", [(0.9, 0.2), (1.0, 0.1), (0.8, 0.0)])
-def test_paid_mixture_owns_positive_component_weights(weights):
+@pytest.mark.parametrize("settings", [
+    {"drift": "global"}, {"amala_kappa": 0.75}, {"amala_grad_clip": 2},
+    {"latent_block_coords": 3}, {"latent_step": {"kind": "fixed", "delta": 0}},
+    {"latent_step": {"kind": "adapted", "target": 1}},
+])
+def test_dsmc_boundary_owns_discrete_choices_and_scale_policy(settings):
     with pytest.raises(ValidationError):
-        PaidMixSpec(local_weight=weights[0], pilot_weight=weights[1])
+        DsmcSpec.model_validate(settings)
 
 
 @pytest.mark.parametrize(
@@ -42,7 +46,7 @@ def test_paid_mixture_owns_positive_component_weights(weights):
     [
         "parameter_proposal",
         "latent_smoother",
-        "dsmc_leaf_proposal",
+        "drift",
         "adaptation_scheme",
         "init_method",
         "latent_init_method",
@@ -50,7 +54,7 @@ def test_paid_mixture_owns_positive_component_weights(weights):
     ],
 )
 def test_sampler_boundary_rejects_unknown_modes(field):
-    raw = {"dsmc": {field: "bogus"}} if field == "dsmc_leaf_proposal" else {field: "bogus"}
+    raw = {"dsmc": {field: "bogus"}} if field == "drift" else {field: "bogus"}
     with pytest.raises(ValidationError, match=field):
         MarginalParticleGibbsSpec.model_validate(raw)
 
@@ -97,7 +101,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         target_accept=0.35,
         exact_constraints=None,
         initial_param_step_size=0.01,
-        dsmc=DsmcSpec(amala_delta_init=0.1),
+        dsmc=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.1)),
         min_scale=1e-6,
         max_scale=1.0,
     )
