@@ -63,10 +63,11 @@ async function projectStudy(
     [
       "uv",
       "run",
-      "--project",
+      "--directory",
       join(repoRoot, "apps/data-pipeline"),
       "python",
-      join(repoRoot, "apps/data-pipeline/scripts/fixtures/study.py"),
+      "-m",
+      "scripts.fixtures.study",
       "project",
       sourceRoot,
       ...(stagingRoot ? [stagingRoot] : []),
