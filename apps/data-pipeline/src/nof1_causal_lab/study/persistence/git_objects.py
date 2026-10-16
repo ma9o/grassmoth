@@ -14,14 +14,14 @@ def open_repository(workspace_id: str, path: Path | None = None) -> pygit2.Repos
     destination = path or Path(data_module.study_dir(workspace_id)) / "history.git"
     if destination.exists():
         repository = pygit2.Repository(str(destination))
-        if "nof1.format" not in repository.config or repository.config.get_int("nof1.format") != 26:
+        if "nof1.format" not in repository.config or repository.config.get_int("nof1.format") != 27:
             raise ValueError(
-                "This study uses an incompatible storage format. Create a new study for format 26."
+                "This study uses an incompatible storage format. Create a new study for format 27."
             )
         return repository
     destination.parent.mkdir(parents=True, exist_ok=True)
     repository = pygit2.init_repository(str(destination), bare=True, initial_head="main")
-    repository.config["nof1.format"] = 26
+    repository.config["nof1.format"] = 27
     repository.config["user.name"] = "nof1-causal-lab"
     repository.config["user.email"] = "study@local"
     signature = pygit2.Signature("nof1-causal-lab", "study@local", 0, 0)

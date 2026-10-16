@@ -133,13 +133,13 @@ New studies initialize their local bare repository on first use. On a fresh chec
 
 ```bash
 git clone --mirror data/HEALTHDEMO/study/history.bundle data/HEALTHDEMO/study/history.git
-git --git-dir=data/HEALTHDEMO/study/history.git config nof1.format 26
+git --git-dir=data/HEALTHDEMO/study/history.git config nof1.format 27
 ```
 
 #### Storage format
 
 The [storage owner](../../apps/data-pipeline/src/nof1_causal_lab/study/persistence/git_objects.py)
-requires format 26. Start a new study or restore a format-26 bundle. The application
+requires format 27. Start a new study or restore a format-27 bundle. The application
 reads only this format and does not perform automatic migrations.
 
 ### Local stack
