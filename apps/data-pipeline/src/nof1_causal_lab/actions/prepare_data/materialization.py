@@ -18,6 +18,7 @@ def materialize_panel(
     """Encode observation rows into the canonical panel, including a typed empty table."""
     from nof1_causal_lab.artifacts.observations.rows import observation_row_schema
     from nof1_causal_lab.observations.aggregations import _encode_non_continuous
+    from nof1_causal_lab.observations.rows import ensure_datetime_column
 
     if observation_rows:
         data_for_model = pl.DataFrame(observation_rows)
@@ -44,22 +45,9 @@ def materialize_panel(
         )
         data_for_model = data_for_model.with_columns(
             pl.col("value").cast(pl.Float64, strict=False).alias("value"),
-            pl.col("anchor_time")
-            .str.replace(r"[Zz]$", "")
-            .str.replace(r"[+-]\d{2}:\d{2}$", "")
-            .str.to_datetime(strict=False)
-            .alias("anchor_time"),
-            pl.col("support_start")
-            .str.replace(r"[Zz]$", "")
-            .str.replace(r"[+-]\d{2}:\d{2}$", "")
-            .str.to_datetime(strict=False)
-            .alias("support_start"),
-            pl.col("support_end")
-            .str.replace(r"[Zz]$", "")
-            .str.replace(r"[+-]\d{2}:\d{2}$", "")
-            .str.to_datetime(strict=False)
-            .alias("support_end"),
-        ).drop_nulls(subset=["anchor_time"])
+        )
+        for column in ("anchor_time", "support_start", "support_end"):
+            data_for_model = ensure_datetime_column(data_for_model, column)
         data_for_model = data_for_model.sort("indicator_id", "anchor_time")
 
     return data_for_model
