@@ -113,6 +113,13 @@ export function composeCallView(
       }
       case "fit": {
         if (request?.action !== "fit") throw new Error("Saved fit is missing its input references");
+        if (request.input.target.kind === "continue") {
+          const parent = input(entry, "fit");
+          view = {...parent, artifacts: {...parent.artifacts, ...produced},
+            dynamicalModelSpec: result.body.dynamical_model_spec ?? parent.dynamicalModelSpec,
+            fitOutput: result.body, fit: result.body.inference.core};
+          break;
+        }
         const dataCall = inputCall(entry, "data");
         const data = parts(dataCall);
         const modelView = input(entry, "dynamical_model_spec");
@@ -135,10 +142,10 @@ export function composeCallView(
             ...produced,
           },
           modelOutput: modelView.modelOutput,
-          dynamicalModelSpec: result.body.dynamical_model_spec,
+          dynamicalModelSpec: result.body.dynamical_model_spec ?? modelView.dynamicalModelSpec,
           fitOutput: result.body,
           prepared: dataCall.record.attempt.action === "prepare_data" ? data.prepared : null,
-          data: request.input.data_ref,
+          data: request.input.target.data_ref,
           fit: result.body.inference.core,
         };
         break;

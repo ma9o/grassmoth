@@ -36,7 +36,7 @@ def test_authored_model_has_no_inference_report(monkeypatch, tmp_path):
 
 @pytest.mark.inference(concern="sampling")
 def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(monkeypatch, tmp_path):
-    from nof1_causal_lab.actions.contracts.bodies import FitInput, FitOutput
+    from nof1_causal_lab.actions.contracts.bodies import NewFitTarget, FitInput, FitOutput
     from nof1_causal_lab.actions.contracts.requests import FitRequest
     from nof1_causal_lab.actions.fit.action import read_inference_report
     from nof1_causal_lab.artifacts.observations.reference import DataRef
@@ -93,10 +93,9 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
                 ),
             ),
             request=FitRequest(
-                input=FitInput(
+                input=FitInput(target=NewFitTarget(
                     dynamical_model_spec_ref=prior.revision,
-                    data_ref=DataRef(revision=panel.revision, replicate_index=0),
-                )
+                    data_ref=DataRef(revision=panel.revision, replicate_index=0)),)
             ),
             seq=1,
         ),

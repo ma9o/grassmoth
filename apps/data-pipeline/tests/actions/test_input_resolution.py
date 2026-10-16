@@ -11,7 +11,7 @@ from fastapi import Response
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
-from nof1_causal_lab.actions.contracts.bodies import FitInput, SimulateInput
+from nof1_causal_lab.actions.contracts.bodies import NewFitTarget, FitInput, SimulateInput
 from nof1_causal_lab.actions.contracts.call_state import PendingCall
 from nof1_causal_lab.actions.contracts.effects import ActionEffects
 from nof1_causal_lab.actions.contracts.requests import (
@@ -386,10 +386,9 @@ def test_latest_reuses_explicit_saved_call_and_pinned_poll_survives_newer_model(
     repository, _, models, panel, _ = study
     http, dispatched = client
     request = FitRequest[GitOid](
-        input=FitInput[GitOid](
+        input=FitInput[GitOid](target=NewFitTarget(
             dynamical_model_spec_ref=models[-1].revision,
-            data_ref=DataRef(revision=panel.revision, replicate_index=0),
-        )
+            data_ref=DataRef(revision=panel.revision, replicate_index=0)),)
     )
     saved = repository.append(
         AttemptRecord(

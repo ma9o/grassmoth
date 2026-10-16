@@ -153,7 +153,7 @@ def build_output(
             dynamical_model_spec = read_model(store, state.current["model"].revision)
             inference = store.read_report(effects.reports["inference"], InferenceReport)
             return FitOutput(
-                dynamical_model_spec=dynamical_model_spec,
+                dynamical_model_spec=dynamical_model_spec if effects.produced else None,
                 checks=store.read_report(effects.reports["checks"], FitCheckReport),
                 inference=inference,
             )

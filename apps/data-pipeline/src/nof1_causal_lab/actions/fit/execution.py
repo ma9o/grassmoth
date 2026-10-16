@@ -15,10 +15,11 @@ import jax.numpy as jnp
 from typing_extensions import TypedDict
 
 from nof1_causal_lab.artifacts.sampling import SamplerSpec
+from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
 from nof1_causal_lab.compute.resources import read_compute_budget
 from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.compile.observation_windows import compile_observation_scan
-from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
+from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior, UnretainedRun
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel, PreparedFit, prepare_fit
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
@@ -41,7 +42,7 @@ class FittedModelResult(TypedDict, closed=True):
 
     fitted: Literal[True]
     duration_seconds: float
-    result: MCMCPosterior
+    result: MCMCPosterior | UnretainedRun
     panel: BoundPanel
 
 
@@ -53,11 +54,11 @@ class ModelFitFailure(TypedDict, closed=True):
     duration_seconds: float
 
 
-def resolve_sampler_spec(settings: FitSettingsSpec) -> SamplerSpec:
+def resolve_sampler_spec(settings: FitSettingsSpec, previous: SamplerSpec | None = None) -> SamplerSpec:
     """Resolve public overrides once, before numerical preparation or execution."""
     from nof1_causal_lab.config import get_config
 
-    configured = get_config().inference.sampler
+    configured = get_config().inference.sampler if previous is None else previous
     return SamplerSpec(
         num_warmup=configured.num_warmup if settings.num_warmup is None else settings.num_warmup,
         num_samples_per_chain=configured.num_samples_per_chain
@@ -68,6 +69,7 @@ def resolve_sampler_spec(settings: FitSettingsSpec) -> SamplerSpec:
         num_particles=configured.num_particles
         if settings.num_particles is None
         else settings.num_particles,
+        hardware=configured.hardware if settings.hardware is None else settings.hardware,
         retain_latent_paths=True,
         algorithm=configured.algorithm if settings.algorithm is None else settings.algorithm,
     )
@@ -77,7 +79,8 @@ def fit_prepared_model(
     prepared: PreparedFit,
     *,
     sampler: SamplerSpec,
-) -> MCMCPosterior | ObservationPreflightFailure | InitializationFailure:
+    continuation: SamplerCheckpoint | None = None,
+) -> MCMCPosterior | UnretainedRun | ObservationPreflightFailure | InitializationFailure:
     """Run on resolved sampler choices and the sampler's owned initialization."""
     from nof1_causal_lab.bootstrap import initialize_numerical_runtime
 
@@ -92,6 +95,7 @@ def fit_prepared_model(
             prepared.panel,
             compute_budget=read_compute_budget(),
             sampler=sampler,
+            continuation=continuation,
             clock=time.monotonic,
         )
     finally:
@@ -99,7 +103,7 @@ def fit_prepared_model(
     if isinstance(result, (ObservationPreflightFailure, InitializationFailure)):
         return result
     if profile_dir is not None:
-        compiled_step = result.diagnostics.compiled_step
+        compiled_step = result.compiled_step if isinstance(result, UnretainedRun) else result.diagnostics.compiled_step
         if compiled_step is None:
             raise RuntimeError("Profiling requested but inference did not retain its compiled step")
         dump_compiled_analysis(compiled_step, profile_dir=profile_dir, label="run_batched_step")
@@ -148,6 +152,7 @@ def fit_model(
     *,
     time_origin: datetime,
     sampler: SamplerSpec,
+    continuation: SamplerCheckpoint | None = None,
 ) -> FittedModelResult | ModelFitFailure:
     """Fit the selected SSM to one observation history with the selected joint sampler.
 
@@ -206,7 +211,7 @@ def fit_model(
     # Fit the model and retain the exact joint posterior.
     logger.info("Starting inference kernel...")
     fit_t0 = time.monotonic()
-    result = fit_prepared_model(prepared, sampler=sampler)
+    result = fit_prepared_model(prepared, sampler=sampler, continuation=continuation)
     if isinstance(result, (ObservationPreflightFailure, InitializationFailure)):
         return {
             "fitted": False,
@@ -222,7 +227,7 @@ def fit_model(
 
     logger.info(
         "Retaining native posterior and sampler telemetry: n_samples=%d",
-        result.draws.describe().n_draws,
+        sampler.num_chains * sampler.num_samples_per_chain,
     )
     return {
         "fitted": True,

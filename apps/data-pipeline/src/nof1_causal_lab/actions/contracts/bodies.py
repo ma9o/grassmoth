@@ -9,6 +9,7 @@ Request envelopes live in ``actions.contracts.requests``. Each output becomes th
 """
 
 from collections.abc import Mapping
+from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field
 
@@ -143,30 +144,39 @@ class PrepareDataOutput(Value):
 # fit
 
 
+class NewFitTarget[RevisionT](Value):
+    """Condition the selected model law on exactly one saved history."""
+
+    kind: Literal["new"] = "new"
+    dynamical_model_spec_ref: RevisionT
+    data_ref: DataRef[RevisionT, int]
+
+
+class ContinueFitTarget[RevisionT](Value):
+    """Continue the original target at the last retained draw of a prior fit."""
+
+    kind: Literal["continue"] = "continue"
+    fit_ref: RevisionT
+
+
+type FitTarget[RevisionT] = Annotated[
+    NewFitTarget[RevisionT] | ContinueFitTarget[RevisionT], Field(discriminator="kind")
+]
+
+
 class FitInput[RevisionT](Value):
-    """Condition one model on one selected observation history.
+    """Start or continue a fit; sample counts always mean additional retained draws."""
 
-    The data revision and replicate index both enter call identity and retained
-    provenance, so fitting another history is a distinct scientific call.
-    """
-
-    dynamical_model_spec_ref: RevisionT = Field(
-        description="Model revision whose parameter law will be conditioned."
-    )
-    data_ref: DataRef[RevisionT, int] = Field(
-        description="One saved observation history selected by revision and a required replicate index."
-    )
-    settings: FitSettingsSpec = Field(
-        default_factory=FitSettingsSpec,
-        description="Optional particle-sampler counts and random seed for the run.",
-    )
+    target: FitTarget[RevisionT]
+    settings: FitSettingsSpec = Field(default_factory=FitSettingsSpec)
+    repeat: int = Field(default=0, ge=0, description="Timing repeat identity; identical repeats reuse their saved result.")
 
 
 class FitOutput(Value):
     """A conditioned model, its completed checks, and self-contained inference evidence."""
 
-    dynamical_model_spec: DynamicalModelSpec = Field(
-        description="The model with its joint parameter law conditioned on the selected data."
+    dynamical_model_spec: DynamicalModelSpec | None = Field(
+        description="The conditioned model, or null when this fit retained no additional draws."
     )
     checks: FitCheckReport = Field(
         description="Completed compatibility and question findings for the selected history."

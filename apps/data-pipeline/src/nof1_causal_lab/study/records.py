@@ -327,12 +327,13 @@ def argument_revisions(attempt: ActionAttempt) -> tuple[tuple[str, GitOid], ...]
     if request is None:
         return ()
     references: list[tuple[str, GitOid]] = []
-    for name in type(request.input).model_fields:
+    selected = request.input.target if isinstance(request, FitRequest) else request.input
+    for name in type(selected).model_fields:
         if not name.endswith("_ref"):
             continue
         value = cast(
             "GitOid | DataRef[GitOid, int | None] | tuple[GitOid | DataRef[GitOid, int | None], ...] | None",
-            getattr(request.input, name),
+            getattr(selected, name),
         )
         if value is not None:
             references.extend(

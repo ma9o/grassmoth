@@ -11,6 +11,8 @@ from nof1_causal_lab.actions.contracts.bodies import (
     DataDiffInput,
     EditModelInput,
     FitInput,
+    NewFitTarget,
+    ContinueFitTarget,
     ModelDiffInput,
     PrepareDataInput,
     SimulateInput,
@@ -41,7 +43,7 @@ if TYPE_CHECKING:
     from nof1_causal_lab.study.persistence.history import StudyRepository
     from nof1_causal_lab.study.persistence.store import ArtifactStore
 
-type RevisionInputKind = Literal["question", "model", "panel", "simulation", "model_parent"]
+type RevisionInputKind = Literal["question", "model", "panel", "simulation", "model_parent", "fit"]
 
 
 def resolve_action_inputs(
@@ -63,10 +65,10 @@ def resolve_action_inputs(
     def latest(kind: RevisionInputKind) -> GitOid:
         if kind == "model_parent":
             return latest("model" if repository.state(head).has("model") else "question")
-        if kind == "simulation":
+        if kind in {"simulation", "fit"}:
             for revision in reversed(repository.records(head)):
                 attempt = revision.record.attempt
-                if attempt.action == "simulate" and isinstance(attempt.outcome, Applied):
+                if attempt.action == ("simulate" if kind == "simulation" else "fit") and isinstance(attempt.outcome, Applied):
                     return revision.commit_id
         else:
             state = repository.state(head)
@@ -112,15 +114,14 @@ def resolve_action_inputs(
                 reasoning=request.reasoning,
             )
         case FitRequest():
+            target = request.input.target
+            resolved_target = NewFitTarget[GitOid](
+                dynamical_model_spec_ref=resolve(target.dynamical_model_spec_ref, "model"),
+                data_ref=data_ref(target.data_ref),
+            ) if isinstance(target, NewFitTarget) else ContinueFitTarget[GitOid](fit_ref=resolve(target.fit_ref, "fit"))
             resolved = FitRequest[GitOid](
                 reasoning=request.reasoning,
-                input=FitInput[GitOid](
-                    dynamical_model_spec_ref=resolve(
-                        request.input.dynamical_model_spec_ref, "model"
-                    ),
-                    data_ref=data_ref(request.input.data_ref),
-                    settings=request.input.settings,
-                ),
+                input=FitInput[GitOid](target=resolved_target, settings=request.input.settings, repeat=request.input.repeat),
             )
         case SimulateRequest():
             resolved = SimulateRequest[GitOid](
@@ -213,22 +214,24 @@ def input_state(
     current: dict[ArtifactId, ArtifactRecord] = (
         {"question": question} if question is not None else {}
     )
+    from nof1_causal_lab.actions.fit.selection import fit_source
+
+    source = fit_source(store, request.input.target) if isinstance(request, FitRequest) else None
     dynamical_model_spec_revision = (
-        request.input.dynamical_model_spec_ref
-        if isinstance(request, (FitRequest, SimulateRequest, PrepareDataRequest))
-        else None
+        source.dynamical_model_spec_ref if source is not None
+        else request.input.dynamical_model_spec_ref
+        if isinstance(request, (SimulateRequest, PrepareDataRequest)) else None
     )
     panel: GitOid | None = None
-    if isinstance(request, FitRequest):
+    if source is not None:
         from nof1_causal_lab.artifacts.observations.preparation import PreparedDataMetadata
         from nof1_causal_lab.study.queries.data import panel_revision, read_data_source
-
-        if isinstance(
-            read_data_source(store, request.input.data_ref.revision), PreparedDataMetadata
-        ):
-            panel = panel_revision(store, request.input.data_ref.revision)
+        if isinstance(read_data_source(store, source.data_ref.revision), PreparedDataMetadata):
+            panel = panel_revision(store, source.data_ref.revision)
     if dynamical_model_spec_revision is not None:
         current["model"] = store.read_meta("model", dynamical_model_spec_revision)
+        if source is not None:
+            current["question"] = store.read_meta("question", current["model"].derived_from["question"])
     if panel is not None:
         current["panel"] = store.read_meta("panel", panel)
         effects = next(
@@ -252,8 +255,8 @@ def input_state(
                 }
             )
     data = (
-        request.input.data_ref
-        if isinstance(request, FitRequest)
+        source.data_ref
+        if source is not None
         else DataRef[GitOid, int](revision=panel, replicate_index=0)
         if panel is not None
         else None

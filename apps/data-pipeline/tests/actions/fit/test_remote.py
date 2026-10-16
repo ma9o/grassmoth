@@ -16,7 +16,7 @@ pytestmark = pytest.mark.contract
 def test_pytest_fits_locally_and_rejects_live_modal_apps():
     from nof1_causal_lab.config import get_config
 
-    assert get_config().inference.hardware is InferenceHardware.LOCAL
+    assert get_config().inference.sampler.hardware is InferenceHardware.LOCAL
     with pytest.raises(pytest.fail.Exception, match="Live Modal execution is disabled"):
         modal.App("pytest-local-only").run()
 

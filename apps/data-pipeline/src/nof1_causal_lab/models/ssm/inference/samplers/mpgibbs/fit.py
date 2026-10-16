@@ -11,6 +11,9 @@ import jax.random as random
 import numpy as np
 
 from nof1_causal_lab.artifacts.identity import ConstructRef
+from nof1_causal_lab.artifacts.arrays import NumericalArray
+from nof1_causal_lab.artifacts.continuation import ParticleTuning, SamplerCheckpoint, sampler_identity
+from nof1_causal_lab.models.ssm.inference.continuation import continued_particle_initialization, frozen_particle_tuning
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
 from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec
 from nof1_causal_lab.models.ssm.compile.state_space import SequentialRecurrences
@@ -41,6 +44,7 @@ from nof1_causal_lab.models.ssm.inference.types import (
     MCMCEvidence,
     MCMCPosterior,
     ProductionDiagnostics,
+    UnretainedRun,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
 from nof1_causal_lab.models.ssm.inference.warmup.laps import prepare_laps_initialization
@@ -69,7 +73,8 @@ def fit_marginal_particle_gibbs(
     sampler: SamplerSpec,
     reparam: Strategy | None = None,
     clock: Callable[[], float],
-) -> MCMCPosterior | InitializationFailure:
+    continuation: SamplerCheckpoint | None = None,
+) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Run exact particle inference with resolved choices and owned warmup outputs."""
     recurrence = panel.compiled_dynamical_model.state_space.recurrence
     if isinstance(recurrence, SequentialRecurrences):
@@ -122,31 +127,19 @@ def fit_marginal_particle_gibbs(
 
     phase_t0 = clock()
     logger.info("phase 2/4: joint LAPS initialization (ensemble=%d)", options.laps.ensemble_size)
-    with inference_phase("mpgibbs", "preparing_initialization", clock=clock):
-        initialization = prepare_laps_initialization(
-            bundle.runtime,
-            compute_budget=compute_budget,
-            spec=options.laps,
-            key=laps_key,
-            num_chains=sampler.num_chains,
-        )
+    if continuation is not None:
+        initialization = continued_particle_initialization(continuation)
+    else:
+        with inference_phase("mpgibbs", "preparing_initialization", clock=clock):
+            initialization = prepare_laps_initialization(
+                bundle.runtime,
+                compute_budget=compute_budget,
+                spec=options.laps,
+                key=laps_key,
+                num_chains=sampler.num_chains,
+            )
     if isinstance(initialization, InitializationFailure):
         return initialization
-    measured = initialization.diagnostics
-    logger.info(
-        "phase 2/4: LAPS ready in %.1fs (dim=%d, ensemble=%d, unadjusted=%d, adjusted=%d, "
-        "early_stop=%s, steps=%.4g/%.4g, adjusted_accept=%.3f)",
-        (clock() - phase_t0),
-        measured.joint_dimension,
-        measured.ensemble_size,
-        measured.unadjusted_steps,
-        measured.adjusted_steps,
-        measured.early_stopped,
-        measured.unadjusted_step_size,
-        measured.adjusted_step_size,
-        measured.adjusted_acceptance,
-    )
-
     paid_mix = (
         None
         if not options.dsmc.pilot_mixture
@@ -171,7 +164,9 @@ def fit_marginal_particle_gibbs(
             parameter_preconditioner_chol=initialization.parameter_chol,
             parameter_proposal=options.parameter_proposal,
             paid_mix=paid_mix,
-            parameter_reference_path=initialization.paths[0],
+            parameter_reference_path=jnp.asarray(continuation.tuning.parameter_reference_path.values)
+            if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
+            else initialization.paths[0],
             diagnostic_metrics_all=options.diagnostic_metrics_all,
             diagnostic_metrics=options.diagnostic_metrics,
             dsmc=options.dsmc,
@@ -179,14 +174,19 @@ def fit_marginal_particle_gibbs(
 
     kernel = make_kernel(bundle.runtime)
     tempering = None
+    reference = None
     if options.tempering is not None:
-        reference = build_gaussian_reference(
-            bundle.runtime,
-            positions=initialization.positions,
-            paths=initialization.paths,
-            parameter_chol=initialization.parameter_chol,
-            scale=options.tempering.reference_scale,
-        )
+        if continuation is not None and isinstance(continuation.tuning, ParticleTuning) and continuation.tuning.gaussian_reference:
+            from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import GaussianReference
+            reference = GaussianReference(*(jnp.asarray(value.values) for value in continuation.tuning.gaussian_reference))
+        else:
+            reference = build_gaussian_reference(
+                bundle.runtime,
+                positions=initialization.positions,
+                paths=initialization.paths,
+                parameter_chol=initialization.parameter_chol,
+                scale=options.tempering.reference_scale,
+            )
         tempering = ReplicaExchangeKernel(bundle.runtime, reference, make_kernel, options.tempering)
     run_result = run_marginal_particle_gibbs(
         bundle.runtime,
@@ -203,7 +203,19 @@ def fit_marginal_particle_gibbs(
         adaptation_scheme=options.adaptation_scheme,
         tempering=tempering,
         clock=clock,
+        continuation=continuation,
     )
+    tuning = continuation.tuning if continuation is not None and isinstance(continuation.tuning, ParticleTuning) else frozen_particle_tuning(initialization, reference)
+    checkpoint = SamplerCheckpoint(
+        settings=sampler, native_state=run_result.final_state, tuning=tuning,
+        random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(run_result.random_key))),
+        parameters=NumericalArray.from_numpy(np.asarray(run_result.last_parameters)),
+        paths=NumericalArray.from_numpy(np.asarray(run_result.last_paths)),
+    )
+    if sampler.num_samples_per_chain == 0:
+        return UnretainedRun(sampler, MCMCEvidence(), run_result.compiled_step, {
+            "warmup": run_result.warmup_chain_extra_fields, "post_warmup": run_result.chain_extra_fields,
+        })
     mcmc_phase_seconds = clock() - phase_t0
     logger.info("phase 3/4: MCMC complete in %.1fs", mcmc_phase_seconds)
 
@@ -283,6 +295,7 @@ def fit_marginal_particle_gibbs(
         amala_grad_norm_max=float(jnp.max(summary_extra_fields["amala_grad_norm_max"])),
     )
     diagnostics = ProductionDiagnostics(
+        checkpoint=checkpoint,
         compiled_step=run_result.compiled_step,
         mcmc=mcmc,
         public_sites=tuple(sorted(bundle.public_sites)),

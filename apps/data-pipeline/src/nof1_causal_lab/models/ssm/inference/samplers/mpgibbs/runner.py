@@ -12,6 +12,10 @@ import jax.random as random
 from blackjax.adaptation.step_size import dual_averaging_adaptation
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.artifacts.arrays import NumericalArray
+from nof1_causal_lab.artifacts.sampling import FixedLatentStepSpec
+from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
+from nof1_causal_lab.models.ssm.inference.continuation import retain_state, restore_state
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ParticleWeightMetric,
     ReplicaSwapCounts,
@@ -41,8 +45,7 @@ from nof1_causal_lab.models.ssm.inference.samplers.particle.diagnostics import (
 )
 from nof1_causal_lab.models.ssm.inference.samplers.particle.math import _masked_mean
 from nof1_causal_lab.models.ssm.inference.samplers.progress import inference_phase
-from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import compile_sweeps
-from nof1_causal_lab.models.ssm.inference.samplers.sweeps import run_sweeps
+from nof1_causal_lab.models.ssm.inference.samplers.sweeps import compile_projected_sweeps, run_sweeps
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -80,6 +83,10 @@ class ParticleChainResult:
     compiled_step: Compiled
     first_step_seconds: float
     sampling_loop_seconds: float
+    final_state: tuple[NumericalArray, ...]
+    random_key: jax.Array
+    last_parameters: jax.Array
+    last_paths: jax.Array
     tempering: TemperingDiagnostics | None = None
 
     @property
@@ -159,6 +166,7 @@ def _initialize_chain_state(
 
 class _Population(NamedTuple):
     chains: TrajectoryMCMCState
+    random_key: jax.Array
     iteration: jax.Array
     betas: jax.Array
     adaptation: DsmcAdaptation
@@ -187,6 +195,7 @@ def run_marginal_particle_gibbs(
     adaptation_scheme: Literal["simple", "dual_averaging"] = "simple",
     tempering: ReplicaExchangeKernel | None = None,
     clock: Callable[[], float],
+    continuation: SamplerCheckpoint | None = None,
 ) -> ParticleChainResult:
     """Run marginalized Particle Gibbs chains from paired LAPS starts."""
     use_dual_averaging = adaptation_scheme == "dual_averaging"
@@ -195,9 +204,6 @@ def run_marginal_particle_gibbs(
         if use_dual_averaging
         else None
     )
-    total_steps = num_warmup + num_samples
-    if total_steps <= 0:
-        raise ValueError("marginal_particle_gibbs requires at least one MCMC step.")
     observations = target.observations
     times = target.times
     num_steps = int(observations.shape[0])
@@ -273,6 +279,7 @@ def run_marginal_particle_gibbs(
         moments = (jnp.zeros_like(example), jnp.zeros_like(example), jnp.asarray(0))
     initial = _Population(
         states,
+        key if continuation is None else jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values)),
         jnp.asarray(0),
         betas,
         initialize_adaptation(states.latent_delta),
@@ -283,14 +290,20 @@ def run_marginal_particle_gibbs(
         jnp.asarray(0),
         moments,
     )
-    step_keys = random.split(key, (total_steps, replicas))
+    if continuation is not None and num_warmup == 0:
+        initial = restore_state(initial, continuation.native_state)
+        scale = kernel.dsmc.latent_step
+        if isinstance(scale, FixedLatentStepSpec):
+            delta = jnp.full_like(initial.chains.latent_delta, scale.delta)
+            initial = initial._replace(chains=initial.chains._replace(latent_delta=delta), adaptation=initial.adaptation._replace(delta=delta))
     diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=kernel.diagnostic_metrics)
 
     def step_factory(
         batch_size: int, stage: SweepStage
     ) -> Callable[[_Population], tuple[_Population, dict[str, jax.Array]]]:
         def sweep(current: _Population) -> tuple[_Population, dict[str, jax.Array]]:
-            keys = step_keys[current.iteration]
+            next_key, step_key = random.split(current.random_key)
+            keys = random.split(step_key, replicas)
             if tempering is None:
                 updated, info = jax.vmap(
                     lambda state, draw_key: kernel.step_fn(state, draw_key, batch_size=batch_size)
@@ -352,14 +365,8 @@ def run_marginal_particle_gibbs(
                 record = {
                     **record,
                     "positions": cold.position,
-                    "observation_log_probs": jax.vmap(
-                        lambda context, path: target.observation_log_probs(
-                            context, path, observations
-                        )
-                    )(cold.latent_context, cold.latent_trajectory),
+                    "paths": cold.latent_trajectory,
                 }
-                if retain_latent_paths:
-                    record = {**record, "paths": cold.latent_trajectory}
                 next_moments = current.moments
                 if next_moments is not None:
                     latent_sum, latent_sumsq, count = next_moments
@@ -370,6 +377,7 @@ def run_marginal_particle_gibbs(
                     )
                 return current._replace(
                     chains=updated,
+                    random_key=next_key,
                     iteration=current.iteration + 1,
                     swap_accepted=current.swap_accepted + exchange.accepted,
                     swap_attempted=current.swap_attempted + exchange.attempted,
@@ -419,6 +427,7 @@ def run_marginal_particle_gibbs(
                 )
             next_state: _Population = current._replace(
                 chains=updated,
+                random_key=next_key,
                 iteration=current.iteration + 1,
                 adaptation=tuning,
             )
@@ -454,13 +463,14 @@ def run_marginal_particle_gibbs(
         return sweep
 
     with inference_phase("mpgibbs", "compiling_sweeps", clock=clock):
-        plan = compile_sweeps(
+        plan = compile_projected_sweeps(
             step_factory,
             initial,
             num_warmup=num_warmup,
             num_samples=num_samples,
             max_batch_size=max(kernel.num_particles, (1 << (num_steps - 1).bit_length()) // 2),
             budget=compute_budget,
+            target=target, path_dtype=states.latent_trajectory.dtype, num_chains=num_chains, clock=clock, label="mpgibbs",
         )
     run = run_sweeps(plan, initial, clock=clock, label="mpgibbs")
     final = run.state
@@ -503,6 +513,9 @@ def run_marginal_particle_gibbs(
         compiled_step=plan.compiled_step,
         first_step_seconds=run.first_step_seconds,
         sampling_loop_seconds=run.sampling_loop_seconds,
+        final_state=retain_state(final), random_key=final.random_key,
+        last_parameters=final.chains.position[cold_indices],
+        last_paths=final.chains.latent_trajectory[cold_indices],
         tempering=None
         if tempering is None
         else TemperingDiagnostics(

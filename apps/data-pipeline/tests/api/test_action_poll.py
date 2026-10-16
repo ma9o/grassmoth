@@ -16,6 +16,7 @@ from nof1_causal_lab.actions.contracts.bodies import (
     EditModelInput,
     EditQuestionInput,
     FitInput,
+    NewFitTarget,
     ModelDiffInput,
     PrepareDataInput,
     SimulateInput,
@@ -96,10 +97,9 @@ async def _execute_action(
             )
         ),
         FitRequest[GitOid](
-            input=FitInput[GitOid](
+            input=FitInput[GitOid](target=NewFitTarget(
                 dynamical_model_spec_ref=git_oid(1),
-                data_ref=DataRef(revision=git_oid(2), replicate_index=0),
-            )
+                data_ref=DataRef(revision=git_oid(2), replicate_index=0)),)
         ),
         SimulateRequest[GitOid](
             input=SimulateInput[GitOid](

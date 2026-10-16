@@ -25,7 +25,7 @@ from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationF
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
-        LapsInitializationDiagnostics,
+        InitializationDiagnostics,
     )
     from nof1_causal_lab.artifacts.sampling import LapsInitializationSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
@@ -41,7 +41,7 @@ class LapsInitializationResult:
     parameter_chol: jax.Array
     pilot_mean: jax.Array
     pilot_variance: jax.Array
-    diagnostics: LapsInitializationDiagnostics
+    diagnostics: InitializationDiagnostics
     trace: LapsTraceRecord | NoLapsTrace = field(default_factory=NoLapsTrace)
 
     @property

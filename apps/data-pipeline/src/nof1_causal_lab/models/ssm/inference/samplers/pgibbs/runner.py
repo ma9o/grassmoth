@@ -10,9 +10,12 @@ import jax.numpy as jnp
 import numpy as np
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.artifacts.arrays import NumericalArray
+from nof1_causal_lab.artifacts.sampling import FixedLatentStepSpec
+from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
+from nof1_causal_lab.models.ssm.inference.continuation import retain_state, restore_state
 from nof1_causal_lab.models.ssm.inference.samplers.progress import inference_phase
-from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import compile_sweeps
-from nof1_causal_lab.models.ssm.inference.samplers.sweeps import run_sweeps
+from nof1_causal_lab.models.ssm.inference.samplers.sweeps import compile_projected_sweeps, run_sweeps
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
@@ -44,6 +47,10 @@ class ParticleGibbsRun:
     final_latent_delta: jax.Array
     final_param_step_size: jax.Array
     compiled_step: Compiled
+    final_state: tuple[NumericalArray, ...]
+    random_key: jax.Array
+    last_parameters: jax.Array
+    last_paths: jax.Array
 
     def __post_init__(self) -> None:
         """Freeze telemetry mappings while retaining the native array buffers."""
@@ -59,6 +66,7 @@ def run_particle_gibbs[State](
     compute_budget: ComputeBudget,
     key: jax.Array,
     clock: Callable[[], float],
+    continuation: SamplerCheckpoint | None = None,
 ) -> ParticleGibbsRun | InitializationFailure:
     """Advance chains together, retaining aligned draws only after warmup."""
     initial_key, key = jax.random.split(key)
@@ -69,6 +77,14 @@ def run_particle_gibbs[State](
             jax.random.split(initial_key, sampler.num_chains),
         )
         jax.block_until_ready(states)
+    if continuation is not None:
+        key = jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values))
+        if sampler.num_warmup == 0:
+            states = restore_state(states, continuation.native_state)
+            options = sampler.algorithm
+            scale = options.dsmc.latent_step
+            if isinstance(scale, FixedLatentStepSpec):
+                states = states._replace(adaptation=states.adaptation._replace(delta=jnp.full_like(states.adaptation.delta, scale.delta)))
     finite_parameters = jax.vmap(kernel.parameters.is_finite)(states.parameters)
     if (
         not np.isfinite(np.asarray(states.log_posterior)).all()
@@ -78,10 +94,6 @@ def run_particle_gibbs[State](
             "Particle Gibbs requires finite exact joint starting densities and parameter-kernel states"
         )
     initial_delta = states.adaptation.delta
-
-    def observation_factors(position: jax.Array, path: jax.Array) -> jax.Array:
-        context = target.context(position, target.times)
-        return jnp.asarray(target.observation_log_probs(context, path, target.observations))
 
     def step_factory(
         batch_size: int, stage: SweepStage
@@ -105,10 +117,8 @@ def run_particle_gibbs[State](
                 record = {
                     **record,
                     "positions": position,
-                    "observation_log_probs": jax.vmap(observation_factors)(position, updated.path),
+                    "paths": updated.path,
                 }
-                if sampler.retain_latent_paths:
-                    record = {**record, "paths": updated.path}
             next_carry: tuple[ParticleGibbsState[State], jax.Array] = (updated, next_key)
             return next_carry, record
 
@@ -116,7 +126,7 @@ def run_particle_gibbs[State](
 
     initial = (states, key)
     with inference_phase("pgibbs", "compiling_sweeps", clock=clock):
-        plan = compile_sweeps(
+        plan = compile_projected_sweeps(
             step_factory,
             initial,
             num_warmup=sampler.num_warmup,
@@ -125,9 +135,10 @@ def run_particle_gibbs[State](
                 kernel.num_particles, (1 << (len(target.times) - 1).bit_length()) // 2
             ),
             budget=compute_budget,
+            target=target, path_dtype=states.path.dtype, num_chains=sampler.num_chains, clock=clock, label="pgibbs",
         )
     run = run_sweeps(plan, initial, clock=clock, label="pgibbs")
-    states, _ = run.state
+    states, next_key = run.state
     draw_fields = frozenset(("positions", "paths", "observation_log_probs", "log_posterior"))
     warmup = {name: value for name, value in run.history.warmup.items() if name not in draw_fields}
     posterior = {
@@ -148,4 +159,6 @@ def run_particle_gibbs[State](
         final_latent_delta=states.adaptation.delta,
         final_param_step_size=jax.vmap(kernel.parameters.step_size)(states.parameters),
         compiled_step=plan.compiled_step,
+        final_state=retain_state(states), random_key=next_key,
+        last_parameters=jax.vmap(kernel.parameters.position)(states.parameters), last_paths=states.path,
     )

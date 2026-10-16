@@ -137,13 +137,12 @@ class TestSamplerSpec:
     def test_hardware_and_algorithm_are_independent(self, hardware, algorithm):
         config = TypeAdapter(InferenceConfig).validate_python(
             {
-                "hardware": hardware.value,
-                "sampler": {"algorithm": algorithm.model_dump()},
+                "sampler": {"hardware": hardware.value, "algorithm": algorithm.model_dump()},
             }
         )
-        assert config.hardware is hardware
+        assert config.sampler.hardware is hardware
         assert config.sampler.algorithm == algorithm
-        assert InferenceConfig().hardware is InferenceHardware.L40S
+        assert InferenceConfig().sampler.hardware is InferenceHardware.L40S
 
     def test_custom_chains_and_seed(self):
         result = InferenceConfig(sampler=SamplerSpec(num_chains=8, seed=42)).sampler

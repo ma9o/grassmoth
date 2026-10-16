@@ -74,7 +74,9 @@ class StudyRepository:
                 continue
             if attempt.action == "fit":
                 assert isinstance(attempt.request, FitRequest)
-                data = attempt.request.input.data_ref
+                from nof1_causal_lab.actions.fit.selection import fit_source
+                from nof1_causal_lab.study.persistence.store import ArtifactStore
+                data = fit_source(ArtifactStore(self.workspace_id, repository_path=self.path), attempt.request.input.target).data_ref
                 break
             if attempt.action == "prepare_data" and any(
                 info.artifact_id == "panel" for info in attempt.outcome.effects.produced

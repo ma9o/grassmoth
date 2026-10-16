@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import FitInput
+from nof1_causal_lab.actions.contracts.bodies import NewFitTarget, FitInput
 from nof1_causal_lab.actions.contracts.requests import FitRequest
 from nof1_causal_lab.actions.runners import run_action_locally
 from nof1_causal_lab.artifacts.identity import GitOid
@@ -74,10 +74,9 @@ def test_inference_advances_model_and_uses_the_selected_input(
     revisions = [original.revision]
     # Refit the selected authored revision; conditioned joint laws cannot be fit inputs.
     request = FitRequest[GitOid](
-        input=FitInput[GitOid](
+        input=FitInput[GitOid](target=NewFitTarget(
             dynamical_model_spec_ref=original.revision,
-            data_ref=DataRef(revision=panel.revision, replicate_index=0),
-        )
+            data_ref=DataRef(revision=panel.revision, replicate_index=0)),)
     )
     question = write_question(artifact_store)
     pins: dict[ArtifactId, GitOid] = {

@@ -24,6 +24,8 @@ import jax.numpy as jnp
 from numpy.typing import NDArray
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
+from nof1_causal_lab.artifacts.sampling import SamplerSpec
 from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
 from nof1_causal_lab.artifacts.reports.inference import PosteriorDrawsInfo
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
@@ -76,11 +78,26 @@ def _arviz_idata_from_posterior(
     return az_base.from_dict(payload)
 
 
+@dataclass(frozen=True)
+class UnretainedRun:
+    """A completed compilation or warmup with no retained posterior and no checkpoint."""
+
+    settings: SamplerSpec
+    evidence: MCMCEvidence
+    compiled_step: Compiled
+    phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]]
+
+    def __post_init__(self) -> None:
+        """Freeze telemetry at the execution boundary."""
+        freeze_fields(self)
+
+
 @dataclass(frozen=True, kw_only=True)
 class ProductionDiagnostics:
     """The exact producer's native buffers, separate from serialized report values."""
 
     mcmc: TrajectoryMCMCResult
+    checkpoint: SamplerCheckpoint | None = None
     observation_log_probs: jnp.ndarray
     latent_chains: LatentChainEvidence | None = None
     compiled_step: Compiled | None = None

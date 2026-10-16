@@ -25,10 +25,12 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
+    from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.inference.types import (
         MCMCPosterior,
+        UnretainedRun,
     )
     from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
@@ -43,7 +45,8 @@ def fit(
     sampler: SamplerSpec,
     reparam: Strategy | Literal["auto"] | None = "auto",
     clock: Callable[[], float],
-) -> MCMCPosterior | ObservationPreflightFailure | InitializationFailure:
+    continuation: SamplerCheckpoint | None = None,
+) -> MCMCPosterior | UnretainedRun | ObservationPreflightFailure | InitializationFailure:
     """Dispatch exact joint inference through the selected algorithm's owned settings."""
     failure = validate_observations_for_fit(priors, panel)
     if failure is not None:
@@ -59,6 +62,7 @@ def fit(
             sampler=sampler,
             reparam=resolved_reparam,
             clock=clock,
+            continuation=continuation,
         )
     if isinstance(sampler.algorithm, NutsDASpec):
         from nof1_causal_lab.models.ssm.inference.samplers.nuts import fit_nuts_da
@@ -70,6 +74,7 @@ def fit(
             sampler=sampler,
             reparam=resolved_reparam,
             clock=clock,
+            continuation=continuation,
         )
     from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.fit import (
         fit_marginal_particle_gibbs,
@@ -82,4 +87,5 @@ def fit(
         sampler=sampler,
         reparam=resolved_reparam,
         clock=clock,
+        continuation=continuation,
     )

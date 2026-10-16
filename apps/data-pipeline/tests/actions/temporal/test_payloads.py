@@ -62,7 +62,7 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
                 from temporalio.worker.workflow_sandbox._restrictions import RestrictionContext
 
                 from nof1_causal_lab.actions.contracts.requests import FitRequest, SimulateRequest
-                from nof1_causal_lab.actions.contracts.bodies import FitInput, SimulateInput
+                from nof1_causal_lab.actions.contracts.bodies import NewFitTarget, FitInput, SimulateInput
                 from nof1_causal_lab.artifacts.identity import GitOid
                 from nof1_causal_lab.artifacts.simulation import SimulationSpec
                 from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
@@ -88,10 +88,9 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
                         # These activities carry revision references, not a DynamicalModelSpec.
                         ActionInput(
                             workspace_id="test", state=state,
-                            request=FitRequest[GitOid](input=FitInput[GitOid](
+                            request=FitRequest[GitOid](input=FitInput[GitOid](target=NewFitTarget(
                                 dynamical_model_spec_ref=model_record.revision,
-                                data_ref={"revision": panel_record.revision, "replicate_index": 0},
-                            )),
+                                data_ref={"revision": panel_record.revision, "replicate_index": 0}),)),
                         ),
                         ActionInput(
                             workspace_id="test", state=state,

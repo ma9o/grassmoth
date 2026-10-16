@@ -120,7 +120,6 @@ class ExtractionWorkersConfig:
 class InferenceConfig:
     """Shell settings alongside the single owned sampler specification."""
 
-    hardware: InferenceHardware = InferenceHardware.L40S
     compute_loo_diagnostics: bool = True
     sampler: SamplerSpec = field(default_factory=SamplerSpec)
 

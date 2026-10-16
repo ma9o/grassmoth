@@ -20,6 +20,7 @@ from nof1_causal_lab.actions.contracts.bodies import (
     EditModelOutput,
     EditQuestionInput,
     FitInput,
+    NewFitTarget,
     ModelDiffInput,
     PrepareDataOutput,
     SimulateInput,
@@ -258,10 +259,9 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 # Both numerical actions reject incomplete definitions before any numerical work.
                 for request in (
                     FitRequest[GitOid](
-                        input=FitInput[GitOid](
+                        input=FitInput[GitOid](target=NewFitTarget(
                             dynamical_model_spec_ref=model_revision,
-                            data_ref=DataRef(revision=before["panel"].revision, replicate_index=0),
-                        )
+                            data_ref=DataRef(revision=before["panel"].revision, replicate_index=0)),)
                     ),
                     SimulateRequest[GitOid](
                         input=SimulateInput[GitOid](

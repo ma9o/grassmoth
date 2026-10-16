@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, FitInput
+from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, NewFitTarget, FitInput
 from nof1_causal_lab.actions.contracts.requests import EditModelRequest, FitRequest
 from nof1_causal_lab.actions.runners import run_action
 from nof1_causal_lab.artifacts.identity import ARTIFACT_IDS, GitOid
@@ -120,10 +120,9 @@ def test_incomplete_model_is_rejected_before_inference(workspace, monkeypatch):
             run_action(
                 workspace,
                 FitRequest[GitOid](
-                    input=FitInput[GitOid](
+                    input=FitInput[GitOid](target=NewFitTarget(
                         dynamical_model_spec_ref=model.revision,
-                        data_ref=DataRef(revision=panel.revision, replicate_index=0),
-                    )
+                        data_ref=DataRef(revision=panel.revision, replicate_index=0)),)
                 ),
                 state,
             )

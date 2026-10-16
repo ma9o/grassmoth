@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
+from nof1_causal_lab.actions.contracts.bodies import FitOutput
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
 from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence, InferenceMetadata
 from nof1_causal_lab.compute.resources import HOST_MEMORY_ALLOCATION_ENV
@@ -42,13 +44,15 @@ class FitComputeInput:
     time_origin: datetime
     sampler: SamplerSpec
     compute_loo_diagnostics: bool
+    continuation: bytes | None = None
+    previous: bytes | None = None
 
 
 @dataclass(frozen=True)
 class FitComputeResult:
     """Complete fitted output to validate and persist through the caller's store."""
 
-    dynamical_model_spec_bytes: bytes
+    dynamical_model_spec_bytes: bytes | None
     evidence: bytes
     metadata_json: str
 
@@ -86,11 +90,13 @@ def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
         array_writer=write_array,
         array_loader=arrays.__getitem__,
         compute_loo_diagnostics=payload.compute_loo_diagnostics,
+        continuation=SamplerCheckpoint.model_validate(unpack_result(payload.continuation)) if payload.continuation is not None else None,
+        previous=FitOutput.model_validate(unpack_result(payload.previous)) if payload.previous is not None else None,
     )
     conditioned = result["_dynamical_model_spec"]
     evidence = result["evidence"]
     return FitComputeResult(
-        dynamical_model_spec_bytes=pack_result(conditioned),
+        dynamical_model_spec_bytes=None if conditioned is None else pack_result(conditioned),
         evidence=pack_result(evidence),
         metadata_json=result["metadata"].model_dump_json(round_trip=True),
     )
@@ -157,6 +163,8 @@ def fit_on_modal(
     array_writer: Callable[[np.ndarray], str],
     array_loader: ArrayLoader,
     compute_loo_diagnostics: bool,
+    continuation: SamplerCheckpoint | None = None,
+    previous: FitOutput | None = None,
 ) -> FitResult:
     """Transfer pinned values, compute once on Modal, then retain returned arrays locally."""
     panel = io.BytesIO()
@@ -172,6 +180,8 @@ def fit_on_modal(
             time_origin=time_origin,
             sampler=sampler,
             compute_loo_diagnostics=compute_loo_diagnostics,
+            continuation=None if continuation is None else pack_result(continuation, array_loader=array_loader),
+            previous=None if previous is None else pack_result(previous, array_loader=array_loader),
         ),
         hardware=hardware,
     )
@@ -181,6 +191,8 @@ def fit_on_modal(
 
     evidence = InferenceEvidence.model_validate(unpack_result(result.evidence))
     metadata = InferenceMetadata.model_validate_json(result.metadata_json)
+    if result.dynamical_model_spec_bytes is None:
+        return {"evidence": evidence, "metadata": metadata, "_dynamical_model_spec": None}
     payload = unpack_result(result.dynamical_model_spec_bytes)
     conditioned = DynamicalModelSpec.model_validate(payload).materialized()
     for identity, value in owned_arrays(payload).items():

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from concurrent.futures import ThreadPoolExecutor
+from contextvars import copy_context
 from typing import TYPE_CHECKING
 
 import jax
@@ -14,12 +16,16 @@ from nof1_causal_lab.models.ssm.inference.samplers.progress import (
     inference_phase,
     log_inference_event,
 )
-from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase
+from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase, compile_sweeps
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepPlan
+    from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepPlan, SweepStage
+    from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
+    from nof1_causal_lab.compute.budget import ComputeBudget
+    from jax.stages import Compiled
+    from jax.typing import DTypeLike
 
 
 @dataclass(frozen=True)
@@ -44,6 +50,31 @@ class SweepRun[Carry]:
     sampling_loop_seconds: float
 
 
+def compile_projected_sweeps[Carry](
+    step_factory: Callable[[int, SweepStage], Callable[[Carry], tuple[Carry, dict[str, jax.Array]]]],
+    initial: Carry,
+    *, target: ParticleTarget, path_dtype: DTypeLike, num_chains: int, num_warmup: int, num_samples: int,
+    max_batch_size: int, budget: ComputeBudget, clock: Callable[[], float], label: str,
+) -> SweepPlan:
+    """Compile independent exact observation projection while the sampler compiles."""
+    block_size = min(25, max(1, num_warmup, num_samples))
+
+    def project(position: jax.Array, path: jax.Array) -> jax.Array:
+        return target.observation_log_probs(target.context(position, target.times), path, target.observations)
+
+    def compile_projection() -> Compiled:
+        with inference_phase(label, "compiling_observation_projection", clock=clock):
+            positions = jax.ShapeDtypeStruct((block_size, num_chains, target.initial_position.size), target.initial_position.dtype)
+            paths = jax.ShapeDtypeStruct((block_size, num_chains, len(target.times), target.independent_mask.shape[-1]), path_dtype)
+            return jax.jit(jax.vmap(jax.vmap(project))).lower(positions, paths).compile()
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        projection = executor.submit(copy_context().run, compile_projection)
+        plan = compile_sweeps(step_factory, initial, num_warmup=num_warmup, num_samples=num_samples,
+            max_batch_size=max_batch_size, budget=budget)
+        return replace(plan, projection=projection.result())
+
+
 def run_sweeps[Carry](
     plan: SweepPlan,
     initial: Carry,
@@ -60,9 +91,13 @@ def run_sweeps[Carry](
     for stage, phase in (("warmup", plan.warmup), ("sampling", plan.posterior)):
         # Assemble directly in the final chain-major layout. Each live block is
         # copied once; no retained chunks or full-history concatenation coexist.
+        shapes = dict(phase.shapes)
+        if stage == "sampling" and plan.projection is not None:
+            projected_shape = plan.projection.out_info
+            shapes["observation_log_probs"] = jax.ShapeDtypeStruct(projected_shape.shape[1:], projected_shape.dtype)
         buffers = {
             name: np.empty((shape.shape[0], phase.steps, *shape.shape[1:]), dtype=shape.dtype)
-            for name, shape in phase.shapes.items()
+            for name, shape in shapes.items()
         }
         if isinstance(phase, CompiledSweepPhase):
             phase_started = clock()
@@ -81,6 +116,8 @@ def run_sweeps[Carry](
                         state, jnp.asarray(count)
                     )
                     state, block = transition
+                    if stage == "sampling" and plan.projection is not None:
+                        block = {**block, "observation_log_probs": plan.projection(block["positions"], block["paths"])}
                     host_block = jax.device_get(block)
                     start = phase.steps - remaining
                     for name in host_block:

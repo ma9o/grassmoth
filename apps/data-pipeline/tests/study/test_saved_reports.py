@@ -14,6 +14,7 @@ import pytest
 from nof1_causal_lab.actions.contracts.bodies import (
     EditModelInput,
     FitInput,
+    NewFitTarget,
     PrepareDataInput,
     SimulateInput,
 )
@@ -253,10 +254,9 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
             ),
         ),
         request=FitRequest[GitOid](
-            input=FitInput[GitOid](
+            input=FitInput[GitOid](target=NewFitTarget(
                 dynamical_model_spec_ref=authored.revision,
-                data_ref=DataRef(revision=panel.revision, replicate_index=0),
-            )
+                data_ref=DataRef(revision=panel.revision, replicate_index=0)),)
         ),
         model_checks=validation,
     )

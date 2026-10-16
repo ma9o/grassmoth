@@ -1,11 +1,14 @@
 """Persisted posterior results and sampling metadata."""
 
 from collections.abc import Mapping
+from typing import Literal
 
 from pydantic import Field
 
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.base import Value
+from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
+from nof1_causal_lab.artifacts.sampling import SamplerSpec
 from nof1_causal_lab.artifacts.identity import ConstructId, DistributionId, ParameterId
 from nof1_causal_lab.artifacts.reports.checks import SpecificationAssessment
 from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
@@ -27,11 +30,41 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
 )
 
 
+class InferencePhase(Value):
+    """Measured interval relative to this execution's start; intervals may overlap."""
+
+    sampler: str
+    stage: str
+    start_seconds: float
+    end_seconds: float
+    outcome: Literal["complete", "failed"]
+
+
+class FitRuntime(Value):
+    """Actual numerical source, environment, compiler settings and devices."""
+
+    source_digest: str
+    versions: Mapping[str, str]
+    compiler: Mapping[str, str]
+    devices: tuple[str, ...]
+
+
+class FitSegment(Value):
+    """One execution's retained draw interval within every combined chain."""
+
+    start: int = Field(ge=0)
+    stop: int = Field(ge=0)
+    settings: SamplerSpec
+    runtime: FitRuntime
+    phases: tuple[InferencePhase, ...]
+
+
 class InferenceMetadata(Value):
     """The production run's law, chain layout and sampler measurements."""
 
-    distribution: DistributionId
-    num_samples_total: int = Field(ge=1)
+    distribution: DistributionId | None
+    num_samples_total: int = Field(ge=0)
+    segments: tuple[FitSegment, ...] = ()
     num_chains: int = Field(ge=1)
     duration_seconds: float = Field(ge=0)
     engine: MCMCEvidence
@@ -50,6 +83,8 @@ class PosteriorDrawsInfo(Value):
 class InferenceEvidence(Value):
     """Native telemetry buffers; posterior atoms and coordinates belong to the model."""
 
+    checkpoint: SamplerCheckpoint | None = None
+    latent_free_mask: NumericalArray | None = None
     chain_extra_fields: Mapping[str, NumericalArray] = Field(default_factory=dict)
     observation_log_probs: NumericalArray | None = None
     observed_rows: NumericalArray | None = None

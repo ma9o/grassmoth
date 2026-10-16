@@ -10,7 +10,7 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts.bodies import FitInput
+from nof1_causal_lab.actions.contracts.bodies import NewFitTarget, FitInput
 from nof1_causal_lab.actions.contracts.effects import ActionEffects
 from nof1_causal_lab.actions.contracts.requests import FitRequest, PrepareDataRequest
 from nof1_causal_lab.actions.runners import run_action
@@ -240,10 +240,9 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
         fit_module, "read_inference_report", lambda *_: _report(dynamical_model_spec)
     )
     request = FitRequest[GitOid](
-        input=FitInput[GitOid](
+        input=FitInput[GitOid](target=NewFitTarget(
             dynamical_model_spec_ref=model_info.revision,
-            data_ref=DataRef(revision=source.revision, replicate_index=source.replicate_index),
-        )
+            data_ref=DataRef(revision=source.revision, replicate_index=source.replicate_index)),)
     )
     applied = run_async(run_action("TEST", request, state.revised(data=source)))
     assert request.input.data_ref == source

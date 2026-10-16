@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import logging
 from contextlib import contextmanager
+from contextvars import ContextVar
+from nof1_causal_lab.artifacts.reports.inference import InferencePhase
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -14,6 +16,20 @@ if TYPE_CHECKING:
     from nof1_causal_lab.json_types import JsonScalar
 
 logger = logging.getLogger(__name__)
+
+
+_PHASE_CAPTURE: ContextVar[tuple[float, list[InferencePhase]] | None] = ContextVar("inference_phases", default=None)
+
+
+@contextmanager
+def capture_phases(clock: Callable[[], float]) -> Iterator[list[InferencePhase]]:
+    """Collect the existing phase intervals within one shell execution."""
+    phases: list[InferencePhase] = []
+    token = _PHASE_CAPTURE.set((clock(), phases))
+    try:
+        yield phases
+    finally:
+        _PHASE_CAPTURE.reset(token)
 
 
 def log_inference_event(label: str, stage: str, event: str, **details: JsonScalar) -> None:
@@ -44,10 +60,18 @@ def inference_phase(
         yield
         completed = True
     finally:
+        ended = clock()
+        capture = _PHASE_CAPTURE.get()
+        if capture is not None:
+            origin, phases = capture
+            phases.append(InferencePhase(
+                sampler=label, stage=stage, start_seconds=started-origin, end_seconds=ended-origin,
+                outcome="complete" if completed else "failed",
+            ))
         log_inference_event(
             label,
             stage,
             "complete" if completed else "failed",  # ty: ignore[redundant-condition-strict] - yield can raise before assignment.
-            elapsed_seconds=clock() - started,
+            elapsed_seconds=ended - started,
             **details,
         )

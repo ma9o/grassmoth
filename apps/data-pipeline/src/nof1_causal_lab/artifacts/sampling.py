@@ -173,10 +173,11 @@ class SamplerSpec(Value):
     """Fully resolved controls for exact joint state and parameter inference."""
 
     num_warmup: int = Field(default=4000, ge=0)
-    num_samples_per_chain: int = Field(default=1000, ge=1)
+    num_samples_per_chain: int = Field(default=1000, ge=0)
     num_chains: int = Field(default=4, ge=1)
     seed: int = Field(default=0, ge=0)
     num_particles: int = Field(default=64, ge=2)
+    hardware: InferenceHardware = InferenceHardware.L40S
     retain_latent_paths: bool = True
     algorithm: InferenceAlgorithmSpec = Field(default_factory=MarginalParticleGibbsSpec)
 
@@ -184,8 +185,9 @@ class SamplerSpec(Value):
 class FitSettingsSpec(Value):
     """Optional numerical controls applied to the configured joint sampler."""
 
+    hardware: InferenceHardware | None = None
     algorithm: InferenceAlgorithmSpec | None = None
-    num_samples_per_chain: int | None = Field(default=None, ge=1)
+    num_samples_per_chain: int | None = Field(default=None, ge=0)
     num_warmup: int | None = Field(default=None, ge=0)
     num_chains: int | None = Field(default=None, ge=1)
     num_particles: int | None = Field(default=None, ge=2)

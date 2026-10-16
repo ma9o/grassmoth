@@ -78,6 +78,7 @@ class SweepPlan:
     block_size: int
     batch_size: int
     compiled_step: Compiled
+    projection: Compiled | None = None
 
 
 def compile_sweeps[Carry](
@@ -97,7 +98,7 @@ def compile_sweeps[Carry](
     the selected width. Independent chains remain vectorized. The common cap of
     25 sequential sweeps bounds output buffers and host progress latency.
     """
-    block_size = min(25, max(num_warmup, num_samples))
+    block_size = min(25, max(1, num_warmup, num_samples))
 
     def trace_phase(
         batch: int, stage: SweepStage, steps: int
@@ -105,7 +106,7 @@ def compile_sweeps[Carry](
         # Reuse the step trace when embedding it in the bounded scan below.
         step = jax.jit(step_factory(batch, stage))
         _, shapes = jax.eval_shape(step, initial)
-        if steps == 0:
+        if steps == 0 and num_warmup + num_samples > 0:
             return EmptySweepPhase(shapes)
         zeros = jax.tree.map(lambda shape: jnp.zeros(shape.shape, shape.dtype), shapes)
 

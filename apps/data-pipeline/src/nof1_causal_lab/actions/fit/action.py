@@ -9,10 +9,17 @@ import numpy as np
 from nof1_causal_lab.actions.errors import ModelFitError
 from nof1_causal_lab.actions.fit.conditioning import condition_model
 from nof1_causal_lab.artifacts.arrays import ArrayVector, NumericalArray
-from nof1_causal_lab.artifacts.identity import ParameterRef
+from nof1_causal_lab.artifacts.identity import ParameterRef, ConstructRef
+from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
+from nof1_causal_lab.actions.contracts.bodies import FitOutput
+from nof1_causal_lab.actions.fit.runtime import fit_runtime
+from nof1_causal_lab.models.ssm.inference.samplers.progress import capture_phases
+from nof1_causal_lab.models.ssm.inference.types import UnretainedRun
+import time
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
 from nof1_causal_lab.artifacts.reports.inference import (
+    FitSegment,
     InferenceEvidence,
     InferenceMetadata,
     InferenceReport,
@@ -36,7 +43,7 @@ if TYPE_CHECKING:
 class FitResult(TypedDict):
     """The fitted model definition paired with its retained numerical inference evidence."""
 
-    _dynamical_model_spec: DynamicalModelSpec
+    _dynamical_model_spec: DynamicalModelSpec | None
     evidence: InferenceEvidence
     metadata: InferenceMetadata
 
@@ -50,16 +57,36 @@ def fit(
     array_writer: Callable[[np.ndarray], str],
     array_loader: ArrayLoader,
     compute_loo_diagnostics: bool,
+    continuation: SamplerCheckpoint | None = None,
+    previous: FitOutput | None = None,
 ) -> FitResult:
     """The exact producer's buffers cross the compute boundary without report reductions."""
     from nof1_causal_lab.actions.fit.execution import fit_model
 
-    fitted = fit_model(selection, data_for_model, time_origin=time_origin, sampler=sampler)
+    with capture_phases(time.monotonic) as phases:
+        fitted = fit_model(selection, data_for_model, time_origin=time_origin, sampler=sampler, continuation=continuation)
     if "error" in fitted:
         raise ModelFitError(
             fitted["error"], diagnostics={"duration_seconds": fitted["duration_seconds"]}
         )
     result = fitted["result"]
+    runtime = fit_runtime()
+    old_count = 0 if previous is None else previous.inference.core.inference_metadata.num_samples_total // sampler.num_chains
+    segment = FitSegment(
+        start=old_count, stop=old_count + sampler.num_samples_per_chain,
+        settings=sampler, runtime=runtime, phases=tuple(phases),
+    )
+    if isinstance(result, UnretainedRun):
+        return {
+            "_dynamical_model_spec": None,
+            "metadata": InferenceMetadata(distribution=None, num_samples_total=0, num_chains=sampler.num_chains,
+                duration_seconds=fitted["duration_seconds"], engine=result.evidence, sampler_diagnostics=None,
+                segments=(segment,)),
+            "evidence": InferenceEvidence(phase_extra_fields={
+                phase: {name: NumericalArray.from_numpy(np.asarray(value)) for name, value in fields.items()}
+                for phase, fields in result.phase_extra_fields.items()
+            }),
+        }
     native = result.diagnostics
 
     def retain(values: object | None) -> NumericalArray | None:
@@ -76,14 +103,18 @@ def fit(
     )
     metadata = InferenceMetadata(
         distribution=identity,
+        segments=(*(previous.inference.core.inference_metadata.segments if previous is not None else ()), segment),
         engine=result.evidence,
         duration_seconds=fitted["duration_seconds"],
         num_chains=native.mcmc.num_chains,
-        num_samples_total=native.mcmc.num_chains * native.mcmc.num_samples,
+        num_samples_total=native.mcmc.num_chains * (old_count + native.mcmc.num_samples),
         sampler_diagnostics=native.sampler_diagnostics,
     )
+    layout = conditioned.law_layouts[identity]
+    latent_indices = tuple(i for identity in layout.constructs for i, (ref, _) in enumerate(native.latent_chains.states) if ref.id == identity) if native.latent_chains is not None else ()
     evidence = InferenceEvidence(
-        chain_extra_fields={
+        checkpoint=native.checkpoint,
+        latent_free_mask=retain(native.latent_chains.free_mask[:, latent_indices]) if native.latent_chains is not None else None,        chain_extra_fields={
             name: NumericalArray.from_numpy(np.asarray(values))
             for name, values in native.mcmc.get_extra_fields(group_by_chain=True).items()
         },
@@ -106,6 +137,28 @@ def fit(
         initial_latent_delta=retain(result.initial_latent_delta),
         final_latent_delta=retain(result.final_latent_delta),
     )
+    if previous is not None:
+        from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms, empirical_distribution
+        assert previous.dynamical_model_spec is not None
+        old = empirical_atoms(previous.dynamical_model_spec.distributions[identity])
+        new = empirical_atoms(conditioned.distributions[identity])
+        chains = sampler.num_chains
+        combined = np.concatenate((old.reshape(chains, old_count, -1), new.reshape(chains, sampler.num_samples_per_chain, -1)), axis=1)
+        law = empirical_distribution(combined.reshape(-1, combined.shape[-1]), array_writer=array_writer, array_loader=array_loader)
+        conditioned = conditioned.with_entities(distributions={**conditioned.distributions, identity: law})
+        prior_evidence = previous.inference.evidence
+        # A different kernel may expose different transition diagnostics. Only common
+        # fields describe the full chain; each segment retains its native telemetry.
+        evidence = evidence.revised(
+            chain_extra_fields={name: NumericalArray.from_numpy(np.concatenate((prior_evidence.chain_extra_fields[name].values, value.values), axis=1))
+                for name, value in evidence.chain_extra_fields.items() if name in prior_evidence.chain_extra_fields},
+            observation_log_probs=NumericalArray.from_numpy(np.concatenate((prior_evidence.observation_log_probs.values, evidence.observation_log_probs.values), axis=1))
+                if prior_evidence.observation_log_probs is not None and evidence.observation_log_probs is not None else None,
+            phase_extra_fields={
+                **{f"previous/{name}": values for name, values in prior_evidence.phase_extra_fields.items()},
+                **evidence.phase_extra_fields,
+            },
+        )
     return {"_dynamical_model_spec": conditioned, "evidence": evidence, "metadata": metadata}
 
 
@@ -118,6 +171,12 @@ def read_inference_report(
     """Compute exact-chain diagnostics from this fit's atoms and native telemetry."""
     from nof1_causal_lab.study.persistence.store import read_model
 
+    if metadata.distribution is None:
+        return InferenceReport(evidence=evidence,
+            core=InferenceReportCore(inference_metadata=metadata, inference_diagnostics=None,
+                convergence=chain_convergence(None), posterior_marginals=(), prior_densities={}),
+            detail=InferenceReportDetail())
+
     def render() -> InferenceReport:
         import jax.numpy as jnp
 
@@ -125,6 +184,7 @@ def read_inference_report(
         from nof1_causal_lab.models.ssm.inference.diagnostics.plots import (
             compute_posterior_marginals,
         )
+        from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
         from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
         from nof1_causal_lab.models.ssm.inference.types import (
             JointPosteriorDraws,
@@ -132,6 +192,7 @@ def read_inference_report(
             ProductionDiagnostics,
         )
 
+        assert metadata.distribution is not None
         dynamical_model_spec = read_model(store, revision)
         layouts = {metadata.distribution: dynamical_model_spec.law_layouts[metadata.distribution]}
         atoms = {
@@ -158,13 +219,19 @@ def read_inference_report(
         extra = {name: jnp.asarray(ref.values) for name, ref in evidence.chain_extra_fields.items()}
         diagnostics = None
         traces, ranks, loo = (), (), None
-        if samples:
+        layout = layouts[metadata.distribution]
+        if samples or layout.constructs:
             chains = metadata.num_chains
             if count % chains:
                 raise ValueError("Retained atoms do not match their original chain count")
             posterior = MCMCPosterior.from_run(
                 draws=JointPosteriorDraws(parameters=samples),
                 diagnostics=ProductionDiagnostics(
+                    latent_chains=LatentChainEvidence(
+                        paths=np.stack(tuple(atoms[metadata.distribution][:, span] for span in layout.trajectory_slices.values()), axis=-1).reshape(chains, count // chains, len(layout.time_points), len(layout.constructs)),
+                        free_mask=np.asarray(evidence.latent_free_mask.values),
+                        states=tuple((ConstructRef(id=identity), dynamical_model_spec.get_construct(identity).name) for identity in layout.constructs),
+                    ) if evidence.latent_free_mask is not None else None,
                     mcmc=TrajectoryMCMCResult(
                         chain_samples={
                             name: values.reshape(chains, -1) for name, values in samples.items()

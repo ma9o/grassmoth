@@ -185,6 +185,7 @@ function object(value: NumPyroValue | undefined): NumPyroDistribution["params"] 
 /** Select the model's original joint atoms; empirical summaries stay backend-owned. */
 export function drawsView(result: FitOutput): readonly DrawColumnView[] {
   const identity = result.inference.core.inference_metadata.distribution;
+  if (identity === null || result.dynamical_model_spec === null) return [];
   const law = required(result.dynamical_model_spec.distributions[identity]);
   const layout = required(result.dynamical_model_spec.law_layouts[identity]);
   const component = object(law.params.component_distribution);

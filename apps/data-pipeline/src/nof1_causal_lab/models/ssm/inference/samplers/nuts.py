@@ -11,6 +11,9 @@ import numpy as np
 from numpyro.infer.hmc import HMCState, hmc
 
 from nof1_causal_lab.artifacts.identity import ConstructRef
+from nof1_causal_lab.artifacts.arrays import NumericalArray
+from nof1_causal_lab.artifacts.continuation import JointTuning, SamplerCheckpoint, sampler_identity
+from nof1_causal_lab.models.ssm.inference.continuation import retain_state, restore_state
 from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import MCMCEvidence, NutsDADiagnostics
 from nof1_causal_lab.artifacts.sampling import FixedTrajectorySpec, NutsDASpec, NutsTrajectorySpec, SamplerSpec
@@ -20,12 +23,12 @@ from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_c
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.inference.samplers.progress import inference_phase
-from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import compile_sweeps
-from nof1_causal_lab.models.ssm.inference.samplers.sweeps import run_sweeps
+from nof1_causal_lab.models.ssm.inference.samplers.sweeps import compile_projected_sweeps, run_sweeps
 from nof1_causal_lab.models.ssm.inference.types import (
     JointPosteriorDraws,
     MCMCPosterior,
     ProductionDiagnostics,
+    UnretainedRun,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
@@ -53,6 +56,7 @@ class NutsDARun:
     phase_extra_fields: Mapping[str, Mapping[str, jax.Array]]
     final_step_size: jax.Array
     compiled_step: Compiled
+    checkpoint: SamplerCheckpoint
 
     def __post_init__(self) -> None:
         """Own immutable phase mappings without changing the numerical buffers."""
@@ -83,6 +87,7 @@ def run_nuts_da(
     compute_budget: ComputeBudget,
     key: jax.Array,
     clock: Callable[[], float],
+    continuation: SamplerCheckpoint | None = None,
 ) -> NutsDARun | InitializationFailure:
     """Advance independent chains together, then retain only post-adaptation joint draws.
 
@@ -118,9 +123,9 @@ def run_nuts_da(
         )
         return moved._replace(adapt_state=adaptation)
 
-    def initialize_chain(chain_key: jax.Array) -> HMCState:
+    def initialize_chain(point: jax.Array, chain_key: jax.Array) -> HMCState:
         return initialize(
-            initial,
+            point,
             num_warmup=sampler.num_warmup,
             step_size=options.initial_step_size,
             adapt_step_size=True,
@@ -134,7 +139,14 @@ def run_nuts_da(
         )
 
     with inference_phase("nuts_da", "initializing_chains", clock=clock):
-        states = jax.jit(jax.vmap(initialize_chain))(jax.random.split(key, sampler.num_chains))
+        starts = jnp.broadcast_to(initial, (sampler.num_chains, initial.size)) if continuation is None else jax.vmap(coordinates.encode)(
+            jnp.asarray(continuation.parameters.values), jnp.asarray(continuation.paths.values)
+        )
+        if continuation is not None:
+            key = jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values))
+        states = jax.jit(jax.vmap(initialize_chain))(starts, jax.random.split(key, sampler.num_chains))
+        if continuation is not None and sampler.num_warmup == 0:
+            states = restore_state(states, continuation.native_state)
         jax.block_until_ready(states)
     if not all(
         np.isfinite(np.asarray(value)).all() for value in (states.potential_energy, states.z_grad)
@@ -145,39 +157,37 @@ def run_nuts_da(
 
     def project(point: jax.Array) -> dict[str, jax.Array]:
         parameters, path = coordinates.decode(point)
-        context = target.context(parameters, target.times)
-        record = {
-            "positions": parameters,
-            "observation_log_probs": jnp.asarray(
-                target.observation_log_probs(context, path, target.observations)
-            ),
-        }
-        if sampler.retain_latent_paths:
-            record = {**record, "paths": path}
+        record = {"positions": parameters, "paths": path}
         return record
 
     def step_factory(
         _batch_size: int, stage: SweepStage
-    ) -> Callable[[HMCState], tuple[HMCState, dict[str, jax.Array]]]:
-        def sweep(current: HMCState) -> tuple[HMCState, dict[str, jax.Array]]:
+    ) -> Callable[[tuple[HMCState, jax.Array]], tuple[tuple[HMCState, jax.Array], dict[str, jax.Array]]]:
+        def sweep(carry: tuple[HMCState, jax.Array]) -> tuple[tuple[HMCState, jax.Array], dict[str, jax.Array]]:
+            current, key = carry
+            next_key, step_key = jax.random.split(key)
+            current = current._replace(rng_key=jax.random.split(step_key, sampler.num_chains))
             updated = jax.vmap(step)(current)
             record = dict(_extra_fields(updated, trajectory=trajectory))
             if stage == "posterior":
                 record = {**record, **jax.vmap(project)(updated.z)}
-            return updated, record
+            return (updated, next_key), record
 
         return sweep
 
     with inference_phase("nuts_da", "compiling_sweeps", clock=clock):
-        plan = compile_sweeps(
+        plan = compile_projected_sweeps(
             step_factory,
-            states,
+            (states, key),
             num_warmup=sampler.num_warmup,
             num_samples=sampler.num_samples_per_chain,
             max_batch_size=1,
             budget=compute_budget,
+            target=target, path_dtype=states.z.dtype, num_chains=sampler.num_chains, clock=clock, label="nuts_da",
         )
-    run = run_sweeps(plan, states, clock=clock, label="nuts_da")
+    run = run_sweeps(plan, (states, key), clock=clock, label="nuts_da")
+    states, next_key = run.state
+    last_parameters, last_paths = jax.vmap(coordinates.decode)(states.z)
     draw_fields = frozenset(("positions", "paths", "observation_log_probs"))
     posterior = {
         name: value for name, value in run.history.posterior.items() if name not in draw_fields
@@ -195,8 +205,14 @@ def run_nuts_da(
             "post_warmup": posterior,
             "all": all_extra,
         },
-        final_step_size=run.state.adapt_state.step_size,
+        final_step_size=states.adapt_state.step_size,
         compiled_step=plan.compiled_step,
+        checkpoint=SamplerCheckpoint(
+            settings=sampler, parameters=NumericalArray.from_numpy(np.asarray(last_parameters)),
+            paths=NumericalArray.from_numpy(np.asarray(last_paths)),
+            random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(next_key))),
+            native_state=retain_state(states), tuning=JointTuning(),
+        ),
     )
 
 
@@ -208,7 +224,8 @@ def fit_nuts_da(
     sampler: SamplerSpec,
     reparam: Strategy | None,
     clock: Callable[[], float],
-) -> MCMCPosterior | InitializationFailure:
+    continuation: SamplerCheckpoint | None = None,
+) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Fit the production exact target and expose the shared posterior/report contract."""
     trace_key, sampling_key = jax.random.split(jax.random.key(sampler.seed))
     with inference_phase("nuts_da", "building_target", clock=clock):
@@ -226,9 +243,12 @@ def fit_nuts_da(
         compute_budget=compute_budget,
         key=sampling_key,
         clock=clock,
+        continuation=continuation,
     )
     if isinstance(run, InitializationFailure):
         return run
+    if sampler.num_samples_per_chain == 0:
+        return UnretainedRun(sampler, MCMCEvidence(method="nuts_da"), run.compiled_step, run.phase_extra_fields)
     extra = run.phase_extra_fields["post_warmup"]
     mcmc = TrajectoryMCMCResult(
         chain_samples=extract_grouped_public_samples(
@@ -254,6 +274,7 @@ def fit_nuts_da(
             state_ids=tuple(state.id for state in panel.compiled_dynamical_model.states),
         ),
         diagnostics=ProductionDiagnostics(
+            checkpoint=run.checkpoint,
             mcmc=mcmc,
             observation_log_probs=run.observation_log_probs,
             compiled_step=run.compiled_step,

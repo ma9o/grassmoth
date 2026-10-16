@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import FitInput, SimulateInput
+from nof1_causal_lab.actions.contracts.bodies import NewFitTarget, FitInput, SimulateInput
 from nof1_causal_lab.actions.contracts.requests import FitRequest, SimulateRequest
 from nof1_causal_lab.actions.temporal.client import pydantic_data_converter
 from nof1_causal_lab.actions.temporal.study.messages import ActionInput
@@ -22,10 +22,9 @@ pytestmark = pytest.mark.contract
     "action",
     [
         FitRequest[GitOid](
-            input=FitInput[GitOid](
+            input=FitInput[GitOid](target=NewFitTarget(
                 dynamical_model_spec_ref=git_oid(1),
-                data_ref=DataRef(revision=git_oid(2), replicate_index=0),
-            )
+                data_ref=DataRef(revision=git_oid(2), replicate_index=0)),)
         ),
         SimulateRequest[GitOid](
             input=SimulateInput[GitOid](
