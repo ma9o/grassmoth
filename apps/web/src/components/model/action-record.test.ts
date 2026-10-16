@@ -15,6 +15,8 @@ const request: SimulateRequest<GitOid> = {
   input: {
     dynamical_model_spec_ref: "1".repeat(40),
     simulation: { start: "2026-01-01", horizon: "1d", interventions: [] },
+    seed: 0,
+    num_replicates: 100,
   },
   reasoning: intent,
 };

@@ -12,7 +12,8 @@ function array(shape: number[], values: number[], dtype: "f8" | "b1" = "f8") {
 
 it("selects original joint posterior atoms and native chain evidence without reducing them", () => {
   const base = fitResult(fittedSnapshot);
-  const identity = base.inference.core.inference_metadata.distribution;
+  const identity = fixtureValue(base.inference.core.inference_metadata.distribution);
+  const model = fixtureValue(base.dynamical_model_spec);
   const atoms = array([4, 4], [-5, 1, 90, 91, 5, -1, 92, 93, -5, 0, 94, 95, 5, 1, 96, 97]);
   const divergences = array([2, 2], [0, 1, 0, 0], "b1");
   const delta = array([2, 2], [1, 2, 3, 4]);
@@ -33,12 +34,12 @@ it("selects original joint posterior atoms and native chain evidence without red
   const saved: FitOutput = {
     ...base,
     dynamical_model_spec: {
-      ...base.dynamical_model_spec,
+      ...model,
       parameters: Object.fromEntries(
         marginals.map(({ subject }) => [
           subject.parameter_id,
           {
-            ...fixtureValue(base.dynamical_model_spec.parameters[subject.parameter_id]),
+            ...fixtureValue(model.parameters[subject.parameter_id]),
             distribution: identity,
             transform: { kind: "identity" },
           },

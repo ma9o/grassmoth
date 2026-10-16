@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
 import pygit2
 
+from nof1_causal_lab.actions.contracts.bodies import FitTarget, NewFitTarget
 from nof1_causal_lab.actions.contracts.requests import (
     FitRequest,
     ScientificActionRequest,
@@ -74,9 +75,7 @@ class StudyRepository:
                 continue
             if attempt.action == "fit":
                 assert isinstance(attempt.request, FitRequest)
-                from nof1_causal_lab.actions.fit.selection import fit_source
-                from nof1_causal_lab.study.persistence.store import ArtifactStore
-                data = fit_source(ArtifactStore(self.workspace_id, repository_path=self.path), attempt.request.input.target).data_ref
+                data = self.fit_source(attempt.request.input.target).data_ref
                 break
             if attempt.action == "prepare_data" and any(
                 info.artifact_id == "panel" for info in attempt.outcome.effects.produced
@@ -84,6 +83,18 @@ class StudyRepository:
                 data = DataRef[GitOid, int](revision=record.commit_id, replicate_index=0)
                 break
         return StudyState(current=current, data=data)
+
+    def fit_source(self, target: FitTarget[GitOid]) -> NewFitTarget[GitOid]:
+        """Walk successful fit revisions to the original model and data inputs."""
+        from typing import cast
+
+        while not isinstance(target, NewFitTarget):
+            attempt = self.record(target.fit_ref).record.attempt
+            if attempt.action != "fit" or not isinstance(attempt.outcome, Applied):
+                raise StudyLookupError("Continuing requires a successful fit revision")
+            assert attempt.request is not None
+            target = attempt.request.input.target
+        return cast("NewFitTarget[GitOid]", target)
 
     def resolve(self, *, at: GitOid) -> GitOid:
         """Require an existing study commit whose retained attempt, if any, was applied successfully."""

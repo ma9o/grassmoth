@@ -25,10 +25,4 @@ def prior_fit(store: ArtifactStore, revision: GitOid) -> FitOutput:
 def fit_source(store: ArtifactStore, target: FitTarget[GitOid]) -> NewFitTarget[GitOid]:
     """Walk fit parents to the original model and data references."""
     repository = StudyRepository(store.workspace_id, repository_path=Path(store.repo.path))
-    while not isinstance(target, NewFitTarget):
-        attempt = repository.record(target.fit_ref).record.attempt
-        if attempt.action != "fit" or not isinstance(attempt.outcome, Applied):
-            raise StudyLookupError("Continuing requires a successful fit revision")
-        assert attempt.request is not None
-        target = attempt.request.input.target
-    return target
+    return repository.fit_source(target)

@@ -194,6 +194,7 @@ CONCERNS = {
             "artifacts.reports.inference",
             "artifacts.reports.posterior_diagnostics",
             "artifacts.sampling",
+            "artifacts.continuation",
             "artifacts.reports.effects",
             "artifacts.reports.empirical",
             "artifacts.scenarios",
@@ -353,6 +354,7 @@ def _layer_for(name: str, module: str) -> str:
     if module.endswith(
         (
             "artifacts.arrays",
+            "artifacts.continuation",
             "artifacts.reports.inference",
             "artifacts.reports.posterior_diagnostics",
             "artifacts.reports.effects",

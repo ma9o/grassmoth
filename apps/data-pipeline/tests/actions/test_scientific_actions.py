@@ -177,14 +177,17 @@ def test_durable_replication_preserves_current_laws_without_comparison(
         )
     else:
         prepared = Applied(result=None, effects=ActionEffects(produced=tuple(produced)))
-    from nof1_causal_lab.actions.contracts.bodies import NewFitTarget, FitInput
+    from nof1_causal_lab.actions.contracts.bodies import FitInput, NewFitTarget
     from nof1_causal_lab.actions.contracts.requests import FitRequest
 
     request = (
         FitRequest(
-            input=FitInput(target=NewFitTarget(
-                dynamical_model_spec_ref=definition.revision,
-                data_ref=DataRef(revision=produced[-2].revision, replicate_index=0)),)
+            input=FitInput(
+                target=NewFitTarget(
+                    dynamical_model_spec_ref=definition.revision,
+                    data_ref=DataRef(revision=produced[-2].revision, replicate_index=0),
+                ),
+            )
         )
         if fitted_laws
         else None

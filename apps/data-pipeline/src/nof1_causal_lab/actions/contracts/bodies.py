@@ -169,7 +169,11 @@ class FitInput[RevisionT](Value):
 
     target: FitTarget[RevisionT]
     settings: FitSettingsSpec = Field(default_factory=FitSettingsSpec)
-    repeat: int = Field(default=0, ge=0, description="Timing repeat identity; identical repeats reuse their saved result.")
+    repeat: int = Field(
+        default=0,
+        ge=0,
+        description="Timing repeat identity; identical repeats reuse their saved result.",
+    )
 
 
 class FitOutput(Value):

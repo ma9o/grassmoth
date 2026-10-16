@@ -22,11 +22,16 @@ def fit_runtime() -> FitRuntime:
         source_digest=digest.hexdigest(),
         versions={
             "python": platform.python_version(),
-            **{name: importlib.metadata.version(name) for name in ("jax", "jaxlib", "numpyro", "dynestyx")},
+            **{
+                name: importlib.metadata.version(name)
+                for name in ("jax", "jaxlib", "numpyro", "dynestyx")
+            },
         },
         compiler={
             "XLA_FLAGS": os.environ.get("XLA_FLAGS", ""),
             **{name: str(value) for name, value in jax.config.values.items()},
         },
-        devices=tuple(f"{device.platform}:{device.device_kind}:{device.id}" for device in jax.devices()),
+        devices=tuple(
+            f"{device.platform}:{device.device_kind}:{device.id}" for device in jax.devices()
+        ),
     )

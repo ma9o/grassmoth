@@ -254,9 +254,12 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
             ),
         ),
         request=FitRequest[GitOid](
-            input=FitInput[GitOid](target=NewFitTarget(
-                dynamical_model_spec_ref=authored.revision,
-                data_ref=DataRef(revision=panel.revision, replicate_index=0)),)
+            input=FitInput[GitOid](
+                target=NewFitTarget(
+                    dynamical_model_spec_ref=authored.revision,
+                    data_ref=DataRef(revision=panel.revision, replicate_index=0),
+                ),
+            )
         ),
         model_checks=validation,
     )
@@ -363,7 +366,8 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     np.testing.assert_array_equal(initial_delta.values, [[1.0, 2.0]])
     np.testing.assert_array_equal(divergent.values, [False, True])
     assert set(fitted_response.body.model_dump()) == {"dynamical_model_spec", "checks", "inference"}
-    for field in ("dynamical_model_spec", "checks", "inference"):
+    assert fitted_response.body.revised(dynamical_model_spec=None).dynamical_model_spec is None
+    for field in ("checks", "inference"):
         with pytest.raises(ValidationError):
             fitted_response.body.revised(**{field: None})
     assert (

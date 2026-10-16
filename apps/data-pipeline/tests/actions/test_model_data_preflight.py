@@ -100,6 +100,7 @@ def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypat
         sampler=sampler,
         reparam=None,
         clock=time.monotonic,
+        continuation=None,
     )
 
 

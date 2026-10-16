@@ -145,8 +145,11 @@ export type RequestDefaultsMayBeOmitted = Expect<
     {
       action: "fit";
       input: {
-        dynamical_model_spec_ref: string;
-        data_ref: { revision: string; replicate_index: number };
+        target: {
+          kind: "new";
+          dynamical_model_spec_ref: string;
+          data_ref: { revision: string; replicate_index: number };
+        };
       };
     },
     FitInput

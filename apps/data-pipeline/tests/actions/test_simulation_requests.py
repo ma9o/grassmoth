@@ -30,7 +30,12 @@ def test_simulation_request_is_a_dated_window_with_optional_interventions():
     )
     assert request.input.simulation.interventions == ()
     assert set(request.model_dump()) == {"action", "input", "reasoning"}
-    assert set(request.input.model_dump()) == {"dynamical_model_spec_ref", "simulation"}
+    assert set(request.input.model_dump()) == {
+        "dynamical_model_spec_ref",
+        "simulation",
+        "seed",
+        "num_replicates",
+    }
     with pytest.raises(ValidationError, match="panel_ref"):
         request.input.revised(panel_ref="b" * 40)
     with pytest.raises(ValidationError, match="Extra inputs"):
@@ -254,7 +259,10 @@ def test_runner_uses_model_time_binding_without_reading_panels(
                 "ORIGIN",
                 SimulateRequest[GitOid](
                     input=SimulateInput[GitOid](
-                        dynamical_model_spec_ref=record.revision, simulation=design, seed=73, num_replicates=1
+                        dynamical_model_spec_ref=record.revision,
+                        simulation=design,
+                        seed=73,
+                        num_replicates=1,
                     )
                 ),
                 state,

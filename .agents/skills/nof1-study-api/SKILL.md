@@ -114,7 +114,7 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
 
 ### POST `/api/studies/{workspace_id}/fit`
 
-Condition input.dynamical_model_spec_ref on the history selected by input.data_ref.revision and input.data_ref.replicate_index. Zero selects prepared user data; a simulation index selects one recorded draw. GET polls call_id. The body retains model, checks and inference. Model laws own their numerical arguments; inference owns native telemetry.
+Fit target.new model and data, or continue target.fit_ref at its last retained state. Counts request additional draws; zero warmup freezes tuning and algorithm changes require warmup. Zero warmup and zero samples compile both sweep programs without execution. Zero-draw fits return checks and inference without a conditioned model. repeat distinguishes timing attempts. GET polls call_id.
 
 **Parameters**
 
@@ -124,7 +124,7 @@ Condition input.dynamical_model_spec_ref on the history selected by input.data_r
 curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit" -o /tmp/action.msgpack \
   -X POST \
   -H 'Content-Type: application/json' \
-  -d '{"action": "fit", "input": {"dynamical_model_spec_ref": "string", "data_ref": {"revision": "string", "replicate_index": 0}}}'
+  -d '{"action": "fit", "input": {"target": {"kind": "new", "dynamical_model_spec_ref": "string", "data_ref": {"revision": "string", "replicate_index": 0}}}}'
 ```
 
 ### POST `/api/studies/{workspace_id}/model_diff`

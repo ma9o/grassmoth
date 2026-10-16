@@ -8,7 +8,6 @@ from pydantic import Field
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
-from nof1_causal_lab.artifacts.sampling import SamplerSpec
 from nof1_causal_lab.artifacts.identity import ConstructId, DistributionId, ParameterId
 from nof1_causal_lab.artifacts.reports.checks import SpecificationAssessment
 from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
@@ -28,6 +27,7 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     RankHistogram,
     TraceSeries,
 )
+from nof1_causal_lab.artifacts.sampling import SamplerSpec
 
 
 class InferencePhase(Value):

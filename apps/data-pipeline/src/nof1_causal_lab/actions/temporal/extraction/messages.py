@@ -12,13 +12,13 @@ from nof1_causal_lab.actions.contracts.progress import ProgressEvent
 from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
 from nof1_causal_lab.actions.prepare_data.worker_output import ExtractionRow, WorkerOutput
 from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
-from nof1_causal_lab.artifacts.observations.records import ObservationRecord
 from nof1_causal_lab.artifacts.observations.preparation import (
     CompletedExtractionWorker,
     FailedExtractionChunk,
     FilePreparationSpec,
     FileSourceRef,
 )
+from nof1_causal_lab.artifacts.observations.records import ObservationRecord
 from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
 
 

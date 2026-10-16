@@ -45,7 +45,12 @@ export function questionCall(
 ): TimelineRevision {
   if (entry.record.attempt.action === "edit_question") return entry;
   const request = entry.record.attempt.request;
-  const argument = request?.action === "fit" && request.input.target.kind === "continue" ? "fit" : entry.record.attempt.action === "edit_model" ? "parent" : "dynamical_model_spec";
+  const argument =
+    request?.action === "fit" && request.input.target.kind === "continue"
+      ? "fit"
+      : entry.record.attempt.action === "edit_model"
+        ? "parent"
+        : "dynamical_model_spec";
   const dependency = dependencies.find(
     (item) => item.seq === entry.record.seq && item.argument === argument,
   );
@@ -103,7 +108,9 @@ export function modelReference(
     case "edit_model":
       return request.input.parent_ref;
     case "fit":
-      return request.input.target.kind === "new" ? request.input.target.dynamical_model_spec_ref : modelReference(producingCall(attempts, request.input.target.fit_ref), attempts);
+      return request.input.target.kind === "new"
+        ? request.input.target.dynamical_model_spec_ref
+        : modelReference(producingCall(attempts, request.input.target.fit_ref), attempts);
     case "prepare_data":
     case "simulate":
       return request.input.dynamical_model_spec_ref;

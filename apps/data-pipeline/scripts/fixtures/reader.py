@@ -156,7 +156,9 @@ class ModelReader:
         attempt = record.record.attempt
         assert attempt.action == "fit"
         assert attempt.request is not None
-        selected = attempt.request.input.data_ref
+        from nof1_causal_lab.actions.fit.selection import fit_source
+
+        selected = fit_source(self.store, attempt.request.input.target).data_ref
         return self.fit_result if selected == self.state.data else None
 
     def model_output(self) -> EditModelOutput | None:

@@ -32,7 +32,9 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
         <span>Chain convergence: {humanize(convergence.status)}.</span>
       </div>
       {convergence.warnings.map((message) => (
-        <p key={message} className="text-amber-700">Warning: {message}</p>
+        <p key={message} className="text-amber-700">
+          Warning: {message}
+        </p>
       ))}
       {convergence.messages.map((message) => (
         <p key={message}>{message}</p>
@@ -68,11 +70,18 @@ export function FitDetails({ context }: { context: ScopeContext }) {
     <>
       <FitCalibration context={context} />
       {nuts && (
-        <Section title={parameters ? "Conditional NUTS adaptation" : "NUTS adaptation"}>
+        <Section title={parameters ? "Conditional NUTS adaptation" : "Joint sampler adaptation"}>
           <KeyValue
             rows={[
               ["Divergences", String(mcmc?.num_divergences ?? "Unavailable")],
-              ["Maximum tree depth reached", formatSignificant(nuts.max_tree_depth_fraction)],
+              ...(nuts.max_tree_depth_fraction === null
+                ? []
+                : [
+                    [
+                      "Maximum tree depth reached",
+                      formatSignificant(nuts.max_tree_depth_fraction),
+                    ] as [string, string],
+                  ]),
               [
                 "Final step sizes",
                 nuts.final_step_size.map((value) => formatSignificant(value)).join(", "),

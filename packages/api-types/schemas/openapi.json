@@ -260,7 +260,7 @@
     "/api/studies/{workspace_id}/fit": {
       "post": {
         "summary": "Fit",
-        "description": "Condition input.dynamical_model_spec_ref on the history selected by input.data_ref.revision and input.data_ref.replicate_index. Zero selects prepared user data; a simulation index selects one recorded draw. GET polls call_id. The body retains model, checks and inference. Model laws own their numerical arguments; inference owns native telemetry.",
+        "description": "Fit target.new model and data, or continue target.fit_ref at its last retained state. Counts request additional draws; zero warmup freezes tuning and algorithm changes require warmup. Zero warmup and zero samples compile both sweep programs without execution. Zero-draw fits return checks and inference without a conditioned model. repeat distinguishes timing attempts. GET polls call_id.",
         "operationId": "fit",
         "parameters": [
           {
@@ -844,6 +844,58 @@
         "x-layer": "transport",
         "x-concern": "api_tools",
         "description": "A successful call pairs its action with that action's scientific result body."
+      },
+      "AdaptedLatentStepSpec-Input": {
+        "additionalProperties": false,
+        "description": "Warmup adapts the per-time scale towards the assigned movement target.",
+        "properties": {
+          "kind": {
+            "const": "adapted",
+            "default": "adapted",
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "default": 0.5,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Target",
+            "type": "number"
+          }
+        },
+        "title": "AdaptedLatentStepSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "AdaptedLatentStepSpec-Output": {
+        "additionalProperties": false,
+        "description": "Warmup adapts the per-time scale towards the assigned movement target.",
+        "properties": {
+          "kind": {
+            "const": "adapted",
+            "default": "adapted",
+            "title": "Kind",
+            "type": "string"
+          },
+          "target": {
+            "default": 0.5,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Target",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "target"
+        ],
+        "title": "AdaptedLatentStepSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
       },
       "Added_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
@@ -1863,6 +1915,17 @@
         "title": "AuthoredLawProvenance",
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.reports.predictive_provenance",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "AuxiliaryDrift": {
+        "enum": [
+          "none",
+          "amala",
+          "amala_plus"
+        ],
+        "type": "string",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -3217,8 +3280,15 @@
             "type": "array"
           },
           "max_tree_depth_fraction": {
-            "title": "Max Tree Depth Fraction",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tree Depth Fraction"
           }
         },
         "required": [
@@ -3233,11 +3303,89 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "ConditionalNutsSpec-Input": {
+        "additionalProperties": false,
+        "description": "Conditional NUTS parameter updates within Particle Gibbs.",
+        "properties": {
+          "method": {
+            "const": "nuts_da",
+            "default": "nuts_da",
+            "title": "Method",
+            "type": "string"
+          },
+          "target_accept_prob": {
+            "default": 0.8,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Target Accept Prob",
+            "type": "number"
+          },
+          "max_tree_depth": {
+            "default": 10,
+            "minimum": 1,
+            "title": "Max Tree Depth",
+            "type": "integer"
+          },
+          "initial_step_size": {
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "title": "Initial Step Size",
+            "type": "number"
+          }
+        },
+        "title": "ConditionalNutsSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ConditionalNutsSpec-Output": {
+        "additionalProperties": false,
+        "description": "Conditional NUTS parameter updates within Particle Gibbs.",
+        "properties": {
+          "method": {
+            "const": "nuts_da",
+            "default": "nuts_da",
+            "title": "Method",
+            "type": "string"
+          },
+          "target_accept_prob": {
+            "default": 0.8,
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Target Accept Prob",
+            "type": "number"
+          },
+          "max_tree_depth": {
+            "default": 10,
+            "minimum": 1,
+            "title": "Max Tree Depth",
+            "type": "integer"
+          },
+          "initial_step_size": {
+            "default": 1.0,
+            "exclusiveMinimum": 0,
+            "title": "Initial Step Size",
+            "type": "number"
+          }
+        },
+        "required": [
+          "method",
+          "target_accept_prob",
+          "max_tree_depth",
+          "initial_step_size"
+        ],
+        "title": "ConditionalNutsSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "ConditionalParameterSpec-Input": {
         "discriminator": {
           "mapping": {
             "mh": "#/components/schemas/MetropolisHastingsSpec-Input",
-            "nuts_da": "#/components/schemas/NutsDASpec-Input"
+            "nuts_da": "#/components/schemas/ConditionalNutsSpec-Input"
           },
           "propertyName": "method"
         },
@@ -3246,7 +3394,7 @@
             "$ref": "#/components/schemas/MetropolisHastingsSpec-Input"
           },
           {
-            "$ref": "#/components/schemas/NutsDASpec-Input"
+            "$ref": "#/components/schemas/ConditionalNutsSpec-Input"
           }
         ],
         "x-python-module": "nof1_causal_lab.artifacts.sampling",
@@ -3257,7 +3405,7 @@
         "discriminator": {
           "mapping": {
             "mh": "#/components/schemas/MetropolisHastingsSpec-Output",
-            "nuts_da": "#/components/schemas/NutsDASpec-Output"
+            "nuts_da": "#/components/schemas/ConditionalNutsSpec-Output"
           },
           "propertyName": "method"
         },
@@ -3266,7 +3414,7 @@
             "$ref": "#/components/schemas/MetropolisHastingsSpec-Output"
           },
           {
-            "$ref": "#/components/schemas/NutsDASpec-Output"
+            "$ref": "#/components/schemas/ConditionalNutsSpec-Output"
           }
         ],
         "x-python-module": "nof1_causal_lab.artifacts.sampling",
@@ -3512,6 +3660,109 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "ContinueFitTarget_Annotated_Any__WithJsonSchema__": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "continue",
+            "default": "continue",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fit_ref": {
+            "title": "Fit Ref",
+            "tsType": "RevisionT",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "fit_ref"
+        ],
+        "title": "ContinueFitTarget[Annotated[Any, WithJsonSchema]]",
+        "type": "object",
+        "x-typescript-mode": "serialization",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-typescript-parameters": [
+          "RevisionT"
+        ],
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
+      "ContinueFitTarget_GitOid_": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "continue",
+            "default": "continue",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fit_ref": {
+            "$ref": "#/components/schemas/GitOid-Output"
+          }
+        },
+        "required": [
+          "kind",
+          "fit_ref"
+        ],
+        "title": "ContinueFitTarget[GitOid]",
+        "type": "object",
+        "x-typescript-mode": "serialization",
+        "x-typescript-type": "ContinueFitTarget<GitOid>",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
+      "ContinueFitTarget_RevisionSelector_": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "continue",
+            "default": "continue",
+            "title": "Kind",
+            "type": "string"
+          },
+          "fit_ref": {
+            "$ref": "#/components/schemas/RevisionSelector"
+          }
+        },
+        "required": [
+          "fit_ref"
+        ],
+        "title": "ContinueFitTarget[RevisionSelector]",
+        "type": "object",
+        "x-typescript-mode": "validation",
+        "x-typescript-type": "ContinueFitTarget<RevisionSelector>",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
+      "ContinuedInitializationDiagnostics": {
+        "additionalProperties": false,
+        "description": "Starting values come from a previous fit; no initializer was executed.",
+        "properties": {
+          "source": {
+            "const": "continued",
+            "default": "continued",
+            "title": "Source",
+            "type": "string"
+          },
+          "reused_tuning": {
+            "title": "Reused Tuning",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "source",
+          "reused_tuning"
+        ],
+        "title": "ContinuedInitializationDiagnostics",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "ConvergenceAssessmentSubject": {
         "anyOf": [
           {
@@ -3543,6 +3794,14 @@
             "title": "Findings",
             "type": "array"
           },
+          "warnings": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
           "checked": {
             "description": "Number of distinct parameter and construct references with convergence findings.",
             "readOnly": true,
@@ -3572,6 +3831,7 @@
         },
         "required": [
           "findings",
+          "warnings",
           "checked",
           "status",
           "messages"
@@ -3602,16 +3862,6 @@
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.reports.checks",
         "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "DSMCLeafProposal": {
-        "enum": [
-          "amala",
-          "amala_plus"
-        ],
-        "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.sampling",
-        "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "DataComparisonReport": {
@@ -4599,108 +4849,23 @@
       },
       "DsmcSpec-Input": {
         "additionalProperties": false,
-        "description": "Conditional dSMC auxiliary law, particle proposal, and warmup adaptation.",
+        "description": "Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.",
         "properties": {
-          "amala_delta_init": {
-            "default": 0.01,
-            "exclusiveMinimum": 0,
-            "title": "Amala Delta Init",
-            "type": "number"
+          "drift": {
+            "$ref": "#/components/schemas/AuxiliaryDrift",
+            "default": "none"
           },
-          "amala_delta_min": {
-            "default": 1e-05,
-            "exclusiveMinimum": 0,
-            "title": "Amala Delta Min",
-            "type": "number"
-          },
-          "amala_delta_max": {
-            "default": 10.0,
-            "exclusiveMinimum": 0,
-            "title": "Amala Delta Max",
-            "type": "number"
-          },
-          "amala_target_accept": {
-            "default": 0.75,
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Amala Target Accept",
-            "type": "number"
-          },
-          "amala_adaptation_window": {
-            "default": 100,
-            "minimum": 1,
-            "title": "Amala Adaptation Window",
-            "type": "integer"
-          },
-          "amala_adaptation_tolerance": {
-            "default": 0.05,
-            "minimum": 0,
-            "title": "Amala Adaptation Tolerance",
-            "type": "number"
-          },
-          "amala_adaptation_rho": {
-            "default": 0.5,
-            "exclusiveMinimum": 0,
-            "title": "Amala Adaptation Rho",
-            "type": "number"
-          },
-          "amala_adaptation_rho_min": {
-            "default": 0.001,
-            "exclusiveMinimum": 0,
-            "title": "Amala Adaptation Rho Min",
-            "type": "number"
-          },
-          "amala_adaptation_gamma": {
-            "default": -0.5,
-            "maximum": 0,
-            "title": "Amala Adaptation Gamma",
-            "type": "number"
-          },
-          "amala_kappa": {
-            "default": 0.75,
-            "minimum": 0,
-            "title": "Amala Kappa",
-            "type": "number"
-          },
-          "amala_grad_clip": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "const": "infinity",
-                "type": "string"
-              }
-            ],
-            "default": "infinity",
-            "title": "Amala Grad Clip"
-          },
-          "dsmc_leaf_proposal": {
-            "$ref": "#/components/schemas/DSMCLeafProposal",
-            "default": "amala_plus"
-          },
-          "paid_mix": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PaidMixSpec-Input"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Input"
           },
           "latent_block_coords": {
-            "anyOf": [
-              {
-                "minimum": 1,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Latent Block Coords"
+            "$ref": "#/components/schemas/LatentBlockSize",
+            "default": 1
+          },
+          "pilot_mixture": {
+            "default": true,
+            "title": "Pilot Mixture",
+            "type": "boolean"
           }
         },
         "title": "DsmcSpec",
@@ -4711,125 +4876,30 @@
       },
       "DsmcSpec-Output": {
         "additionalProperties": false,
-        "description": "Conditional dSMC auxiliary law, particle proposal, and warmup adaptation.",
+        "description": "Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.",
         "properties": {
-          "amala_delta_init": {
-            "default": 0.01,
-            "exclusiveMinimum": 0,
-            "title": "Amala Delta Init",
-            "type": "number"
+          "drift": {
+            "$ref": "#/components/schemas/AuxiliaryDrift",
+            "default": "none"
           },
-          "amala_delta_min": {
-            "default": 1e-05,
-            "exclusiveMinimum": 0,
-            "title": "Amala Delta Min",
-            "type": "number"
-          },
-          "amala_delta_max": {
-            "default": 10.0,
-            "exclusiveMinimum": 0,
-            "title": "Amala Delta Max",
-            "type": "number"
-          },
-          "amala_target_accept": {
-            "default": 0.75,
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Amala Target Accept",
-            "type": "number"
-          },
-          "amala_adaptation_window": {
-            "default": 100,
-            "minimum": 1,
-            "title": "Amala Adaptation Window",
-            "type": "integer"
-          },
-          "amala_adaptation_tolerance": {
-            "default": 0.05,
-            "minimum": 0,
-            "title": "Amala Adaptation Tolerance",
-            "type": "number"
-          },
-          "amala_adaptation_rho": {
-            "default": 0.5,
-            "exclusiveMinimum": 0,
-            "title": "Amala Adaptation Rho",
-            "type": "number"
-          },
-          "amala_adaptation_rho_min": {
-            "default": 0.001,
-            "exclusiveMinimum": 0,
-            "title": "Amala Adaptation Rho Min",
-            "type": "number"
-          },
-          "amala_adaptation_gamma": {
-            "default": -0.5,
-            "maximum": 0,
-            "title": "Amala Adaptation Gamma",
-            "type": "number"
-          },
-          "amala_kappa": {
-            "default": 0.75,
-            "minimum": 0,
-            "title": "Amala Kappa",
-            "type": "number"
-          },
-          "amala_grad_clip": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "const": "infinity",
-                "type": "string"
-              }
-            ],
-            "default": "infinity",
-            "title": "Amala Grad Clip"
-          },
-          "dsmc_leaf_proposal": {
-            "$ref": "#/components/schemas/DSMCLeafProposal",
-            "default": "amala_plus"
-          },
-          "paid_mix": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PaidMixSpec-Output"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Output"
           },
           "latent_block_coords": {
-            "anyOf": [
-              {
-                "minimum": 1,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Latent Block Coords"
+            "$ref": "#/components/schemas/LatentBlockSize",
+            "default": 1
+          },
+          "pilot_mixture": {
+            "default": true,
+            "title": "Pilot Mixture",
+            "type": "boolean"
           }
         },
         "required": [
-          "amala_delta_init",
-          "amala_delta_min",
-          "amala_delta_max",
-          "amala_target_accept",
-          "amala_adaptation_window",
-          "amala_adaptation_tolerance",
-          "amala_adaptation_rho",
-          "amala_adaptation_rho_min",
-          "amala_adaptation_gamma",
-          "amala_kappa",
-          "amala_grad_clip",
-          "dsmc_leaf_proposal",
-          "paid_mix",
-          "latent_block_coords"
+          "drift",
+          "latent_step",
+          "latent_block_coords",
+          "pilot_mixture"
         ],
         "title": "DsmcSpec",
         "type": "object",
@@ -15237,6 +15307,7 @@
         "discriminator": {
           "mapping": {
             "computed": "#/components/schemas/ComputedExtractionSpec-Input",
+            "recorded": "#/components/schemas/RecordedExtractionSpec-Input",
             "semantic": "#/components/schemas/SemanticExtractionSpec-Input"
           },
           "propertyName": "kind"
@@ -15247,6 +15318,9 @@
           },
           {
             "$ref": "#/components/schemas/SemanticExtractionSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/RecordedExtractionSpec-Input"
           }
         ],
         "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
@@ -15257,6 +15331,7 @@
         "discriminator": {
           "mapping": {
             "computed": "#/components/schemas/ComputedExtractionSpec-Output",
+            "recorded": "#/components/schemas/RecordedExtractionSpec-Output",
             "semantic": "#/components/schemas/SemanticExtractionSpec-Output"
           },
           "propertyName": "kind"
@@ -15267,6 +15342,9 @@
           },
           {
             "$ref": "#/components/schemas/SemanticExtractionSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/RecordedExtractionSpec-Output"
           }
         ],
         "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
@@ -15676,25 +15754,24 @@
       "FitInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
         "properties": {
-          "dynamical_model_spec_ref": {
-            "description": "Model revision whose parameter law will be conditioned.",
-            "title": "Dynamical Model Spec Ref",
-            "tsType": "RevisionT",
-            "type": "string"
-          },
-          "data_ref": {
-            "$ref": "#/components/schemas/DataRef_Annotated_Any__WithJsonSchema__int_",
-            "description": "One saved observation history selected by revision and a required replicate index."
+          "target": {
+            "$ref": "#/components/schemas/FitTarget_Annotated_Any__WithJsonSchema__"
           },
           "settings": {
-            "$ref": "#/components/schemas/FitSettingsSpec-Output",
-            "description": "Optional particle-sampler counts and random seed for the run."
+            "$ref": "#/components/schemas/FitSettingsSpec-Output"
+          },
+          "repeat": {
+            "default": 0,
+            "description": "Timing repeat identity; identical repeats reuse their saved result.",
+            "minimum": 0,
+            "title": "Repeat",
+            "type": "integer"
           }
         },
         "required": [
-          "dynamical_model_spec_ref",
-          "data_ref",
-          "settings"
+          "target",
+          "settings",
+          "repeat"
         ],
         "title": "FitInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
@@ -15709,23 +15786,24 @@
       "FitInput_GitOid_": {
         "additionalProperties": false,
         "properties": {
-          "dynamical_model_spec_ref": {
-            "$ref": "#/components/schemas/GitOid-Output",
-            "description": "Model revision whose parameter law will be conditioned."
-          },
-          "data_ref": {
-            "$ref": "#/components/schemas/DataRef_GitOid_int_",
-            "description": "One saved observation history selected by revision and a required replicate index."
+          "target": {
+            "$ref": "#/components/schemas/FitTarget_GitOid_"
           },
           "settings": {
-            "$ref": "#/components/schemas/FitSettingsSpec-Output",
-            "description": "Optional particle-sampler counts and random seed for the run."
+            "$ref": "#/components/schemas/FitSettingsSpec-Output"
+          },
+          "repeat": {
+            "default": 0,
+            "description": "Timing repeat identity; identical repeats reuse their saved result.",
+            "minimum": 0,
+            "title": "Repeat",
+            "type": "integer"
           }
         },
         "required": [
-          "dynamical_model_spec_ref",
-          "data_ref",
-          "settings"
+          "target",
+          "settings",
+          "repeat"
         ],
         "title": "FitInput[GitOid]",
         "type": "object",
@@ -15738,22 +15816,22 @@
       "FitInput_RevisionSelector_": {
         "additionalProperties": false,
         "properties": {
-          "dynamical_model_spec_ref": {
-            "$ref": "#/components/schemas/RevisionSelector",
-            "description": "Model revision whose parameter law will be conditioned."
-          },
-          "data_ref": {
-            "$ref": "#/components/schemas/DataRef_RevisionSelector_int_",
-            "description": "One saved observation history selected by revision and a required replicate index."
+          "target": {
+            "$ref": "#/components/schemas/FitTarget_RevisionSelector_"
           },
           "settings": {
-            "$ref": "#/components/schemas/FitSettingsSpec-Input",
-            "description": "Optional particle-sampler counts and random seed for the run."
+            "$ref": "#/components/schemas/FitSettingsSpec-Input"
+          },
+          "repeat": {
+            "default": 0,
+            "description": "Timing repeat identity; identical repeats reuse their saved result.",
+            "minimum": 0,
+            "title": "Repeat",
+            "type": "integer"
           }
         },
         "required": [
-          "dynamical_model_spec_ref",
-          "data_ref"
+          "target"
         ],
         "title": "FitInput[RevisionSelector]",
         "type": "object",
@@ -15768,8 +15846,15 @@
         "description": "A conditioned model, its completed checks, and self-contained inference evidence.",
         "properties": {
           "dynamical_model_spec": {
-            "$ref": "#/components/schemas/DynamicalModelSpec-Output",
-            "description": "The model with its joint parameter law conditioned on the selected data."
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DynamicalModelSpec-Output"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The combined conditioned model, or null when this fit and its parents have no retained draws. Zero-draw continuations reuse their parent's model without producing a revision."
           },
           "checks": {
             "$ref": "#/components/schemas/FitCheckReport",
@@ -15926,10 +16011,104 @@
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
+      "FitRuntime": {
+        "additionalProperties": false,
+        "description": "Actual numerical source, environment, compiler settings and devices.",
+        "properties": {
+          "source_digest": {
+            "title": "Source Digest",
+            "type": "string"
+          },
+          "versions": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Versions",
+            "type": "object"
+          },
+          "compiler": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Compiler",
+            "type": "object"
+          },
+          "devices": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Devices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_digest",
+          "versions",
+          "compiler",
+          "devices"
+        ],
+        "title": "FitRuntime",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "FitSegment": {
+        "additionalProperties": false,
+        "description": "One execution's retained draw interval within every combined chain.",
+        "properties": {
+          "start": {
+            "minimum": 0,
+            "title": "Start",
+            "type": "integer"
+          },
+          "stop": {
+            "minimum": 0,
+            "title": "Stop",
+            "type": "integer"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/SamplerSpec"
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/FitRuntime"
+          },
+          "phases": {
+            "items": {
+              "$ref": "#/components/schemas/InferencePhase"
+            },
+            "title": "Phases",
+            "type": "array"
+          }
+        },
+        "required": [
+          "start",
+          "stop",
+          "settings",
+          "runtime",
+          "phases"
+        ],
+        "title": "FitSegment",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "FitSettingsSpec-Input": {
         "additionalProperties": false,
         "description": "Optional numerical controls applied to the configured joint sampler.",
         "properties": {
+          "hardware": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InferenceHardware"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "algorithm": {
             "anyOf": [
               {
@@ -15944,7 +16123,7 @@
           "num_samples_per_chain": {
             "anyOf": [
               {
-                "minimum": 1,
+                "minimum": 0,
                 "type": "integer"
               },
               {
@@ -16017,6 +16196,17 @@
         "additionalProperties": false,
         "description": "Optional numerical controls applied to the configured joint sampler.",
         "properties": {
+          "hardware": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InferenceHardware"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "algorithm": {
             "anyOf": [
               {
@@ -16031,7 +16221,7 @@
           "num_samples_per_chain": {
             "anyOf": [
               {
-                "minimum": 1,
+                "minimum": 0,
                 "type": "integer"
               },
               {
@@ -16095,6 +16285,7 @@
           }
         },
         "required": [
+          "hardware",
           "algorithm",
           "num_samples_per_chain",
           "num_warmup",
@@ -16107,6 +16298,74 @@
         "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
+      },
+      "FitTarget_Annotated_Any__WithJsonSchema__": {
+        "discriminator": {
+          "mapping": {
+            "continue": "#/components/schemas/ContinueFitTarget_Annotated_Any__WithJsonSchema__",
+            "new": "#/components/schemas/NewFitTarget_Annotated_Any__WithJsonSchema__"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NewFitTarget_Annotated_Any__WithJsonSchema__"
+          },
+          {
+            "$ref": "#/components/schemas/ContinueFitTarget_Annotated_Any__WithJsonSchema__"
+          }
+        ],
+        "x-typescript-mode": "serialization",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-typescript-parameters": [
+          "RevisionT"
+        ],
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
+      "FitTarget_GitOid_": {
+        "discriminator": {
+          "mapping": {
+            "continue": "#/components/schemas/ContinueFitTarget_GitOid_",
+            "new": "#/components/schemas/NewFitTarget_GitOid_"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NewFitTarget_GitOid_"
+          },
+          {
+            "$ref": "#/components/schemas/ContinueFitTarget_GitOid_"
+          }
+        ],
+        "x-typescript-mode": "serialization",
+        "x-typescript-type": "FitTarget<GitOid>",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
+      "FitTarget_RevisionSelector_": {
+        "discriminator": {
+          "mapping": {
+            "continue": "#/components/schemas/ContinueFitTarget_RevisionSelector_",
+            "new": "#/components/schemas/NewFitTarget_RevisionSelector_"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NewFitTarget_RevisionSelector_"
+          },
+          {
+            "$ref": "#/components/schemas/ContinueFitTarget_RevisionSelector_"
+          }
+        ],
+        "x-typescript-mode": "validation",
+        "x-typescript-type": "FitTarget<RevisionSelector>",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
       },
       "FittedLawProvenance": {
         "additionalProperties": false,
@@ -16145,6 +16404,56 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "FixedLatentStepSpec-Input": {
+        "additionalProperties": false,
+        "description": "An assigned scale which remains fixed during warmup and sampling.",
+        "properties": {
+          "kind": {
+            "const": "fixed",
+            "default": "fixed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "delta": {
+            "default": 0.01,
+            "exclusiveMinimum": 0,
+            "title": "Delta",
+            "type": "number"
+          }
+        },
+        "title": "FixedLatentStepSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "FixedLatentStepSpec-Output": {
+        "additionalProperties": false,
+        "description": "An assigned scale which remains fixed during warmup and sampling.",
+        "properties": {
+          "kind": {
+            "const": "fixed",
+            "default": "fixed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "delta": {
+            "default": 0.01,
+            "exclusiveMinimum": 0,
+            "title": "Delta",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "delta"
+        ],
+        "title": "FixedLatentStepSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "FixedParameterDiagnostics": {
         "additionalProperties": false,
         "description": "A model with no free parameter coordinates needs only trajectory updates.",
@@ -16162,6 +16471,76 @@
         "title": "FixedParameterDiagnostics",
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "FixedTrajectorySpec-Input": {
+        "additionalProperties": false,
+        "description": "A fixed number of leapfrog steps with the production jitter policy.",
+        "properties": {
+          "kind": {
+            "const": "fixed",
+            "default": "fixed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "steps": {
+            "default": 8,
+            "minimum": 1,
+            "title": "Steps",
+            "type": "integer"
+          }
+        },
+        "title": "FixedTrajectorySpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "FixedTrajectorySpec-Output": {
+        "additionalProperties": false,
+        "description": "A fixed number of leapfrog steps with the production jitter policy.",
+        "properties": {
+          "kind": {
+            "const": "fixed",
+            "default": "fixed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "steps": {
+            "default": 8,
+            "minimum": 1,
+            "title": "Steps",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "steps"
+        ],
+        "title": "FixedTrajectorySpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "FrozenSamplerTuning": {
+        "discriminator": {
+          "mapping": {
+            "joint": "#/components/schemas/JointTuning",
+            "particle": "#/components/schemas/ParticleTuning"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/JointTuning"
+          },
+          {
+            "$ref": "#/components/schemas/ParticleTuning"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.continuation",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16838,6 +17217,28 @@
         "additionalProperties": false,
         "description": "Native telemetry buffers; posterior atoms and coordinates belong to the model.",
         "properties": {
+          "checkpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SamplerCheckpoint"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "latent_free_mask": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NumericalArray"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
           "chain_extra_fields": {
             "additionalProperties": {
               "$ref": "#/components/schemas/NumericalArray"
@@ -16934,6 +17335,8 @@
           }
         },
         "required": [
+          "checkpoint",
+          "latent_free_mask",
           "chain_extra_fields",
           "observation_log_probs",
           "observed_rows",
@@ -16950,17 +17353,55 @@
         "x-layer": "artifacts",
         "x-concern": "scientific_model"
       },
+      "InferenceHardware": {
+        "description": "Run here, or request one of Modal's named GPU types.",
+        "enum": [
+          "local",
+          "T4",
+          "L4",
+          "A10",
+          "L40S",
+          "A100",
+          "A100-40GB",
+          "A100-80GB",
+          "RTX-PRO-6000",
+          "H100",
+          "H100!",
+          "H200",
+          "B200"
+        ],
+        "title": "InferenceHardware",
+        "type": "string",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "InferenceMetadata": {
         "additionalProperties": false,
         "description": "The production run's law, chain layout and sampler measurements.",
         "properties": {
           "distribution": {
-            "$ref": "#/components/schemas/DistributionId-Output"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DistributionId-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "num_samples_total": {
-            "minimum": 1,
+            "minimum": 0,
             "title": "Num Samples Total",
             "type": "integer"
+          },
+          "segments": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FitSegment"
+            },
+            "title": "Segments",
+            "type": "array"
           },
           "num_chains": {
             "minimum": 1,
@@ -16996,12 +17437,55 @@
         "required": [
           "distribution",
           "num_samples_total",
+          "segments",
           "num_chains",
           "duration_seconds",
           "engine",
           "sampler_diagnostics"
         ],
         "title": "InferenceMetadata",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "InferencePhase": {
+        "additionalProperties": false,
+        "description": "Measured interval relative to this execution's start; intervals may overlap.",
+        "properties": {
+          "sampler": {
+            "title": "Sampler",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "start_seconds": {
+            "title": "Start Seconds",
+            "type": "number"
+          },
+          "end_seconds": {
+            "title": "End Seconds",
+            "type": "number"
+          },
+          "outcome": {
+            "enum": [
+              "complete",
+              "failed"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sampler",
+          "stage",
+          "start_seconds",
+          "end_seconds",
+          "outcome"
+        ],
+        "title": "InferencePhase",
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.reports.inference",
         "x-layer": "findings",
@@ -17180,6 +17664,19 @@
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.model.parameter_spec",
         "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "InitializationDiagnostics": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/LapsInitializationDiagnostics"
+          },
+          {
+            "$ref": "#/components/schemas/ContinuedInitializationDiagnostics"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "IntervalEffectTransformSpec-Input": {
@@ -17473,6 +17970,66 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "JointTrajectorySpec-Input": {
+        "discriminator": {
+          "mapping": {
+            "fixed": "#/components/schemas/FixedTrajectorySpec-Input",
+            "nuts": "#/components/schemas/NutsTrajectorySpec-Input"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NutsTrajectorySpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/FixedTrajectorySpec-Input"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "JointTrajectorySpec-Output": {
+        "discriminator": {
+          "mapping": {
+            "fixed": "#/components/schemas/FixedTrajectorySpec-Output",
+            "nuts": "#/components/schemas/NutsTrajectorySpec-Output"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NutsTrajectorySpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/FixedTrajectorySpec-Output"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "JointTuning": {
+        "additionalProperties": false,
+        "description": "Joint coordinates are reconstructed from the original model and trace seed.",
+        "properties": {
+          "kind": {
+            "const": "joint",
+            "default": "joint",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "JointTuning",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.continuation",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "JsonArray-Input": {
         "items": {
           "$ref": "#/components/schemas/JsonValue-Input"
@@ -17705,6 +18262,12 @@
         "additionalProperties": false,
         "description": "Realized joint-ensemble initialization, without any claim of posterior convergence.",
         "properties": {
+          "source": {
+            "const": "laps",
+            "default": "laps",
+            "title": "Source",
+            "type": "string"
+          },
           "ensemble_size": {
             "title": "Ensemble Size",
             "type": "integer"
@@ -17739,6 +18302,7 @@
           }
         },
         "required": [
+          "source",
           "ensemble_size",
           "joint_dimension",
           "unadjusted_steps",
@@ -17856,6 +18420,16 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "LatentBlockSize": {
+        "enum": [
+          1,
+          2,
+          "all"
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "LatentConvergenceSubject": {
         "additionalProperties": false,
         "description": "A convergence criterion over a construct's independent latent coordinates.",
@@ -17951,6 +18525,46 @@
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "LatentStepSpec-Input": {
+        "discriminator": {
+          "mapping": {
+            "adapted": "#/components/schemas/AdaptedLatentStepSpec-Input",
+            "fixed": "#/components/schemas/FixedLatentStepSpec-Input"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AdaptedLatentStepSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/FixedLatentStepSpec-Input"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "LatentStepSpec-Output": {
+        "discriminator": {
+          "mapping": {
+            "adapted": "#/components/schemas/AdaptedLatentStepSpec-Output",
+            "fixed": "#/components/schemas/FixedLatentStepSpec-Output"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AdaptedLatentStepSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/FixedLatentStepSpec-Output"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "LikelihoodSpec-Input": {
@@ -18191,6 +18805,7 @@
           },
           "n_parameter_particles": {
             "default": 2,
+            "minimum": 2,
             "title": "N Parameter Particles",
             "type": "integer"
           },
@@ -18209,7 +18824,7 @@
             "$ref": "#/components/schemas/DsmcSpec-Input"
           },
           "parameter_proposal": {
-            "default": "pseudo_langevin",
+            "default": "random_walk",
             "enum": [
               "random_walk",
               "pseudo_langevin"
@@ -18291,6 +18906,7 @@
           },
           "n_parameter_particles": {
             "default": 2,
+            "minimum": 2,
             "title": "N Parameter Particles",
             "type": "integer"
           },
@@ -18309,7 +18925,7 @@
             "$ref": "#/components/schemas/DsmcSpec-Output"
           },
           "parameter_proposal": {
-            "default": "pseudo_langevin",
+            "default": "random_walk",
             "enum": [
               "random_walk",
               "pseudo_langevin"
@@ -19094,6 +19710,96 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "NewFitTarget_Annotated_Any__WithJsonSchema__": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "new",
+            "default": "new",
+            "title": "Kind",
+            "type": "string"
+          },
+          "dynamical_model_spec_ref": {
+            "title": "Dynamical Model Spec Ref",
+            "tsType": "RevisionT",
+            "type": "string"
+          },
+          "data_ref": {
+            "$ref": "#/components/schemas/DataRef_Annotated_Any__WithJsonSchema__int_"
+          }
+        },
+        "required": [
+          "kind",
+          "dynamical_model_spec_ref",
+          "data_ref"
+        ],
+        "title": "NewFitTarget[Annotated[Any, WithJsonSchema]]",
+        "type": "object",
+        "x-typescript-mode": "serialization",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-typescript-parameters": [
+          "RevisionT"
+        ],
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
+      "NewFitTarget_GitOid_": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "new",
+            "default": "new",
+            "title": "Kind",
+            "type": "string"
+          },
+          "dynamical_model_spec_ref": {
+            "$ref": "#/components/schemas/GitOid-Output"
+          },
+          "data_ref": {
+            "$ref": "#/components/schemas/DataRef_GitOid_int_"
+          }
+        },
+        "required": [
+          "kind",
+          "dynamical_model_spec_ref",
+          "data_ref"
+        ],
+        "title": "NewFitTarget[GitOid]",
+        "type": "object",
+        "x-typescript-mode": "serialization",
+        "x-typescript-type": "NewFitTarget<GitOid>",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
+      "NewFitTarget_RevisionSelector_": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "new",
+            "default": "new",
+            "title": "Kind",
+            "type": "string"
+          },
+          "dynamical_model_spec_ref": {
+            "$ref": "#/components/schemas/RevisionSelector"
+          },
+          "data_ref": {
+            "$ref": "#/components/schemas/DataRef_RevisionSelector_int_"
+          }
+        },
+        "required": [
+          "dynamical_model_spec_ref",
+          "data_ref"
+        ],
+        "title": "NewFitTarget[RevisionSelector]",
+        "type": "object",
+        "x-typescript-mode": "validation",
+        "x-typescript-type": "NewFitTarget<RevisionSelector>",
+        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
+      },
       "NonIdentifiableTreatmentStatus": {
         "additionalProperties": false,
         "description": "Context on why a treatment effect is not identifiable.",
@@ -19875,8 +20581,15 @@
             "type": "array"
           },
           "max_tree_depth_fraction": {
-            "title": "Max Tree Depth Fraction",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Tree Depth Fraction"
           }
         },
         "required": [
@@ -19893,7 +20606,7 @@
       },
       "NutsDASpec-Input": {
         "additionalProperties": false,
-        "description": "NUTS with dual averaging and diagonal mass adaptation, joint or conditional.",
+        "description": "Joint HMC with dual averaging and windowed diagonal mass adaptation.",
         "properties": {
           "method": {
             "const": "nuts_da",
@@ -19908,11 +20621,8 @@
             "title": "Target Accept Prob",
             "type": "number"
           },
-          "max_tree_depth": {
-            "default": 10,
-            "minimum": 1,
-            "title": "Max Tree Depth",
-            "type": "integer"
+          "trajectory": {
+            "$ref": "#/components/schemas/JointTrajectorySpec-Input"
           },
           "initial_step_size": {
             "default": 1.0,
@@ -19929,7 +20639,7 @@
       },
       "NutsDASpec-Output": {
         "additionalProperties": false,
-        "description": "NUTS with dual averaging and diagonal mass adaptation, joint or conditional.",
+        "description": "Joint HMC with dual averaging and windowed diagonal mass adaptation.",
         "properties": {
           "method": {
             "const": "nuts_da",
@@ -19944,11 +20654,8 @@
             "title": "Target Accept Prob",
             "type": "number"
           },
-          "max_tree_depth": {
-            "default": 10,
-            "minimum": 1,
-            "title": "Max Tree Depth",
-            "type": "integer"
+          "trajectory": {
+            "$ref": "#/components/schemas/JointTrajectorySpec-Output"
           },
           "initial_step_size": {
             "default": 1.0,
@@ -19960,10 +20667,60 @@
         "required": [
           "method",
           "target_accept_prob",
-          "max_tree_depth",
+          "trajectory",
           "initial_step_size"
         ],
         "title": "NutsDASpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "NutsTrajectorySpec-Input": {
+        "additionalProperties": false,
+        "description": "A dynamically terminated trajectory, bounded by tree depth.",
+        "properties": {
+          "kind": {
+            "const": "nuts",
+            "default": "nuts",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_tree_depth": {
+            "default": 10,
+            "minimum": 1,
+            "title": "Max Tree Depth",
+            "type": "integer"
+          }
+        },
+        "title": "NutsTrajectorySpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "NutsTrajectorySpec-Output": {
+        "additionalProperties": false,
+        "description": "A dynamically terminated trajectory, bounded by tree depth.",
+        "properties": {
+          "kind": {
+            "const": "nuts",
+            "default": "nuts",
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_tree_depth": {
+            "default": 10,
+            "minimum": 1,
+            "title": "Max Tree Depth",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "max_tree_depth"
+        ],
+        "title": "NutsTrajectorySpec",
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
@@ -20755,86 +21512,6 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "PaidMixSpec-Input": {
-        "additionalProperties": false,
-        "description": "Optional fixed pilot and wide proposals mixed with an auxiliary particle proposal.",
-        "properties": {
-          "local_weight": {
-            "default": 0.85,
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Local Weight",
-            "type": "number"
-          },
-          "pilot_weight": {
-            "default": 0.1,
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Pilot Weight",
-            "type": "number"
-          },
-          "pilot_var_scale": {
-            "default": 0.25,
-            "exclusiveMinimum": 0,
-            "title": "Pilot Var Scale",
-            "type": "number"
-          },
-          "wide_mult": {
-            "default": 4.0,
-            "exclusiveMinimum": 0,
-            "title": "Wide Mult",
-            "type": "number"
-          }
-        },
-        "title": "PaidMixSpec",
-        "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "PaidMixSpec-Output": {
-        "additionalProperties": false,
-        "description": "Optional fixed pilot and wide proposals mixed with an auxiliary particle proposal.",
-        "properties": {
-          "local_weight": {
-            "default": 0.85,
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Local Weight",
-            "type": "number"
-          },
-          "pilot_weight": {
-            "default": 0.1,
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Pilot Weight",
-            "type": "number"
-          },
-          "pilot_var_scale": {
-            "default": 0.25,
-            "exclusiveMinimum": 0,
-            "title": "Pilot Var Scale",
-            "type": "number"
-          },
-          "wide_mult": {
-            "default": 4.0,
-            "exclusiveMinimum": 0,
-            "title": "Wide Mult",
-            "type": "number"
-          }
-        },
-        "required": [
-          "local_weight",
-          "pilot_weight",
-          "pilot_var_scale",
-          "wide_mult"
-        ],
-        "title": "PaidMixSpec",
-        "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "PairedArmSimulation": {
         "additionalProperties": false,
         "description": "Intervention and natural-course histories with matched draw indices.",
@@ -21249,7 +21926,7 @@
             "type": "number"
           },
           "initialization": {
-            "$ref": "#/components/schemas/LapsInitializationDiagnostics"
+            "$ref": "#/components/schemas/InitializationDiagnostics"
           },
           "parameters": {
             "discriminator": {
@@ -21396,8 +22073,8 @@
             "title": "Mcmc Phase Seconds",
             "type": "number"
           },
-          "dsmc_leaf_proposal": {
-            "title": "Dsmc Leaf Proposal",
+          "drift": {
+            "title": "Drift",
             "type": "string"
           },
           "diagnostic_metrics": {
@@ -21431,13 +22108,10 @@
             "type": "number"
           },
           "latent_block_coords": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
+            "enum": [
+              1,
+              2,
+              "all"
             ],
             "title": "Latent Block Coords"
           },
@@ -21547,7 +22221,7 @@
             "title": "Amala Grad Norm Max"
           },
           "initialization": {
-            "$ref": "#/components/schemas/LapsInitializationDiagnostics"
+            "$ref": "#/components/schemas/InitializationDiagnostics"
           },
           "dsmc_weights": {
             "anyOf": [
@@ -21575,7 +22249,7 @@
           "settings",
           "parameter_kernel",
           "mcmc_phase_seconds",
-          "dsmc_leaf_proposal",
+          "drift",
           "diagnostic_metrics",
           "param_target_accept",
           "parameter_preconditioned",
@@ -21601,6 +22275,55 @@
         "title": "ParticleSamplerDiagnostics",
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "ParticleTuning": {
+        "additionalProperties": false,
+        "description": "Frozen proposal geometry; these values are not posterior draws.",
+        "properties": {
+          "kind": {
+            "const": "particle",
+            "default": "particle",
+            "title": "Kind",
+            "type": "string"
+          },
+          "parameter_chol": {
+            "$ref": "#/components/schemas/NumericalArray"
+          },
+          "pilot_mean": {
+            "$ref": "#/components/schemas/NumericalArray"
+          },
+          "pilot_variance": {
+            "$ref": "#/components/schemas/NumericalArray"
+          },
+          "parameter_reference_path": {
+            "$ref": "#/components/schemas/NumericalArray"
+          },
+          "gaussian_reference": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NumericalArray"
+            },
+            "title": "Gaussian Reference",
+            "type": "array"
+          },
+          "initialization": {
+            "$ref": "#/components/schemas/InitializationDiagnostics"
+          }
+        },
+        "required": [
+          "kind",
+          "parameter_chol",
+          "pilot_mean",
+          "pilot_variance",
+          "parameter_reference_path",
+          "gaussian_reference",
+          "initialization"
+        ],
+        "title": "ParticleTuning",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.continuation",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -22224,7 +22947,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/ExtractionSpec-Output"
             },
-            "description": "Computed rules or semantic extraction instructions keyed by the model's observation IDs.",
+            "description": "Computed, recorded-reading or semantic extraction instructions keyed by the model's observation IDs.",
             "minProperties": 1,
             "propertyNames": {
               "$ref": "#/components/schemas/IndicatorId-Output"
@@ -22271,7 +22994,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/ExtractionSpec-Output"
             },
-            "description": "Computed rules or semantic extraction instructions keyed by the model's observation IDs.",
+            "description": "Computed, recorded-reading or semantic extraction instructions keyed by the model's observation IDs.",
             "minProperties": 1,
             "propertyNames": {
               "$ref": "#/components/schemas/IndicatorId-Output"
@@ -22315,7 +23038,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/ExtractionSpec-Input"
             },
-            "description": "Computed rules or semantic extraction instructions keyed by the model's observation IDs.",
+            "description": "Computed, recorded-reading or semantic extraction instructions keyed by the model's observation IDs.",
             "minProperties": 1,
             "propertyNames": {
               "$ref": "#/components/schemas/IndicatorId-Input"
@@ -22935,6 +23658,105 @@
         "x-layer": "study",
         "x-concern": "execution_history"
       },
+      "RecordedExtractionSpec-Input": {
+        "additionalProperties": false,
+        "description": "Import already measured readings and their actual support without re-bucketing.",
+        "properties": {
+          "kind": {
+            "const": "recorded",
+            "default": "recorded",
+            "title": "Kind",
+            "type": "string"
+          },
+          "how_to_measure": {
+            "default": "Import the recorded reading and temporal support unchanged.",
+            "title": "How To Measure",
+            "type": "string"
+          },
+          "value_column": {
+            "minLength": 1,
+            "title": "Value Column",
+            "type": "string"
+          },
+          "anchor_column": {
+            "default": "timestamp",
+            "minLength": 1,
+            "title": "Anchor Column",
+            "type": "string"
+          },
+          "support_start_column": {
+            "minLength": 1,
+            "title": "Support Start Column",
+            "type": "string"
+          },
+          "support_end_column": {
+            "minLength": 1,
+            "title": "Support End Column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value_column",
+          "support_start_column",
+          "support_end_column"
+        ],
+        "title": "RecordedExtractionSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "RecordedExtractionSpec-Output": {
+        "additionalProperties": false,
+        "description": "Import already measured readings and their actual support without re-bucketing.",
+        "properties": {
+          "kind": {
+            "const": "recorded",
+            "default": "recorded",
+            "title": "Kind",
+            "type": "string"
+          },
+          "how_to_measure": {
+            "default": "Import the recorded reading and temporal support unchanged.",
+            "title": "How To Measure",
+            "type": "string"
+          },
+          "value_column": {
+            "minLength": 1,
+            "title": "Value Column",
+            "type": "string"
+          },
+          "anchor_column": {
+            "default": "timestamp",
+            "minLength": 1,
+            "title": "Anchor Column",
+            "type": "string"
+          },
+          "support_start_column": {
+            "minLength": 1,
+            "title": "Support Start Column",
+            "type": "string"
+          },
+          "support_end_column": {
+            "minLength": 1,
+            "title": "Support End Column",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "how_to_measure",
+          "value_column",
+          "anchor_column",
+          "support_start_column",
+          "support_end_column"
+        ],
+        "title": "RecordedExtractionSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "Rejected": {
         "additionalProperties": false,
         "description": "An expected refusal to execute or publish a scientific request.",
@@ -23256,6 +24078,47 @@
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
+      "SamplerCheckpoint": {
+        "additionalProperties": false,
+        "description": "An exact native state at the last retained draw, with its next random key.",
+        "properties": {
+          "settings": {
+            "$ref": "#/components/schemas/SamplerSpec"
+          },
+          "parameters": {
+            "$ref": "#/components/schemas/NumericalArray"
+          },
+          "paths": {
+            "$ref": "#/components/schemas/NumericalArray"
+          },
+          "random_key": {
+            "$ref": "#/components/schemas/NumericalArray"
+          },
+          "native_state": {
+            "items": {
+              "$ref": "#/components/schemas/NumericalArray"
+            },
+            "title": "Native State",
+            "type": "array"
+          },
+          "tuning": {
+            "$ref": "#/components/schemas/FrozenSamplerTuning"
+          }
+        },
+        "required": [
+          "settings",
+          "parameters",
+          "paths",
+          "random_key",
+          "native_state",
+          "tuning"
+        ],
+        "title": "SamplerCheckpoint",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.continuation",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "SamplerSpec": {
         "additionalProperties": false,
         "description": "Fully resolved controls for exact joint state and parameter inference.",
@@ -23268,7 +24131,7 @@
           },
           "num_samples_per_chain": {
             "default": 1000,
-            "minimum": 1,
+            "minimum": 0,
             "title": "Num Samples Per Chain",
             "type": "integer"
           },
@@ -23290,6 +24153,10 @@
             "title": "Num Particles",
             "type": "integer"
           },
+          "hardware": {
+            "$ref": "#/components/schemas/InferenceHardware",
+            "default": "L40S"
+          },
           "retain_latent_paths": {
             "default": true,
             "title": "Retain Latent Paths",
@@ -23305,6 +24172,7 @@
           "num_chains",
           "seed",
           "num_particles",
+          "hardware",
           "retain_latent_paths",
           "algorithm"
         ],
@@ -23524,11 +24392,27 @@
           "simulation": {
             "$ref": "#/components/schemas/SimulationSpec-Output",
             "description": "Requested start, horizon, and interventions."
+          },
+          "seed": {
+            "default": 0,
+            "description": "Generation seed, retained with the histories.",
+            "minimum": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "num_replicates": {
+            "default": 100,
+            "description": "Number of independent histories.",
+            "minimum": 1,
+            "title": "Num Replicates",
+            "type": "integer"
           }
         },
         "required": [
           "dynamical_model_spec_ref",
-          "simulation"
+          "simulation",
+          "seed",
+          "num_replicates"
         ],
         "title": "SimulateInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
@@ -23550,11 +24434,27 @@
           "simulation": {
             "$ref": "#/components/schemas/SimulationSpec-Output",
             "description": "Requested start, horizon, and interventions."
+          },
+          "seed": {
+            "default": 0,
+            "description": "Generation seed, retained with the histories.",
+            "minimum": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "num_replicates": {
+            "default": 100,
+            "description": "Number of independent histories.",
+            "minimum": 1,
+            "title": "Num Replicates",
+            "type": "integer"
           }
         },
         "required": [
           "dynamical_model_spec_ref",
-          "simulation"
+          "simulation",
+          "seed",
+          "num_replicates"
         ],
         "title": "SimulateInput[GitOid]",
         "type": "object",
@@ -23574,6 +24474,20 @@
           "simulation": {
             "$ref": "#/components/schemas/SimulationSpec-Input",
             "description": "Requested start, horizon, and interventions."
+          },
+          "seed": {
+            "default": 0,
+            "description": "Generation seed, retained with the histories.",
+            "minimum": 0,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "num_replicates": {
+            "default": 100,
+            "description": "Number of independent histories.",
+            "minimum": 1,
+            "title": "Num Replicates",
+            "type": "integer"
           }
         },
         "required": [
@@ -25568,6 +26482,9 @@
     "Change": {
       "$ref": "#/components/schemas/Change_Annotated_Any__WithJsonSchema__"
     },
+    "ContinueFitTarget": {
+      "$ref": "#/components/schemas/ContinueFitTarget_Annotated_Any__WithJsonSchema__"
+    },
     "DataDiffInput": {
       "$ref": "#/components/schemas/DataDiffInput_Annotated_Any__WithJsonSchema__"
     },
@@ -25598,6 +26515,9 @@
     "FitRequest": {
       "$ref": "#/components/schemas/FitRequest_Annotated_Any__WithJsonSchema__"
     },
+    "FitTarget": {
+      "$ref": "#/components/schemas/FitTarget_Annotated_Any__WithJsonSchema__"
+    },
     "GammaLawSpec": {
       "$ref": "#/components/schemas/GammaLawSpec_Annotated_Any__WithJsonSchema__"
     },
@@ -25609,6 +26529,9 @@
     },
     "NegativeBinomial2LawSpec": {
       "$ref": "#/components/schemas/NegativeBinomial2LawSpec_Annotated_Any__WithJsonSchema__"
+    },
+    "NewFitTarget": {
+      "$ref": "#/components/schemas/NewFitTarget_Annotated_Any__WithJsonSchema__"
     },
     "NormalLawSpec": {
       "$ref": "#/components/schemas/NormalLawSpec_Annotated_Any__WithJsonSchema__"

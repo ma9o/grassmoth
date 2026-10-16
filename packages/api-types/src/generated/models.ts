@@ -7,6 +7,7 @@ export type ActionMessage = components["schemas"]["ActionMessage"];
 export type ActionPoll = components["schemas"]["ActionPoll"];
 export type ActionReportName = components["schemas"]["ActionReportName"];
 export type ActionSuccess = components["schemas"]["ActionSuccess"];
+export type AdaptedLatentStepSpec = components["schemas"]["AdaptedLatentStepSpec-Output"];
 export type ArrayVector = components["schemas"]["ArrayVector"];
 export type ArtifactFiles = components["schemas"]["ArtifactFiles"];
 export type ArtifactId = components["schemas"]["ArtifactId"];
@@ -15,6 +16,7 @@ export type ArtifactResult = components["schemas"]["ArtifactResult"];
 export type ArtifactSource = components["schemas"]["ArtifactSource"];
 export type AttemptRecord = components["schemas"]["AttemptRecord"];
 export type AuthoredLawProvenance = components["schemas"]["AuthoredLawProvenance"];
+export type AuxiliaryDrift = components["schemas"]["AuxiliaryDrift"];
 export type BinaryExpression = components["schemas"]["BinaryExpression-Output"];
 export type BinaryOperator = components["schemas"]["BinaryOperator"];
 export type CallExpression = components["schemas"]["CallExpression-Output"];
@@ -29,14 +31,15 @@ export type CompletedExtractionWorker = components["schemas"]["CompletedExtracti
 export type ComputedExtractionSpec = components["schemas"]["ComputedExtractionSpec-Output"];
 export type ConditionalMetropolisDiagnostics = components["schemas"]["ConditionalMetropolisDiagnostics"];
 export type ConditionalNutsDiagnostics = components["schemas"]["ConditionalNutsDiagnostics"];
+export type ConditionalNutsSpec = components["schemas"]["ConditionalNutsSpec-Output"];
 export type ConditionalParameterSpec = components["schemas"]["ConditionalParameterSpec-Output"];
 export type ConstructId = components["schemas"]["ConstructId-Output"];
 export type ConstructRef = components["schemas"]["ConstructRef-Output"];
 export type ConstructSpec = components["schemas"]["ConstructSpec-Output"];
+export type ContinuedInitializationDiagnostics = components["schemas"]["ContinuedInitializationDiagnostics"];
 export type ConvergenceAssessmentSubject = components["schemas"]["ConvergenceAssessmentSubject"];
 export type ConvergenceReport = components["schemas"]["ConvergenceReport"];
 export type ConvergenceSubject = components["schemas"]["ConvergenceSubject"];
-export type DSMCLeafProposal = components["schemas"]["DSMCLeafProposal"];
 export type DataComparisonReport = components["schemas"]["DataComparisonReport"];
 export type DataDiffOutput = components["schemas"]["DataDiffOutput"];
 export type DataFinding = components["schemas"]["DataFinding"];
@@ -82,9 +85,14 @@ export type FindingSubject = components["schemas"]["FindingSubject"];
 export type FitCheckReport = components["schemas"]["FitCheckReport"];
 export type FitOutput = components["schemas"]["FitOutput"];
 export type FitReliability = components["schemas"]["FitReliability"];
+export type FitRuntime = components["schemas"]["FitRuntime"];
+export type FitSegment = components["schemas"]["FitSegment"];
 export type FitSettingsSpec = components["schemas"]["FitSettingsSpec-Output"];
 export type FittedLawProvenance = components["schemas"]["FittedLawProvenance"];
+export type FixedLatentStepSpec = components["schemas"]["FixedLatentStepSpec-Output"];
 export type FixedParameterDiagnostics = components["schemas"]["FixedParameterDiagnostics"];
+export type FixedTrajectorySpec = components["schemas"]["FixedTrajectorySpec-Output"];
+export type FrozenSamplerTuning = components["schemas"]["FrozenSamplerTuning"];
 export type GaussianReferenceTemperingSpec = components["schemas"]["GaussianReferenceTemperingSpec-Output"];
 export type GitOid = components["schemas"]["GitOid-Output"];
 export type HistogramBin = components["schemas"]["HistogramBin"];
@@ -101,22 +109,29 @@ export type IndicatorRef = components["schemas"]["IndicatorRef"];
 export type IndicatorSpec = components["schemas"]["IndicatorSpec-Output"];
 export type InferenceAlgorithmSpec = components["schemas"]["InferenceAlgorithmSpec-Output"];
 export type InferenceEvidence = components["schemas"]["InferenceEvidence"];
+export type InferenceHardware = components["schemas"]["InferenceHardware"];
 export type InferenceMetadata = components["schemas"]["InferenceMetadata"];
+export type InferencePhase = components["schemas"]["InferencePhase"];
 export type InferenceReport = components["schemas"]["InferenceReport"];
 export type InferenceReportCore = components["schemas"]["InferenceReportCore"];
 export type InferenceReportDetail = components["schemas"]["InferenceReportDetail"];
 export type InitialCorrelationTransformSpec = components["schemas"]["InitialCorrelationTransformSpec-Output"];
+export type InitializationDiagnostics = components["schemas"]["InitializationDiagnostics"];
 export type IntervalEffectTransformSpec = components["schemas"]["IntervalEffectTransformSpec-Output"];
 export type InterventionSpec = components["schemas"]["InterventionSpec-Output"];
 export type JointLawLayout = components["schemas"]["JointLawLayout-Output"];
+export type JointTrajectorySpec = components["schemas"]["JointTrajectorySpec-Output"];
+export type JointTuning = components["schemas"]["JointTuning"];
 export type JsonScalar = boolean | number | string | null;
 export type LLMTrace = components["schemas"]["LLMTrace"];
 export type LOODiagnostics = components["schemas"]["LOODiagnostics"];
 export type LOOPITPoint = components["schemas"]["LOOPITPoint"];
 export type LapsInitializationDiagnostics = components["schemas"]["LapsInitializationDiagnostics"];
 export type LapsInitializationSpec = components["schemas"]["LapsInitializationSpec-Output"];
+export type LatentBlockSize = components["schemas"]["LatentBlockSize"];
 export type LatentConvergenceSubject = components["schemas"]["LatentConvergenceSubject"];
 export type LatentDiagnostics = components["schemas"]["LatentDiagnostics"];
+export type LatentStepSpec = components["schemas"]["LatentStepSpec-Output"];
 export type LikelihoodSpec = components["schemas"]["LikelihoodSpec-Output"];
 export type LiteralExpression = components["schemas"]["LiteralExpression-Output"];
 export type LiteratureSource = components["schemas"]["LiteratureSource-Output"];
@@ -150,6 +165,7 @@ export type NumericCriterionEvidence = components["schemas"]["NumericCriterionEv
 export type NumericalArray = components["schemas"]["NumericalArray"];
 export type NutsDADiagnostics = components["schemas"]["NutsDADiagnostics"];
 export type NutsDASpec = components["schemas"]["NutsDASpec-Output"];
+export type NutsTrajectorySpec = components["schemas"]["NutsTrajectorySpec-Output"];
 export type ObservationData = components["schemas"]["ObservationData"];
 export type ObservationHistory = components["schemas"]["ObservationHistory"];
 export type ObservationLawSpec = components["schemas"]["ObservationLawSpec-Output"];
@@ -157,7 +173,6 @@ export type ObservationWindow = components["schemas"]["ObservationWindow"];
 export type OutcomeSubject = components["schemas"]["OutcomeSubject"];
 export type PPCOverlay = components["schemas"]["PPCOverlay"];
 export type PPCTestStat = components["schemas"]["PPCTestStat"];
-export type PaidMixSpec = components["schemas"]["PaidMixSpec-Output"];
 export type PairedArmSimulation = components["schemas"]["PairedArmSimulation"];
 export type ParameterDiagnostics = components["schemas"]["ParameterDiagnostics"];
 export type ParameterElementId = components["schemas"]["ParameterElementId-Output"];
@@ -169,6 +184,7 @@ export type ParetoKPoint = components["schemas"]["ParetoKPoint"];
 export type ParticleGibbsDiagnostics = components["schemas"]["ParticleGibbsDiagnostics"];
 export type ParticleGibbsSpec = components["schemas"]["ParticleGibbsSpec-Output"];
 export type ParticleSamplerDiagnostics = components["schemas"]["ParticleSamplerDiagnostics"];
+export type ParticleTuning = components["schemas"]["ParticleTuning"];
 export type ParticleWeightDiagnostics = components["schemas"]["ParticleWeightDiagnostics"];
 export type ParticleWeightMetric = components["schemas"]["ParticleWeightMetric"];
 export type ParticleWeightSummary = components["schemas"]["ParticleWeightSummary"];
@@ -197,6 +213,7 @@ export type QuestionSubject = components["schemas"]["QuestionSubject"];
 export type Raised = components["schemas"]["Raised"];
 export type RankHistogram = components["schemas"]["RankHistogram"];
 export type RecordDependency = components["schemas"]["RecordDependency"];
+export type RecordedExtractionSpec = components["schemas"]["RecordedExtractionSpec-Output"];
 export type Rejected = components["schemas"]["Rejected"];
 export type ReplicaSwapCounts = components["schemas"]["ReplicaSwapCounts"];
 export type RetractedArtifact = components["schemas"]["RetractedArtifact"];
@@ -204,6 +221,7 @@ export type RevisionSelector = components["schemas"]["RevisionSelector"];
 export type Role = components["schemas"]["Role"];
 export type RunningAction = components["schemas"]["RunningAction"];
 export type RunningPoll = components["schemas"]["RunningPoll"];
+export type SamplerCheckpoint = components["schemas"]["SamplerCheckpoint"];
 export type SamplerSpec = components["schemas"]["SamplerSpec"];
 export type ScalarStatisticComparison = components["schemas"]["ScalarStatisticComparison"];
 export type ScalarValues = components["schemas"]["ScalarValues"];
@@ -319,6 +337,15 @@ export type CategoricalLawSpec<A> = {
     readonly logits: A;
 };
 export type Change<PayloadT> = Added<PayloadT> | Removed<PayloadT> | Revised<PayloadT>;
+export type ContinueFitTarget<RevisionT> = {
+    /**
+     * @description discriminator enum property added by openapi-typescript
+     * @enum {string}
+     */
+    readonly kind: "continue";
+    /** Fit Ref */
+    readonly fit_ref: RevisionT;
+};
 export type DataDiffInput<RevisionT> = {
     /** @description References on the left side. Each reference selects one replicate by index, or all its retained histories when the index is omitted. */
     readonly left_ref: DataSelection<RevisionT>;
@@ -404,15 +431,14 @@ export type Evaluated<Subject, Evidence> = {
     readonly evidence: Evidence;
 };
 export type FitInput<RevisionT> = {
-    /**
-     * Dynamical Model Spec Ref
-     * @description Model revision whose parameter law will be conditioned.
-     */
-    readonly dynamical_model_spec_ref: RevisionT;
-    /** @description One saved observation history selected by revision and a required replicate index. */
-    readonly data_ref: DataRef<RevisionT, number>;
-    /** @description Optional particle-sampler counts and random seed for the run. */
+    readonly target: FitTarget<RevisionT>;
     readonly settings: FitSettingsSpec;
+    /**
+     * Repeat
+     * @description Timing repeat identity; identical repeats reuse their saved result.
+     * @default 0
+     */
+    readonly repeat: number;
 };
 export type FitRequest<RevisionT> = {
     /**
@@ -431,6 +457,7 @@ export type FitRequest<RevisionT> = {
      */
     readonly reasoning: string | null;
 };
+export type FitTarget<RevisionT> = NewFitTarget<RevisionT> | ContinueFitTarget<RevisionT>;
 export type GammaLawSpec<A> = {
     /**
      * Distribution
@@ -483,6 +510,16 @@ export type NegativeBinomial2LawSpec<A> = {
     readonly mean: A;
     /** Concentration */
     readonly concentration: A;
+};
+export type NewFitTarget<RevisionT> = {
+    /**
+     * @description discriminator enum property added by openapi-typescript
+     * @enum {string}
+     */
+    readonly kind: "new";
+    /** Dynamical Model Spec Ref */
+    readonly dynamical_model_spec_ref: RevisionT;
+    readonly data_ref: DataRef<RevisionT, number>;
 };
 export type NormalLawSpec<A> = {
     /**
@@ -575,7 +612,7 @@ export type PrepareDataInput<RevisionT, SourceT> = {
     readonly source: SourceT;
     /**
      * Extraction
-     * @description Computed rules or semantic extraction instructions keyed by the model's observation IDs.
+     * @description Computed, recorded-reading or semantic extraction instructions keyed by the model's observation IDs.
      */
     readonly extraction: Readonly<Partial<Record<IndicatorId, ExtractionSpec>>>;
     /**
@@ -630,6 +667,18 @@ export type SimulateInput<RevisionT> = {
     readonly dynamical_model_spec_ref: RevisionT;
     /** @description Requested start, horizon, and interventions. */
     readonly simulation: SimulationSpec;
+    /**
+     * Seed
+     * @description Generation seed, retained with the histories.
+     * @default 0
+     */
+    readonly seed: number;
+    /**
+     * Num Replicates
+     * @description Number of independent histories.
+     * @default 100
+     */
+    readonly num_replicates: number;
 };
 export type SimulateRequest<RevisionT> = {
     /**

@@ -100,6 +100,7 @@ def law_provenance(
                 assert isinstance(fit.record.attempt.outcome, Applied)
                 assert fit.record.attempt.request is not None
                 from nof1_causal_lab.actions.fit.selection import fit_source
+
                 fitted_data = fit_source(store, fit.record.attempt.request.input.target).data_ref
                 if inherited != uncertain or any(
                     fitted.get(key) != value for key, value in laws.items() if key not in uncertain

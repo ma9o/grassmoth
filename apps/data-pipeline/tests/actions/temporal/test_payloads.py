@@ -169,7 +169,13 @@ def test_numerical_results_cross_workflows_only_as_saved_report_references(actio
     if action == "fit":
         request = FitRequest.model_validate(
             {
-                "input": {'target': {'kind': 'new', 'dynamical_model_spec_ref': ref['revision'], 'data_ref': data}}
+                "input": {
+                    "target": {
+                        "kind": "new",
+                        "dynamical_model_spec_ref": ref["revision"],
+                        "data_ref": data,
+                    }
+                }
             }
         )
         result = InferenceEvidence(chain_extra_fields={"energy": values})

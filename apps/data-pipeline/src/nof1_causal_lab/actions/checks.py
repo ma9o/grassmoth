@@ -96,13 +96,19 @@ def check_specification(
 
 
 def check_model_data(
-    inputs: FitCompilationResult, panel: ObservationDataset, *, time_origin: datetime,
+    inputs: FitCompilationResult,
+    panel: ObservationDataset,
+    *,
+    time_origin: datetime,
     sampler: SamplerSpec | None = None,
 ) -> tuple[SpecificationAssessment, ...]:
     """Evaluate fitting input compatibility without running a sampler or simulator."""
     from nof1_causal_lab.models.ssm.compile.inputs import IncompleteModel
     from nof1_causal_lab.models.ssm.preparation.panel import PreparedFit, prepare_fit
-    from nof1_causal_lab.models.ssm.preparation.preflight import validate_observations_for_fit, validate_sampler_support
+    from nof1_causal_lab.models.ssm.preparation.preflight import (
+        validate_observations_for_fit,
+        validate_sampler_support,
+    )
 
     prepared = prepare_fit(inputs, panel, time_origin=time_origin)
     if not isinstance(prepared, PreparedFit):

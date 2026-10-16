@@ -21,6 +21,8 @@ export function fitResult(snapshot: ModelSnapshot): FitOutput {
     checks: fixtureValue(snapshot.fit_checks),
     inference: {
       evidence: {
+        checkpoint: null,
+        latent_free_mask: null,
         chain_extra_fields: {},
         observation_log_probs: null,
         observed_rows: null,

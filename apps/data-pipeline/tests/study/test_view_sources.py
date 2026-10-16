@@ -36,7 +36,7 @@ def test_authored_model_has_no_inference_report(monkeypatch, tmp_path):
 
 @pytest.mark.inference(concern="sampling")
 def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(monkeypatch, tmp_path):
-    from nof1_causal_lab.actions.contracts.bodies import NewFitTarget, FitInput, FitOutput
+    from nof1_causal_lab.actions.contracts.bodies import FitInput, FitOutput, NewFitTarget
     from nof1_causal_lab.actions.contracts.requests import FitRequest
     from nof1_causal_lab.actions.fit.action import read_inference_report
     from nof1_causal_lab.artifacts.observations.reference import DataRef
@@ -93,9 +93,12 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
                 ),
             ),
             request=FitRequest(
-                input=FitInput(target=NewFitTarget(
-                    dynamical_model_spec_ref=prior.revision,
-                    data_ref=DataRef(revision=panel.revision, replicate_index=0)),)
+                input=FitInput(
+                    target=NewFitTarget(
+                        dynamical_model_spec_ref=prior.revision,
+                        data_ref=DataRef(revision=panel.revision, replicate_index=0),
+                    ),
+                )
             ),
             seq=1,
         ),
@@ -115,6 +118,7 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
     assert set(output.model_dump()) == {"dynamical_model_spec", "checks", "inference"}
     from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms
 
+    assert output.dynamical_model_spec is not None
     np_atoms = empirical_atoms(output.dynamical_model_spec.distributions[identity])
     assert len(np_atoms) == report.core.inference_metadata.num_samples_total
     assert {row.subject.element_id for row in marginals} == set(

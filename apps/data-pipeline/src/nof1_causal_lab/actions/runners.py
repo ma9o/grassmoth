@@ -12,6 +12,7 @@ import asyncio
 from functools import partial
 from typing import TYPE_CHECKING
 
+from nof1_causal_lab.actions.contracts.bodies import ContinueFitTarget, FitInput
 from nof1_causal_lab.actions.contracts.effects import ActionEffects
 from nof1_causal_lab.actions.contracts.requests import (
     DataDiffRequest,
@@ -19,11 +20,10 @@ from nof1_causal_lab.actions.contracts.requests import (
     ModelDiffRequest,
     SimulateRequest,
 )
-from nof1_causal_lab.artifacts.sampling import InferenceHardware
-from nof1_causal_lab.actions.contracts.bodies import FitInput, ContinueFitTarget
+from nof1_causal_lab.actions.errors import ModelFitError
 from nof1_causal_lab.actions.fit.selection import fit_source, prior_fit
 from nof1_causal_lab.artifacts.continuation import JointTuning, sampler_identity
-from nof1_causal_lab.actions.errors import ModelFitError
+from nof1_causal_lab.artifacts.sampling import InferenceHardware
 from nof1_causal_lab.artifacts.simulation import ModelSimulationResult
 from nof1_causal_lab.models.structure import StructuralSelection
 from nof1_causal_lab.study.artifact_files import json_filename
@@ -33,9 +33,7 @@ from nof1_causal_lab.study.records import Applied
 if TYPE_CHECKING:
     from nof1_causal_lab.actions.contracts.bodies import SimulateInput
     from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
-    from nof1_causal_lab.artifacts.observations.reference import DataRef
     from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
-    from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
     from nof1_causal_lab.study.state import StudyState
 
 
@@ -51,7 +49,11 @@ async def _run_fit(
 
     source = fit_source(store, request.target)
     history = read_data_history(store, source.data_ref)
-    previous = prior_fit(store, request.target.fit_ref) if isinstance(request.target, ContinueFitTarget) else None
+    previous = (
+        prior_fit(store, request.target.fit_ref)
+        if isinstance(request.target, ContinueFitTarget)
+        else None
+    )
     continuation = None if previous is None else previous.inference.evidence.checkpoint
     from functools import cache
 
@@ -61,20 +63,40 @@ async def _run_fit(
     selection = StructuralSelection.for_question(
         dynamical_model_spec, read_question(store, pins["question"])
     )
-    sampler = resolve_sampler_spec(request.settings, None if continuation is None else continuation.settings)
+    sampler = resolve_sampler_spec(
+        request.settings, None if continuation is None else continuation.settings
+    )
     if continuation is not None:
-        if sampler.num_chains != continuation.settings.num_chains or sampler.seed != continuation.settings.seed:
-            raise ModelFitError("Continuation inherits its chain count and random stream", diagnostics={"code": "INCOMPATIBLE_CONTINUATION"})
+        if (
+            sampler.num_chains != continuation.settings.num_chains
+            or sampler.seed != continuation.settings.seed
+        ):
+            raise ModelFitError(
+                "Continuation inherits its chain count and random stream",
+                diagnostics={"code": "INCOMPATIBLE_CONTINUATION"},
+            )
         if sampler_identity(sampler) != sampler_identity(continuation.settings):
             if sampler.num_warmup == 0:
-                raise ModelFitError("Switching algorithm requires positive warmup", diagnostics={"code": "CONTINUATION_REQUIRES_WARMUP"})
+                raise ModelFitError(
+                    "Switching algorithm requires positive warmup",
+                    diagnostics={"code": "CONTINUATION_REQUIRES_WARMUP"},
+                )
             continuation = continuation.revised(tuning=JointTuning())
     from nof1_causal_lab.actions.checks import check_model_data
-    from nof1_causal_lab.models.ssm.compile.inputs import compile_ssm_inputs_from_model
     from nof1_causal_lab.artifacts.reports.checks import Evaluated
-    findings = check_model_data(compile_ssm_inputs_from_model(selection), history.observations, time_origin=history.time_origin, sampler=sampler)
+    from nof1_causal_lab.models.ssm.compile.inputs import compile_ssm_inputs_from_model
+
+    findings = check_model_data(
+        compile_ssm_inputs_from_model(selection),
+        history.observations,
+        time_origin=history.time_origin,
+        sampler=sampler,
+    )
     if any(not isinstance(item, Evaluated) or item.outcome != "passed" for item in findings):
-        raise ModelFitError("Fit preflight rejected the inputs before compute allocation", diagnostics={"findings": [item.model_dump(mode="json") for item in findings]})
+        raise ModelFitError(
+            "Fit preflight rejected the inputs before compute allocation",
+            diagnostics={"findings": [item.model_dump(mode="json") for item in findings]},
+        )
 
     config = get_config().inference
     if sampler.hardware != InferenceHardware.LOCAL:
@@ -110,13 +132,18 @@ async def _run_fit(
         effects = ActionEffects(reports={"inference": store.write_report(report)})
     else:
         info = store.write_artifact(
-            "model", derived_from=pins, produced_by="fit",
-            json_files={json_filename("model", "model"): conditioned.model_dump(mode="json", round_trip=True)},
+            "model",
+            derived_from=pins,
+            produced_by="fit",
+            json_files={
+                json_filename("model", "model"): conditioned.model_dump(
+                    mode="json", round_trip=True
+                )
+            },
         )
         report = read_inference_report(store, info.revision, evidence, result["metadata"])
         effects = ActionEffects(produced=(info,), reports={"inference": store.write_report(report)})
     return Applied(result=evidence, effects=effects)
-
 
 
 async def _run_simulate(

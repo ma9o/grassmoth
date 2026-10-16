@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, TypedDict
 
 import numpy as np
 
 from nof1_causal_lab.actions.errors import ModelFitError
 from nof1_causal_lab.actions.fit.conditioning import condition_model
-from nof1_causal_lab.artifacts.arrays import ArrayVector, NumericalArray
-from nof1_causal_lab.artifacts.identity import ParameterRef, ConstructRef
-from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
-from nof1_causal_lab.actions.contracts.bodies import FitOutput
 from nof1_causal_lab.actions.fit.runtime import fit_runtime
-from nof1_causal_lab.models.ssm.inference.samplers.progress import capture_phases
-from nof1_causal_lab.models.ssm.inference.types import UnretainedRun
-import time
+from nof1_causal_lab.artifacts.arrays import ArrayVector, NumericalArray
+from nof1_causal_lab.artifacts.identity import ConstructRef, ParameterRef
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
 from nof1_causal_lab.artifacts.reports.inference import (
@@ -27,11 +23,15 @@ from nof1_causal_lab.artifacts.reports.inference import (
     InferenceReportDetail,
 )
 from nof1_causal_lab.models.ssm.inference.diagnostics.convergence import chain_convergence
+from nof1_causal_lab.models.ssm.inference.samplers.progress import capture_phases
+from nof1_causal_lab.models.ssm.inference.types import UnretainedRun
 
 if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
+    from nof1_causal_lab.actions.contracts.bodies import FitOutput
+    from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
     from nof1_causal_lab.artifacts.identity import GitOid
     from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
     from nof1_causal_lab.artifacts.probability.serialization import ArrayLoader
@@ -64,21 +64,36 @@ def fit(
     from nof1_causal_lab.actions.fit.execution import fit_model
 
     with capture_phases(time.monotonic) as phases:
-        fitted = fit_model(selection, data_for_model, time_origin=time_origin, sampler=sampler, continuation=continuation)
+        fitted = fit_model(
+            selection,
+            data_for_model,
+            time_origin=time_origin,
+            sampler=sampler,
+            continuation=continuation,
+        )
     if "error" in fitted:
         raise ModelFitError(
             fitted["error"], diagnostics={"duration_seconds": fitted["duration_seconds"]}
         )
     result = fitted["result"]
     runtime = fit_runtime()
-    old_count = 0 if previous is None else previous.inference.core.inference_metadata.num_samples_total // sampler.num_chains
+    old_count = (
+        0
+        if previous is None
+        else previous.inference.core.inference_metadata.num_samples_total // sampler.num_chains
+    )
     segment = FitSegment(
-        start=old_count, stop=old_count + sampler.num_samples_per_chain,
-        settings=sampler, runtime=runtime, phases=tuple(phases),
+        start=old_count,
+        stop=old_count + sampler.num_samples_per_chain,
+        settings=sampler,
+        runtime=runtime,
+        phases=tuple(phases),
     )
     if isinstance(result, UnretainedRun):
         phase_fields = {
-            phase: {name: NumericalArray.from_numpy(np.asarray(value)) for name, value in fields.items()}
+            phase: {
+                name: NumericalArray.from_numpy(np.asarray(value)) for name, value in fields.items()
+            }
             for phase, fields in result.phase_extra_fields.items()
         }
         if previous is not None:
@@ -89,16 +104,27 @@ def fit(
                     duration_seconds=fitted["duration_seconds"],
                     segments=(*prior.core.inference_metadata.segments, segment),
                 ),
-                "evidence": prior.evidence.revised(phase_extra_fields={
-                    **{f"previous/{name}": fields for name, fields in prior.evidence.phase_extra_fields.items()},
-                    **phase_fields,
-                }),
+                "evidence": prior.evidence.revised(
+                    phase_extra_fields={
+                        **{
+                            f"previous/{name}": fields
+                            for name, fields in prior.evidence.phase_extra_fields.items()
+                        },
+                        **phase_fields,
+                    }
+                ),
             }
         return {
             "_dynamical_model_spec": None,
-            "metadata": InferenceMetadata(distribution=None, num_samples_total=0, num_chains=sampler.num_chains,
-                duration_seconds=fitted["duration_seconds"], engine=result.evidence, sampler_diagnostics=None,
-                segments=(segment,)),
+            "metadata": InferenceMetadata(
+                distribution=None,
+                num_samples_total=0,
+                num_chains=sampler.num_chains,
+                duration_seconds=fitted["duration_seconds"],
+                engine=result.evidence,
+                sampler_diagnostics=None,
+                segments=(segment,),
+            ),
             "evidence": InferenceEvidence(phase_extra_fields=phase_fields),
         }
     native = result.diagnostics
@@ -117,7 +143,10 @@ def fit(
     )
     metadata = InferenceMetadata(
         distribution=identity,
-        segments=(*(previous.inference.core.inference_metadata.segments if previous is not None else ()), segment),
+        segments=(
+            *(previous.inference.core.inference_metadata.segments if previous is not None else ()),
+            segment,
+        ),
         engine=result.evidence,
         duration_seconds=fitted["duration_seconds"],
         num_chains=native.mcmc.num_chains,
@@ -125,10 +154,22 @@ def fit(
         sampler_diagnostics=native.sampler_diagnostics,
     )
     layout = conditioned.law_layouts[identity]
-    latent_indices = tuple(i for identity in layout.constructs for i, (ref, _) in enumerate(native.latent_chains.states) if ref.id == identity) if native.latent_chains is not None else ()
+    latent_indices = (
+        tuple(
+            i
+            for identity in layout.constructs
+            for i, (ref, _) in enumerate(native.latent_chains.states)
+            if ref.id == identity
+        )
+        if native.latent_chains is not None
+        else ()
+    )
     evidence = InferenceEvidence(
         checkpoint=native.checkpoint,
-        latent_free_mask=retain(native.latent_chains.free_mask[:, latent_indices]) if native.latent_chains is not None else None,        chain_extra_fields={
+        latent_free_mask=retain(native.latent_chains.free_mask[:, latent_indices])
+        if native.latent_chains is not None
+        else None,
+        chain_extra_fields={
             name: NumericalArray.from_numpy(np.asarray(values))
             for name, values in native.mcmc.get_extra_fields(group_by_chain=True).items()
         },
@@ -152,26 +193,62 @@ def fit(
         final_latent_delta=retain(result.final_latent_delta),
     )
     if previous is not None:
-        from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms, empirical_distribution
+        from nof1_causal_lab.artifacts.probability.serialization import (
+            empirical_atoms,
+            empirical_distribution,
+        )
+
         assert previous.dynamical_model_spec is not None
         old = empirical_atoms(previous.dynamical_model_spec.distributions[identity])
         new = empirical_atoms(conditioned.distributions[identity])
         chains = sampler.num_chains
-        combined = np.concatenate((old.reshape(chains, old_count, -1), new.reshape(chains, sampler.num_samples_per_chain, -1)), axis=1)
-        law = empirical_distribution(combined.reshape(-1, combined.shape[-1]), array_writer=array_writer, array_loader=array_loader)
-        conditioned = conditioned.with_entities(distributions={**conditioned.distributions, identity: law})
+        combined = np.concatenate(
+            (
+                old.reshape(chains, old_count, -1),
+                new.reshape(chains, sampler.num_samples_per_chain, -1),
+            ),
+            axis=1,
+        )
+        law = empirical_distribution(
+            combined.reshape(-1, combined.shape[-1]),
+            array_writer=array_writer,
+            array_loader=array_loader,
+        )
+        conditioned = conditioned.with_entities(
+            distributions={**conditioned.distributions, identity: law}
+        )
         prior_evidence = previous.inference.evidence
         # A different kernel may expose different transition diagnostics. Only common
         # fields describe the full chain; each segment retains its native telemetry.
         evidence = evidence.revised(
-            chain_extra_fields={name: NumericalArray.from_numpy(np.concatenate((prior_evidence.chain_extra_fields[name].values, value.values), axis=1))
+            chain_extra_fields={
+                name: NumericalArray.from_numpy(
+                    np.concatenate(
+                        (prior_evidence.chain_extra_fields[name].values, value.values), axis=1
+                    )
+                )
                 for name, value in evidence.chain_extra_fields.items()
                 if name in prior_evidence.chain_extra_fields
-                and prior_evidence.chain_extra_fields[name].values.shape[2:] == value.values.shape[2:]},
-            observation_log_probs=NumericalArray.from_numpy(np.concatenate((prior_evidence.observation_log_probs.values, evidence.observation_log_probs.values), axis=1))
-                if prior_evidence.observation_log_probs is not None and evidence.observation_log_probs is not None else None,
+                and prior_evidence.chain_extra_fields[name].values.shape[2:]
+                == value.values.shape[2:]
+            },
+            observation_log_probs=NumericalArray.from_numpy(
+                np.concatenate(
+                    (
+                        prior_evidence.observation_log_probs.values,
+                        evidence.observation_log_probs.values,
+                    ),
+                    axis=1,
+                )
+            )
+            if prior_evidence.observation_log_probs is not None
+            and evidence.observation_log_probs is not None
+            else None,
             phase_extra_fields={
-                **{f"previous/{name}": values for name, values in prior_evidence.phase_extra_fields.items()},
+                **{
+                    f"previous/{name}": values
+                    for name, values in prior_evidence.phase_extra_fields.items()
+                },
                 **evidence.phase_extra_fields,
             },
         )
@@ -188,19 +265,26 @@ def read_inference_report(
     from nof1_causal_lab.study.persistence.store import read_model
 
     if metadata.distribution is None:
-        return InferenceReport(evidence=evidence,
-            core=InferenceReportCore(inference_metadata=metadata, inference_diagnostics=None,
-                convergence=chain_convergence(None), posterior_marginals=(), prior_densities={}),
-            detail=InferenceReportDetail())
+        return InferenceReport(
+            evidence=evidence,
+            core=InferenceReportCore(
+                inference_metadata=metadata,
+                inference_diagnostics=None,
+                convergence=chain_convergence(None),
+                posterior_marginals=(),
+                prior_densities={},
+            ),
+            detail=InferenceReportDetail(),
+        )
 
     def render() -> InferenceReport:
         import jax.numpy as jnp
 
         from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms
+        from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
         from nof1_causal_lab.models.ssm.inference.diagnostics.plots import (
             compute_posterior_marginals,
         )
-        from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
         from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
         from nof1_causal_lab.models.ssm.inference.types import (
             JointPosteriorDraws,
@@ -244,10 +328,26 @@ def read_inference_report(
                 draws=JointPosteriorDraws(parameters=samples),
                 diagnostics=ProductionDiagnostics(
                     latent_chains=LatentChainEvidence(
-                        paths=np.stack(tuple(atoms[metadata.distribution][:, span] for span in layout.trajectory_slices.values()), axis=-1).reshape(chains, count // chains, len(layout.time_points), len(layout.constructs)),
+                        paths=np.stack(
+                            tuple(
+                                atoms[metadata.distribution][:, span]
+                                for span in layout.trajectory_slices.values()
+                            ),
+                            axis=-1,
+                        ).reshape(
+                            chains, count // chains, len(layout.time_points), len(layout.constructs)
+                        ),
                         free_mask=np.asarray(evidence.latent_free_mask.values),
-                        states=tuple((ConstructRef(id=identity), dynamical_model_spec.get_construct(identity).name) for identity in layout.constructs),
-                    ) if evidence.latent_free_mask is not None else None,
+                        states=tuple(
+                            (
+                                ConstructRef(id=identity),
+                                dynamical_model_spec.get_construct(identity).name,
+                            )
+                            for identity in layout.constructs
+                        ),
+                    )
+                    if evidence.latent_free_mask is not None
+                    else None,
                     mcmc=TrajectoryMCMCResult(
                         chain_samples={
                             name: values.reshape(chains, -1) for name, values in samples.items()

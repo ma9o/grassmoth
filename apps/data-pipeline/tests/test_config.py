@@ -10,8 +10,8 @@ from nof1_causal_lab.actions.temporal.llm.messages import LLMSubroutineInput, LL
 from nof1_causal_lab.artifacts.sampling import (
     AdaptedLatentStepSpec,
     DsmcSpec,
-    FixedLatentStepSpec,
     FitSettingsSpec,
+    FixedLatentStepSpec,
     InferenceHardware,
     MarginalParticleGibbsSpec,
     NutsDASpec,
@@ -86,7 +86,9 @@ class TestSamplerSpec:
             num_chains=2,
             seed=3,
             num_particles=8,
-            algorithm=MarginalParticleGibbsSpec(dsmc=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.31))),
+            algorithm=MarginalParticleGibbsSpec(
+                dsmc=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.31))
+            ),
         )
         config = _make_pipeline_config()
         monkeypatch.setattr(

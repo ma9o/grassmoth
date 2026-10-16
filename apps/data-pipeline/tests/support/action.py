@@ -113,7 +113,7 @@ def applied_record(
     if isinstance(result.result, InferenceEvidence):
         assert request is not None
         assert request.action == "fit"
-        state = state.revised(data=request.input.data_ref)
+        state = state.revised(data=repository.fit_source(request.input.target).data_ref)
     if isinstance(result.result, DataPreparationResult):
         from nof1_causal_lab.actions.data_checks import evaluate_data_checks
 

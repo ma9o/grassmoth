@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, NewFitTarget, FitInput
+from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, FitInput, NewFitTarget
 from nof1_causal_lab.actions.contracts.requests import EditModelRequest, FitRequest
 from nof1_causal_lab.actions.runners import run_action
 from nof1_causal_lab.artifacts.identity import ARTIFACT_IDS, GitOid
@@ -120,9 +120,12 @@ def test_incomplete_model_is_rejected_before_inference(workspace, monkeypatch):
             run_action(
                 workspace,
                 FitRequest[GitOid](
-                    input=FitInput[GitOid](target=NewFitTarget(
-                        dynamical_model_spec_ref=model.revision,
-                        data_ref=DataRef(revision=panel.revision, replicate_index=0)),)
+                    input=FitInput[GitOid](
+                        target=NewFitTarget(
+                            dynamical_model_spec_ref=model.revision,
+                            data_ref=DataRef(revision=panel.revision, replicate_index=0),
+                        ),
+                    )
                 ),
                 state,
             )
@@ -221,7 +224,13 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     monkeypatch.setattr(
         config,
         "get_config",
-        lambda: replace(configured, inference=replace(configured.inference, sampler=configured.inference.sampler.revised(hardware=hardware))),
+        lambda: replace(
+            configured,
+            inference=replace(
+                configured.inference,
+                sampler=configured.inference.sampler.revised(hardware=hardware),
+            ),
+        ),
     )
     local_fit = Mock(side_effect=fit)
     modal_fit = Mock(side_effect=lambda _hardware, **kwargs: fit(**kwargs))
@@ -236,8 +245,13 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
         _run_fit(
             store,
             pins,
-            FitInput(target=NewFitTarget(dynamical_model_spec_ref=pins["model"],
-                data_ref=DataRef[GitOid, int](revision=pins["panel"], replicate_index=0)), settings=FitSettingsSpec()),
+            FitInput(
+                target=NewFitTarget(
+                    dynamical_model_spec_ref=pins["model"],
+                    data_ref=DataRef[GitOid, int](revision=pins["panel"], replicate_index=0),
+                ),
+                settings=FitSettingsSpec(),
+            ),
         )
     )
     assert effects.effects.produced[0].derived_from == pins

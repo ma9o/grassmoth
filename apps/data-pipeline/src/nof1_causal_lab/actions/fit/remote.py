@@ -7,9 +7,9 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
 from nof1_causal_lab.actions.contracts.bodies import FitOutput
+from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
 from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence, InferenceMetadata
 from nof1_causal_lab.compute.resources import HOST_MEMORY_ALLOCATION_ENV
@@ -90,8 +90,12 @@ def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
         array_writer=write_array,
         array_loader=arrays.__getitem__,
         compute_loo_diagnostics=payload.compute_loo_diagnostics,
-        continuation=SamplerCheckpoint.model_validate(unpack_result(payload.continuation)) if payload.continuation is not None else None,
-        previous=FitOutput.model_validate(unpack_result(payload.previous)) if payload.previous is not None else None,
+        continuation=SamplerCheckpoint.model_validate(unpack_result(payload.continuation))
+        if payload.continuation is not None
+        else None,
+        previous=FitOutput.model_validate(unpack_result(payload.previous))
+        if payload.previous is not None
+        else None,
     )
     conditioned = result["_dynamical_model_spec"]
     evidence = result["evidence"]
@@ -180,7 +184,9 @@ def fit_on_modal(
             time_origin=time_origin,
             sampler=sampler,
             compute_loo_diagnostics=compute_loo_diagnostics,
-            continuation=None if continuation is None else pack_result(continuation, array_loader=array_loader),
+            continuation=None
+            if continuation is None
+            else pack_result(continuation, array_loader=array_loader),
             previous=None if previous is None else pack_result(previous, array_loader=array_loader),
         ),
         hardware=hardware,

@@ -29,7 +29,13 @@ def _fit_on_local_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
     from nof1_causal_lab.artifacts.sampling import InferenceHardware
 
     loaded = config.load_config()
-    local = replace(loaded, inference=replace(loaded.inference, hardware=InferenceHardware.LOCAL))
+    local = replace(
+        loaded,
+        inference=replace(
+            loaded.inference,
+            sampler=loaded.inference.sampler.revised(hardware=InferenceHardware.LOCAL),
+        ),
+    )
     monkeypatch.setattr(config, "get_config", lambda: local)
 
     def reject_modal_run(*_args: object, **_kwargs: object) -> NoReturn:

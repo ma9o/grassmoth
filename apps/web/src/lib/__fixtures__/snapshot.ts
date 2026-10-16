@@ -62,13 +62,14 @@ const fit: InferenceReportCore = {
   inference_metadata: {
     distribution: "distribution:00000000000000000003",
     num_samples_total: 3,
+    segments: [],
     num_chains: 1,
     duration_seconds: 0,
     engine: { method: "mpgibbs" },
     sampler_diagnostics: null,
   },
   inference_diagnostics: null,
-  convergence: { findings: [], checked: 0, status: "not_evaluated", messages: [] },
+  convergence: { findings: [], checked: 0, status: "not_evaluated", messages: [], warnings: [] },
   loo_diagnostics: null,
   posterior_marginals: [decay, diffusion].map((parameter) => ({
     parameter: parameter.name,

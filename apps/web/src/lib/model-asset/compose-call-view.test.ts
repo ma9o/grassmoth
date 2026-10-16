@@ -23,6 +23,7 @@ const extraction = {
 const source = { files: ["input/test.csv"] as const, hashes: {}, start: null, end: null };
 const design = { start: "2026-01-01", horizon: "1d", interventions: [] };
 const settings = {
+  hardware: null,
   algorithm: null,
   num_samples_per_chain: null,
   num_warmup: null,
@@ -65,8 +66,12 @@ const journal: TimelineRevision[] = [1, 4, 5, 7, 8, 9, 10, 11, 12, 13].map((seq)
               action: "fit",
               reasoning: null,
               input: {
-                dynamical_model_spec_ref: oid(7),
-                data_ref: { revision: oid(5), replicate_index: 0 },
+                target: {
+                  kind: "new",
+                  dynamical_model_spec_ref: oid(7),
+                  data_ref: { revision: oid(5), replicate_index: 0 },
+                },
+                repeat: 0,
 
                 settings,
               },
@@ -78,6 +83,8 @@ const journal: TimelineRevision[] = [1, 4, 5, 7, 8, 9, 10, 11, 12, 13].map((seq)
                 input: {
                   dynamical_model_spec_ref: oid(seq - 1),
                   simulation: design,
+                  seed: 0,
+                  num_replicates: 100,
                 },
               }
             : seq === 13
@@ -282,7 +289,8 @@ describe("views composed from recorded call dependencies", () => {
   it("keeps a fit's exact simulation replicate without adopting the simulation's model", () => {
     const template = entry(10);
     const request = template.record.attempt.request;
-    if (request?.action !== "fit") throw new Error("Fixture");
+    if (request?.action !== "fit" || request.input.target.kind !== "new")
+      throw new Error("Fixture");
     const selected: TimelineRevision = {
       ...template,
       commit_id: "e".repeat(40),
@@ -296,7 +304,10 @@ describe("views composed from recorded call dependencies", () => {
             ...request,
             input: {
               ...request.input,
-              data_ref: { revision: entry(9).commit_id, replicate_index: 1 },
+              target: {
+                ...request.input.target,
+                data_ref: { revision: entry(9).commit_id, replicate_index: 1 },
+              },
             },
           },
         },

@@ -65,7 +65,18 @@ export function IndicatorScope({ context, id }: { context: ScopeContext; id: Ind
           <KeyValue
             rows={[
               ["Extraction", preparation.extraction.kind],
-              ["Source columns", preparation.extraction.source_columns.join(", ")],
+              [
+                "Source columns",
+                (preparation.extraction.kind === "recorded"
+                  ? [
+                      preparation.extraction.value_column,
+                      preparation.extraction.anchor_column,
+                      preparation.extraction.support_start_column,
+                      preparation.extraction.support_end_column,
+                    ]
+                  : preparation.extraction.source_columns
+                ).join(", "),
+              ],
               ...(preparation.extraction.kind === "computed"
                 ? [["Null filling", formatFillNull(preparation.extraction)] as [string, string]]
                 : []),

@@ -155,7 +155,12 @@ class RecordedExtractionSpec(Value):
     @property
     def source_columns(self) -> tuple[str, ...]:
         """Columns owning the reading and its recorded temporal support."""
-        return (self.value_column, self.anchor_column, self.support_start_column, self.support_end_column)
+        return (
+            self.value_column,
+            self.anchor_column,
+            self.support_start_column,
+            self.support_end_column,
+        )
 
 
 type ExtractionSpec = Annotated[

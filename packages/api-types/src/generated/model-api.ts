@@ -110,7 +110,7 @@ export interface paths {
         readonly put?: never;
         /**
          * Fit
-         * @description Condition input.dynamical_model_spec_ref on the history selected by input.data_ref.revision and input.data_ref.replicate_index. Zero selects prepared user data; a simulation index selects one recorded draw. GET polls call_id. The body retains model, checks and inference. Model laws own their numerical arguments; inference owns native telemetry.
+         * @description Fit target.new model and data, or continue target.fit_ref at its last retained state. Counts request additional draws; zero warmup freezes tuning and algorithm changes require warmup. Zero warmup and zero samples compile both sweep programs without execution. Zero-draw fits return checks and inference without a conditioned model. repeat distinguishes timing attempts. GET polls call_id.
          */
         readonly post: operations["fit"];
         readonly delete?: never;
@@ -292,6 +292,38 @@ export interface components {
         readonly ActionReportName: "checks" | "identification" | "validation" | "data-profile" | "inference" | "simulation" | "data-diff" | "model-diff";
         /** @description A successful call pairs its action with that action's scientific result body. */
         readonly ActionSuccess: Domain.SuccessfulPoll<"edit_question", Domain.EditQuestionOutput> | Domain.SuccessfulPoll<"edit_model", Domain.EditModelOutput> | Domain.SuccessfulPoll<"prepare_data", Domain.PrepareDataOutput> | Domain.SuccessfulPoll<"fit", Domain.FitOutput> | Domain.SuccessfulPoll<"simulate", Domain.SimulateOutput> | Domain.SuccessfulPoll<"data_diff", Domain.DataDiffOutput> | Domain.SuccessfulPoll<"model_diff", Domain.ModelDiffOutput>;
+        /**
+         * AdaptedLatentStepSpec
+         * @description Warmup adapts the per-time scale towards the assigned movement target.
+         */
+        readonly "AdaptedLatentStepSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "adapted";
+            /**
+             * Target
+             * @default 0.5
+             */
+            readonly target?: number;
+        };
+        /**
+         * AdaptedLatentStepSpec
+         * @description Warmup adapts the per-time scale towards the assigned movement target.
+         */
+        readonly "AdaptedLatentStepSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "adapted";
+            /**
+             * Target
+             * @default 0.5
+             */
+            readonly target: number;
+        };
         /** Added[DataPoint] */
         readonly Added_DataPoint_: {
             /**
@@ -553,6 +585,8 @@ export interface components {
              */
             readonly interpretation: "prior_predictive";
         };
+        /** @enum {string} */
+        readonly AuxiliaryDrift: "none" | "amala" | "amala_plus";
         /** BernoulliLogitsLawSpec[Expression] */
         readonly "BernoulliLogitsLawSpec_Expression_-Output": {
             /**
@@ -907,10 +941,62 @@ export interface components {
             /** Final Step Size */
             readonly final_step_size: readonly number[];
             /** Max Tree Depth Fraction */
-            readonly max_tree_depth_fraction: number;
+            readonly max_tree_depth_fraction: number | null;
         };
-        readonly "ConditionalParameterSpec-Input": components["schemas"]["MetropolisHastingsSpec-Input"] | components["schemas"]["NutsDASpec-Input"];
-        readonly "ConditionalParameterSpec-Output": components["schemas"]["MetropolisHastingsSpec-Output"] | components["schemas"]["NutsDASpec-Output"];
+        /**
+         * ConditionalNutsSpec
+         * @description Conditional NUTS parameter updates within Particle Gibbs.
+         */
+        readonly "ConditionalNutsSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "nuts_da";
+            /**
+             * Target Accept Prob
+             * @default 0.8
+             */
+            readonly target_accept_prob?: number;
+            /**
+             * Max Tree Depth
+             * @default 10
+             */
+            readonly max_tree_depth?: number;
+            /**
+             * Initial Step Size
+             * @default 1
+             */
+            readonly initial_step_size?: number;
+        };
+        /**
+         * ConditionalNutsSpec
+         * @description Conditional NUTS parameter updates within Particle Gibbs.
+         */
+        readonly "ConditionalNutsSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "nuts_da";
+            /**
+             * Target Accept Prob
+             * @default 0.8
+             */
+            readonly target_accept_prob: number;
+            /**
+             * Max Tree Depth
+             * @default 10
+             */
+            readonly max_tree_depth: number;
+            /**
+             * Initial Step Size
+             * @default 1
+             */
+            readonly initial_step_size: number;
+        };
+        readonly "ConditionalParameterSpec-Input": components["schemas"]["MetropolisHastingsSpec-Input"] | components["schemas"]["ConditionalNutsSpec-Input"];
+        readonly "ConditionalParameterSpec-Output": components["schemas"]["MetropolisHastingsSpec-Output"] | components["schemas"]["ConditionalNutsSpec-Output"];
         /** @description A persistent construct identity survives changes to its display name. */
         readonly "ConstructId-Input": `construct:${string}`;
         /** @description A persistent construct identity survives changes to its display name. */
@@ -975,6 +1061,38 @@ export interface components {
             /** @description 'time_varying' (changes over time) or 'time_invariant' (fixed) */
             readonly temporal_status: components["schemas"]["TemporalStatus"];
         };
+        /** ContinueFitTarget[GitOid] */
+        readonly ContinueFitTarget_GitOid_: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "continue";
+            readonly fit_ref: components["schemas"]["GitOid-Output"];
+        };
+        /** ContinueFitTarget[RevisionSelector] */
+        readonly ContinueFitTarget_RevisionSelector_: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "continue";
+            readonly fit_ref: components["schemas"]["RevisionSelector"];
+        };
+        /**
+         * ContinuedInitializationDiagnostics
+         * @description Starting values come from a previous fit; no initializer was executed.
+         */
+        readonly ContinuedInitializationDiagnostics: {
+            /**
+             * Source
+             * @default continued
+             * @constant
+             */
+            readonly source: "continued";
+            /** Reused Tuning */
+            readonly reused_tuning: boolean;
+        };
         readonly ConvergenceAssessmentSubject: components["schemas"]["ConvergenceSubject"] | components["schemas"]["LatentConvergenceSubject"] | ("recorded_parameter_chains" | "recorded_latent_chains");
         /**
          * ConvergenceReport
@@ -983,6 +1101,11 @@ export interface components {
         readonly ConvergenceReport: {
             /** Findings */
             readonly findings: readonly Domain.Assessment<Domain.ConvergenceAssessmentSubject, Domain.NumericCriterionEvidence>[];
+            /**
+             * Warnings
+             * @default []
+             */
+            readonly warnings: readonly string[];
             /**
              * Checked
              * @description Number of distinct parameter and construct references with convergence findings.
@@ -1009,8 +1132,6 @@ export interface components {
             /** Label */
             readonly label: string;
         };
-        /** @enum {string} */
-        readonly DSMCLeafProposal: "amala" | "amala_plus";
         /**
          * DataComparisonReport
          * @description Statistical comparison of two nonempty selections of immutable saved histories.
@@ -1290,141 +1411,35 @@ export interface components {
         };
         /**
          * DsmcSpec
-         * @description Conditional dSMC auxiliary law, particle proposal, and warmup adaptation.
+         * @description Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.
          */
         readonly "DsmcSpec-Input": {
+            /** @default none */
+            readonly drift?: components["schemas"]["AuxiliaryDrift"];
+            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
+            /** @default 1 */
+            readonly latent_block_coords?: components["schemas"]["LatentBlockSize"];
             /**
-             * Amala Delta Init
-             * @default 0.01
+             * Pilot Mixture
+             * @default true
              */
-            readonly amala_delta_init?: number;
-            /**
-             * Amala Delta Min
-             * @default 0.00001
-             */
-            readonly amala_delta_min?: number;
-            /**
-             * Amala Delta Max
-             * @default 10
-             */
-            readonly amala_delta_max?: number;
-            /**
-             * Amala Target Accept
-             * @default 0.75
-             */
-            readonly amala_target_accept?: number;
-            /**
-             * Amala Adaptation Window
-             * @default 100
-             */
-            readonly amala_adaptation_window?: number;
-            /**
-             * Amala Adaptation Tolerance
-             * @default 0.05
-             */
-            readonly amala_adaptation_tolerance?: number;
-            /**
-             * Amala Adaptation Rho
-             * @default 0.5
-             */
-            readonly amala_adaptation_rho?: number;
-            /**
-             * Amala Adaptation Rho Min
-             * @default 0.001
-             */
-            readonly amala_adaptation_rho_min?: number;
-            /**
-             * Amala Adaptation Gamma
-             * @default -0.5
-             */
-            readonly amala_adaptation_gamma?: number;
-            /**
-             * Amala Kappa
-             * @default 0.75
-             */
-            readonly amala_kappa?: number;
-            /**
-             * Amala Grad Clip
-             * @default infinity
-             */
-            readonly amala_grad_clip?: number | "infinity";
-            /** @default amala_plus */
-            readonly dsmc_leaf_proposal?: components["schemas"]["DSMCLeafProposal"];
-            readonly paid_mix?: components["schemas"]["PaidMixSpec-Input"] | null;
-            /**
-             * Latent Block Coords
-             * @default null
-             */
-            readonly latent_block_coords?: number | null;
+            readonly pilot_mixture?: boolean;
         };
         /**
          * DsmcSpec
-         * @description Conditional dSMC auxiliary law, particle proposal, and warmup adaptation.
+         * @description Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.
          */
         readonly "DsmcSpec-Output": {
+            /** @default none */
+            readonly drift: components["schemas"]["AuxiliaryDrift"];
+            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
+            /** @default 1 */
+            readonly latent_block_coords: components["schemas"]["LatentBlockSize"];
             /**
-             * Amala Delta Init
-             * @default 0.01
+             * Pilot Mixture
+             * @default true
              */
-            readonly amala_delta_init: number;
-            /**
-             * Amala Delta Min
-             * @default 0.00001
-             */
-            readonly amala_delta_min: number;
-            /**
-             * Amala Delta Max
-             * @default 10
-             */
-            readonly amala_delta_max: number;
-            /**
-             * Amala Target Accept
-             * @default 0.75
-             */
-            readonly amala_target_accept: number;
-            /**
-             * Amala Adaptation Window
-             * @default 100
-             */
-            readonly amala_adaptation_window: number;
-            /**
-             * Amala Adaptation Tolerance
-             * @default 0.05
-             */
-            readonly amala_adaptation_tolerance: number;
-            /**
-             * Amala Adaptation Rho
-             * @default 0.5
-             */
-            readonly amala_adaptation_rho: number;
-            /**
-             * Amala Adaptation Rho Min
-             * @default 0.001
-             */
-            readonly amala_adaptation_rho_min: number;
-            /**
-             * Amala Adaptation Gamma
-             * @default -0.5
-             */
-            readonly amala_adaptation_gamma: number;
-            /**
-             * Amala Kappa
-             * @default 0.75
-             */
-            readonly amala_kappa: number;
-            /**
-             * Amala Grad Clip
-             * @default infinity
-             */
-            readonly amala_grad_clip: number | "infinity";
-            /** @default amala_plus */
-            readonly dsmc_leaf_proposal: components["schemas"]["DSMCLeafProposal"];
-            readonly paid_mix: components["schemas"]["PaidMixSpec-Output"] | null;
-            /**
-             * Latent Block Coords
-             * @default null
-             */
-            readonly latent_block_coords: number | null;
+            readonly pilot_mixture: boolean;
         };
         /**
          * DsmcWeightDiagnostics
@@ -4052,8 +4067,8 @@ export interface components {
             /** Failed Workers */
             readonly failed_workers: number;
         };
-        readonly "ExtractionSpec-Input": components["schemas"]["ComputedExtractionSpec-Input"] | components["schemas"]["SemanticExtractionSpec-Input"];
-        readonly "ExtractionSpec-Output": components["schemas"]["ComputedExtractionSpec-Output"] | components["schemas"]["SemanticExtractionSpec-Output"];
+        readonly "ExtractionSpec-Input": components["schemas"]["ComputedExtractionSpec-Input"] | components["schemas"]["SemanticExtractionSpec-Input"] | components["schemas"]["RecordedExtractionSpec-Input"];
+        readonly "ExtractionSpec-Output": components["schemas"]["ComputedExtractionSpec-Output"] | components["schemas"]["SemanticExtractionSpec-Output"] | components["schemas"]["RecordedExtractionSpec-Output"];
         /**
          * ExtractionWorkerEvent
          * @description One extraction worker's state; a worker reports its LLM calls when it finishes.
@@ -4211,29 +4226,33 @@ export interface components {
         };
         /** FitInput[GitOid] */
         readonly FitInput_GitOid_: {
-            /** @description Model revision whose parameter law will be conditioned. */
-            readonly dynamical_model_spec_ref: components["schemas"]["GitOid-Output"];
-            /** @description One saved observation history selected by revision and a required replicate index. */
-            readonly data_ref: Domain.DataRef<Domain.GitOid, number>;
-            /** @description Optional particle-sampler counts and random seed for the run. */
+            readonly target: Domain.FitTarget<Domain.GitOid>;
             readonly settings: components["schemas"]["FitSettingsSpec-Output"];
+            /**
+             * Repeat
+             * @description Timing repeat identity; identical repeats reuse their saved result.
+             * @default 0
+             */
+            readonly repeat: number;
         };
         /** FitInput[RevisionSelector] */
         readonly FitInput_RevisionSelector_: {
-            /** @description Model revision whose parameter law will be conditioned. */
-            readonly dynamical_model_spec_ref: components["schemas"]["RevisionSelector"];
-            /** @description One saved observation history selected by revision and a required replicate index. */
-            readonly data_ref: components["schemas"]["DataRef_RevisionSelector_int_"];
-            /** @description Optional particle-sampler counts and random seed for the run. */
+            readonly target: components["schemas"]["FitTarget_RevisionSelector_"];
             readonly settings?: components["schemas"]["FitSettingsSpec-Input"];
+            /**
+             * Repeat
+             * @description Timing repeat identity; identical repeats reuse their saved result.
+             * @default 0
+             */
+            readonly repeat?: number;
         };
         /**
          * FitOutput
          * @description A conditioned model, its completed checks, and self-contained inference evidence.
          */
         readonly FitOutput: {
-            /** @description The model with its joint parameter law conditioned on the selected data. */
-            readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Output"];
+            /** @description The combined conditioned model, or null when this fit and its parents have no retained draws. Zero-draw continuations reuse their parent's model without producing a revision. */
+            readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Output"] | null;
             /** @description Completed compatibility and question findings for the selected history. */
             readonly checks: components["schemas"]["FitCheckReport"];
             /** @description Run provenance, native sampler evidence, diagnostics and parameter summaries. */
@@ -4274,10 +4293,44 @@ export interface components {
             readonly reasoning?: string | null;
         };
         /**
+         * FitRuntime
+         * @description Actual numerical source, environment, compiler settings and devices.
+         */
+        readonly FitRuntime: {
+            /** Source Digest */
+            readonly source_digest: string;
+            /** Versions */
+            readonly versions: {
+                readonly [key: string]: string;
+            };
+            /** Compiler */
+            readonly compiler: {
+                readonly [key: string]: string;
+            };
+            /** Devices */
+            readonly devices: readonly string[];
+        };
+        /**
+         * FitSegment
+         * @description One execution's retained draw interval within every combined chain.
+         */
+        readonly FitSegment: {
+            /** Start */
+            readonly start: number;
+            /** Stop */
+            readonly stop: number;
+            readonly settings: components["schemas"]["SamplerSpec"];
+            readonly runtime: components["schemas"]["FitRuntime"];
+            /** Phases */
+            readonly phases: readonly components["schemas"]["InferencePhase"][];
+        };
+        /**
          * FitSettingsSpec
          * @description Optional numerical controls applied to the configured joint sampler.
          */
         readonly "FitSettingsSpec-Input": {
+            /** @default null */
+            readonly hardware?: components["schemas"]["InferenceHardware"] | null;
             /** @default null */
             readonly algorithm?: components["schemas"]["InferenceAlgorithmSpec-Input"] | null;
             /**
@@ -4312,6 +4365,8 @@ export interface components {
          */
         readonly "FitSettingsSpec-Output": {
             /** @default null */
+            readonly hardware: components["schemas"]["InferenceHardware"] | null;
+            /** @default null */
             readonly algorithm: components["schemas"]["InferenceAlgorithmSpec-Output"] | null;
             /**
              * Num Samples Per Chain
@@ -4339,6 +4394,8 @@ export interface components {
              */
             readonly seed: number | null;
         };
+        readonly FitTarget_GitOid_: Domain.NewFitTarget<Domain.GitOid> | Domain.ContinueFitTarget<Domain.GitOid>;
+        readonly FitTarget_RevisionSelector_: components["schemas"]["NewFitTarget_RevisionSelector_"] | components["schemas"]["ContinueFitTarget_RevisionSelector_"];
         /**
          * FittedLawProvenance
          * @description All current laws retain one committed fit's model and observation panel.
@@ -4358,6 +4415,38 @@ export interface components {
             readonly interpretation: "in_sample_posterior_predictive" | "posterior_predictive";
         };
         /**
+         * FixedLatentStepSpec
+         * @description An assigned scale which remains fixed during warmup and sampling.
+         */
+        readonly "FixedLatentStepSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "fixed";
+            /**
+             * Delta
+             * @default 0.01
+             */
+            readonly delta?: number;
+        };
+        /**
+         * FixedLatentStepSpec
+         * @description An assigned scale which remains fixed during warmup and sampling.
+         */
+        readonly "FixedLatentStepSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "fixed";
+            /**
+             * Delta
+             * @default 0.01
+             */
+            readonly delta: number;
+        };
+        /**
          * FixedParameterDiagnostics
          * @description A model with no free parameter coordinates needs only trajectory updates.
          */
@@ -4368,6 +4457,39 @@ export interface components {
              */
             readonly method: "fixed";
         };
+        /**
+         * FixedTrajectorySpec
+         * @description A fixed number of leapfrog steps with the production jitter policy.
+         */
+        readonly "FixedTrajectorySpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "fixed";
+            /**
+             * Steps
+             * @default 8
+             */
+            readonly steps?: number;
+        };
+        /**
+         * FixedTrajectorySpec
+         * @description A fixed number of leapfrog steps with the production jitter policy.
+         */
+        readonly "FixedTrajectorySpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "fixed";
+            /**
+             * Steps
+             * @default 8
+             */
+            readonly steps: number;
+        };
+        readonly FrozenSamplerTuning: components["schemas"]["JointTuning"] | components["schemas"]["ParticleTuning"];
         /** GammaLawSpec[Expression] */
         readonly "GammaLawSpec_Expression_-Output": {
             /**
@@ -4583,6 +4705,10 @@ export interface components {
          * @description Native telemetry buffers; posterior atoms and coordinates belong to the model.
          */
         readonly InferenceEvidence: {
+            /** @default null */
+            readonly checkpoint: components["schemas"]["SamplerCheckpoint"] | null;
+            /** @default null */
+            readonly latent_free_mask: components["schemas"]["NumericalArray"] | null;
             /** Chain Extra Fields */
             readonly chain_extra_fields: {
                 readonly [key: string]: components["schemas"]["NumericalArray"];
@@ -4609,13 +4735,24 @@ export interface components {
             readonly final_latent_delta: components["schemas"]["NumericalArray"] | null;
         };
         /**
+         * InferenceHardware
+         * @description Run here, or request one of Modal's named GPU types.
+         * @enum {string}
+         */
+        readonly InferenceHardware: "local" | "T4" | "L4" | "A10" | "L40S" | "A100" | "A100-40GB" | "A100-80GB" | "RTX-PRO-6000" | "H100" | "H100!" | "H200" | "B200";
+        /**
          * InferenceMetadata
          * @description The production run's law, chain layout and sampler measurements.
          */
         readonly InferenceMetadata: {
-            readonly distribution: components["schemas"]["DistributionId-Output"];
+            readonly distribution: components["schemas"]["DistributionId-Output"] | null;
             /** Num Samples Total */
             readonly num_samples_total: number;
+            /**
+             * Segments
+             * @default []
+             */
+            readonly segments: readonly components["schemas"]["FitSegment"][];
             /** Num Chains */
             readonly num_chains: number;
             /** Duration Seconds */
@@ -4623,6 +4760,25 @@ export interface components {
             readonly engine: components["schemas"]["MCMCEvidence"];
             /** Sampler Diagnostics */
             readonly sampler_diagnostics: components["schemas"]["ParticleSamplerDiagnostics"] | components["schemas"]["NutsDADiagnostics"] | components["schemas"]["ParticleGibbsDiagnostics"] | null;
+        };
+        /**
+         * InferencePhase
+         * @description Measured interval relative to this execution's start; intervals may overlap.
+         */
+        readonly InferencePhase: {
+            /** Sampler */
+            readonly sampler: string;
+            /** Stage */
+            readonly stage: string;
+            /** Start Seconds */
+            readonly start_seconds: number;
+            /** End Seconds */
+            readonly end_seconds: number;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            readonly outcome: "complete" | "failed";
         };
         /**
          * InferenceReport
@@ -4688,6 +4844,7 @@ export interface components {
              */
             readonly kind: "initial_state_correlation";
         };
+        readonly InitializationDiagnostics: components["schemas"]["LapsInitializationDiagnostics"] | components["schemas"]["ContinuedInitializationDiagnostics"];
         /**
          * IntervalEffectTransformSpec
          * @description Divide an interval effect by its explicit duration in days.
@@ -4757,6 +4914,19 @@ export interface components {
             readonly time_origin: string | "relative";
             /** Labels */
             readonly labels: Readonly<Partial<Record<components["schemas"]["ParameterElementId-Output"], string>>>;
+        };
+        readonly "JointTrajectorySpec-Input": components["schemas"]["NutsTrajectorySpec-Input"] | components["schemas"]["FixedTrajectorySpec-Input"];
+        readonly "JointTrajectorySpec-Output": components["schemas"]["NutsTrajectorySpec-Output"] | components["schemas"]["FixedTrajectorySpec-Output"];
+        /**
+         * JointTuning
+         * @description Joint coordinates are reconstructed from the original model and trace seed.
+         */
+        readonly JointTuning: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "joint";
         };
         /** @description A JSON scalar transports a string, number, boolean, or null. */
         readonly JsonScalar: boolean | number | string | null;
@@ -4828,6 +4998,12 @@ export interface components {
          * @description Realized joint-ensemble initialization, without any claim of posterior convergence.
          */
         readonly LapsInitializationDiagnostics: {
+            /**
+             * Source
+             * @default laps
+             * @constant
+             */
+            readonly source: "laps";
             /** Ensemble Size */
             readonly ensemble_size: number;
             /** Joint Dimension */
@@ -4917,6 +5093,8 @@ export interface components {
              */
             readonly covariance_regularization: number;
         };
+        /** @enum {unknown} */
+        readonly LatentBlockSize: 1 | 2 | "all";
         /**
          * LatentConvergenceSubject
          * @description A convergence criterion over a construct's independent latent coordinates.
@@ -4945,6 +5123,8 @@ export interface components {
             /** Mcse Mean */
             readonly mcse_mean: number | null;
         };
+        readonly "LatentStepSpec-Input": components["schemas"]["AdaptedLatentStepSpec-Input"] | components["schemas"]["FixedLatentStepSpec-Input"];
+        readonly "LatentStepSpec-Output": components["schemas"]["AdaptedLatentStepSpec-Output"] | components["schemas"]["FixedLatentStepSpec-Output"];
         /**
          * LikelihoodSpec
          * @description An indicator's conditional probability law and its scientific justification.
@@ -5035,7 +5215,7 @@ export interface components {
             readonly dsmc?: components["schemas"]["DsmcSpec-Input"];
             /**
              * Parameter Proposal
-             * @default pseudo_langevin
+             * @default random_walk
              * @enum {string}
              */
             readonly parameter_proposal?: "random_walk" | "pseudo_langevin";
@@ -5107,7 +5287,7 @@ export interface components {
             readonly dsmc: components["schemas"]["DsmcSpec-Output"];
             /**
              * Parameter Proposal
-             * @default pseudo_langevin
+             * @default random_walk
              * @enum {string}
              */
             readonly parameter_proposal: "random_walk" | "pseudo_langevin";
@@ -5383,6 +5563,26 @@ export interface components {
             readonly mean: components["schemas"]["Expression-Output"];
             readonly concentration: components["schemas"]["Expression-Output"];
         };
+        /** NewFitTarget[GitOid] */
+        readonly NewFitTarget_GitOid_: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "new";
+            readonly dynamical_model_spec_ref: components["schemas"]["GitOid-Output"];
+            readonly data_ref: Domain.DataRef<Domain.GitOid, number>;
+        };
+        /** NewFitTarget[RevisionSelector] */
+        readonly NewFitTarget_RevisionSelector_: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "new";
+            readonly dynamical_model_spec_ref: components["schemas"]["RevisionSelector"];
+            readonly data_ref: components["schemas"]["DataRef_RevisionSelector_int_"];
+        };
         /**
          * NonIdentifiableTreatmentStatus
          * @description Context on why a treatment effect is not identifiable.
@@ -5626,11 +5826,11 @@ export interface components {
             /** Final Step Size */
             readonly final_step_size: readonly number[];
             /** Max Tree Depth Fraction */
-            readonly max_tree_depth_fraction: number;
+            readonly max_tree_depth_fraction: number | null;
         };
         /**
          * NutsDASpec
-         * @description NUTS with dual averaging and diagonal mass adaptation, joint or conditional.
+         * @description Joint HMC with dual averaging and windowed diagonal mass adaptation.
          */
         readonly "NutsDASpec-Input": {
             /**
@@ -5643,11 +5843,7 @@ export interface components {
              * @default 0.8
              */
             readonly target_accept_prob?: number;
-            /**
-             * Max Tree Depth
-             * @default 10
-             */
-            readonly max_tree_depth?: number;
+            readonly trajectory?: components["schemas"]["JointTrajectorySpec-Input"];
             /**
              * Initial Step Size
              * @default 1
@@ -5656,7 +5852,7 @@ export interface components {
         };
         /**
          * NutsDASpec
-         * @description NUTS with dual averaging and diagonal mass adaptation, joint or conditional.
+         * @description Joint HMC with dual averaging and windowed diagonal mass adaptation.
          */
         readonly "NutsDASpec-Output": {
             /**
@@ -5669,16 +5865,44 @@ export interface components {
              * @default 0.8
              */
             readonly target_accept_prob: number;
-            /**
-             * Max Tree Depth
-             * @default 10
-             */
-            readonly max_tree_depth: number;
+            readonly trajectory: components["schemas"]["JointTrajectorySpec-Output"];
             /**
              * Initial Step Size
              * @default 1
              */
             readonly initial_step_size: number;
+        };
+        /**
+         * NutsTrajectorySpec
+         * @description A dynamically terminated trajectory, bounded by tree depth.
+         */
+        readonly "NutsTrajectorySpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "nuts";
+            /**
+             * Max Tree Depth
+             * @default 10
+             */
+            readonly max_tree_depth?: number;
+        };
+        /**
+         * NutsTrajectorySpec
+         * @description A dynamically terminated trajectory, bounded by tree depth.
+         */
+        readonly "NutsTrajectorySpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "nuts";
+            /**
+             * Max Tree Depth
+             * @default 10
+             */
+            readonly max_tree_depth: number;
         };
         readonly ObservationData: Readonly<Partial<Record<components["schemas"]["IndicatorId-Output"], components["schemas"]["ObservationHistory"]>>>;
         /**
@@ -5837,58 +6061,6 @@ export interface components {
             ] | null;
         };
         /**
-         * PaidMixSpec
-         * @description Optional fixed pilot and wide proposals mixed with an auxiliary particle proposal.
-         */
-        readonly "PaidMixSpec-Input": {
-            /**
-             * Local Weight
-             * @default 0.85
-             */
-            readonly local_weight?: number;
-            /**
-             * Pilot Weight
-             * @default 0.1
-             */
-            readonly pilot_weight?: number;
-            /**
-             * Pilot Var Scale
-             * @default 0.25
-             */
-            readonly pilot_var_scale?: number;
-            /**
-             * Wide Mult
-             * @default 4
-             */
-            readonly wide_mult?: number;
-        };
-        /**
-         * PaidMixSpec
-         * @description Optional fixed pilot and wide proposals mixed with an auxiliary particle proposal.
-         */
-        readonly "PaidMixSpec-Output": {
-            /**
-             * Local Weight
-             * @default 0.85
-             */
-            readonly local_weight: number;
-            /**
-             * Pilot Weight
-             * @default 0.1
-             */
-            readonly pilot_weight: number;
-            /**
-             * Pilot Var Scale
-             * @default 0.25
-             */
-            readonly pilot_var_scale: number;
-            /**
-             * Wide Mult
-             * @default 4
-             */
-            readonly wide_mult: number;
-        };
-        /**
          * PairedArmSimulation
          * @description Intervention and natural-course histories with matched draw indices.
          */
@@ -5995,7 +6167,7 @@ export interface components {
             readonly settings: components["schemas"]["SamplerSpec"];
             /** Mcmc Phase Seconds */
             readonly mcmc_phase_seconds: number;
-            readonly initialization: components["schemas"]["LapsInitializationDiagnostics"];
+            readonly initialization: components["schemas"]["InitializationDiagnostics"];
             /** Parameters */
             readonly parameters: components["schemas"]["FixedParameterDiagnostics"] | components["schemas"]["ConditionalMetropolisDiagnostics"] | components["schemas"]["ConditionalNutsDiagnostics"];
             /** Latent Update Fraction */
@@ -6054,8 +6226,8 @@ export interface components {
             readonly parameter_kernel: string;
             /** Mcmc Phase Seconds */
             readonly mcmc_phase_seconds: number;
-            /** Dsmc Leaf Proposal */
-            readonly dsmc_leaf_proposal: string;
+            /** Drift */
+            readonly drift: string;
             /** Diagnostic Metrics */
             readonly diagnostic_metrics: readonly string[];
             /** Param Target Accept */
@@ -6069,8 +6241,11 @@ export interface components {
             readonly latent_update_fraction: number;
             /** Latent Frozen Fraction */
             readonly latent_frozen_fraction: number;
-            /** Latent Block Coords */
-            readonly latent_block_coords: number | null;
+            /**
+             * Latent Block Coords
+             * @enum {unknown}
+             */
+            readonly latent_block_coords: 1 | 2 | "all";
             /** Initial Param Step Size */
             readonly initial_param_step_size: readonly number[];
             /** Final Param Step Size */
@@ -6112,10 +6287,31 @@ export interface components {
              * @default null
              */
             readonly amala_grad_norm_max: number | null;
-            readonly initialization: components["schemas"]["LapsInitializationDiagnostics"];
+            readonly initialization: components["schemas"]["InitializationDiagnostics"];
             readonly dsmc_weights: components["schemas"]["DsmcWeightDiagnostics"] | null;
             /** @default null */
             readonly tempering: components["schemas"]["TemperingDiagnostics"] | null;
+        };
+        /**
+         * ParticleTuning
+         * @description Frozen proposal geometry; these values are not posterior draws.
+         */
+        readonly ParticleTuning: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "particle";
+            readonly parameter_chol: components["schemas"]["NumericalArray"];
+            readonly pilot_mean: components["schemas"]["NumericalArray"];
+            readonly pilot_variance: components["schemas"]["NumericalArray"];
+            readonly parameter_reference_path: components["schemas"]["NumericalArray"];
+            /**
+             * Gaussian Reference
+             * @default []
+             */
+            readonly gaussian_reference: readonly components["schemas"]["NumericalArray"][];
+            readonly initialization: components["schemas"]["InitializationDiagnostics"];
         };
         /**
          * ParticleWeightDiagnostics
@@ -6295,7 +6491,7 @@ export interface components {
             readonly source: components["schemas"]["FileSourceRef"];
             /**
              * Extraction
-             * @description Computed rules or semantic extraction instructions keyed by the model's observation IDs.
+             * @description Computed, recorded-reading or semantic extraction instructions keyed by the model's observation IDs.
              */
             readonly extraction: Readonly<Partial<Record<components["schemas"]["IndicatorId-Output"], components["schemas"]["ExtractionSpec-Output"]>>>;
             /**
@@ -6313,7 +6509,7 @@ export interface components {
             readonly source: components["schemas"]["SourceFolder"];
             /**
              * Extraction
-             * @description Computed rules or semantic extraction instructions keyed by the model's observation IDs.
+             * @description Computed, recorded-reading or semantic extraction instructions keyed by the model's observation IDs.
              */
             readonly extraction: Readonly<Partial<Record<components["schemas"]["IndicatorId-Input"], components["schemas"]["ExtractionSpec-Input"]>>>;
             /**
@@ -6556,6 +6752,60 @@ export interface components {
             readonly argument: string;
         };
         /**
+         * RecordedExtractionSpec
+         * @description Import already measured readings and their actual support without re-bucketing.
+         */
+        readonly "RecordedExtractionSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "recorded";
+            /**
+             * How To Measure
+             * @default Import the recorded reading and temporal support unchanged.
+             */
+            readonly how_to_measure?: string;
+            /** Value Column */
+            readonly value_column: string;
+            /**
+             * Anchor Column
+             * @default timestamp
+             */
+            readonly anchor_column?: string;
+            /** Support Start Column */
+            readonly support_start_column: string;
+            /** Support End Column */
+            readonly support_end_column: string;
+        };
+        /**
+         * RecordedExtractionSpec
+         * @description Import already measured readings and their actual support without re-bucketing.
+         */
+        readonly "RecordedExtractionSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "recorded";
+            /**
+             * How To Measure
+             * @default Import the recorded reading and temporal support unchanged.
+             */
+            readonly how_to_measure: string;
+            /** Value Column */
+            readonly value_column: string;
+            /**
+             * Anchor Column
+             * @default timestamp
+             */
+            readonly anchor_column: string;
+            /** Support Start Column */
+            readonly support_start_column: string;
+            /** Support End Column */
+            readonly support_end_column: string;
+        };
+        /**
          * Rejected
          * @description An expected refusal to execute or publish a scientific request.
          */
@@ -6661,6 +6911,19 @@ export interface components {
             readonly body: null;
         };
         /**
+         * SamplerCheckpoint
+         * @description An exact native state at the last retained draw, with its next random key.
+         */
+        readonly SamplerCheckpoint: {
+            readonly settings: components["schemas"]["SamplerSpec"];
+            readonly parameters: components["schemas"]["NumericalArray"];
+            readonly paths: components["schemas"]["NumericalArray"];
+            readonly random_key: components["schemas"]["NumericalArray"];
+            /** Native State */
+            readonly native_state: readonly components["schemas"]["NumericalArray"][];
+            readonly tuning: components["schemas"]["FrozenSamplerTuning"];
+        };
+        /**
          * SamplerSpec
          * @description Fully resolved controls for exact joint state and parameter inference.
          */
@@ -6690,6 +6953,8 @@ export interface components {
              * @default 64
              */
             readonly num_particles: number;
+            /** @default L40S */
+            readonly hardware: components["schemas"]["InferenceHardware"];
             /**
              * Retain Latent Paths
              * @default true
@@ -6775,6 +7040,18 @@ export interface components {
             readonly dynamical_model_spec_ref: components["schemas"]["GitOid-Output"];
             /** @description Requested start, horizon, and interventions. */
             readonly simulation: components["schemas"]["SimulationSpec-Output"];
+            /**
+             * Seed
+             * @description Generation seed, retained with the histories.
+             * @default 0
+             */
+            readonly seed: number;
+            /**
+             * Num Replicates
+             * @description Number of independent histories.
+             * @default 100
+             */
+            readonly num_replicates: number;
         };
         /** SimulateInput[RevisionSelector] */
         readonly SimulateInput_RevisionSelector_: {
@@ -6782,6 +7059,18 @@ export interface components {
             readonly dynamical_model_spec_ref: components["schemas"]["RevisionSelector"];
             /** @description Requested start, horizon, and interventions. */
             readonly simulation: components["schemas"]["SimulationSpec-Input"];
+            /**
+             * Seed
+             * @description Generation seed, retained with the histories.
+             * @default 0
+             */
+            readonly seed?: number;
+            /**
+             * Num Replicates
+             * @description Number of independent histories.
+             * @default 100
+             */
+            readonly num_replicates?: number;
         };
         /**
          * SimulateOutput

@@ -15,7 +15,6 @@ import jax.numpy as jnp
 from typing_extensions import TypedDict
 
 from nof1_causal_lab.artifacts.sampling import SamplerSpec
-from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
 from nof1_causal_lab.compute.resources import read_compute_budget
 from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.compile.observation_windows import compile_observation_scan
@@ -30,6 +29,7 @@ if TYPE_CHECKING:
 
     from jax.stages import Compiled
 
+    from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
     from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
     from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
     from nof1_causal_lab.models.structure import StructuralSelection
@@ -54,7 +54,9 @@ class ModelFitFailure(TypedDict, closed=True):
     duration_seconds: float
 
 
-def resolve_sampler_spec(settings: FitSettingsSpec, previous: SamplerSpec | None = None) -> SamplerSpec:
+def resolve_sampler_spec(
+    settings: FitSettingsSpec, previous: SamplerSpec | None = None
+) -> SamplerSpec:
     """Resolve public overrides once, before numerical preparation or execution."""
     from nof1_causal_lab.config import get_config
 
@@ -103,7 +105,11 @@ def fit_prepared_model(
     if isinstance(result, (ObservationPreflightFailure, InitializationFailure)):
         return result
     if profile_dir is not None:
-        compiled_step = result.compiled_step if isinstance(result, UnretainedRun) else result.diagnostics.compiled_step
+        compiled_step = (
+            result.compiled_step
+            if isinstance(result, UnretainedRun)
+            else result.diagnostics.compiled_step
+        )
         if compiled_step is None:
             raise RuntimeError("Profiling requested but inference did not retain its compiled step")
         dump_compiled_analysis(compiled_step, profile_dir=profile_dir, label="run_batched_step")
@@ -162,6 +168,7 @@ def fit_model(
         time_origin: Calendar instant of model day zero, or ``None`` for a
             calendar-free history.
         sampler: Fully resolved initialization, sampling, and diagnostic controls.
+        continuation: Last retained sampler state and tuning, when continuing a fit.
 
     Returns:
         Fitted model and retained inference evidence on success, or a fit-failure

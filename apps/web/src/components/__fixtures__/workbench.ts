@@ -314,6 +314,7 @@ function preparation(seq: number): PrepareDataRequest<GitOid, FileSourceRef> {
   };
 }
 const settings = (seed: number) => ({
+  hardware: null,
   algorithm: null,
   num_samples_per_chain: null,
   num_warmup: null,
@@ -424,8 +425,12 @@ const workbenchRecords: StudyRevision[] = [
       action: "fit",
       reasoning: null,
       input: {
-        dynamical_model_spec_ref: modelId(4),
-        data_ref: { revision: panelId, replicate_index: 0 },
+        target: {
+          kind: "new",
+          dynamical_model_spec_ref: modelId(4),
+          data_ref: { revision: panelId, replicate_index: 0 },
+        },
+        repeat: 0,
         settings: settings(8),
       },
     },
@@ -444,6 +449,8 @@ const workbenchRecords: StudyRevision[] = [
       input: {
         dynamical_model_spec_ref: modelId(4),
         simulation: simulationDesign,
+        seed: 0,
+        num_replicates: 100,
       },
     },
     outcome: {
@@ -458,8 +465,12 @@ const workbenchRecords: StudyRevision[] = [
       action: "fit",
       reasoning: null,
       input: {
-        dynamical_model_spec_ref: modelId(4),
-        data_ref: { revision: panelId, replicate_index: 0 },
+        target: {
+          kind: "new",
+          dynamical_model_spec_ref: modelId(4),
+          data_ref: { revision: panelId, replicate_index: 0 },
+        },
+        repeat: 0,
         settings: settings(10),
       },
     },
@@ -494,6 +505,8 @@ const workbenchRecords: StudyRevision[] = [
       input: {
         dynamical_model_spec_ref: modelId(7),
         simulation: simulationDesign,
+        seed: 0,
+        num_replicates: 100,
       },
     },
     outcome: {
@@ -694,8 +707,12 @@ export function workbenchHandlers() {
         action: "fit",
         reasoning: null,
         input: {
-          dynamical_model_spec_ref: modelId(7),
-          data_ref: { revision: panelId, replicate_index: 0 },
+          target: {
+            kind: "new",
+            dynamical_model_spec_ref: modelId(7),
+            data_ref: { revision: panelId, replicate_index: 0 },
+          },
+          repeat: 0,
           settings: settings(13),
         },
       },

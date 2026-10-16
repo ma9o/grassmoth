@@ -78,7 +78,10 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
     """Compute deterministic measurements and plan cached or LLM-backed extraction chunks."""
     import polars as pl
 
-    from nof1_causal_lab.actions.prepare_data.planning import prepare_semantic_chunks, recorded_observations
+    from nof1_causal_lab.actions.prepare_data.materialization import recorded_observations
+    from nof1_causal_lab.actions.prepare_data.planning import (
+        prepare_semantic_chunks,
+    )
     from nof1_causal_lab.actions.prepare_data.worker_output import WorkerOutput
     from nof1_causal_lab.config import get_config
     from nof1_causal_lab.observations.aggregations import compute_indicators

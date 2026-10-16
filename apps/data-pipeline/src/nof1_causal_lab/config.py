@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 from pydantic import ConfigDict, TypeAdapter, with_config
 
 from nof1_causal_lab.actions.errors import execution_failure_handler
-from nof1_causal_lab.artifacts.sampling import InferenceHardware, SamplerSpec
+from nof1_causal_lab.artifacts.sampling import SamplerSpec
 from nof1_causal_lab.llm.specs import (
     EmbeddedLLMSpec,
     EmbeddedReasoningEffort,
