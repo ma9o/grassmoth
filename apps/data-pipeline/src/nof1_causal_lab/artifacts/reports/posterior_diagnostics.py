@@ -112,6 +112,7 @@ class ConvergenceReport(Value):
     """Recorded-chain criteria cover parameters and independent latent coordinates."""
 
     findings: tuple[Assessment[ConvergenceAssessmentSubject, NumericCriterionEvidence], ...]
+    warnings: tuple[str, ...] = ()
 
     @computed_field
     @property

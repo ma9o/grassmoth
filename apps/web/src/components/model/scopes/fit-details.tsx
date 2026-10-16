@@ -31,6 +31,9 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
         <StatusIcon status={convergence.status} />
         <span>Chain convergence: {humanize(convergence.status)}.</span>
       </div>
+      {convergence.warnings.map((message) => (
+        <p key={message} className="text-amber-700">Warning: {message}</p>
+      ))}
       {convergence.messages.map((message) => (
         <p key={message}>{message}</p>
       ))}

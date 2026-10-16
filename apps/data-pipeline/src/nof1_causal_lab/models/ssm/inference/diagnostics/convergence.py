@@ -15,8 +15,11 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ConvergenceReport,
 )
 
-# Vehtari et al. (2021), https://doi.org/10.1214/20-BA1221.
-R_HAT_LIMIT = 1.01
+# Practical cutoff documented by RStan: https://mc-stan.org/rstan/reference/Rhat.html.
+# The warning retains Vehtari et al. (2021)'s stricter diagnostic signal:
+# https://doi.org/10.1214/20-BA1221. Neither is a familywise error guarantee.
+R_HAT_LIMIT = 1.05
+R_HAT_WARNING = 1.01
 ESS_PER_CHAIN = 100
 
 
@@ -89,7 +92,14 @@ def chain_convergence(chains: ChainDiagnostics | None) -> ConvergenceReport:
                         evidence=evidence,
                     )
                 )
-    return ConvergenceReport(findings=tuple(findings))
+    return ConvergenceReport(
+        findings=tuple(findings),
+        warnings=tuple(
+            f"{subject.label}: r_hat is {r_hat:g}; inspect mixing before relying on this fit."
+            for subject, r_hat, _, _ in coordinates
+            if r_hat is not None and R_HAT_WARNING <= r_hat < R_HAT_LIMIT
+        ),
+    )
 
 
 def convergence_failures(report: ConvergenceReport) -> tuple[str, ...]:
