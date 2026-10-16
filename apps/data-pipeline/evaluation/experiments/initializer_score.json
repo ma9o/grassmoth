@@ -1,0 +1,53 @@
+{
+  "case": "../cases/tiny.json",
+  "seeds": [
+    {
+      "generation": 721,
+      "sampler": 19
+    }
+  ],
+  "repeats": 2,
+  "concurrent_arms": 1,
+  "reservation_usd_per_fit": 0,
+  "name": "Initializer work and starting values",
+  "base": {
+    "hardware": "local",
+    "num_chains": 2,
+    "num_warmup": 0,
+    "num_samples_per_chain": 0,
+    "num_particles": 8,
+    "seed": 19,
+    "algorithm": {
+      "method": "mpgibbs",
+      "laps": {
+        "ensemble_size": 8,
+        "num_unadjusted_steps": 10,
+        "num_adjusted_steps": 1,
+        "steps_per_sample": 1
+      },
+      "dsmc": {
+        "latent_step": {
+          "kind": "fixed",
+          "delta": 0.01
+        }
+      }
+    }
+  },
+  "factors": [
+    "algorithm.laps.num_unadjusted_steps"
+  ],
+  "arms": [
+    {
+      "name": "steps10",
+      "settings": {
+        "algorithm.laps.num_unadjusted_steps": 10
+      }
+    },
+    {
+      "name": "steps20",
+      "settings": {
+        "algorithm.laps.num_unadjusted_steps": 20
+      }
+    }
+  ]
+}

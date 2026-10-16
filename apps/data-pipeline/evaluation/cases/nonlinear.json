@@ -1,0 +1,73 @@
+{
+  "name": "nonlinear",
+  "question": {
+    "text": "Benchmark nonlinear inference and identify the input effect on the outcome.",
+    "outcome": "construct:affective_state",
+    "queries": {
+      "input contrast": {
+        "start": "2020-01-01",
+        "horizon": "31d",
+        "interventions": [
+          {
+            "target": "construct:serotonergic_exposure",
+            "value": 1.0
+          }
+        ]
+      }
+    }
+  },
+  "fit_model": "assets/nonlinear/model.json",
+  "data": {
+    "kind": "simulate",
+    "truth_model": "assets/nonlinear/truth.json",
+    "simulation": {
+      "start": "2020-01-01",
+      "horizon": "31d"
+    }
+  },
+  "truth": {
+    "parameter:aac881031457a2ca0da1eb858c7353fd970047e4038fe2e08ee3a67b3faa4777": 0.18,
+    "parameter:f9329f55922d7cec9641aad10828eb1af206abdedcc7f2b119ee7e6b12612755": 0.28,
+    "parameter:e6e449bbcfa8f8600c43b6210cb3f6da2f7961978a65e39d5822f7b37d36c9f6": 0.25,
+    "parameter:17cbc157086e379ab0f79726ceda91ecfdfdab21b0b01b95f9dbfeda6a129a80": 0.6931471805599453,
+    "parameter:9b2fc1354fa82aba33ffe91fe9bdc526c523eea7b59db260e4b03fe880e2b330": -0.35,
+    "obs_r": 12.0,
+    "parameter:f79d969731996adf3bfbd5ab92a49ff987ada316d6612ece587ea1cc7b932ade": -0.7,
+    "parameter:79662f96615e2ff9d35538f7d07b942328c296ea052d1dbb5d3539f31629401d": 0.3,
+    "parameter:938216054a753a32b53f26518bee9bfa853c676eac9aa8d519a6575557da5410": -1.0,
+    "parameter:4e7e46ec84bea6a6f0910900aaba1b61d3e4b787f4a99e004f1e651ba899862e": 0.4,
+    "parameter:52d33186fb0652fa7db42e38230e89085d8451cfcc97adf8b0c3fc857e50b032": -1.2,
+    "parameter:40c239055ce178cb451abf794b24d54cd565904ee240f44270408a9a64dcc55f": 0.35,
+    "parameter:31a4dc12b5597ca5a3ebdf934d0e2a3acc5dacb64a134782e35fc6b92a19fb3f": 0.16,
+    "parameter:e3b1a91b4ec3a028f12b8fa29628f3d8fc7f26377211715764684586c05f9466": 0.35,
+    "parameter:23cac41aa8995c84bc64222605bfbfe11b2419c48fda7c2c1c27378e8b3cf701": 0.2,
+    "parameter:bffbbdc39752a89d49bd56ba8c18069e6747d2f85140b214ecbcf4442b868937": 2.5,
+    "parameter:a66e136944bf38a9e47bdebc82523108eaa83d5cafb5f7741130b7055f66054e": 1.0,
+    "obs_shape": 8.0,
+    "parameter:e2b7144357cf3ffdec11c43b60e5f647cb7aa7e19caa3425123e7bb7c514ba2e": 3.0,
+    "parameter:f0e6a45f2b8fb2d3a199ace9fa221aad3472020d87fa36e152b353925f553050": 1.5,
+    "parameter:79b94d28e412d5b54e0df56609bd424bbc4c0df150768dc6e5f2e821254eeffc": 0.2,
+    "parameter:c932e837ec942dba3c4a597f0882e3ba78807672d7bef0a56253c2b135dc4fe2": 0.32,
+    "parameter:437cce46204011d1627f262cc843e9151f3d784f72e35e92f931f40aa6bee453": 4.382026634673881,
+    "parameter:06977a873ad9f2b46eb0dd3d5aaa958c3af16c99fd1bc86502bcf0c0a293437c": 5.0,
+    "parameter:bd61d018625d16171a3b76957057724fd9b29d92afc6e318bc30eb550b5939a6": 2.0,
+    "parameter:04437277afe25527c2c2d5a7c7ab597534f7536eeb13d6ef691c28bd7ee907ea": 0.035,
+    "parameter:a1cb5d62c1569bf14c945a819f1b095c93b9b62913bbc9d2161d098b2bf9a24e": 0.03,
+    "parameter:99d806dcc7d3279022e1c9a02eb70df503574d09db6c6d0edcca3e11f61e6d22": 0.02,
+    "parameter:af62141ec5b978f94974b219c4fba409d7122631139f4b38c07d4a01bb3c4324": 0.06,
+    "parameter:3e3cb1e41e8f02d678738914ec6d72c132a2e249f8264ecd2d1a7942f9a4ad25": 0.025,
+    "parameter:790b7d2189c6d19046a490df6348c5d6743a616ccc41846defc137c21f0a739f": 0.045,
+    "parameter:0a305927c8e9d9bb0fa97889c5cdc40b1e862977babd5164a4525ca5cb0c433c": 0.08,
+    "parameter:777fc1870f45492bb2729e3d3c0ddbffbe477cf7d0ceb39de132d9fafc50c486": 0.02,
+    "parameter:a97392ee3b7af8589636d7d2e8d0f88560ea69c29cd7d72c5052627f30e78efa": 0.04,
+    "parameter:b8a8f399253a70d211c2f5a03eb96d53342272076acc657780bd4babd9f5e599": 0.03
+  },
+  "provenance": "Former synthetic nonlinear fixture, now generated through simulate. Measurement scheduling follows the model clock; historical handwritten generator and recovery runner are removed. Diffrax truth recovery is distinct from comparisons to the fitted-grid posterior.",
+  "allowed_findings": {
+    "C2 latent scale": "This cheap case generates one history; the across-replicate marginal-scale screen has zero ensemble variance and does not assess this design."
+  },
+  "unavailable_findings": {
+    "NO_OBSERVATIONS": "Truth generation has no external observations for predictive calibration.",
+    "EDGE_CONTRASTS_EXPLICIT": "Edge removal is a separate declared causal contrast, not part of generating this dataset."
+  }
+}

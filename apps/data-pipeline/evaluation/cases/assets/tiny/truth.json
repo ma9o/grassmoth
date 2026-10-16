@@ -1,0 +1,249 @@
+{
+  "constructs": {
+    "construct:y": {
+      "name": "y",
+      "description": "Benchmark y",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.35,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-y": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:y"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:y"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:y": {
+          "observation": {
+            "name": "y",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:y"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:u": {
+      "name": "u",
+      "description": "Assigned input",
+      "role": "exogenous",
+      "temporal_status": "time_varying",
+      "indicators": {
+        "indicator:u": {
+          "observation": {
+            "name": "u",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Delta",
+              "v": {
+                "kind": "state",
+                "construct_id": "construct:u"
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      },
+      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1"
+    }
+  },
+  "edges": {
+    "edge:u-y": {
+      "cause": "construct:u",
+      "effect": "construct:y",
+      "description": "Declared benchmark causal relation",
+      "mechanisms": {
+        "mechanism:u-y": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.7,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:u"
+            }
+          }
+        }
+      }
+    }
+  },
+  "parameters": {},
+  "distributions": {
+    "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1": {
+      "distribution": "Delta",
+      "params": {
+        "v": {
+          "array": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            1.0
+          ],
+          "dtype": "float32"
+        },
+        "event_dim": 1
+      }
+    }
+  },
+  "law_layouts": {
+    "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1": {
+      "parameters": [],
+      "constructs": [
+        "construct:u"
+      ],
+      "time_points": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0,
+        13.0,
+        14.0,
+        15.0,
+        16.0
+      ],
+      "time_origin": "relative",
+      "labels": {}
+    }
+  },
+  "measurement_clock": "1d"
+}

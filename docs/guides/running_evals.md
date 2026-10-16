@@ -1,18 +1,31 @@
-# Running Evaluation Benchmarks
+# Running inference experiments
 
-The maintained evaluation surface is the nonlinear SSM benchmark suite under
-`apps/data-pipeline/evaluation/benchmarks/`.
+The maintained [experiment package](../../apps/data-pipeline/evaluation/README.md)
+builds cases through production actions and schedules paired fits. Its declarations
+pin the case, controls, treatment, seeds, repeats and any accuracy tolerances.
 
-From `apps/data-pipeline/`, the local CPU benchmark entrypoint is:
+Read the [integration guide](agentic_integration_testing.md) before starting services.
+Run a case or experiment only with an approved compute budget. From
+`apps/data-pipeline`, against an authorized study facade:
 
 ```bash
-uv run python evaluation/benchmarks/benchmark.py
+uv run python -m evaluation.run evaluation/experiments/cpu_compile.json \
+  --endpoint http://localhost:8100 \
+  --output ../../scratchpad/benchmarks/cpu-compile-01
 ```
 
-Use `--help` to inspect its current model, sampler, and output options. The
-benchmark writes generated artifacts under `scratchpad/`.
+The example uses local hardware and zero retained samples. It is intended to inspect
+compilation, not establish posterior accuracy. The
+[declaration owner](../../apps/data-pipeline/evaluation/declarations.py) defines
+supported contrasts; the [fit chart](../assets/action-flows/fit.svg) owns continuation
+and compile-only behavior. The [sampler contract](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/sampling.py)
+owns production choices and defaults.
 
-GPU profiling and recovery entrypoints are
-`evaluation/benchmarks/benchmark_gpu.py` and
-`evaluation/benchmarks/benchmark_recovery_gpu.py`. They launch paid Modal GPU
-work and must only be run when explicitly requested.
+Each run writes a sortable HTML report, raw action results and case/attempt manifests.
+It rejects undeclared control differences and mismatched scientific inputs. Reserved
+budget, recorded compute time and separately supplied billing output remain distinct.
+See the [package guide](../../apps/data-pipeline/evaluation/README.md#accounting-and-provenance)
+for cost reconciliation and the declaration examples for initializer and movement probes.
+
+The package never launches a case on import. Historical experiment scripts and
+outputs belong in gitignored `scratchpad/`; maintained cases use the public actions.

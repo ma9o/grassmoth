@@ -1,0 +1,42 @@
+{
+  "name": "tiny",
+  "question": {
+    "text": "Benchmark nonlinear inference and identify the input effect on the outcome.",
+    "outcome": "construct:y",
+    "queries": {
+      "input contrast": {
+        "start": "2020-01-01",
+        "horizon": "16d",
+        "interventions": [
+          {
+            "target": "construct:u",
+            "value": 1.0
+          }
+        ]
+      }
+    }
+  },
+  "fit_model": "assets/tiny/model.json",
+  "data": {
+    "kind": "simulate",
+    "truth_model": "assets/tiny/truth.json",
+    "simulation": {
+      "start": "2020-01-01",
+      "horizon": "16d"
+    }
+  },
+  "expected_identified": [
+    "construct:u"
+  ],
+  "truth": {
+    "input_effect": 0.7
+  },
+  "allowed_findings": {
+    "C2 latent scale": "This cheap case generates one history; the across-replicate marginal-scale screen has zero ensemble variance and does not assess this design."
+  },
+  "provenance": "One nonlinear state, one known input and one unknown effect; generated only by production simulate, one replicate.",
+  "unavailable_findings": {
+    "NO_OBSERVATIONS": "Truth generation has no external observations for predictive calibration.",
+    "EDGE_CONTRASTS_EXPLICIT": "Edge removal is a separate declared causal contrast, not part of generating this dataset."
+  }
+}
