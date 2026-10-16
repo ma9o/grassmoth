@@ -12,6 +12,7 @@ from nof1_causal_lab.actions.contracts.progress import ProgressEvent
 from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
 from nof1_causal_lab.actions.prepare_data.worker_output import ExtractionRow, WorkerOutput
 from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
+from nof1_causal_lab.artifacts.observations.records import ObservationRecord
 from nof1_causal_lab.artifacts.observations.preparation import (
     CompletedExtractionWorker,
     FailedExtractionChunk,
@@ -148,5 +149,6 @@ class MeasurementsFile(BaseModel):
     measurement_structure: MeasurementContext
     preparation: FilePreparationSpec
     computed_dicts: list[ExtractionRow]
+    recorded_dicts: list[ObservationRecord]
     empty_output: WorkerOutput
     chunks: list[MeasurementChunkRef]

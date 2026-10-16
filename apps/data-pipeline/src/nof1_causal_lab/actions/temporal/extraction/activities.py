@@ -78,7 +78,7 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
     """Compute deterministic measurements and plan cached or LLM-backed extraction chunks."""
     import polars as pl
 
-    from nof1_causal_lab.actions.prepare_data.planning import prepare_semantic_chunks
+    from nof1_causal_lab.actions.prepare_data.planning import prepare_semantic_chunks, recorded_observations
     from nof1_causal_lab.actions.prepare_data.worker_output import WorkerOutput
     from nof1_causal_lab.config import get_config
     from nof1_causal_lab.observations.aggregations import compute_indicators
@@ -190,6 +190,7 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
             "measurement_structure": measurement_structure.model_dump(mode="json"),
             "preparation": resolved.model_dump(mode="json"),
             "computed_dicts": computed_dicts,
+            "recorded_dicts": recorded_observations(raw_df, measurement_structure),
             "empty_output": empty_output.model_dump(mode="json"),
             "chunks": [chunk.model_dump(mode="json") for chunk in chunks],
         },
@@ -377,7 +378,7 @@ async def finalize_measurements_activity(
             if all_dicts
             else [],
         )
-        panel = materialize_panel(observation_rows, measurement_structure)
+        panel = materialize_panel(observation_rows + plan.recorded_dicts, measurement_structure)
         if len(panel) == 0:
             raise ValueError("Extraction produced no observations")
         panel = validate_observation_rows(panel, variables)

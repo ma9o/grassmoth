@@ -142,8 +142,25 @@ class ComputedExtractionSpec(Value):
         return self
 
 
+class RecordedExtractionSpec(Value):
+    """Import already measured readings and their actual support without re-bucketing."""
+
+    kind: Literal["recorded"] = "recorded"
+    how_to_measure: str = "Import the recorded reading and temporal support unchanged."
+    value_column: str = Field(min_length=1)
+    anchor_column: str = Field(default="timestamp", min_length=1)
+    support_start_column: str = Field(min_length=1)
+    support_end_column: str = Field(min_length=1)
+
+    @property
+    def source_columns(self) -> tuple[str, ...]:
+        """Columns owning the reading and its recorded temporal support."""
+        return (self.value_column, self.anchor_column, self.support_start_column, self.support_end_column)
+
+
 type ExtractionSpec = Annotated[
-    ComputedExtractionSpec | SemanticExtractionSpec, Field(discriminator="kind")
+    ComputedExtractionSpec | SemanticExtractionSpec | RecordedExtractionSpec,
+    Field(discriminator="kind"),
 ]
 
 

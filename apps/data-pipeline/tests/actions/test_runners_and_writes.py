@@ -166,6 +166,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
                         mode="json"
                     ),
                 },
+                "recorded_dicts": [],
                 "computed_dicts": [
                     {
                         "indicator_id": dynamical_model_spec.indicators[0].observation.id,
