@@ -18,7 +18,6 @@ from nof1_causal_lab.models.ssm.inference.samplers.particle.context import (
 )
 from nof1_causal_lab.models.ssm.inference.samplers.particle.contract import (
     PaidMixture,
-    SmootherSetup,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import step
 from nof1_causal_lab.models.ssm.inference.samplers.particle.setup import build_smoother_setup
@@ -28,36 +27,16 @@ pytestmark = pytest.mark.inference(concern="sampling")
 
 
 def _context(target, method, *, mixture=False, count=4):
-    local = target.tree_target()
     path = jnp.linspace(-0.2, 0.4, target.times.size + 1)[1:, None]
-    static = SmootherSetup(
-        latent_context_runtime_fn=target.context,
-        log_prior_unc_fn=target.log_prior,
-        obs_increment_fn=local.observation_increment,
-        trajectory_log_prob_fn=target.path_log_prob,
-        runtime_observations=target.observations,
-        runtime_times=target.times,
-        latent_free_mask=target.independent_mask,
+    static = build_smoother_setup(
+        target,
+        DsmcSpec(dsmc_leaf_proposal=method, amala_kappa=1.0),
         num_particles=count,
         num_parameter_particles=2,
-        dsmc_leaf_proposal=method,
-        amala_kappa=1.0,
-        amala_grad_clip=float("inf"),
-        latent_block_coords=None,
-        paid_mix=PaidMixture(
-            PaidMixSpec(),
-            jnp.zeros_like(path),
-            jnp.ones_like(path),
-        )
-        if mixture
-        else None,
-        target=target,
-        transition_initial_log_prob_fn=local.initial_log_prob,
-        transition_log_prob_fn=local.transition_log_prob,
-        transition_pairwise_log_probs_fn=local.pairwise_transition_log_prob,
+        free_mask=target.independent_mask,
+        paid_mix=PaidMixture(PaidMixSpec(), jnp.zeros_like(path), jnp.ones_like(path))
+        if mixture else None,
         diagnostic_metrics=frozenset(),
-        intervals=local.intervals,
-        local_auxiliary_exact=False,
     )
     return build_smoother_context(
         static,
@@ -69,24 +48,36 @@ def _context(target, method, *, mixture=False, count=4):
     )
 
 
-def _prefixes(target, ctx, path):
-    def per_label(bound):
-        states = target.replay_path(bound, path)
-        transitions = jax.vmap(lambda a, b, t: target.transition_log_prob(bound, a, b, t))(
-            states[:-1], states[1:], jnp.arange(1, len(path))
-        )
-        initial = target.initial_log_prob(bound, states[0])
-        return jnp.cumsum(
-            jnp.concatenate((initial[None], transitions))
-            + target.observation_log_probs(bound, states, target.observations)
-        )
+def _local_gradients(target, ctx, path, method):
+    local = target.tree_target()
+    gradients = []
+    for index in range(len(path)):
+        def density(value):
+            def per_label(bound):
+                result = (
+                    local.initial_log_prob(bound, value) if index == 0
+                    else local.transition_log_prob(bound, path[index - 1], value, index)
+                )
+                result += local.observation_increment(bound, value, index, target.observations)
+                if method == "amala_plus" and index + 1 < len(path):
+                    result += local.transition_log_prob(bound, value, path[index + 1], index + 1)
+                return result
+            return jax.scipy.special.logsumexp(
+                ctx.initial_label_log_probs + jax.vmap(per_label)(ctx.contexts)
+            )
+        gradients.append(jax.grad(density)(path[index]))
+    return jnp.stack(gradients)
 
-    values = jax.vmap(per_label)(ctx.contexts)
-    return jax.scipy.special.logsumexp(ctx.initial_label_log_probs[:, None] + values, axis=0)
+
+def _auxiliary_density(auxiliary, path):
+    return jnp.sum(jax.vmap(auxiliary.local_log_density)(
+        jnp.concatenate((path[:1], path[:-1])), path,
+        jnp.concatenate((path[1:], path[-1:])), jnp.arange(len(path))
+    ))
 
 
 @pytest.mark.parametrize("interval", [False, True])
-def test_filtering_and_smoothing_gradients_match_full_prefix_jacobian(interval):
+def test_local_auxiliary_keeps_exact_global_parameter_label_scores(interval):
     times = np.arange(5.0)
     observations = np.array([[0.1], [0.4], [-0.2], [0.6], [0.8]])
     starts = times[:, None].copy()
@@ -96,11 +87,6 @@ def test_filtering_and_smoothing_gradients_match_full_prefix_jacobian(interval):
     target = interval_target(times, observations, starts, ("mean" if interval else "last",))
     ctx = _context(target, "amala")
     path = jnp.array([[-0.3], [0.1], [0.6], [-0.2], [0.5]])
-    jacobian = jax.jacrev(lambda x: _prefixes(target, ctx, x))(path)
-    diagonal = jacobian[jnp.arange(5), jnp.arange(5)]
-    np.testing.assert_allclose(ctx.filtering_gradient(path), diagonal, atol=2e-5)
-    np.testing.assert_allclose(ctx.smoothing_gradient(path), jacobian[-1], atol=2e-5)
-    assert not np.allclose(diagonal[:-1], jacobian[-1, :-1])
     scores = ctx.score_labels(path)
     expected_path = jax.vmap(lambda bound: target.path_log_prob(bound, path, target.observations))(
         ctx.contexts
@@ -127,19 +113,17 @@ def test_auxiliary_draw_and_mixture_density_follow_paper_laws(method, mixture):
     noise = np.sqrt(variance) * np.asarray(
         jax.random.normal(key, reference.shape, dtype=reference.dtype)
     )
-    jacobian = jax.jacrev(lambda x: _prefixes(target, ctx, x))(reference)
-    gradient = jacobian[jnp.arange(3), jnp.arange(3)] if method == "amala" else jacobian[-1]
+    gradient = _local_gradients(target, ctx, reference, method)
     drift = variance * np.asarray(gradient)
     expected = np.where(mask, reference + drift + noise, reference)
     np.testing.assert_allclose(auxiliary.auxiliary, expected, atol=2e-5)
     candidate = reference + jnp.where(mask, 0.25, 0)
-    jacobian = jax.jacrev(lambda x: _prefixes(target, ctx, x))(candidate)
-    gradient = jacobian[jnp.arange(3), jnp.arange(3)] if method == "amala" else jacobian[-1]
+    gradient = _local_gradients(target, ctx, candidate, method)
     center = candidate + variance * gradient
     expected_density = np.where(
         mask, -0.5 * (np.log(2 * np.pi * variance) + (expected - center) ** 2 / variance), 0
     ).sum()
-    np.testing.assert_allclose(auxiliary.path_log_density(candidate), expected_density, atol=2e-5)
+    np.testing.assert_allclose(_auxiliary_density(auxiliary, candidate), expected_density, atol=2e-5)
     particles, density = auxiliary.propose(jax.random.key(91))
     np.testing.assert_array_equal(particles[:, 0], reference)
     np.testing.assert_array_equal(particles[1, :, 0], np.full(4, reference[1, 0]))
@@ -313,8 +297,6 @@ def test_zero_drift_uses_leaf_factors_without_path_or_transition_gradients():
 
     ctx = _context(target, "amala_plus", count=5)._replace(
         amala_kappa=0.0,
-        smoothing_gradient=forbidden,
-        filtering_gradient=forbidden,
         transition_current_value_grad_by_param=forbidden,
         transition_next_value_grad_by_param=forbidden,
     )
@@ -323,7 +305,7 @@ def test_zero_drift_uses_leaf_factors_without_path_or_transition_gradients():
     expected = norm.logpdf(
         np.asarray(auxiliary.auxiliary), np.asarray(candidate), np.sqrt(0.3)
     ).sum()
-    np.testing.assert_allclose(auxiliary.path_log_density(candidate), expected, atol=1e-5)
+    np.testing.assert_allclose(_auxiliary_density(auxiliary, candidate), expected, atol=1e-5)
     result = jax.jit(lambda: trace_step(ctx, jax.random.key(911), reference, None))()
     np.testing.assert_allclose(result.trace.root_selection.log_weights, -np.log(5), atol=1e-6)
     np.testing.assert_array_equal(auxiliary.gradient_norms, np.zeros(5))
@@ -368,10 +350,7 @@ def test_pairwise_transition_matrix_matches_individual_declared_densities(state_
 @pytest.mark.parametrize(
     ("steps", "mixture"), [(1, False), (2, False), (4, True), (5, True), (33, True)]
 )
-def test_local_root_shortcut_preserves_full_correction_and_skips_path_gradients(
-    method, steps, mixture, monkeypatch
-):
-    from nof1_causal_lab.models.ssm.inference.samplers.particle.auxiliary import AuxiliaryKernel
+def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, steps, mixture):
     from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import trace_step
 
     times = np.arange(float(steps))
@@ -389,7 +368,6 @@ def test_local_root_shortcut_preserves_full_correction_and_skips_path_gradients(
         else None,
         diagnostic_metrics=frozenset(),
     )
-    assert setup.local_auxiliary_exact
     ctx = build_smoother_context(
         setup,
         jnp.array([[0.3]]),
@@ -400,14 +378,11 @@ def test_local_root_shortcut_preserves_full_correction_and_skips_path_gradients(
     )
     key = jax.random.key(610)
     full = jax.jit(
-        lambda: trace_step(ctx._replace(local_auxiliary_exact=False), key, reference, None)
+        lambda: trace_step(ctx, key, reference, None)
     )()
 
-    def forbidden(*_args):
-        raise AssertionError("The proven local case must not re-evaluate full-path gradients")
-
-    monkeypatch.setattr(AuxiliaryKernel, "path_log_density", forbidden)
     fast = jax.jit(lambda: trace_step(ctx, key, reference, None, batch_size=2))()
+    np.testing.assert_allclose(fast.trace.root_selection.log_weights, -np.log(5), atol=1e-6)
     np.testing.assert_array_equal(fast.result.origin_path, full.result.origin_path)
     np.testing.assert_allclose(fast.result.latent_path, full.result.latent_path, atol=1e-6)
     np.testing.assert_allclose(

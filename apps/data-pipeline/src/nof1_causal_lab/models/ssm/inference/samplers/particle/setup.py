@@ -28,7 +28,7 @@ def build_smoother_setup(
     paid_mix: PaidMixture | None,
     diagnostic_metrics: frozenset[str],
 ) -> SmootherSetup:
-    """Use local tree factors, retaining the exact target for auxiliary gradients."""
+    """Bind local auxiliary factors while retaining the exact scientific target."""
     local_target = target.tree_target()
 
     def observation_increment(
@@ -53,15 +53,9 @@ def build_smoother_setup(
         amala_grad_clip=spec.amala_grad_clip,
         latent_block_coords=spec.latent_block_coords,
         paid_mix=paid_mix,
-        target=target,
         transition_initial_log_prob_fn=local_target.initial_log_prob,
         transition_log_prob_fn=local_target.transition_log_prob,
         transition_pairwise_log_probs_fn=local_target.pairwise_transition_log_prob,
         diagnostic_metrics=diagnostic_metrics,
         intervals=local_target.intervals,
-        local_auxiliary_exact=(
-            num_parameter_particles == 1
-            and target.intervals is None
-            and not target.state_space.requires_replay
-        ),
     )

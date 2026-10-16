@@ -145,22 +145,6 @@ def build_smoother_context(
             parameter_log_priors + trajectory_log_probs,
         )
 
-    def _smoothing_gradient(path: jnp.ndarray) -> jnp.ndarray:
-        gradient: jnp.ndarray = jax.grad(
-            lambda x: jax.scipy.special.logsumexp(parameter_log_probs + _trajectory_log_probs(x))
-        )(path)
-        return gradient
-
-    def _filtering_gradient(path: jnp.ndarray) -> jnp.ndarray:
-        increments, gradients = jax.vmap(
-            lambda context: static.target.filtering_log_prob_and_grad(
-                context, path, runtime_observations
-            )
-        )(contexts)
-        prefix = jnp.cumsum(increments, axis=1)
-        labels = jax.nn.softmax(parameter_log_probs[:, None] + prefix, axis=0)
-        return jnp.einsum("kt,ktd->td", labels, gradients).astype(latent_dtype)
-
     return SmootherContext(
         contexts=contexts,
         initial_label_log_probs=initial_label_log_probs,
@@ -178,15 +162,12 @@ def build_smoother_context(
         amala_grad_clip=static.amala_grad_clip,
         latent_block_coords=static.latent_block_coords,
         paid_mix=static.paid_mix,
-        smoothing_gradient=_smoothing_gradient,
-        filtering_gradient=_filtering_gradient,
         initial_value_grad_by_param=_initial_value_grad_by_param,
         transition_current_value_grad_by_param=_transition_current_value_grad_by_param,
         transition_next_value_grad_by_param=_transition_next_value_grad_by_param,
         pairwise_transition_log_probs=_pairwise_transition_log_probs,
         score_labels=_score_labels,
         intervals=static.intervals,
-        local_auxiliary_exact=static.local_auxiliary_exact,
         diagnostic_weights=build_particle_diagnostic_flags(
             diagnostic_metrics=static.diagnostic_metrics
         ).particle_weights,

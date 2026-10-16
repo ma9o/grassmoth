@@ -40,6 +40,52 @@ def _drift(
     return kappa * variance * gradient * scale, norms[..., 0]
 
 
+def _local_gradient(
+    ctx: SmootherContext,
+    previous: jax.Array,
+    current: jax.Array,
+    following: jax.Array,
+    index: jax.Array,
+) -> jax.Array:
+    """Use the same bounded-window drift for generation and candidate scoring."""
+    prior, prior_gradient = jax.lax.cond(
+        index == 0,
+        lambda: ctx.initial_value_grad_by_param(current),
+        lambda: ctx.transition_current_value_grad_by_param(previous, current, index),
+    )
+    observation, observation_gradient = _value_and_grad_by_param(
+        ctx.contexts,
+        current,
+        lambda bound, value: ctx.obs_increment_fn(
+            bound, value, index, ctx.runtime_observations
+        ),
+        value_dtype=ctx.traj_dtype,
+        grad_dtype=ctx.latent_dtype,
+    )
+    logits = ctx.initial_label_log_probs + prior + observation
+    gradients = prior_gradient + observation_gradient
+    if ctx.dsmc_leaf_proposal == "amala_plus":
+        future, future_gradient = jax.lax.cond(
+            index + 1 < ctx.num_steps,
+            lambda: ctx.transition_next_value_grad_by_param(
+                current, following, jnp.minimum(index + 1, ctx.num_steps - 1)
+            ),
+            lambda: (jnp.zeros_like(prior), jnp.zeros_like(prior_gradient)),
+        )
+        logits = logits + future
+        gradients = gradients + future_gradient
+    return jnp.einsum("k,kd->d", jax.nn.softmax(logits), gradients)
+
+
+def _path_local_gradient(ctx: SmootherContext, path: jax.Array) -> jax.Array:
+    """Evaluate the declared local auxiliary drift at every path coordinate."""
+    previous = jnp.concatenate((path[:1], path[:-1]))
+    following = jnp.concatenate((path[1:], path[-1:]))
+    return jax.vmap(lambda before, current, after, index: _local_gradient(
+        ctx, before, current, after, index
+    ))(previous, path, following, jnp.arange(ctx.num_steps))
+
+
 @dataclass(frozen=True)
 class AuxiliaryKernel:
     """One refreshed auxiliary trajectory, its proposal, and its target factors."""
@@ -50,20 +96,6 @@ class AuxiliaryKernel:
     variance: jax.Array
     auxiliary: jax.Array
     gradient_norms: jax.Array
-
-    def path_log_density(self, path: jax.Array) -> jax.Array:
-        """Evaluate the actual auxiliary law at a complete candidate trajectory."""
-        ctx = self.context
-        if ctx.amala_kappa == 0:
-            return jnp.sum(_masked_normal_log_prob(self.auxiliary, path, self.variance, self.mask))
-        gradient = (
-            ctx.filtering_gradient(path)
-            if ctx.dsmc_leaf_proposal == "amala"
-            else ctx.smoothing_gradient(path)
-        )
-        drift, _ = _drift(gradient, self.variance, self.mask, ctx.amala_kappa, ctx.amala_grad_clip)
-        center = path + drift
-        return jnp.sum(_masked_normal_log_prob(self.auxiliary, center, self.variance, self.mask))
 
     def guide_log_density(self, current: jax.Array, index: jax.Array) -> jax.Array:
         """Positive leaf guide depending only on the refreshed auxiliary and candidate."""
@@ -78,43 +110,15 @@ class AuxiliaryKernel:
         following: jax.Array,
         index: jax.Array,
     ) -> jax.Array:
-        """Score the bounded-window auxiliary factor used by intermediate trees.
+        """Score the actual auxiliary law, including with labels, intervals and replay.
 
-        For one Markov model these are exactly the paper's pair/triple factors.
-        Parameter marginalization, intervals and replay can make the true drift
-        nonlocal. The root then replaces the accumulated local factors with
-        ``path_log_density``; it never silently substitutes this local gradient.
+        The scientific target retains every recurrence and likelihood correction
+        independently of this bounded-window proposal drift.
         """
         ctx = self.context
         if ctx.amala_kappa == 0:
             return self.guide_log_density(current, index)
-        prior, prior_gradient = jax.lax.cond(
-            index == 0,
-            lambda: ctx.initial_value_grad_by_param(current),
-            lambda: ctx.transition_current_value_grad_by_param(previous, current, index),
-        )
-        observation, observation_gradient = _value_and_grad_by_param(
-            ctx.contexts,
-            current,
-            lambda bound, value: ctx.obs_increment_fn(
-                bound, value, index, ctx.runtime_observations
-            ),
-            value_dtype=ctx.traj_dtype,
-            grad_dtype=ctx.latent_dtype,
-        )
-        logits = ctx.initial_label_log_probs + prior + observation
-        gradients = prior_gradient + observation_gradient
-        if ctx.dsmc_leaf_proposal == "amala_plus":
-            future, future_gradient = jax.lax.cond(
-                index + 1 < ctx.num_steps,
-                lambda: ctx.transition_next_value_grad_by_param(
-                    current, following, jnp.minimum(index + 1, ctx.num_steps - 1)
-                ),
-                lambda: (jnp.zeros_like(prior), jnp.zeros_like(prior_gradient)),
-            )
-            logits = logits + future
-            gradients = gradients + future_gradient
-        gradient = jnp.einsum("k,kd->d", jax.nn.softmax(logits), gradients)
+        gradient = _local_gradient(ctx, previous, current, following, index)
         drift, _ = _drift(
             gradient,
             self.variance[index],
@@ -201,11 +205,7 @@ def build_auxiliary(
         drift = jnp.zeros_like(reference)
         norms = jnp.zeros(reference.shape[0], dtype=reference.dtype)
     else:
-        gradient = (
-            context.filtering_gradient(reference)
-            if context.dsmc_leaf_proposal == "amala"
-            else context.smoothing_gradient(reference)
-        )
+        gradient = _path_local_gradient(context, reference)
         drift, norms = _drift(
             gradient, variance, mask, context.amala_kappa, context.amala_grad_clip
         )

@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
     from nof1_causal_lab.artifacts.sampling import DSMCLeafProposal, PaidMixSpec
     from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
-    from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
 
 type ParticleContextRuntimeFn = Callable[[jnp.ndarray, jnp.ndarray], ParticleContext]
@@ -78,13 +77,11 @@ class SmootherSetup(NamedTuple):
     # coordinate-conditional cSMC on the same target.
     latent_block_coords: int | None
     paid_mix: PaidMixture | None
-    target: ParticleTarget
     transition_initial_log_prob_fn: Callable[[ParticleContext, jnp.ndarray], jnp.ndarray]
     transition_log_prob_fn: TransitionLogProbFn
     transition_pairwise_log_probs_fn: TransitionLogProbFn
     diagnostic_metrics: frozenset[str]
     intervals: ParticleIntervalObservations | None
-    local_auxiliary_exact: bool
 
 
 class SmootherContext(NamedTuple):
@@ -111,13 +108,10 @@ class SmootherContext(NamedTuple):
     amala_grad_clip: float
     latent_block_coords: int | None
     paid_mix: PaidMixture | None
-    smoothing_gradient: Callable[[jnp.ndarray], jnp.ndarray]
-    filtering_gradient: Callable[[jnp.ndarray], jnp.ndarray]
     initial_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
     transition_current_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
     transition_next_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
     pairwise_transition_log_probs: Callable[..., jnp.ndarray]
     score_labels: Callable[[jnp.ndarray], TrajectoryLabelScores]
     intervals: ParticleIntervalObservations | None
-    local_auxiliary_exact: bool
     diagnostic_weights: bool

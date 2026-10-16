@@ -12,10 +12,10 @@ the inverse proposal density from dominating the intermediate leaf weights.
 
 For nonlocal corrections, the root first conditionally resamples N trajectories
 from its local target, retaining the reference. Importance selection then replaces
-that target by the exact replayed, auxiliary-augmented target. This is a final
+that target by the exact replayed scientific target. This is a final
 conditional SMC stage: its conditional particle-generation law is unchanged,
 and its terminal weights are the exact target/local-target ratio. Consequently
-only N complete trajectories need replay and exact gradients, instead of N squared.
+only N complete trajectories need replay, instead of N squared.
 The terminal forced move is the modified Gibbs update in Particle-aMALA Algorithm
 1 (https://arxiv.org/abs/2401.14868); its stationary law is the terminal weights.
 """
@@ -68,7 +68,6 @@ class _Segment(NamedTuple):
     boundary: jax.Array
     weights: jax.Array
     statistics: jax.Array
-    auxiliary_log_density: jax.Array
 
 
 type _CombinedSegment = tuple[
@@ -119,8 +118,6 @@ def _step(
         transition_current_value_grad_by_param=jax.jit(ctx.transition_current_value_grad_by_param),
         transition_next_value_grad_by_param=jax.jit(ctx.transition_next_value_grad_by_param),
         pairwise_transition_log_probs=jax.jit(ctx.pairwise_transition_log_probs),
-        smoothing_gradient=jax.jit(ctx.smoothing_gradient),
-        filtering_gradient=jax.jit(ctx.filtering_gradient),
         obs_increment_fn=jax.jit(ctx.obs_increment_fn),
     )
     count = ctx.num_free_particles + 1
@@ -234,7 +231,7 @@ def _step(
         plan: CompiledIntervalTreeLevel | IntervalTreeLevelRuntime | None,
         node: jax.Array,
         width: jax.Array,
-    ) -> tuple[jax.Array, jax.Array, jax.Array]:
+    ) -> tuple[jax.Array, jax.Array]:
         transition = ctx.pairwise_transition_log_probs(left.last, right.first, seam)
         paid = seam_auxiliary(left, right, seam, width)
         if intervals is not None and plan is not None and plan.emission_slots.shape[1]:
@@ -252,7 +249,7 @@ def _step(
             - left_density[:, None]
             - right_density[None]
         )
-        return logits.astype(ctx.traj_dtype), joint.astype(ctx.traj_dtype), paid
+        return logits.astype(ctx.traj_dtype), joint.astype(ctx.traj_dtype)
 
     def combine(
         left: _Segment,
@@ -263,7 +260,7 @@ def _step(
         node: jax.Array,
         width: jax.Array,
     ) -> _CombinedSegment:
-        logits, joint, paid = join(left, right, seam, plan, node, width)
+        logits, joint = join(left, right, seam, plan, node, width)
         selected = jnp.concatenate(
             (jnp.zeros(1, dtype=jnp.int32), _multinomial(draw_key, logits.reshape(-1), count - 1))
         )
@@ -290,7 +287,6 @@ def _step(
             ),
             jnp.full(count, -math.log(count), dtype=ctx.traj_dtype),
             stats,
-            left.auxiliary_log_density[li] + right.auxiliary_log_density[ri] + paid[li, ri],
         )
         metrics = weight_statistics(logits.reshape(-1)) if ctx.diagnostic_weights else {}
         return segment, metrics, (li, ri)
@@ -298,21 +294,15 @@ def _step(
     def path_from_origins(origins: jax.Array) -> jax.Array:
         return particles[jnp.arange(steps), origins[:steps]]
 
-    def terminal_correction(origins: jax.Array, local: jax.Array, paid: jax.Array) -> jax.Array:
-        if (ctx.local_auxiliary_exact or ctx.amala_kappa == 0) and root_correction is None:
+    def terminal_correction(origins: jax.Array, local: jax.Array) -> jax.Array:
+        if root_correction is None:
             # Every auxiliary pair/triple is already paid at its owning tree node.
             return jnp.asarray(0.0, dtype=ctx.traj_dtype)
         path = path_from_origins(origins)
-        replay = (
-            jnp.zeros(labels, dtype=ctx.traj_dtype)
-            if root_correction is None
-            else root_correction(path)
-        )
+        replay = root_correction(path)
         ratio = jax.scipy.special.logsumexp(logpi + local + replay) - jax.scipy.special.logsumexp(
             logpi + local
         )
-        if ctx.amala_kappa != 0:
-            ratio = ratio + auxiliary.path_log_density(path) - paid
         return ratio.astype(ctx.traj_dtype)
 
     origins = jnp.broadcast_to(jnp.arange(count)[None, :, None], (padded, count, 1))
@@ -323,7 +313,7 @@ def _step(
     if steps == 1:
         root_logits = leaf_logits[0]
         root_logits = root_logits + jax.vmap(terminal_correction)(
-            origins[0], evidence[0], paid_auxiliary[0]
+            origins[0], evidence[0]
         )
         chosen = _forced_move(select_key, root_logits)
         selected_origins = origins[0, chosen]
@@ -337,7 +327,6 @@ def _step(
             origins,
             jnp.pad(weights, ((0, pad), (0, 0)), constant_values=-math.log(count)),
             statistics,
-            jnp.pad(paid_auxiliary, ((0, pad), (0, 0))),
         )
         max_nodes = padded // 2
         block = max(1, padded // 16)
@@ -464,7 +453,7 @@ def _step(
         with jax.named_scope("dsmc_root_correction"):
             root_logits = jax.lax.map(
                 lambda inputs: terminal_correction(*inputs),
-                (root_origins, root.evidence, root.auxiliary_log_density),
+                (root_origins, root.evidence),
                 batch_size=batch,
             )
         chosen = _forced_move(select_key, root_logits)
