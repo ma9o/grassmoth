@@ -203,9 +203,13 @@ def _stationarity_features(paths, mean, chol):
 
 @pytest.mark.parametrize("interval", [False, True], ids=["point", "overlapping_intervals"])
 @pytest.mark.parametrize("parameter_count", [1, 2], ids=["fixed_parameter", "fixed_mixture"])
-@pytest.mark.parametrize("method", ["amala", "amala_plus"])
+@pytest.mark.parametrize(
+    ("method", "kappa"), [("amala", 0.75), ("amala_plus", 0.75), ("amala_plus", 0.0)]
+)
 @pytest.mark.parametrize("mixture", [False, True], ids=["paid_off", "paid_on"])
-def test_conditional_tree_preserves_analytic_posterior(interval, parameter_count, method, mixture):
+def test_conditional_tree_preserves_analytic_posterior(
+    interval, parameter_count, method, kappa, mixture
+):
     """One transition from exact independent draws isolates invariance without burn-in."""
     target, joint_mean, joint_covariance = _gaussian_smoother_case(interval)
     parameters = np.array([0.3]) if parameter_count == 1 else np.array([-0.4, 0.7])
@@ -227,7 +231,9 @@ def test_conditional_tree_preserves_analytic_posterior(interval, parameter_count
     before = jnp.asarray(
         (means[labels] + rng.normal(size=(size, len(mean))) @ conditional_chol.T)[..., None]
     )
-    spec = DsmcSpec(dsmc_leaf_proposal=method, paid_mix=PaidMixSpec() if mixture else None)
+    spec = DsmcSpec(
+        dsmc_leaf_proposal=method, amala_kappa=kappa, paid_mix=PaidMixSpec() if mixture else None
+    )
     setup = build_smoother_setup(
         target,
         spec,
@@ -256,9 +262,9 @@ def test_conditional_tree_preserves_analytic_posterior(interval, parameter_count
     paths, log_probs = jax.jit(jax.vmap(advance))(before, keys)
     initial_paths = np.asarray(before)[..., 0]
     initial_features = _stationarity_features(initial_paths, mean, chol)
-    # Bonferroni across 16 cases and every tested moment/function. Repeated sweeps
+    # Bonferroni across 24 cases and every tested moment/function. Repeated sweeps
     # belong in the mixing benchmark; they are not needed to test invariance.
-    critical = norm.isf(0.001 / (2 * 16 * initial_features.shape[1]))
+    critical = norm.isf(0.001 / (2 * 24 * initial_features.shape[1]))
     observed = np.asarray(paths)[..., 0]
     differences = _stationarity_features(observed, mean, chol) - initial_features
     uncertainty = differences.std(axis=0, ddof=1) / np.sqrt(size)
@@ -292,6 +298,35 @@ def test_root_replay_evaluates_only_linear_number_of_complete_paths(count):
     jax.block_until_ready(result.latent_path)
     jax.effects_barrier()
     assert calls == [(3, 1)] * count
+
+
+def test_zero_drift_uses_leaf_factors_without_path_or_transition_gradients():
+    """The random-walk auxiliary is exactly local even for a parameter mixture."""
+    from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import trace_step
+
+    times = np.arange(5.0)
+    target = interval_target(times, np.full((5, 1), 0.2), times[:, None], ("last",))
+    reference = jnp.linspace(-0.2, 0.3, 5)[:, None]
+
+    def forbidden(*_args):
+        raise AssertionError("Zero drift must not evaluate unused gradients")
+
+    ctx = _context(target, "amala_plus", count=5)._replace(
+        amala_kappa=0.0,
+        smoothing_gradient=forbidden,
+        filtering_gradient=forbidden,
+        transition_current_value_grad_by_param=forbidden,
+        transition_next_value_grad_by_param=forbidden,
+    )
+    auxiliary = build_auxiliary(ctx, jax.random.key(910), reference, ctx.latent_free_mask)
+    candidate = reference + 0.1
+    expected = norm.logpdf(
+        np.asarray(auxiliary.auxiliary), np.asarray(candidate), np.sqrt(0.3)
+    ).sum()
+    np.testing.assert_allclose(auxiliary.path_log_density(candidate), expected, atol=1e-5)
+    result = jax.jit(lambda: trace_step(ctx, jax.random.key(911), reference, None))()
+    np.testing.assert_allclose(result.trace.root_selection.log_weights, -np.log(5), atol=1e-6)
+    np.testing.assert_array_equal(auxiliary.gradient_norms, np.zeros(5))
 
 
 @pytest.mark.parametrize("state_dependent", [False, True])
@@ -330,7 +365,9 @@ def test_pairwise_transition_matrix_matches_individual_declared_densities(state_
 
 
 @pytest.mark.parametrize("method", ["amala", "amala_plus"])
-@pytest.mark.parametrize(("steps", "mixture"), [(1, False), (4, True), (5, True)])
+@pytest.mark.parametrize(
+    ("steps", "mixture"), [(1, False), (2, False), (4, True), (5, True), (33, True)]
+)
 def test_local_root_shortcut_preserves_full_correction_and_skips_path_gradients(
     method, steps, mixture, monkeypatch
 ):
@@ -378,15 +415,20 @@ def test_local_root_shortcut_preserves_full_correction_and_skips_path_gradients(
     )
 
 
-@pytest.mark.parametrize("method", ["amala", "amala_plus"])
-def test_dsmc_batching_preserves_nonlocal_mixture_transition(method, monkeypatch):
+@pytest.mark.parametrize(
+    ("method", "kappa", "steps"),
+    [("amala", 1.0, 33), ("amala_plus", 1.0, 33), ("amala_plus", 0.0, 33)],
+)
+def test_dsmc_batching_preserves_nonlocal_mixture_transition(method, kappa, steps, monkeypatch):
     from nof1_causal_lab.models.ssm.inference.samplers.particle import dsmc
     from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import trace_step
 
-    times = np.arange(5.0)
-    target = interval_target(times, np.full((5, 1), 0.2), times[:, None], ("last",))
-    ctx = _context(target, method, count=5, mixture=True)._replace(diagnostic_weights=True)
-    path = jnp.linspace(-0.2, 0.3, 5)[:, None]
+    times = np.arange(float(steps))
+    target = interval_target(times, np.full((steps, 1), 0.2), times[:, None], ("last",))
+    ctx = _context(target, method, count=5, mixture=True)._replace(
+        amala_kappa=kappa, diagnostic_weights=True
+    )
+    path = jnp.linspace(-0.2, 0.3, steps)[:, None]
     key = jax.random.key(711)
     parallel = jax.jit(lambda: trace_step(ctx, key, path, None))()
     batched = jax.jit(lambda: trace_step(ctx, key, path, None, batch_size=2))()

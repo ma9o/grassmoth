@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 import pytest
+from scipy.stats import norm
 
 from nof1_causal_lab.artifacts.probability.families import DistributionFamily
 from nof1_causal_lab.artifacts.sampling import DsmcSpec
@@ -180,8 +181,11 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
 
 
 @pytest.mark.inference(concern="recovery")
-@pytest.mark.parametrize("method", ["amala", "amala_plus"])
-def test_interval_particle_kernel_recovers_analytic_joint_posterior(method):
+@pytest.mark.parametrize(
+    ("method", "kappa"),
+    [("amala", 0.75), ("amala_plus", 0.75), ("amala_plus", 0.0)],
+)
+def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kappa):
     target, mean, covariance = gaussian_interval_case()
     kernel = build_marginal_particle_gibbs_kernel(
         target,
@@ -190,7 +194,7 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method):
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        dsmc=DsmcSpec(dsmc_leaf_proposal=method),
+        dsmc=DsmcSpec(dsmc_leaf_proposal=method, amala_kappa=kappa),
     )
     chains = 4
     joint = jnp.asarray(np.random.default_rng(24).normal(size=(chains, len(mean))))
@@ -218,6 +222,49 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method):
     direction = np.r_[1.0, np.ones(len(mean) - 1) / (len(mean) - 1)]
     assert abs(contrast.mean() - direction @ mean) < 0.07
     assert abs(contrast.var() - direction @ covariance @ direction) < 0.04
+
+
+@pytest.mark.parametrize(
+    ("method", "kappa"),
+    [("amala", 0.75), ("amala_plus", 0.75), ("amala_plus", 0.0)],
+)
+def test_reusable_tree_levels_preserve_joint_posterior_with_padding(method, kappa):
+    """An unbalanced 33-time tree exercises multiple shared upper levels and ancestry."""
+    target, mean, covariance = gaussian_interval_case(steps=33)
+    chol = np.linalg.cholesky(covariance)
+    size = 2048
+    before = mean + np.random.default_rng(410).normal(size=(size, mean.size)) @ chol.T
+    kernel = build_marginal_particle_gibbs_kernel(
+        target,
+        num_particles=4,
+        num_parameter_particles=2,
+        param_step_size=0.3,
+        parameter_proposal="random_walk",
+        parameter_reference_path=jnp.asarray(mean[1:, None]),
+        dsmc=DsmcSpec(dsmc_leaf_proposal=method, amala_kappa=kappa, paid_mix=None),
+    )
+
+    def advance(point, key):
+        initial = initialize_interval_chain(target, point, kernel=kernel)
+        updated, _ = kernel.step_fn(initial, key)
+        return jnp.concatenate((updated.position, updated.latent_trajectory[:, 0]))
+
+    after = np.asarray(
+        jax.jit(jax.vmap(advance))(jnp.asarray(before), jax.random.split(jax.random.key(411), size))
+    )
+    initial = np.linalg.solve(chol, (before - mean).T).T
+    observed = np.linalg.solve(chol, (after - mean).T).T
+    left, right = np.triu_indices(mean.size)
+    differences = np.column_stack(
+        (
+            observed - initial,
+            observed[:, left] * observed[:, right] - initial[:, left] * initial[:, right],
+        )
+    )
+    critical = norm.isf(0.001 / (2 * differences.shape[1]))
+    uncertainty = differences.std(axis=0, ddof=1) / np.sqrt(size)
+    assert np.all(np.abs(differences.mean(axis=0)) <= critical * uncertainty)
+    assert np.all(np.mean((after - before) ** 2, axis=0) > 1e-4 * np.diag(covariance))
 
 
 def test_calendar_totals_and_grid_refinement_preserve_response_scale():

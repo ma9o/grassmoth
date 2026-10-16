@@ -129,11 +129,10 @@ def interval_target(
     )
 
 
-def gaussian_interval_case():
+def gaussian_interval_case(steps=9):
     """A generated overlapping-window panel with an analytic joint posterior."""
-    steps = 9
     times = np.arange(float(steps))
-    windows = ((0, 2), (1, 5), (4, 8))
+    windows = ((0, steps // 4), (steps // 8, 5 * steps // 8), (steps // 2, steps - 1))
     rows = np.zeros((len(windows), steps))
     starts = np.full((steps, 1), np.nan)
     for i, (first, last) in enumerate(windows):

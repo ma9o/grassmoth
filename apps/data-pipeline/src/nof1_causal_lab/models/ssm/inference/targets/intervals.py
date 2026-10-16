@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
@@ -28,6 +28,44 @@ if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
     from nof1_causal_lab.models.ssm.execution.observation_operator import ObservationGradient
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext
+
+
+class IntervalTreeLevelRuntime(NamedTuple):
+    """Array-valued level plans carried by a compiled loop over tree depths."""
+
+    left_slots: jax.Array
+    right_slots: jax.Array
+    emission_slots: jax.Array
+    observations: jax.Array
+    masks: jax.Array
+    weights: jax.Array
+
+
+def stack_interval_tree_levels(
+    levels: tuple[CompiledIntervalTreeLevel, ...], node_count: int, slot_count: int
+) -> IntervalTreeLevelRuntime:
+    """Pad inactive nodes and slots, retaining the exact emitted-factor masks."""
+    emission_count = max(level.emission_slots.shape[1] for level in levels)
+
+    def pad(values: np.ndarray, width: int, fill: int) -> np.ndarray:
+        padding = (
+            (0, node_count - values.shape[0]),
+            (0, width - values.shape[1]),
+            *((0, 0) for _ in values.shape[2:]),
+        )
+        return np.pad(values, padding, constant_values=fill)
+
+    def field(values: tuple[np.ndarray, ...], width: int, fill: int) -> jax.Array:
+        return jnp.asarray(np.stack(tuple(pad(value, width, fill) for value in values)))
+
+    return IntervalTreeLevelRuntime(
+        field(tuple(level.left_slots for level in levels), slot_count, -1),
+        field(tuple(level.right_slots for level in levels), slot_count, -1),
+        field(tuple(level.emission_slots for level in levels), emission_count, 0),
+        field(tuple(level.observations for level in levels), emission_count, 0),
+        field(tuple(level.masks for level in levels), emission_count, 0),
+        field(tuple(level.weights for level in levels), emission_count, 1),
+    )
 
 
 @dataclass(frozen=True)
@@ -117,7 +155,7 @@ class ParticleIntervalObservations:
         self,
         contexts: ParticleContext,
         statistics: jax.Array,
-        level: CompiledIntervalTreeLevel,
+        level: CompiledIntervalTreeLevel | IntervalTreeLevelRuntime,
         node: jax.Array,
     ) -> jax.Array:
         """Score emitted statistics for aligned particles, preserving parameter labels."""
@@ -130,7 +168,7 @@ class ParticleIntervalObservations:
         contexts: ParticleContext,
         left: jax.Array,
         right: jax.Array,
-        level: CompiledIntervalTreeLevel,
+        level: CompiledIntervalTreeLevel | IntervalTreeLevelRuntime,
         node: jax.Array,
     ) -> jax.Array:
         """Score all child pairs, expanding only slots emitted at this node."""
@@ -149,7 +187,7 @@ class ParticleIntervalObservations:
         self,
         contexts: ParticleContext,
         statistics: jax.Array,
-        level: CompiledIntervalTreeLevel,
+        level: CompiledIntervalTreeLevel | IntervalTreeLevelRuntime,
         node: jax.Array,
     ) -> jax.Array:
         """Evaluate already selected emissions with their joint channel laws."""

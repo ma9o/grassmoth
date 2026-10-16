@@ -54,6 +54,8 @@ class AuxiliaryKernel:
     def path_log_density(self, path: jax.Array) -> jax.Array:
         """Evaluate the actual auxiliary law at a complete candidate trajectory."""
         ctx = self.context
+        if ctx.amala_kappa == 0:
+            return jnp.sum(_masked_normal_log_prob(self.auxiliary, path, self.variance, self.mask))
         gradient = (
             ctx.filtering_gradient(path)
             if ctx.dsmc_leaf_proposal == "amala"
@@ -62,6 +64,12 @@ class AuxiliaryKernel:
         drift, _ = _drift(gradient, self.variance, self.mask, ctx.amala_kappa, ctx.amala_grad_clip)
         center = path + drift
         return jnp.sum(_masked_normal_log_prob(self.auxiliary, center, self.variance, self.mask))
+
+    def guide_log_density(self, current: jax.Array, index: jax.Array) -> jax.Array:
+        """Positive leaf guide depending only on the refreshed auxiliary and candidate."""
+        return _masked_normal_log_prob(
+            self.auxiliary[index], current, self.variance[index], self.mask[index]
+        )
 
     def local_log_density(
         self,
@@ -78,6 +86,8 @@ class AuxiliaryKernel:
         ``path_log_density``; it never silently substitutes this local gradient.
         """
         ctx = self.context
+        if ctx.amala_kappa == 0:
+            return self.guide_log_density(current, index)
         prior, prior_gradient = jax.lax.cond(
             index == 0,
             lambda: ctx.initial_value_grad_by_param(current),
@@ -187,11 +197,17 @@ def build_auxiliary(
     """Refresh the chosen auxiliary law before drawing any free particles."""
     variance = 0.5 * jnp.asarray(context.amala_delta, dtype=context.latent_dtype)[:, None]
     noise = jnp.sqrt(variance) * jax.random.normal(key, reference.shape, dtype=context.latent_dtype)
-    gradient = (
-        context.filtering_gradient(reference)
-        if context.dsmc_leaf_proposal == "amala"
-        else context.smoothing_gradient(reference)
-    )
-    drift, norms = _drift(gradient, variance, mask, context.amala_kappa, context.amala_grad_clip)
+    if context.amala_kappa == 0:
+        drift = jnp.zeros_like(reference)
+        norms = jnp.zeros(reference.shape[0], dtype=reference.dtype)
+    else:
+        gradient = (
+            context.filtering_gradient(reference)
+            if context.dsmc_leaf_proposal == "amala"
+            else context.smoothing_gradient(reference)
+        )
+        drift, norms = _drift(
+            gradient, variance, mask, context.amala_kappa, context.amala_grad_clip
+        )
     auxiliary = jnp.where(mask, reference + drift + noise, reference)
     return AuxiliaryKernel(context, reference, mask, variance, auxiliary, norms)
