@@ -196,6 +196,8 @@ class SimulateInput[RevisionT](Value):
         description="Revision supplying the authored or fitted generative law."
     )
     simulation: SimulationSpec = Field(description="Requested start, horizon, and interventions.")
+    seed: int = Field(default=0, ge=0, description="Generation seed, retained with the histories.")
+    num_replicates: int = Field(default=100, ge=1, description="Number of independent histories.")
 
 
 class SimulateOutput(Value):

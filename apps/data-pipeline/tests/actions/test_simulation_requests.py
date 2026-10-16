@@ -231,7 +231,8 @@ def test_runner_uses_model_time_binding_without_reading_panels(
     expected_origin = fit_origin if conditioned else design.start_instant
     calls = []
 
-    def generate(_model, *, start, end, assignments, time_origin, compute_budget):
+    def generate(_model, *, start, end, assignments, time_origin, compute_budget, seed, draws):
+        assert (seed, draws) == (73, 1)
         calls.append(time_origin)
         assert time_origin == expected_origin
         assert (start, end) == (design.start_day(expected_origin), design.end_day(expected_origin))
@@ -253,7 +254,7 @@ def test_runner_uses_model_time_binding_without_reading_panels(
                 "ORIGIN",
                 SimulateRequest[GitOid](
                     input=SimulateInput[GitOid](
-                        dynamical_model_spec_ref=record.revision, simulation=design
+                        dynamical_model_spec_ref=record.revision, simulation=design, seed=73, num_replicates=1
                     )
                 ),
                 state,

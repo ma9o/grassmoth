@@ -128,6 +128,8 @@ def resolve_action_inputs(
                 reasoning=request.reasoning,
                 input=SimulateInput[GitOid](
                     simulation=request.input.simulation,
+                    seed=request.input.seed,
+                    num_replicates=request.input.num_replicates,
                     dynamical_model_spec_ref=resolve(
                         request.input.dynamical_model_spec_ref, "model"
                     ),

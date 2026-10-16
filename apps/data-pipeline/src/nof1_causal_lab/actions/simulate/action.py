@@ -67,6 +67,8 @@ def simulate(
         end=end,
         assignments=assignments,
         time_origin=time_origin,
+        seed=request.seed,
+        draws=request.num_replicates,
     )
     if isinstance(batch, ObservationPreflightFailure):
         return batch
