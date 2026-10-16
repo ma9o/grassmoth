@@ -16,7 +16,6 @@ from nof1_causal_lab.artifacts.continuation import ParticleTuning, SamplerCheckp
 from nof1_causal_lab.models.ssm.inference.continuation import continued_particle_initialization, frozen_particle_tuning
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
 from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec
-from nof1_causal_lab.models.ssm.compile.state_space import SequentialRecurrences
 from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 from nof1_causal_lab.models.ssm.inference.extraction import (
     build_pmcmc_mcmc_result,
@@ -76,16 +75,6 @@ def fit_marginal_particle_gibbs(
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Run exact particle inference with resolved choices and owned warmup outputs."""
-    recurrence = panel.compiled_dynamical_model.state_space.recurrence
-    if isinstance(recurrence, SequentialRecurrences):
-        names = tuple(
-            panel.compiled_dynamical_model.states[index].name for index in recurrence.indices
-        )
-        return InitializationFailure.unavailable(
-            "DSMC requires deterministic recurrences that are affine in their deterministic "
-            "coordinates to preserve O(log T) parallel depth; unsupported states: "
-            + ", ".join(names)
-        )
     observations = panel.observations
     options = sampler.algorithm
     assert isinstance(options, MarginalParticleGibbsSpec)
@@ -214,6 +203,7 @@ def fit_marginal_particle_gibbs(
     )
     if sampler.num_samples_per_chain == 0:
         return UnretainedRun(sampler, MCMCEvidence(), run_result.compiled_step, {
+            "initialization" if continuation is None else "continued_start": run_result.starting_values,
             "warmup": run_result.warmup_chain_extra_fields, "post_warmup": run_result.chain_extra_fields,
         })
     mcmc_phase_seconds = clock() - phase_t0
@@ -315,6 +305,7 @@ def fit_marginal_particle_gibbs(
         else None,
         sampler_diagnostics=kernel_diagnostics,
         phase_extra_fields={
+            "initialization" if continuation is None else "continued_start": run_result.starting_values,
             "warmup": run_result.warmup_chain_extra_fields,
             "post_warmup": run_result.chain_extra_fields,
             "all": run_result.all_chain_extra_fields,

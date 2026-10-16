@@ -106,7 +106,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         max_scale=1.0,
     )
     step = Mock(side_effect=AssertionError("Invalid initial states must fail before sampling"))
-    monkeypatch.setattr(runner, "compile_sweeps", step)
+    monkeypatch.setattr(runner, "compile_projected_sweeps", step)
     with pytest.raises(ValueError, match=error):
         runner.run_marginal_particle_gibbs(
             target,

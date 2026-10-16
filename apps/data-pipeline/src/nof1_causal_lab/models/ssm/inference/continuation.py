@@ -24,13 +24,13 @@ def retain_state[State](state: State) -> tuple[NumericalArray, ...]:
             jax.random.key_data(value) if jax.dtypes.issubdtype(value.dtype, jax.dtypes.prng_key)
             else value
         ))
-        for value in jax.tree.leaves(state)
+        for value in jax.tree.leaves(jax.tree.map(jnp.asarray, state))
     )
 
 
 def restore_state[State](template: State, leaves: tuple[NumericalArray, ...]) -> State:
     """Reconstruct a kernel's native tree using its freshly bound structure."""
-    originals, structure = jax.tree.flatten(template)
+    originals, structure = jax.tree.flatten(jax.tree.map(jnp.asarray, template))
     restored = tuple(
         jax.random.wrap_key_data(jnp.asarray(saved.values))
         if jax.dtypes.issubdtype(original.dtype, jax.dtypes.prng_key)

@@ -33,10 +33,7 @@ def test_read_facade_serves_reads_and_rejects_actions(monkeypatch, tmp_path):
         "/api/studies/WS-READONLY/fit",
         json={
             "action": "fit",
-            "input": {
-                "dynamical_model_spec_ref": str(git_oid(1)),
-                "data_ref": {"revision": str(git_oid(2)), "replicate_index": 0},
-            },
+            "input": {'target': {'kind': 'new', 'dynamical_model_spec_ref': str(git_oid(1)), 'data_ref': {'revision': str(git_oid(2)), 'replicate_index': 0}}},
         },
     )
     assert action.status_code == 403

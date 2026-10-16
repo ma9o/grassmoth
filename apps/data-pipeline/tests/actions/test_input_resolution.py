@@ -210,10 +210,7 @@ def client(monkeypatch):
         ),
         (
             "fit",
-            {
-                "dynamical_model_spec_ref": "latest",
-                "data_ref": {"revision": "latest", "replicate_index": 0},
-            },
+            {'target': {'kind': 'new', 'dynamical_model_spec_ref': 'latest', 'data_ref': {'revision': 'latest', 'replicate_index': 0}}},
         ),
         (
             "simulate",
@@ -409,10 +406,7 @@ def test_latest_reuses_explicit_saved_call_and_pinned_poll_survives_newer_model(
     path = "/api/studies/LATEST/fit"
     arguments = {
         "action": "fit",
-        "input": {
-            "dynamical_model_spec_ref": "latest",
-            "data_ref": {"revision": "latest", "replicate_index": 0},
-        },
+        "input": {'target': {'kind': 'new', 'dynamical_model_spec_ref': 'latest', 'data_ref': {'revision': 'latest', 'replicate_index': 0}}},
     }
     assert http.post(path, json=arguments).text == saved.commit_id
     assert not dispatched
@@ -421,7 +415,7 @@ def test_latest_reuses_explicit_saved_call_and_pinned_poll_survives_newer_model(
     assert http.post(path, json=request.model_dump(mode="json")).text == saved.commit_id
     response = http.post(path, json=arguments)
     assert response.status_code == 200
-    assert dispatched[0].input.dynamical_model_spec_ref == models[0].revision
+    assert dispatched[0].input.target.dynamical_model_spec_ref == models[0].revision
     assert len(dispatched) == 1
 
 
@@ -432,18 +426,12 @@ def test_latest_reuses_explicit_saved_call_and_pinned_poll_survives_newer_model(
         (
             "fit",
             "model",
-            {
-                "dynamical_model_spec_ref": "latest",
-                "data_ref": {"revision": str(git_oid(1)), "replicate_index": 0},
-            },
+            {'target': {'kind': 'new', 'dynamical_model_spec_ref': 'latest', 'data_ref': {'revision': str(git_oid(1)), 'replicate_index': 0}}},
         ),
         (
             "fit",
             "panel",
-            {
-                "dynamical_model_spec_ref": str(git_oid(1)),
-                "data_ref": {"revision": "latest", "replicate_index": 0},
-            },
+            {'target': {'kind': 'new', 'dynamical_model_spec_ref': str(git_oid(1)), 'data_ref': {'revision': 'latest', 'replicate_index': 0}}},
         ),
     ],
 )
@@ -484,10 +472,7 @@ def test_latest_does_not_resurrect_retracted_or_stale_panel(study, client, inval
             path,
             json={
                 "action": "fit",
-                "input": {
-                    "dynamical_model_spec_ref": "latest",
-                    "data_ref": {"revision": "latest", "replicate_index": 0},
-                },
+                "input": {'target': {'kind': 'new', 'dynamical_model_spec_ref': 'latest', 'data_ref': {'revision': 'latest', 'replicate_index': 0}}},
             },
         ).status_code
         == 422
@@ -499,10 +484,7 @@ def test_latest_does_not_resurrect_retracted_or_stale_panel(study, client, inval
             path,
             json={
                 "action": "fit",
-                "input": {
-                    "dynamical_model_spec_ref": models[-1].revision,
-                    "data_ref": {"revision": panel.revision, "replicate_index": 0},
-                },
+                "input": {'target': {'kind': 'new', 'dynamical_model_spec_ref': models[-1].revision, 'data_ref': {'revision': panel.revision, 'replicate_index': 0}}},
             },
         ).status_code
         == 200
@@ -648,9 +630,6 @@ def test_only_http_inputs_accept_latest():
         adapter.validate_python(
             {
                 "action": "fit",
-                "input": {
-                    "dynamical_model_spec_ref": "latest",
-                    "data_ref": {"revision": git_oid(1), "replicate_index": 0},
-                },
+                "input": {'target': {'kind': 'new', 'dynamical_model_spec_ref': 'latest', 'data_ref': {'revision': git_oid(1), 'replicate_index': 0}}},
             }
         )

@@ -10,9 +10,13 @@ import numpyro.distributions as dist
 
 from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec, NormalLawSpec, StudentTLawSpec
 from nof1_causal_lab.models.ssm import compiled_access as numeric
+from nof1_causal_lab.artifacts.model.likelihood import DistributionFamily
+from nof1_causal_lab.artifacts.sampling import NutsDASpec, SamplerSpec
+from nof1_causal_lab.models.ssm.compile.state_space import SequentialRecurrences
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
+    from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
 
 LOCATION_REACH_SIGMAS = 6.0
@@ -28,6 +32,26 @@ class ObservationPreflightFailure:
     def rejected(cls, message: str) -> Self:
         """Own the rejection value shared by observation preparation and fitting."""
         return cls(message)
+
+
+def validate_sampler_support(
+    compiled: CompiledDynamicalModel, sampler: SamplerSpec,
+) -> ObservationPreflightFailure | None:
+    """Own sampler-specific restrictions, including checks before remote allocation."""
+    if DistributionFamily.STUDENT_T in numeric.diffusion_families(compiled):
+        return ObservationPreflightFailure.rejected(
+            "Exact inference currently requires Gaussian latent diffusion for every state."
+        )
+    if isinstance(sampler.algorithm, NutsDASpec):
+        return None
+    recurrence = compiled.state_space.recurrence
+    if isinstance(recurrence, SequentialRecurrences):
+        names = tuple(compiled.states[index].name for index in recurrence.indices)
+        return ObservationPreflightFailure.rejected(
+            "DSMC requires deterministic recurrences that are affine in their deterministic "
+            "coordinates to preserve O(log T) parallel depth; unsupported states: " + ", ".join(names)
+        )
+    return None
 
 
 def validate_observation_support_for_fit(panel: BoundPanel) -> ObservationPreflightFailure | None:

@@ -10,7 +10,7 @@ import jax.numpy as jnp
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.compute.batching import compile_from_estimate, compiled_memory
-from nof1_causal_lab.compute.budget import MemoryDemand
+from nof1_causal_lab.compute.budget import MemoryDemand, NO_MEMORY_DEMAND
 from nof1_causal_lab.compute.traced_memory import traced_memory
 
 if TYPE_CHECKING:
@@ -78,6 +78,7 @@ class SweepPlan:
     block_size: int
     batch_size: int
     compiled_step: Compiled
+    memory: MemoryDemand = NO_MEMORY_DEMAND
     projection: Compiled | None = None
 
 
@@ -91,6 +92,7 @@ def compile_sweeps[Carry](
     num_samples: int,
     max_batch_size: int,
     budget: ComputeBudget,
+    additional_overhead: MemoryDemand = NO_MEMORY_DEMAND,
 ) -> SweepPlan:
     """Check compiled peak memory plus histories, without timing or executing a sweep.
 
@@ -170,13 +172,18 @@ def compile_sweeps[Carry](
     # combined diagnostics can also coexist on device. These do not scale with
     # node concurrency and must be reserved only once.
     overhead = MemoryDemand(
-        host_bytes=history_bytes + transfer_bytes,
-        device_bytes=2 * history_bytes,
+        host_bytes=history_bytes + transfer_bytes + additional_overhead.host_bytes,
+        device_bytes=2 * history_bytes + additional_overhead.device_bytes,
     )
-    return compile_from_estimate(
+    chosen = compile_from_estimate(
         compile_plan,
         single_memory=single_memory,
         max_batch_size=max_batch_size,
         budget=budget,
         overhead=overhead,
-    ).executable
+    )
+    from dataclasses import replace
+    return replace(chosen.executable, memory=MemoryDemand(
+        host_bytes=chosen.memory.host_bytes + overhead.host_bytes,
+        device_bytes=chosen.memory.device_bytes + overhead.device_bytes,
+    ))

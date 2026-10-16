@@ -71,6 +71,7 @@ class ParticleChainResult:
     chain_extra_fields: Mapping[str, jnp.ndarray]
     warmup_chain_extra_fields: Mapping[str, jnp.ndarray]
     all_chain_extra_fields: Mapping[str, jnp.ndarray]
+    starting_values: Mapping[str, jnp.ndarray]
     complete_log_posterior_history: jnp.ndarray
     warmup_complete_log_posterior_history: jnp.ndarray
     all_complete_log_posterior_history: jnp.ndarray
@@ -260,8 +261,6 @@ def run_marginal_particle_gibbs(
             f"{nonfinite_chains}. Every move would be rejected against a non-finite "
             "reference, so the sampler cannot recover from this initialization."
         )
-    initial_param_step_size = states.param_step_size
-    initial_latent_delta = states.latent_delta
     levels = 1 if tempering is None else tempering.spec.num_temperatures
     betas = jnp.linspace(1.0, 0.0, levels, dtype=states.position.dtype)
     cold_indices = jnp.arange(num_chains) * levels
@@ -291,11 +290,13 @@ def run_marginal_particle_gibbs(
         moments,
     )
     if continuation is not None and num_warmup == 0:
-        initial = restore_state(initial, continuation.native_state)
+        initial = restore_state(initial._replace(moments=None), continuation.native_state)._replace(moments=moments)
         scale = kernel.dsmc.latent_step
         if isinstance(scale, FixedLatentStepSpec):
             delta = jnp.full_like(initial.chains.latent_delta, scale.delta)
             initial = initial._replace(chains=initial.chains._replace(latent_delta=delta), adaptation=initial.adaptation._replace(delta=delta))
+    initial_param_step_size = initial.chains.param_step_size[cold_indices]
+    initial_latent_delta = initial.chains.latent_delta[cold_indices]
     diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=kernel.diagnostic_metrics)
 
     def step_factory(
@@ -494,6 +495,11 @@ def run_marginal_particle_gibbs(
         latent_summary = _latent_summary_from_chain_moments(mean, jnp.sqrt(variance))
     complete_lp = run.history.posterior["log_posterior"]
     return ParticleChainResult(
+        starting_values={
+            "positions": initial.chains.position[cold_indices],
+            "paths": initial.chains.latent_trajectory[cold_indices],
+            "log_joint": initial.chains.complete_log_posterior[cold_indices],
+        },
         grouped_positions=run.history.posterior["positions"],
         observation_log_probs=run.history.posterior["observation_log_probs"],
         chain_extra_fields=posterior_extra,
@@ -513,7 +519,7 @@ def run_marginal_particle_gibbs(
         compiled_step=plan.compiled_step,
         first_step_seconds=run.first_step_seconds,
         sampling_loop_seconds=run.sampling_loop_seconds,
-        final_state=retain_state(final), random_key=final.random_key,
+        final_state=retain_state(final._replace(moments=None)), random_key=final.random_key,
         last_parameters=final.chains.position[cold_indices],
         last_paths=final.chains.latent_trajectory[cold_indices],
         tempering=None

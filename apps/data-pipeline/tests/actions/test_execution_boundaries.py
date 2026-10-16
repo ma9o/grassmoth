@@ -221,7 +221,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     monkeypatch.setattr(
         config,
         "get_config",
-        lambda: replace(configured, inference=replace(configured.inference, hardware=hardware)),
+        lambda: replace(configured, inference=replace(configured.inference, sampler=configured.inference.sampler.revised(hardware=hardware))),
     )
     local_fit = Mock(side_effect=fit)
     modal_fit = Mock(side_effect=lambda _hardware, **kwargs: fit(**kwargs))
@@ -236,8 +236,8 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
         _run_fit(
             store,
             pins,
-            FitSettingsSpec(),
-            DataRef[GitOid, int](revision=pins["panel"], replicate_index=0),
+            FitInput(target=NewFitTarget(dynamical_model_spec_ref=pins["model"],
+                data_ref=DataRef[GitOid, int](revision=pins["panel"], replicate_index=0)), settings=FitSettingsSpec()),
         )
     )
     assert effects.effects.produced[0].derived_from == pins

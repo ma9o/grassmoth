@@ -77,15 +77,29 @@ def fit(
         settings=sampler, runtime=runtime, phases=tuple(phases),
     )
     if isinstance(result, UnretainedRun):
+        phase_fields = {
+            phase: {name: NumericalArray.from_numpy(np.asarray(value)) for name, value in fields.items()}
+            for phase, fields in result.phase_extra_fields.items()
+        }
+        if previous is not None:
+            prior = previous.inference
+            return {
+                "_dynamical_model_spec": None,
+                "metadata": prior.core.inference_metadata.revised(
+                    duration_seconds=fitted["duration_seconds"],
+                    segments=(*prior.core.inference_metadata.segments, segment),
+                ),
+                "evidence": prior.evidence.revised(phase_extra_fields={
+                    **{f"previous/{name}": fields for name, fields in prior.evidence.phase_extra_fields.items()},
+                    **phase_fields,
+                }),
+            }
         return {
             "_dynamical_model_spec": None,
             "metadata": InferenceMetadata(distribution=None, num_samples_total=0, num_chains=sampler.num_chains,
                 duration_seconds=fitted["duration_seconds"], engine=result.evidence, sampler_diagnostics=None,
                 segments=(segment,)),
-            "evidence": InferenceEvidence(phase_extra_fields={
-                phase: {name: NumericalArray.from_numpy(np.asarray(value)) for name, value in fields.items()}
-                for phase, fields in result.phase_extra_fields.items()
-            }),
+            "evidence": InferenceEvidence(phase_extra_fields=phase_fields),
         }
     native = result.diagnostics
 
@@ -151,7 +165,9 @@ def fit(
         # fields describe the full chain; each segment retains its native telemetry.
         evidence = evidence.revised(
             chain_extra_fields={name: NumericalArray.from_numpy(np.concatenate((prior_evidence.chain_extra_fields[name].values, value.values), axis=1))
-                for name, value in evidence.chain_extra_fields.items() if name in prior_evidence.chain_extra_fields},
+                for name, value in evidence.chain_extra_fields.items()
+                if name in prior_evidence.chain_extra_fields
+                and prior_evidence.chain_extra_fields[name].values.shape[2:] == value.values.shape[2:]},
             observation_log_probs=NumericalArray.from_numpy(np.concatenate((prior_evidence.observation_log_probs.values, evidence.observation_log_probs.values), axis=1))
                 if prior_evidence.observation_log_probs is not None and evidence.observation_log_probs is not None else None,
             phase_extra_fields={

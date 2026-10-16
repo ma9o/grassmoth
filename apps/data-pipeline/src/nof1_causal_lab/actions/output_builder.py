@@ -148,12 +148,21 @@ def build_output(
                 },
             )
         case "fit":
+            assert attempt.request is not None
+            from nof1_causal_lab.actions.contracts.bodies import ContinueFitTarget
+            from nof1_causal_lab.actions.fit.selection import prior_fit
             from nof1_causal_lab.artifacts.reports.inference import FitCheckReport, InferenceReport
 
-            dynamical_model_spec = read_model(store, state.current["model"].revision)
+            dynamical_model_spec = (
+                read_model(store, state.current["model"].revision)
+                if effects.produced
+                else prior_fit(store, attempt.request.input.target.fit_ref).dynamical_model_spec
+                if isinstance(attempt.request.input.target, ContinueFitTarget)
+                else None
+            )
             inference = store.read_report(effects.reports["inference"], InferenceReport)
             return FitOutput(
-                dynamical_model_spec=dynamical_model_spec if effects.produced else None,
+                dynamical_model_spec=dynamical_model_spec,
                 checks=store.read_report(effects.reports["checks"], FitCheckReport),
                 inference=inference,
             )

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
+    from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.models.ssm.compile.inputs import (
         FitCompilationResult,
         ModelCompilationResult,
@@ -95,12 +96,13 @@ def check_specification(
 
 
 def check_model_data(
-    inputs: FitCompilationResult, panel: ObservationDataset, *, time_origin: datetime
+    inputs: FitCompilationResult, panel: ObservationDataset, *, time_origin: datetime,
+    sampler: SamplerSpec | None = None,
 ) -> tuple[SpecificationAssessment, ...]:
     """Evaluate fitting input compatibility without running a sampler or simulator."""
     from nof1_causal_lab.models.ssm.compile.inputs import IncompleteModel
     from nof1_causal_lab.models.ssm.preparation.panel import PreparedFit, prepare_fit
-    from nof1_causal_lab.models.ssm.preparation.preflight import validate_observations_for_fit
+    from nof1_causal_lab.models.ssm.preparation.preflight import validate_observations_for_fit, validate_sampler_support
 
     prepared = prepare_fit(inputs, panel, time_origin=time_origin)
     if not isinstance(prepared, PreparedFit):
@@ -117,6 +119,8 @@ def check_model_data(
             ),
         )
     failure = validate_observations_for_fit(prepared.inputs.prior_runtime_bundle, prepared.panel)
+    if failure is None and sampler is not None:
+        failure = validate_sampler_support(prepared.panel.compiled_dynamical_model, sampler)
     finding: SpecificationAssessment = (
         Evaluated(code="fit_preflight", subject="model", outcome="failed", evidence=failure.message)
         if failure is not None

@@ -29,5 +29,6 @@ def fit_source(store: ArtifactStore, target: FitTarget[GitOid]) -> NewFitTarget[
         attempt = repository.record(target.fit_ref).record.attempt
         if attempt.action != "fit" or not isinstance(attempt.outcome, Applied):
             raise StudyLookupError("Continuing requires a successful fit revision")
+        assert attempt.request is not None
         target = attempt.request.input.target
     return target

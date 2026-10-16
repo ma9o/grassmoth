@@ -109,7 +109,7 @@ class PrepareDataInput[RevisionT, SourceT](Value):
     extraction: Mapping[IndicatorId, ExtractionSpec] = Field(
         min_length=1,
         description=(
-            "Computed rules or semantic extraction instructions keyed by the model's "
+            "Computed, recorded-reading or semantic extraction instructions keyed by the model's "
             "observation IDs."
         ),
     )
@@ -176,7 +176,7 @@ class FitOutput(Value):
     """A conditioned model, its completed checks, and self-contained inference evidence."""
 
     dynamical_model_spec: DynamicalModelSpec | None = Field(
-        description="The conditioned model, or null when this fit retained no additional draws."
+        description="The combined conditioned model, or null when this fit and its parents have no retained draws. Zero-draw continuations reuse their parent's model without producing a revision."
     )
     checks: FitCheckReport = Field(
         description="Completed compatibility and question findings for the selected history."

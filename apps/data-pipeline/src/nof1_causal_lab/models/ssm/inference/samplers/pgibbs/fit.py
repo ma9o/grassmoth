@@ -20,7 +20,6 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ParticleGibbsDiagnostics,
 )
 from nof1_causal_lab.artifacts.sampling import MetropolisHastingsSpec, ParticleGibbsSpec
-from nof1_causal_lab.models.ssm.compile.state_space import SequentialRecurrences
 from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 from nof1_causal_lab.models.ssm.inference.extraction import extract_grouped_public_samples
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
@@ -72,16 +71,6 @@ def fit_particle_gibbs(
     """Initialize paired draws with LAPS, then retain only exact blocked PG updates."""
     options = sampler.algorithm
     assert isinstance(options, ParticleGibbsSpec)
-    recurrence = panel.compiled_dynamical_model.state_space.recurrence
-    if isinstance(recurrence, SequentialRecurrences):
-        names = tuple(
-            panel.compiled_dynamical_model.states[index].name for index in recurrence.indices
-        )
-        return InitializationFailure.unavailable(
-            "DSMC requires deterministic recurrences that are affine in their deterministic "
-            "coordinates to preserve O(log T) parallel depth; unsupported states: "
-            + ", ".join(names)
-        )
     trace_key, laps_key, sample_key = jax.random.split(jax.random.key(sampler.seed), 3)
     with inference_phase("pgibbs", "building_target", clock=clock):
         problem = build_particle_problem(

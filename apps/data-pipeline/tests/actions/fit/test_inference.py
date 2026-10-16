@@ -126,3 +126,81 @@ def test_fit_model_logs_runtime_summary_and_diagnostic_boundaries(monkeypatch, c
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledFitInputs
     from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
+
+
+def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_evidence(monkeypatch):
+    from nof1_causal_lab.actions.contracts.bodies import FitOutput
+    from nof1_causal_lab.actions.fit.action import fit
+    from nof1_causal_lab.artifacts.arrays import NumericalArray
+    from nof1_causal_lab.artifacts.continuation import JointTuning, SamplerCheckpoint
+    from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms
+    from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
+    from nof1_causal_lab.artifacts.reports.inference import (
+        FitCheckReport, InferenceReport, InferenceReportCore, InferenceReportDetail,
+    )
+    from nof1_causal_lab.artifacts.reports.model_checks import QuestionCheckReport
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import MCMCEvidence
+    from nof1_causal_lab.models.ssm.inference.diagnostics.convergence import chain_convergence
+    from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
+    from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior, ProductionDiagnostics, UnretainedRun
+    from tests.support.inference import parameter_draws
+
+    model = _sleep_state_model()
+    panel = _make_panel(compile_fit_fixture(model))
+    dataset = ObservationDataset.from_frame(pl.DataFrame(panel.rows), tuple(item.observation for item in panel.compiled_dynamical_model.observations), time_origin=panel.time_origin)
+    settings = SamplerSpec(num_chains=2, num_warmup=0, num_samples_per_chain=2, hardware="local")
+    arrays = {}
+
+    def write(values):
+        identity = str(len(arrays))
+        arrays[identity] = values
+        return identity
+
+    def posterior(count, offset):
+        parameters = {name: values + offset for name, values in parameter_draws(model, 2 * count).items()}
+        paths = jnp.arange(2 * count * 2 * len(panel.compiled_dynamical_model.states), dtype=jnp.float32).reshape(2 * count, 2, -1) + offset
+        checkpoint = SamplerCheckpoint(settings=settings.revised(num_samples_per_chain=count),
+            parameters=NumericalArray.from_numpy(np.zeros((2, 1))),
+            paths=NumericalArray.from_numpy(np.asarray(paths.reshape(2, count, 2, -1)[:, -1])),
+            random_key=NumericalArray.from_numpy(np.array([0, offset], dtype=np.uint32)),
+            native_state=(), tuning=JointTuning())
+        return MCMCPosterior.from_run(draws=JointPosteriorDraws(parameters, paths),
+            diagnostics=ProductionDiagnostics(checkpoint=checkpoint,
+                mcmc=TrajectoryMCMCResult(chain_samples={name: values.reshape(2, count, *values.shape[1:]) for name, values in parameters.items()},
+                    chain_extra_fields={}, num_chains=2, num_samples=count),
+                observation_log_probs=jnp.full((2, count, 2), offset)))
+
+    def execute(result, count, previous=None):
+        monkeypatch.setattr(stage5_inference, "fit_model", lambda *_args, **_kwargs: {
+            "fitted": True, "duration_seconds": 1., "result": result, "panel": panel,
+        })
+        return fit(selection=StructuralSelection(model, None), data_for_model=dataset,
+            time_origin=panel.time_origin, sampler=settings.revised(num_samples_per_chain=count),
+            array_writer=write, array_loader=arrays.__getitem__, compute_loo_diagnostics=True,
+            previous=previous)
+
+    def output(result):
+        return FitOutput(dynamical_model_spec=result["_dynamical_model_spec"],
+            checks=FitCheckReport(data=DataProfileReport(indicators={}, findings=()), preflight=(), question=QuestionCheckReport(findings=())),
+            inference=InferenceReport(evidence=result["evidence"],
+                core=InferenceReportCore(inference_metadata=result["metadata"], inference_diagnostics=None,
+                    convergence=chain_convergence(None), posterior_marginals=(), prior_densities={}),
+                detail=InferenceReportDetail()))
+
+    first = execute(posterior(2, 1), 2)
+    standalone = execute(posterior(1, 5), 1)
+    combined = execute(posterior(1, 5), 1, output(first))
+    identity = first["metadata"].distribution
+    old = empirical_atoms(first["_dynamical_model_spec"].distributions[identity]).reshape(2, 2, -1)
+    new = empirical_atoms(standalone["_dynamical_model_spec"].distributions[identity]).reshape(2, 1, -1)
+    atoms = empirical_atoms(combined["_dynamical_model_spec"].distributions[identity]).reshape(2, 3, -1)
+    np.testing.assert_array_equal(atoms, np.concatenate((old, new), axis=1))
+    assert combined["metadata"].num_samples_total == 6
+    assert [(segment.start, segment.stop) for segment in combined["metadata"].segments] == [(0, 2), (2, 3)]
+    np.testing.assert_array_equal(combined["evidence"].observation_log_probs.values[0, :, 0], [1, 1, 5])
+    zero = execute(UnretainedRun(settings, MCMCEvidence(), None, {}), 0, output(combined))
+    assert zero["_dynamical_model_spec"] is None
+    assert zero["metadata"].num_samples_total == 6
+    assert zero["metadata"].segments[-1].start == zero["metadata"].segments[-1].stop == 3
+    assert zero["evidence"].checkpoint == combined["evidence"].checkpoint
+    np.testing.assert_array_equal(zero["evidence"].observation_log_probs.values, combined["evidence"].observation_log_probs.values)

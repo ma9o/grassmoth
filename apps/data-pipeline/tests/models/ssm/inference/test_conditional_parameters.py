@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nof1_causal_lab.artifacts.sampling import MetropolisHastingsSpec, NutsDASpec
+from nof1_causal_lab.artifacts.sampling import MetropolisHastingsSpec, ConditionalNutsSpec
 from nof1_causal_lab.models.ssm.inference.samplers.pgibbs.parameters import (
     metropolis_kernel,
     nuts_kernel,
@@ -26,7 +26,7 @@ def test_conditional_parameter_update_preserves_joint_posterior_and_freezes_adap
     kernel = (
         metropolis_kernel(target, MetropolisHastingsSpec(), preconditioner, warmup)
         if method == "mh"
-        else nuts_kernel(target, NutsDASpec(), preconditioner, warmup)
+        else nuts_kernel(target, ConditionalNutsSpec(), preconditioner, warmup)
     )
     center = jnp.asarray(mean)
     loading = jnp.asarray(covariance[1:, 0] / covariance[0, 0])

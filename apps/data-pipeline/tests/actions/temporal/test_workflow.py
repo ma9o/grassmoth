@@ -332,7 +332,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 assert records[5].record.attempt.action == "fit"
                 assert records[5].record.attempt.request is not None
                 assert (
-                    records[5].record.attempt.request.input.dynamical_model_spec_ref
+                    records[5].record.attempt.request.input.target.dynamical_model_spec_ref
                     == model_revision
                 )
                 assert all("move" not in record.model_dump() for record in records)

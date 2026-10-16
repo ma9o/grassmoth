@@ -68,10 +68,6 @@ def build_particle_problem(
     exact_constraints = compile_exact_state_constraints(
         compiled_dynamical_model, observations, input_values=panel.input_values
     )
-    if DistributionFamily.STUDENT_T in numeric.diffusion_families(compiled_dynamical_model):
-        raise ValueError(
-            "Particle inference currently requires Gaussian latent diffusion for every state."
-        )
     scientific_parameters, site_info, public_sites = prepare_model_parameters(
         priors, panel, trace_key, reparam
     )

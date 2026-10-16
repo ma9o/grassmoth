@@ -12,6 +12,9 @@ import jax.numpy as jnp
 import numpy as np
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.compute.batching import compiled_memory
+from nof1_causal_lab.compute.budget import MemoryDemand
+from nof1_causal_lab.compute.traced_memory import traced_memory
 from nof1_causal_lab.models.ssm.inference.samplers.progress import (
     inference_phase,
     log_inference_event,
@@ -62,17 +65,31 @@ def compile_projected_sweeps[Carry](
     def project(position: jax.Array, path: jax.Array) -> jax.Array:
         return target.observation_log_probs(target.context(position, target.times), path, target.observations)
 
+    positions = jax.ShapeDtypeStruct((block_size, num_chains, target.initial_position.size), target.initial_position.dtype)
+    paths = jax.ShapeDtypeStruct((block_size, num_chains, len(target.times), target.independent_mask.shape[-1]), path_dtype)
+    projection_trace = jax.jit(jax.vmap(jax.vmap(project))).trace(positions, paths)
+    estimate = traced_memory(projection_trace.jaxpr)
+    shape = projection_trace.out_info
+    transfer = shape.size * shape.dtype.itemsize
+    retained = transfer // block_size * num_samples
+    overhead = MemoryDemand(host_bytes=estimate.host_bytes + retained + transfer,
+                            device_bytes=estimate.device_bytes + 2 * retained)
+
     def compile_projection() -> Compiled:
         with inference_phase(label, "compiling_observation_projection", clock=clock):
-            positions = jax.ShapeDtypeStruct((block_size, num_chains, target.initial_position.size), target.initial_position.dtype)
-            paths = jax.ShapeDtypeStruct((block_size, num_chains, len(target.times), target.independent_mask.shape[-1]), path_dtype)
-            return jax.jit(jax.vmap(jax.vmap(project))).lower(positions, paths).compile()
+            return projection_trace.lower().compile()
 
     with ThreadPoolExecutor(max_workers=1) as executor:
-        projection = executor.submit(copy_context().run, compile_projection)
+        future = executor.submit(copy_context().run, compile_projection)
         plan = compile_sweeps(step_factory, initial, num_warmup=num_warmup, num_samples=num_samples,
-            max_batch_size=max_batch_size, budget=budget)
-        return replace(plan, projection=projection.result())
+            max_batch_size=max_batch_size, budget=budget, additional_overhead=overhead)
+        projection = future.result()
+    actual = compiled_memory(projection)
+    demand = MemoryDemand(host_bytes=plan.memory.host_bytes - estimate.host_bytes + actual.host_bytes,
+                          device_bytes=plan.memory.device_bytes - estimate.device_bytes + actual.device_bytes)
+    if not budget.capacity(demand, limit=1):
+        raise MemoryError("Sweep and observation projection exceed the numerical execution memory budget")
+    return replace(plan, projection=projection, memory=demand)
 
 
 def run_sweeps[Carry](

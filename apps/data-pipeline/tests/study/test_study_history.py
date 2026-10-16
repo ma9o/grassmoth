@@ -404,7 +404,7 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
         elif action == "fit":
             request = FitRequest[GitOid](
                 input=FitInput[GitOid].model_validate(
-                    {**inputs, "data_ref": {"revision": inputs["data_ref"], "replicate_index": 0}}
+                    {"target": {**inputs["target"], "data_ref": {"revision": inputs["target"]["data_ref"], "replicate_index": 0}}}
                 )
             )
             if status == "raised":
@@ -466,7 +466,7 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
         revision(
             4,
             "fit",
-            {"dynamical_model_spec_ref": oid(1), "data_ref": oid(4)},
+            {'target': {'kind': 'new', 'dynamical_model_spec_ref': oid(1), 'data_ref': oid(4)}},
             ("model", 5, {"model": 1, "panel": 4}),
         ),
         revision(
@@ -478,7 +478,7 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
             ("panel", 4, {"raw_data": 3}),
         ),
         revision(
-            6, "fit", {"dynamical_model_spec_ref": oid(6), "data_ref": oid(4)}, status="raised"
+            6, "fit", {'target': {'kind': 'new', 'dynamical_model_spec_ref': oid(6), 'data_ref': oid(4)}}, status="raised"
         ),
         revision(8, "edit_model", {"parent_ref": oid(6)}, ("model", 8, {"model": 6})),
         revision(
@@ -500,7 +500,7 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
             revision(
                 9,
                 "fit",
-                {"dynamical_model_spec_ref": oid(106), "data_ref": oid(999)},
+                {'target': {'kind': 'new', 'dynamical_model_spec_ref': oid(106), 'data_ref': oid(999)}},
                 status="raised",
             ),
             revision(10, "model_diff", {"before_ref": oid(5), "after_ref": oid(6)}),

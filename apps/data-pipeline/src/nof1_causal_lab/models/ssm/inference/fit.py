@@ -19,6 +19,7 @@ from nof1_causal_lab.models.ssm.inference.reparameterization import AutoReparam
 from nof1_causal_lab.models.ssm.preparation.preflight import (
     ObservationPreflightFailure,
     validate_observations_for_fit,
+    validate_sampler_support,
 )
 
 if TYPE_CHECKING:
@@ -49,6 +50,9 @@ def fit(
 ) -> MCMCPosterior | UnretainedRun | ObservationPreflightFailure | InitializationFailure:
     """Dispatch exact joint inference through the selected algorithm's owned settings."""
     failure = validate_observations_for_fit(priors, panel)
+    if failure is not None:
+        return failure
+    failure = validate_sampler_support(panel.compiled_dynamical_model, sampler)
     if failure is not None:
         return failure
     resolved_reparam = AutoReparam(centered=0.0) if reparam == "auto" else reparam

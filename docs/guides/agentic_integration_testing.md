@@ -177,7 +177,7 @@ process — no need to bounce the whole stack. If the supervisor was started wit
 `up --no-deps web`, `process-compose project update` can disable its dependency
 processes; check that Temporal is still running afterward.
 
-For local-study GPU fits, select `inference.hardware: L40S` (the default) in
+For local-study GPU fits, select `inference.sampler.hardware: L40S` (the default) in
 [`config.yaml`](../../apps/data-pipeline/config.yaml) and restart the worker.
 Use `local` to fit on this machine; the other
 [hardware enum values](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/sampling.py)

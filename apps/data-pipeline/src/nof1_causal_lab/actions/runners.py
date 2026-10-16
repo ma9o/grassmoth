@@ -72,7 +72,7 @@ async def _run_fit(
     from nof1_causal_lab.actions.checks import check_model_data
     from nof1_causal_lab.models.ssm.compile.inputs import compile_ssm_inputs_from_model
     from nof1_causal_lab.artifacts.reports.checks import Evaluated
-    findings = check_model_data(compile_ssm_inputs_from_model(selection), history.observations, time_origin=history.time_origin)
+    findings = check_model_data(compile_ssm_inputs_from_model(selection), history.observations, time_origin=history.time_origin, sampler=sampler)
     if any(not isinstance(item, Evaluated) or item.outcome != "passed" for item in findings):
         raise ModelFitError("Fit preflight rejected the inputs before compute allocation", diagnostics={"findings": [item.model_dump(mode="json") for item in findings]})
 
@@ -99,7 +99,14 @@ async def _run_fit(
     conditioned = result["_dynamical_model_spec"]
     evidence = result["evidence"]
     if conditioned is None:
-        report = read_inference_report(store, pins["model"], evidence, result["metadata"])
+        report = (
+            read_inference_report(store, pins["model"], evidence, result["metadata"])
+            if previous is None
+            else previous.inference.revised(
+                evidence=evidence,
+                core=previous.inference.core.revised(inference_metadata=result["metadata"]),
+            )
+        )
         effects = ActionEffects(reports={"inference": store.write_report(report)})
     else:
         info = store.write_artifact(
