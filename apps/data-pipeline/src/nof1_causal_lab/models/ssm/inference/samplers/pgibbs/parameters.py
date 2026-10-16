@@ -20,7 +20,7 @@ from numpyro.infer.hmc import HMCState, hmc
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from nof1_causal_lab.artifacts.sampling import MetropolisHastingsSpec, ConditionalNutsSpec
+    from nof1_causal_lab.artifacts.sampling import ConditionalNutsSpec, MetropolisHastingsSpec
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
 

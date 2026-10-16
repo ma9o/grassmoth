@@ -25,8 +25,8 @@ from nof1_causal_lab.models.ssm.preparation.preflight import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
+    from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.inference.types import (

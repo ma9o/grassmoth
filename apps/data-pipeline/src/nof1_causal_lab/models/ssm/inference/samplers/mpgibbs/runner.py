@@ -12,15 +12,13 @@ import jax.random as random
 from blackjax.adaptation.step_size import dual_averaging_adaptation
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
-from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.sampling import FixedLatentStepSpec
-from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
-from nof1_causal_lab.models.ssm.inference.continuation import retain_state, restore_state
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ParticleWeightMetric,
     ReplicaSwapCounts,
     TemperingDiagnostics,
 )
+from nof1_causal_lab.artifacts.sampling import FixedLatentStepSpec
+from nof1_causal_lab.models.ssm.inference.continuation import restore_state, retain_state
 from nof1_causal_lab.models.ssm.inference.mcmc_state import (
     TrajectoryMCMCState,
     _adapt_scale,
@@ -37,21 +35,26 @@ from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.tempering import (
 from nof1_causal_lab.models.ssm.inference.samplers.particle.adaptation import (
     DsmcAdaptation,
     adapt_scales,
-    initialize_adaptation,
     initial_delta,
+    initialize_adaptation,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.particle.diagnostics import (
     build_particle_diagnostic_flags,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.particle.math import _masked_mean
 from nof1_causal_lab.models.ssm.inference.samplers.progress import inference_phase
-from nof1_causal_lab.models.ssm.inference.samplers.sweeps import compile_projected_sweeps, run_sweeps
+from nof1_causal_lab.models.ssm.inference.samplers.sweeps import (
+    compile_projected_sweeps,
+    run_sweeps,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from jax.stages import Compiled
 
+    from nof1_causal_lab.artifacts.arrays import NumericalArray
+    from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.conditioning import ExactStateConstraints
     from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
@@ -278,7 +281,9 @@ def run_marginal_particle_gibbs(
         moments = (jnp.zeros_like(example), jnp.zeros_like(example), jnp.asarray(0))
     initial = _Population(
         states,
-        key if continuation is None else jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values)),
+        key
+        if continuation is None
+        else jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values)),
         jnp.asarray(0),
         betas,
         initialize_adaptation(states.latent_delta),
@@ -290,11 +295,16 @@ def run_marginal_particle_gibbs(
         moments,
     )
     if continuation is not None and num_warmup == 0:
-        initial = restore_state(initial._replace(moments=None), continuation.native_state)._replace(moments=moments)
+        initial = restore_state(initial._replace(moments=None), continuation.native_state)._replace(
+            moments=moments
+        )
         scale = kernel.dsmc.latent_step
         if isinstance(scale, FixedLatentStepSpec):
             delta = jnp.full_like(initial.chains.latent_delta, scale.delta)
-            initial = initial._replace(chains=initial.chains._replace(latent_delta=delta), adaptation=initial.adaptation._replace(delta=delta))
+            initial = initial._replace(
+                chains=initial.chains._replace(latent_delta=delta),
+                adaptation=initial.adaptation._replace(delta=delta),
+            )
     initial_param_step_size = initial.chains.param_step_size[cold_indices]
     initial_latent_delta = initial.chains.latent_delta[cold_indices]
     diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=kernel.diagnostic_metrics)
@@ -471,7 +481,11 @@ def run_marginal_particle_gibbs(
             num_samples=num_samples,
             max_batch_size=max(kernel.num_particles, (1 << (num_steps - 1).bit_length()) // 2),
             budget=compute_budget,
-            target=target, path_dtype=states.latent_trajectory.dtype, num_chains=num_chains, clock=clock, label="mpgibbs",
+            target=target,
+            path_dtype=states.latent_trajectory.dtype,
+            num_chains=num_chains,
+            clock=clock,
+            label="mpgibbs",
         )
     run = run_sweeps(plan, initial, clock=clock, label="mpgibbs")
     final = run.state
@@ -519,7 +533,8 @@ def run_marginal_particle_gibbs(
         compiled_step=plan.compiled_step,
         first_step_seconds=run.first_step_seconds,
         sampling_loop_seconds=run.sampling_loop_seconds,
-        final_state=retain_state(final._replace(moments=None)), random_key=final.random_key,
+        final_state=retain_state(final._replace(moments=None)),
+        random_key=final.random_key,
         last_parameters=final.chains.position[cold_indices],
         last_paths=final.chains.latent_trajectory[cold_indices],
         tempering=None

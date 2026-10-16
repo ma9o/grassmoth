@@ -8,7 +8,12 @@ import numpy as np
 import pytest
 
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import NutsDADiagnostics
-from nof1_causal_lab.artifacts.sampling import FixedTrajectorySpec, NutsDASpec, NutsTrajectorySpec, SamplerSpec
+from nof1_causal_lab.artifacts.sampling import (
+    FixedTrajectorySpec,
+    NutsDASpec,
+    NutsTrajectorySpec,
+    SamplerSpec,
+)
 from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.ssm.inference.samplers.nuts import NutsDARun, run_nuts_da
 from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
@@ -68,7 +73,9 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
         prepared.prior_runtime_bundle,
         panel,
         sampler=SamplerSpec(
-            algorithm=NutsDASpec(trajectory=NutsTrajectorySpec(max_tree_depth=3), initial_step_size=0.01),
+            algorithm=NutsDASpec(
+                trajectory=NutsTrajectorySpec(max_tree_depth=3), initial_step_size=0.01
+            ),
             num_warmup=0,
             num_samples_per_chain=4,
             num_chains=2,
@@ -91,44 +98,88 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
     assert result.diagnostics.phase_extra_fields["warmup"]["energy"].shape == (2, 0)
 
 
-@pytest.mark.parametrize("trajectory", [NutsTrajectorySpec(max_tree_depth=3), FixedTrajectorySpec(steps=4)])
+@pytest.mark.parametrize(
+    "trajectory", [NutsTrajectorySpec(max_tree_depth=3), FixedTrajectorySpec(steps=4)]
+)
 def test_continuation_matches_uninterrupted_random_stream_and_tuning(trajectory):
     target, _, _ = gaussian_interval_case()
-    settings = SamplerSpec(algorithm=NutsDASpec(trajectory=trajectory, initial_step_size=0.05),
-        num_warmup=12, num_samples_per_chain=8, num_chains=2)
+    settings = SamplerSpec(
+        algorithm=NutsDASpec(trajectory=trajectory, initial_step_size=0.05),
+        num_warmup=12,
+        num_samples_per_chain=8,
+        num_chains=2,
+    )
+
     def run(options, continuation=None):
-        return run_nuts_da(target, sampler=options, compute_budget=COMPUTE_BUDGET,
-            key=jax.random.key(17), clock=time.monotonic, continuation=continuation)
+        return run_nuts_da(
+            target,
+            sampler=options,
+            compute_budget=COMPUTE_BUDGET,
+            key=jax.random.key(17),
+            clock=time.monotonic,
+            continuation=continuation,
+        )
+
     full = run(settings)
     first = run(settings.revised(num_samples_per_chain=4))
-    assert isinstance(full, NutsDARun) and isinstance(first, NutsDARun)
+    assert isinstance(full, NutsDARun)
+    assert isinstance(first, NutsDARun)
     second = run(settings.revised(num_warmup=0, num_samples_per_chain=4), first.checkpoint)
     assert isinstance(second, NutsDARun)
-    np.testing.assert_allclose(full.positions, np.concatenate((first.positions, second.positions), axis=1), rtol=2e-6, atol=2e-6)
+    np.testing.assert_allclose(
+        full.positions,
+        np.concatenate((first.positions, second.positions), axis=1),
+        rtol=2e-6,
+        atol=2e-6,
+    )
     np.testing.assert_array_equal(second.final_step_size, first.final_step_size)
-    np.testing.assert_array_equal(second.checkpoint.random_key.values, full.checkpoint.random_key.values)
+    np.testing.assert_array_equal(
+        second.checkpoint.random_key.values, full.checkpoint.random_key.values
+    )
 
 
 def test_compile_only_executes_neither_sweep(monkeypatch):
     from nof1_causal_lab.models.ssm.inference.samplers import sweeps
+
     target, _, _ = gaussian_interval_case()
     observed = []
     original = sweeps.run_sweeps
+
     def record(plan, initial, **kwargs):
         observed.append(plan)
         result = original(plan, initial, **kwargs)
-        for before, after in zip(jax.tree.leaves(initial), jax.tree.leaves(result.state), strict=True):
-            np.testing.assert_array_equal(jax.random.key_data(before) if jax.dtypes.issubdtype(before.dtype, jax.dtypes.prng_key) else before,
-                jax.random.key_data(after) if jax.dtypes.issubdtype(after.dtype, jax.dtypes.prng_key) else after)
+        for before, after in zip(
+            jax.tree.leaves(initial), jax.tree.leaves(result.state), strict=True
+        ):
+            np.testing.assert_array_equal(
+                jax.random.key_data(before)
+                if jax.dtypes.issubdtype(before.dtype, jax.dtypes.prng_key)
+                else before,
+                jax.random.key_data(after)
+                if jax.dtypes.issubdtype(after.dtype, jax.dtypes.prng_key)
+                else after,
+            )
         return result
+
     from nof1_causal_lab.models.ssm.inference.samplers import nuts
+
     monkeypatch.setattr(nuts, "run_sweeps", record)
-    run = run_nuts_da(target, sampler=SamplerSpec(algorithm=NutsDASpec(trajectory=FixedTrajectorySpec(steps=2)),
-        num_warmup=0, num_samples_per_chain=0, num_chains=2), compute_budget=COMPUTE_BUDGET,
-        key=jax.random.key(18), clock=time.monotonic)
+    run = run_nuts_da(
+        target,
+        sampler=SamplerSpec(
+            algorithm=NutsDASpec(trajectory=FixedTrajectorySpec(steps=2)),
+            num_warmup=0,
+            num_samples_per_chain=0,
+            num_chains=2,
+        ),
+        compute_budget=COMPUTE_BUDGET,
+        key=jax.random.key(18),
+        clock=time.monotonic,
+    )
     assert isinstance(run, NutsDARun)
     assert run.positions.shape[:2] == (2, 0)
     from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase
+
     assert isinstance(observed[0].warmup, CompiledSweepPhase)
     assert isinstance(observed[0].posterior, CompiledSweepPhase)
     assert observed[0].projection is not None

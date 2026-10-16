@@ -397,46 +397,6 @@ class ParticleTarget:
         path = self.replay_path(context, path)
         return self.factor_log_prob(context, path, observations)
 
-    def filtering_log_prob_and_grad(
-        self, context: ParticleContext, path: jax.Array, observations: jax.Array
-    ) -> tuple[jax.Array, jax.Array]:
-        """Return causal increments and their gradients with respect to the current state.
-
-        Each increment contains its incoming transition and observations anchored
-        at that time, including completed intervals. Deterministic recurrences
-        at t depend on earlier independent coordinates; those are held fixed in
-        the filtering derivative. Prefix sums therefore recover log pi_t and
-        its last-coordinate derivative without a quadratic trajectory Jacobian.
-        """
-        history = jax.lax.stop_gradient(self.replay_path(context, path))
-        free = self.independent_mask
-        if self.exact_constraints is not None:
-            free = free & self.exact_constraints.free_mask
-
-        def density(coordinates: jax.Array) -> tuple[jax.Array, jax.Array]:
-            current = jnp.where(free, coordinates, history)
-            transitions = jax.vmap(
-                lambda previous, state, index: self.transition_log_prob(
-                    context, previous, state, index
-                )
-            )(history[:-1], current[1:], jnp.arange(1, path.shape[0]))
-            prior = jnp.concatenate((self.initial_log_prob(context, current[0])[None], transitions))
-            emissions = (
-                self.observation_log_probs(context, current, observations)
-                if self.intervals is None
-                else self.intervals.trajectory_log_probs(
-                    context, current, observations, gradient="current"
-                )
-            )
-            increments: jax.Array = prior + emissions
-            return jnp.sum(increments), increments
-
-        evaluate: Callable[[jax.Array], tuple[tuple[jax.Array, jax.Array], jax.Array]] = (
-            jax.value_and_grad(density, has_aux=True)
-        )
-        (_, increments), gradient = evaluate(path)
-        return increments, gradient
-
     def factor_log_prob(self, context, path, observations):
         """Sum local factors on supplied coordinates, without a path reconstruction."""
         return self.prior_path_log_prob(context, path) + jnp.sum(

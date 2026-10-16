@@ -11,8 +11,6 @@ import jax.numpy as jnp
 import numpy as np
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
-from nof1_causal_lab.artifacts.probability.families import DistributionFamily
-from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.compile.interval_tree import compile_interval_tree
 from nof1_causal_lab.models.ssm.compile.observation_partition import compile_observation_partition
 from nof1_causal_lab.models.ssm.execution.dynamical_model import build_dynamical_model

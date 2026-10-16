@@ -19,9 +19,9 @@ from nof1_causal_lab.compute.budget import (
 )
 from nof1_causal_lab.models.ssm.inference.samplers import sweep_plan
 from nof1_causal_lab.models.ssm.inference.samplers.particle.adaptation import (
+    ADAPTATION_WINDOW,
     adapt_scales,
     initialize_adaptation,
-    ADAPTATION_WINDOW,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.sweeps import run_sweeps
 from tests.support.compute import COMPUTE_BUDGET
@@ -178,7 +178,11 @@ def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
     frozen = state
     for index in range(ADAPTATION_WINDOW + 8):
         state = adapt_scales(
-            state, spec, jnp.asarray(accepted[index]), jnp.asarray(proposed[index]), ADAPTATION_WINDOW + 4
+            state,
+            spec,
+            jnp.asarray(accepted[index]),
+            jnp.asarray(proposed[index]),
+            ADAPTATION_WINDOW + 4,
         )
         end = min(index + 1, ADAPTATION_WINDOW + 4)
         start = max(0, end - ADAPTATION_WINDOW)

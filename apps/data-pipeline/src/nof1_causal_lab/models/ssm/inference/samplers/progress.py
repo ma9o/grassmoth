@@ -6,9 +6,10 @@ import json
 import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
-from nof1_causal_lab.artifacts.reports.inference import InferencePhase
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
+
+from nof1_causal_lab.artifacts.reports.inference import InferencePhase
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -18,7 +19,9 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-_PHASE_CAPTURE: ContextVar[tuple[float, list[InferencePhase]] | None] = ContextVar("inference_phases", default=None)
+_PHASE_CAPTURE: ContextVar[tuple[float, list[InferencePhase]] | None] = ContextVar(
+    "inference_phases", default=None
+)
 
 
 @contextmanager
@@ -55,23 +58,28 @@ def inference_phase(
     """Mark phase entry and completion; preserve exceptions and identify their phase."""
     started = clock()
     log_inference_event(label, stage, "started", **details)
-    completed = False
+    outcome: Literal["complete", "failed"] = "failed"
     try:
         yield
-        completed = True
+        outcome = "complete"
     finally:
         ended = clock()
         capture = _PHASE_CAPTURE.get()
         if capture is not None:
             origin, phases = capture
-            phases.append(InferencePhase(
-                sampler=label, stage=stage, start_seconds=started-origin, end_seconds=ended-origin,
-                outcome="complete" if completed else "failed",
-            ))
+            phases.append(
+                InferencePhase(
+                    sampler=label,
+                    stage=stage,
+                    start_seconds=started - origin,
+                    end_seconds=ended - origin,
+                    outcome=outcome,
+                )
+            )
         log_inference_event(
             label,
             stage,
-            "complete" if completed else "failed",  # ty: ignore[redundant-condition-strict] - yield can raise before assignment.
+            outcome,
             elapsed_seconds=ended - started,
             **details,
         )

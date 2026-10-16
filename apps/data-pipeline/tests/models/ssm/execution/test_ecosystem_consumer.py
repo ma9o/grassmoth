@@ -24,8 +24,6 @@ from nof1_causal_lab.models.ssm.dynamics.vector_field import StructuralDrift
 from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
-from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
-from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.inference import bind_panel_fixture, compile_fit_fixture
 from tests.support.model import construct_named, load_model_fixture
@@ -147,13 +145,15 @@ def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(in
         clock=time.monotonic,
         compute_budget=COMPUTE_BUDGET,
     )
-    assert not isinstance(result, (ObservationPreflightFailure, InitializationFailure))
+    from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
+
+    assert isinstance(result, MCMCPosterior)
     assert not hasattr(result.diagnostics, "likelihood_backend")
     diagnostics = result.diagnostics.sampler_diagnostics
     assert isinstance(diagnostics, ParticleSamplerDiagnostics)
     assert isinstance(diagnostics.settings.algorithm, MarginalParticleGibbsSpec)
     assert diagnostics.parameter_kernel == "m_pgibbs_pseudo_langevin"
-    assert diagnostics.drift == "none"
+    assert diagnostics.drift == "amala_plus"
     assert diagnostics.settings.algorithm.adaptation_scheme == "dual_averaging"
     latent_paths = result.draws.latent_paths
     assert latent_paths is not None

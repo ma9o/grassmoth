@@ -312,9 +312,7 @@ def _step(
     node_statistics = (leaf_metrics,) if ctx.diagnostic_weights else ()
     if steps == 1:
         root_logits = leaf_logits[0]
-        root_logits = root_logits + jax.vmap(terminal_correction)(
-            origins[0], evidence[0]
-        )
+        root_logits = root_logits + jax.vmap(terminal_correction)(origins[0], evidence[0])
         chosen = _forced_move(select_key, root_logits)
         selected_origins = origins[0, chosen]
     else:

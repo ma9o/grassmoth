@@ -48,7 +48,9 @@ class JointCoordinates:
     def encode(self, parameters: jax.Array, path: jax.Array) -> jax.Array:
         """Map transferable scientific values into this kernel's affine chart."""
         innovations = jax.vmap(jnp.linalg.solve)(self.path_chol, path - self.path_center)
-        values = jnp.concatenate((parameters - self.parameter_center, innovations.reshape(-1)[self.free_indices]))
+        values = jnp.concatenate(
+            (parameters - self.parameter_center, innovations.reshape(-1)[self.free_indices])
+        )
         return values if self.dimension else jnp.zeros(1, dtype=parameters.dtype)
 
     def decode(self, position: jax.Array) -> tuple[jax.Array, jax.Array]:

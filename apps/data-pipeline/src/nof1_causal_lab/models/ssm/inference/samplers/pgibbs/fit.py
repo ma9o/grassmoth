@@ -8,10 +8,12 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.continuation import ParticleTuning, SamplerCheckpoint, sampler_identity
-from nof1_causal_lab.models.ssm.inference.continuation import continued_particle_initialization, frozen_particle_tuning
+from nof1_causal_lab.artifacts.continuation import (
+    ParticleTuning,
+    SamplerCheckpoint,
+)
+from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ConditionalMetropolisDiagnostics,
     ConditionalNutsDiagnostics,
@@ -20,6 +22,9 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ParticleGibbsDiagnostics,
 )
 from nof1_causal_lab.artifacts.sampling import MetropolisHastingsSpec, ParticleGibbsSpec
+from nof1_causal_lab.models.ssm.inference.continuation import (
+    frozen_particle_tuning,
+)
 from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 from nof1_causal_lab.models.ssm.inference.extraction import extract_grouped_public_samples
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
@@ -44,7 +49,10 @@ from nof1_causal_lab.models.ssm.inference.types import (
     ProductionDiagnostics,
     UnretainedRun,
 )
-from nof1_causal_lab.models.ssm.inference.warmup.laps import prepare_laps_initialization
+from nof1_causal_lab.models.ssm.inference.warmup.laps import (
+    continued_particle_initialization,
+    prepare_laps_initialization,
+)
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
 
@@ -144,15 +152,23 @@ def fit_particle_gibbs(
         )
     if isinstance(run, InitializationFailure):
         return run
-    tuning = continuation.tuning if continuation is not None and isinstance(continuation.tuning, ParticleTuning) else frozen_particle_tuning(initialization, None)
+    tuning = (
+        continuation.tuning
+        if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
+        else frozen_particle_tuning(initialization, None)
+    )
     checkpoint = SamplerCheckpoint(
-        settings=sampler, native_state=run.final_state, tuning=tuning,
+        settings=sampler,
+        native_state=run.final_state,
+        tuning=tuning,
         random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(run.random_key))),
         parameters=NumericalArray.from_numpy(np.asarray(run.last_parameters)),
         paths=NumericalArray.from_numpy(np.asarray(run.last_paths)),
     )
     if sampler.num_samples_per_chain == 0:
-        return UnretainedRun(sampler, MCMCEvidence(method="pgibbs"), run.compiled_step, run.phase_extra_fields)
+        return UnretainedRun(
+            sampler, MCMCEvidence(method="pgibbs"), run.compiled_step, run.phase_extra_fields
+        )
     duration = clock() - started
     extra = run.phase_extra_fields["post_warmup"]
     parameter_diagnostics: (

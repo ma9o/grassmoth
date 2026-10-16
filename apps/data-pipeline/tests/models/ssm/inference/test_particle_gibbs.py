@@ -7,6 +7,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
+from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.model.expressions import coefficient
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
@@ -15,11 +16,12 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ParticleGibbsDiagnostics,
 )
 from nof1_causal_lab.artifacts.sampling import (
-    DsmcSpec,
-    LapsInitializationSpec,
-    MetropolisHastingsSpec,
     ConditionalNutsSpec,
+    DsmcSpec,
     FixedLatentStepSpec,
+    LapsInitializationSpec,
+    MarginalParticleGibbsSpec,
+    MetropolisHastingsSpec,
     ParticleGibbsSpec,
     SamplerSpec,
 )
@@ -32,6 +34,7 @@ from nof1_causal_lab.models.ssm.inference.samplers.pgibbs.parameters import (
     nuts_kernel,
 )
 from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
+from nof1_causal_lab.study.persistence.codec import pack_result, unpack_result
 from tests.models.ssm.compile.test_exact_state_space import _model, _problem
 from tests.models.ssm.inference.test_laps_initialization import _nonlinear_fixture
 from tests.support.compute import COMPUTE_BUDGET
@@ -202,3 +205,91 @@ def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method, retain_p
             np.asarray(result.final_latent_delta)[:, None], retained["latent_delta"].shape
         ),
     )
+
+
+@pytest.mark.parametrize("method", ["mh", "nuts", "marginal"])
+def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(method):
+    prepared, panel = _nonlinear_fixture()
+    initialization = LapsInitializationSpec(
+        ensemble_size=32, num_unadjusted_steps=100, num_adjusted_steps=5
+    )
+    algorithm = (
+        MarginalParticleGibbsSpec(laps=initialization)
+        if method == "marginal"
+        else ParticleGibbsSpec(
+            parameter_kernel=MetropolisHastingsSpec()
+            if method == "mh"
+            else ConditionalNutsSpec(max_tree_depth=3, initial_step_size=0.01),
+            laps=initialization,
+        )
+    )
+    settings = SamplerSpec(
+        algorithm=algorithm,
+        num_warmup=5,
+        num_samples_per_chain=4,
+        num_chains=2,
+        num_particles=4,
+        retain_latent_paths=True,
+    )
+
+    def run(options, checkpoint=None):
+        result = fit(
+            prepared.prior_runtime_bundle,
+            panel,
+            sampler=options,
+            continuation=checkpoint,
+            compute_budget=COMPUTE_BUDGET,
+            reparam=None,
+            clock=time.monotonic,
+        )
+        assert isinstance(result, MCMCPosterior)
+        assert result.diagnostics.checkpoint is not None
+        return result
+
+    full = run(settings)
+    first = run(settings.revised(num_samples_per_chain=2))
+    checkpoint = SamplerCheckpoint.model_validate(
+        unpack_result(pack_result(first.diagnostics.checkpoint))
+    )
+    second = run(settings.revised(num_warmup=0, num_samples_per_chain=2), checkpoint)
+
+    def combined(before, after):
+        # Public draws flatten chain first, so append within each chain.
+        return np.concatenate(
+            (
+                np.asarray(before).reshape((2, 2, *before.shape[1:])),
+                np.asarray(after).reshape((2, 2, *after.shape[1:])),
+            ),
+            axis=1,
+        ).reshape((8, *before.shape[1:]))
+
+    for name, values in full.draws.parameters.items():
+        np.testing.assert_allclose(
+            values,
+            combined(first.draws.parameters[name], second.draws.parameters[name]),
+            rtol=2e-6,
+            atol=2e-6,
+        )
+    assert full.draws.latent_paths is not None
+    assert first.draws.latent_paths is not None
+    assert second.draws.latent_paths is not None
+    np.testing.assert_allclose(
+        full.draws.latent_paths,
+        combined(first.draws.latent_paths, second.draws.latent_paths),
+        rtol=2e-6,
+        atol=2e-6,
+    )
+    np.testing.assert_allclose(
+        full.diagnostics.observation_log_probs,
+        np.concatenate(
+            (first.diagnostics.observation_log_probs, second.diagnostics.observation_log_probs),
+            axis=1,
+        ),
+        rtol=2e-6,
+        atol=2e-6,
+    )
+    np.testing.assert_array_equal(second.final_latent_delta, first.final_latent_delta)
+    assert second.diagnostics.checkpoint is not None
+    assert full.diagnostics.checkpoint is not None
+    assert second.diagnostics.checkpoint.random_key == full.diagnostics.checkpoint.random_key
+    assert second.diagnostics.checkpoint.tuning == checkpoint.tuning

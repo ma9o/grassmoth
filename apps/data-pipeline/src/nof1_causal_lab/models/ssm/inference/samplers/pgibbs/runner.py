@@ -10,12 +10,13 @@ import jax.numpy as jnp
 import numpy as np
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
-from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.sampling import ParticleGibbsSpec, FixedLatentStepSpec
-from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
-from nof1_causal_lab.models.ssm.inference.continuation import retain_state, restore_state
+from nof1_causal_lab.artifacts.sampling import FixedLatentStepSpec, ParticleGibbsSpec
+from nof1_causal_lab.models.ssm.inference.continuation import restore_state, retain_state
 from nof1_causal_lab.models.ssm.inference.samplers.progress import inference_phase
-from nof1_causal_lab.models.ssm.inference.samplers.sweeps import compile_projected_sweeps, run_sweeps
+from nof1_causal_lab.models.ssm.inference.samplers.sweeps import (
+    compile_projected_sweeps,
+    run_sweeps,
+)
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
@@ -23,6 +24,8 @@ if TYPE_CHECKING:
 
     from jax.stages import Compiled
 
+    from nof1_causal_lab.artifacts.arrays import NumericalArray
+    from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.samplers.pgibbs.kernel import (
@@ -85,7 +88,11 @@ def run_particle_gibbs[State](
             assert isinstance(options, ParticleGibbsSpec)
             scale = options.dsmc.latent_step
             if isinstance(scale, FixedLatentStepSpec):
-                states = states._replace(adaptation=states.adaptation._replace(delta=jnp.full_like(states.adaptation.delta, scale.delta)))
+                states = states._replace(
+                    adaptation=states.adaptation._replace(
+                        delta=jnp.full_like(states.adaptation.delta, scale.delta)
+                    )
+                )
     finite_parameters = jax.vmap(kernel.parameters.is_finite)(states.parameters)
     if (
         not np.isfinite(np.asarray(states.log_posterior)).all()
@@ -141,7 +148,11 @@ def run_particle_gibbs[State](
                 kernel.num_particles, (1 << (len(target.times) - 1).bit_length()) // 2
             ),
             budget=compute_budget,
-            target=target, path_dtype=states.path.dtype, num_chains=sampler.num_chains, clock=clock, label="pgibbs",
+            target=target,
+            path_dtype=states.path.dtype,
+            num_chains=sampler.num_chains,
+            clock=clock,
+            label="pgibbs",
         )
     run = run_sweeps(plan, initial, clock=clock, label="pgibbs")
     states, next_key = run.state
@@ -160,12 +171,18 @@ def run_particle_gibbs[State](
         log_posterior=jnp.concatenate(
             (run.history.warmup["log_posterior"], run.history.posterior["log_posterior"]), axis=1
         ),
-        phase_extra_fields={"warmup": warmup, "post_warmup": posterior, "all": extra,
-            "initialization" if continuation is None else "continued_start": starting_values},
+        phase_extra_fields={
+            "warmup": warmup,
+            "post_warmup": posterior,
+            "all": extra,
+            "initialization" if continuation is None else "continued_start": starting_values,
+        },
         initial_latent_delta=initial_delta,
         final_latent_delta=states.adaptation.delta,
         final_param_step_size=jax.vmap(kernel.parameters.step_size)(states.parameters),
         compiled_step=plan.compiled_step,
-        final_state=retain_state(states), random_key=next_key,
-        last_parameters=jax.vmap(kernel.parameters.position)(states.parameters), last_paths=states.path,
+        final_state=retain_state(states),
+        random_key=next_key,
+        last_parameters=jax.vmap(kernel.parameters.position)(states.parameters),
+        last_paths=states.path,
     )

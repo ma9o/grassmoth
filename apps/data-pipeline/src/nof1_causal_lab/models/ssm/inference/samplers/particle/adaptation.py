@@ -8,9 +8,8 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
-from nof1_causal_lab.models.ssm.inference.mcmc_state import _clip_scale
-
 from nof1_causal_lab.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
+from nof1_causal_lab.models.ssm.inference.mcmc_state import _clip_scale
 
 INITIAL_DELTA = 0.01
 ADAPTATION_WINDOW = 100
@@ -24,7 +23,11 @@ DELTA_MAX = 10.0
 
 def initial_delta(spec: DsmcSpec) -> float:
     """Resolve the assigned fixed scale or the adaptation starting value."""
-    return spec.latent_step.delta if isinstance(spec.latent_step, FixedLatentStepSpec) else INITIAL_DELTA
+    return (
+        spec.latent_step.delta
+        if isinstance(spec.latent_step, FixedLatentStepSpec)
+        else INITIAL_DELTA
+    )
 
 
 class DsmcAdaptation(NamedTuple):
@@ -56,7 +59,6 @@ def adapt_scales(
     num_warmup: int,
 ) -> DsmcAdaptation:
     """Adapt only proposed coordinates; freeze scales and windows after warmup."""
-
     if isinstance(spec.latent_step, FixedLatentStepSpec):
         return state
     target = spec.latent_step.target
@@ -70,16 +72,10 @@ def adapt_scales(
         rate = accepted_total / jnp.maximum(count, 1)
         iteration = state.iteration + 1
         learning_rate = jnp.maximum(
-            iteration.astype(state.delta.dtype) ** ADAPTATION_GAMMA
-            * ADAPTATION_RHO,
+            iteration.astype(state.delta.dtype) ** ADAPTATION_GAMMA * ADAPTATION_RHO,
             ADAPTATION_RHO_MIN,
         )
-        change = (
-            learning_rate
-            * state.delta
-            * (rate - target)
-            / target
-        )
+        change = learning_rate * state.delta * (rate - target) / target
         active = (
             (jnp.abs(rate - target) >= ADAPTATION_TOLERANCE)
             & (iteration > ADAPTATION_WINDOW)

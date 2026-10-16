@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
@@ -19,16 +19,21 @@ from nof1_causal_lab.models.ssm.inference.samplers.progress import (
     inference_phase,
     log_inference_event,
 )
-from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase, compile_sweeps
+from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import (
+    CompiledSweepPhase,
+    compile_sweeps,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
+    from concurrent.futures import Future
 
+    from jax.stages import Compiled, Traced
+    from jax.typing import DTypeLike
+
+    from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepPlan, SweepStage
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
-    from nof1_causal_lab.compute.budget import ComputeBudget
-    from jax.stages import Compiled
-    from jax.typing import DTypeLike
 
 
 @dataclass(frozen=True)
@@ -54,41 +59,73 @@ class SweepRun[Carry]:
 
 
 def compile_projected_sweeps[Carry](
-    step_factory: Callable[[int, SweepStage], Callable[[Carry], tuple[Carry, dict[str, jax.Array]]]],
+    step_factory: Callable[
+        [int, SweepStage], Callable[[Carry], tuple[Carry, dict[str, jax.Array]]]
+    ],
     initial: Carry,
-    *, target: ParticleTarget, path_dtype: DTypeLike, num_chains: int, num_warmup: int, num_samples: int,
-    max_batch_size: int, budget: ComputeBudget, clock: Callable[[], float], label: str,
+    *,
+    target: ParticleTarget,
+    path_dtype: DTypeLike,
+    num_chains: int,
+    num_warmup: int,
+    num_samples: int,
+    max_batch_size: int,
+    budget: ComputeBudget,
+    clock: Callable[[], float],
+    label: str,
 ) -> SweepPlan:
     """Compile independent exact observation projection while the sampler compiles."""
     block_size = min(25, max(1, num_warmup, num_samples))
 
     def project(position: jax.Array, path: jax.Array) -> jax.Array:
-        return target.observation_log_probs(target.context(position, target.times), path, target.observations)
+        return jnp.asarray(
+            target.observation_log_probs(
+                target.context(position, target.times), path, target.observations
+            )
+        )
 
-    positions = jax.ShapeDtypeStruct((block_size, num_chains, target.initial_position.size), target.initial_position.dtype)
-    paths = jax.ShapeDtypeStruct((block_size, num_chains, len(target.times), target.independent_mask.shape[-1]), path_dtype)
-    projection_trace = jax.jit(jax.vmap(jax.vmap(project))).trace(positions, paths)
+    positions = jax.ShapeDtypeStruct(
+        (block_size, num_chains, target.initial_position.size), target.initial_position.dtype
+    )
+    paths = jax.ShapeDtypeStruct(
+        (block_size, num_chains, len(target.times), target.independent_mask.shape[-1]), path_dtype
+    )
+    projection_trace: Traced = jax.jit(jax.vmap(jax.vmap(project))).trace(positions, paths)
     estimate = traced_memory(projection_trace.jaxpr)
     shape = projection_trace.out_info
     transfer = shape.size * shape.dtype.itemsize
     retained = transfer // block_size * num_samples
-    overhead = MemoryDemand(host_bytes=estimate.host_bytes + retained + transfer,
-                            device_bytes=estimate.device_bytes + 2 * retained)
+    overhead = MemoryDemand(
+        host_bytes=estimate.host_bytes + retained + transfer,
+        device_bytes=estimate.device_bytes + 2 * retained,
+    )
 
     def compile_projection() -> Compiled:
         with inference_phase(label, "compiling_observation_projection", clock=clock):
-            return projection_trace.lower().compile()
+            return cast("Compiled", projection_trace.lower().compile())
 
     with ThreadPoolExecutor(max_workers=1) as executor:
-        future = executor.submit(copy_context().run, compile_projection)
-        plan = compile_sweeps(step_factory, initial, num_warmup=num_warmup, num_samples=num_samples,
-            max_batch_size=max_batch_size, budget=budget, additional_overhead=overhead)
+        context = copy_context()
+        future: Future[Compiled] = executor.submit(lambda: context.run(compile_projection))
+        plan = compile_sweeps(
+            step_factory,
+            initial,
+            num_warmup=num_warmup,
+            num_samples=num_samples,
+            max_batch_size=max_batch_size,
+            budget=budget,
+            additional_overhead=overhead,
+        )
         projection = future.result()
     actual = compiled_memory(projection)
-    demand = MemoryDemand(host_bytes=plan.memory.host_bytes - estimate.host_bytes + actual.host_bytes,
-                          device_bytes=plan.memory.device_bytes - estimate.device_bytes + actual.device_bytes)
+    demand = MemoryDemand(
+        host_bytes=plan.memory.host_bytes - estimate.host_bytes + actual.host_bytes,
+        device_bytes=plan.memory.device_bytes - estimate.device_bytes + actual.device_bytes,
+    )
     if not budget.capacity(demand, limit=1):
-        raise MemoryError("Sweep and observation projection exceed the numerical execution memory budget")
+        raise MemoryError(
+            "Sweep and observation projection exceed the numerical execution memory budget"
+        )
     return replace(plan, projection=projection, memory=demand)
 
 
@@ -111,7 +148,9 @@ def run_sweeps[Carry](
         shapes = dict(phase.shapes)
         if stage == "sampling" and plan.projection is not None:
             projected_shape = plan.projection.out_info
-            shapes["observation_log_probs"] = jax.ShapeDtypeStruct(projected_shape.shape[1:], projected_shape.dtype)
+            shapes["observation_log_probs"] = jax.ShapeDtypeStruct(
+                projected_shape.shape[1:], projected_shape.dtype
+            )
         buffers = {
             name: np.empty((shape.shape[0], phase.steps, *shape.shape[1:]), dtype=shape.dtype)
             for name, shape in shapes.items()
@@ -134,7 +173,12 @@ def run_sweeps[Carry](
                     )
                     state, block = transition
                     if stage == "sampling" and plan.projection is not None:
-                        block = {**block, "observation_log_probs": plan.projection(block["positions"], block["paths"])}
+                        block = {
+                            **block,
+                            "observation_log_probs": plan.projection(
+                                block["positions"], block["paths"]
+                            ),
+                        }
                     host_block = jax.device_get(block)
                     start = phase.steps - remaining
                     for name in host_block:

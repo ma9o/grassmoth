@@ -21,7 +21,7 @@ from nof1_causal_lab.artifacts.model.likelihood import (
 )
 from nof1_causal_lab.artifacts.model.parameter_context import iter_coefficient_uses
 from nof1_causal_lab.artifacts.probability.families import DistributionFamily
-from nof1_causal_lab.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
+from nof1_causal_lab.artifacts.sampling import DsmcSpec
 from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.execution.observation_model import compile_observation_model
 from nof1_causal_lab.models.ssm.inference import problem as problem_module

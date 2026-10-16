@@ -16,8 +16,8 @@ import jax.numpy as jnp
 from nof1_causal_lab.models.ssm.inference.samplers.particle.adaptation import (
     DsmcAdaptation,
     adapt_scales,
-    initialize_adaptation,
     initial_delta,
+    initialize_adaptation,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.particle.context import build_smoother_context
 from nof1_causal_lab.models.ssm.inference.samplers.particle.diagnostics import (

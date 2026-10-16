@@ -59,9 +59,7 @@ def _local_gradient(
     observation, observation_gradient = _value_and_grad_by_param(
         ctx.contexts,
         current,
-        lambda bound, value: ctx.obs_increment_fn(
-            bound, value, index, ctx.runtime_observations
-        ),
+        lambda bound, value: ctx.obs_increment_fn(bound, value, index, ctx.runtime_observations),
         value_dtype=ctx.traj_dtype,
         grad_dtype=ctx.latent_dtype,
     )
@@ -84,9 +82,9 @@ def _path_local_gradient(ctx: SmootherContext, path: jax.Array) -> jax.Array:
     """Evaluate the declared local auxiliary drift at every path coordinate."""
     previous = jnp.concatenate((path[:1], path[:-1]))
     following = jnp.concatenate((path[1:], path[-1:]))
-    return jax.vmap(lambda before, current, after, index: _local_gradient(
-        ctx, before, current, after, index
-    ))(previous, path, following, jnp.arange(ctx.num_steps))
+    return jax.vmap(
+        lambda before, current, after, index: _local_gradient(ctx, before, current, after, index)
+    )(previous, path, following, jnp.arange(ctx.num_steps))
 
 
 @dataclass(frozen=True)
@@ -205,8 +203,6 @@ def build_auxiliary(
         norms = jnp.zeros(reference.shape[0], dtype=reference.dtype)
     else:
         gradient = _path_local_gradient(context, reference)
-        drift, norms = _drift(
-            gradient, variance, mask
-        )
+        drift, norms = _drift(gradient, variance, mask)
     auxiliary = jnp.where(mask, reference + drift + noise, reference)
     return AuxiliaryKernel(context, reference, mask, variance, auxiliary, norms)

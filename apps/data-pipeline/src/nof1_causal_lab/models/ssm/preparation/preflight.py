@@ -8,15 +8,19 @@ from typing import TYPE_CHECKING, Self
 import numpy as np
 import numpyro.distributions as dist
 
-from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec, NormalLawSpec, StudentTLawSpec
-from nof1_causal_lab.models.ssm import compiled_access as numeric
-from nof1_causal_lab.artifacts.model.likelihood import DistributionFamily
+from nof1_causal_lab.artifacts.model.likelihood import (
+    DeltaLawSpec,
+    DistributionFamily,
+    NormalLawSpec,
+    StudentTLawSpec,
+)
 from nof1_causal_lab.artifacts.sampling import NutsDASpec, SamplerSpec
+from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.compile.state_space import SequentialRecurrences
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
+    from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
 
 LOCATION_REACH_SIGMAS = 6.0
@@ -35,7 +39,8 @@ class ObservationPreflightFailure:
 
 
 def validate_sampler_support(
-    compiled: CompiledDynamicalModel, sampler: SamplerSpec,
+    compiled: CompiledDynamicalModel,
+    sampler: SamplerSpec,
 ) -> ObservationPreflightFailure | None:
     """Own sampler-specific restrictions, including checks before remote allocation."""
     if DistributionFamily.STUDENT_T in numeric.diffusion_families(compiled):
@@ -49,7 +54,8 @@ def validate_sampler_support(
         names = tuple(compiled.states[index].name for index in recurrence.indices)
         return ObservationPreflightFailure.rejected(
             "DSMC requires deterministic recurrences that are affine in their deterministic "
-            "coordinates to preserve O(log T) parallel depth; unsupported states: " + ", ".join(names)
+            "coordinates to preserve O(log T) parallel depth; unsupported states: "
+            + ", ".join(names)
         )
     return None
 

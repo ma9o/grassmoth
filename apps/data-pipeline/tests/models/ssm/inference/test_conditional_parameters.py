@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nof1_causal_lab.artifacts.sampling import MetropolisHastingsSpec, ConditionalNutsSpec
+from nof1_causal_lab.artifacts.sampling import ConditionalNutsSpec, MetropolisHastingsSpec
 from nof1_causal_lab.models.ssm.inference.samplers.pgibbs.parameters import (
     metropolis_kernel,
     nuts_kernel,

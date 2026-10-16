@@ -50,7 +50,7 @@ class LapsTraceRecord:
 
     unadjusted: EnsemblePhaseTraceRecord  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.
     adjusted: EnsemblePhaseTraceRecord  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.
-    adjusted_acceptance: jax.Array
+    adjusted_acceptance: jax.Array  # noqa: F841, RUF100 - Notebook trace plots consume these per-step values outside Vulture's source-only pass.
 
 
 @dataclass(frozen=True)

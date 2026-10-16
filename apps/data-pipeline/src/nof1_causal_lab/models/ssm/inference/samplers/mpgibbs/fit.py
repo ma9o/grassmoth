@@ -10,12 +10,17 @@ import jax.numpy as jnp
 import jax.random as random
 import numpy as np
 
-from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.continuation import ParticleTuning, SamplerCheckpoint, sampler_identity
-from nof1_causal_lab.models.ssm.inference.continuation import continued_particle_initialization, frozen_particle_tuning
+from nof1_causal_lab.artifacts.continuation import (
+    ParticleTuning,
+    SamplerCheckpoint,
+)
+from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
 from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec
+from nof1_causal_lab.models.ssm.inference.continuation import (
+    frozen_particle_tuning,
+)
 from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 from nof1_causal_lab.models.ssm.inference.extraction import (
     build_pmcmc_mcmc_result,
@@ -46,7 +51,10 @@ from nof1_causal_lab.models.ssm.inference.types import (
     UnretainedRun,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
-from nof1_causal_lab.models.ssm.inference.warmup.laps import prepare_laps_initialization
+from nof1_causal_lab.models.ssm.inference.warmup.laps import (
+    continued_particle_initialization,
+    prepare_laps_initialization,
+)
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
 
@@ -132,9 +140,7 @@ def fit_marginal_particle_gibbs(
     paid_mix = (
         None
         if not options.dsmc.pilot_mixture
-        else PaidMixture(
-            initialization.pilot_mean, initialization.pilot_proposal_variance
-        )
+        else PaidMixture(initialization.pilot_mean, initialization.pilot_proposal_variance)
     )
 
     phase_t0 = clock()
@@ -153,7 +159,9 @@ def fit_marginal_particle_gibbs(
             parameter_preconditioner_chol=initialization.parameter_chol,
             parameter_proposal=options.parameter_proposal,
             paid_mix=paid_mix,
-            parameter_reference_path=jnp.asarray(continuation.tuning.parameter_reference_path.values)
+            parameter_reference_path=jnp.asarray(
+                continuation.tuning.parameter_reference_path.values
+            )
             if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
             else initialization.paths[0],
             diagnostic_metrics_all=options.diagnostic_metrics_all,
@@ -165,9 +173,18 @@ def fit_marginal_particle_gibbs(
     tempering = None
     reference = None
     if options.tempering is not None:
-        if continuation is not None and isinstance(continuation.tuning, ParticleTuning) and continuation.tuning.gaussian_reference:
-            from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import GaussianReference
-            reference = GaussianReference(*(jnp.asarray(value.values) for value in continuation.tuning.gaussian_reference))
+        if (
+            continuation is not None
+            and isinstance(continuation.tuning, ParticleTuning)
+            and continuation.tuning.gaussian_reference
+        ):
+            from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import (
+                GaussianReference,
+            )
+
+            reference = GaussianReference(
+                *(jnp.asarray(value.values) for value in continuation.tuning.gaussian_reference)
+            )
         else:
             reference = build_gaussian_reference(
                 bundle.runtime,
@@ -194,18 +211,34 @@ def fit_marginal_particle_gibbs(
         clock=clock,
         continuation=continuation,
     )
-    tuning = continuation.tuning if continuation is not None and isinstance(continuation.tuning, ParticleTuning) else frozen_particle_tuning(initialization, reference)
+    tuning = (
+        continuation.tuning
+        if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
+        else frozen_particle_tuning(initialization, reference)
+    )
     checkpoint = SamplerCheckpoint(
-        settings=sampler, native_state=run_result.final_state, tuning=tuning,
-        random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(run_result.random_key))),
+        settings=sampler,
+        native_state=run_result.final_state,
+        tuning=tuning,
+        random_key=NumericalArray.from_numpy(
+            np.asarray(jax.random.key_data(run_result.random_key))
+        ),
         parameters=NumericalArray.from_numpy(np.asarray(run_result.last_parameters)),
         paths=NumericalArray.from_numpy(np.asarray(run_result.last_paths)),
     )
     if sampler.num_samples_per_chain == 0:
-        return UnretainedRun(sampler, MCMCEvidence(), run_result.compiled_step, {
-            "initialization" if continuation is None else "continued_start": run_result.starting_values,
-            "warmup": run_result.warmup_chain_extra_fields, "post_warmup": run_result.chain_extra_fields,
-        })
+        return UnretainedRun(
+            sampler,
+            MCMCEvidence(),
+            run_result.compiled_step,
+            {
+                "initialization"
+                if continuation is None
+                else "continued_start": run_result.starting_values,
+                "warmup": run_result.warmup_chain_extra_fields,
+                "post_warmup": run_result.chain_extra_fields,
+            },
+        )
     mcmc_phase_seconds = clock() - phase_t0
     logger.info("phase 3/4: MCMC complete in %.1fs", mcmc_phase_seconds)
 
@@ -305,7 +338,9 @@ def fit_marginal_particle_gibbs(
         else None,
         sampler_diagnostics=kernel_diagnostics,
         phase_extra_fields={
-            "initialization" if continuation is None else "continued_start": run_result.starting_values,
+            "initialization"
+            if continuation is None
+            else "continued_start": run_result.starting_values,
             "warmup": run_result.warmup_chain_extra_fields,
             "post_warmup": run_result.chain_extra_fields,
             "all": run_result.all_chain_extra_fields,

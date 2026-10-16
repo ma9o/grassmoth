@@ -10,7 +10,7 @@ import jax.numpy as jnp
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.compute.batching import compile_from_estimate, compiled_memory
-from nof1_causal_lab.compute.budget import MemoryDemand, NO_MEMORY_DEMAND
+from nof1_causal_lab.compute.budget import NO_MEMORY_DEMAND, MemoryDemand
 from nof1_causal_lab.compute.traced_memory import traced_memory
 
 if TYPE_CHECKING:
@@ -183,7 +183,11 @@ def compile_sweeps[Carry](
         overhead=overhead,
     )
     from dataclasses import replace
-    return replace(chosen.executable, memory=MemoryDemand(
-        host_bytes=chosen.memory.host_bytes + overhead.host_bytes,
-        device_bytes=chosen.memory.device_bytes + overhead.device_bytes,
-    ))
+
+    return replace(
+        chosen.executable,
+        memory=MemoryDemand(
+            host_bytes=chosen.memory.host_bytes + overhead.host_bytes,
+            device_bytes=chosen.memory.device_bytes + overhead.device_bytes,
+        ),
+    )

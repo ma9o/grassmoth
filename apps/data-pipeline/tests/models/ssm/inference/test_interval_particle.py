@@ -18,6 +18,7 @@ from nof1_causal_lab.artifacts.sampling import DsmcSpec
 from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
+from nof1_causal_lab.models.ssm.inference.samplers.particle.contract import PaidMixture
 from nof1_causal_lab.models.ssm.inference.targets.intervals import gather_interval_statistics
 from tests.support.interval_particle import (
     gaussian_interval_case,
@@ -194,10 +195,19 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        dsmc=DsmcSpec(drift=method, drift=method if kappa else "none"),
+        paid_mix=PaidMixture(jnp.zeros((len(mean) - 1, 1)), jnp.ones((len(mean) - 1, 1))),
+        dsmc=DsmcSpec(drift=method if kappa else "none"),
     )
-    chains = 4
-    joint = jnp.asarray(np.random.default_rng(24).normal(size=(chains, len(mean))))
+    # Replicate chains to resolve the weakly identified offset/path direction
+    # without loosening the analytic moment tolerances.
+    chains = 16
+    # Draw starts from the declared prior, including its temporal dependence.
+    # Independent unit-normal path coordinates can create ten-SD innovations;
+    # recovery from those starts measures initialization rather than this kernel.
+    joint = np.random.default_rng(24).normal(size=(chains, len(mean)))
+    for index in range(2, len(mean)):
+        joint[:, index] = 0.7 * joint[:, index - 1] + np.sqrt(0.3) * joint[:, index]
+    joint = jnp.asarray(joint)
     initial = jax.vmap(lambda point: initialize_interval_chain(target, point, kernel=kernel))(joint)
 
     @jax.jit
@@ -212,7 +222,9 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
         return jax.lax.scan(sweep, states, keys)
 
     _, (draws, frozen) = sample(initial, jax.random.split(jax.random.key(21), 2200))
-    retained = np.asarray(draws[700:]).reshape(-1, len(mean))
+    retained_chains = np.asarray(draws[700:])
+    assert np.all(np.ptp(retained_chains, axis=0) > 0)
+    retained = retained_chains.reshape(-1, len(mean))
     np.testing.assert_allclose(retained.mean(axis=0), mean, atol=0.12)
     np.testing.assert_allclose(np.cov(retained.T), covariance, atol=0.12)
     assert float(jnp.mean(frozen[700:])) < 0.8
@@ -241,7 +253,7 @@ def test_reusable_tree_levels_preserve_joint_posterior_with_padding(method, kapp
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        dsmc=DsmcSpec(drift=method, drift=method if kappa else "none", pilot_mixture=False),
+        dsmc=DsmcSpec(drift=method if kappa else "none", pilot_mixture=False),
     )
 
     def advance(point, key):

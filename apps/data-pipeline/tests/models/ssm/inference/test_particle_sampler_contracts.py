@@ -11,8 +11,8 @@ from pydantic import ValidationError
 
 from nof1_causal_lab.artifacts.sampling import (
     DsmcSpec,
-    MarginalParticleGibbsSpec,
     FixedLatentStepSpec,
+    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
@@ -31,11 +31,17 @@ from tests.support.compute import COMPUTE_BUDGET
 pytestmark = pytest.mark.contract
 
 
-@pytest.mark.parametrize("settings", [
-    {"drift": "global"}, {"amala_kappa": 0.75}, {"amala_grad_clip": 2},
-    {"latent_block_coords": 3}, {"latent_step": {"kind": "fixed", "delta": 0}},
-    {"latent_step": {"kind": "adapted", "target": 1}},
-])
+@pytest.mark.parametrize(
+    "settings",
+    [
+        {"drift": "global"},
+        {"amala_kappa": 0.75},
+        {"amala_grad_clip": 2},
+        {"latent_block_coords": 3},
+        {"latent_step": {"kind": "fixed", "delta": 0}},
+        {"latent_step": {"kind": "adapted", "target": 1}},
+    ],
+)
 def test_dsmc_boundary_owns_discrete_choices_and_scale_policy(settings):
     with pytest.raises(ValidationError):
         DsmcSpec.model_validate(settings)

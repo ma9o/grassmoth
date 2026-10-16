@@ -11,7 +11,7 @@ import pytest
 from scipy.special import logsumexp
 from scipy.stats import norm
 
-from nof1_causal_lab.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
+from nof1_causal_lab.artifacts.sampling import DsmcSpec
 from nof1_causal_lab.models.ssm.inference.samplers.particle.auxiliary import build_auxiliary
 from nof1_causal_lab.models.ssm.inference.samplers.particle.context import (
     build_smoother_context,
@@ -34,8 +34,7 @@ def _context(target, method, *, mixture=False, count=4):
         num_particles=count,
         num_parameter_particles=2,
         free_mask=target.independent_mask,
-        paid_mix=PaidMixture(jnp.zeros_like(path), jnp.ones_like(path))
-        if mixture else None,
+        paid_mix=PaidMixture(jnp.zeros_like(path), jnp.ones_like(path)) if mixture else None,
         diagnostic_metrics=frozenset(),
     )
     return build_smoother_context(
@@ -52,28 +51,36 @@ def _local_gradients(target, ctx, path, method):
     local = target.tree_target()
     gradients = []
     for index in range(len(path)):
-        def density(value):
+
+        def density(value, index=index):
             def per_label(bound):
                 result = (
-                    local.initial_log_prob(bound, value) if index == 0
+                    local.initial_log_prob(bound, value)
+                    if index == 0
                     else local.transition_log_prob(bound, path[index - 1], value, index)
                 )
                 result += local.observation_increment(bound, value, index, target.observations)
                 if method == "amala_plus" and index + 1 < len(path):
                     result += local.transition_log_prob(bound, value, path[index + 1], index + 1)
                 return result
+
             return jax.scipy.special.logsumexp(
                 ctx.initial_label_log_probs + jax.vmap(per_label)(ctx.contexts)
             )
+
         gradients.append(jax.grad(density)(path[index]))
     return jnp.stack(gradients)
 
 
 def _auxiliary_density(auxiliary, path):
-    return jnp.sum(jax.vmap(auxiliary.local_log_density)(
-        jnp.concatenate((path[:1], path[:-1])), path,
-        jnp.concatenate((path[1:], path[-1:])), jnp.arange(len(path))
-    ))
+    return jnp.sum(
+        jax.vmap(auxiliary.local_log_density)(
+            jnp.concatenate((path[:1], path[:-1])),
+            path,
+            jnp.concatenate((path[1:], path[-1:])),
+            jnp.arange(len(path)),
+        )
+    )
 
 
 @pytest.mark.parametrize("interval", [False, True])
@@ -123,7 +130,9 @@ def test_auxiliary_draw_and_mixture_density_follow_paper_laws(method, mixture):
     expected_density = np.where(
         mask, -0.5 * (np.log(2 * np.pi * variance) + (expected - center) ** 2 / variance), 0
     ).sum()
-    np.testing.assert_allclose(_auxiliary_density(auxiliary, candidate), expected_density, atol=2e-5)
+    np.testing.assert_allclose(
+        _auxiliary_density(auxiliary, candidate), expected_density, atol=2e-5
+    )
     particles, density = auxiliary.propose(jax.random.key(91))
     np.testing.assert_array_equal(particles[:, 0], reference)
     np.testing.assert_array_equal(particles[1, :, 0], np.full(4, reference[1, 0]))
@@ -215,9 +224,7 @@ def test_conditional_tree_preserves_analytic_posterior(
     before = jnp.asarray(
         (means[labels] + rng.normal(size=(size, len(mean))) @ conditional_chol.T)[..., None]
     )
-    spec = DsmcSpec(
-        drift=method if kappa else "none", pilot_mixture=mixture
-    )
+    spec = DsmcSpec(drift=method if kappa else "none", pilot_mixture=mixture)
     setup = build_smoother_setup(
         target,
         spec,
@@ -377,12 +384,29 @@ def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, s
         trajectory_dtype=reference.dtype,
     )
     key = jax.random.key(610)
-    full = jax.jit(
-        lambda: trace_step(ctx, key, reference, None)
-    )()
+    full = jax.jit(lambda: trace_step(ctx, key, reference, None))()
 
     fast = jax.jit(lambda: trace_step(ctx, key, reference, None, batch_size=2))()
-    np.testing.assert_allclose(fast.trace.root_selection.log_weights, -np.log(5), atol=1e-6)
+    if steps == 1:
+        # With no merge/resampling level, the root still owns the leaf's exact
+        # scientific and auxiliary importance weights.
+        keys = jax.random.split(key, 6)
+        auxiliary = build_auxiliary(ctx, keys[0], reference, ctx.latent_free_mask)
+        candidates, proposal = auxiliary.propose(keys[2])
+        context = target.context(jnp.array([0.3]), target.times)
+        weights = (
+            jax.vmap(
+                lambda value: (
+                    target.path_log_prob(context, value[None], target.observations)
+                    + auxiliary.local_log_density(value, value, value, jnp.asarray(0))
+                )
+            )(candidates[0])
+            - proposal[0]
+        )
+        expected = jax.nn.log_softmax(weights)
+    else:
+        expected = jnp.full(5, -np.log(5))
+    np.testing.assert_allclose(fast.trace.root_selection.log_weights, expected, atol=1e-6)
     np.testing.assert_array_equal(fast.result.origin_path, full.result.origin_path)
     np.testing.assert_allclose(fast.result.latent_path, full.result.latent_path, atol=1e-6)
     np.testing.assert_allclose(

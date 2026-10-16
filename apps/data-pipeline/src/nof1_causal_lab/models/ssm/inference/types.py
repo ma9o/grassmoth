@@ -9,7 +9,9 @@ if TYPE_CHECKING:
     from numpy.typing import ArrayLike
     from xarray import DataTree
 
+    from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
     from nof1_causal_lab.artifacts.identity import ConstructId
+    from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
     from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 
@@ -24,8 +26,6 @@ import jax.numpy as jnp
 from numpy.typing import NDArray
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
-from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
-from nof1_causal_lab.artifacts.sampling import SamplerSpec
 from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
 from nof1_causal_lab.artifacts.reports.inference import PosteriorDrawsInfo
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (

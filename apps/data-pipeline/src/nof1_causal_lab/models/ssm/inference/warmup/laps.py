@@ -15,6 +15,10 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from nof1_causal_lab.artifacts.continuation import ParticleTuning, SamplerCheckpoint
+from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
+    ContinuedInitializationDiagnostics,
+)
 from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import (
     LapsTraceRecord,
@@ -108,4 +112,28 @@ def prepare_laps_initialization(
         pilot_variance=jnp.var(paths, axis=0),
         diagnostics=ensemble.diagnostics,
         trace=ensemble.trace,
+    )
+
+
+def continued_particle_initialization(checkpoint: SamplerCheckpoint) -> LapsInitializationResult:
+    """Start at retained values, using the particle kernel's saved proposal geometry."""
+    tuning = checkpoint.tuning
+    if not isinstance(tuning, ParticleTuning):
+        positions = jnp.asarray(checkpoint.parameters.values)
+        paths = jnp.asarray(checkpoint.paths.values)
+        return LapsInitializationResult(
+            positions=positions,
+            paths=paths,
+            parameter_chol=jnp.eye(positions.shape[-1], dtype=positions.dtype),
+            pilot_mean=jnp.mean(paths, axis=0),
+            pilot_variance=jnp.var(paths, axis=0),
+            diagnostics=ContinuedInitializationDiagnostics(reused_tuning=False),
+        )
+    return LapsInitializationResult(
+        positions=jnp.asarray(checkpoint.parameters.values),
+        paths=jnp.asarray(checkpoint.paths.values),
+        parameter_chol=jnp.asarray(tuning.parameter_chol.values),
+        pilot_mean=jnp.asarray(tuning.pilot_mean.values),
+        pilot_variance=jnp.asarray(tuning.pilot_variance.values),
+        diagnostics=ContinuedInitializationDiagnostics(reused_tuning=True),
     )

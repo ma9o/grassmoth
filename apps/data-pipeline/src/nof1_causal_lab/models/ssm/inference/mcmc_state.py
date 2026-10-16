@@ -24,7 +24,7 @@ class TrajectoryMCMCState(NamedTuple):
     position: jnp.ndarray
     # Fixed-pilot parameter oracle at this position and this replica's target.
     parameter_gradient: jnp.ndarray
-    latent_context: ParticleContext
+    latent_context: ParticleContext  # noqa: F841, RUF100 - Retained state inspection in notebooks reads the bound context; Vulture checks src separately.
     latent_trajectory: jnp.ndarray
     trajectory_log_prob: jnp.ndarray
     complete_log_posterior: jnp.ndarray

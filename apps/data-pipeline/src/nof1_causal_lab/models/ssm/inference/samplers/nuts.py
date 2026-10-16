@@ -3,27 +3,35 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 from numpyro.infer.hmc import HMCState, hmc
 
-from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.arrays import NumericalArray
-from nof1_causal_lab.artifacts.continuation import JointTuning, SamplerCheckpoint, sampler_identity
-from nof1_causal_lab.models.ssm.inference.continuation import retain_state, restore_state
+from nof1_causal_lab.artifacts.continuation import JointTuning, SamplerCheckpoint
+from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import MCMCEvidence, NutsDADiagnostics
-from nof1_causal_lab.artifacts.sampling import FixedTrajectorySpec, NutsDASpec, NutsTrajectorySpec, SamplerSpec
+from nof1_causal_lab.artifacts.sampling import (
+    FixedTrajectorySpec,
+    NutsDASpec,
+    NutsTrajectorySpec,
+    SamplerSpec,
+)
+from nof1_causal_lab.models.ssm.inference.continuation import restore_state, retain_state
 from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 from nof1_causal_lab.models.ssm.inference.extraction import extract_grouped_public_samples
 from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.inference.samplers.progress import inference_phase
-from nof1_causal_lab.models.ssm.inference.samplers.sweeps import compile_projected_sweeps, run_sweeps
+from nof1_causal_lab.models.ssm.inference.samplers.sweeps import (
+    compile_projected_sweeps,
+    run_sweeps,
+)
 from nof1_causal_lab.models.ssm.inference.types import (
     JointPosteriorDraws,
     MCMCPosterior,
@@ -63,21 +71,31 @@ class NutsDARun:
         freeze_fields(self)
 
 
-def _extra_fields(state: HMCState, *, trajectory: NutsTrajectorySpec | FixedTrajectorySpec) -> Mapping[str, jax.Array]:
-    tree_depth = jnp.ceil(jnp.log2(state.num_steps + 1)).astype(jnp.int32)
-    tree_fields = {
-        "tree_depth": tree_depth,
-        "max_tree_depth_reached": jnp.asarray(state.num_steps) >= 2**trajectory.max_tree_depth - 1,
-    } if isinstance(trajectory, NutsTrajectorySpec) else {}
-    return {
-        **tree_fields,
-        "diverging": jnp.asarray(state.diverging),
-        "accept_prob": jnp.asarray(state.accept_prob),
-        "num_steps": jnp.asarray(state.num_steps),
-        "energy": jnp.asarray(state.energy),
-        "potential_energy": jnp.asarray(state.potential_energy),
-        "step_size": jnp.asarray(state.adapt_state.step_size),
-    }
+def _extra_fields(
+    state: HMCState, *, trajectory: NutsTrajectorySpec | FixedTrajectorySpec
+) -> Mapping[str, jax.Array]:
+    tree_depth: jax.Array = jnp.ceil(jnp.log2(state.num_steps + 1)).astype(jnp.int32)
+    tree_fields: Mapping[str, jax.Array] = (
+        {
+            "tree_depth": tree_depth,
+            "max_tree_depth_reached": jnp.asarray(state.num_steps)
+            >= 2**trajectory.max_tree_depth - 1,
+        }
+        if isinstance(trajectory, NutsTrajectorySpec)
+        else {}
+    )
+    return cast(
+        "Mapping[str, jax.Array]",
+        {
+            **tree_fields,
+            "diverging": jnp.asarray(state.diverging),
+            "accept_prob": jnp.asarray(state.accept_prob),
+            "num_steps": jnp.asarray(state.num_steps),
+            "energy": jnp.asarray(state.energy),
+            "potential_energy": jnp.asarray(state.potential_energy),
+            "step_size": jnp.asarray(state.adapt_state.step_size),
+        },
+    )
 
 
 def run_nuts_da(
@@ -115,7 +133,9 @@ def run_nuts_da(
         multiplier = jax.random.uniform(jitter_key, (), minval=0.8, maxval=1.2)
         varied = state._replace(
             rng_key=kernel_key,
-            adapt_state=state.adapt_state._replace(step_size=state.adapt_state.step_size * multiplier),
+            adapt_state=state.adapt_state._replace(
+                step_size=state.adapt_state.step_size * multiplier
+            ),
         )
         moved = raw_step(varied)
         adaptation = jax.lax.cond(
@@ -132,19 +152,27 @@ def run_nuts_da(
             adapt_mass_matrix=True,
             dense_mass=False,
             target_accept_prob=options.target_accept_prob,
-            max_tree_depth=trajectory.max_tree_depth if isinstance(trajectory, NutsTrajectorySpec) else 10,
+            max_tree_depth=trajectory.max_tree_depth
+            if isinstance(trajectory, NutsTrajectorySpec)
+            else 10,
             num_steps=trajectory.steps if isinstance(trajectory, FixedTrajectorySpec) else None,
-            trajectory_length=None,
+            trajectory_length=None,  # pyright: ignore[reportArgumentType] - NumPyro documents None for fixed-step HMC; its unannotated default is a float.
             rng_key=chain_key,
         )
 
     with inference_phase("nuts_da", "initializing_chains", clock=clock):
-        starts = jnp.broadcast_to(initial, (sampler.num_chains, initial.size)) if continuation is None else jax.vmap(coordinates.encode)(
-            jnp.asarray(continuation.parameters.values), jnp.asarray(continuation.paths.values)
+        starts = (
+            jnp.broadcast_to(initial, (sampler.num_chains, initial.size))
+            if continuation is None
+            else jax.vmap(coordinates.encode)(
+                jnp.asarray(continuation.parameters.values), jnp.asarray(continuation.paths.values)
+            )
         )
         if continuation is not None:
             key = jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values))
-        states = jax.jit(jax.vmap(initialize_chain))(starts, jax.random.split(key, sampler.num_chains))
+        states = jax.jit(jax.vmap(initialize_chain))(
+            starts, jax.random.split(key, sampler.num_chains)
+        )
         if continuation is not None and sampler.num_warmup == 0:
             states = restore_state(states, continuation.native_state)
         jax.block_until_ready(states)
@@ -157,13 +185,16 @@ def run_nuts_da(
 
     def project(point: jax.Array) -> dict[str, jax.Array]:
         parameters, path = coordinates.decode(point)
-        record = {"positions": parameters, "paths": path}
-        return record
+        return {"positions": parameters, "paths": path}
 
     def step_factory(
         _batch_size: int, stage: SweepStage
-    ) -> Callable[[tuple[HMCState, jax.Array]], tuple[tuple[HMCState, jax.Array], dict[str, jax.Array]]]:
-        def sweep(carry: tuple[HMCState, jax.Array]) -> tuple[tuple[HMCState, jax.Array], dict[str, jax.Array]]:
+    ) -> Callable[
+        [tuple[HMCState, jax.Array]], tuple[tuple[HMCState, jax.Array], dict[str, jax.Array]]
+    ]:
+        def sweep(
+            carry: tuple[HMCState, jax.Array],
+        ) -> tuple[tuple[HMCState, jax.Array], dict[str, jax.Array]]:
             current, key = carry
             next_key, step_key = jax.random.split(key)
             current = current._replace(rng_key=jax.random.split(step_key, sampler.num_chains))
@@ -183,7 +214,11 @@ def run_nuts_da(
             num_samples=sampler.num_samples_per_chain,
             max_batch_size=1,
             budget=compute_budget,
-            target=target, path_dtype=states.z.dtype, num_chains=sampler.num_chains, clock=clock, label="nuts_da",
+            target=target,
+            path_dtype=states.z.dtype,
+            num_chains=sampler.num_chains,
+            clock=clock,
+            label="nuts_da",
         )
     run = run_sweeps(plan, (states, key), clock=clock, label="nuts_da")
     states, next_key = run.state
@@ -208,10 +243,12 @@ def run_nuts_da(
         final_step_size=states.adapt_state.step_size,
         compiled_step=plan.compiled_step,
         checkpoint=SamplerCheckpoint(
-            settings=sampler, parameters=NumericalArray.from_numpy(np.asarray(last_parameters)),
+            settings=sampler,
+            parameters=NumericalArray.from_numpy(np.asarray(last_parameters)),
             paths=NumericalArray.from_numpy(np.asarray(last_paths)),
             random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(next_key))),
-            native_state=retain_state(states), tuning=JointTuning(),
+            native_state=retain_state(states),
+            tuning=JointTuning(),
         ),
     )
 
@@ -248,7 +285,9 @@ def fit_nuts_da(
     if isinstance(run, InitializationFailure):
         return run
     if sampler.num_samples_per_chain == 0:
-        return UnretainedRun(sampler, MCMCEvidence(method="nuts_da"), run.compiled_step, run.phase_extra_fields)
+        return UnretainedRun(
+            sampler, MCMCEvidence(method="nuts_da"), run.compiled_step, run.phase_extra_fields
+        )
     extra = run.phase_extra_fields["post_warmup"]
     mcmc = TrajectoryMCMCResult(
         chain_samples=extract_grouped_public_samples(
@@ -298,7 +337,8 @@ def fit_nuts_da(
                 mcmc_phase_seconds=clock() - started,
                 final_step_size=tuple(float(value) for value in run.final_step_size),
                 max_tree_depth_fraction=float(jnp.mean(extra["max_tree_depth_reached"]))
-                if isinstance(sampler.algorithm.trajectory, NutsTrajectorySpec) else None,
+                if "max_tree_depth_reached" in extra
+                else None,
             ),
             phase_extra_fields=run.phase_extra_fields,
         ),

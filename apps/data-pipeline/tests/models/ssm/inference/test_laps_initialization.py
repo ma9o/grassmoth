@@ -138,6 +138,11 @@ def test_laps_ensemble_recovers_analytic_joint_moments_with_paired_paths():
     whitened = np.linalg.solve(np.linalg.cholesky(covariance), (joint - mean).T).T
     np.testing.assert_allclose(whitened.mean(axis=0), 0, atol=0.15)
     np.testing.assert_allclose(np.cov(whitened, rowvar=False), np.eye(mean.size), atol=0.2)
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
+        LapsInitializationDiagnostics,
+    )
+
+    assert isinstance(result.diagnostics, LapsInitializationDiagnostics)
     assert result.diagnostics.adjusted_acceptance > 0.1
     assert np.linalg.eigvalsh(np.asarray(result.parameter_chol @ result.parameter_chol.T)).min() > 0
 
@@ -229,6 +234,11 @@ def test_production_fit_consumes_laps_package(leaf):
     else:
         assert evidence.dsmc_weights is None
         assert not any(key.startswith("dsmc_weight_") for key in retained)
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
+        LapsInitializationDiagnostics,
+    )
+
+    assert isinstance(evidence.initialization, LapsInitializationDiagnostics)
     assert evidence.initialization.ensemble_size == 128
     assert evidence.parameter_preconditioned
     if leaf == "amala_plus":

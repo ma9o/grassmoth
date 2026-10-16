@@ -24,17 +24,15 @@ from nof1_causal_lab.models.ssm.compile.state_space import (
     SequentialRecurrences,
 )
 from nof1_causal_lab.models.ssm.execution.supported_normal import SupportedNormal
+from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
-from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.fit import (
-    fit_marginal_particle_gibbs,
-)
 from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
 )
-from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
+from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.helpers import make_model
 from tests.support.inference import bind_panel_fixture, compile_fit_fixture
@@ -407,14 +405,14 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
     panel = bind_panel_fixture(
         compiled, jnp.full((4, len(compiled.observations)), jnp.nan), jnp.arange(4.0)
     )
-    failure = fit_marginal_particle_gibbs(
+    failure = fit(
         prepared.prior_runtime_bundle,
         panel,
         compute_budget=COMPUTE_BUDGET,
         sampler=SamplerSpec(),
         clock=lambda: 0.0,
     )
-    assert isinstance(failure, InitializationFailure)
+    assert isinstance(failure, ObservationPreflightFailure)
     assert "O(log T)" in failure.message
     assert "total" in failure.message
 
@@ -569,30 +567,6 @@ def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients
     for measured, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
         assert np.isfinite(measured).all()
         np.testing.assert_allclose(measured, reference, rtol=2e-5, atol=2e-5)
-
-    context = target.context(position, target.times)
-
-    def prefixes(coordinates):
-        replayed = target.replay_path(context, coordinates)
-        incoming = jax.vmap(
-            lambda previous, current, t: target.transition_log_prob(context, previous, current, t)
-        )(replayed[:-1], replayed[1:], jnp.arange(1, len(path)))
-        return jnp.cumsum(
-            jnp.concatenate((target.initial_log_prob(context, replayed[0])[None], incoming))
-            + target.observation_log_probs(context, replayed, target.observations)
-        )
-
-    increments, filtering_gradient = target.filtering_log_prob_and_grad(
-        context, path, target.observations
-    )
-    jacobian = jax.jacrev(prefixes)(path)
-    np.testing.assert_allclose(jnp.cumsum(increments), prefixes(path), rtol=2e-5, atol=2e-5)
-    np.testing.assert_allclose(
-        filtering_gradient,
-        jacobian[jnp.arange(len(path)), jnp.arange(len(path))],
-        rtol=2e-5,
-        atol=2e-5,
-    )
 
 
 def test_observation_partition_keeps_free_loadings_and_joint_gaussian_blocks():

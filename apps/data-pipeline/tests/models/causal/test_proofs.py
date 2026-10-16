@@ -201,9 +201,13 @@ def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engi
     )
     warning_gate = chain_convergence(warning_chains)
     assert warning_gate.status == "passed"
-    assert warning_gate.warnings and not warning_gate.messages
+    assert warning_gate.warnings
+    assert not warning_gate.messages
     certify_conditioned_model(
-        dynamical_model_spec, revision, record, dynamical_model_spec,
+        dynamical_model_spec,
+        revision,
+        record,
+        dynamical_model_spec,
         report.core.revised(inference_diagnostics=warning_chains, convergence=warning_gate),
     )
     poorly_mixed = diagnostics.revised(
