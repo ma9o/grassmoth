@@ -113,7 +113,7 @@
   "fit_model": {
     "kind": "study_model",
     "repository": "../../../../data/FRANCE1940/study/history.git",
-    "revision": "1fb7ff0cc1652066e0516b207a1171f8353b6370",
+    "revision": "5cb773f5f78eb5cf7b6b2fda4d59cf40e3012067",
     "sha256": "d9f377b994de75f28469620701c57ae4d931eb22166fafd996e037e6b937314c"
   },
   "data": {
@@ -445,7 +445,8 @@
     "suspicious_pattern": "Retained FRANCE1940 scientific finding: >50% of values are 0.0 (2/3)",
     "dtype_violation": "Retained FRANCE1940 scientific finding: 2 outlier(s) outside [-0.30, 0.20]",
     "variance": "Retained FRANCE1940 scientific finding: Variance requires at least two observations.",
-    "no_numeric": "Retained FRANCE1940 scientific finding: No numeric observations were retained."
+    "no_numeric": "Retained FRANCE1940 scientific finding: No numeric observations were retained.",
+    "large_timestamp_gap": "Retained FRANCE1940 scientific finding: annual and monthly historical series have gaps far longer than their declared daily observation window."
   },
   "expected_identified": [
     "construct:aircraft_investment_log_daily",
@@ -472,9 +473,10 @@
     "construct:war",
     "construct:weekly_hours"
   ],
-  "provenance": "FRANCE1940 model tree 1fb7ff0cc1652066e0516b207a1171f8353b6370, source hashes {'structural_20261008_wage_input/historical_inputs.csv': 'ca2357ecc629cac519bb87f659cd9573af6bbb97689a85e011e721f3b0e7e72b'}. Original study is read-only; source capture is reproduced through prepare_data in each benchmark workspace.",
+  "provenance": "FRANCE1940 model tree 5cb773f5f78eb5cf7b6b2fda4d59cf40e3012067, source hashes {'structural_20261008_wage_input/historical_inputs.csv': 'ca2357ecc629cac519bb87f659cd9573af6bbb97689a85e011e721f3b0e7e72b'}. Original study is read-only; source capture is reproduced through prepare_data in each benchmark workspace.",
   "unavailable_findings": {
     "INSUFFICIENT_OBSERVATIONS": "Some retained historical instruments have too few measurements for their empirical check.",
-    "NO_OBSERVATIONS": "Some declared historical instruments have no retained measurements."
+    "NO_OBSERVATIONS": "Some declared historical instruments have no retained measurements.",
+    "INSUFFICIENT_TIMES": "Some retained historical instruments, such as the two pre-1939 aircraft spot-rate readings, have too few observation times for gap checks."
   }
 }
