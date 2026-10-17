@@ -23,6 +23,11 @@ def test_pytest_fits_locally_and_rejects_live_modal_apps():
 
 @pytest.mark.parametrize("hardware", [InferenceHardware.L40S, InferenceHardware.H100])
 def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(monkeypatch, hardware):
+    # The SDK's process-global terminal renderer races when independent fit
+    # activities create apps concurrently. Service dispatch must stay headless.
+    monkeypatch.setattr(
+        modal, "enable_output", Mock(side_effect=AssertionError("Interactive Modal output"))
+    )
     payload = FitComputeInput(
         dynamical_model_spec_bytes=b"pinned-model",
         outcome=None,

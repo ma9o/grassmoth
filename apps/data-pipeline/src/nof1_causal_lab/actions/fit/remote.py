@@ -168,7 +168,7 @@ def _dispatch_fit(
         volumes={"/cache": modal.Volume.from_name("nof1-cached-fit-cache", create_if_missing=True)},
     )(_fit_gpu)
     try:
-        with modal.enable_output(), app.run():
+        with app.run():
             if allocation is None:
                 return remote_fit.remote(payload)
             allocation = allocation.revised(app_id=app.app_id)
