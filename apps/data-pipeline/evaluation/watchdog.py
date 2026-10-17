@@ -15,7 +15,10 @@ def expired(allocation: ModalAllocation, now: float) -> bool:
     """Completed calls and expired reservations must not retain live paid containers."""
     return (
         allocation.finished_at is not None
-        or now >= allocation.created_at + allocation.policy.wall_seconds
+        or now
+        >= allocation.created_at
+        + allocation.policy.startup_seconds
+        + allocation.policy.timeout_seconds
     )
 
 

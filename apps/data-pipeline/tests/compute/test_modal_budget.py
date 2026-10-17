@@ -35,6 +35,12 @@ def test_budget_admission_is_atomic_and_does_not_refund_finished_calls(tmp_path)
     with ThreadPoolExecutor(max_workers=2) as pool:
         allocations = tuple(pool.map(lambda _: reserve_allocation(policy, sampler), range(2)))
     assert len({item.identity for item in allocations}) == 2
+    from evaluation.watchdog import expired
+
+    allocation = allocations[0]
+    assert not expired(allocation, allocation.created_at + 19)
+    assert expired(allocation, allocation.created_at + 20)
+    assert allocation.policy.wall_seconds == 30  # Ten seconds remain for termination.
     for item in allocations:
         save_allocation(item.revised(finished_at=time.time()))
     with pytest.raises(RuntimeError, match="reserved stage budget"):
