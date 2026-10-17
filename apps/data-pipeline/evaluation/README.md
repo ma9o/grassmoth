@@ -170,7 +170,7 @@ value, timestamp or interval support.
 To regenerate into a new review directory on an explicitly authorized isolated stack:
 
 ```bash
-uv run python -m evaluation.fixtures.t512 \
+uv run python -m evaluation.fixtures.recorded --recipe evaluation/cases/t512.json \
   --endpoint http://localhost:18100 --workspace BENCHT512REGEN \
   --output ../../scratchpad/t512-regenerated
 ```
@@ -182,3 +182,11 @@ so changing an experiment's generation seed does not regenerate these recorded c
 
 The [case note](cases/assets/t512/README.md) owns the differences from the historical
 handwritten stress fixture. Its old posterior is not a reference for this changed case.
+
+The [dense rung](cases/assets/dense/README.md) uses the same recorded-data machinery
+for precise and noisy variants with coexisting dense and sparse components and
+unknown diffusion. `charts_dense_precise.json` and `charts_dense_noisy.json` declare
+`algorithm.chart` as the sole arm factor (`centred`, `innovation`, `mixed`). The
+latest segment's chart and actual mixed mask are retained in evaluation telemetry,
+including compile-only calls. References and GPU budget approval belong to the
+later pilot; these declarations do not run it.

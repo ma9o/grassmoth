@@ -1,0 +1,53 @@
+{
+  "name": "Joint chart pilot: dense precise",
+  "case": "../cases/dense_precise.json",
+  "base": {
+    "hardware": "local",
+    "num_chains": 4,
+    "num_warmup": 2000,
+    "num_samples_per_chain": 1000,
+    "algorithm": {
+      "method": "nuts_da",
+      "chart": "centred"
+    }
+  },
+  "factors": [
+    "algorithm.chart"
+  ],
+  "arms": [
+    {
+      "name": "centred",
+      "settings": {
+        "algorithm.chart": "centred"
+      }
+    },
+    {
+      "name": "innovation",
+      "settings": {
+        "algorithm.chart": "innovation"
+      }
+    },
+    {
+      "name": "mixed",
+      "settings": {
+        "algorithm.chart": "mixed"
+      }
+    }
+  ],
+  "seeds": [
+    {
+      "generation": 8029,
+      "sampler": 19
+    },
+    {
+      "generation": 8029,
+      "sampler": 37
+    },
+    {
+      "generation": 8029,
+      "sampler": 61
+    }
+  ],
+  "repeats": 1,
+  "concurrent_arms": 1
+}

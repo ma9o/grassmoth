@@ -1,0 +1,101 @@
+{
+  "name": "dense_noisy",
+  "question": {
+    "text": "Compare inference charts with dense and sparse nonlinear states, unknown diffusion and precise versus noisy readings. Identify the input effect on the dense outcome.",
+    "outcome": "construct:y",
+    "queries": {
+      "input contrast": {
+        "start": "2020-01-01",
+        "horizon": "32d",
+        "interventions": [
+          {
+            "target": "construct:u",
+            "value": 1.0
+          }
+        ]
+      }
+    }
+  },
+  "fit_model": {
+    "kind": "file",
+    "path": "assets/dense/noisy/model.json",
+    "sha256": "d593accd29e96c8fedbd73d6524dfc4bfdd9fd30cc58b1408eb425e6ec828645"
+  },
+  "data": {
+    "kind": "prepare_data",
+    "files": [
+      {
+        "kind": "file",
+        "path": "assets/dense/noisy/observations.csv",
+        "sha256": "94f9fc9e442c174c88fff90d7d77a12e096dd621088c1ca683eff73dd61250ce"
+      }
+    ],
+    "provenance_files": [
+      {
+        "kind": "file",
+        "path": "assets/dense/noisy/truth.json",
+        "sha256": "de1dace9e311b2b5e4b709d96d9ff9156b5c69b19dbd9337a90e0ade3285b967"
+      },
+      {
+        "kind": "file",
+        "path": "assets/dense/generation-request.json",
+        "sha256": "c47efbc24eb8ae94d639a6d5d0e4bdbd368f5f2c596ac7cb9d6027f3f45ed1bc"
+      },
+      {
+        "kind": "file",
+        "path": "assets/dense/mask.json",
+        "sha256": "996f93f99d2da41abe4801ab1bdcc5d549c695a8b41fd6499842f97b385cda78"
+      },
+      {
+        "kind": "file",
+        "path": "assets/dense/noisy/generated.csv",
+        "sha256": "0ebc912392cfcb79cdf04c394eba8a07cb8fca4521f2c82234ced9b6ded12ef0"
+      },
+      {
+        "kind": "file",
+        "path": "assets/dense/noisy/generation.json",
+        "sha256": "c4aad5f43e765a4faef0e2c98e05234320876c922ae6055835503c8d7b74c948"
+      }
+    ],
+    "extraction": {
+      "indicator:x": {
+        "kind": "recorded",
+        "value_column": "sparse",
+        "support_start_column": "sparse_start",
+        "support_end_column": "sparse_end"
+      },
+      "indicator:y": {
+        "kind": "recorded",
+        "value_column": "dense",
+        "support_start_column": "dense_start",
+        "support_end_column": "dense_end"
+      },
+      "indicator:u": {
+        "kind": "recorded",
+        "value_column": "u",
+        "support_start_column": "u_start",
+        "support_end_column": "u_end"
+      }
+    },
+    "context": "Import values and six-hour point supports exactly. Missing sparse readings are declared in mask.json; do not fill or aggregate."
+  },
+  "expected_identified": [
+    "construct:u"
+  ],
+  "truth": {
+    "input_effect": 0.7,
+    "sigma_dense": 0.35,
+    "sigma_sparse": 0.45
+  },
+  "allowed_findings": {
+    "C2 latent scale": "One simulation replicate has zero across-replicate variance; this screen does not assess this one-history design.",
+    "large_timestamp_gap": "The sparse channel intentionally keeps every eighth six-hour point reading.",
+    "C5c transmission": "Low information in noisy readings is the predeclared geometry stressor; their SD is 2.0 instead of 0.05.",
+    "suspicious_pattern": "The known deterministic input alternates between -1 and +1 in blocks of eight; 65 of 129 readings are +1."
+  },
+  "unavailable_findings": {
+    "NO_OBSERVATIONS": "Truth generation has no external observations for calibration.",
+    "EDGE_CONTRASTS_EXPLICIT": "Separate edge knockout simulations are outside generation of this dataset."
+  },
+  "provenance": "Production edit_model \u2192 simulate (seed 8029, one replicate) \u2192 saved CSV \u2192 declared sparse mask \u2192 prepare_data. The two variants share grid, seed, dynamics and mask; observation SD is 2.0. Exact revisions and hashes are in assets/dense/noisy/generation.json."
+}

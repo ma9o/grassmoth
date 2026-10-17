@@ -10,7 +10,7 @@ import pygit2
 import pytest
 from evaluation.client import ActionClient
 from evaluation.declarations import CaseFile, StudyModel
-from evaluation.fixtures.t512 import ObservationMask, mask_csv
+from evaluation.fixtures.recorded import ObservationMask, mask_csv
 from evaluation.sources import model_document, read_source
 
 from nof1_causal_lab.artifacts.identity import GitOid
@@ -113,3 +113,25 @@ def test_t512_mask_reproduces_committed_data_without_changing_support(tmp_path):
         for column, value in before.items():
             if column == "timestamp" or column.endswith(("_start", "_end")) or after[column]:
                 assert after[column] == value
+
+
+@pytest.mark.parametrize("variant", ("precise", "noisy"))
+def test_dense_case_pins_sources_and_declares_only_sparse_value_masking(variant, tmp_path):
+    from evaluation.declarations import CaseRecipe
+
+    root = Path(__file__).parents[2] / "evaluation/cases"
+    recipe = CaseRecipe.model_validate_json((root / f"dense_{variant}.json").read_text())
+    for source in (recipe.fit_model, *recipe.data.files, *recipe.data.provenance_files):
+        read_source(source, root)
+    assets = root / "assets/dense"
+    mask = ObservationMask.model_validate_json((assets / "mask.json").read_text())
+    output = tmp_path / "masked.csv"
+    mask_csv(assets / variant / "generated.csv", output, mask)
+    assert output.read_bytes() == (assets / variant / "observations.csv").read_bytes()
+    rows = list(csv.DictReader(io.StringIO(output.read_text())))
+    assert len(rows) == 129
+    assert sum(bool(row["dense"]) for row in rows) == 129
+    assert sum(bool(row["sparse"]) for row in rows) == 17
+    generation = json.loads((assets / variant / "generation.json").read_text())
+    assert generation["simulate"]["input"]["num_replicates"] == 1
+    assert generation["simulate"]["input"]["seed"] == 8029

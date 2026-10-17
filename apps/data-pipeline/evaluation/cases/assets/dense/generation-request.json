@@ -1,0 +1,24 @@
+{
+  "question": {
+    "text": "Compare inference charts with dense and sparse nonlinear states, unknown diffusion and precise versus noisy readings. Identify the input effect on the dense outcome.",
+    "outcome": "construct:y",
+    "queries": {
+      "input contrast": {
+        "start": "2020-01-01",
+        "horizon": "32d",
+        "interventions": [
+          {
+            "target": "construct:u",
+            "value": 1.0
+          }
+        ]
+      }
+    }
+  },
+  "simulation": {
+    "start": "2020-01-01",
+    "horizon": "32d"
+  },
+  "seed": 8029,
+  "num_replicates": 1
+}

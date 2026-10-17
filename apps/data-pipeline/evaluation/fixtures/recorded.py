@@ -1,4 +1,4 @@
-"""Regenerate the T=512 CSV through public actions, then apply its declared mask."""
+"""Regenerate a recorded benchmark CSV through public actions, then apply its declared mask."""
 
 from __future__ import annotations
 
@@ -26,7 +26,6 @@ from nof1_causal_lab.study.projections.observations import resolve_vector
 if TYPE_CHECKING:
     from nof1_causal_lab.actions.contracts.bodies import SimulateOutput
 
-_ASSETS = Path(__file__).parents[1] / "cases/assets/t512"
 _REQUEST = TypeAdapter(ActionInput)
 
 
@@ -108,14 +107,14 @@ def export_csv(result: SimulateOutput, destination: Path) -> None:
         writer.writerows(rows.values())
 
 
-def generate(endpoint: str, workspace: str, output: Path) -> None:
+def generate(recipe_path: Path, endpoint: str, workspace: str, output: Path) -> None:
     """Author literal truth and simulate one replicate; never fit or run an experiment."""
     output.mkdir(parents=True, exist_ok=False)
     client = ActionClient(endpoint, workspace, output / "calls")
-    recipe_root = _ASSETS.parents[1]
-    recipe = CaseRecipe.model_validate_json((recipe_root / "t512.json").read_text())
+    recipe_root = recipe_path.parent
+    recipe = CaseRecipe.model_validate_json(recipe_path.read_text())
     if not isinstance(recipe.data, RecordedData):
-        raise TypeError("The T=512 recipe must declare its recorded source provenance")
+        raise TypeError("The recipe must declare its recorded source provenance")
     sources = {Path(source.path).name: source for source in recipe.data.provenance_files}
     content = {
         name: read_source(sources[name], recipe_root)
@@ -185,12 +184,9 @@ def generate(endpoint: str, workspace: str, output: Path) -> None:
                 "simulation_revision": generated.commit_id,
                 "simulate_call_id": generated.call_id,
                 "hashes": {
-                    name: hashlib.sha256((root / name).read_bytes()).hexdigest()
-                    for root, names in (
-                        (_ASSETS, ("truth.json", "mask.json", "generation-request.json")),
-                        (output, ("generated.csv", "observations.csv")),
-                    )
-                    for name in names
+                    **{name: hashlib.sha256(payload).hexdigest() for name, payload in content.items()},
+                    **{name: hashlib.sha256((output / name).read_bytes()).hexdigest()
+                       for name in ("generated.csv", "observations.csv")},
                 },
                 "model_findings": truth.body.checks.model_dump(mode="json"),
                 "identification": truth.body.identification.model_dump(mode="json"),
@@ -207,11 +203,12 @@ def generate(endpoint: str, workspace: str, output: Path) -> None:
 def main() -> None:
     """Write a new regeneration directory against an explicitly chosen local stack."""
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--recipe", required=True, type=Path)
     parser.add_argument("--endpoint", required=True)
     parser.add_argument("--workspace", required=True)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    generate(args.endpoint, args.workspace, args.output)
+    generate(args.recipe, args.endpoint, args.workspace, args.output)
 
 
 if __name__ == "__main__":
