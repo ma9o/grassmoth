@@ -230,7 +230,11 @@ class StudyWorkflow:
                     run_action_activity,
                     ActionInput(workspace_id=self._workspace_id, request=action, state=base.state),
                     start_to_close_timeout=_RUN_ACTION_TIMEOUT,
-                    retry_policy=_ACTIVITY_RETRY,
+                    # A per-fit compute limit must not silently buy another
+                    # allocation after timeout or a lost provider response.
+                    retry_policy=RetryPolicy(maximum_attempts=1)
+                    if isinstance(action, FitRequest)
+                    else _ACTIVITY_RETRY,
                 )
             if isinstance(
                 action, (EditModelRequest, FitRequest, PrepareDataRequest)

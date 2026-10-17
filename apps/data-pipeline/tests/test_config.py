@@ -106,6 +106,7 @@ class TestSamplerSpec:
                 num_chains=4,
                 seed=0,
                 num_particles=16,
+                time_limit_seconds=90,
             )
         )
         assert (
@@ -114,7 +115,8 @@ class TestSamplerSpec:
             resolved.num_chains,
             resolved.seed,
             resolved.num_particles,
-        ) == (0, 30, 4, 0, 16)
+            resolved.time_limit_seconds,
+        ) == (0, 30, 4, 0, 16, 90)
         assert resolved.algorithm is configured.algorithm
         assert isinstance(resolved.algorithm, MarginalParticleGibbsSpec)
         assert resolved.algorithm.dsmc.latent_step == FixedLatentStepSpec(delta=0.31)
@@ -126,6 +128,14 @@ class TestSamplerSpec:
             configured.num_particles,
         ) == (10, 20, 2, 3, 8)
         assert resolve_sampler_spec(FitSettingsSpec()) == configured
+        assert configured.time_limit_seconds == 14400
+        assert resolve_sampler_spec(FitSettingsSpec(), resolved).time_limit_seconds == 90
+        assert (
+            resolve_sampler_spec(
+                FitSettingsSpec(time_limit_seconds=30), resolved
+            ).time_limit_seconds
+            == 30
+        )
         assert (
             resolve_sampler_spec(FitSettingsSpec(algorithm=NutsDASpec())).algorithm == NutsDASpec()
         )

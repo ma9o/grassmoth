@@ -16039,13 +16039,28 @@
             },
             "title": "Devices",
             "type": "array"
+          },
+          "time_limit_seconds": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Enforced Modal phase limit; null for local execution.",
+            "title": "Time Limit Seconds"
           }
         },
         "required": [
           "source_digest",
           "versions",
           "compiler",
-          "devices"
+          "devices",
+          "time_limit_seconds"
         ],
         "title": "FitRuntime",
         "type": "object",
@@ -16108,6 +16123,19 @@
               }
             ],
             "default": null
+          },
+          "time_limit_seconds": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Time Limit Seconds"
           },
           "algorithm": {
             "anyOf": [
@@ -16207,6 +16235,19 @@
             ],
             "default": null
           },
+          "time_limit_seconds": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Time Limit Seconds"
+          },
           "algorithm": {
             "anyOf": [
               {
@@ -16286,6 +16327,7 @@
         },
         "required": [
           "hardware",
+          "time_limit_seconds",
           "algorithm",
           "num_samples_per_chain",
           "num_warmup",
@@ -24157,6 +24199,13 @@
             "$ref": "#/components/schemas/InferenceHardware",
             "default": "L40S"
           },
+          "time_limit_seconds": {
+            "default": 14400,
+            "description": "Modal startup and execution timeout per phase. Local fits have no enforced timeout.",
+            "minimum": 1,
+            "title": "Time Limit Seconds",
+            "type": "integer"
+          },
           "retain_latent_paths": {
             "default": true,
             "title": "Retain Latent Paths",
@@ -24173,6 +24222,7 @@
           "seed",
           "num_particles",
           "hardware",
+          "time_limit_seconds",
           "retain_latent_paths",
           "algorithm"
         ],

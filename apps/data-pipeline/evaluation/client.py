@@ -23,6 +23,7 @@ from nof1_causal_lab.study.persistence.codec import unpack_result
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from evaluation.budget import BudgetLedger
     from nof1_causal_lab.api.studies import TimelineResponse
     from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
 
@@ -32,11 +33,14 @@ _POLL = TypeAdapter(ActionPoll)
 class ActionClient:
     """Persist every returned envelope so failures and reused calls remain reviewable."""
 
-    def __init__(self, endpoint: str, workspace: str, output: Path):
+    def __init__(
+        self, endpoint: str, workspace: str, output: Path, *, budget: BudgetLedger | None = None
+    ):
         self.endpoint = endpoint.rstrip("/")
         self.workspace = workspace
         self.output = output
         self.reused: dict[str, bool] = {}
+        self.budget = budget
         output.mkdir(parents=True, exist_ok=True)
 
     def _read(self, request: Request) -> ActionPoll:
@@ -75,6 +79,12 @@ class ActionClient:
                 request.model_dump_json(round_trip=True)
             )
             self.reused[identity] = reused
+            if (
+                not reused
+                and self.budget is not None
+                and request.input.settings.hardware != "local"
+            ):
+                self.budget.reserve(self.endpoint, self.workspace, identity, request.input.settings)
         poll = self._read(
             Request(
                 url,
@@ -87,6 +97,8 @@ class ActionClient:
         while isinstance(poll, RunningPoll):
             time.sleep(1)
             poll = self._read(Request(url + "/" + poll.call_id))
+        if isinstance(request, FitRequest) and self.budget is not None:
+            self.budget.finish(self.endpoint, self.workspace, poll.call_id, poll.status)
         if isinstance(poll, FailedPoll):
             raise ValueError(f"{request.action} failed; inspect {poll.call_id}")
         return poll

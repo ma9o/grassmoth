@@ -47,6 +47,9 @@ class FitRuntime(Value):
     versions: Mapping[str, str]
     compiler: Mapping[str, str]
     devices: tuple[str, ...]
+    time_limit_seconds: int | None = Field(
+        default=None, ge=1, description="Enforced Modal phase limit; null for local execution."
+    )
 
 
 class FitSegment(Value):

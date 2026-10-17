@@ -11,6 +11,7 @@ from itertools import batched
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
+from evaluation.budget import BudgetLedger
 from evaluation.client import ActionClient
 from evaluation.comparison import (
     _posterior_draws,
@@ -80,6 +81,8 @@ def _fit(
     repeat: int,
     previous: GitOid | None = None,
 ):
+    if settings.hardware != "local" and client.budget is None:
+        raise ValueError("Paid benchmark fits require an evaluation budget policy")
     target = (
         ContinueFitTarget(fit_ref=previous)
         if previous is not None
@@ -112,6 +115,7 @@ def run(
     output: Path,
     billing: BillingReport | None,
     workspace_root: Path | None = None,
+    budget: BudgetLedger | None = None,
 ) -> None:
     """Prepare equal cases, schedule isolated arms, compare only valid pairs and retain failures."""
     if experiment.probe_samples is not None and workspace_root is None:
@@ -121,9 +125,7 @@ def run(
     output.mkdir(parents=True, exist_ok=False)
     (output / "experiment.json").write_text(experiment.model_dump_json(indent=2))
     identity = hashlib.sha256(
-        experiment.model_dump_json(
-            exclude={"repeats", "posterior", "reservation_usd_per_fit", "concurrent_arms"}
-        ).encode()
+        experiment.model_dump_json(exclude={"repeats", "posterior", "concurrent_arms"}).encode()
     ).hexdigest()[:12]
     rows: list[JsonObject] = []
     try:
@@ -134,6 +136,7 @@ def run(
                         arm.endpoint or endpoint,
                         f"bench-{identity}-g{seed.generation}-s{seed.sampler}-{i}-r{repeat}",
                         output / f"g{seed.generation}-s{seed.sampler}" / arm.name / f"r{repeat}",
+                        budget=budget,
                     )
                     for i, arm in enumerate(experiment.arms)
                 )
@@ -148,6 +151,7 @@ def run(
                             if source is not None
                             else clients[0].workspace + "-anchor",
                             output / f"anchor-s{seed.sampler}-r{repeat}",
+                            budget=budget,
                         )
                         if source is None:
                             anchor_case = prepare_case(
@@ -300,8 +304,10 @@ def run(
                     results = tuple(results_by_batch)
                     controls = tuple(_controls(result.body) for result in results)
                     factors = (
-                        (*experiment.factors, "runtime.devices")
+                        (*experiment.factors, "runtime.devices", "runtime.time_limit_seconds")
                         if "hardware" in experiment.factors
+                        else (*experiment.factors, "runtime.time_limit_seconds")
+                        if "time_limit_seconds" in experiment.factors
                         else experiment.factors
                     )
                     for control in controls[1:]:
@@ -376,7 +382,7 @@ def run(
         rows.append({"status": "failed", "detail": str(exc)})
         raise
     finally:
-        write_report(output / "report.html", experiment, rows, billing)
+        write_report(output / "report.html", experiment, rows, billing, budget)
 
 
 def main() -> None:
@@ -385,6 +391,9 @@ def main() -> None:
     parser.add_argument("declaration", type=Path)
     parser.add_argument("--endpoint", required=True)
     parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument(
+        "--budget", type=Path, help="Evaluation admission and billing ledger policy"
+    )
     parser.add_argument(
         "--workspace-root", type=Path, help="Local isolated facade data root for shared probes"
     )
@@ -402,6 +411,7 @@ def main() -> None:
         args.output,
         billing,
         args.workspace_root,
+        BudgetLedger.read(args.budget) if args.budget else None,
     )
 
 

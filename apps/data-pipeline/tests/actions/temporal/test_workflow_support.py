@@ -138,3 +138,53 @@ def test_emit_progress_uses_shared_activity_policy(monkeypatch) -> None:
         "start_to_close_timeout": EVENT_TIMEOUT,
         "retry_policy": EVENT_RETRY,
     }
+
+
+@pytest.mark.parametrize(("kind", "attempts"), [("fit", 1), ("simulate", 3)])
+def test_failed_fit_has_one_compute_attempt_and_only_journals_the_failure(
+    monkeypatch, kind, attempts
+):
+    from datetime import UTC, datetime
+
+    from temporalio.exceptions import ActivityError, RetryState
+
+    from nof1_causal_lab.actions.temporal.study import workflow as study_workflow
+    from nof1_causal_lab.actions.temporal.study.messages import ActionRequest, StudyInit
+    from nof1_causal_lab.study.records import ActionBase
+    from nof1_causal_lab.study.state import StudyState
+    from tests.support.git import git_oid
+
+    payload = (
+        {"target": {"kind": "continue", "fit_ref": git_oid(1)}}
+        if kind == "fit"
+        else {
+            "dynamical_model_spec_ref": git_oid(1),
+            "simulation": {"start": "2026-01-01", "horizon": "1d"},
+        }
+    )
+    request = ActionRequest.model_validate({"request": {"action": kind, "input": payload}})
+    base = ActionBase(commit_id=git_oid(1), state=StudyState())
+    error = ActivityError(
+        "provider timeout",
+        scheduled_event_id=1,
+        started_event_id=2,
+        identity="worker",
+        activity_type="run_action_activity",
+        activity_id="2",
+        retry_state=RetryState.MAXIMUM_ATTEMPTS_REACHED,
+    )
+    execute = AsyncMock(side_effect=[base, error])
+    monkeypatch.setattr(study_workflow.workflow, "execute_activity", execute)
+    monkeypatch.setattr(study_workflow.workflow, "now", lambda: datetime(2026, 1, 1, tzinfo=UTC))
+    monkeypatch.setattr(study_workflow, "validate_lineage", lambda *_: None)
+    runner = study_workflow.StudyWorkflow(StudyInit(workspace_id="test"))
+    journal = AsyncMock()
+    monkeypatch.setattr(runner, "_journal", journal)
+    monkeypatch.setattr(runner, "_report_progress", Mock())
+    asyncio.run(runner._execute_action(request))
+    assert (
+        execute.call_count == 2
+    )  # Read inputs, then compute; no checks or scientific publication.
+    assert execute.call_args.kwargs["retry_policy"].maximum_attempts == attempts
+    assert journal.await_args is not None
+    assert journal.await_args.args[-1].outcome.status == "raised"

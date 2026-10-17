@@ -95,29 +95,67 @@ no benchmark-local prediction engine is supplied.
 
 ## Accounting and provenance
 
-`reservation_usd_per_fit` is a reporting estimate; a newly prepared shared anchor is
-counted once per seed/repeat. External anchors are accounted for in their preparation run.
-Recorded duration and the union of compile intervals measure execution, not GPU billing.
-Supply saved output from `modal billing report` with `--billing-report PATH` to retain
-its original text, filename and SHA-256 digest beside the measured results. Reconcile
-its job allocations separately; the runner does not estimate an invoice from duration.
-Missing billed cost is unknown, never zero. No billing command or paid job is launched
-by importing this package or by generating its report.
+Paid experiment runs require `--budget POLICY.json`. The [evaluation ledger](budget.py)
+checks the review hold file and reserves each fresh fit before its public POST. It
+also covers newly prepared anchors; copied saved anchors and reused calls do not
+allocate again. A failed call retains its debit, and a lost response retains both
+its debit and scheduling slot until recovered or reconciled. The policy directory
+can be shared across stages and scheduler processes; admission uses a file lock.
 
-Exploratory declarations and generated outputs belong in gitignored `scratchpad/`.
+For example, an operator-supplied policy is:
 
-For an isolated stack, `NOF1_DATA_ROOT` selects its local storage root. The optional
-`NOF1_MODAL_FIT_BUDGET` points to a deployment-owned JSON
-[allocation policy](../src/nof1_causal_lab/compute/modal_budget.py). It debits the full
-per-call reservation under a file lock before launching, requires a current watchdog
-heartbeat, checks the review hold file, limits concurrent allocations, and retains
-failed allocations in the debit. The remote adapter caps CPU/RAM and startup/execution
-time, registers app and function-call IDs, and terminates a timed-out call's containers.
-Run `python -m evaluation.watchdog REGISTRY_ROOT` in a separate supervised process;
-each stage policy uses one child directory. The watchdog stops registered completed
-or expired apps, including apps still building their image. These bounds do not
-replace billing reconciliation. Price the full allocation and leave headroom for
-builds, transfer and termination; unavailable billing is never zero cost.
+```json
+{
+  "directory": "/absolute/campaign/ledger",
+  "hold_file": "/absolute/campaign/CLAUDE-HOLD",
+  "rates": {"L40S": "0.001"},
+  "max_usd": "10",
+  "max_concurrent": 4,
+  "termination_seconds": 60,
+  "extra_usd_per_fit": "0.05"
+}
+```
+
+Rates must cover GPU, CPU and memory; the example is illustrative, not a current
+price quote. The resolved fit's `time_limit_seconds` is sent to production in its
+settings. Reserve `rate × (2 × time_limit_seconds + termination_seconds)` plus the
+extra per-fit allowance: Modal startup and computation each have that time bound.
+Price image builds and other overhead into the extra allowance. Provider invoices,
+not inference duration, determine actual cost. The [fit chart](../../../docs/assets/action-flows/fit.svg)
+owns timeout/failure behavior. There is no benchmark hook or watchdog in production.
+
+Save `modal billing report --for today --show-resources --json` and
+`modal app list --json`, then provide reviewed allocation-to-app bindings:
+
+```json
+{
+  "<allocation identity from ledger/allocations>": {
+    "app_ids": ["ap-..."],
+    "evidence": "provider trace tying this app to the recorded fit call"
+  }
+}
+```
+
+Production apps share a name. Match IDs from provider execution evidence; do not
+infer identity from overlapping timestamps or the app name. Unmapped calls retain
+their full reservation. Reconcile the saved exports without launching any work:
+
+```bash
+uv run python -m evaluation.budget --policy POLICY.json \
+  --billing-report billing.json --apps apps.json --bindings bindings.json
+```
+
+The ledger retains the original exports, their SHA-256 hashes and every reconciliation
+snapshot. Only stopped apps with reported charges settle to their invoices. Missing
+billing is unknown, never zero; no bound app may settle two reservations. Supply the
+complete binding set on each reconciliation. Successful or failed completion alone
+never releases money. The report shows the ledger alongside measured phase times;
+`--billing-report PATH` also retains the source billing export beside the experiment.
+Importing the package or generating a report executes no scientific or paid job.
+
+Exploratory declarations and outputs belong in gitignored `scratchpad/`. The
+[storage configuration](../src/nof1_causal_lab/storage/backend.py) owns
+`NOF1_DATA_ROOT`, the general local-storage deployment override for an isolated stack.
 
 ## Saved T=512 data
 

@@ -88,7 +88,7 @@ def fit(
             fitted["error"], diagnostics={"duration_seconds": fitted["duration_seconds"]}
         )
     result = fitted["result"]
-    runtime = fit_runtime()
+    runtime = fit_runtime(sampler)
     old_count = (
         0
         if previous is None

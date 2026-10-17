@@ -72,6 +72,9 @@ def resolve_sampler_spec(
         if settings.num_particles is None
         else settings.num_particles,
         hardware=configured.hardware if settings.hardware is None else settings.hardware,
+        time_limit_seconds=configured.time_limit_seconds
+        if settings.time_limit_seconds is None
+        else settings.time_limit_seconds,
         retain_latent_paths=True,
         algorithm=configured.algorithm if settings.algorithm is None else settings.algorithm,
     )

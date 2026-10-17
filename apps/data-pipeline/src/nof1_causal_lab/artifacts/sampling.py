@@ -178,6 +178,11 @@ class SamplerSpec(Value):
     seed: int = Field(default=0, ge=0)
     num_particles: int = Field(default=64, ge=2)
     hardware: InferenceHardware = InferenceHardware.L40S
+    time_limit_seconds: int = Field(
+        default=14400,
+        ge=1,
+        description="Modal startup and execution timeout per phase. Local fits have no enforced timeout.",
+    )
     retain_latent_paths: bool = True
     algorithm: InferenceAlgorithmSpec = Field(default_factory=MarginalParticleGibbsSpec)
 
@@ -186,6 +191,7 @@ class FitSettingsSpec(Value):
     """Optional numerical controls applied to the configured joint sampler."""
 
     hardware: InferenceHardware | None = None
+    time_limit_seconds: int | None = Field(default=None, ge=1)
     algorithm: InferenceAlgorithmSpec | None = None
     num_samples_per_chain: int | None = Field(default=None, ge=0)
     num_warmup: int | None = Field(default=None, ge=0)

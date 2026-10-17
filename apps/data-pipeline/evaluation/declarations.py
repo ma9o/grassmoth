@@ -131,7 +131,6 @@ class Experiment(Value):
     seeds: tuple[SeedPair, ...] = Field(min_length=1)
     repeats: int = Field(default=1, ge=1)
     concurrent_arms: int = Field(default=1, ge=1)
-    reservation_usd_per_fit: float = Field(default=0, ge=0)
     posterior: PosteriorComparison | None = None
     probe_samples: int | None = Field(default=None, ge=1)
     probe_warmup: int = Field(default=0, ge=0)

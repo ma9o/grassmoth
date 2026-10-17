@@ -11,6 +11,7 @@ from nof1_causal_lab.artifacts.base import Value
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from evaluation.budget import BudgetLedger
     from evaluation.declarations import Experiment
     from nof1_causal_lab.json_types import JsonObject
 
@@ -32,7 +33,11 @@ class BillingReport(Value):
 
 
 def write_report(
-    path: Path, experiment: Experiment, rows: list[JsonObject], billing: BillingReport | None
+    path: Path,
+    experiment: Experiment,
+    rows: list[JsonObject],
+    billing: BillingReport | None,
+    budget: BudgetLedger | None = None,
 ) -> None:
     """Render saved results and separately supplied Modal billing-report allocations."""
     keys = tuple(dict.fromkeys(key for row in rows for key in row))
@@ -44,15 +49,7 @@ def write_report(
         "<tr>" + "".join(f"<td>{html.escape(str(row.get(key, '')))}</td>" for key in keys) + "</tr>"
         for row in rows
     )
-    reservation = (
-        experiment.reservation_usd_per_fit
-        * (
-            len(experiment.arms)
-            + int(experiment.probe_samples is not None and experiment.probe_anchor is None)
-        )
-        * len(experiment.seeds)
-        * experiment.repeats
-    )
+    reservation = html.escape(budget.summary() if budget is not None else "No paid admissions")
     payload = html.escape(experiment.model_dump_json(indent=2))
     invoices = html.escape(
         billing.model_dump_json(indent=2) if billing is not None else "Not supplied"
@@ -63,7 +60,8 @@ body{{font:14px system-ui;margin:24px;color:#172033}} table{{border-collapse:col
 th,td{{border:1px solid #ddd;padding:8px;text-align:left;white-space:pre-wrap}}th{{position:sticky;top:0;background:#eef2f5}}
 button{{font:inherit;border:0;background:none;cursor:pointer}}pre{{white-space:pre-wrap;max-width:100%}}
 </style><h1>{html.escape(experiment.name)}</h1>
-<p>Reserved upper budget: ${reservation:.4f}. Measured compute seconds are retained fit evidence,
+<details open><summary>Budget ledger</summary><pre>{reservation}</pre></details>
+<p>Measured compute seconds are retained fit evidence,
 not billed GPU time. Reused calls do not represent a new timing measurement.</p>
 <p>Compilation time is the union of recorded compile intervals; overlapping work is counted once.
 Adapted tuning is an outcome. Summary equivalence covers marginal means and standard deviations,

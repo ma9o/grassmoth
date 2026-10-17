@@ -4309,6 +4309,12 @@ export interface components {
             };
             /** Devices */
             readonly devices: readonly string[];
+            /**
+             * Time Limit Seconds
+             * @description Enforced Modal phase limit; null for local execution.
+             * @default null
+             */
+            readonly time_limit_seconds: number | null;
         };
         /**
          * FitSegment
@@ -4331,6 +4337,11 @@ export interface components {
         readonly "FitSettingsSpec-Input": {
             /** @default null */
             readonly hardware?: components["schemas"]["InferenceHardware"] | null;
+            /**
+             * Time Limit Seconds
+             * @default null
+             */
+            readonly time_limit_seconds?: number | null;
             /** @default null */
             readonly algorithm?: components["schemas"]["InferenceAlgorithmSpec-Input"] | null;
             /**
@@ -4366,6 +4377,11 @@ export interface components {
         readonly "FitSettingsSpec-Output": {
             /** @default null */
             readonly hardware: components["schemas"]["InferenceHardware"] | null;
+            /**
+             * Time Limit Seconds
+             * @default null
+             */
+            readonly time_limit_seconds: number | null;
             /** @default null */
             readonly algorithm: components["schemas"]["InferenceAlgorithmSpec-Output"] | null;
             /**
@@ -6955,6 +6971,12 @@ export interface components {
             readonly num_particles: number;
             /** @default L40S */
             readonly hardware: components["schemas"]["InferenceHardware"];
+            /**
+             * Time Limit Seconds
+             * @description Modal startup and execution timeout per phase. Local fits have no enforced timeout.
+             * @default 14400
+             */
+            readonly time_limit_seconds: number;
             /**
              * Retain Latent Paths
              * @default true

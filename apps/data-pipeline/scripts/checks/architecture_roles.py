@@ -78,7 +78,6 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "compute/batching": "compiler",
     "compute/traced_memory": "compiler",
     "compute/modal_images": "edge",
-    "compute/modal_budget": "edge",
     "compute/resources": "edge",
     "config": "edge",
     "json_types": "domain",

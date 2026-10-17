@@ -3,6 +3,10 @@
 Production (``DEPLOYMENT_ENV=production``) uses Cloudflare R2.
 All other environments default to local filesystem.
 
+Local storage uses ``NOF1_DATA_ROOT`` when set (expanded to an absolute path),
+otherwise the repository's ``data/`` directory. This deployment setting does not
+change the R2 location when ``DEPLOYMENT_ENV=production``.
+
 Environment variables for R2::
 
     DEPLOYMENT_ENV=production

@@ -9,9 +9,10 @@ from pathlib import Path
 import jax
 
 from nof1_causal_lab.artifacts.reports.inference import FitRuntime
+from nof1_causal_lab.artifacts.sampling import InferenceHardware, SamplerSpec
 
 
-def fit_runtime() -> FitRuntime:
+def fit_runtime(sampler: SamplerSpec) -> FitRuntime:
     """Hash shipped numerical source, including uncommitted edits, without requiring Git."""
     root = Path(__file__).resolve().parents[2]
     digest = hashlib.sha256()
@@ -19,6 +20,9 @@ def fit_runtime() -> FitRuntime:
         digest.update(str(path.relative_to(root)).encode())
         digest.update(path.read_bytes())
     return FitRuntime(
+        time_limit_seconds=None
+        if sampler.hardware == InferenceHardware.LOCAL
+        else sampler.time_limit_seconds,
         source_digest=digest.hexdigest(),
         versions={
             "python": platform.python_version(),

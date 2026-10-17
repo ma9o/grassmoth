@@ -22,7 +22,10 @@ def test_pytest_fits_locally_and_rejects_live_modal_apps():
 
 
 @pytest.mark.parametrize("hardware", [InferenceHardware.L40S, InferenceHardware.H100])
-def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(monkeypatch, hardware):
+@pytest.mark.parametrize("time_limit", [14400, 90])
+def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
+    monkeypatch, hardware, time_limit
+):
     # The SDK's process-global terminal renderer races when independent fit
     # activities create apps concurrently. Service dispatch must stay headless.
     monkeypatch.setattr(
@@ -34,7 +37,7 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(mon
         panel_parquet=b"pinned-history",
         variables=(),
         time_origin=datetime(2024, 1, 1, tzinfo=UTC),
-        sampler=SamplerSpec(algorithm=NutsDASpec(), num_chains=4),
+        sampler=SamplerSpec(algorithm=NutsDASpec(), num_chains=4, time_limit_seconds=time_limit),
         compute_loo_diagnostics=False,
     )
     expected = FitComputeResult(b"fitted-model", b"evidence", "{}")
@@ -46,46 +49,34 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(mon
     monkeypatch.setattr(modal, "App", lambda _name: app)
     assert _dispatch_fit(payload, hardware=hardware) is expected
     assert app.function.call_args.kwargs["gpu"] == hardware.value
-    assert app.function.call_args.kwargs["timeout"] == 4 * 60 * 60
+    assert app.function.call_args.kwargs["timeout"] == time_limit
+    assert app.function.call_args.kwargs["startup_timeout"] == time_limit
+    assert app.function.call_args.kwargs["scaledown_window"] == 2
+    assert "max_containers" not in app.function.call_args.kwargs
+    assert app.function.call_args.kwargs["cpu"] == (8, 8)
+    assert app.function.call_args.kwargs["memory"] == (32768, 32768)
     remote.remote.assert_called_once_with(payload)
+    remote.spawn.assert_not_called()
 
 
-def test_bounded_dispatch_records_provider_ids_and_terminates_timed_out_call(tmp_path, monkeypatch):
-    from nof1_causal_lab.compute.modal_budget import ModalAllocation, ModalFitBudget
-
-    policy = ModalFitBudget(
-        directory=tmp_path / "registry",
-        hold_file=tmp_path / "HOLD",
-        hardware="L40S",
-        timeout_seconds=10,
-        startup_seconds=10,
-        termination_seconds=10,
-        usd_per_second=0.001,
-        reservation_usd=1,
-        max_reserved_usd=1,
-    )
-    policy.directory.mkdir()
-    (policy.directory / "watchdog.heartbeat").touch()
-    policy_path = tmp_path / "policy.json"
-    policy_path.write_text(policy.model_dump_json())
-    monkeypatch.setenv("NOF1_MODAL_FIT_BUDGET", str(policy_path))
+def test_modal_timeout_propagates_without_another_call(monkeypatch):
     payload = FitComputeInput(
         b"model", None, b"history", (), datetime.now(UTC), SamplerSpec(), False
     )
-    call = Mock(object_id="fc-budget-test", get=Mock(side_effect=TimeoutError("expired")))
-    function = Mock()
-    function.spawn.return_value = call
-    app = Mock(app_id="ap-budget-test")
+    function = Mock(remote=Mock(side_effect=modal.exception.FunctionTimeoutError("expired")))
+    app = Mock()
     app.function.return_value = lambda _function: function
     app.run.return_value = nullcontext()
     monkeypatch.setattr(modal, "App", lambda _name: app)
-    with pytest.raises(TimeoutError, match="expired"):
+    with pytest.raises(modal.exception.FunctionTimeoutError, match="expired"):
         _dispatch_fit(payload, hardware=InferenceHardware.L40S)
-    call.cancel.assert_called_once_with(terminate_containers=True)
-    assert app.function.call_args.kwargs["cpu"] == (8, 8)
-    assert app.function.call_args.kwargs["memory"] == (32768, 32768)
-    assert app.function.call_args.kwargs["scaledown_window"] == 2
-    record = ModalAllocation.model_validate_json(next(policy.directory.glob("*.json")).read_text())
-    assert record.app_id == "ap-budget-test"
-    assert record.function_call_id == "fc-budget-test"
-    assert record.finished_at is not None
+    function.remote.assert_called_once_with(payload)
+    function.spawn.assert_not_called()
+
+
+def test_runtime_records_the_enforced_modal_limit():
+    from nof1_causal_lab.actions.fit.runtime import fit_runtime
+
+    sampler = SamplerSpec(hardware="L40S", time_limit_seconds=90)
+    assert fit_runtime(sampler).time_limit_seconds == 90
+    assert fit_runtime(sampler.revised(hardware="local")).time_limit_seconds is None

@@ -24,6 +24,7 @@ const source = { files: ["input/test.csv"] as const, hashes: {}, start: null, en
 const design = { start: "2026-01-01", horizon: "1d", interventions: [] };
 const settings = {
   hardware: null,
+  time_limit_seconds: null,
   algorithm: null,
   num_samples_per_chain: null,
   num_warmup: null,
