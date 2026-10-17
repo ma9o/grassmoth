@@ -4904,6 +4904,8 @@ export interface components {
             /** Value */
             readonly value: number;
         };
+        /** @enum {string} */
+        readonly JointChart: "centred" | "innovation" | "mixed";
         /**
          * JointLawLayout
          * @description An explicit law membership ordered independently of native tensor positions.
@@ -5855,6 +5857,11 @@ export interface components {
              */
             readonly method: "nuts_da";
             /**
+             * @description Experimental coordinates for the unchanged joint posterior; frozen per fit.
+             * @default centred
+             */
+            readonly chart?: components["schemas"]["JointChart"];
+            /**
              * Target Accept Prob
              * @default 0.8
              */
@@ -5876,6 +5883,11 @@ export interface components {
              * @enum {string}
              */
             readonly method: "nuts_da";
+            /**
+             * @description Experimental coordinates for the unchanged joint posterior; frozen per fit.
+             * @default centred
+             */
+            readonly chart: components["schemas"]["JointChart"];
             /**
              * Target Accept Prob
              * @default 0.8

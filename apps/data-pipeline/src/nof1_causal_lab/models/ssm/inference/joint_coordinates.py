@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 if TYPE_CHECKING:
+    from nof1_causal_lab.artifacts.sampling import JointChart
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
-
-
-type JointChart = Literal["centred", "innovation", "mixed"]
 
 
 @dataclass(frozen=True, eq=False)

@@ -119,6 +119,7 @@ export type InitialCorrelationTransformSpec = components["schemas"]["InitialCorr
 export type InitializationDiagnostics = components["schemas"]["InitializationDiagnostics"];
 export type IntervalEffectTransformSpec = components["schemas"]["IntervalEffectTransformSpec-Output"];
 export type InterventionSpec = components["schemas"]["InterventionSpec-Output"];
+export type JointChart = components["schemas"]["JointChart"];
 export type JointLawLayout = components["schemas"]["JointLawLayout-Output"];
 export type JointTrajectorySpec = components["schemas"]["JointTrajectorySpec-Output"];
 export type JointTuning = components["schemas"]["JointTuning"];

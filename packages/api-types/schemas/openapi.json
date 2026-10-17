@@ -17859,6 +17859,17 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "JointChart": {
+        "enum": [
+          "centred",
+          "innovation",
+          "mixed"
+        ],
+        "type": "string",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "JointLawLayout-Input": {
         "additionalProperties": false,
         "description": "An explicit law membership ordered independently of native tensor positions.\n\nParameters sort by identity, then by scientific element identity. Trajectories\nfollow in construct-identity order, retaining the supplied time-point order.\nElement identities include their categorical or covariance basis.",
@@ -20656,6 +20667,11 @@
             "title": "Method",
             "type": "string"
           },
+          "chart": {
+            "$ref": "#/components/schemas/JointChart",
+            "default": "centred",
+            "description": "Experimental coordinates for the unchanged joint posterior; frozen per fit."
+          },
           "target_accept_prob": {
             "default": 0.8,
             "exclusiveMaximum": 1,
@@ -20689,6 +20705,11 @@
             "title": "Method",
             "type": "string"
           },
+          "chart": {
+            "$ref": "#/components/schemas/JointChart",
+            "default": "centred",
+            "description": "Experimental coordinates for the unchanged joint posterior; frozen per fit."
+          },
           "target_accept_prob": {
             "default": 0.8,
             "exclusiveMaximum": 1,
@@ -20708,6 +20729,7 @@
         },
         "required": [
           "method",
+          "chart",
           "target_accept_prob",
           "trajectory",
           "initial_step_size"

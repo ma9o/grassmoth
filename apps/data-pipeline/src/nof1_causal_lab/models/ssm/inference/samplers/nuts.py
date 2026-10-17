@@ -115,9 +115,14 @@ def run_nuts_da(
     """
     options = sampler.algorithm
     assert isinstance(options, NutsDASpec)
-    coordinates = build_joint_coordinates(target)
-    # A fully fixed model can still use one independent normal auxiliary.
-    initial = jnp.zeros(max(1, coordinates.dimension), dtype=target.initial_position.dtype)
+    coordinates = build_joint_coordinates(target, options.chart)
+    # Preserve identical scientific starts across charts, including the original
+    # affine default. A fully fixed model retains one independent normal auxiliary.
+    centred = build_joint_coordinates(target)
+    scientific_start = centred.decode(
+        jnp.zeros(max(1, centred.dimension), dtype=target.initial_position.dtype)
+    )
+    initial = coordinates.encode(*scientific_start)
     trajectory = options.trajectory
     initialize, raw_step = hmc(
         lambda point: -coordinates.log_density(point),
