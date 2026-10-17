@@ -1,13 +1,16 @@
 """Pinned external inputs, action revisions and reproducible observation masking."""
 
+import csv
 import hashlib
 import io
 import json
+from pathlib import Path
 
 import pygit2
 import pytest
 from evaluation.client import ActionClient
 from evaluation.declarations import CaseFile, StudyModel
+from evaluation.fixtures.t512 import ObservationMask, mask_csv
 from evaluation.sources import model_document, read_source
 
 from nof1_causal_lab.artifacts.identity import GitOid
@@ -90,3 +93,23 @@ def test_action_artifact_revision_is_not_its_journal_commit(tmp_path, monkeypatc
     monkeypatch.setattr("evaluation.client.urlopen", lambda *_args, **_kwargs: io.BytesIO(payload))
     client = ActionClient("http://example.invalid", "BENCH", tmp_path)
     assert client.artifact_revision("call:" + "1" * 64, "question") == "3" * 40
+
+
+def test_t512_mask_reproduces_committed_data_without_changing_support(tmp_path):
+    root = Path(__file__).parents[2] / "evaluation/cases/assets/t512"
+    mask = ObservationMask.model_validate_json((root / "mask.json").read_text())
+    masked = tmp_path / "observations.csv"
+    mask_csv(root / "generated.csv", masked, mask)
+    assert masked.read_bytes() == (root / "observations.csv").read_bytes()
+    with (root / "generated.csv").open() as stream:
+        original = list(csv.DictReader(stream))
+    with masked.open() as stream:
+        rows = list(csv.DictReader(stream))
+    assert len(rows) == 512
+    assert sum(bool(row["accumulator"]) for row in rows) == 17
+    assert sum(bool(row["accumulator_origin"]) for row in rows) == 1
+    assert sum(bool(row["driver_exact"]) for row in rows) == 1
+    for before, after in zip(original, rows, strict=True):
+        for column, value in before.items():
+            if column == "timestamp" or column.endswith(("_start", "_end")) or after[column]:
+                assert after[column] == value

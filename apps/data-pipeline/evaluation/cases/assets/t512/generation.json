@@ -1,0 +1,1066 @@
+{
+  "workspace": "BENCHT51220261017",
+  "question_revision": "ecb0d8d21f5eb46490ac53de3e9a73170719ff2e",
+  "truth_revision": "5d4d9efa44fcca3d4d971104d4576907b007bc90",
+  "simulate": {
+    "action": "simulate",
+    "input": {
+      "dynamical_model_spec_ref": "5d4d9efa44fcca3d4d971104d4576907b007bc90",
+      "simulation": {
+        "start": "2020-01-01",
+        "horizon": "1533h",
+        "interventions": []
+      },
+      "seed": 721,
+      "num_replicates": 1
+    },
+    "reasoning": null
+  },
+  "simulation_revision": "7420b7011b4ab27546e605c47e085470ff21e8b8",
+  "simulate_call_id": "call:473871b0bfd5f696a8f34e6f66625cfd4a034fec4e24b28039642bbc2bbfac15",
+  "hashes": {
+    "truth.json": "eddbc26014d64d35612915b871bca86cd110e2006165c7ac323ecb9fd3e26924",
+    "mask.json": "79d188a7c28b583ff8e66d19290ea8220ebb4dc8d6adf83affd77e01bbbe8874",
+    "generation-request.json": "4ccae13a47e9e614e09779acc57c5921e90beb9433704f5b47529faff24a030a",
+    "generated.csv": "bfdb8b5e22cb0f26debb3b89e2e7b21a8bbd727d06d7f2d4a6efb9d635669868",
+    "observations.csv": "73e0bd4faf3138b5c119ffe2832521fd6ba0254db4cf2f24334fc98c1c018a01"
+  },
+  "model_findings": {
+    "specification": [
+      {
+        "kind": "evaluated",
+        "code": "model_execution",
+        "subject": "model",
+        "outcome": "passed",
+        "evidence": "Model definitions, references, and measurements support execution."
+      },
+      {
+        "kind": "evaluated",
+        "code": "fit_laws",
+        "subject": "model",
+        "outcome": "passed",
+        "evidence": "Parameter laws support the current fitting engine."
+      }
+    ],
+    "question": {
+      "findings": [
+        {
+          "kind": "evaluated",
+          "code": "outcome",
+          "subject": {
+            "outcome": {
+              "kind": "construct",
+              "id": "construct:outcome"
+            }
+          },
+          "outcome": "passed",
+          "evidence": "outcome is a measured, modeled course."
+        },
+        {
+          "kind": "evaluated",
+          "code": "target",
+          "subject": {
+            "query": "input contrast",
+            "target": {
+              "kind": "construct",
+              "id": "construct:input"
+            }
+          },
+          "outcome": "passed",
+          "evidence": "input is a state a simulation can set."
+        },
+        {
+          "kind": "evaluated",
+          "code": "identification",
+          "subject": {
+            "query": "input contrast",
+            "target": {
+              "kind": "construct",
+              "id": "construct:input"
+            }
+          },
+          "outcome": "passed",
+          "evidence": "The effect of input on outcome is identified: Sum[accumulator_{t-1}, baseline, driver_{t-1}, outcome_{t-1}](Sum[accumulator_t, driver_t, input_t, input_{t-1}](P(accumulator_t, accumulator_{t-1}, baseline, driver_t, driver_{t-1}, input_t, input_{t-1}, outcome_t, outcome_{t-1})))"
+        }
+      ]
+    }
+  },
+  "identification": {
+    "outcome": "construct:outcome",
+    "treatments": {
+      "construct:accumulator": {
+        "status": "identified",
+        "estimand": "Sum[baseline, driver_{t-1}, outcome_{t-1}](P(driver_{t-1} | baseline) * P(outcome_t | accumulator_{t-1}, baseline, driver_{t-1}, outcome_{t-1}) * Sum[accumulator_{t-1}, driver_{t-1}, outcome_t, outcome_{t-1}](Sum[accumulator_t, driver_t, input_t, input_{t-1}](P(accumulator_t, accumulator_{t-1}, baseline, driver_t, driver_{t-1}, input_t, input_{t-1}, outcome_t, outcome_{t-1}))) * Sum[accumulator_{t-1}, baseline, driver_{t-1}, outcome_t](Sum[accumulator_t, driver_t, input_t, input_{t-1}](P(accumulator_t, accumulator_{t-1}, baseline, driver_t, driver_{t-1}, input_t, input_{t-1}, outcome_t, outcome_{t-1}))))",
+        "marginalized_confounders": [
+          "construct:process_confounder"
+        ],
+        "instruments": []
+      },
+      "construct:baseline": {
+        "status": "identified",
+        "estimand": "Sum[accumulator_{t-1}, driver_{t-1}, outcome_{t-1}](P(driver_{t-1} | baseline) * P(outcome_t | accumulator_{t-1}, baseline, driver_{t-1}, outcome_{t-1}) * Sum[accumulator_{t-1}, baseline, driver_{t-1}, outcome_t](Sum[accumulator_t, driver_t, input_t, input_{t-1}](P(accumulator_t, accumulator_{t-1}, baseline, driver_t, driver_{t-1}, input_t, input_{t-1}, outcome_t, outcome_{t-1}))) * Sum[baseline, driver_{t-1}, outcome_t, outcome_{t-1}](Sum[accumulator_t, driver_t, input_t, input_{t-1}](P(accumulator_t, accumulator_{t-1}, baseline, driver_t, driver_{t-1}, input_t, input_{t-1}, outcome_t, outcome_{t-1}))))",
+        "marginalized_confounders": [
+          "construct:process_confounder"
+        ],
+        "instruments": []
+      },
+      "construct:driver": {
+        "status": "identified",
+        "estimand": "Sum[accumulator_{t-1}, outcome_{t-1}](P(outcome_t | accumulator_{t-1}, baseline, driver_{t-1}, outcome_{t-1}) * Sum[accumulator_{t-1}, baseline, driver_{t-1}, outcome_t](Sum[accumulator_t, driver_t, input_t, input_{t-1}](P(accumulator_t, accumulator_{t-1}, baseline, driver_t, driver_{t-1}, input_t, input_{t-1}, outcome_t, outcome_{t-1}))) * Sum[baseline, driver_{t-1}, outcome_t, outcome_{t-1}](Sum[accumulator_t, driver_t, input_t, input_{t-1}](P(accumulator_t, accumulator_{t-1}, baseline, driver_t, driver_{t-1}, input_t, input_{t-1}, outcome_t, outcome_{t-1}))))",
+        "marginalized_confounders": [
+          "construct:process_confounder"
+        ],
+        "instruments": []
+      },
+      "construct:input": {
+        "status": "identified",
+        "estimand": "Sum[accumulator_{t-1}, baseline, driver_{t-1}, outcome_{t-1}](Sum[accumulator_t, driver_t, input_t, input_{t-1}](P(accumulator_t, accumulator_{t-1}, baseline, driver_t, driver_{t-1}, input_t, input_{t-1}, outcome_t, outcome_{t-1})))",
+        "marginalized_confounders": [
+          "construct:process_confounder"
+        ],
+        "instruments": []
+      }
+    }
+  },
+  "simulation_findings": [
+    {
+      "kind": "evaluated",
+      "code": "C1a finiteness",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "construct",
+          "id": "construct:accumulator"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "nonfinite_fraction",
+          "value": 0.0,
+          "lower": null,
+          "upper": 0.0,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "simulation of accumulator produced non-finite values \u2014 dependent measurements cannot be evaluated.",
+          "display_value": "nonfinite 0.0%",
+          "band_label": "0%"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C1b confinement",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "construct",
+          "id": "construct:accumulator"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "explosive_fraction",
+          "value": 0.0,
+          "lower": null,
+          "upper": 0.01,
+          "lower_inclusive": true,
+          "upper_inclusive": false,
+          "note": "trajectories of accumulator grow without settling within the study window.",
+          "display_value": "P(late/early amplitude > 5) 0.0%",
+          "band_label": "<1.0% (self-calibrating growth)"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C2 latent scale",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "construct",
+          "id": "construct:accumulator"
+        }
+      },
+      "outcome": "failed",
+      "evidence": [
+        {
+          "criterion": "median_latent_sd",
+          "value": 0.0,
+          "lower": 0.3333333333333333,
+          "upper": 3.0,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "marginal predictive scale of accumulator is inconsistent with the standardized latent convention (standardized-latent convention).",
+          "display_value": "median sd 0.00 (5\u201395%: 0.00\u20130.00)",
+          "band_label": "[0.33, 3.00] (standardized-latent convention)"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C3 resolvability",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "construct",
+          "id": "construct:accumulator"
+        }
+      },
+      "reason": "NO_RELAXATION_TERM",
+      "detail": "No declared decay coefficient supplies the timescale screen."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C4b edge overwhelm",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "edge",
+          "id": "edge:driver_accumulator"
+        }
+      },
+      "reason": "EDGE_CONTRASTS_EXPLICIT",
+      "detail": "Edge-share analysis requires a separate paired edge-knockout experiment."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:accumulator"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:accumulator"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:accumulator"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "median_temporal_signal_share",
+          "value": 0.9960509819729556,
+          "lower": 0.04,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the emission for accumulator carries little temporal latent information relative to its conditional observation variance.",
+          "display_value": "median temporal signal share 99.6%",
+          "band_label": ">= 4% of predictive variation"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:accumulator_origin"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:accumulator_origin"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:accumulator",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:accumulator_origin"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "median_temporal_signal_share",
+          "value": 1.0,
+          "lower": 0.04,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the emission for accumulator_origin carries little temporal latent information relative to its conditional observation variance.",
+          "display_value": "median temporal signal share 100.0%",
+          "band_label": ">= 4% of predictive variation"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C1a finiteness",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "construct",
+          "id": "construct:driver"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "nonfinite_fraction",
+          "value": 0.0,
+          "lower": null,
+          "upper": 0.0,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "simulation of driver produced non-finite values \u2014 dependent measurements cannot be evaluated.",
+          "display_value": "nonfinite 0.0%",
+          "band_label": "0%"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C1b confinement",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "construct",
+          "id": "construct:driver"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "explosive_fraction",
+          "value": 0.0,
+          "lower": null,
+          "upper": 0.01,
+          "lower_inclusive": true,
+          "upper_inclusive": false,
+          "note": "trajectories of driver grow without settling within the study window.",
+          "display_value": "P(late/early amplitude > 5) 0.0%",
+          "band_label": "<1.0% (self-calibrating growth)"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C2 latent scale",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "construct",
+          "id": "construct:driver"
+        }
+      },
+      "outcome": "failed",
+      "evidence": [
+        {
+          "criterion": "median_latent_sd",
+          "value": 0.0,
+          "lower": 0.3333333333333333,
+          "upper": 3.0,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "marginal predictive scale of driver is inconsistent with the standardized latent convention (standardized-latent convention).",
+          "display_value": "median sd 0.00 (5\u201395%: 0.00\u20130.00)",
+          "band_label": "[0.33, 3.00] (standardized-latent convention)"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C3 resolvability",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "construct",
+          "id": "construct:driver"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "resolvable_mass",
+          "value": 1.0,
+          "lower": 0.8,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the timescale posited for driver lies outside the window this sampling design can resolve under the declared decay-coefficient screen.",
+          "display_value": "sampled \u03c4 median 1.54 d (10\u201390% 1.54\u20131.54); 100% resolvable",
+          "band_label": ">= 80% of draws resolved by actual gaps and span"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C4b edge overwhelm",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "edge",
+          "id": "edge:input_driver"
+        }
+      },
+      "reason": "EDGE_CONTRASTS_EXPLICIT",
+      "detail": "Edge-share analysis requires a separate paired edge-knockout experiment."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C4b edge overwhelm",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "edge",
+          "id": "edge:baseline_driver"
+        }
+      },
+      "reason": "EDGE_CONTRASTS_EXPLICIT",
+      "detail": "Edge-share analysis requires a separate paired edge-knockout experiment."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "median_temporal_signal_share",
+          "value": 0.9424218101944158,
+          "lower": 0.04,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the emission for driver carries little temporal latent information relative to its conditional observation variance.",
+          "display_value": "median temporal signal share 94.2%",
+          "band_label": ">= 4% of predictive variation"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver_count"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver_count"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver_count"
+        }
+      },
+      "outcome": "failed",
+      "evidence": [
+        {
+          "criterion": "median_temporal_signal_share",
+          "value": 0.013751821362780475,
+          "lower": 0.04,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the emission for driver_count carries little temporal latent information relative to its conditional observation variance.",
+          "display_value": "median temporal signal share 1.4%",
+          "band_label": ">= 4% of predictive variation"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver_exact"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver_exact"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver_exact"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "median_temporal_signal_share",
+          "value": 1.0,
+          "lower": 0.04,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the emission for driver_exact carries little temporal latent information relative to its conditional observation variance.",
+          "display_value": "median temporal signal share 100.0%",
+          "band_label": ">= 4% of predictive variation"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver_mean"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver_mean"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:driver",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:driver_mean"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "median_temporal_signal_share",
+          "value": 0.8965108152692387,
+          "lower": 0.04,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the emission for driver_mean carries little temporal latent information relative to its conditional observation variance.",
+          "display_value": "median temporal signal share 89.7%",
+          "band_label": ">= 4% of predictive variation"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C1a finiteness",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "construct",
+          "id": "construct:outcome"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "nonfinite_fraction",
+          "value": 0.0,
+          "lower": null,
+          "upper": 0.0,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "simulation of outcome produced non-finite values \u2014 dependent measurements cannot be evaluated.",
+          "display_value": "nonfinite 0.0%",
+          "band_label": "0%"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C1b confinement",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "construct",
+          "id": "construct:outcome"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "explosive_fraction",
+          "value": 0.0,
+          "lower": null,
+          "upper": 0.01,
+          "lower_inclusive": true,
+          "upper_inclusive": false,
+          "note": "trajectories of outcome grow without settling within the study window.",
+          "display_value": "P(late/early amplitude > 5) 0.0%",
+          "band_label": "<1.0% (self-calibrating growth)"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C2 latent scale",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "construct",
+          "id": "construct:outcome"
+        }
+      },
+      "outcome": "failed",
+      "evidence": [
+        {
+          "criterion": "median_latent_sd",
+          "value": 0.0,
+          "lower": 0.3333333333333333,
+          "upper": 3.0,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "marginal predictive scale of outcome is inconsistent with the standardized latent convention (standardized-latent convention).",
+          "display_value": "median sd 0.00 (5\u201395%: 0.00\u20130.00)",
+          "band_label": "[0.33, 3.00] (standardized-latent convention)"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C3 resolvability",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "construct",
+          "id": "construct:outcome"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "resolvable_mass",
+          "value": 1.0,
+          "lower": 0.8,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the timescale posited for outcome lies outside the window this sampling design can resolve under the declared decay-coefficient screen.",
+          "display_value": "sampled \u03c4 median 1.25 d (10\u201390% 1.25\u20131.25); 100% resolvable",
+          "band_label": ">= 80% of draws resolved by actual gaps and span"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C4b edge overwhelm",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "edge",
+          "id": "edge:accumulator_outcome"
+        }
+      },
+      "reason": "EDGE_CONTRASTS_EXPLICIT",
+      "detail": "Edge-share analysis requires a separate paired edge-knockout experiment."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C4b edge overwhelm",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "edge",
+          "id": "edge:driver_outcome"
+        }
+      },
+      "reason": "EDGE_CONTRASTS_EXPLICIT",
+      "detail": "Edge-share analysis requires a separate paired edge-knockout experiment."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:outcome"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:outcome"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:outcome"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "median_temporal_signal_share",
+          "value": 0.9574668319905996,
+          "lower": 0.04,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the emission for outcome carries little temporal latent information relative to its conditional observation variance.",
+          "display_value": "median temporal signal share 95.7%",
+          "band_label": ">= 4% of predictive variation"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:outcome_binary"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:outcome_binary"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:outcome_binary"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "median_temporal_signal_share",
+          "value": 0.1064594037179829,
+          "lower": 0.04,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the emission for outcome_binary carries little temporal latent information relative to its conditional observation variance.",
+          "display_value": "median temporal signal share 10.6%",
+          "band_label": ">= 4% of predictive variation"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:outcome_std"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:outcome_std"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:outcome",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:outcome_std"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "median_temporal_signal_share",
+          "value": 0.483570309979326,
+          "lower": 0.04,
+          "upper": null,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "the emission for outcome_std carries little temporal latent information relative to its conditional observation variance.",
+          "display_value": "median temporal signal share 48.4%",
+          "band_label": ">= 4% of predictive variation"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C1a finiteness",
+      "subject": {
+        "construct_id": "construct:baseline",
+        "target": {
+          "kind": "construct",
+          "id": "construct:baseline"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "nonfinite_fraction",
+          "value": 0.0,
+          "lower": null,
+          "upper": 0.0,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "simulation of baseline produced non-finite values \u2014 dependent measurements cannot be evaluated.",
+          "display_value": "nonfinite 0.0%",
+          "band_label": "0%"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C1b confinement",
+      "subject": {
+        "construct_id": "construct:baseline",
+        "target": {
+          "kind": "construct",
+          "id": "construct:baseline"
+        }
+      },
+      "outcome": "passed",
+      "evidence": [
+        {
+          "criterion": "explosive_fraction",
+          "value": 0.0,
+          "lower": null,
+          "upper": 0.01,
+          "lower_inclusive": true,
+          "upper_inclusive": false,
+          "note": "trajectories of baseline grow without settling within the study window.",
+          "display_value": "P(late/early amplitude > 5) 0.0%",
+          "band_label": "<1.0% (self-calibrating growth)"
+        }
+      ]
+    },
+    {
+      "kind": "evaluated",
+      "code": "C2 latent scale",
+      "subject": {
+        "construct_id": "construct:baseline",
+        "target": {
+          "kind": "construct",
+          "id": "construct:baseline"
+        }
+      },
+      "outcome": "failed",
+      "evidence": [
+        {
+          "criterion": "median_latent_sd",
+          "value": 0.0,
+          "lower": 0.3333333333333333,
+          "upper": 3.0,
+          "lower_inclusive": true,
+          "upper_inclusive": true,
+          "note": "marginal predictive scale of baseline is inconsistent with the standardized latent convention (standardized-latent convention).",
+          "display_value": "median sd 0.00 (5\u201395%: 0.00\u20130.00)",
+          "band_label": "[0.33, 3.00] (standardized-latent convention)"
+        }
+      ]
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C3 resolvability",
+      "subject": {
+        "construct_id": "construct:baseline",
+        "target": {
+          "kind": "construct",
+          "id": "construct:baseline"
+        }
+      },
+      "reason": "NO_RELAXATION_TERM",
+      "detail": "No declared decay coefficient supplies the timescale screen."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5a location reach",
+      "subject": {
+        "construct_id": "construct:baseline",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:baseline"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5b width",
+      "subject": {
+        "construct_id": "construct:baseline",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:baseline"
+        }
+      },
+      "reason": "NO_OBSERVATIONS",
+      "detail": "No comparison observations exist for this indicator."
+    },
+    {
+      "kind": "not_evaluated",
+      "code": "C5c transmission",
+      "subject": {
+        "construct_id": "construct:baseline",
+        "target": {
+          "kind": "indicator",
+          "id": "indicator:baseline"
+        }
+      },
+      "reason": "STATIC_CONSTRUCT",
+      "detail": "Temporal transmission applies only to time-varying constructs."
+    }
+  ]
+}

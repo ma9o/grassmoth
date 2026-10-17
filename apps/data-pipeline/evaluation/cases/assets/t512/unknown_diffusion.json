@@ -1,0 +1,936 @@
+{
+  "constructs": {
+    "construct:baseline": {
+      "name": "baseline",
+      "description": "T=512 baseline",
+      "role": "endogenous",
+      "temporal_status": "time_invariant",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.5,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.0,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {},
+      "indicators": {
+        "indicator:baseline": {
+          "observation": {
+            "name": "baseline",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:baseline"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:driver": {
+      "name": "driver",
+      "description": "T=512 driver",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.5629387178015028,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": "parameter:9ae36b2abf5a687a6151966f82cc62c4a62da15f22fbe436020dd5e02a986244",
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self_driver": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.65,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:driver"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.05,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:driver"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:driver": {
+          "observation": {
+            "name": "driver",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:driver"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.12,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        },
+        "indicator:driver_mean": {
+          "observation": {
+            "name": "driver_mean",
+            "measurement_dtype": "continuous",
+            "aggregation": "mean",
+            "observation_window": "18h",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:driver"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.15,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        },
+        "indicator:driver_count": {
+          "observation": {
+            "name": "driver_count",
+            "measurement_dtype": "count",
+            "aggregation": "sum",
+            "observation_window": "18h",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Poisson",
+              "rate": {
+                "kind": "call",
+                "function": "exp",
+                "arguments": [
+                  {
+                    "kind": "binary",
+                    "operator": "add",
+                    "left": {
+                      "kind": "coefficient",
+                      "role": "observation_intercept",
+                      "value": 0.4,
+                      "construct_ids": []
+                    },
+                    "right": {
+                      "kind": "binary",
+                      "operator": "multiply",
+                      "left": {
+                        "kind": "coefficient",
+                        "role": "loading",
+                        "value": 0.25,
+                        "construct_ids": []
+                      },
+                      "right": {
+                        "kind": "state",
+                        "construct_id": "construct:driver"
+                      }
+                    }
+                  }
+                ]
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        },
+        "indicator:driver_exact": {
+          "observation": {
+            "name": "driver_exact",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Delta",
+              "v": {
+                "kind": "state",
+                "construct_id": "construct:driver"
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:accumulator": {
+      "name": "accumulator",
+      "description": "T=512 accumulator",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self_accumulator": {
+          "kind": "drift",
+          "expression": {
+            "kind": "literal",
+            "value": 0.0
+          }
+        }
+      },
+      "indicators": {
+        "indicator:accumulator": {
+          "observation": {
+            "name": "accumulator",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:accumulator"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        },
+        "indicator:accumulator_origin": {
+          "observation": {
+            "name": "accumulator_origin",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Delta",
+              "v": {
+                "kind": "state",
+                "construct_id": "construct:accumulator"
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:outcome": {
+      "name": "outcome",
+      "description": "T=512 outcome",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4678675026115834,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.35,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "diffusion_loading",
+          "value": -0.08,
+          "construct_ids": [
+            "construct:driver"
+          ]
+        }
+      ],
+      "dynamics": {
+        "mechanism:self_outcome": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.8,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:outcome"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.04,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:outcome"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:outcome": {
+          "observation": {
+            "name": "outcome",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:outcome"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.12,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        },
+        "indicator:outcome_std": {
+          "observation": {
+            "name": "outcome_std",
+            "measurement_dtype": "continuous",
+            "aggregation": "std",
+            "observation_window": "18h",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:outcome"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.06,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        },
+        "indicator:outcome_binary": {
+          "observation": {
+            "name": "outcome_binary",
+            "measurement_dtype": "binary",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "BernoulliLogits",
+              "logits": {
+                "kind": "binary",
+                "operator": "add",
+                "left": {
+                  "kind": "coefficient",
+                  "role": "observation_intercept",
+                  "value": 0.0,
+                  "construct_ids": []
+                },
+                "right": {
+                  "kind": "binary",
+                  "operator": "multiply",
+                  "left": {
+                    "kind": "coefficient",
+                    "role": "loading",
+                    "value": 1.4,
+                    "construct_ids": []
+                  },
+                  "right": {
+                    "kind": "state",
+                    "construct_id": "construct:outcome"
+                  }
+                }
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:input": {
+      "name": "input",
+      "description": "Known input alternating every eight grid intervals.",
+      "role": "exogenous",
+      "temporal_status": "time_varying",
+      "indicators": {
+        "indicator:input": {
+          "observation": {
+            "name": "input",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": null,
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Delta",
+              "v": {
+                "kind": "state",
+                "construct_id": "construct:input"
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared synthetic benchmark instrument in native units."
+          },
+          "construct_polarity": "positive"
+        }
+      },
+      "distribution": "distribution:5af1b8c8fe1577b826bc5a4f8fcbf05bfe6e5a53836b41493630e5d73134e11a"
+    },
+    "construct:process_confounder": {
+      "name": "process_confounder",
+      "description": "Explicit shared innovation noise in the scientific DAG.",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "indicators": {},
+      "dynamics": {},
+      "coefficients": []
+    }
+  },
+  "edges": {
+    "edge:baseline_driver": {
+      "cause": "construct:baseline",
+      "effect": "construct:driver",
+      "description": "Declared stress-case causal mechanism.",
+      "mechanisms": {
+        "mechanism:baseline_driver": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 1.0,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:baseline"
+            }
+          }
+        }
+      }
+    },
+    "edge:input_driver": {
+      "cause": "construct:input",
+      "effect": "construct:driver",
+      "description": "Declared stress-case causal mechanism.",
+      "mechanisms": {
+        "mechanism:input_driver": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": "parameter:e4828eabc6d060e9dd1291f0f5fd655a9cbb31b11f96a0a952921b06205e45bf",
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:input"
+            }
+          }
+        }
+      }
+    },
+    "edge:driver_accumulator": {
+      "cause": "construct:driver",
+      "effect": "construct:accumulator",
+      "description": "Declared stress-case causal mechanism.",
+      "mechanisms": {
+        "mechanism:driver_accumulator": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 1.0,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:driver"
+            }
+          }
+        }
+      }
+    },
+    "edge:driver_outcome": {
+      "cause": "construct:driver",
+      "effect": "construct:outcome",
+      "description": "Declared stress-case causal mechanism.",
+      "mechanisms": {
+        "mechanism:driver_outcome": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": "parameter:228f35f96863c3fd9cce0f279000682f9ddb86b3eb9f698687767a126dcd7ca7",
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:driver"
+            }
+          }
+        }
+      }
+    },
+    "edge:accumulator_outcome": {
+      "cause": "construct:accumulator",
+      "effect": "construct:outcome",
+      "description": "Declared stress-case causal mechanism.",
+      "mechanisms": {
+        "mechanism:accumulator_outcome": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.12,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:accumulator"
+            }
+          }
+        }
+      }
+    },
+    "edge:process_confounder_driver": {
+      "cause": "construct:process_confounder",
+      "effect": "construct:driver",
+      "description": "Marginalized shared-noise parent.",
+      "mechanisms": {}
+    },
+    "edge:process_confounder_outcome": {
+      "cause": "construct:process_confounder",
+      "effect": "construct:outcome",
+      "description": "Marginalized shared-noise parent.",
+      "mechanisms": {}
+    }
+  },
+  "parameters": {
+    "parameter:e4828eabc6d060e9dd1291f0f5fd655a9cbb31b11f96a0a952921b06205e45bf": {
+      "name": "input_effect",
+      "description": "Unknown causal effect in the stress case.",
+      "distribution": "distribution:t512-input_effect"
+    },
+    "parameter:228f35f96863c3fd9cce0f279000682f9ddb86b3eb9f698687767a126dcd7ca7": {
+      "name": "cross_effect",
+      "description": "Unknown causal effect in the stress case.",
+      "distribution": "distribution:t512-cross_effect"
+    },
+    "parameter:9ae36b2abf5a687a6151966f82cc62c4a62da15f22fbe436020dd5e02a986244": {
+      "name": "sigma",
+      "description": "Unknown driver diffusion scale; the data are shared with the fixed-diffusion case.",
+      "distribution": "distribution:t512-sigma"
+    }
+  },
+  "distributions": {
+    "distribution:5af1b8c8fe1577b826bc5a4f8fcbf05bfe6e5a53836b41493630e5d73134e11a": {
+      "distribution": "Delta",
+      "params": {
+        "v": {
+          "array": [
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0,
+            1.0,
+            -1.0
+          ],
+          "dtype": "float64"
+        },
+        "event_dim": 1
+      }
+    },
+    "distribution:t512-input_effect": {
+      "distribution": "Normal",
+      "params": {
+        "loc": 0.0,
+        "scale": 1.0
+      }
+    },
+    "distribution:t512-cross_effect": {
+      "distribution": "Normal",
+      "params": {
+        "loc": 0.0,
+        "scale": 1.0
+      }
+    },
+    "distribution:t512-sigma": {
+      "distribution": "HalfNormal",
+      "params": {
+        "scale": 0.6
+      }
+    }
+  },
+  "law_layouts": {
+    "distribution:5af1b8c8fe1577b826bc5a4f8fcbf05bfe6e5a53836b41493630e5d73134e11a": {
+      "parameters": [],
+      "constructs": [
+        "construct:input"
+      ],
+      "time_points": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0,
+        13.0,
+        14.0,
+        15.0,
+        16.0,
+        17.0,
+        18.0,
+        19.0,
+        20.0,
+        21.0,
+        22.0,
+        23.0,
+        24.0,
+        25.0,
+        26.0,
+        27.0,
+        28.0,
+        29.0,
+        30.0,
+        31.0,
+        32.0,
+        33.0,
+        34.0,
+        35.0,
+        36.0,
+        37.0,
+        38.0,
+        39.0,
+        40.0,
+        41.0,
+        42.0,
+        43.0,
+        44.0,
+        45.0,
+        46.0,
+        47.0,
+        48.0,
+        49.0,
+        50.0,
+        51.0,
+        52.0,
+        53.0,
+        54.0,
+        55.0,
+        56.0,
+        57.0,
+        58.0,
+        59.0,
+        60.0,
+        61.0,
+        62.0,
+        63.0
+      ],
+      "time_origin": "relative",
+      "labels": {}
+    }
+  },
+  "measurement_clock": "3h"
+}

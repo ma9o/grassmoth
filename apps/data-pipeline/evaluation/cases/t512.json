@@ -1,0 +1,152 @@
+{
+  "name": "t512",
+  "question": {
+    "text": "Benchmark nonlinear inference with interval readings, sparse data and a replayed deterministic accumulator. Identify the input effect on the outcome.",
+    "outcome": "construct:outcome",
+    "queries": {
+      "input contrast": {
+        "start": "2020-01-01",
+        "horizon": "1533h",
+        "interventions": [
+          {
+            "target": "construct:input",
+            "value": 1.0
+          }
+        ]
+      }
+    }
+  },
+  "fit_model": {
+    "kind": "file",
+    "path": "assets/t512/model.json",
+    "sha256": "a8a0b084d57fbf56a452851c907a42a157bfc046afbaa34640dee05983cab25f"
+  },
+  "data": {
+    "kind": "prepare_data",
+    "files": [
+      {
+        "kind": "file",
+        "path": "assets/t512/observations.csv",
+        "sha256": "73e0bd4faf3138b5c119ffe2832521fd6ba0254db4cf2f24334fc98c1c018a01"
+      }
+    ],
+    "provenance_files": [
+      {
+        "kind": "file",
+        "path": "assets/t512/truth.json",
+        "sha256": "eddbc26014d64d35612915b871bca86cd110e2006165c7ac323ecb9fd3e26924"
+      },
+      {
+        "kind": "file",
+        "path": "assets/t512/generation-request.json",
+        "sha256": "4ccae13a47e9e614e09779acc57c5921e90beb9433704f5b47529faff24a030a"
+      },
+      {
+        "kind": "file",
+        "path": "assets/t512/generated.csv",
+        "sha256": "bfdb8b5e22cb0f26debb3b89e2e7b21a8bbd727d06d7f2d4a6efb9d635669868"
+      },
+      {
+        "kind": "file",
+        "path": "assets/t512/mask.json",
+        "sha256": "79d188a7c28b583ff8e66d19290ea8220ebb4dc8d6adf83affd77e01bbbe8874"
+      },
+      {
+        "kind": "file",
+        "path": "assets/t512/generation.json",
+        "sha256": "c3713b0a84090096a6e352e3105f71d3839fe2ccb93b739fc611c33104dca699"
+      }
+    ],
+    "extraction": {
+      "indicator:baseline": {
+        "kind": "recorded",
+        "value_column": "baseline",
+        "support_start_column": "baseline_start",
+        "support_end_column": "baseline_end"
+      },
+      "indicator:driver": {
+        "kind": "recorded",
+        "value_column": "driver",
+        "support_start_column": "driver_start",
+        "support_end_column": "driver_end"
+      },
+      "indicator:driver_mean": {
+        "kind": "recorded",
+        "value_column": "driver_mean",
+        "support_start_column": "driver_mean_start",
+        "support_end_column": "driver_mean_end"
+      },
+      "indicator:driver_count": {
+        "kind": "recorded",
+        "value_column": "driver_count",
+        "support_start_column": "driver_count_start",
+        "support_end_column": "driver_count_end"
+      },
+      "indicator:driver_exact": {
+        "kind": "recorded",
+        "value_column": "driver_exact",
+        "support_start_column": "driver_exact_start",
+        "support_end_column": "driver_exact_end"
+      },
+      "indicator:accumulator": {
+        "kind": "recorded",
+        "value_column": "accumulator",
+        "support_start_column": "accumulator_start",
+        "support_end_column": "accumulator_end"
+      },
+      "indicator:accumulator_origin": {
+        "kind": "recorded",
+        "value_column": "accumulator_origin",
+        "support_start_column": "accumulator_origin_start",
+        "support_end_column": "accumulator_origin_end"
+      },
+      "indicator:outcome": {
+        "kind": "recorded",
+        "value_column": "outcome",
+        "support_start_column": "outcome_start",
+        "support_end_column": "outcome_end"
+      },
+      "indicator:outcome_std": {
+        "kind": "recorded",
+        "value_column": "outcome_std",
+        "support_start_column": "outcome_std_start",
+        "support_end_column": "outcome_std_end"
+      },
+      "indicator:outcome_binary": {
+        "kind": "recorded",
+        "value_column": "outcome_binary",
+        "support_start_column": "outcome_binary_start",
+        "support_end_column": "outcome_binary_end"
+      },
+      "indicator:input": {
+        "kind": "recorded",
+        "value_column": "input",
+        "support_start_column": "input_start",
+        "support_end_column": "input_end"
+      }
+    },
+    "context": "Production-simulated readings with explicitly masked values. Import anchors and support unchanged; never aggregate or fill gaps. Point instruments use the declared three-hour cadence; missing rows are not observed times."
+  },
+  "expected_identified": [
+    "construct:input"
+  ],
+  "truth": {
+    "input_effect": 0.7,
+    "cross_effect": 0.45
+  },
+  "allowed_findings": {
+    "C2 latent scale": "One generating replicate has zero across-replicate variance; this screen does not assess a one-history design.",
+    "C5c transmission": "The interval count instrument intentionally carries little temporal information (1.4% in seed 721); Gaussian point and interval channels carry the signal.",
+    "sample_size": "The exact driver reading and known accumulator origin each intentionally have one observation.",
+    "large_timestamp_gap": "Accumulator readings are intentionally sparse (every 32 grid intervals plus the final node); the original supports and all gaps remain recorded."
+  },
+  "unavailable_findings": {
+    "NO_OBSERVATIONS": "Truth generation has no external observations for predictive calibration.",
+    "EDGE_CONTRASTS_EXPLICIT": "Edge knockout experiments are separate from generating the recorded dataset.",
+    "NO_RELAXATION_TERM": "The deterministic accumulator and static baseline have no relaxation term.",
+    "STATIC_CONSTRUCT": "The baseline is constant within each history.",
+    "INSUFFICIENT_TIMES": "The exact driver reading and known accumulator origin each supply only one observation time.",
+    "INSUFFICIENT_OBSERVATIONS": "A single exact reading has no estimable empirical variance."
+  },
+  "provenance": "New DSL-supported T=512 variant. Production simulate from truth artifact 5d4d9efa44fcca3d4d971104d4576907b007bc90, seed 721, one replicate; the exact call and hashes are in generation.json. The declared mask converts generated.csv to observations.csv. See assets/t512/README.md for changes from the historical fixture; its old posterior is not a reference."
+}

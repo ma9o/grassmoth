@@ -8,7 +8,9 @@ executes nothing. Run a declaration only after its compute budget and case are a
 
 - `cases/` contains immutable model documents and action recipes. `tiny.json` is a small
   nonlinear CPU debugging case; `nonlinear.json` replaces the former Python fixture.
-  `france1940.json` imports a pinned model and hash-verified source CSV through actions.
+  `t512.json` and `t512_unknown_diffusion.json` share a saved synthetic history.
+  `france1940.json` reads its pinned model and source CSV from local `data/FRANCE1940`
+  at run time; those assets are not copied into this package.
 - `declarations.py` owns experiment inputs: case, resolved base controls, declared factor
   or interaction, paired generation/sampler seeds, repeats, optional frozen-checkpoint
   probes, and predeclared reference tolerances.
@@ -17,6 +19,9 @@ executes nothing. Run a declaration only after its compute budget and case are a
   failed finding needs a case-specific reason. Unavailable checks require an explicit
   unavailable-reason declaration; accepting an unavailable check never accepts a failed
   one with the same code. Neither bypasses production fit preflight.
+- `sources.py` verifies every declared source hash before submitting any action. A local
+  study model is read from its pinned result tree without opening the study for writes
+  or changing its storage format. Missing inputs and hash mismatches stop the recipe.
 - `run.py` schedules one workspace per arm and seed pair, verifies model/data content,
   rejects undeclared control differences, and retains complete action envelopes.
 - `comparison.py` qualifies references using production convergence plus the declared
@@ -66,7 +71,9 @@ their own fit device. A reused call is visibly marked and is not a new timing sa
 fresh timings of an already executed declaration, increase `repeats`; changing the
 sampler seed asks a different stochastic question. Output directories must be new.
 Stable workspace names permit saved calls to be reused, and every action is pinned
-to its returned revision. The output preserves case and attempt manifests and raw
+to its scientific input revisions. The client reads produced question, model and panel
+artifact revisions from the public timeline; simulation and fit references select their
+action commits. The output preserves case and attempt manifests and raw
 MessagePack envelopes, including failures. Continued fits report the earlier and
 new draws as one chain; segment bounds identify the new observations of the sampler.
 
@@ -88,6 +95,29 @@ Missing billed cost is unknown, never zero. No billing command or paid job is la
 by importing this package or by generating its report.
 
 Exploratory declarations and generated outputs belong in gitignored `scratchpad/`.
-The original T=512 data must enter through `prepare_data`, preserving its timestamps,
-missing values and interval support. Its recipe is pending the documented DSL gap and
-source-data decision; do not substitute a new simulation schedule or a hand-built target.
+
+## Saved T=512 data
+
+Both T=512 recipes import the same `assets/t512/observations.csv` through `prepare_data`
+using recorded readings and temporal supports. The unknown-diffusion variant frees only
+the driver's diffusion scale. The literal truth model, seed 721, one-replicate simulate
+request, returned truth revision and source hashes are retained beside the CSV.
+`generated.csv` is the unmodified simulator output; `mask.json` declares the only
+subsequent transformation. The mask removes readings without changing any retained
+value, timestamp or interval support.
+
+To regenerate into a new review directory on an explicitly authorized isolated stack:
+
+```bash
+uv run python -m evaluation.fixtures.t512 \
+  --endpoint http://localhost:18100 --workspace BENCHT512REGEN \
+  --output ../../scratchpad/t512-regenerated
+```
+
+This command calls `edit_question`, `edit_model` and `simulate`, exports the retained
+history, and applies the committed mask. It runs no fits. Compare the exported files
+and recorded findings before updating case hashes. Recipes use the committed CSV,
+so changing an experiment's generation seed does not regenerate these recorded cases.
+
+The [case note](cases/assets/t512/README.md) owns the differences from the historical
+handwritten stress fixture. Its old posterior is not a reference for this changed case.

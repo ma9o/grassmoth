@@ -1,0 +1,24 @@
+{
+  "question": {
+    "text": "Benchmark nonlinear inference with interval readings, sparse data and a replayed deterministic accumulator. Identify the input effect on the outcome.",
+    "outcome": "construct:outcome",
+    "queries": {
+      "input contrast": {
+        "start": "2020-01-01",
+        "horizon": "1533h",
+        "interventions": [
+          {
+            "target": "construct:input",
+            "value": 1.0
+          }
+        ]
+      }
+    }
+  },
+  "simulation": {
+    "start": "2020-01-01",
+    "horizon": "1533h"
+  },
+  "seed": 721,
+  "num_replicates": 1
+}

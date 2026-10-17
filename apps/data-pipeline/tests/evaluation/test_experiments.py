@@ -93,3 +93,36 @@ def test_unavailable_generation_checks_do_not_accept_failed_scientific_checks():
     assert require_findings((missing,), {}, allowed)
     with pytest.raises(ValueError, match="Unaccepted structured finding"):
         require_findings((failed,), {}, allowed)
+
+
+def test_t512_variants_share_data_and_compile_the_accumulator_for_replay():
+    from nof1_causal_lab.models.ssm.compile.inputs import compile_executable_model
+    from nof1_causal_lab.models.structure import StructuralSelection
+
+    root = Path(__file__).parents[2] / "evaluation/cases"
+    recipes = tuple(
+        CaseRecipe.model_validate_json((root / (name + ".json")).read_text())
+        for name in ("t512", "t512_unknown_diffusion")
+    )
+    assert recipes[0].data == recipes[1].data
+    models = tuple(
+        model_document(recipe.fit_model, read_source(recipe.fit_model, root)).materialized()
+        for recipe in recipes
+    )
+    for model, recipe in zip(models, recipes, strict=True):
+        compiled = compile_executable_model(StructuralSelection(model, recipe.question.outcome))
+        accumulator = next(
+            index for index, state in enumerate(compiled.states) if state.name == "accumulator"
+        )
+        assert accumulator in compiled.state_space.replayed_coordinates
+        assert accumulator not in compiled.state_space.transition
+        assert accumulator not in compiled.state_space.initial
+    assert {parameter.name for parameter in models[0].parameters} == {
+        "input_effect",
+        "cross_effect",
+    }
+    assert {parameter.name for parameter in models[1].parameters} == {
+        "input_effect",
+        "cross_effect",
+        "sigma",
+    }
