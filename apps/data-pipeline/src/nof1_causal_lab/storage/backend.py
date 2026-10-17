@@ -69,6 +69,8 @@ def get_base_uri() -> str:
         bucket = os.environ["R2_BUCKET"]
         prefix = os.getenv("R2_PREFIX", "data")
         return f"s3://{bucket}/{prefix}"
+    if root := os.environ.get("NOF1_DATA_ROOT"):
+        return str(Path(root).expanduser().resolve())
     return str(_find_local_data_dir())
 
 

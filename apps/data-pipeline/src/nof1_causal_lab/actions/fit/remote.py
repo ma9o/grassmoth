@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import io
 import logging
+import time
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -124,11 +125,19 @@ def _dispatch_fit(
 ) -> FitComputeResult:
     import modal
 
+    from nof1_causal_lab.compute.modal_budget import (
+        configured_budget,
+        reserve_allocation,
+        save_allocation,
+    )
     from nof1_causal_lab.compute.modal_images import gpu_image
+
+    policy = configured_budget()
+    allocation = reserve_allocation(policy, payload.sampler) if policy is not None else None
 
     # A separate ephemeral app per call supports concurrent local study workers
     # and ships their current source; no deployed production function is replaced.
-    app = modal.App("nof1-causal-lab-pipeline")
+    app = modal.App("nof1-causal-lab-pipeline" if allocation is None else allocation.app_name)
     remote_fit = app.function(
         image=gpu_image,
         # Function environment overrides image defaults without adding a build
@@ -147,14 +156,42 @@ def _dispatch_fit(
             "MKL_NUM_THREADS": "1",
         },
         gpu=hardware.value,
-        cpu=_FIT_CPU_CORES,
-        memory=_FIT_HOST_MEMORY_MIB,
-        timeout=timeout,
+        cpu=_FIT_CPU_CORES if policy is None else (_FIT_CPU_CORES, _FIT_CPU_CORES),
+        memory=_FIT_HOST_MEMORY_MIB
+        if policy is None
+        else (_FIT_HOST_MEMORY_MIB, _FIT_HOST_MEMORY_MIB),
+        timeout=timeout if policy is None else policy.timeout_seconds,
+        startup_timeout=timeout if policy is None else policy.startup_seconds,
+        max_containers=1,
+        scaledown_window=1,
         retries=0,
         volumes={"/cache": modal.Volume.from_name("nof1-cached-fit-cache", create_if_missing=True)},
     )(_fit_gpu)
-    with modal.enable_output(), app.run():
-        return remote_fit.remote(payload)
+    try:
+        with modal.enable_output(), app.run():
+            if allocation is None:
+                return remote_fit.remote(payload)
+            allocation = allocation.revised(app_id=app.app_id)
+            save_allocation(allocation)
+            call = remote_fit.spawn(payload)
+            allocation = allocation.revised(function_call_id=call.object_id)
+            save_allocation(allocation)
+            logging.getLogger(__name__).info(
+                "Bounded Modal allocation: app=%s call=%s",
+                allocation.app_id,
+                allocation.function_call_id,
+            )
+            completed = False
+            try:
+                result = call.get(timeout=allocation.policy.wall_seconds)
+                completed = True
+                return result
+            finally:
+                if not completed:
+                    call.cancel(terminate_containers=True)
+    finally:
+        if allocation is not None:
+            save_allocation(allocation.revised(finished_at=time.time()))
 
 
 def fit_on_modal(
