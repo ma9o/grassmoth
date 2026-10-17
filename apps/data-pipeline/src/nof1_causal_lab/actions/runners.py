@@ -42,6 +42,15 @@ async def _run_fit(
     pins: dict[ArtifactId, GitOid],
     request: FitInput[GitOid],
 ) -> Applied[InferenceEvidence]:
+    """Keep continuation loading, compute and publication off the activity event loop."""
+    return await asyncio.to_thread(_fit_selected, store, pins, request)
+
+
+def _fit_selected(
+    store: ArtifactStore,
+    pins: dict[ArtifactId, GitOid],
+    request: FitInput[GitOid],
+) -> Applied[InferenceEvidence]:
     from nof1_causal_lab.actions.fit.action import fit, read_inference_report
     from nof1_causal_lab.actions.fit.execution import resolve_sampler_spec
     from nof1_causal_lab.config import get_config
@@ -105,8 +114,7 @@ async def _run_fit(
         compute_fit = partial(fit_on_modal, sampler.hardware)
     else:
         compute_fit = fit
-    result = await asyncio.to_thread(
-        compute_fit,
+    result = compute_fit(
         selection=selection,
         data_for_model=history.observations,
         time_origin=history.time_origin,

@@ -139,12 +139,23 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     workspace, monkeypatch, hardware
 ):
     from dataclasses import replace
+    from threading import get_ident
 
     from nof1_causal_lab import config
     from nof1_causal_lab.actions.fit import action as flow
     from nof1_causal_lab.actions.fit import remote
     from nof1_causal_lab.actions.runners import _run_fit
     from nof1_causal_lab.study.persistence.store import read_model
+    from nof1_causal_lab.study.queries import data
+
+    event_loop_thread = get_ident()
+    read_history = data.read_data_history
+
+    def read_history_off_loop(*args, **kwargs):
+        assert get_ident() != event_loop_thread
+        return read_history(*args, **kwargs)
+
+    monkeypatch.setattr(data, "read_data_history", read_history_off_loop)
 
     prior = x_y_model()
     fitted = prior
