@@ -1,9 +1,12 @@
 """Model edits evaluate and reuse data-independent checks without numerical execution."""
 
+from unittest.mock import Mock
+
 import pytest
 from pydantic import ValidationError
 
 from nof1_causal_lab.actions.contracts.bodies import EditModelInput
+from nof1_causal_lab.actions.contracts.effects import ActionEffects
 from nof1_causal_lab.actions.contracts.requests import EditModelRequest
 from nof1_causal_lab.actions.edit_model import edit_model
 from nof1_causal_lab.actions.model_checks import evaluate_model_checks
@@ -12,7 +15,7 @@ from nof1_causal_lab.artifacts.model.question import QuestionSpec
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.state import apply_effects
+from nof1_causal_lab.study.state import ArtifactRecord, StudyState, apply_effects
 from tests.support.action import question_root
 from tests.support.git import git_oid
 from tests.support.model import construct_named, stress_sleep_causal_model
@@ -81,3 +84,23 @@ def test_edit_model_contract_rejects_panel_selection():
                 "panel_ref": git_oid(2),
             }
         )
+
+
+def test_fit_checks_use_selected_input_model_not_conditioned_output(monkeypatch):
+    from nof1_causal_lab.actions import model_checks
+
+    original = ArtifactRecord(artifact_id="model", revision=git_oid(1))
+    posterior = original.revised(revision=git_oid(2), derived_from={"model": original.revision})
+    inputs = StudyState(
+        current={"model": original},
+        data=DataRef[GitOid, int](revision=git_oid(3), replicate_index=0),
+    )
+    applied = Applied(result=None, effects=ActionEffects(produced=(posterior,)))
+    read_checks = Mock()
+    monkeypatch.setattr(model_checks, "read_model_checks", read_checks)
+
+    evaluate_model_checks("checks", inputs, applied, action="fit")
+
+    # Fitting produces a shared empirical law; input preflight must never try
+    # to compile that posterior as independent scalar priors.
+    read_checks.assert_called_once_with("checks", inputs, action="fit")

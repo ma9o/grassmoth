@@ -95,9 +95,11 @@ def evaluate_model_checks[ResultT](
     *,
     action: Literal["edit_model", "fit"],
 ) -> tuple[ModelCheckReport, IdentificationReport] | FitCheckReport:
-    """Evaluate reports against the inputs and outputs of this action."""
+    """Check the edited model, or the selected inputs that a fit actually consumed."""
     return read_model_checks(
         workspace_id,
-        apply_effects(state, applied.effects.produced, applied.effects.retracted),
+        state
+        if action == "fit"
+        else apply_effects(state, applied.effects.produced, applied.effects.retracted),
         action=action,
     )
