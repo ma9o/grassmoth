@@ -5,8 +5,9 @@ from pathlib import Path
 
 import pytest
 from evaluation.comparison import differing_controls
-from evaluation.declarations import CaseRecipe, Experiment
+from evaluation.declarations import CaseFile, CaseRecipe, Experiment, StudyModel
 from evaluation.run import assigned_settings
+from evaluation.sources import model_document, read_source
 from pydantic import ValidationError
 
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
@@ -51,19 +52,24 @@ def test_action_recipe_models_are_complete_authored_documents():
     root = Path(__file__).parents[2] / "evaluation/cases"
     for path in root.glob("*.json"):
         recipe = CaseRecipe.model_validate_json(path.read_text())
-        model = DynamicalModelSpec.model_validate_json(
-            (root / recipe.fit_model).read_text()
-        ).materialized()
+        if isinstance(recipe.fit_model, StudyModel):
+            assert recipe.fit_model.repository.startswith("../../../../data/")
+            assert recipe.data.kind == "prepare_data"
+            assert all(file.path.startswith("../../../../data/") for file in recipe.data.files)
+            continue
+        model = model_document(recipe.fit_model, read_source(recipe.fit_model, root)).materialized()
         assert model.get_construct(recipe.question.outcome)
         assert model.measurement_clock is not None
         if recipe.data.kind == "simulate":
             truth = DynamicalModelSpec.model_validate_json(
-                (root / recipe.data.truth_model).read_text()
+                read_source(recipe.data.truth_model, root)
             ).materialized()
             assert not truth.parameters
         else:
             assert set(recipe.data.extraction) == {item.observation.id for item in model.indicators}
-            assert all((root / file).is_file() for file in recipe.data.files)
+            for file in (*recipe.data.files, *recipe.data.provenance_files):
+                assert isinstance(file, CaseFile)
+                assert read_source(file, root)
         assert json.loads(path.read_text())["provenance"]
 
 

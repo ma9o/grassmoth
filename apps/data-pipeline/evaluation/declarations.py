@@ -8,7 +8,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, model_validator
 
 from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import IndicatorId
+from nof1_causal_lab.artifacts.identity import GitOid, IndicatorId
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
 from nof1_causal_lab.artifacts.observations.preparation import ExtractionSpec
 from nof1_causal_lab.artifacts.reports.checks import NotEvaluatedReason
@@ -17,11 +17,31 @@ from nof1_causal_lab.artifacts.simulation import SimulationSpec
 from nof1_causal_lab.json_types import JsonValue
 
 
+class CaseFile(Value):
+    """A recipe-relative file whose bytes must match before any action is submitted."""
+
+    kind: Literal["file"] = "file"
+    path: str
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+class StudyModel(Value):
+    """A read-only model result in a local study, selected by immutable tree and hash."""
+
+    kind: Literal["study_model"] = "study_model"
+    repository: str
+    revision: GitOid
+    sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
+
+
+type ModelSource = Annotated[CaseFile | StudyModel, Field(discriminator="kind")]
+
+
 class GeneratedData(Value):
     """The production simulator generates a pinned replicate from a literal truth model."""
 
     kind: Literal["simulate"] = "simulate"
-    truth_model: str
+    truth_model: CaseFile
     simulation: SimulationSpec
 
 
@@ -29,7 +49,8 @@ class RecordedData(Value):
     """The production preparation action imports immutable source files."""
 
     kind: Literal["prepare_data"] = "prepare_data"
-    files: tuple[str, ...] = Field(min_length=1)
+    files: tuple[CaseFile, ...] = Field(min_length=1)
+    provenance_files: tuple[CaseFile, ...] = ()
     extraction: Mapping[IndicatorId, ExtractionSpec]
     context: str = ""
 
@@ -39,7 +60,7 @@ class CaseRecipe(Value):
 
     name: str
     question: QuestionSpec
-    fit_model: str
+    fit_model: ModelSource
     data: Annotated[GeneratedData | RecordedData, Field(discriminator="kind")]
     expected_identified: tuple[str, ...] = ()
     allowed_findings: Mapping[str, str] = Field(default_factory=dict)

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from typing import TYPE_CHECKING
 
 from pydantic import TypeAdapter
 
 from evaluation.declarations import CaseRecipe, GeneratedData
+from evaluation.sources import model_document, read_source
 from nof1_causal_lab.actions.contracts.requests import ActionInput
 from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.identity import GitOid
@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from evaluation.client import ActionClient
+    from evaluation.declarations import ModelSource
 
 _REQUEST = TypeAdapter(ActionInput)
 
@@ -64,12 +65,12 @@ def fingerprint(value: object) -> str:
 
 def prepare_case(recipe: CaseRecipe, root: Path, client: ActionClient, seed: int) -> PreparedCase:
     """Pin the model and one history; no sampler or alternate data generator runs here."""
-    files = (
+    sources = (
         (recipe.fit_model, recipe.data.truth_model)
         if isinstance(recipe.data, GeneratedData)
-        else (recipe.fit_model, *recipe.data.files)
+        else (recipe.fit_model, *recipe.data.files, *recipe.data.provenance_files)
     )
-    content = {name: (root / name).read_bytes() for name in files}
+    content = {source.sha256: read_source(source, root) for source in sources}
     recipe_digest = fingerprint({"recipe": recipe.model_dump(mode="json"), "files": content})
     question = client.call(
         _REQUEST.validate_python(
@@ -79,15 +80,18 @@ def prepare_case(recipe: CaseRecipe, root: Path, client: ActionClient, seed: int
             }
         )
     )
+    question_revision = client.artifact_revision(question.call_id, "question")
 
-    def model(path: str, parent: GitOid):
+    def model(source: ModelSource, parent: GitOid):
         result = client.call(
             _REQUEST.validate_python(
                 {
                     "action": "edit_model",
                     "input": {
                         "parent_ref": parent,
-                        "dynamical_model_spec": json.loads(content[path]),
+                        "dynamical_model_spec": model_document(
+                            source, content[source.sha256]
+                        ).model_dump(mode="json"),
                     },
                 }
             )
@@ -108,13 +112,15 @@ def prepare_case(recipe: CaseRecipe, root: Path, client: ActionClient, seed: int
         return result, findings
 
     if isinstance(recipe.data, GeneratedData):
-        truth, truth_findings = model(recipe.data.truth_model, question.commit_id)
+        truth, truth_findings = model(recipe.data.truth_model, question_revision)
         generated = client.call(
             _REQUEST.validate_python(
                 {
                     "action": "simulate",
                     "input": {
-                        "dynamical_model_spec_ref": truth.commit_id,
+                        "dynamical_model_spec_ref": client.artifact_revision(
+                            truth.call_id, "model"
+                        ),
                         "simulation": recipe.data.simulation.model_dump(mode="json"),
                         "seed": seed,
                         "num_replicates": 1,
@@ -129,18 +135,20 @@ def prepare_case(recipe: CaseRecipe, root: Path, client: ActionClient, seed: int
         )
         data = generated.body.data[0]
         data_revision = generated.commit_id
-        fitted, findings = model(recipe.fit_model, question.commit_id)
+        fitted, findings = model(recipe.fit_model, question_revision)
         findings += truth_findings + generation_findings
     else:
-        fitted, findings = model(recipe.fit_model, question.commit_id)
+        fitted, findings = model(recipe.fit_model, question_revision)
         for file in recipe.data.files:
-            client.upload(root / file)
+            client.upload((root / file.path).name, content[file.sha256])
         prepared = client.call(
             _REQUEST.validate_python(
                 {
                     "action": "prepare_data",
                     "input": {
-                        "dynamical_model_spec_ref": fitted.commit_id,
+                        "dynamical_model_spec_ref": client.artifact_revision(
+                            fitted.call_id, "model"
+                        ),
                         "source": "input",
                         "extraction": {
                             key: rule.model_dump(mode="json")
@@ -160,9 +168,10 @@ def prepare_case(recipe: CaseRecipe, root: Path, client: ActionClient, seed: int
             findings += require_findings(
                 audit.findings, recipe.allowed_findings, recipe.unavailable_findings
             )
-        data, data_revision = prepared.body.data, prepared.commit_id
+        data = prepared.body.data
+        data_revision = client.artifact_revision(prepared.call_id, "panel")
     return PreparedCase(
-        model_ref=fitted.commit_id,
+        model_ref=client.artifact_revision(fitted.call_id, "model"),
         data_ref=DataRef(revision=data_revision, replicate_index=0),
         model_digest=fingerprint(result_payload(fitted.body.dynamical_model_spec)),
         data_digest=fingerprint({key: result_payload(value) for key, value in data.items()}),

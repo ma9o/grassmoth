@@ -16,10 +16,18 @@
       }
     }
   },
-  "fit_model": "assets/nonlinear/model.json",
+  "fit_model": {
+    "kind": "file",
+    "path": "assets/nonlinear/model.json",
+    "sha256": "56cb4d195da754b1129808f8345da21b1855d38d4d3e6f0169e9f9eefc04db48"
+  },
   "data": {
     "kind": "simulate",
-    "truth_model": "assets/nonlinear/truth.json",
+    "truth_model": {
+      "kind": "file",
+      "path": "assets/nonlinear/truth.json",
+      "sha256": "b247887b2196745e99815463532d0766e204e9c0e5f388e8357fba3f41caeeaf"
+    },
     "simulation": {
       "start": "2020-01-01",
       "horizon": "31d"

@@ -23,7 +23,8 @@ from nof1_causal_lab.study.persistence.codec import unpack_result
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from nof1_causal_lab.artifacts.identity import GitOid
+    from nof1_causal_lab.api.studies import TimelineResponse
+    from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
 
 _POLL = TypeAdapter(ActionPoll)
 
@@ -82,8 +83,7 @@ class ActionClient:
             raise ValueError(f"{request.action} failed; inspect {poll.call_id}")
         return poll
 
-    def fit_source(self, call_id: str) -> NewFitTarget[GitOid]:
-        """Check a saved reference's original inputs against its public journal lineage."""
+    def _timeline(self) -> TimelineResponse:
         from nof1_causal_lab.api.studies import TimelineResponse
 
         with urlopen(
@@ -92,6 +92,23 @@ class ActionClient:
             payload = response.read()
         timeline = TimelineResponse.model_validate_json(payload)
         (self.output / "timeline.json").write_bytes(payload)
+        return timeline
+
+    def artifact_revision(self, call_id: str, artifact: ArtifactId) -> GitOid:
+        """Select a produced artifact tree; an action commit is a different revision."""
+        from nof1_causal_lab.study.records import Applied
+
+        item = next(item for item in self._timeline().attempts if item.call_id == call_id)
+        outcome = item.record.attempt.outcome
+        if not isinstance(outcome, Applied):
+            raise ValueError("Only successful actions produce case artifacts")
+        return next(
+            info.revision for info in outcome.effects.produced if info.artifact_id == artifact
+        )
+
+    def fit_source(self, call_id: str) -> NewFitTarget[GitOid]:
+        """Check a saved reference's original inputs against its public journal lineage."""
+        timeline = self._timeline()
         by_revision = {item.commit_id: item for item in timeline.attempts}
         item = next(item for item in timeline.attempts if item.call_id == call_id)
         while True:
@@ -103,16 +120,16 @@ class ActionClient:
                 return target
             item = by_revision[target.fit_ref]
 
-    def upload(self, path: Path) -> None:
+    def upload(self, filename: str, payload: bytes) -> None:
         """Stage source bytes through the same public upload endpoint as study clients."""
         boundary = "nof1-benchmark-" + uuid4().hex
         body = (
             (
                 f'--{boundary}\r\nContent-Disposition: form-data; name="workspaceId"\r\n\r\n{self.workspace}\r\n'
-                f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{path.name}"\r\n'
+                f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
                 "Content-Type: application/octet-stream\r\n\r\n"
             ).encode()
-            + path.read_bytes()
+            + payload
             + f"\r\n--{boundary}--\r\n".encode()
         )
         with urlopen(

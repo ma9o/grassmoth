@@ -110,11 +110,20 @@
       }
     }
   },
-  "fit_model": "assets/france1940/model.json",
+  "fit_model": {
+    "kind": "study_model",
+    "repository": "../../../../data/FRANCE1940/study/history.git",
+    "revision": "1fb7ff0cc1652066e0516b207a1171f8353b6370",
+    "sha256": "d9f377b994de75f28469620701c57ae4d931eb22166fafd996e037e6b937314c"
+  },
   "data": {
     "kind": "prepare_data",
     "files": [
-      "assets/france1940/historical_inputs.csv"
+      {
+        "kind": "file",
+        "path": "../../../../data/FRANCE1940/structural_20261008_wage_input/historical_inputs.csv",
+        "sha256": "ca2357ecc629cac519bb87f659cd9573af6bbb97689a85e011e721f3b0e7e72b"
+      }
     ],
     "extraction": {
       "indicator:aircraft_spot_rate_log": {
