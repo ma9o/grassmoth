@@ -101,11 +101,13 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
 @pytest.mark.parametrize(
     "trajectory", [NutsTrajectorySpec(max_tree_depth=3), FixedTrajectorySpec(steps=4)]
 )
-@pytest.mark.parametrize("chart", ["centred", "innovation", "mixed"])
-def test_continuation_matches_uninterrupted_random_stream_and_tuning(trajectory, chart):
+@pytest.mark.parametrize("parameterization", ["centred", "non_centred", "mixed"])
+def test_continuation_matches_uninterrupted_random_stream_and_tuning(trajectory, parameterization):
     target, _, _ = gaussian_interval_case()
     settings = SamplerSpec(
-        algorithm=NutsDASpec(trajectory=trajectory, initial_step_size=0.05, chart=chart),
+        algorithm=NutsDASpec(
+            trajectory=trajectory, initial_step_size=0.05, parameterization=parameterization
+        ),
         num_warmup=12,
         num_samples_per_chain=8,
         num_chains=2,
@@ -139,8 +141,8 @@ def test_continuation_matches_uninterrupted_random_stream_and_tuning(trajectory,
     )
 
 
-@pytest.mark.parametrize("chart", ["centred", "innovation", "mixed"])
-def test_compile_only_executes_neither_sweep(monkeypatch, chart):
+@pytest.mark.parametrize("parameterization", ["centred", "non_centred", "mixed"])
+def test_compile_only_executes_neither_sweep(monkeypatch, parameterization):
     from nof1_causal_lab.models.ssm.inference.samplers import sweeps
 
     target, _, _ = gaussian_interval_case()
@@ -169,7 +171,9 @@ def test_compile_only_executes_neither_sweep(monkeypatch, chart):
     run = run_nuts_da(
         target,
         sampler=SamplerSpec(
-            algorithm=NutsDASpec(trajectory=FixedTrajectorySpec(steps=2), chart=chart),
+            algorithm=NutsDASpec(
+                trajectory=FixedTrajectorySpec(steps=2), parameterization=parameterization
+            ),
             num_warmup=0,
             num_samples_per_chain=0,
             num_chains=2,
@@ -195,7 +199,7 @@ def test_compile_only_executes_neither_sweep(monkeypatch, chart):
     from nof1_causal_lab.artifacts.continuation import JointTuning
 
     assert isinstance(run.checkpoint.tuning, JointTuning)
-    assert run.checkpoint.tuning.chart.kind == chart
+    assert run.checkpoint.tuning.parameterization.kind == parameterization
 
     from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase
 

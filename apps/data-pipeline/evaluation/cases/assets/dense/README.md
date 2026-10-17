@@ -1,4 +1,4 @@
-# Dense and sparse chart comparison
+# Dense and sparse parameterization comparison
 
 The two cases use the same 129-node six-hour grid over 32 days, two nonlinear
 stochastic states, a known alternating input, and one seed (8029, one replicate).
@@ -38,5 +38,5 @@ uv run python -m evaluation.fixtures.recorded \
 
 This command runs no fit. Review its outputs and findings before updating the
 pinned assets. The experiment declarations in `evaluation/experiments` use
-`algorithm.chart` as their sole factor and three sampler seeds. They have not
+`algorithm.parameterization` as their sole factor and three sampler seeds. They have not
 been run; their local hardware assignment does not authorize a GPU campaign.

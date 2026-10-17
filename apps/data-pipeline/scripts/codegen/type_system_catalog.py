@@ -195,7 +195,7 @@ CONCERNS = {
             "artifacts.reports.posterior_diagnostics",
             "artifacts.sampling",
             "artifacts.continuation",
-            "artifacts.joint_chart",
+            "artifacts.joint_parameterization",
             "artifacts.reports.effects",
             "artifacts.reports.empirical",
             "artifacts.scenarios",
@@ -356,7 +356,7 @@ def _layer_for(name: str, module: str) -> str:
         (
             "artifacts.arrays",
             "artifacts.continuation",
-            "artifacts.joint_chart",
+            "artifacts.joint_parameterization",
             "artifacts.reports.inference",
             "artifacts.reports.posterior_diagnostics",
             "artifacts.reports.effects",

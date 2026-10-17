@@ -200,7 +200,7 @@ class ParticleTarget:
     def innovation_map(
         self, context: ParticleContext, innovation_mask: jax.Array
     ) -> GaussianPathMap:
-        """Bind exact moments, support and pinned values for a frozen chart policy."""
+        """Bind exact moments, support and pinned values for a frozen parameterization policy."""
         fixed = (
             jnp.full(self.independent_mask.shape, jnp.nan, dtype=self.observations.dtype)
             if self.exact_constraints is None

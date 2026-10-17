@@ -20,7 +20,7 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ContinuedInitializationDiagnostics,
 )
 from nof1_causal_lab.models.ssm.inference.joint_coordinates import (
-    CentredChart,
+    CentredParameterization,
     JointCoordinates,
     build_joint_coordinates,
 )
@@ -42,7 +42,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class LapsInitializationTrace:
-    """Native ensemble history together with the exact chart that produced it."""
+    """Native ensemble history together with the exact parameterization that produced it."""
 
     coordinates: JointCoordinates
     ensemble: LapsTraceRecord
@@ -83,13 +83,13 @@ def prepare_laps_initialization(
             "LAPS ensemble_size must cover all requested particle chains"
         )
     coordinates = build_joint_coordinates(target, "centred")
-    assert isinstance(coordinates.chart, CentredChart)
+    assert isinstance(coordinates.parameterization, CentredParameterization)
     if not all(
         np.isfinite(np.asarray(value)).all()
         for value in (
             coordinates.parameter_center,
-            coordinates.chart.path_center,
-            coordinates.chart.path_chol,
+            coordinates.parameterization.path_center,
+            coordinates.parameterization.path_chol,
         )
     ):
         return InitializationFailure.unavailable(

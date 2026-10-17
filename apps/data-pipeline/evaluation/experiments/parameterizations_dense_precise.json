@@ -1,6 +1,6 @@
 {
-  "name": "Joint chart pilot: dense noisy",
-  "case": "../cases/dense_noisy.json",
+  "name": "Joint parameterization pilot: dense precise",
+  "case": "../cases/dense_precise.json",
   "base": {
     "hardware": "local",
     "num_chains": 4,
@@ -8,29 +8,29 @@
     "num_samples_per_chain": 1000,
     "algorithm": {
       "method": "nuts_da",
-      "chart": "centred"
+      "parameterization": "centred"
     }
   },
   "factors": [
-    "algorithm.chart"
+    "algorithm.parameterization"
   ],
   "arms": [
     {
       "name": "centred",
       "settings": {
-        "algorithm.chart": "centred"
+        "algorithm.parameterization": "centred"
       }
     },
     {
-      "name": "innovation",
+      "name": "non_centred",
       "settings": {
-        "algorithm.chart": "innovation"
+        "algorithm.parameterization": "non_centred"
       }
     },
     {
       "name": "mixed",
       "settings": {
-        "algorithm.chart": "mixed"
+        "algorithm.parameterization": "mixed"
       }
     }
   ],

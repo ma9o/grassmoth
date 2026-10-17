@@ -12,7 +12,7 @@ import polars as pl
 import pytest
 
 from nof1_causal_lab.actions.fit import execution as stage5_inference
-from nof1_causal_lab.artifacts.joint_chart import CentredChartRecord
+from nof1_causal_lab.artifacts.joint_parameterization import CentredParameterizationRecord
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
 from nof1_causal_lab.artifacts.sampling import SamplerSpec
@@ -186,7 +186,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             paths=NumericalArray.from_numpy(np.asarray(paths.reshape(2, count, 2, -1)[:, -1])),
             random_key=NumericalArray.from_numpy(np.array([0, offset], dtype=np.uint32)),
             native_state=(),
-            tuning=JointTuning(chart=CentredChartRecord()),
+            tuning=JointTuning(parameterization=CentredParameterizationRecord()),
         )
         return MCMCPosterior.from_run(
             draws=JointPosteriorDraws(parameters, paths),

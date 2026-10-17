@@ -129,19 +129,21 @@ def test_t512_variants_share_data_and_compile_the_accumulator_for_replay():
 
 
 @pytest.mark.parametrize("variant", ["precise", "noisy"])
-def test_chart_arms_use_the_production_setting_and_keep_other_controls_paired(variant):
+def test_parameterization_arms_use_the_production_setting_and_keep_other_controls_paired(variant):
     from pathlib import Path
 
     from nof1_causal_lab.artifacts.sampling import NutsDASpec
 
-    path = Path(__file__).parents[2] / f"evaluation/experiments/charts_dense_{variant}.json"
+    path = (
+        Path(__file__).parents[2] / f"evaluation/experiments/parameterizations_dense_{variant}.json"
+    )
     experiment = Experiment.model_validate_json(path.read_text())
     settings = [assigned_settings(experiment, arm, 19) for arm in experiment.arms]
-    charts = set()
+    parameterizations = set()
     for value in settings:
         assert isinstance(value.algorithm, NutsDASpec)
-        charts.add(value.algorithm.chart)
-    assert charts == {"centred", "innovation", "mixed"}
+        parameterizations.add(value.algorithm.parameterization)
+    assert parameterizations == {"centred", "non_centred", "mixed"}
     for value in settings[1:]:
         assert (
             differing_controls(

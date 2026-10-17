@@ -11,7 +11,7 @@ from nof1_causal_lab.artifacts.base import Value
 
 type AuxiliaryDrift = Literal["none", "amala", "amala_plus"]
 type LatentBlockSize = Literal[1, 2, "all"]
-type JointChart = Literal["centred", "innovation", "mixed"]
+type JointParameterization = Literal["centred", "non_centred", "mixed"]
 
 
 class AdaptedLatentStepSpec(Value):
@@ -74,7 +74,7 @@ class NutsDASpec(Value):
     """Joint HMC with dual averaging and windowed diagonal mass adaptation."""
 
     method: Literal["nuts_da"] = "nuts_da"
-    chart: JointChart = Field(
+    parameterization: JointParameterization = Field(
         default="centred",
         description="Experimental coordinates for the unchanged joint posterior; frozen per fit.",
     )

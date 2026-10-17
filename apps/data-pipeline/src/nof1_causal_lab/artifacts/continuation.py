@@ -6,7 +6,7 @@ from pydantic import Field
 
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.joint_chart import JointChartRecord
+from nof1_causal_lab.artifacts.joint_parameterization import JointParameterizationRecord
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import InitializationDiagnostics
 from nof1_causal_lab.artifacts.sampling import (
     MarginalParticleGibbsSpec,
@@ -20,7 +20,7 @@ class JointTuning(Value):
     """Joint coordinates are reconstructed from the original model and trace seed."""
 
     kind: Literal["joint"] = "joint"
-    chart: JointChartRecord
+    parameterization: JointParameterizationRecord
 
 
 class TransferredTuning(Value):
@@ -61,7 +61,7 @@ def sampler_identity(settings: SamplerSpec) -> tuple[str | int, ...]:
     """Identify kernels whose private state has the same scientific interpretation."""
     algorithm = settings.algorithm
     if isinstance(algorithm, NutsDASpec):
-        return (algorithm.method, algorithm.trajectory.kind, algorithm.chart)
+        return (algorithm.method, algorithm.trajectory.kind, algorithm.parameterization)
     if isinstance(algorithm, ParticleGibbsSpec):
         return (algorithm.method, algorithm.parameter_kernel.method)
     assert isinstance(algorithm, MarginalParticleGibbsSpec)

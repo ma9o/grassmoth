@@ -51,7 +51,7 @@ def _nonlinear_fixture():
 
 
 @pytest.mark.parametrize("nonlinear", [False, True])
-def test_laps_chart_preserves_exact_density_and_directional_gradients(nonlinear):
+def test_laps_parameterization_preserves_exact_density_and_directional_gradients(nonlinear):
     if nonlinear:
         prepared, panel = _nonlinear_fixture()
         target = build_particle_problem(
@@ -63,29 +63,30 @@ def test_laps_chart_preserves_exact_density_and_directional_gradients(nonlinear)
         ).runtime
     else:
         target, _, _ = gaussian_interval_case()
-    chart = build_joint_coordinates(target)
-    point = jnp.linspace(-0.4, 0.5, chart.dimension)
+    parameterization = build_joint_coordinates(target)
+    point = jnp.linspace(-0.4, 0.5, parameterization.dimension)
 
     def native_coordinates(q):
-        parameters, path = chart.decode(q)
-        return jnp.concatenate((parameters, path.ravel()[chart.free_indices]))
+        parameters, path = parameterization.decode(q)
+        return jnp.concatenate((parameters, path.ravel()[parameterization.free_indices]))
 
     jacobian = jax.jacfwd(native_coordinates)(point)
     _, log_jacobian = jnp.linalg.slogdet(jacobian)
-    parameters, path = chart.decode(point)
+    parameters, path = parameterization.decode(point)
     expected = target.log_posterior(parameters, path, target.observations, target.times)
-    value, gradient = jax.jit(jax.value_and_grad(chart.log_density))(point)
+    value, gradient = jax.jit(jax.value_and_grad(parameterization.log_density))(point)
     np.testing.assert_allclose(value, expected + log_jacobian, rtol=2e-6)
     direction = jax.random.normal(jax.random.key(321), point.shape)
     direction = direction / jnp.linalg.norm(direction)
     h = 1e-3
     finite_difference = (
-        chart.log_density(point + h * direction) - chart.log_density(point - h * direction)
+        parameterization.log_density(point + h * direction)
+        - parameterization.log_density(point - h * direction)
     ) / (2 * h)
     np.testing.assert_allclose(gradient @ direction, finite_difference, rtol=0.02, atol=2e-3)
 
 
-def test_laps_chart_excludes_fixed_states_and_replays_static_and_accumulated_states():
+def test_laps_parameterization_excludes_fixed_states_and_replays_static_and_accumulated_states():
     model = _model()
     driver_spec = next(item for item in model.constructs if item.name == "driver")
     driver_spec = driver_spec.revised(
@@ -112,9 +113,9 @@ def test_laps_chart_excludes_fixed_states_and_replays_static_and_accumulated_sta
     target = problem.runtime
     assert target.exact_constraints is not None
     values = target.exact_constraints.values
-    chart = build_joint_coordinates(target)
-    _, path = jax.jit(chart.decode)(jnp.linspace(-0.5, 0.5, chart.dimension))
-    assert chart.dimension == target.initial_position.size + int(
+    parameterization = build_joint_coordinates(target)
+    _, path = jax.jit(parameterization.decode)(jnp.linspace(-0.5, 0.5, parameterization.dimension))
+    assert parameterization.dimension == target.initial_position.size + int(
         jnp.sum(target.independent_mask & jnp.isnan(values))
     )
     np.testing.assert_array_equal(path[:, baseline], jnp.repeat(path[0, baseline], 4))

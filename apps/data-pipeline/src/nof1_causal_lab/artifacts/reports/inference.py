@@ -9,7 +9,7 @@ from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
 from nof1_causal_lab.artifacts.identity import ConstructId, DistributionId, ParameterId
-from nof1_causal_lab.artifacts.joint_chart import JointChartRecord
+from nof1_causal_lab.artifacts.joint_parameterization import JointParameterizationRecord
 from nof1_causal_lab.artifacts.reports.checks import SpecificationAssessment
 from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
 from nof1_causal_lab.artifacts.reports.model_checks import QuestionCheckReport
@@ -61,7 +61,7 @@ class FitSegment(Value):
     settings: SamplerSpec
     runtime: FitRuntime
     phases: tuple[InferencePhase, ...]
-    chart: JointChartRecord | None = None
+    parameterization: JointParameterizationRecord | None = None
 
 
 class InferenceMetadata(Value):

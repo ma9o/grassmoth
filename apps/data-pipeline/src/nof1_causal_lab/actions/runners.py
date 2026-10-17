@@ -87,7 +87,7 @@ def _fit_selected(
         if sampler_identity(sampler) != sampler_identity(continuation.settings):
             if sampler.num_warmup == 0:
                 raise ModelFitError(
-                    "Switching algorithm or joint chart requires positive warmup",
+                    "Switching algorithm or joint parameterization requires positive warmup",
                     diagnostics={"code": "CONTINUATION_REQUIRES_WARMUP"},
                 )
             continuation = continuation.revised(tuning=TransferredTuning())

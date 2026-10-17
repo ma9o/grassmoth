@@ -1,4 +1,4 @@
-"""Exact chart identities and decoded analytic posteriors, without fitting a study."""
+"""Exact parameterization identities and decoded analytic posteriors, without fitting a study."""
 
 from dataclasses import replace
 
@@ -10,7 +10,7 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from nof1_causal_lab.artifacts.joint_chart import MixedChartRecord
+from nof1_causal_lab.artifacts.joint_parameterization import MixedParameterizationRecord
 from nof1_causal_lab.artifacts.probability.families import DistributionFamily
 from nof1_causal_lab.models.ssm.execution.contracts import MeasurementParams
 from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
@@ -24,7 +24,7 @@ from tests.support.interval_particle import gaussian_interval_case, interval_tar
 from tests.support.observation import observation_laws
 
 pytestmark = pytest.mark.inference(concern="sampling")
-CHARTS = ("centred", "innovation", "mixed")
+PARAMETERIZATIONS = ("centred", "non_centred", "mixed")
 
 
 def _direct_constraints(value):
@@ -154,39 +154,47 @@ def _correlated_target(pinned=0.3):
     )
 
 
-@pytest.mark.parametrize("chart_name", CHARTS)
-def test_correlated_parameter_dependent_chart_keeps_exact_and_interval_factors(chart_name):
+@pytest.mark.parametrize("parameterization_name", PARAMETERIZATIONS)
+def test_correlated_parameter_dependent_parameterization_keeps_exact_and_interval_factors(
+    parameterization_name,
+):
     target = _correlated_target()
-    chart = build_joint_coordinates(target, chart_name)
-    point = jnp.linspace(-0.3, 0.4, chart.dimension)
+    parameterization = build_joint_coordinates(target, parameterization_name)
+    point = jnp.linspace(-0.3, 0.4, parameterization.dimension)
 
     def scientific(q):
-        parameters, path = chart.decode(q)
-        return jnp.concatenate((parameters, path.ravel()[chart.free_indices]))
+        parameters, path = parameterization.decode(q)
+        return jnp.concatenate((parameters, path.ravel()[parameterization.free_indices]))
 
-    parameters, path = chart.decode(point)
+    parameters, path = parameterization.decode(point)
     assert path[1, 0] == 0.3
-    assert chart.dimension == 8  # one parameter plus eight states minus the pinned state
-    np.testing.assert_allclose(chart.encode(parameters, path), point, atol=2e-6)
+    assert parameterization.dimension == 8  # one parameter plus eight states minus the pinned state
+    np.testing.assert_allclose(parameterization.encode(parameters, path), point, atol=2e-6)
     _, jacobian = jnp.linalg.slogdet(jax.jacfwd(scientific)(point))
     expected = target.log_posterior(parameters, path, target.observations, target.times) + jacobian
-    value, gradient = jax.jit(jax.value_and_grad(chart.log_density))(point)
+    value, gradient = jax.jit(jax.value_and_grad(parameterization.log_density))(point)
     np.testing.assert_allclose(value, expected, rtol=3e-6, atol=3e-6)
     direction = jnp.linspace(0.4, -0.2, point.size)
     h = 1e-3
     finite_difference = (
-        chart.log_density(point + h * direction) - chart.log_density(point - h * direction)
+        parameterization.log_density(point + h * direction)
+        - parameterization.log_density(point - h * direction)
     ) / (2 * h)
     np.testing.assert_allclose(gradient @ direction, finite_difference, rtol=3e-3, atol=2e-3)
-    if chart_name == "mixed":
-        record = chart.record
-        assert isinstance(record, MixedChartRecord)
+    if parameterization_name == "mixed":
+        record = parameterization.record
+        assert isinstance(record, MixedParameterizationRecord)
         assert record.centred_mask == ((False, True), (False, False), (False, True), (False, False))
-        assert not record.equals_innovation
+        assert not record.equals_non_centred
     # Conditional dynamics at a pinned reading remain in the transformed target.
     changed = _correlated_target(0.8)
     assert (
-        abs(float(build_joint_coordinates(changed, chart_name).log_density(point) - value)) > 0.01
+        abs(
+            float(
+                build_joint_coordinates(changed, parameterization_name).log_density(point) - value
+            )
+        )
+        > 0.01
     )
 
 
@@ -218,8 +226,10 @@ def test_conditional_gaussian_keeps_centred_marginal_and_noise_normalization():
     np.testing.assert_allclose(*derivatives, rtol=2e-6)
 
 
-@pytest.mark.parametrize("chart_name", CHARTS)
-def test_static_and_accumulator_replay_have_no_extra_noise_or_centred_drivers(chart_name):
+@pytest.mark.parametrize("parameterization_name", PARAMETERIZATIONS)
+def test_static_and_accumulator_replay_have_no_extra_noise_or_centred_drivers(
+    parameterization_name,
+):
     compiled, problem = _problem(_model())
     indices = {state.name: i for i, state in enumerate(compiled.states)}
     total_column = next(
@@ -228,24 +238,26 @@ def test_static_and_accumulator_replay_have_no_extra_noise_or_centred_drivers(ch
     observed = problem.runtime.observations.at[2, total_column].set(0.2)
     _, problem = _problem(_model(), observed)
     target = problem.runtime
-    chart = build_joint_coordinates(target, chart_name)
-    point = jnp.linspace(-0.2, 0.3, chart.dimension)
-    parameters, path = chart.decode(point)
-    np.testing.assert_allclose(chart.encode(parameters, path), point, atol=2e-6)
+    parameterization = build_joint_coordinates(target, parameterization_name)
+    point = jnp.linspace(-0.2, 0.3, parameterization.dimension)
+    parameters, path = parameterization.decode(point)
+    np.testing.assert_allclose(parameterization.encode(parameters, path), point, atol=2e-6)
     np.testing.assert_allclose(
         path[1:, indices["total"]], jnp.cumsum(path[:-1, indices["driver"]]), atol=2e-6
     )
     np.testing.assert_array_equal(
         path[:, indices["baseline"]], jnp.repeat(path[0, indices["baseline"]], 4)
     )
-    assert not np.asarray(chart.free_mask)[:, [indices["total"], indices["baseline"]]].any()
-    if chart_name == "mixed":
-        record = chart.record
-        assert isinstance(record, MixedChartRecord)
-        assert record.equals_innovation
+    assert not np.asarray(parameterization.free_mask)[
+        :, [indices["total"], indices["baseline"]]
+    ].any()
+    if parameterization_name == "mixed":
+        record = parameterization.record
+        assert isinstance(record, MixedParameterizationRecord)
+        assert record.equals_non_centred
     context = target.context(parameters, target.times)
     np.testing.assert_allclose(path, target.replay_path(context, path), atol=2e-6)
-    assert np.isfinite(jax.grad(chart.log_density)(point)).all()
+    assert np.isfinite(jax.grad(parameterization.log_density)(point)).all()
 
 
 def _point_gaussian_case():
@@ -262,19 +274,21 @@ def _point_gaussian_case():
 
 
 @pytest.mark.parametrize("fixture", [_point_gaussian_case, gaussian_interval_case])
-@pytest.mark.parametrize("chart_name", CHARTS)
-def test_decoded_analytic_posterior_matches_in_all_charts(fixture, chart_name):
+@pytest.mark.parametrize("parameterization_name", PARAMETERIZATIONS)
+def test_decoded_analytic_posterior_matches_in_all_parameterizations(
+    fixture, parameterization_name
+):
     target, expected_mean, expected_covariance = fixture()
-    chart = build_joint_coordinates(target, chart_name)
-    zero = jnp.zeros(chart.dimension)
-    # This control is Gaussian in each affine chart: integration is analytic,
+    parameterization = build_joint_coordinates(target, parameterization_name)
+    zero = jnp.zeros(parameterization.dimension)
+    # This control is Gaussian in each affine parameterization: integration is analytic,
     # without a sampler, adaptation, stochastic tolerance or production fit.
-    precision = -jax.hessian(chart.log_density)(zero)
+    precision = -jax.hessian(parameterization.log_density)(zero)
     covariance = jnp.linalg.inv(precision)
-    mean = covariance @ jax.grad(chart.log_density)(zero)
+    mean = covariance @ jax.grad(parameterization.log_density)(zero)
 
     def scientific(q):
-        parameters, path = chart.decode(q)
+        parameters, path = parameterization.decode(q)
         return jnp.concatenate((parameters, path[:, 0]))
 
     derivative = jax.jacfwd(scientific)(mean)
@@ -282,24 +296,26 @@ def test_decoded_analytic_posterior_matches_in_all_charts(fixture, chart_name):
     np.testing.assert_allclose(
         derivative @ covariance @ derivative.T, expected_covariance, rtol=2e-5, atol=2e-5
     )
-    if fixture == gaussian_interval_case and chart_name == "mixed":
-        record = chart.record
-        assert isinstance(record, MixedChartRecord)
-        assert record.equals_innovation
-    if chart_name == "innovation":
-        parameters, path = chart.decode(zero)
+    if fixture == gaussian_interval_case and parameterization_name == "mixed":
+        record = parameterization.record
+        assert isinstance(record, MixedParameterizationRecord)
+        assert record.equals_non_centred
+    if parameterization_name == "non_centred":
+        parameters, path = parameterization.decode(zero)
         context = target.context(parameters, target.times)
         expected = (
             target.log_prior(parameters)
             + dist.Normal(0.0, 1.0).log_prob(zero[1:]).sum()
             + target.observation_log_probs(context, path, target.observations).sum()
         )
-        np.testing.assert_allclose(chart.log_density(zero), expected, atol=3e-6)
+        np.testing.assert_allclose(parameterization.log_density(zero), expected, atol=3e-6)
 
 
-@pytest.mark.parametrize("chart_name", ["innovation", "mixed"])
+@pytest.mark.parametrize("parameterization_name", ["non_centred", "mixed"])
 @pytest.mark.parametrize("beta", [0.0, 0.35, 1.0])
-def test_scientific_tempering_reference_gets_the_same_chart_jacobian(chart_name, beta):
+def test_scientific_tempering_reference_gets_the_same_parameterization_jacobian(
+    parameterization_name, beta
+):
     target = _correlated_target()
     affine = build_joint_coordinates(target)
     _, anchor = affine.decode(jnp.zeros(affine.dimension))
@@ -312,17 +328,17 @@ def test_scientific_tempering_reference_gets_the_same_chart_jacobian(chart_name,
         affine.free_mask,
     )
     target = target.at_temperature(reference, jnp.asarray(beta))
-    chart = build_joint_coordinates(target, chart_name)
-    point = jnp.linspace(-0.2, 0.3, chart.dimension)
+    parameterization = build_joint_coordinates(target, parameterization_name)
+    point = jnp.linspace(-0.2, 0.3, parameterization.dimension)
 
     def scientific(q):
-        parameters, path = chart.decode(q)
-        return jnp.concatenate((parameters, path.ravel()[chart.free_indices]))
+        parameters, path = parameterization.decode(q)
+        return jnp.concatenate((parameters, path.ravel()[parameterization.free_indices]))
 
-    parameters, path = chart.decode(point)
+    parameters, path = parameterization.decode(point)
     _, logdet = jnp.linalg.slogdet(jax.jacfwd(scientific)(point))
     np.testing.assert_allclose(
-        chart.log_density(point),
+        parameterization.log_density(point),
         target.log_posterior(parameters, path, target.observations, target.times) + logdet,
         rtol=3e-6,
         atol=3e-6,
@@ -376,7 +392,7 @@ def test_compiler_mask_tracks_available_direct_multi_state_readings_only():
     np.testing.assert_array_equal(mask, expected)
 
 
-def test_zero_warmup_rejects_changed_chart_or_mask_before_kernel_execution():
+def test_zero_warmup_rejects_changed_parameterization_or_mask_before_kernel_execution():
     import time
 
     from nof1_causal_lab.artifacts.arrays import NumericalArray
@@ -390,7 +406,10 @@ def test_zero_warmup_rejects_changed_chart_or_mask_before_kernel_execution():
     coordinates = build_joint_coordinates(target, "mixed")
     parameters, path = coordinates.decode(jnp.zeros(coordinates.dimension))
     settings = SamplerSpec(
-        algorithm=NutsDASpec(chart="mixed"), num_warmup=0, num_samples_per_chain=1, num_chains=1
+        algorithm=NutsDASpec(parameterization="mixed"),
+        num_warmup=0,
+        num_samples_per_chain=1,
+        num_chains=1,
     )
     checkpoint = SamplerCheckpoint(
         settings=settings,
@@ -398,10 +417,10 @@ def test_zero_warmup_rejects_changed_chart_or_mask_before_kernel_execution():
         paths=NumericalArray.from_numpy(np.asarray(path[None])),
         random_key=NumericalArray.from_numpy(np.array([0, 1], dtype=np.uint32)),
         native_state=(),
-        tuning=JointTuning(chart=coordinates.record),
+        tuning=JointTuning(parameterization=coordinates.record),
     )
     for changed_target, changed_settings in (
-        (target, settings.revised(algorithm=NutsDASpec(chart="innovation"))),
+        (target, settings.revised(algorithm=NutsDASpec(parameterization="non_centred"))),
         (replace(target, point_reading_mask=jnp.zeros_like(target.point_reading_mask)), settings),
     ):
         result = run_nuts_da(

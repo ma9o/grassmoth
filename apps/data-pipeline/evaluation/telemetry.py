@@ -17,7 +17,9 @@ def sampler_outcomes(result: FitOutput) -> JsonObject:
         "draw_start": segment.start,
         "draw_stop": segment.stop,
         "phases": [phase.model_dump(mode="json") for phase in segment.phases],
-        "chart": None if segment.chart is None else segment.chart.model_dump(mode="json"),
+        "parameterization": None
+        if segment.parameterization is None
+        else segment.parameterization.model_dump(mode="json"),
     }
     diagnostics = metadata.sampler_diagnostics
     if diagnostics is not None and segment.stop > segment.start:

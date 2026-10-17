@@ -185,8 +185,8 @@ handwritten stress fixture. Its old posterior is not a reference for this change
 
 The [dense rung](cases/assets/dense/README.md) uses the same recorded-data machinery
 for precise and noisy variants with coexisting dense and sparse components and
-unknown diffusion. `charts_dense_precise.json` and `charts_dense_noisy.json` declare
-`algorithm.chart` as the sole arm factor (`centred`, `innovation`, `mixed`). The
-latest segment's chart and actual mixed mask are retained in evaluation telemetry,
+unknown diffusion. `parameterizations_dense_precise.json` and `parameterizations_dense_noisy.json` declare
+`algorithm.parameterization` as the sole arm factor (`centred`, `non_centred`, `mixed`). The
+latest segment's parameterization and actual mixed mask are retained in evaluation telemetry,
 including compile-only calls. References and GPU budget approval belong to the
 later pilot; these declarations do not run it.

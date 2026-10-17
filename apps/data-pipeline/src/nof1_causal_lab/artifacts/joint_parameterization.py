@@ -1,4 +1,4 @@
-"""Producing coordinate charts for native energies, masks and continuation state."""
+"""Producing coordinate parameterizations for native energies, masks and continuation state."""
 
 import hashlib
 import json
@@ -9,19 +9,19 @@ from pydantic import Field, computed_field
 from nof1_causal_lab.artifacts.base import Value
 
 
-class CentredChartRecord(Value):
-    """The original frozen affine chart, reconstructed from the pinned target and seed."""
+class CentredParameterizationRecord(Value):
+    """The original frozen affine parameterization, reconstructed from the pinned target and seed."""
 
     kind: Literal["centred"] = "centred"
 
 
-class InnovationChartRecord(Value):
+class NonCentredParameterizationRecord(Value):
     """Exact conditional innovations in every unpinned independent path coordinate."""
 
-    kind: Literal["innovation"] = "innovation"
+    kind: Literal["non_centred"] = "non_centred"
 
 
-class MixedChartRecord(Value):
+class MixedParameterizationRecord(Value):
     """Centred free coordinates, in the full checkpoint path's time/state axis order."""
 
     kind: Literal["mixed"] = "mixed"
@@ -37,11 +37,12 @@ class MixedChartRecord(Value):
 
     @computed_field
     @property
-    def equals_innovation(self) -> bool:
+    def equals_non_centred(self) -> bool:
         """Whether the available-reading policy selects no centred free coordinate."""
         return not any(any(row) for row in self.centred_mask)
 
 
-type JointChartRecord = Annotated[
-    CentredChartRecord | InnovationChartRecord | MixedChartRecord, Field(discriminator="kind")
+type JointParameterizationRecord = Annotated[
+    CentredParameterizationRecord | NonCentredParameterizationRecord | MixedParameterizationRecord,
+    Field(discriminator="kind"),
 ]

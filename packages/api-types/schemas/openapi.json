@@ -2677,9 +2677,9 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "CentredChartRecord": {
+      "CentredParameterizationRecord": {
         "additionalProperties": false,
-        "description": "The original frozen affine chart, reconstructed from the pinned target and seed.",
+        "description": "The original frozen affine parameterization, reconstructed from the pinned target and seed.",
         "properties": {
           "kind": {
             "const": "centred",
@@ -2691,9 +2691,9 @@
         "required": [
           "kind"
         ],
-        "title": "CentredChartRecord",
+        "title": "CentredParameterizationRecord",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.joint_chart",
+        "x-python-module": "nof1_causal_lab.artifacts.joint_parameterization",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -16115,10 +16115,10 @@
             "title": "Phases",
             "type": "array"
           },
-          "chart": {
+          "parameterization": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/JointChartRecord"
+                "$ref": "#/components/schemas/JointParameterizationRecord"
               },
               {
                 "type": "null"
@@ -16133,7 +16133,7 @@
           "settings",
           "runtime",
           "phases",
-          "chart"
+          "parameterization"
         ],
         "title": "FitSegment",
         "type": "object",
@@ -17757,26 +17757,6 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "InnovationChartRecord": {
-        "additionalProperties": false,
-        "description": "Exact conditional innovations in every unpinned independent path coordinate.",
-        "properties": {
-          "kind": {
-            "const": "innovation",
-            "default": "innovation",
-            "title": "Kind",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind"
-        ],
-        "title": "InnovationChartRecord",
-        "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.joint_chart",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
       "IntervalEffectTransformSpec-Input": {
         "additionalProperties": false,
         "description": "Divide an interval effect by its explicit duration in days.",
@@ -17913,41 +17893,6 @@
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.scenarios",
         "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "JointChart": {
-        "enum": [
-          "centred",
-          "innovation",
-          "mixed"
-        ],
-        "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "JointChartRecord": {
-        "discriminator": {
-          "mapping": {
-            "centred": "#/components/schemas/CentredChartRecord",
-            "innovation": "#/components/schemas/InnovationChartRecord",
-            "mixed": "#/components/schemas/MixedChartRecord"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/CentredChartRecord"
-          },
-          {
-            "$ref": "#/components/schemas/InnovationChartRecord"
-          },
-          {
-            "$ref": "#/components/schemas/MixedChartRecord"
-          }
-        ],
-        "x-python-module": "nof1_causal_lab.artifacts.joint_chart",
-        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "JointLawLayout-Input": {
@@ -18103,6 +18048,41 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "JointParameterization": {
+        "enum": [
+          "centred",
+          "non_centred",
+          "mixed"
+        ],
+        "type": "string",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "JointParameterizationRecord": {
+        "discriminator": {
+          "mapping": {
+            "centred": "#/components/schemas/CentredParameterizationRecord",
+            "mixed": "#/components/schemas/MixedParameterizationRecord",
+            "non_centred": "#/components/schemas/NonCentredParameterizationRecord"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CentredParameterizationRecord"
+          },
+          {
+            "$ref": "#/components/schemas/NonCentredParameterizationRecord"
+          },
+          {
+            "$ref": "#/components/schemas/MixedParameterizationRecord"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.joint_parameterization",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "JointTrajectorySpec-Input": {
         "discriminator": {
           "mapping": {
@@ -18153,13 +18133,13 @@
             "title": "Kind",
             "type": "string"
           },
-          "chart": {
-            "$ref": "#/components/schemas/JointChartRecord"
+          "parameterization": {
+            "$ref": "#/components/schemas/JointParameterizationRecord"
           }
         },
         "required": [
           "kind",
-          "chart"
+          "parameterization"
         ],
         "title": "JointTuning",
         "type": "object",
@@ -19269,51 +19249,6 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "MixedChartRecord": {
-        "additionalProperties": false,
-        "description": "Centred free coordinates, in the full checkpoint path's time/state axis order.",
-        "properties": {
-          "kind": {
-            "const": "mixed",
-            "default": "mixed",
-            "title": "Kind",
-            "type": "string"
-          },
-          "centred_mask": {
-            "items": {
-              "items": {
-                "type": "boolean"
-              },
-              "type": "array"
-            },
-            "title": "Centred Mask",
-            "type": "array"
-          },
-          "mask_identity": {
-            "description": "Content identity of the actual mask, including its time and state dimensions.",
-            "readOnly": true,
-            "title": "Mask Identity",
-            "type": "string"
-          },
-          "equals_innovation": {
-            "description": "Whether the available-reading policy selects no centred free coordinate.",
-            "readOnly": true,
-            "title": "Equals Innovation",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "kind",
-          "centred_mask",
-          "mask_identity",
-          "equals_innovation"
-        ],
-        "title": "MixedChartRecord",
-        "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.joint_chart",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
       "MixedLawProvenance": {
         "additionalProperties": false,
         "description": "Some laws retain a committed fit and others have different ancestry.",
@@ -19348,6 +19283,51 @@
         "type": "object",
         "x-python-module": "nof1_causal_lab.artifacts.reports.predictive_provenance",
         "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "MixedParameterizationRecord": {
+        "additionalProperties": false,
+        "description": "Centred free coordinates, in the full checkpoint path's time/state axis order.",
+        "properties": {
+          "kind": {
+            "const": "mixed",
+            "default": "mixed",
+            "title": "Kind",
+            "type": "string"
+          },
+          "centred_mask": {
+            "items": {
+              "items": {
+                "type": "boolean"
+              },
+              "type": "array"
+            },
+            "title": "Centred Mask",
+            "type": "array"
+          },
+          "mask_identity": {
+            "description": "Content identity of the actual mask, including its time and state dimensions.",
+            "readOnly": true,
+            "title": "Mask Identity",
+            "type": "string"
+          },
+          "equals_non_centred": {
+            "description": "Whether the available-reading policy selects no centred free coordinate.",
+            "readOnly": true,
+            "title": "Equals Non Centred",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "kind",
+          "centred_mask",
+          "mask_identity",
+          "equals_non_centred"
+        ],
+        "title": "MixedParameterizationRecord",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.joint_parameterization",
+        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "ModelCheckReport": {
@@ -19981,6 +19961,26 @@
         "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
+      },
+      "NonCentredParameterizationRecord": {
+        "additionalProperties": false,
+        "description": "Exact conditional innovations in every unpinned independent path coordinate.",
+        "properties": {
+          "kind": {
+            "const": "non_centred",
+            "default": "non_centred",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "NonCentredParameterizationRecord",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.joint_parameterization",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
       },
       "NonIdentifiableTreatmentStatus": {
         "additionalProperties": false,
@@ -20796,8 +20796,8 @@
             "title": "Method",
             "type": "string"
           },
-          "chart": {
-            "$ref": "#/components/schemas/JointChart",
+          "parameterization": {
+            "$ref": "#/components/schemas/JointParameterization",
             "default": "centred",
             "description": "Experimental coordinates for the unchanged joint posterior; frozen per fit."
           },
@@ -20834,8 +20834,8 @@
             "title": "Method",
             "type": "string"
           },
-          "chart": {
-            "$ref": "#/components/schemas/JointChart",
+          "parameterization": {
+            "$ref": "#/components/schemas/JointParameterization",
             "default": "centred",
             "description": "Experimental coordinates for the unchanged joint posterior; frozen per fit."
           },
@@ -20858,7 +20858,7 @@
         },
         "required": [
           "method",
-          "chart",
+          "parameterization",
           "target_accept_prob",
           "trajectory",
           "initial_step_size"

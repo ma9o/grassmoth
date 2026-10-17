@@ -1,4 +1,4 @@
-"""Invertible charts of the same exact joint parameter and trajectory posterior."""
+"""Invertible parameterizations of the same exact joint parameter and trajectory posterior."""
 
 from __future__ import annotations
 
@@ -9,15 +9,15 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from nof1_causal_lab.artifacts.joint_chart import (
-    CentredChartRecord,
-    InnovationChartRecord,
-    JointChartRecord,
-    MixedChartRecord,
+from nof1_causal_lab.artifacts.joint_parameterization import (
+    CentredParameterizationRecord,
+    NonCentredParameterizationRecord,
+    JointParameterizationRecord,
+    MixedParameterizationRecord,
 )
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.sampling import JointChart
+    from nof1_causal_lab.artifacts.sampling import JointParameterization
     from nof1_causal_lab.models.ssm.inference.targets.particle import (
         ParticleContext,
         ParticleTarget,
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True, eq=False)
-class CentredChart:
+class CentredParameterization:
     """The original frozen affine path scale; independent of the sampled parameters."""
 
     path_center: jax.Array
@@ -33,12 +33,12 @@ class CentredChart:
 
 
 @dataclass(frozen=True)
-class InnovationChart:
+class NonCentredParameterization:
     """Every free stochastic path coordinate is an exact conditional innovation."""
 
 
 @dataclass(frozen=True, eq=False)
-class MixedChart:
+class MixedParameterization:
     """Available direct point readings select centred free coordinates, once per fit."""
 
     centred_mask: jax.Array
@@ -46,24 +46,24 @@ class MixedChart:
 
 @dataclass(frozen=True, eq=False)
 class JointCoordinates:
-    """One owned chart, with exact constraints excluded from its sampled vector."""
+    """One owned parameterization, with exact constraints excluded from its sampled vector."""
 
     target: ParticleTarget
     parameter_center: jax.Array
     free_mask: jax.Array
     free_indices: jax.Array
-    chart: CentredChart | InnovationChart | MixedChart
+    parameterization: CentredParameterization | NonCentredParameterization | MixedParameterization
 
     @property
-    def record(self) -> JointChartRecord:
+    def record(self) -> JointParameterizationRecord:
         """Freeze native-coordinate provenance outside numerical tracing."""
-        match self.chart:
-            case CentredChart():
-                return CentredChartRecord()
-            case InnovationChart():
-                return InnovationChartRecord()
-            case MixedChart(centred_mask=mask):
-                return MixedChartRecord(
+        match self.parameterization:
+            case CentredParameterization():
+                return CentredParameterizationRecord()
+            case NonCentredParameterization():
+                return NonCentredParameterizationRecord()
+            case MixedParameterization(centred_mask=mask):
+                return MixedParameterizationRecord(
                     centred_mask=tuple(
                         tuple(bool(value) for value in row) for row in np.asarray(mask)
                     )
@@ -82,12 +82,12 @@ class JointCoordinates:
     @property
     def innovation_mask(self) -> jax.Array:
         """Stochastic coordinates transformed under this frozen policy."""
-        match self.chart:
-            case CentredChart():
+        match self.parameterization:
+            case CentredParameterization():
                 return jnp.zeros_like(self.free_mask)
-            case InnovationChart():
+            case NonCentredParameterization():
                 return self.free_mask
-            case MixedChart(centred_mask=mask):
+            case MixedParameterization(centred_mask=mask):
                 return self.free_mask & ~mask
 
     def _unpack(self, position: jax.Array) -> tuple[jax.Array, jax.Array]:
@@ -100,22 +100,22 @@ class JointCoordinates:
         )
 
     def _path(self, context: ParticleContext, values: jax.Array) -> tuple[jax.Array, jax.Array]:
-        match self.chart:
-            case CentredChart(path_center=center, path_chol=chol):
+        match self.parameterization:
+            case CentredParameterization(path_center=center, path_chol=chol):
                 path = center + jnp.einsum("tij,tj->ti", chol, values)
                 log_jacobian = jnp.sum(
                     jnp.where(self.free_mask, jnp.log(jnp.diagonal(chol, axis1=-2, axis2=-1)), 0.0)
                 )
                 return self.target.replay_path(context, path), log_jacobian
-            case InnovationChart() | MixedChart():
+            case NonCentredParameterization() | MixedParameterization():
                 return self.target.innovation_map(context, self.innovation_mask).decode(values)
 
     def encode(self, parameters: jax.Array, path: jax.Array) -> jax.Array:
         """Encode the same scientific starts into this sampler's native coordinates."""
-        match self.chart:
-            case CentredChart(path_center=center, path_chol=chol):
+        match self.parameterization:
+            case CentredParameterization(path_center=center, path_chol=chol):
                 values = jax.vmap(jnp.linalg.solve)(chol, path - center)
-            case InnovationChart() | MixedChart():
+            case NonCentredParameterization() | MixedParameterization():
                 context = self.target.context(parameters, self.target.times)
                 path = self.target.replay_path(context, path)
                 values = self.target.innovation_map(context, self.innovation_mask).encode(path)
@@ -132,7 +132,7 @@ class JointCoordinates:
         return parameters, path
 
     def log_density(self, position: jax.Array) -> jax.Array:
-        """Score the authoritative scientific target plus the exact chart Jacobian.
+        """Score the authoritative scientific target plus the exact parameterization Jacobian.
 
         The full density retains centred/pinned marginals and correlated static
         initial factors. It also transforms a scientific Gaussian tempering
@@ -155,7 +155,7 @@ class JointCoordinates:
 
 
 def build_joint_coordinates(
-    target: ParticleTarget, chart: JointChart = "centred"
+    target: ParticleTarget, parameterization: JointParameterization = "centred"
 ) -> JointCoordinates:
     """Freeze the policy; parameter-dependent innovation maps bind at each evaluation."""
     position = target.initial_position
@@ -163,11 +163,11 @@ def build_joint_coordinates(
     if target.exact_constraints is not None:
         free = free & target.exact_constraints.free_mask
     indices = jnp.asarray(np.flatnonzero(np.asarray(free)), dtype=jnp.int32)
-    if chart == "innovation":
-        return JointCoordinates(target, position, free, indices, InnovationChart())
-    if chart == "mixed":
+    if parameterization == "non_centred":
+        return JointCoordinates(target, position, free, indices, NonCentredParameterization())
+    if parameterization == "mixed":
         return JointCoordinates(
-            target, position, free, indices, MixedChart(free & target.point_reading_mask)
+            target, position, free, indices, MixedParameterization(free & target.point_reading_mask)
         )
     context = target.context(position, target.times)
     initial_mean, initial_covariance = target.initial_moments(context)
@@ -181,5 +181,9 @@ def build_joint_coordinates(
     embedded = jnp.where(free[:, :, None] & free[:, None, :], covariance, 0.0)
     embedded = embedded + jax.vmap(jnp.diag)((~free).astype(path.dtype))
     return JointCoordinates(
-        target, position, free, indices, CentredChart(path, jnp.linalg.cholesky(embedded))
+        target,
+        position,
+        free,
+        indices,
+        CentredParameterization(path, jnp.linalg.cholesky(embedded)),
     )

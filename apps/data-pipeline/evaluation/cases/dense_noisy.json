@@ -1,7 +1,7 @@
 {
   "name": "dense_noisy",
   "question": {
-    "text": "Compare inference charts with dense and sparse nonlinear states, unknown diffusion and precise versus noisy readings. Identify the input effect on the dense outcome.",
+    "text": "Compare inference parameterizations with dense and sparse nonlinear states, unknown diffusion and precise versus noisy readings. Identify the input effect on the dense outcome.",
     "outcome": "construct:y",
     "queries": {
       "input contrast": {
