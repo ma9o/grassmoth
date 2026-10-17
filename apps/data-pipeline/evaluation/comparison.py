@@ -61,17 +61,25 @@ def _posterior_draws(result: FitOutput, segment: FitSegment | None = None):
     return layout, atoms
 
 
+def _empirical_moments(atoms: np.ndarray):
+    """A repeated literal has zero variance regardless of floating-point summation error."""
+    variable = np.ptp(atoms, axis=0) > 0
+    mean = np.where(variable, atoms.mean(axis=0, dtype=np.float64), atoms[0])
+    scale = np.where(variable, atoms.std(axis=0, ddof=1, dtype=np.float64), 0.0)
+    return variable, mean, scale
+
+
 def posterior_arrays(result: FitOutput, segment: FitSegment | None = None):
     """Summarize saved joint coordinates and their Monte Carlo uncertainty."""
     layout, atoms = _posterior_draws(result, segment)
     metadata = result.inference.core.inference_metadata
     chains = atoms.reshape(metadata.num_chains, -1, atoms.shape[-1])
-    variable = np.ptp(atoms, axis=0) > 0
+    variable, mean, scale = _empirical_moments(atoms)
     errors = np.zeros(atoms.shape[-1])
     if np.any(variable):
         data = az.from_dict({"posterior": {"joint": chains[:, :, variable]}})
         errors[variable] = np.asarray(mcse(data, method="mean")["joint"].values)
-    return layout, atoms.mean(axis=0), atoms.std(axis=0, ddof=1), errors
+    return layout, mean, scale, errors
 
 
 def qualify_reference(result: FitOutput, rule: Reference) -> None:
@@ -138,9 +146,8 @@ def _start_scores(starts: np.ndarray, reference: np.ndarray) -> dict[str, JsonVa
         raise ValueError("Initializer and reference have different scientific coordinates")
     if not np.isfinite(starts).all():
         return {"status": "not scored", "reason": "Non-finite delivered starts"}
-    scale = reference.std(axis=0, ddof=1)
-    free = scale > 0
-    distances = (starts[:, free] - reference.mean(axis=0)[free]) / scale[free]
+    free, mean, scale = _empirical_moments(reference)
+    distances = (starts[:, free] - mean[free]) / scale[free]
     spread = np.std(starts[:, free], axis=0) / scale[free]
     coverage = np.mean(
         (reference >= starts.min(axis=0)) & (reference <= starts.max(axis=0)), axis=0
