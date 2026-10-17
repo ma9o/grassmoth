@@ -13,6 +13,7 @@ from jax.scipy.linalg import solve_triangular
 
 from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences
 from nof1_causal_lab.models.ssm.execution.affine import compose_affine_maps
+from nof1_causal_lab.models.ssm.execution.innovations import GaussianPathMap
 from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import (
     GaussianReference,
     GaussianReferenceBridge,
@@ -195,6 +196,26 @@ class ParticleTarget:
         _, tail = jax.lax.scan(advance, initial, jnp.arange(1, self.times.size))
         return jnp.concatenate((initial[None], tail))
 
+    def innovation_map(
+        self, context: ParticleContext, innovation_mask: jax.Array
+    ) -> GaussianPathMap:
+        """Bind exact moments, support and pinned values for a frozen chart policy."""
+        fixed = (
+            jnp.full(self.independent_mask.shape, jnp.nan, dtype=self.observations.dtype)
+            if self.exact_constraints is None
+            else self.exact_constraints.values
+        )
+        static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
+        fixed = fixed.at[:, static].set(context[2][static])
+        return GaussianPathMap(
+            self.initial_moments(context),
+            lambda previous, index: self.transition_moments(context, previous, index),
+            self.state_density_mask,
+            self.independent_mask,
+            innovation_mask,
+            fixed,
+        )
+
     @property
     def initial_position(self):
         """Initial unconstrained parameter position supplied by the parameter target."""
@@ -279,7 +300,7 @@ class ParticleTarget:
     def transition_moments(
         self, context: ParticleContext, previous: jax.Array, index: jax.Array
     ) -> tuple[jax.Array, jax.Array]:
-        """Expose declared transition moments for initialization of a frozen Gaussian reference."""
+        """Expose the declared Gaussian law for exact maps and initialization geometry."""
         distribution = cast(
             "dist.MultivariateNormal", self._transition_distribution(context, previous, index)
         )
