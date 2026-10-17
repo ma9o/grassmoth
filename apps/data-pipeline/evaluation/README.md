@@ -51,8 +51,12 @@ uv run python -m evaluation.run evaluation/experiments/cpu_compile.json \
 
 The examples are declarations, not evidence that a case has run. `cpu_compile.json`
 compares fixed trajectory lengths with zero warmup and zero retained draws.
-`drift_probe.json` first obtains the same retained base checkpoint in each arm, then
-continues it with zero warmup and the declared drift. `initializer_score.json` records
+`drift_probe.json` obtains one retained base checkpoint, copies its completed durable
+workspace into new arm workspaces, then continues it with explicit `probe_warmup`
+and the declared drift. Supply `--workspace-root` with the isolated facade's local
+data root. An optional `probe_anchor` selects an already saved fit by workspace,
+call ID and case manifest; its seed and chain count must match. Copying a live
+workspace or replacing an existing destination is rejected. `initializer_score.json` records
 starting values and preparation cost with no posterior draws. Add a qualified
 `posterior.references` entry to score those starts; without one the report says
 "not scored". Zero-draw arms skip posterior equivalence. These small counts are
@@ -75,7 +79,12 @@ to its scientific input revisions. The client reads produced question, model and
 artifact revisions from the public timeline; simulation and fit references select their
 action commits. The output preserves case and attempt manifests and raw
 MessagePack envelopes, including failures. Continued fits report the earlier and
-new draws as one chain; segment bounds identify the new observations of the sampler.
+new draws as one chain. The experiment applies production diagnostics, convergence,
+truth errors and reference comparison only to the latest segment. Its native phase
+buffers retain diagnostics introduced by an algorithm switch. A failed equivalence
+test is labelled inconclusive unless the mean uncertainty band is outside the
+declared tolerance or a fixed coordinate disagrees; a standard-deviation tolerance
+failure alone does not establish a precise discrepancy.
 
 For posterior accuracy, declare `posterior.references` separately for every generation
 seed and provide a saved reference's case manifest and call ID. The scientific model
@@ -86,7 +95,8 @@ no benchmark-local prediction engine is supplied.
 
 ## Accounting and provenance
 
-`reservation_usd_per_fit` is a planned upper budget, including base fits used by probes.
+`reservation_usd_per_fit` is a reporting estimate; a newly prepared shared anchor is
+counted once per seed/repeat. External anchors are accounted for in their preparation run.
 Recorded duration and the union of compile intervals measure execution, not GPU billing.
 Supply saved output from `modal billing report` with `--billing-report PATH` to retain
 its original text, filename and SHA-256 digest beside the measured results. Reconcile
@@ -95,6 +105,19 @@ Missing billed cost is unknown, never zero. No billing command or paid job is la
 by importing this package or by generating its report.
 
 Exploratory declarations and generated outputs belong in gitignored `scratchpad/`.
+
+For an isolated stack, `NOF1_DATA_ROOT` selects its local storage root. The optional
+`NOF1_MODAL_FIT_BUDGET` points to a deployment-owned JSON
+[allocation policy](../src/nof1_causal_lab/compute/modal_budget.py). It debits the full
+per-call reservation under a file lock before launching, requires a current watchdog
+heartbeat, checks the review hold file, limits concurrent allocations, and retains
+failed allocations in the debit. The remote adapter caps CPU/RAM and startup/execution
+time, registers app and function-call IDs, and terminates a timed-out call's containers.
+Run `python -m evaluation.watchdog REGISTRY_ROOT` in a separate supervised process;
+each stage policy uses one child directory. The watchdog stops registered completed
+or expired apps, including apps still building their image. These bounds do not
+replace billing reconciliation. Price the full allocation and leave headroom for
+builds, transfer and termination; unavailable billing is never zero cost.
 
 ## Saved T=512 data
 

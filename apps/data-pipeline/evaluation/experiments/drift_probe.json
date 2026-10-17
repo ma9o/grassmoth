@@ -34,6 +34,7 @@
     }
   },
   "probe_samples": 8,
+  "probe_warmup": 32,
   "factors": [
     "algorithm.dsmc.drift"
   ],

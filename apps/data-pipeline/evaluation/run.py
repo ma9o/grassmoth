@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, cast
 
 from evaluation.client import ActionClient
 from evaluation.comparison import (
+    _posterior_draws,
     differing_controls,
     initializer_scores,
     posterior_equivalence,
@@ -20,7 +21,9 @@ from evaluation.comparison import (
 from evaluation.declarations import Arm, CaseRecipe, Experiment
 from evaluation.recipes import PreparedCase, fingerprint, prepare_case, require_findings
 from evaluation.report import BillingReport, write_report
+from evaluation.segments import segment_summary
 from evaluation.telemetry import sampler_outcomes
+from evaluation.workspaces import copy_anchor_workspace
 from nof1_causal_lab.actions.contracts.bodies import (
     ContinueFitTarget,
     FitInput,
@@ -46,6 +49,9 @@ def assigned_settings(experiment: Experiment, arm: Arm, seed: int) -> FitSetting
             current = current[part]
         current[parts[-1]] = value
     values["seed"] = seed
+    if experiment.probe_samples is not None:
+        values["num_warmup"] = experiment.probe_warmup
+        values["num_samples_per_chain"] = experiment.probe_samples
     return FitSettingsSpec.model_validate(values)
 
 
@@ -101,8 +107,11 @@ def run(
     endpoint: str,
     output: Path,
     billing: BillingReport | None,
+    workspace_root: Path | None = None,
 ) -> None:
     """Prepare equal cases, schedule isolated arms, compare only valid pairs and retain failures."""
+    if experiment.probe_samples is not None and workspace_root is None:
+        raise ValueError("Shared probes require --workspace-root for the isolated local facade")
     case_path = (declaration_root / experiment.case).resolve()
     recipe = CaseRecipe.model_validate_json(case_path.read_text())
     output.mkdir(parents=True, exist_ok=False)
@@ -115,103 +124,165 @@ def run(
     rows: list[JsonObject] = []
     try:
         for seed in experiment.seeds:
-            clients = tuple(
-                ActionClient(
-                    arm.endpoint or endpoint,
-                    f"bench-{identity}-g{seed.generation}-s{seed.sampler}-{i}",
-                    output / f"g{seed.generation}-s{seed.sampler}" / arm.name,
+            for repeat in range(experiment.repeats):
+                clients = tuple(
+                    ActionClient(
+                        arm.endpoint or endpoint,
+                        f"bench-{identity}-g{seed.generation}-s{seed.sampler}-{i}-r{repeat}",
+                        output / f"g{seed.generation}-s{seed.sampler}" / arm.name / f"r{repeat}",
+                    )
+                    for i, arm in enumerate(experiment.arms)
                 )
-                for i, arm in enumerate(experiment.arms)
-            )
-            with ThreadPoolExecutor(max_workers=experiment.concurrent_arms) as pool:
-                cases = tuple(
-                    pool.map(
-                        partial(prepare_case, recipe, case_path.parent, seed=seed.generation),
-                        clients,
-                    )
-                )
-                for client, case in zip(clients, cases, strict=True):
-                    (client.output / "case.json").write_text(case.model_dump_json(indent=2))
-                if (
-                    len(
-                        {
-                            (case.model_digest, case.data_digest, case.recipe_digest)
-                            for case in cases
-                        }
-                    )
-                    != 1
-                ):
-                    raise ValueError(
-                        "Prepared arms have different scientific model or data content"
-                    )
-                reference = None
-                if experiment.posterior is not None:
-                    rule = experiment.posterior.references[seed.generation]
-                    reference_case = PreparedCase.model_validate_json(
-                        (declaration_root / rule.case_manifest).read_text()
-                    )
-                    if (reference_case.model_digest, reference_case.data_digest) != (
-                        cases[0].model_digest,
-                        cases[0].data_digest,
-                    ):
-                        raise ValueError("Reference was fitted to a different model or dataset")
-                    reference_client = ActionClient(
-                        rule.endpoint or endpoint, rule.workspace, output / "reference"
-                    )
-                    saved = reference_client.saved("fit", rule.call_id)
-                    if saved.action != "fit":
-                        raise TypeError("Reference must be a fit")
-                    source = reference_client.fit_source(rule.call_id)
-                    if (
-                        source.dynamical_model_spec_ref != reference_case.model_ref
-                        or source.data_ref != reference_case.data_ref
-                    ):
-                        raise ValueError(
-                            "Reference journal does not match its supplied case manifest"
-                        )
-                    reference = saved.body
-                    qualify_reference(reference, rule)
-                for repeat in range(experiment.repeats):
+                with ThreadPoolExecutor(max_workers=experiment.concurrent_arms) as pool:
                     previous: tuple[GitOid | None, ...] = tuple(None for _ in clients)
                     if experiment.probe_samples is not None:
-                        base = FitSettingsSpec.model_validate(
-                            experiment.base.revised(seed=seed.sampler).model_dump(
-                                mode="json", exclude={"retain_latent_paths"}
+                        assert workspace_root is not None
+                        source = experiment.probe_anchor
+                        anchor_client = ActionClient(
+                            endpoint,
+                            source.workspace
+                            if source is not None
+                            else clients[0].workspace + "-anchor",
+                            output / f"anchor-s{seed.sampler}-r{repeat}",
+                        )
+                        if source is None:
+                            anchor_case = prepare_case(
+                                recipe, case_path.parent, anchor_client, seed.generation
                             )
+                            base = FitSettingsSpec.model_validate(
+                                experiment.base.revised(seed=seed.sampler).model_dump(
+                                    mode="json", exclude={"retain_latent_paths"}
+                                )
+                            )
+                            anchor = _fit(anchor_client, anchor_case, base, repeat)
+                        else:
+                            anchor_case = PreparedCase.model_validate_json(
+                                (declaration_root / source.case_manifest).read_text()
+                            )
+                            anchor = anchor_client.saved("fit", source.call_id)
+                            if anchor.action != "fit":
+                                raise TypeError("Anchor must be a fit")
+                            inputs = anchor_client.fit_source(source.call_id)
+                            if (
+                                inputs.dynamical_model_spec_ref != anchor_case.model_ref
+                                or inputs.data_ref != anchor_case.data_ref
+                            ):
+                                raise ValueError("Anchor journal differs from its case manifest")
+                            verified = prepare_case(
+                                recipe,
+                                case_path.parent,
+                                ActionClient(
+                                    endpoint,
+                                    clients[0].workspace + "-verify",
+                                    output / "verified-case",
+                                ),
+                                seed.generation,
+                            )
+                            if (
+                                verified.model_digest,
+                                verified.data_digest,
+                                verified.recipe_digest,
+                            ) != (
+                                anchor_case.model_digest,
+                                anchor_case.data_digest,
+                                anchor_case.recipe_digest,
+                            ):
+                                raise ValueError("Anchor belongs to a different scientific case")
+                        (anchor_client.output / "case.json").write_text(
+                            anchor_case.model_dump_json(indent=2)
                         )
-                        anchor_futures = tuple(
-                            pool.submit(_fit, client, case, base, repeat)
-                            for client, case in zip(clients, cases, strict=True)
-                        )
-                        anchors = tuple(future.result() for future in anchor_futures)
-                        checkpoints = tuple(
-                            anchor.body.inference.evidence.checkpoint for anchor in anchors
-                        )
+                        checkpoint = anchor.body.inference.evidence.checkpoint
                         if (
-                            any(point is None for point in checkpoints)
-                            or len(
-                                {
-                                    fingerprint(result_payload(point))
-                                    for point in checkpoints
-                                    if point is not None
-                                }
-                            )
-                            != 1
+                            checkpoint is None
+                            or checkpoint.settings.seed != seed.sampler
+                            or checkpoint.settings.num_chains != experiment.base.num_chains
                         ):
                             raise ValueError(
-                                "Probe arms did not produce the same frozen checkpoint"
+                                "Anchor must retain the requested chains and random stream"
                             )
-                        previous = tuple(anchor.commit_id for anchor in anchors)
+                        digest = fingerprint(result_payload(checkpoint))
+                        for client in clients:
+                            hashes = copy_anchor_workspace(
+                                workspace_root, anchor_client, client.workspace
+                            )
+                            copied = client.saved("fit", anchor.call_id)
+                            copied_checkpoint = (
+                                copied.body.inference.evidence.checkpoint
+                                if copied.action == "fit"
+                                else None
+                            )
+                            if (
+                                copied_checkpoint is None
+                                or fingerprint(result_payload(copied_checkpoint)) != digest
+                            ):
+                                raise ValueError("Copied anchor checkpoint differs")
+                            (client.output / "anchor.json").write_text(
+                                json.dumps(
+                                    {
+                                        "workspace": anchor_client.workspace,
+                                        "call_id": anchor.call_id,
+                                        "revision": anchor.commit_id,
+                                        "checkpoint_sha256": digest,
+                                        "ledger_files": hashes,
+                                    },
+                                    indent=2,
+                                )
+                            )
+                        cases = tuple(anchor_case for _ in clients)
+                        previous = tuple(anchor.commit_id for _ in clients)
+                    else:
+                        cases = tuple(
+                            pool.map(
+                                partial(
+                                    prepare_case, recipe, case_path.parent, seed=seed.generation
+                                ),
+                                clients,
+                            )
+                        )
+                    for client, case in zip(clients, cases, strict=True):
+                        (client.output / "case.json").write_text(case.model_dump_json(indent=2))
+                    if (
+                        len(
+                            {
+                                (case.model_digest, case.data_digest, case.recipe_digest)
+                                for case in cases
+                            }
+                        )
+                        != 1
+                    ):
+                        raise ValueError(
+                            "Prepared arms have different scientific model or data content"
+                        )
+                    reference = None
+                    if experiment.posterior is not None:
+                        rule = experiment.posterior.references[seed.generation]
+                        reference_case = PreparedCase.model_validate_json(
+                            (declaration_root / rule.case_manifest).read_text()
+                        )
+                        if (reference_case.model_digest, reference_case.data_digest) != (
+                            cases[0].model_digest,
+                            cases[0].data_digest,
+                        ):
+                            raise ValueError("Reference was fitted to a different model or dataset")
+                        reference_client = ActionClient(
+                            rule.endpoint or endpoint, rule.workspace, output / "reference"
+                        )
+                        saved = reference_client.saved("fit", rule.call_id)
+                        if saved.action != "fit":
+                            raise TypeError("Reference must be a fit")
+                        source_inputs = reference_client.fit_source(rule.call_id)
+                        if (
+                            source_inputs.dynamical_model_spec_ref != reference_case.model_ref
+                            or source_inputs.data_ref != reference_case.data_ref
+                        ):
+                            raise ValueError(
+                                "Reference journal does not match its supplied case manifest"
+                            )
+                        reference = saved.body
+                        qualify_reference(reference, rule)
                     settings = tuple(
                         assigned_settings(experiment, arm, seed.sampler) for arm in experiment.arms
                     )
-                    if experiment.probe_samples is not None:
-                        settings = tuple(
-                            item.revised(
-                                num_warmup=0, num_samples_per_chain=experiment.probe_samples
-                            )
-                            for item in settings
-                        )
                     jobs = tuple(zip(clients, cases, settings, previous, strict=True))
                     fit_futures = tuple(
                         pool.submit(_fit, client, case, setting, repeat, prior)
@@ -256,8 +327,7 @@ def run(
                             "revision": result.commit_id,
                             "compute_seconds": result.body.inference.core.inference_metadata.duration_seconds,
                             "compile_seconds": compile_seconds(result.body),
-                            "gate": result.body.inference.core.convergence.status,
-                            "warnings": list(result.body.inference.core.convergence.warnings),
+                            **segment_summary(result.body),
                             **initializer_scores(result.body, reference),
                             **sampler_outcomes(result.body),
                         }
@@ -268,14 +338,18 @@ def run(
                         ):
                             row.update(
                                 posterior_equivalence(
-                                    result.body, reference, experiment.posterior.tolerance
+                                    result.body, reference, experiment.posterior.tolerance, segment
                                 )
                             )
-                        if result.body.inference.core.posterior_marginals:
+                        if segment.stop > segment.start:
+                            layout, atoms = _posterior_draws(result.body, segment)
                             row["truth_absolute_errors"] = {
-                                m.parameter: abs(m.mean - recipe.truth[m.parameter])
-                                for m in result.body.inference.core.posterior_marginals
-                                if m.parameter in recipe.truth
+                                layout.labels[element]: abs(
+                                    float(atoms[:, column].mean())
+                                    - recipe.truth[layout.labels[element]]
+                                )
+                                for element, column in layout.parameter_columns.items()
+                                if layout.labels[element] in recipe.truth
                             }
                         attempt = {
                             "case": case.model_dump(mode="json"),
@@ -303,6 +377,9 @@ def main() -> None:
     parser.add_argument("--endpoint", required=True)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument(
+        "--workspace-root", type=Path, help="Local isolated facade data root for shared probes"
+    )
+    parser.add_argument(
         "--billing-report",
         type=Path,
         help="Saved output of modal billing report; preserved verbatim",
@@ -315,6 +392,7 @@ def main() -> None:
         args.endpoint,
         args.output,
         billing,
+        args.workspace_root,
     )
 
 

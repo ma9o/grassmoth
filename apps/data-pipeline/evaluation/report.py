@@ -46,10 +46,12 @@ def write_report(
     )
     reservation = (
         experiment.reservation_usd_per_fit
-        * len(experiment.arms)
+        * (
+            len(experiment.arms)
+            + int(experiment.probe_samples is not None and experiment.probe_anchor is None)
+        )
         * len(experiment.seeds)
         * experiment.repeats
-        * (2 if experiment.probe_samples is not None else 1)
     )
     payload = html.escape(experiment.model_dump_json(indent=2))
     invoices = html.escape(

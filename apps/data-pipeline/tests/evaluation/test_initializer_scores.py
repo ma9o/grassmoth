@@ -234,6 +234,75 @@ def test_collapsed_high_density_starts_lose_reference_coverage(scored_starts):
     assert path["start_fixed_coordinates_equal"] == [True, True]
 
 
+@pytest.mark.inference(concern="sampling")
+def test_segment_scoring_cannot_borrow_healthy_anchor_draws(scored_starts):
+    from evaluation.comparison import posterior_arrays, posterior_equivalence
+    from evaluation.declarations import Tolerances
+    from evaluation.segments import segment_summary
+
+    from nof1_causal_lab.artifacts.probability.serialization import (
+        empirical_atoms,
+        empirical_distribution,
+    )
+
+    reference, _ = scored_starts
+    model = reference.dynamical_model_spec
+    metadata = reference.inference.core.inference_metadata
+    identity = metadata.distribution
+    assert model is not None
+    assert identity is not None
+    atoms = empirical_atoms(model.distributions[identity]).copy()
+    free = np.ptp(atoms, axis=0) > 0
+    atoms.reshape(4, 256, -1)[:, 224:, free] = 100
+    segment = metadata.segments[0].revised(
+        start=224,
+        stop=256,
+        settings=metadata.segments[0].settings.revised(num_samples_per_chain=32),
+        phases=(
+            InferencePhase(
+                sampler="mpgibbs",
+                stage="sampling",
+                start_seconds=0,
+                end_seconds=10,
+                outcome="complete",
+            ),
+        ),
+    )
+    result = reference.revised(
+        dynamical_model_spec=model.with_entities(
+            distributions={
+                **model.distributions,
+                identity: empirical_distribution(atoms),
+            }
+        ),
+        inference=reference.inference.revised(
+            core=reference.inference.core.revised(
+                inference_metadata=metadata.revised(
+                    segments=(metadata.segments[0].revised(stop=224), segment),
+                )
+            ),
+            evidence=InferenceEvidence(
+                latent_free_mask=NumericalArray.from_numpy(np.array([[True], [True], [False]])),
+                phase_extra_fields={
+                    "post_warmup": {
+                        "diverging": NumericalArray.from_numpy(np.zeros((4, 32), dtype=bool))
+                    }
+                },
+            ),
+        ),
+    )
+    assert result.inference.core.convergence.status == "passed"
+    summary = segment_summary(result)
+    assert summary["gate"] == "failed"
+    assert summary["min_ess_per_sampling_second"] == 0
+    np.testing.assert_array_equal(posterior_arrays(result, segment)[1][free], 100)
+    assert np.all(posterior_arrays(result)[1][free] < 100)
+    compared = posterior_equivalence(
+        result, reference, Tolerances(mean_sd=0.5, sd_relative=0.3), segment
+    )
+    assert compared["comparison_status"] == "discrepant"
+
+
 def test_no_reference_has_no_initializer_quality_proxy(scored_starts):
     _, starts = scored_starts
     assert initializer_scores(starts(0, log_joint=1e9), None) == {

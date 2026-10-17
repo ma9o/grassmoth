@@ -111,6 +111,14 @@ class PosteriorComparison(Value):
     tolerance: Tolerances
 
 
+class SavedAnchor(Value):
+    """A completed fit whose durable workspace can seed isolated continuation arms."""
+
+    workspace: str
+    call_id: str
+    case_manifest: str
+
+
 class Experiment(Value):
     """A single factor or explicit interaction, paired across seeds and timing repeats."""
 
@@ -126,6 +134,8 @@ class Experiment(Value):
     reservation_usd_per_fit: float = Field(default=0, ge=0)
     posterior: PosteriorComparison | None = None
     probe_samples: int | None = Field(default=None, ge=1)
+    probe_warmup: int = Field(default=0, ge=0)
+    probe_anchor: SavedAnchor | None = None
 
     @model_validator(mode="after")
     def assigned_factors(self) -> Self:
@@ -158,6 +168,17 @@ class Experiment(Value):
             raise ValueError("Benchmark fits retain joint parameter and state draws")
         if self.probe_samples is not None and self.base.num_samples_per_chain == 0:
             raise ValueError("A probe requires a base fit with retained draws")
+        if self.probe_samples is None and (self.probe_warmup or self.probe_anchor is not None):
+            raise ValueError("Probe preparation requires probe_samples")
+        if self.probe_anchor is not None and len(self.seeds) != 1:
+            raise ValueError("A saved anchor owns one sampler random stream")
+        if self.probe_samples is not None and any(arm.endpoint for arm in self.arms):
+            raise ValueError("Shared workspace probes require one local facade endpoint")
+        if self.probe_samples is not None and set(self.factors) & {
+            "num_warmup",
+            "num_samples_per_chain",
+        }:
+            raise ValueError("Probe draw counts and warmup belong to the probe controls")
         if self.probe_samples is not None and any(
             path.startswith("algorithm.laps") for path in self.factors
         ):

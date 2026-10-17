@@ -15,6 +15,7 @@ if TYPE_CHECKING:
 
     from evaluation.declarations import Reference, Tolerances
     from nof1_causal_lab.actions.contracts.bodies import FitOutput
+    from nof1_causal_lab.artifacts.reports.inference import FitSegment
     from nof1_causal_lab.json_types import JsonValue
 
 
@@ -45,7 +46,7 @@ def differing_controls(
     )
 
 
-def _posterior_draws(result: FitOutput):
+def _posterior_draws(result: FitOutput, segment: FitSegment | None = None):
     """Read the core's aligned empirical law and chain axes without reconstructing a model."""
     metadata = result.inference.core.inference_metadata
     model = result.dynamical_model_spec
@@ -53,12 +54,16 @@ def _posterior_draws(result: FitOutput):
         raise ValueError("Posterior comparisons require retained draws")
     layout = model.law_layouts[metadata.distribution]
     atoms = empirical_atoms(model.distributions[metadata.distribution])
+    if segment is not None:
+        atoms = atoms.reshape(metadata.num_chains, -1, atoms.shape[-1])[
+            :, segment.start : segment.stop
+        ].reshape(-1, atoms.shape[-1])
     return layout, atoms
 
 
-def posterior_arrays(result: FitOutput):
+def posterior_arrays(result: FitOutput, segment: FitSegment | None = None):
     """Summarize saved joint coordinates and their Monte Carlo uncertainty."""
-    layout, atoms = _posterior_draws(result)
+    layout, atoms = _posterior_draws(result, segment)
     metadata = result.inference.core.inference_metadata
     chains = atoms.reshape(metadata.num_chains, -1, atoms.shape[-1])
     variable = np.ptp(atoms, axis=0) > 0
@@ -85,10 +90,13 @@ def qualify_reference(result: FitOutput, rule: Reference) -> None:
 
 
 def posterior_equivalence(
-    result: FitOutput, reference: FitOutput, tolerance: Tolerances
+    result: FitOutput,
+    reference: FitOutput,
+    tolerance: Tolerances,
+    segment: FitSegment | None = None,
 ) -> dict[str, JsonValue]:
     """Compare declared marginal means and SDs; this is not full distribution equivalence."""
-    layout, mean, scale, error = posterior_arrays(result)
+    layout, mean, scale, error = posterior_arrays(result, segment)
     other_layout, other_mean, other_scale, other_error = posterior_arrays(reference)
     if layout != other_layout:
         raise ValueError("Reference and arm have different scientific coordinates")
@@ -98,12 +106,26 @@ def posterior_equivalence(
     mean_bound = (np.abs(mean[free] - other_mean[free]) + uncertainty) / other_scale[free]
     sd_error = np.abs(scale[free] / other_scale[free] - 1)
     finite = bool(np.all(np.isfinite(mean_bound)) and np.all(np.isfinite(sd_error)))
-    return {
-        "summary_equivalent": finite
+    equivalent = (
+        finite
         and fixed_equal
         and bool(
             np.all(mean_bound <= tolerance.mean_sd) and np.all(sd_error <= tolerance.sd_relative)
-        ),
+        )
+    )
+    discrepant = not fixed_equal or bool(
+        np.any(
+            (np.abs(mean[free] - other_mean[free]) - uncertainty) / other_scale[free]
+            > tolerance.mean_sd
+        )
+    )
+    return {
+        "summary_equivalent": equivalent,
+        "comparison_status": "equivalent"
+        if equivalent
+        else "discrepant"
+        if discrepant
+        else "inconclusive",
         "max_mean_bound_sd": float(np.max(mean_bound)) if finite and mean_bound.size else None,
         "max_sd_relative_error": float(np.max(sd_error)) if finite and sd_error.size else None,
         "fixed_coordinates_equal": fixed_equal,
@@ -160,7 +182,12 @@ def initializer_scores(result: FitOutput, reference: FitOutput | None) -> dict[s
     cost: dict[str, JsonValue] = {
         "initializer_preparation_seconds": elapsed if intervals else None,
     }
-    initial = result.inference.evidence.phase_extra_fields.get("initialization")
+    fields = result.inference.evidence.phase_extra_fields
+    initial = (
+        fields.get("continued_start")
+        if "continued_start" in fields
+        else fields.get("initialization")
+    )
     if initial is None:
         return {**cost, "initializer": "not scored", "initializer_reason": "No delivered starts"}
     if reference is None:

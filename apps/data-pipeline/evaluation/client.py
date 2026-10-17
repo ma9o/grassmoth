@@ -94,6 +94,11 @@ class ActionClient:
         (self.output / "timeline.json").write_bytes(payload)
         return timeline
 
+    def require_idle(self) -> None:
+        """A live study must never be copied as a benchmark preparation snapshot."""
+        if self._timeline().running is not None:
+            raise ValueError("Anchor workspace still has a running action")
+
     def artifact_revision(self, call_id: str, artifact: ArtifactId) -> GitOid:
         """Select a produced artifact tree; an action commit is a different revision."""
         from nof1_causal_lab.study.records import Applied
