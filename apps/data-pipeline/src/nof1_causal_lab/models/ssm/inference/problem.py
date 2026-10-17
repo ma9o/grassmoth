@@ -13,6 +13,7 @@ import numpy as np
 from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.models.ssm.compile.interval_tree import compile_interval_tree
 from nof1_causal_lab.models.ssm.compile.observation_partition import compile_observation_partition
+from nof1_causal_lab.models.ssm.compile.point_readings import compile_point_reading_mask
 from nof1_causal_lab.models.ssm.execution.dynamical_model import build_dynamical_model
 from nof1_causal_lab.models.ssm.execution.observation_operator import compile_observation_operator
 from nof1_causal_lab.models.ssm.execution.state_transition import SupportedEulerMaruyama
@@ -146,6 +147,7 @@ def build_particle_problem(
             tuple(observation.law for observation in compiled_dynamical_model.observations),
             state_space,
         ),
+        compile_point_reading_mask(compiled_dynamical_model, observations),
         exact_constraints=exact_constraints,
     )
     intervals = (

@@ -19,7 +19,7 @@ from nof1_causal_lab.artifacts.continuation import ParticleTuning, SamplerCheckp
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ContinuedInitializationDiagnostics,
 )
-from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
+from nof1_causal_lab.models.ssm.inference.joint_coordinates import CentredChart, build_joint_coordinates
 from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import (
     LapsTraceRecord,
     NoLapsTrace,
@@ -71,9 +71,10 @@ def prepare_laps_initialization(
             "LAPS ensemble_size must cover all requested particle chains"
         )
     coordinates = build_joint_coordinates(target)
+    assert isinstance(coordinates.chart, CentredChart)
     if not all(
         np.isfinite(np.asarray(value)).all()
-        for value in (coordinates.parameter_center, coordinates.path_center, coordinates.path_chol)
+        for value in (coordinates.parameter_center, coordinates.chart.path_center, coordinates.chart.path_chol)
     ):
         return InitializationFailure.unavailable(
             "The native starting point has no finite LAPS coordinate scale"

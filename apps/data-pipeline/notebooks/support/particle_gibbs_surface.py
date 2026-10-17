@@ -412,6 +412,7 @@ def production_target(world: World) -> ParticleTarget:
         times=jnp.asarray([0.0]),
         state_space=StateSpace(1, (), (0,), (0,), (), ParallelRecurrences(())),
         observation_partition=CompiledObservationPartition((0,), ()),
+        point_reading_mask=jnp.ones((1, 1), dtype=bool),
     )
 
 

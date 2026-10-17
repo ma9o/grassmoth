@@ -58,6 +58,7 @@ class ParticleTarget:
     times: jax.Array
     state_space: StateSpace
     observation_partition: CompiledObservationPartition
+    point_reading_mask: jax.Array
     intervals: ParticleIntervalObservations | None = None
     exact_constraints: ExactStateConstraints | None = None
     bridge: GaussianReferenceBridge | None = None

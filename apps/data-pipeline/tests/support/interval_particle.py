@@ -125,6 +125,10 @@ def interval_target(
             ParallelRecurrences(()),
         ),
         CompiledObservationPartition(tuple(range(channels)), ()),
+        jnp.broadcast_to(
+            jnp.any(jnp.isfinite(observations) & jnp.asarray([kind == "point" for kind in kinds]), axis=1)[:, None],
+            (len(times), state_dim),
+        ),
         intervals=intervals,
     )
 
