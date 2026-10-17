@@ -163,7 +163,7 @@ def _dispatch_fit(
         timeout=timeout if policy is None else policy.timeout_seconds,
         startup_timeout=timeout if policy is None else policy.startup_seconds,
         max_containers=1,
-        scaledown_window=1,
+        scaledown_window=2,
         retries=0,
         volumes={"/cache": modal.Volume.from_name("nof1-cached-fit-cache", create_if_missing=True)},
     )(_fit_gpu)

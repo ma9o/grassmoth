@@ -79,6 +79,7 @@ def test_bounded_dispatch_records_provider_ids_and_terminates_timed_out_call(tmp
     call.cancel.assert_called_once_with(terminate_containers=True)
     assert app.function.call_args.kwargs["cpu"] == (8, 8)
     assert app.function.call_args.kwargs["memory"] == (32768, 32768)
+    assert app.function.call_args.kwargs["scaledown_window"] == 2
     record = ModalAllocation.model_validate_json(next(policy.directory.glob("*.json")).read_text())
     assert record.app_id == "ap-budget-test"
     assert record.function_call_id == "fc-budget-test"
