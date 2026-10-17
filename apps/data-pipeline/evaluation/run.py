@@ -7,6 +7,7 @@ import hashlib
 import json
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
+from itertools import batched
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -35,6 +36,9 @@ from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, SamplerSpec
 from nof1_causal_lab.study.persistence.codec import result_payload
 
 if TYPE_CHECKING:
+    from typing import Literal
+
+    from nof1_causal_lab.actions.contracts.polling import SuccessfulPoll
     from nof1_causal_lab.artifacts.identity import GitOid
     from nof1_causal_lab.json_types import JsonObject
 
@@ -284,11 +288,16 @@ def run(
                         assigned_settings(experiment, arm, seed.sampler) for arm in experiment.arms
                     )
                     jobs = tuple(zip(clients, cases, settings, previous, strict=True))
-                    fit_futures = tuple(
-                        pool.submit(_fit, client, case, setting, repeat, prior)
-                        for client, case, setting, prior in jobs
-                    )
-                    results = tuple(future.result() for future in fit_futures)
+                    results_by_batch: list[SuccessfulPoll[Literal["fit"], FitOutput]] = []
+                    for batch in batched(jobs, experiment.concurrent_arms):
+                        fit_futures = tuple(
+                            pool.submit(_fit, client, case, setting, repeat, prior)
+                            for client, case, setting, prior in batch
+                        )
+                        # A lost HTTP response can leave accepted work running.
+                        # Resolve this batch before admitting any further arms.
+                        results_by_batch.extend(future.result() for future in fit_futures)
+                    results = tuple(results_by_batch)
                     controls = tuple(_controls(result.body) for result in results)
                     factors = (
                         (*experiment.factors, "runtime.devices")

@@ -1,6 +1,8 @@
 """Shared preparation owns one frozen ledger; warmup is explicit for every treatment."""
 
+from email.message import Message
 from unittest.mock import Mock
+from urllib.error import HTTPError
 
 import pytest
 from evaluation.declarations import Experiment
@@ -36,3 +38,37 @@ def test_probe_assigns_positive_warmup_and_copies_only_idle_durable_state(tmp_pa
     with pytest.raises(ValueError, match="running"):
         copy_anchor_workspace(tmp_path, client, "blocked")
     assert not (tmp_path / "blocked").exists()
+
+
+def test_lost_fit_acknowledgement_retains_identity_without_resubmission(tmp_path, monkeypatch):
+    from evaluation.client import ActionClient
+
+    from nof1_causal_lab.actions.contracts.bodies import FitInput, NewFitTarget
+    from nof1_causal_lab.actions.contracts.requests import FitRequest, call_identity
+    from nof1_causal_lab.artifacts.observations.reference import DataRef
+    from tests.support.git import git_oid
+
+    request = FitRequest(
+        input=FitInput(
+            target=NewFitTarget(
+                dynamical_model_spec_ref=git_oid(1),
+                data_ref=DataRef(revision=git_oid(2), replicate_index=0),
+            )
+        )
+    )
+    client = ActionClient("http://isolated.invalid", "probe", tmp_path)
+    reads = Mock(
+        side_effect=[
+            HTTPError("lookup", 404, "not saved", Message(), None),
+            HTTPError("submission", 500, "response lost", Message(), None),
+        ]
+    )
+    monkeypatch.setattr(client, "_read", reads)
+    with pytest.raises(HTTPError, match="response lost"):
+        client.call(request)
+    identity = call_identity(request)
+    assert (tmp_path / (identity + ".request.json")).read_text() == request.model_dump_json(
+        round_trip=True
+    )
+    assert client.reused[identity] is False
+    assert [call.args[0].get_method() for call in reads.call_args_list] == ["GET", "POST"]

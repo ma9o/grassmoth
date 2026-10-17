@@ -60,13 +60,21 @@ class ActionClient:
         url = f"{self.endpoint}/api/studies/{self.workspace}/{request.action}"
         reused = False
         if isinstance(request, FitRequest):
+            identity = call_identity(request)
             try:
-                self._read(Request(url + "/" + call_identity(request)))
+                self._read(Request(url + "/" + identity))
             except HTTPError as exc:
                 if exc.code != 404:
                     raise
             else:
                 reused = True
+            # A POST may be accepted even if its response is lost. Retain the
+            # pinned identity before submission so recovery polls this call
+            # without allocating another fit or inventing a scientific failure.
+            (self.output / (identity + ".request.json")).write_text(
+                request.model_dump_json(round_trip=True)
+            )
+            self.reused[identity] = reused
         poll = self._read(
             Request(
                 url,
