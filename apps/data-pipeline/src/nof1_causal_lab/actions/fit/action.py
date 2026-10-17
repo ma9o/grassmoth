@@ -48,6 +48,18 @@ class FitResult(TypedDict):
     metadata: InferenceMetadata
 
 
+def append_phase_evidence(
+    previous: InferenceEvidence, current: InferenceEvidence
+) -> InferenceEvidence:
+    """Retain earlier phase buffers under one additional continuation prefix."""
+    return current.revised(
+        phase_extra_fields={
+            **{f"previous/{name}": values for name, values in previous.phase_extra_fields.items()},
+            **current.phase_extra_fields,
+        }
+    )
+
+
 def fit(
     *,
     selection: StructuralSelection,
@@ -104,14 +116,8 @@ def fit(
                     duration_seconds=fitted["duration_seconds"],
                     segments=(*prior.core.inference_metadata.segments, segment),
                 ),
-                "evidence": prior.evidence.revised(
-                    phase_extra_fields={
-                        **{
-                            f"previous/{name}": fields
-                            for name, fields in prior.evidence.phase_extra_fields.items()
-                        },
-                        **phase_fields,
-                    }
+                "evidence": append_phase_evidence(
+                    prior.evidence, prior.evidence.revised(phase_extra_fields=phase_fields)
                 ),
             }
         return {
@@ -244,14 +250,8 @@ def fit(
             if prior_evidence.observation_log_probs is not None
             and evidence.observation_log_probs is not None
             else None,
-            phase_extra_fields={
-                **{
-                    f"previous/{name}": values
-                    for name, values in prior_evidence.phase_extra_fields.items()
-                },
-                **evidence.phase_extra_fields,
-            },
         )
+        evidence = append_phase_evidence(prior_evidence, evidence)
     return {"_dynamical_model_spec": conditioned, "evidence": evidence, "metadata": metadata}
 
 

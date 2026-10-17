@@ -208,6 +208,19 @@ def fit_on_modal(
     previous: FitOutput | None = None,
 ) -> FitResult:
     """Transfer pinned values, compute once on Modal, then retain returned arrays locally."""
+    from nof1_causal_lab.actions.fit.action import append_phase_evidence
+
+    # Prior phase traces are publication history, never transition inputs. Keep
+    # them at the caller instead of uploading and downloading them unchanged.
+    compute_previous = (
+        None
+        if previous is None
+        else previous.revised(
+            inference=previous.inference.revised(
+                evidence=previous.inference.evidence.revised(phase_extra_fields={})
+            )
+        )
+    )
     panel = io.BytesIO()
     data_for_model.recorded.frame.write_parquet(panel)
     result = _dispatch_fit(
@@ -224,7 +237,9 @@ def fit_on_modal(
             continuation=None
             if continuation is None
             else pack_result(continuation, array_loader=array_loader),
-            previous=None if previous is None else pack_result(previous, array_loader=array_loader),
+            previous=None
+            if compute_previous is None
+            else pack_result(compute_previous, array_loader=array_loader),
         ),
         hardware=hardware,
     )
@@ -233,6 +248,8 @@ def fit_on_modal(
     from nof1_causal_lab.study.persistence.arrays import owned_arrays
 
     evidence = InferenceEvidence.model_validate(unpack_result(result.evidence))
+    if previous is not None:
+        evidence = append_phase_evidence(previous.inference.evidence, evidence)
     metadata = InferenceMetadata.model_validate_json(result.metadata_json)
     if result.dynamical_model_spec_bytes is None:
         return {"evidence": evidence, "metadata": metadata, "_dynamical_model_spec": None}

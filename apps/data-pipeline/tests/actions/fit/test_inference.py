@@ -163,7 +163,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     arrays = {}
 
     def write(values):
-        identity = f"{len(arrays):064x}"
+        from nof1_causal_lab.storage.arrays import encode_array
+
+        identity, _ = encode_array(np.asarray(values))
         arrays[identity] = values
         return identity
 
@@ -246,6 +248,11 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         )
 
     first = execute(posterior(2, 1), 2)
+    first["evidence"] = first["evidence"].revised(
+        phase_extra_fields={
+            "initialization": {"position": NumericalArray.from_numpy(np.array([1.0, 2.0]))}
+        }
+    )
     standalone = execute(posterior(1, 5), 1)
     combined = execute(posterior(1, 5), 1, output(first))
     identity = first["metadata"].distribution
@@ -265,6 +272,40 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     np.testing.assert_array_equal(
         combined["evidence"].observation_log_probs.values[0, :, 0], [1, 1, 5]
     )
+    from nof1_causal_lab.actions.fit import remote
+    from nof1_causal_lab.artifacts.sampling import InferenceHardware
+    from nof1_causal_lab.study.persistence.codec import unpack_result
+
+    def dispatch_without_history_buffers(payload, *, hardware):
+        assert hardware is InferenceHardware.L40S
+        prior = FitOutput.model_validate(unpack_result(payload.previous))
+        assert not prior.inference.evidence.phase_extra_fields
+        return remote.execute_fit_compute(payload)
+
+    monkeypatch.setattr(remote, "_dispatch_fit", dispatch_without_history_buffers)
+
+    def remotely(count, previous):
+        return remote.fit_on_modal(
+            InferenceHardware.L40S,
+            selection=StructuralSelection(model, None),
+            data_for_model=dataset,
+            time_origin=panel.time_origin,
+            sampler=settings.revised(num_samples_per_chain=count),
+            array_writer=write,
+            array_loader=arrays.__getitem__,
+            compute_loo_diagnostics=True,
+            previous=previous,
+        )
+
+    transported = remotely(1, output(first))
+    np.testing.assert_array_equal(
+        empirical_atoms(transported["_dynamical_model_spec"].distributions[identity]),
+        empirical_atoms(combined["_dynamical_model_spec"].distributions[identity]),
+    )
+    np.testing.assert_array_equal(
+        transported["evidence"].phase_extra_fields["previous/initialization"]["position"].values,
+        [1.0, 2.0],
+    )
     from unittest.mock import Mock
 
     from jax.stages import Compiled
@@ -279,4 +320,13 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     np.testing.assert_array_equal(
         zero["evidence"].observation_log_probs.values,
         combined["evidence"].observation_log_probs.values,
+    )
+    remote_zero = remotely(0, output(combined))
+    assert remote_zero["_dynamical_model_spec"] is None
+    assert remote_zero["metadata"].num_samples_total == 6
+    np.testing.assert_array_equal(
+        remote_zero["evidence"]
+        .phase_extra_fields["previous/previous/initialization"]["position"]
+        .values,
+        [1.0, 2.0],
     )
