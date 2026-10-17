@@ -38,14 +38,28 @@ class GaussianInnovationStep:
         return jnp.sum(jnp.log(jnp.diag(self.chol)))
 
 
-def conditional_gaussian_step(
-    mean: jax.Array,
+@jax.tree_util.register_dataclass
+@dataclass(frozen=True, eq=False)
+class GaussianInnovationFactors:
+    """State-independent conditional geometry, reusable across nonlinear means."""
+
+    regression: jax.Array
+    chol: jax.Array
+    centred_mask: jax.Array
+    innovation_mask: jax.Array
+
+    def condition(self, mean: jax.Array, values: jax.Array) -> GaussianInnovationStep:
+        """Bind the current drift and conditioned values without refactorizing."""
+        conditional_mean = mean + self.regression @ jnp.where(self.centred_mask, values - mean, 0.0)
+        return GaussianInnovationStep(conditional_mean, self.chol, self.innovation_mask)
+
+
+def conditional_gaussian_factors(
     covariance: jax.Array,
     *,
     density_mask: jax.Array,
     innovation_mask: jax.Array,
-    values: jax.Array,
-) -> GaussianInnovationStep:
+) -> GaussianInnovationFactors:
     """Condition on centred, pinned and global stochastic coordinates exactly.
 
     Padding permits one compiled scan even when the mask changes at each time.
@@ -58,35 +72,55 @@ def conditional_gaussian_step(
     cc = cc + jnp.diag((~centred).astype(covariance.dtype))
     nc = jnp.where(innovation_mask[:, None] & centred[None, :], covariance, 0.0)
     regression = jnp.linalg.solve(cc, nc.T).T
-    conditional_mean = mean + regression @ jnp.where(centred, values - mean, 0.0)
     conditional_covariance = jnp.where(
         innovation_mask[:, None] & innovation_mask[None, :],
         covariance - regression @ nc.T,
         0.0,
     ) + jnp.diag((~innovation_mask).astype(covariance.dtype))
-    return GaussianInnovationStep(
-        conditional_mean, jnp.linalg.cholesky(conditional_covariance), innovation_mask
+    return GaussianInnovationFactors(
+        regression, jnp.linalg.cholesky(conditional_covariance), centred, innovation_mask
     )
+
+
+def conditional_gaussian_step(
+    mean: jax.Array,
+    covariance: jax.Array,
+    *,
+    density_mask: jax.Array,
+    innovation_mask: jax.Array,
+    values: jax.Array,
+) -> GaussianInnovationStep:
+    """Bind one exact conditional Gaussian map, retaining its centred marginal."""
+    return conditional_gaussian_factors(
+        covariance, density_mask=density_mask, innovation_mask=innovation_mask
+    ).condition(mean, values)
 
 
 @dataclass(frozen=True, eq=False)
 class GaussianPathMap:
-    """Exact forward recurrence and inverse on a parameter-bound scientific law."""
+    """Exact recurrence with additive covariance bound independently of the path."""
 
-    initial_moments: tuple[jax.Array, jax.Array]
-    transition_moments: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]]
+    initial_mean: jax.Array
+    transition_mean: Callable[[jax.Array, jax.Array], jax.Array]
+    covariances: jax.Array
     density_mask: jax.Array
     independent_mask: jax.Array
     innovation_mask: jax.Array
     fixed_values: jax.Array
 
-    def _step(
-        self, moments: tuple[jax.Array, jax.Array], values: jax.Array, index: jax.Array | int
-    ) -> GaussianInnovationStep:
+    def _transition_factors(self) -> GaussianInnovationFactors:
+        return jax.vmap(
+            lambda covariance, density, innovation: conditional_gaussian_factors(
+                covariance, density_mask=density, innovation_mask=innovation
+            )
+        )(self.covariances[1:], self.density_mask[1:], self.innovation_mask[1:])
+
+    def _initial_step(self, values: jax.Array) -> GaussianInnovationStep:
         return conditional_gaussian_step(
-            *moments,
-            density_mask=self.density_mask[index],
-            innovation_mask=self.innovation_mask[index],
+            self.initial_mean,
+            self.covariances[0],
+            density_mask=self.density_mask[0],
+            innovation_mask=self.innovation_mask[0],
             values=values,
         )
 
@@ -96,32 +130,40 @@ class GaussianPathMap:
 
     def decode(self, coordinates: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Replay the declared dynamics while transforming only stochastic coordinates."""
-        values = self._values(coordinates[0], self.initial_moments[0], 0)
-        initial_step = self._step(self.initial_moments, values, 0)
-        initial = initial_step.decode(values)
-
-        def advance(previous: jax.Array, index: jax.Array):
-            moments = self.transition_moments(previous, index)
-            values = self._values(coordinates[index], moments[0], index)
-            step = self._step(moments, values, index)
-            current = step.decode(values)
-            return current, (current, step.log_abs_det)
-
-        _, (tail, determinants) = jax.lax.scan(
-            advance, initial, jnp.arange(1, coordinates.shape[0])
+        factors = self._transition_factors()
+        values = self._values(coordinates[0], self.initial_mean, 0)
+        first = self._initial_step(values)
+        initial = first.decode(values)
+        log_abs_det = first.log_abs_det + jnp.sum(
+            jnp.log(jnp.diagonal(factors.chol, axis1=-2, axis2=-1))
         )
-        return jnp.concatenate((initial[None], tail)), jnp.asarray(
-            initial_step.log_abs_det + jnp.sum(determinants)
-        )
+
+        def advance(
+            previous: jax.Array, step: tuple[jax.Array, GaussianInnovationFactors]
+        ) -> tuple[jax.Array, jax.Array]:
+            index, geometry = step
+            mean = self.transition_mean(previous, index)
+            values = self._values(coordinates[index], mean, index)
+            current = geometry.condition(mean, values).decode(values)
+            return current, current
+
+        _, tail = jax.lax.scan(advance, initial, (jnp.arange(1, coordinates.shape[0]), factors))
+        return jnp.concatenate((initial[None], tail)), log_abs_det
 
     def encode(self, path: jax.Array) -> jax.Array:
         """Invert the recurrence on a valid scientific path, including its initial law."""
-        initial = self._step(self.initial_moments, path[0], 0).encode(path[0])
+        factors = self._transition_factors()
+        initial = self._initial_step(path[0]).encode(path[0])
 
-        def inverse(previous: jax.Array, current: jax.Array, index: jax.Array) -> jax.Array:
-            return self._step(self.transition_moments(previous, index), current, index).encode(
+        def inverse(
+            previous: jax.Array,
+            current: jax.Array,
+            index: jax.Array,
+            geometry: GaussianInnovationFactors,
+        ) -> jax.Array:
+            return geometry.condition(self.transition_mean(previous, index), current).encode(
                 current
             )
 
-        tail = jax.vmap(inverse)(path[:-1], path[1:], jnp.arange(1, path.shape[0]))
+        tail = jax.vmap(inverse)(path[:-1], path[1:], jnp.arange(1, path.shape[0]), factors)
         return jnp.concatenate((initial[None], tail))

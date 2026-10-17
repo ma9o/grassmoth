@@ -208,9 +208,18 @@ class ParticleTarget:
         )
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
         fixed = fixed.at[:, static].set(context[2][static])
+        initial_mean, initial_covariance = self.initial_moments(context)
+        # continuous_state_evolution binds the compiled diffusion as an array in
+        # FullDiffusion, never a state function. Its EM covariance therefore
+        # depends only on the parameters and time interval. A fixed state can
+        # expose those exact covariances before the nonlinear recurrence runs.
+        covariances = jax.vmap(
+            lambda index: self.transition_moments(context, initial_mean, index)[1]
+        )(jnp.arange(1, self.times.size))
         return GaussianPathMap(
-            self.initial_moments(context),
-            lambda previous, index: self.transition_moments(context, previous, index),
+            initial_mean,
+            lambda previous, index: self.transition_moments(context, previous, index)[0],
+            jnp.concatenate((initial_covariance[None], covariances)),
             self.state_density_mask,
             self.independent_mask,
             innovation_mask,

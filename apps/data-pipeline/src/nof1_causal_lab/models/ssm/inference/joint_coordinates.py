@@ -11,9 +11,9 @@ import numpy as np
 
 from nof1_causal_lab.artifacts.joint_parameterization import (
     CentredParameterizationRecord,
-    NonCentredParameterizationRecord,
     JointParameterizationRecord,
     MixedParameterizationRecord,
+    NonCentredParameterizationRecord,
 )
 
 if TYPE_CHECKING:
