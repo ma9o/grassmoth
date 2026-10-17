@@ -19,7 +19,11 @@ from nof1_causal_lab.artifacts.continuation import ParticleTuning, SamplerCheckp
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ContinuedInitializationDiagnostics,
 )
-from nof1_causal_lab.models.ssm.inference.joint_coordinates import CentredChart, build_joint_coordinates
+from nof1_causal_lab.models.ssm.inference.joint_coordinates import (
+    CentredChart,
+    JointCoordinates,
+    build_joint_coordinates,
+)
 from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import (
     LapsTraceRecord,
     NoLapsTrace,
@@ -37,6 +41,14 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class LapsInitializationTrace:
+    """Native ensemble history together with the exact chart that produced it."""
+
+    coordinates: JointCoordinates
+    ensemble: LapsTraceRecord
+
+
+@dataclass(frozen=True)
 class LapsInitializationResult:
     """Paired chain starts and ensemble proposal moments in the production coordinates."""
 
@@ -46,7 +58,7 @@ class LapsInitializationResult:
     pilot_mean: jax.Array
     pilot_variance: jax.Array
     diagnostics: InitializationDiagnostics
-    trace: LapsTraceRecord | NoLapsTrace = field(default_factory=NoLapsTrace)
+    trace: LapsInitializationTrace | NoLapsTrace = field(default_factory=NoLapsTrace)
 
     @property
     def pilot_proposal_variance(self) -> jax.Array:
@@ -70,7 +82,7 @@ def prepare_laps_initialization(
         return InitializationFailure.unavailable(
             "LAPS ensemble_size must cover all requested particle chains"
         )
-    coordinates = build_joint_coordinates(target)
+    coordinates = build_joint_coordinates(target, "centred")
     assert isinstance(coordinates.chart, CentredChart)
     if not all(
         np.isfinite(np.asarray(value)).all()
@@ -112,7 +124,9 @@ def prepare_laps_initialization(
         pilot_mean=jnp.mean(paths, axis=0),
         pilot_variance=jnp.var(paths, axis=0),
         diagnostics=ensemble.diagnostics,
-        trace=ensemble.trace,
+        trace=LapsInitializationTrace(coordinates, ensemble.trace)
+        if isinstance(ensemble.trace, LapsTraceRecord)
+        else ensemble.trace,
     )
 
 

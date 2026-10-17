@@ -31,7 +31,6 @@ from nof1_causal_lab.artifacts.sampling import (
 from nof1_causal_lab.compute.budget import ComputeBudget, SharedMemoryBudget
 from nof1_causal_lab.models.ssm.compile.observation_partition import CompiledObservationPartition
 from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
-from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
 from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -53,7 +52,7 @@ from nof1_causal_lab.models.ssm.inference.warmup.laps import (
     LapsInitializationResult,
     prepare_laps_initialization,
 )
-from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import LapsTraceRecord
+from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationTrace
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
@@ -746,9 +745,9 @@ def run_laps(
     if isinstance(result, InitializationFailure):
         return result
     assert isinstance(result, LapsInitializationResult)
-    trace = result.trace
-    assert isinstance(trace, LapsTraceRecord)
-    coordinates = build_joint_coordinates(target)
+    assert isinstance(result.trace, LapsInitializationTrace)
+    trace = result.trace.ensemble
+    coordinates = result.trace.coordinates
     raw = jnp.concatenate((trace.unadjusted.positions, trace.adjusted.positions))
     theta, paths = jax.jit(jax.vmap(jax.vmap(coordinates.decode)))(raw)
     positions = jnp.stack((theta[..., 0], paths[..., 0, 0]), axis=-1)
