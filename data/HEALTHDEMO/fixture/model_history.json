@@ -7,7 +7,7 @@
     },
     "dynamical_model_spec": null,
     "workspace_id": "HEALTHDEMO",
-    "commit_id": "6baaed79133b6d196e64407eb71903aafdf69faa",
+    "commit_id": "ce439676099db4c60d0b62f3df90e6c1bc2a87c7",
     "selected_seq": 0,
     "state": {
       "current": {
@@ -49,13 +49,13 @@
       "measurement_clock": null
     },
     "workspace_id": "HEALTHDEMO",
-    "commit_id": "9487e46b257f32e6c2af66c004b32486c811651c",
+    "commit_id": "b21a8da56adb1a23d8412ca8b21f1fa9500743c6",
     "selected_seq": 2,
     "state": {
       "current": {
         "model": {
           "artifact_id": "model",
-          "revision": "694544606b5b4d7154f20a715ce61284fd108768",
+          "revision": "9c653f98b148d0947de58a96ca158dc6e512cec5",
           "derived_from": {
             "question": "96c5db3928236599a333bb61db0a56b9ea50138c"
           },
@@ -615,15 +615,15 @@
       "measurement_clock": null
     },
     "workspace_id": "HEALTHDEMO",
-    "commit_id": "1af4457304633b0a0c09acbc92e144a6c52d5393",
+    "commit_id": "8d996fce3ff5c9d444493f444daa1459fb132447",
     "selected_seq": 3,
     "state": {
       "current": {
         "model": {
           "artifact_id": "model",
-          "revision": "ffa3a3e3b7ac4ed7caffaa52a4a6175500ad9a81",
+          "revision": "dfdb2d6f1eb8d88f53a1b807fd557e270bea407e",
           "derived_from": {
-            "model": "694544606b5b4d7154f20a715ce61284fd108768",
+            "model": "9c653f98b148d0947de58a96ca158dc6e512cec5",
             "question": "96c5db3928236599a333bb61db0a56b9ea50138c"
           },
           "produced_by": "edit_model",
@@ -1515,15 +1515,15 @@
       "measurement_clock": "1d"
     },
     "workspace_id": "HEALTHDEMO",
-    "commit_id": "4b13c146e356161da9eab981d824d36962ebae22",
+    "commit_id": "720aa95eb434204ddbf13dfb226d9dcfd913bd96",
     "selected_seq": 4,
     "state": {
       "current": {
         "model": {
           "artifact_id": "model",
-          "revision": "a2ba42326a821e28beb75554b8598370faaa7ce0",
+          "revision": "3aeeb4332e59f49c207d91dab5e5b44cb1363104",
           "derived_from": {
-            "model": "ffa3a3e3b7ac4ed7caffaa52a4a6175500ad9a81",
+            "model": "dfdb2d6f1eb8d88f53a1b807fd557e270bea407e",
             "question": "96c5db3928236599a333bb61db0a56b9ea50138c",
             "raw_data": "1aa1c3d2b8184263133ce58b3e0ed710111551ee"
           },
@@ -2508,15 +2508,15 @@
       "measurement_clock": "1d"
     },
     "workspace_id": "HEALTHDEMO",
-    "commit_id": "6e11cc6b2d92a2f826de651c50ed380607399c5a",
+    "commit_id": "a94103b2472c1bfc4a42a95f0a4383d60b28911b",
     "selected_seq": 5,
     "state": {
       "current": {
         "model": {
           "artifact_id": "model",
-          "revision": "a2ba42326a821e28beb75554b8598370faaa7ce0",
+          "revision": "3aeeb4332e59f49c207d91dab5e5b44cb1363104",
           "derived_from": {
-            "model": "ffa3a3e3b7ac4ed7caffaa52a4a6175500ad9a81",
+            "model": "dfdb2d6f1eb8d88f53a1b807fd557e270bea407e",
             "question": "96c5db3928236599a333bb61db0a56b9ea50138c",
             "raw_data": "1aa1c3d2b8184263133ce58b3e0ed710111551ee"
           },
@@ -2529,7 +2529,7 @@
         },
         "panel": {
           "artifact_id": "panel",
-          "revision": "d26063a0eec18633c88a22bcc0d347c076e5565c",
+          "revision": "f0fb4972f077e8dc81b0dfbf21b0ac7125fb2d13",
           "derived_from": {
             "raw_data": "1aa1c3d2b8184263133ce58b3e0ed710111551ee"
           },
@@ -2563,7 +2563,7 @@
         }
       },
       "data": {
-        "revision": "6e11cc6b2d92a2f826de651c50ed380607399c5a",
+        "revision": "a94103b2472c1bfc4a42a95f0a4383d60b28911b",
         "replicate_index": 0
       }
     },
@@ -8514,16 +8514,16 @@
       "measurement_clock": "1d"
     },
     "workspace_id": "HEALTHDEMO",
-    "commit_id": "dece2916520d7f85d449d16e82d1705dd55b6c4a",
+    "commit_id": "e033cd46caee322176007969e179d21ae48af4c5",
     "selected_seq": 7,
     "state": {
       "current": {
         "model": {
           "artifact_id": "model",
-          "revision": "868c2b3d6c32fc829d9bdf59ef69d1af82ec9ddd",
+          "revision": "bc66ed1d9dd8ac49e5fe29efe5e994a9adc9d83f",
           "derived_from": {
-            "model": "a2ba42326a821e28beb75554b8598370faaa7ce0",
-            "panel": "d26063a0eec18633c88a22bcc0d347c076e5565c",
+            "model": "3aeeb4332e59f49c207d91dab5e5b44cb1363104",
+            "panel": "f0fb4972f077e8dc81b0dfbf21b0ac7125fb2d13",
             "question": "96c5db3928236599a333bb61db0a56b9ea50138c"
           },
           "produced_by": "edit_model",
@@ -8535,7 +8535,7 @@
         },
         "panel": {
           "artifact_id": "panel",
-          "revision": "d26063a0eec18633c88a22bcc0d347c076e5565c",
+          "revision": "f0fb4972f077e8dc81b0dfbf21b0ac7125fb2d13",
           "derived_from": {
             "raw_data": "1aa1c3d2b8184263133ce58b3e0ed710111551ee"
           },
@@ -8569,7 +8569,7 @@
         }
       },
       "data": {
-        "revision": "6e11cc6b2d92a2f826de651c50ed380607399c5a",
+        "revision": "a94103b2472c1bfc4a42a95f0a4383d60b28911b",
         "replicate_index": 0
       }
     },

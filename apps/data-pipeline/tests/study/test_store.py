@@ -32,6 +32,13 @@ def workspace(monkeypatch, tmp_path):
 
 
 class TestArtifactStore:
+    def test_storage_format_requires_explicit_conversion(self, workspace):
+        repository = ArtifactStore(workspace).repo
+        assert repository.config.get_int("nof1.format") == 28
+        repository.config["nof1.format"] = 27
+        with pytest.raises(ValueError, match="format 28"):
+            ArtifactStore(workspace)
+
     def test_artifacts_are_immutable_git_trees(self, workspace):
         store = ArtifactStore(workspace)
         first = store.write_artifact(

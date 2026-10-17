@@ -3260,16 +3260,16 @@
     "measurement_clock": "1d"
   },
   "workspace_id": "HEALTHDEMO",
-  "commit_id": "dece2916520d7f85d449d16e82d1705dd55b6c4a",
+  "commit_id": "e033cd46caee322176007969e179d21ae48af4c5",
   "selected_seq": 7,
   "state": {
     "current": {
       "model": {
         "artifact_id": "model",
-        "revision": "868c2b3d6c32fc829d9bdf59ef69d1af82ec9ddd",
+        "revision": "bc66ed1d9dd8ac49e5fe29efe5e994a9adc9d83f",
         "derived_from": {
-          "model": "a2ba42326a821e28beb75554b8598370faaa7ce0",
-          "panel": "d26063a0eec18633c88a22bcc0d347c076e5565c",
+          "model": "3aeeb4332e59f49c207d91dab5e5b44cb1363104",
+          "panel": "f0fb4972f077e8dc81b0dfbf21b0ac7125fb2d13",
           "question": "96c5db3928236599a333bb61db0a56b9ea50138c"
         },
         "produced_by": "edit_model",
@@ -3281,7 +3281,7 @@
       },
       "panel": {
         "artifact_id": "panel",
-        "revision": "d26063a0eec18633c88a22bcc0d347c076e5565c",
+        "revision": "f0fb4972f077e8dc81b0dfbf21b0ac7125fb2d13",
         "derived_from": {
           "raw_data": "1aa1c3d2b8184263133ce58b3e0ed710111551ee"
         },
@@ -3315,7 +3315,7 @@
       }
     },
     "data": {
-      "revision": "6e11cc6b2d92a2f826de651c50ed380607399c5a",
+      "revision": "a94103b2472c1bfc4a42a95f0a4383d60b28911b",
       "replicate_index": 0
     }
   },

@@ -224,7 +224,7 @@ def build_outputs():
             capture_output=True,
         )
         subprocess.run(
-            ["git", "--git-dir", str(history), "config", "nof1.format", "26"],
+            ["git", "--git-dir", str(history), "config", "nof1.format", "28"],
             check=True,
             capture_output=True,
         )
