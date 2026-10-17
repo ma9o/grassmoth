@@ -5,6 +5,7 @@ import shutil
 from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import get_ident
 
 import numpy as np
 import polars as pl
@@ -143,7 +144,18 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
             record=record,
         )
         assert len(publication.model_dump_json().encode()) < 20_000
-        return publication, asyncio.run(journal_activity(publication))
+        from nof1_causal_lab.study.queries import results
+
+        read_result = results.read_result
+        event_loop_thread = get_ident()
+
+        def read_off_loop(*args, **kwargs):
+            assert get_ident() != event_loop_thread
+            return read_result(*args, **kwargs)
+
+        with monkeypatch.context() as patch:
+            patch.setattr(results, "read_result", read_off_loop)
+            return publication, asyncio.run(journal_activity(publication))
 
     _, prepared = publish(
         Applied(result=DataPreparationResult(), effects=ActionEffects(produced=(panel,))),

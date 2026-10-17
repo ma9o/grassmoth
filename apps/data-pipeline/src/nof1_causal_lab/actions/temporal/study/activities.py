@@ -212,6 +212,11 @@ async def complete_result_activity(activity_input: CompleteResultInput) -> Actio
 @activity.defn
 async def journal_activity(activity_input: AttemptPublication) -> StudyRevision:
     """Publish the owned record and traces; replay retries use its persisted identity."""
+    return await asyncio.to_thread(_journal_attempt, activity_input)
+
+
+def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
+    """Read large saved reports and publish their journal entry outside the event loop."""
     journal = StudyRepository(activity_input.workspace_id)
     existing = journal.read_attempt(activity_input.record.seq)
     if existing is not None:
