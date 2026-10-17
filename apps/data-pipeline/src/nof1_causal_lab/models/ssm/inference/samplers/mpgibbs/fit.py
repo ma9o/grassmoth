@@ -25,6 +25,7 @@ from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainE
 from nof1_causal_lab.models.ssm.inference.extraction import (
     build_pmcmc_mcmc_result,
     extract_grouped_public_samples,
+    project_initialization,
 )
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
@@ -226,15 +227,18 @@ def fit_marginal_particle_gibbs(
         parameters=NumericalArray.from_numpy(np.asarray(run_result.last_parameters)),
         paths=NumericalArray.from_numpy(np.asarray(run_result.last_paths)),
     )
+    starting_values = project_initialization(
+        run_result.starting_values,
+        bundle=bundle,
+        compiled_dynamical_model=panel.compiled_dynamical_model,
+    )
     if sampler.num_samples_per_chain == 0:
         return UnretainedRun(
             sampler,
             MCMCEvidence(),
             run_result.compiled_step,
             {
-                "initialization"
-                if continuation is None
-                else "continued_start": run_result.starting_values,
+                "initialization" if continuation is None else "continued_start": starting_values,
                 "warmup": run_result.warmup_chain_extra_fields,
                 "post_warmup": run_result.chain_extra_fields,
             },
@@ -338,9 +342,7 @@ def fit_marginal_particle_gibbs(
         else None,
         sampler_diagnostics=kernel_diagnostics,
         phase_extra_fields={
-            "initialization"
-            if continuation is None
-            else "continued_start": run_result.starting_values,
+            "initialization" if continuation is None else "continued_start": starting_values,
             "warmup": run_result.warmup_chain_extra_fields,
             "post_warmup": run_result.chain_extra_fields,
             "all": run_result.all_chain_extra_fields,

@@ -258,10 +258,14 @@ def run(
                             "compile_seconds": compile_seconds(result.body),
                             "gate": result.body.inference.core.convergence.status,
                             "warnings": list(result.body.inference.core.convergence.warnings),
-                            **initializer_scores(result.body),
+                            **initializer_scores(result.body, reference),
                             **sampler_outcomes(result.body),
                         }
-                        if reference is not None and experiment.posterior is not None:
+                        if (
+                            reference is not None
+                            and experiment.posterior is not None
+                            and segment.stop > segment.start
+                        ):
                             row.update(
                                 posterior_equivalence(
                                     result.body, reference, experiment.posterior.tolerance

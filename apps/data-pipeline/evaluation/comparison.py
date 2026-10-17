@@ -45,7 +45,7 @@ def differing_controls(
     )
 
 
-def posterior_arrays(result: FitOutput):
+def _posterior_draws(result: FitOutput):
     """Read the core's aligned empirical law and chain axes without reconstructing a model."""
     metadata = result.inference.core.inference_metadata
     model = result.dynamical_model_spec
@@ -53,6 +53,13 @@ def posterior_arrays(result: FitOutput):
         raise ValueError("Posterior comparisons require retained draws")
     layout = model.law_layouts[metadata.distribution]
     atoms = empirical_atoms(model.distributions[metadata.distribution])
+    return layout, atoms
+
+
+def posterior_arrays(result: FitOutput):
+    """Summarize saved joint coordinates and their Monte Carlo uncertainty."""
+    layout, atoms = _posterior_draws(result)
+    metadata = result.inference.core.inference_metadata
     chains = atoms.reshape(metadata.num_chains, -1, atoms.shape[-1])
     variable = np.ptp(atoms, axis=0) > 0
     errors = np.zeros(atoms.shape[-1])
@@ -103,17 +110,79 @@ def posterior_equivalence(
     }
 
 
-def initializer_scores(result: FitOutput) -> dict[str, JsonValue]:
-    """Score the initializer's own retained state, separately from posterior performance."""
+def _start_scores(starts: np.ndarray, reference: np.ndarray) -> dict[str, JsonValue]:
+    """Compare every delivered start and its ensemble coverage to reference marginals."""
+    if starts.shape[1:] != reference.shape[1:]:
+        raise ValueError("Initializer and reference have different scientific coordinates")
+    if not np.isfinite(starts).all():
+        return {"status": "not scored", "reason": "Non-finite delivered starts"}
+    scale = reference.std(axis=0, ddof=1)
+    free = scale > 0
+    distances = (starts[:, free] - reference.mean(axis=0)[free]) / scale[free]
+    spread = np.std(starts[:, free], axis=0) / scale[free]
+    coverage = np.mean(
+        (reference >= starts.min(axis=0)) & (reference <= starts.max(axis=0)), axis=0
+    )
+    return {
+        "start_rms_reference_sd": np.sqrt(np.mean(distances**2, axis=1)).tolist()
+        if np.any(free)
+        else [None] * len(starts),
+        "start_max_abs_reference_sd": np.max(np.abs(distances), axis=1).tolist()
+        if np.any(free)
+        else [None] * len(starts),
+        "start_fixed_coordinates_equal": np.all(
+            starts[:, ~free] == reference[0, ~free], axis=1
+        ).tolist(),
+        "spread_reference_sd": [
+            float(value) if varying else None
+            for value, varying in zip(
+                np.divide(np.std(starts, axis=0), scale, out=np.zeros_like(scale), where=free),
+                free,
+                strict=True,
+            )
+        ],
+        "min_spread_reference_sd": float(spread.min()) if spread.size else None,
+        "reference_mass_covered": coverage.tolist(),
+    }
+
+
+def initializer_scores(result: FitOutput, reference: FitOutput | None) -> dict[str, JsonValue]:
+    """Score delivered public starts against the caller's qualified reference, plus cost."""
+    intervals = sorted(
+        (phase.start_seconds, phase.end_seconds)
+        for phase in result.inference.core.inference_metadata.segments[-1].phases
+        if phase.stage in {"preparing_initialization", "initializing_chains"}
+    )
+    stop, elapsed = 0.0, 0.0
+    for left, right in intervals:
+        elapsed += max(0.0, right - max(left, stop))
+        stop = max(stop, right)
+    cost: dict[str, JsonValue] = {
+        "initializer_preparation_seconds": elapsed if intervals else None,
+    }
     initial = result.inference.evidence.phase_extra_fields.get("initialization")
     if initial is None:
-        return {"initializer": "not_run"}
-    values = np.asarray(initial["log_joint"].values)
+        return {**cost, "initializer": "not scored", "initializer_reason": "No delivered starts"}
+    if reference is None:
+        return {
+            **cost,
+            "initializer": "not scored",
+            "initializer_reason": "No qualified reference",
+        }
+    layout, atoms = _posterior_draws(reference)
+    if layout.constructs and not np.array_equal(initial["time_points"].values, layout.time_points):
+        raise ValueError("Initializer and reference have different time grids")
     return {
-        "initializer_finite_fraction": float(np.isfinite(values).mean()),
-        "initializer_mean_log_joint": float(values.mean()) if np.isfinite(values).all() else None,
-        "initializer_parameter_spread": float(np.mean(np.std(initial["positions"].values, axis=0)))
-        if initial["positions"].values.shape[-1]
-        else 0.0,
-        "initializer_state_spread": float(np.mean(np.std(initial["paths"].values, axis=0))),
+        **cost,
+        "initializer": "scored",
+        "initializer_parameters": {
+            str(identity): _start_scores(
+                initial[str(identity)].values[:, None], atoms[:, column, None]
+            )
+            for identity, column in layout.parameter_columns.items()
+        },
+        "initializer_paths": {
+            str(identity): _start_scores(initial[str(identity)].values, atoms[:, span])
+            for identity, span in layout.trajectory_slices.items()
+        },
     }

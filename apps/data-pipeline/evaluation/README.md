@@ -21,7 +21,11 @@ executes nothing. Run a declaration only after its compute budget and case are a
   rejects undeclared control differences, and retains complete action envelopes.
 - `comparison.py` qualifies references using production convergence plus the declared
   R-hat/MCSE limits, compares marginal means and standard deviations with an MCSE
-  uncertainty band, and scores the initializer's retained starting values directly.
+  uncertainty band, and compares each delivered parameter start and state path with
+  a qualified reference in the same public scientific coordinates. It reports
+  reference-scaled distances, ensemble spread and marginal reference coverage,
+  separately from initialization preparation time; the initializer's own density
+  is not a quality score.
 - `report.py` writes one sortable HTML table. Assigned settings, adapted tuning,
   phase intervals, movement diagnostics, truth recovery and reference comparisons
   remain distinguishable. Summary equivalence does not prove equality of joint laws.
@@ -43,8 +47,10 @@ uv run python -m evaluation.run evaluation/experiments/cpu_compile.json \
 The examples are declarations, not evidence that a case has run. `cpu_compile.json`
 compares fixed trajectory lengths with zero warmup and zero retained draws.
 `drift_probe.json` first obtains the same retained base checkpoint in each arm, then
-continues it with zero warmup and the declared drift. `initializer_score.json` scores
-starting values and preparation cost with no posterior draws. These small counts are
+continues it with zero warmup and the declared drift. `initializer_score.json` records
+starting values and preparation cost with no posterior draws. Add a qualified
+`posterior.references` entry to score those starts; without one the report says
+"not scored". Zero-draw arms skip posterior equivalence. These small counts are
 for debugging; they do not certify a posterior or qualify a reference.
 
 Every arm assigns exactly the declared paths. A whole algorithm object can be a

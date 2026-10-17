@@ -26,7 +26,10 @@ from nof1_causal_lab.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
 from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
-from nof1_causal_lab.models.ssm.inference.extraction import extract_grouped_public_samples
+from nof1_causal_lab.models.ssm.inference.extraction import (
+    extract_grouped_public_samples,
+    project_initialization,
+)
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.inference.samplers.particle.contract import PaidMixture
@@ -165,9 +168,17 @@ def fit_particle_gibbs(
         parameters=NumericalArray.from_numpy(np.asarray(run.last_parameters)),
         paths=NumericalArray.from_numpy(np.asarray(run.last_paths)),
     )
+    phase_fields = {
+        name: project_initialization(
+            values, bundle=problem, compiled_dynamical_model=panel.compiled_dynamical_model
+        )
+        if name in {"initialization", "continued_start"}
+        else values
+        for name, values in run.phase_extra_fields.items()
+    }
     if sampler.num_samples_per_chain == 0:
         return UnretainedRun(
-            sampler, MCMCEvidence(method="pgibbs"), run.compiled_step, run.phase_extra_fields
+            sampler, MCMCEvidence(method="pgibbs"), run.compiled_step, phase_fields
         )
     duration = clock() - started
     extra = run.phase_extra_fields["post_warmup"]
@@ -242,7 +253,7 @@ def fit_particle_gibbs(
                 if options.diagnostic_metrics_all
                 else None,
             ),
-            phase_extra_fields=run.phase_extra_fields,
+            phase_extra_fields=phase_fields,
             warmup_complete_log_posterior_history=run.log_posterior[:, : sampler.num_warmup],
             all_complete_log_posterior_history=run.log_posterior,
             exact_observation_rows=None
