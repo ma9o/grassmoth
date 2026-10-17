@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Literal, cast
 import polars as pl
 
 from nof1_causal_lab.artifacts.identity import IndicatorId, IndicatorRef
+from nof1_causal_lab.artifacts.observations.semantics import SupportKind
 from nof1_causal_lab.artifacts.reports.checks import Evaluated, NotEvaluated
 from nof1_causal_lab.artifacts.reports.data_quality import (
     DataFinding,
@@ -189,6 +190,25 @@ def _build_indicator_context(
 
     timestamps = ind_data[OBSERVATION_TIME_COLUMN]
     parsed = parse_timestamp_series(timestamps)
+    if (
+        indicator_meta is not None
+        and indicator_meta.support_kind == SupportKind.POINT
+        and (window := indicator_meta.observation_window) is not None
+    ):
+        # A point's support has zero width. Its declared observation window owns
+        # cadence; calendar windows retain their actual elapsed length.
+        model_clock_hours = (
+            parsed.to_frame("anchor")
+            .select(
+                (
+                    (
+                        pl.col("anchor").dt.offset_by(window.polars_interval) - pl.col("anchor")
+                    ).dt.total_seconds()
+                    / 3600
+                ).median()
+            )
+            .item()
+        )
 
     return IndicatorContext(
         name=indicator_id,
@@ -199,7 +219,9 @@ def _build_indicator_context(
         dtype=dtype,
         is_time_invariant=is_time_invariant,
         model_clock_hours=model_clock_hours,
-        parsed_ts=parsed.drop_nulls(),
+        parsed_ts=parsed.filter(
+            ind_data["value"].cast(pl.Float64, strict=False).is_not_null()
+        ).drop_nulls(),
         n_unparseable=parsed.null_count(),
         n_total_ts=len(timestamps),
     )

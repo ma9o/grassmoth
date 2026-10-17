@@ -5,7 +5,7 @@ This module tests:
 2. Validation checks - timestamps, dtype, coverage, gaps, hallucination, correlations
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 import polars as pl
@@ -27,6 +27,44 @@ from nof1_causal_lab.observations.quality.profile import validate_extraction as 
 from tests.support.helpers import fixture_entity_id, make_model
 
 pytestmark = pytest.mark.contract
+
+
+def test_recorded_point_cadence_uses_declared_window_and_only_observed_times():
+    definition = (
+        _make_spec(model_clock="3h")
+        .indicators[0]
+        .observation.revised(aggregation="last")
+        .resolved(Duration("3h"))
+    )
+    times = [datetime(2020, 1, 1) + timedelta(hours=3 * index) for index in range(16)]
+    data = pl.DataFrame(
+        {
+            "indicator_id": [definition.id] * 16,
+            "value": [float(index % 5) for index in range(16)],
+            "anchor_time": times,
+            "support_start": times,
+            "support_end": times,
+        }
+    )
+    complete = profile_data(data, definitions=(definition,))
+    time_findings = {
+        item.code: item
+        for item in complete.indicators[definition.id].findings
+        if item.code in {"insufficient_coverage", "large_timestamp_gap"}
+    }
+    assert all(
+        isinstance(item, Evaluated) and item.outcome == "passed" for item in time_findings.values()
+    )
+    masked = data.with_columns(
+        pl.when(pl.int_range(pl.len()).is_between(4, 11))
+        .then(None)
+        .otherwise(pl.col("value"))
+        .alias("value")
+    )
+    sparse = profile_data(masked, definitions=(definition,))
+    gaps = [item for item in _all_issues(sparse) if item.code == "large_timestamp_gap"]
+    assert len(gaps) == 1
+    assert "27h" in gaps[0].evidence
 
 
 @pytest.fixture
