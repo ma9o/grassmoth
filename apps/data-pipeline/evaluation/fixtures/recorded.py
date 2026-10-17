@@ -184,9 +184,14 @@ def generate(recipe_path: Path, endpoint: str, workspace: str, output: Path) -> 
                 "simulation_revision": generated.commit_id,
                 "simulate_call_id": generated.call_id,
                 "hashes": {
-                    **{name: hashlib.sha256(payload).hexdigest() for name, payload in content.items()},
-                    **{name: hashlib.sha256((output / name).read_bytes()).hexdigest()
-                       for name in ("generated.csv", "observations.csv")},
+                    **{
+                        name: hashlib.sha256(payload).hexdigest()
+                        for name, payload in content.items()
+                    },
+                    **{
+                        name: hashlib.sha256((output / name).read_bytes()).hexdigest()
+                        for name in ("generated.csv", "observations.csv")
+                    },
                 },
                 "model_findings": truth.body.checks.model_dump(mode="json"),
                 "identification": truth.body.identification.model_dump(mode="json"),

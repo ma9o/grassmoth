@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 from jax.scipy.linalg import solve_triangular
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(frozen=True, eq=False)
@@ -107,7 +110,9 @@ class GaussianPathMap:
         _, (tail, determinants) = jax.lax.scan(
             advance, initial, jnp.arange(1, coordinates.shape[0])
         )
-        return jnp.concatenate((initial[None], tail)), initial_step.log_abs_det + determinants.sum()
+        return jnp.concatenate((initial[None], tail)), jnp.asarray(
+            initial_step.log_abs_det + jnp.sum(determinants)
+        )
 
     def encode(self, path: jax.Array) -> jax.Array:
         """Invert the recurrence on a valid scientific path, including its initial law."""

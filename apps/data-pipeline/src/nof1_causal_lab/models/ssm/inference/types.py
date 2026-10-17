@@ -10,8 +10,8 @@ if TYPE_CHECKING:
     from xarray import DataTree
 
     from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
-    from nof1_causal_lab.artifacts.joint_chart import JointChartRecord
     from nof1_causal_lab.artifacts.identity import ConstructId
+    from nof1_causal_lab.artifacts.joint_chart import JointChartRecord
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
     from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult

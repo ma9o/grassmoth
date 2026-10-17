@@ -18,7 +18,10 @@ from nof1_causal_lab.artifacts.joint_chart import (
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.sampling import JointChart
-    from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
+    from nof1_causal_lab.models.ssm.inference.targets.particle import (
+        ParticleContext,
+        ParticleTarget,
+    )
 
 
 @dataclass(frozen=True, eq=False)
@@ -60,9 +63,11 @@ class JointCoordinates:
             case InnovationChart():
                 return InnovationChartRecord()
             case MixedChart(centred_mask=mask):
-                return MixedChartRecord(centred_mask=tuple(
-                    tuple(bool(value) for value in row) for row in np.asarray(mask)
-                ))
+                return MixedChartRecord(
+                    centred_mask=tuple(
+                        tuple(bool(value) for value in row) for row in np.asarray(mask)
+                    )
+                )
 
     @property
     def parameter_dimension(self) -> int:
@@ -87,18 +92,20 @@ class JointCoordinates:
 
     def _unpack(self, position: jax.Array) -> tuple[jax.Array, jax.Array]:
         values = jnp.zeros(self.free_mask.size, dtype=position.dtype)
-        values = values.at[self.free_indices].set(position[self.parameter_dimension : self.dimension])
-        return self.parameter_center + position[: self.parameter_dimension], values.reshape(self.free_mask.shape)
+        values = values.at[self.free_indices].set(
+            position[self.parameter_dimension : self.dimension]
+        )
+        return self.parameter_center + position[: self.parameter_dimension], values.reshape(
+            self.free_mask.shape
+        )
 
-    def _path(
-        self, context: ParticleContext, values: jax.Array
-    ) -> tuple[jax.Array, jax.Array]:
+    def _path(self, context: ParticleContext, values: jax.Array) -> tuple[jax.Array, jax.Array]:
         match self.chart:
             case CentredChart(path_center=center, path_chol=chol):
                 path = center + jnp.einsum("tij,tj->ti", chol, values)
-                log_jacobian = jnp.sum(jnp.where(
-                    self.free_mask, jnp.log(jnp.diagonal(chol, axis1=-2, axis2=-1)), 0.0
-                ))
+                log_jacobian = jnp.sum(
+                    jnp.where(self.free_mask, jnp.log(jnp.diagonal(chol, axis1=-2, axis2=-1)), 0.0)
+                )
                 return self.target.replay_path(context, path), log_jacobian
             case InnovationChart() | MixedChart():
                 return self.target.innovation_map(context, self.innovation_mask).decode(values)
@@ -112,7 +119,9 @@ class JointCoordinates:
                 context = self.target.context(parameters, self.target.times)
                 path = self.target.replay_path(context, path)
                 values = self.target.innovation_map(context, self.innovation_mask).encode(path)
-        result = jnp.concatenate((parameters - self.parameter_center, values.ravel()[self.free_indices]))
+        result = jnp.concatenate(
+            (parameters - self.parameter_center, values.ravel()[self.free_indices])
+        )
         return result if self.dimension else jnp.zeros(1, dtype=parameters.dtype)
 
     def decode(self, position: jax.Array) -> tuple[jax.Array, jax.Array]:
@@ -132,11 +141,17 @@ class JointCoordinates:
         parameters, values = self._unpack(position)
         context = self.target.context(parameters, self.target.times)
         path, log_jacobian = self._path(context, values)
-        density = self.target.log_prior(parameters) + self.target.factor_log_prob(
-            context, path, self.target.observations
+        density = jnp.asarray(
+            self.target.log_prior(parameters)
+            + self.target.factor_log_prob(context, path, self.target.observations)
         )
         auxiliary = position[self.dimension :]
-        return density + log_jacobian - 0.5 * jnp.sum(auxiliary**2) - 0.5 * auxiliary.size * jnp.log(2 * jnp.pi)
+        return (
+            density
+            + log_jacobian
+            - 0.5 * jnp.sum(auxiliary**2)
+            - 0.5 * auxiliary.size * jnp.log(2 * jnp.pi)
+        )
 
 
 def build_joint_coordinates(
@@ -151,7 +166,9 @@ def build_joint_coordinates(
     if chart == "innovation":
         return JointCoordinates(target, position, free, indices, InnovationChart())
     if chart == "mixed":
-        return JointCoordinates(target, position, free, indices, MixedChart(free & target.point_reading_mask))
+        return JointCoordinates(
+            target, position, free, indices, MixedChart(free & target.point_reading_mask)
+        )
     context = target.context(position, target.times)
     initial_mean, initial_covariance = target.initial_moments(context)
     path = target.replay_path(
@@ -163,4 +180,6 @@ def build_joint_coordinates(
     covariance = jnp.concatenate((initial_covariance[None], transition_covariance))
     embedded = jnp.where(free[:, :, None] & free[:, None, :], covariance, 0.0)
     embedded = embedded + jax.vmap(jnp.diag)((~free).astype(path.dtype))
-    return JointCoordinates(target, position, free, indices, CentredChart(path, jnp.linalg.cholesky(embedded)))
+    return JointCoordinates(
+        target, position, free, indices, CentredChart(path, jnp.linalg.cholesky(embedded))
+    )

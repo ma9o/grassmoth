@@ -300,7 +300,10 @@ def fit_nuts_da(
     chart_record = run.checkpoint.tuning.chart
     if sampler.num_samples_per_chain == 0:
         return UnretainedRun(
-            sampler, MCMCEvidence(method="nuts_da"), run.compiled_step, run.phase_extra_fields,
+            sampler,
+            MCMCEvidence(method="nuts_da"),
+            run.compiled_step,
+            run.phase_extra_fields,
             chart=chart_record,
         )
     extra = run.phase_extra_fields["post_warmup"]

@@ -31,7 +31,9 @@ class MixedChartRecord(Value):
     @property
     def mask_identity(self) -> str:
         """Content identity of the actual mask, including its time and state dimensions."""
-        return hashlib.sha256(json.dumps(self.centred_mask, separators=(",", ":")).encode()).hexdigest()
+        return hashlib.sha256(
+            json.dumps(self.centred_mask, separators=(",", ":")).encode()
+        ).hexdigest()
 
     @computed_field
     @property

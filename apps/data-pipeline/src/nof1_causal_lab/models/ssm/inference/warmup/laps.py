@@ -86,7 +86,11 @@ def prepare_laps_initialization(
     assert isinstance(coordinates.chart, CentredChart)
     if not all(
         np.isfinite(np.asarray(value)).all()
-        for value in (coordinates.parameter_center, coordinates.chart.path_center, coordinates.chart.path_chol)
+        for value in (
+            coordinates.parameter_center,
+            coordinates.chart.path_center,
+            coordinates.chart.path_chol,
+        )
     ):
         return InitializationFailure.unavailable(
             "The native starting point has no finite LAPS coordinate scale"

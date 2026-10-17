@@ -50,9 +50,9 @@ from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import (
 from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from nof1_causal_lab.models.ssm.inference.warmup.laps import (
     LapsInitializationResult,
+    LapsInitializationTrace,
     prepare_laps_initialization,
 )
-from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationTrace
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:

@@ -7,13 +7,12 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
-from nof1_causal_lab.artifacts.joint_chart import CentredChartRecord
-
 import numpy as np
 import polars as pl
 import pytest
 
 from nof1_causal_lab.actions.fit import execution as stage5_inference
+from nof1_causal_lab.artifacts.joint_chart import CentredChartRecord
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
 from nof1_causal_lab.artifacts.sampling import SamplerSpec

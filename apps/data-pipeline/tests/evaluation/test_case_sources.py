@@ -115,12 +115,13 @@ def test_t512_mask_reproduces_committed_data_without_changing_support(tmp_path):
                 assert after[column] == value
 
 
-@pytest.mark.parametrize("variant", ("precise", "noisy"))
+@pytest.mark.parametrize("variant", ["precise", "noisy"])
 def test_dense_case_pins_sources_and_declares_only_sparse_value_masking(variant, tmp_path):
-    from evaluation.declarations import CaseRecipe
+    from evaluation.declarations import CaseRecipe, RecordedData
 
     root = Path(__file__).parents[2] / "evaluation/cases"
     recipe = CaseRecipe.model_validate_json((root / f"dense_{variant}.json").read_text())
+    assert isinstance(recipe.data, RecordedData)
     for source in (recipe.fit_model, *recipe.data.files, *recipe.data.provenance_files):
         read_source(source, root)
     assets = root / "assets/dense"
