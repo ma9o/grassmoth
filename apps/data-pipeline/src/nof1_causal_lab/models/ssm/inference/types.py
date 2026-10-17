@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from xarray import DataTree
 
     from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
+    from nof1_causal_lab.artifacts.joint_chart import JointChartRecord
     from nof1_causal_lab.artifacts.identity import ConstructId
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.models.ssm.inference.diagnostics.latent import LatentChainEvidence
@@ -86,6 +87,7 @@ class UnretainedRun:
     evidence: MCMCEvidence
     compiled_step: Compiled
     phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]]
+    chart: JointChartRecord | None = None
 
     def __post_init__(self) -> None:
         """Freeze telemetry at the execution boundary."""
@@ -98,6 +100,7 @@ class ProductionDiagnostics:
 
     mcmc: TrajectoryMCMCResult
     checkpoint: SamplerCheckpoint | None = None
+    chart: JointChartRecord | None = None
     observation_log_probs: jnp.ndarray
     latent_chains: LatentChainEvidence | None = None
     compiled_step: Compiled | None = None

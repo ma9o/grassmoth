@@ -735,6 +735,17 @@ export interface components {
             readonly warnings: readonly string[];
         };
         /**
+         * CentredChartRecord
+         * @description The original frozen affine chart, reconstructed from the pinned target and seed.
+         */
+        readonly CentredChartRecord: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "centred";
+        };
+        /**
          * ChainDiagnostics
          * @description Compact retained-chain measurements; plot series compose the report detail.
          */
@@ -4329,6 +4340,8 @@ export interface components {
             readonly runtime: components["schemas"]["FitRuntime"];
             /** Phases */
             readonly phases: readonly components["schemas"]["InferencePhase"][];
+            /** @default null */
+            readonly chart: components["schemas"]["JointChartRecord"] | null;
         };
         /**
          * FitSettingsSpec
@@ -4505,7 +4518,7 @@ export interface components {
              */
             readonly steps: number;
         };
-        readonly FrozenSamplerTuning: components["schemas"]["JointTuning"] | components["schemas"]["ParticleTuning"];
+        readonly FrozenSamplerTuning: components["schemas"]["JointTuning"] | components["schemas"]["ParticleTuning"] | components["schemas"]["TransferredTuning"];
         /** GammaLawSpec[Expression] */
         readonly "GammaLawSpec_Expression_-Output": {
             /**
@@ -4862,6 +4875,17 @@ export interface components {
         };
         readonly InitializationDiagnostics: components["schemas"]["LapsInitializationDiagnostics"] | components["schemas"]["ContinuedInitializationDiagnostics"];
         /**
+         * InnovationChartRecord
+         * @description Exact conditional innovations in every unpinned independent path coordinate.
+         */
+        readonly InnovationChartRecord: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "innovation";
+        };
+        /**
          * IntervalEffectTransformSpec
          * @description Divide an interval effect by its explicit duration in days.
          */
@@ -4906,6 +4930,7 @@ export interface components {
         };
         /** @enum {string} */
         readonly JointChart: "centred" | "innovation" | "mixed";
+        readonly JointChartRecord: components["schemas"]["CentredChartRecord"] | components["schemas"]["InnovationChartRecord"] | components["schemas"]["MixedChartRecord"];
         /**
          * JointLawLayout
          * @description An explicit law membership ordered independently of native tensor positions.
@@ -4945,6 +4970,7 @@ export interface components {
              * @enum {string}
              */
             readonly kind: "joint";
+            readonly chart: components["schemas"]["JointChartRecord"];
         };
         /** @description A JSON scalar transports a string, number, boolean, or null. */
         readonly JsonScalar: boolean | number | string | null;
@@ -5419,6 +5445,29 @@ export interface components {
              * @default 0.3
              */
             readonly target_accept_prob: number;
+        };
+        /**
+         * MixedChartRecord
+         * @description Centred free coordinates, in the full checkpoint path's time/state axis order.
+         */
+        readonly MixedChartRecord: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "mixed";
+            /** Centred Mask */
+            readonly centred_mask: readonly (readonly boolean[])[];
+            /**
+             * Mask Identity
+             * @description Content identity of the actual mask, including its time and state dimensions.
+             */
+            readonly mask_identity: string;
+            /**
+             * Equals Innovation
+             * @description Whether the available-reading policy selects no centred free coordinate.
+             */
+            readonly equals_innovation: boolean;
         };
         /**
          * MixedLawProvenance
@@ -7697,6 +7746,17 @@ export interface components {
              * @default null
              */
             readonly reasoning_tokens: number | null;
+        };
+        /**
+         * TransferredTuning
+         * @description Only scientific values transfer across kernels; warmup must prepare new tuning.
+         */
+        readonly TransferredTuning: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "transferred";
         };
         /**
          * UnknownLawProvenance

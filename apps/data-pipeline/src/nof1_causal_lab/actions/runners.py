@@ -22,7 +22,7 @@ from nof1_causal_lab.actions.contracts.requests import (
 )
 from nof1_causal_lab.actions.errors import ModelFitError
 from nof1_causal_lab.actions.fit.selection import fit_source, prior_fit
-from nof1_causal_lab.artifacts.continuation import JointTuning, sampler_identity
+from nof1_causal_lab.artifacts.continuation import TransferredTuning, sampler_identity
 from nof1_causal_lab.artifacts.sampling import InferenceHardware
 from nof1_causal_lab.artifacts.simulation import ModelSimulationResult
 from nof1_causal_lab.models.structure import StructuralSelection
@@ -87,10 +87,10 @@ def _fit_selected(
         if sampler_identity(sampler) != sampler_identity(continuation.settings):
             if sampler.num_warmup == 0:
                 raise ModelFitError(
-                    "Switching algorithm requires positive warmup",
+                    "Switching algorithm or joint chart requires positive warmup",
                     diagnostics={"code": "CONTINUATION_REQUIRES_WARMUP"},
                 )
-            continuation = continuation.revised(tuning=JointTuning())
+            continuation = continuation.revised(tuning=TransferredTuning())
     from nof1_causal_lab.actions.checks import check_model_data
     from nof1_causal_lab.artifacts.reports.checks import Evaluated
     from nof1_causal_lab.models.ssm.compile.inputs import compile_ssm_inputs_from_model

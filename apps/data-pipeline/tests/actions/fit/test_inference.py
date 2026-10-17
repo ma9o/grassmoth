@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
+from nof1_causal_lab.artifacts.joint_chart import CentredChartRecord
+
 import numpy as np
 import polars as pl
 import pytest
@@ -185,7 +187,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             paths=NumericalArray.from_numpy(np.asarray(paths.reshape(2, count, 2, -1)[:, -1])),
             random_key=NumericalArray.from_numpy(np.array([0, offset], dtype=np.uint32)),
             native_state=(),
-            tuning=JointTuning(),
+            tuning=JointTuning(chart=CentredChartRecord()),
         )
         return MCMCPosterior.from_run(
             draws=JointPosteriorDraws(parameters, paths),

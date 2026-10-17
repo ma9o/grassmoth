@@ -9,6 +9,13 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from nof1_causal_lab.artifacts.joint_chart import (
+    CentredChartRecord,
+    InnovationChartRecord,
+    JointChartRecord,
+    MixedChartRecord,
+)
+
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.sampling import JointChart
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
@@ -43,6 +50,19 @@ class JointCoordinates:
     free_mask: jax.Array
     free_indices: jax.Array
     chart: CentredChart | InnovationChart | MixedChart
+
+    @property
+    def record(self) -> JointChartRecord:
+        """Freeze native-coordinate provenance outside numerical tracing."""
+        match self.chart:
+            case CentredChart():
+                return CentredChartRecord()
+            case InnovationChart():
+                return InnovationChartRecord()
+            case MixedChart(centred_mask=mask):
+                return MixedChartRecord(centred_mask=tuple(
+                    tuple(bool(value) for value in row) for row in np.asarray(mask)
+                ))
 
     @property
     def parameter_dimension(self) -> int:

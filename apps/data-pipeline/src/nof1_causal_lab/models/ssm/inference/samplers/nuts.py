@@ -116,6 +116,13 @@ def run_nuts_da(
     options = sampler.algorithm
     assert isinstance(options, NutsDASpec)
     coordinates = build_joint_coordinates(target, options.chart)
+    chart_record = coordinates.record
+    if continuation is not None and sampler.num_warmup == 0:
+        tuning = continuation.tuning
+        if not isinstance(tuning, JointTuning) or tuning.chart != chart_record:
+            return InitializationFailure.unavailable(
+                "Changing joint chart or its compiled mask requires positive warmup"
+            )
     # Preserve identical scientific starts across charts, including the original
     # affine default. A fully fixed model retains one independent normal auxiliary.
     centred = build_joint_coordinates(target)
@@ -253,7 +260,7 @@ def run_nuts_da(
             paths=NumericalArray.from_numpy(np.asarray(last_paths)),
             random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(next_key))),
             native_state=retain_state(states),
-            tuning=JointTuning(),
+            tuning=JointTuning(chart=chart_record),
         ),
     )
 
@@ -289,9 +296,12 @@ def fit_nuts_da(
     )
     if isinstance(run, InitializationFailure):
         return run
+    assert isinstance(run.checkpoint.tuning, JointTuning)
+    chart_record = run.checkpoint.tuning.chart
     if sampler.num_samples_per_chain == 0:
         return UnretainedRun(
-            sampler, MCMCEvidence(method="nuts_da"), run.compiled_step, run.phase_extra_fields
+            sampler, MCMCEvidence(method="nuts_da"), run.compiled_step, run.phase_extra_fields,
+            chart=chart_record,
         )
     extra = run.phase_extra_fields["post_warmup"]
     mcmc = TrajectoryMCMCResult(
@@ -319,6 +329,7 @@ def fit_nuts_da(
         ),
         diagnostics=ProductionDiagnostics(
             checkpoint=run.checkpoint,
+            chart=chart_record,
             mcmc=mcmc,
             observation_log_probs=run.observation_log_probs,
             compiled_step=run.compiled_step,

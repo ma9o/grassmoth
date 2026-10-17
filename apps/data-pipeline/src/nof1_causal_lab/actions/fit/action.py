@@ -100,6 +100,7 @@ def fit(
         settings=sampler,
         runtime=runtime,
         phases=tuple(phases),
+        chart=result.chart if isinstance(result, UnretainedRun) else result.diagnostics.chart,
     )
     if isinstance(result, UnretainedRun):
         phase_fields = {
