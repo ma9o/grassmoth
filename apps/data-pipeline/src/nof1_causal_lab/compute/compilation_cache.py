@@ -124,7 +124,7 @@ def _program_structure(
 
 def _program_key(structure: bytes, examples: object) -> str:
     """Scope staged programs to source, dependencies, compiler settings and layout."""
-    leaves, tree = jax.tree.flatten(examples)
+    leaves = jax.tree.leaves(examples)
     layouts = tuple(
         (value.shape, str(value.dtype), bool(jax.typeof(value).weak_type)) for value in leaves
     )
@@ -145,7 +145,9 @@ def _program_key(structure: bytes, examples: object) -> str:
             )
         ),
         "layouts": layouts,
-        "tree": tree,
+        # prepare_program already prefixes structure with the serialized input
+        # tree. Re-pickling it here and for logging duplicates the most costly
+        # static traversal, even when shapes and programs are restored.
     }
     digest = hashlib.sha256(structure)
     digest.update(_program_bytes(tuple(components.values())))

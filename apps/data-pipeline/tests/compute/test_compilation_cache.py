@@ -128,6 +128,19 @@ def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp
     assert len(tuple(tmp_path.glob("nof1-program-*-cache"))) == 2
 
 
+def test_staged_key_keeps_input_tree_identity_with_identical_leaf_layouts(tmp_path):
+    from nof1_causal_lab.compute.compilation_cache import prepare_program
+
+    def identity(value):
+        return value
+
+    leaf = jax.ShapeDtypeStruct((2,), jnp.float32)
+    with local_compilation_cache(tmp_path, commit=lambda: None) as working:
+        for argument in ({"a": leaf}, {"b": leaf}, (leaf,), {"a": leaf}):
+            prepare_program(identity, argument)
+        assert len(tuple(working.glob("nof1-shapes-*-cache"))) == 3
+
+
 def _file(root, name, content, modified):
     path = root / name
     path.parent.mkdir(parents=True, exist_ok=True)
