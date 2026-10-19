@@ -12,6 +12,8 @@ from nof1_causal_lab.actions.fit.remote import (
     FitComputeInput,
     FitComputeResult,
     _dispatch_fit,
+    decode_fit_result,
+    encode_fit_result,
 )
 from nof1_causal_lab.artifacts.sampling import InferenceHardware, NutsDASpec, SamplerSpec
 
@@ -55,12 +57,12 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     )
     expected = FitComputeResult(b"fitted-model", b"evidence", "{}")
     remote = Mock()
-    remote.remote.return_value = expected
+    remote.remote.return_value = encode_fit_result(expected)
     app = Mock()
     app.function.return_value = lambda _function: remote
     app.run.return_value = nullcontext()
     monkeypatch.setattr(modal, "App", lambda _name: app)
-    assert _dispatch_fit(payload, hardware=hardware) is expected
+    assert _dispatch_fit(payload, hardware=hardware) == expected
     assert app.function.call_args.kwargs["gpu"] == hardware.value
     assert app.function.call_args.kwargs["timeout"] == time_limit
     assert app.function.call_args.kwargs["startup_timeout"] == time_limit
@@ -71,7 +73,7 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     assert app.function.call_args.kwargs["env"][FIT_CACHE_VOLUME_ENV] == "test-fit-cache"
     assert app.function.call_args.kwargs["env"]["JAX_COMPILATION_CACHE_DIR"].startswith("/tmp/")
     assert (
-        app.function.call_args.kwargs["env"]["JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS"] == "1.0"
+        app.function.call_args.kwargs["env"]["JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS"] == "0.0"
     )
     assert app.function.call_args.kwargs["volumes"] == {
         "/cache": isolated_cache_volume.return_value
@@ -102,3 +104,38 @@ def test_runtime_records_the_enforced_modal_limit():
     sampler = SamplerSpec(hardware="L40S", time_limit_seconds=90)
     assert fit_runtime(sampler).time_limit_seconds == 90
     assert fit_runtime(sampler.revised(hardware="local")).time_limit_seconds is None
+
+
+@pytest.mark.parametrize("model", [None, bytes(range(256)) * 1000])
+def test_fit_return_compression_preserves_all_bytes(model):
+    import pickle
+
+    expected = FitComputeResult(model, bytes(range(256)) * 2000, '{"message":"é"}')
+    frame = encode_fit_result(expected)
+    restored = decode_fit_result(frame)
+    assert restored == expected
+    assert pickle.dumps(restored, protocol=5) == pickle.dumps(expected, protocol=5)
+    assert len(frame) < len(expected.evidence) // 10
+
+
+def test_fit_return_rejects_corruption_and_sizes_before_decode(monkeypatch):
+    import pyarrow as pa
+
+    from nof1_causal_lab.actions.fit import remote
+
+    frame = encode_fit_result(FitComputeResult(b"model", b"evidence", "{}"))
+    corrupted = frame[:8] + bytes([frame[8] ^ 1]) + frame[9:]
+    with pytest.raises(ValueError, match="checksum"):
+        decode_fit_result(corrupted)
+    decompress = Mock(side_effect=AssertionError("Must reject before allocation"))
+    monkeypatch.setattr(pa, "decompress", decompress)
+    with pytest.raises(ValueError, match="decoded size bound"):
+        decode_fit_result((remote.FIT_RESULT_MAX_BYTES + 1).to_bytes(8, "big") + frame[8:])
+    with pytest.raises(ValueError, match="transport size"):
+        decode_fit_result(b"truncated")
+    monkeypatch.setattr(remote, "FIT_RESULT_MAX_BYTES", len(frame) - 1)
+    with pytest.raises(ValueError, match="transport size"):
+        decode_fit_result(frame)
+    with pytest.raises(ValueError, match="transport size bound"):
+        encode_fit_result(FitComputeResult(b"too large" * len(frame), b"", "{}"))
+    decompress.assert_not_called()
