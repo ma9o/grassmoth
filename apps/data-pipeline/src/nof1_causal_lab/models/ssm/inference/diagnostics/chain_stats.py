@@ -1,8 +1,6 @@
 """Bounded vectorization of the native ArviZ rank, split-chain and Geyer diagnostics."""
 
 import numpy as np
-from arviz_stats.base.array import array_stats
-from arviz_stats.validate import validate_ci_prob
 from numpy.typing import NDArray
 from scipy import stats
 
@@ -27,6 +25,8 @@ def _rhat(values: NDArray) -> NDArray:
 
 def _ess(values: NDArray) -> NDArray:
     """Reduce all lags together, preserving ArviZ's terminal-even-lag convention."""
+    from arviz_stats.base.array import array_stats
+
     values = np.asarray(values, dtype=float)
     chains, draws = values.shape[-2:]
     acov = array_stats.autocov(values, axis=-1).mean(axis=-2)
@@ -87,6 +87,8 @@ def chain_statistics(samples: NDArray) -> NDArray:
     coordinates enter a batch; no chain or draw is thinned. The definitions and
     short-chain behavior match arviz-stats' native sampling diagnostics.
     """
+    from arviz_stats.validate import validate_ci_prob
+
     if samples.shape[0] < 1 or samples.shape[1] < 4:
         return np.full((samples.shape[-1], 4), np.nan)
     # The xarray diagnostics resolve omitted tail probabilities through ArviZ's

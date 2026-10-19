@@ -6,7 +6,6 @@ from collections.abc import Iterator, Mapping, Sequence
 from typing import TYPE_CHECKING
 
 import numpy as np
-from arviz_stats.base.array import array_stats
 
 from nof1_causal_lab.artifacts.identity import ParameterRef
 from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
@@ -63,6 +62,8 @@ def build_rank_histograms(
     chain_samples: Mapping[str, jnp.ndarray], references: ParameterReferences, n_bins: int = 20
 ) -> tuple[RankHistogram, ...]:
     """Build per-chain pooled-rank histograms for coordinates with scientific parameter references."""
+    from arviz_stats.base.array import array_stats
+
     histograms = []
     for coordinate, values in sample_coordinates(chain_samples, sample_dims=2):
         reference = references[coordinate]
@@ -91,6 +92,8 @@ def build_rank_histograms(
 
 
 def _density_histogram(values: NDArray, n_bins: int) -> DensityCurve:
+    from arviz_stats.base.array import array_stats
+
     v_min, v_max = float(np.min(values)), float(np.max(values))
     padding = (v_max - v_min) * HIST_PADDING_RATIO if v_max > v_min else HIST_PADDING_DEFAULT
     density, edges = array_stats.histogram(
@@ -106,6 +109,8 @@ def param_marginal(
     parameter: str, subject: ParameterRef, values: jnp.ndarray, n_bins: int = 50
 ) -> PosteriorMarginal:
     """Summarize scalar posterior draws with a density histogram, moments, and a 94% HDI."""
+    from arviz_stats.base.array import array_stats
+
     draws = np.asarray(values)
     histogram = _density_histogram(draws, n_bins)
     low, high = array_stats.hdi(draws, prob=0.94, axis=-1)
@@ -125,6 +130,8 @@ def param_marginal(
 
 def build_energy_diagnostics(energy: jnp.ndarray, n_bins: int = 40) -> EnergyDiagnostics:
     """Summarize per-chain energy and consecutive energy changes, including each chain's BFMI."""
+    from arviz_stats.base.array import array_stats
+
     chains = np.atleast_2d(np.asarray(energy))
     transitions = np.diff(chains, axis=1)
     return EnergyDiagnostics(
