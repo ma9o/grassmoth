@@ -219,21 +219,19 @@ def build_joint_coordinates(
         return JointCoordinates(
             target, position, free, indices, MixedParameterization(free & target.point_reading_mask)
         )
-    context = target.context(position, target.times)
-    initial_mean, initial_covariance = target.initial_moments(context)
-    path = target.replay_path(
-        context, jnp.broadcast_to(initial_mean, (target.times.size, initial_mean.size))
-    )
-    transition_covariance = jax.vmap(
-        lambda previous, index: target.transition_moments(context, previous, index)[1]
-    )(path[:-1], jnp.arange(1, target.times.size))
-    covariance = jnp.concatenate((initial_covariance[None], transition_covariance))
-    embedded = jnp.where(free[:, :, None] & free[:, None, :], covariance, 0.0)
-    embedded = embedded + jax.vmap(jnp.diag)((~free).astype(path.dtype))
-    return JointCoordinates(
-        target,
-        position,
-        free,
-        indices,
-        CentredParameterization(path, jnp.linalg.cholesky(embedded)),
-    )
+
+    def affine_chart(parameters: jax.Array) -> CentredParameterization:
+        context = target.context(parameters, target.times)
+        initial_mean, initial_covariance = target.initial_moments(context)
+        path = target.replay_path(
+            context, jnp.broadcast_to(initial_mean, (target.times.size, initial_mean.size))
+        )
+        transition_covariance = jax.vmap(
+            lambda previous, index: target.transition_moments(context, previous, index)[1]
+        )(path[:-1], jnp.arange(1, target.times.size))
+        covariance = jnp.concatenate((initial_covariance[None], transition_covariance))
+        embedded = jnp.where(free[:, :, None] & free[:, None, :], covariance, 0.0)
+        embedded = embedded + jax.vmap(jnp.diag)((~free).astype(path.dtype))
+        return CentredParameterization(path, jnp.linalg.cholesky(embedded))
+
+    return JointCoordinates(target, position, free, indices, jax.jit(affine_chart)(position))

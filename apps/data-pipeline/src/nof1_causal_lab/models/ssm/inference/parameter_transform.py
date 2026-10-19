@@ -28,12 +28,15 @@ def prepare_parameter_transform(
 ) -> ParameterTransform:
     """Keep conditional priors, factors, transforms, and Jacobians in NumPyro."""
     info, potential, postprocess, _ = initialize_model(
-        key,
+        # A singleton key batch stages NumPyro's initial density and gradient
+        # validation together; its single-key path executes the first try eagerly.
+        key[None],
         prior_model,
         model_args=model_args,
         init_strategy=init_to_value(values=initial_values),
     )
-    initial, unravel = ravel_pytree(info.z)
+    position = jax.tree.map(lambda value: value[0], info.z)
+    initial, unravel = ravel_pytree(position)
     return ParameterTransform(
         initial,
         unravel,

@@ -80,18 +80,29 @@ def prepare_particle_initialization(
         coordinates = build_joint_coordinates(target, "centred")
         assert isinstance(coordinates.parameterization, CentredParameterization)
 
-        def draw(chart: JointChart, draw_key: jax.Array) -> tuple[jax.Array, jax.Array]:
+        def draw(
+            chart: JointChart, draw_key: jax.Array
+        ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
             points = spec.scale * jax.random.normal(
                 draw_key, (num_chains, max(1, coordinates.dimension))
             )
-            return jax.vmap(coordinates.bind(chart).decode)(points)
+            positions, paths = jax.vmap(coordinates.bind(chart).decode)(points)
+            return (
+                positions,
+                paths,
+                spec.scale * jnp.eye(coordinates.parameter_dimension, dtype=positions.dtype),
+                jnp.mean(paths, axis=0),
+                jnp.var(paths, axis=0),
+            )
 
         compiled = jax.jit(draw).lower(coordinates.chart, key).compile()
         if not compute_budget.capacity(compiled_memory(compiled), limit=1):
             raise MemoryError(
                 "Gaussian initialization exceeds the numerical execution memory budget"
             )
-        positions, paths = compiled(coordinates.chart, key)
+        positions, paths, parameter_chol, pilot_mean, pilot_variance = compiled(
+            coordinates.chart, key
+        )
         if not all(np.isfinite(np.asarray(value)).all() for value in (positions, paths)):
             return InitializationFailure.unavailable(
                 "The Gaussian initializer produced non-finite starting coordinates"
@@ -99,10 +110,9 @@ def prepare_particle_initialization(
         return ParticleInitialization(
             positions=positions,
             paths=paths,
-            parameter_chol=spec.scale
-            * jnp.eye(coordinates.parameter_dimension, dtype=positions.dtype),
-            pilot_mean=jnp.mean(paths, axis=0),
-            pilot_variance=jnp.var(paths, axis=0),
+            parameter_chol=parameter_chol,
+            pilot_mean=pilot_mean,
+            pilot_variance=pilot_variance,
             diagnostics=GaussianInitializationDiagnostics(
                 joint_dimension=coordinates.dimension, scale=spec.scale
             ),

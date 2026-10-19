@@ -75,24 +75,29 @@ def _discover_sites(
     )
     if reparam is not None:
         model_fn = handlers.reparam(model_fn, config=reparam)
-    with handlers.seed(rng_seed=rng_key):
-        trace = handlers.trace(model_fn).get_trace()
 
-    site_info: dict[str, SiteInfoEntry] = {}
-    for name, site in trace.items():
-        if (
-            site["type"] == "sample"
+    def draw_sites(key: jax.Array) -> dict[str, tuple[dist.Distribution, jax.Array]]:
+        with handlers.seed(rng_seed=key):
+            trace = handlers.trace(model_fn).get_trace()
+        return {
+            name: (site["fn"], site["value"])
+            for name, site in trace.items()
+            if site["type"] == "sample"
             and not site.get("is_observed", False)
             and name not in INTERNAL_DIAGNOSTIC_SITES
-        ):
-            d = site["fn"]
-            site_info[name] = SiteInfoEntry(
-                shape=site["value"].shape,
-                distribution=d,
-                transform=dist.transforms.biject_to(d.support),
-                value=site["value"],
+        }
+
+    return MappingProxyType(
+        {
+            name: SiteInfoEntry(
+                shape=value.shape,
+                distribution=distribution,
+                transform=dist.transforms.biject_to(distribution.support),
+                value=value,
             )
-    return MappingProxyType(site_info)
+            for name, (distribution, value) in jax.jit(draw_sites)(rng_key).items()
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -135,4 +140,9 @@ def extract_constrained_samples(
     public_sites: Set[str],
 ) -> dict[str, jnp.ndarray]:
     """Replay the prior program and retain its authored parameter/deterministic sites."""
-    return _filter_public_samples(jax.vmap(parameters.constrain)(particles), public_sites)
+    constrained: dict[str, jnp.ndarray] = jax.jit(
+        lambda positions: _filter_public_samples(
+            jax.vmap(parameters.constrain)(positions), public_sites
+        )
+    )(particles)
+    return constrained

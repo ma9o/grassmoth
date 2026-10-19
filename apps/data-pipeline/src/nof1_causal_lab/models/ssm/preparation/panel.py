@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import jax
 import jax.numpy as jnp
 import numpy as np
 import polars as pl
@@ -28,7 +29,6 @@ if TYPE_CHECKING:
     from collections.abc import Sequence
     from datetime import datetime
 
-    import jax
     import pyarrow as pa
 
     from nof1_causal_lab.artifacts.identity import IndicatorId
@@ -288,11 +288,12 @@ def bind_panel(
         response = input_values[
             :, jnp.asarray([item.state_index for item in compiled_dynamical_model.observations])
         ]
-        expected, _ = operator.project_response_trajectory(response)
+        expected, _ = jax.jit(operator.project_response_trajectory)(response)
+        recorded_values, expected_values = np.asarray(values), np.asarray(expected)
         for channel in channels:
-            recorded = np.asarray(values[:, channel])
+            recorded = recorded_values[:, channel]
             consistent = np.isnan(recorded) | np.isclose(
-                recorded, np.asarray(expected[:, channel]), rtol=1e-6, atol=1e-6
+                recorded, expected_values[:, channel], rtol=1e-6, atol=1e-6
             )
             if not consistent.all():
                 return PanelPreparationFailure(

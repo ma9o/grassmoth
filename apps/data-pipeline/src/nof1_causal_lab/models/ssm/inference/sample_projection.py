@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 import logging
 from typing import TYPE_CHECKING
 
+import jax
 from numpyro import handlers
 
 from nof1_causal_lab.models.ssm.constants import INTERNAL_DIAGNOSTIC_SITES
@@ -36,14 +37,19 @@ def _trace_public_sites(
     if exclude is not None:
         excluded.update(exclude)
 
-    with handlers.seed(rng_seed=0):
-        trace: dict[str, Message] = handlers.trace(model_fn).get_trace()
+    def public_values() -> dict[str, jax.Array]:
+        with handlers.seed(rng_seed=0):
+            trace: dict[str, Message] = handlers.trace(model_fn).get_trace()
+        return {
+            name: site["value"]
+            for name, site in trace.items()
+            if site["type"] == "sample"
+            and not site.get("is_observed", False)
+            and name not in excluded
+        }
 
-    return frozenset(
-        name
-        for name, site in trace.items()
-        if site["type"] == "sample" and not site.get("is_observed", False) and name not in excluded
-    )
+    shapes: dict[str, jax.ShapeDtypeStruct] = jax.eval_shape(public_values)
+    return frozenset(shapes)
 
 
 def _filter_public_samples(

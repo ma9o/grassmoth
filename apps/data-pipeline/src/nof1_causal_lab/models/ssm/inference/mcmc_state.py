@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple
 
-import jax
 import jax.numpy as jnp
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
@@ -154,10 +153,3 @@ def _clip_dual_averaging_state(
         log_step_size_avg=_clip_log_value(da_state.log_step_size_avg),
         mu=_clip_log_value(da_state.mu),
     )
-
-
-def _stack_chain_states(states: list[TrajectoryMCMCState]) -> TrajectoryMCMCState:
-    stacked: TrajectoryMCMCState = jax.tree_util.tree_map(
-        lambda *values: jnp.stack(values, axis=0), *states
-    )
-    return stacked

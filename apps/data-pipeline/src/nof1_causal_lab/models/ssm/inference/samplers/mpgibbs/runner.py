@@ -25,7 +25,6 @@ from nof1_causal_lab.models.ssm.inference.mcmc_state import (
     _clip_dual_averaging_state,
     _clip_scale,
     _latent_summary_from_chain_moments,
-    _stack_chain_states,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.tempering import (
     ExchangeRecord,
@@ -233,10 +232,10 @@ def run_marginal_particle_gibbs(
         jnp.asarray(initial_latent_delta_value, dtype=observations.dtype),
     )
     with inference_phase("mpgibbs", "initializing_chains", clock=clock):
-        states = _stack_chain_states(
-            [
-                _initialize_chain_state(
-                    chain_init_positions[chain_idx],
+        states = jax.jit(
+            jax.vmap(
+                lambda position, path: _initialize_chain_state(
+                    position,
                     observations=observations,
                     times=times,
                     target=target,
@@ -247,11 +246,10 @@ def run_marginal_particle_gibbs(
                     param_min_scale=kernel.min_scale,
                     param_max_scale=kernel.max_scale,
                     param_target_accept=kernel.target_accept,
-                    initial_latent_trajectory=chain_initial_latents[chain_idx],
+                    initial_latent_trajectory=path,
                 )
-                for chain_idx in range(num_chains)
-            ]
-        )
+            )
+        )(chain_init_positions, chain_initial_latents)
         jax.block_until_ready(states)
     nonfinite_chains = [
         chain_idx
