@@ -10,7 +10,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const client = createModelClient();
 export function journalPollIntervalMs(active: boolean): number {
-  return active ? 2_000 : 10_000;
+  return active ? 500 : 10_000;
 }
 
 /** The slim call log and the call currently executing; scientific results are read by replay. */
