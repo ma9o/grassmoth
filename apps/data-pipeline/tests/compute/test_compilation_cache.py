@@ -348,9 +348,9 @@ def test_topology_writers_keep_separate_binaries_and_share_staged_artifacts(tmp_
     assert snapshots == {
         path.name: path.read_bytes() for path in (tmp_path / "namespace").iterdir()
     }
-    previous_limit = 400 * 1024**2 + 256 * 1024 + 193 * 1024 + 10240
+    archive_limit = 400 * 1024**2 + 256 * 1024 + 529 * 1024 + 10240
     assert (
-        sum(FIT_CACHE_POLICY.archive_bytes(p) for p in ("shared", "accelerator")) <= previous_limit
+        sum(FIT_CACHE_POLICY.archive_bytes(p) for p in ("shared", "accelerator")) <= archive_limit
     )
 
 

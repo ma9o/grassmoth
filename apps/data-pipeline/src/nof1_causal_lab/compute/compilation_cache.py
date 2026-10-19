@@ -363,10 +363,10 @@ class CachePolicy(Value):
         )
 
 
-FIT_CACHE_MIN_COMPILE_SECONDS = 1.0
+FIT_CACHE_MIN_COMPILE_SECONDS = 0.0
 FIT_CACHE_POLICY = CachePolicy(
     staged=CacheLimit(files=16, bytes=64 * 1024**2),
-    executables=CacheLimit(files=48, bytes=192 * 1024**2),
+    executables=CacheLimit(files=384, bytes=192 * 1024**2),
     autotune=CacheLimit(files=128, bytes=16 * 1024**2),
     kernels=CacheLimit(files=1, bytes=128 * 1024**2),
 )
