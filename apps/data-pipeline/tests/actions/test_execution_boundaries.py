@@ -96,8 +96,20 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
         assert store.read_result(result_ref, EditModelOutput) == output
 
 
-def test_incomplete_model_is_rejected_before_inference(workspace, monkeypatch):
+def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monkeypatch):
+    from threading import get_ident
+
     from nof1_causal_lab.actions.fit import action as flow
+    from nof1_causal_lab.study.persistence import store as store_module
+
+    event_loop_thread = get_ident()
+    read_model = store_module.read_model
+
+    def read_model_off_loop(*args, **kwargs):
+        assert get_ident() != event_loop_thread
+        return read_model(*args, **kwargs)
+
+    monkeypatch.setattr(store_module, "read_model", read_model_off_loop)
 
     local = Mock()
     monkeypatch.setattr(flow, "fit", local)

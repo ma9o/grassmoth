@@ -228,15 +228,15 @@ def _pinned(store: ArtifactStore, selected: dict[ArtifactId, GitOid]) -> dict[Ar
     return dict(selected)
 
 
-async def run_action(
+def _pin_action_inputs(
     workspace_id: str,
     request: FitRequest[GitOid]
     | SimulateRequest[GitOid]
     | DataDiffRequest[GitOid]
     | ModelDiffRequest[GitOid],
     state: StudyState,
-) -> Applied[InferenceEvidence] | Applied[ModelSimulationResult] | Applied[None]:
-    """Pin a request's inputs and run it against the local study store."""
+) -> dict[ArtifactId, GitOid]:
+    """Resolve and compile selected inputs on the same blocking execution boundary."""
     store = ArtifactStore(workspace_id)
     if isinstance(request, FitRequest):
         pins = _pinned(
@@ -264,4 +264,17 @@ async def run_action(
         )
     else:
         pins = {}
+    return pins
+
+
+async def run_action(
+    workspace_id: str,
+    request: FitRequest[GitOid]
+    | SimulateRequest[GitOid]
+    | DataDiffRequest[GitOid]
+    | ModelDiffRequest[GitOid],
+    state: StudyState,
+) -> Applied[InferenceEvidence] | Applied[ModelSimulationResult] | Applied[None]:
+    """Pin and compile inputs off the activity event loop, then execute the action."""
+    pins = await asyncio.to_thread(_pin_action_inputs, workspace_id, request, state)
     return await run_action_locally(workspace_id, request, pins)

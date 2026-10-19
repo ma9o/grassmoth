@@ -29,6 +29,7 @@ from nof1_causal_lab.study.persistence.git_objects import (
     open_repository,
     read_blob,
     read_file,
+    write_blob,
     write_tree,
 )
 from nof1_causal_lab.study.state import ArtifactRecord, ArtifactResult
@@ -115,7 +116,7 @@ class ArtifactStore:
         """Store the exact public result, including display values evaluated during execution."""
         from nof1_causal_lab.study.persistence.codec import pack_result
 
-        return GitOid(str(self.repo.create_blob(pack_result(result, array_loader=self.read_array))))
+        return GitOid(str(write_blob(self.repo, pack_result(result, array_loader=self.read_array))))
 
     def read_result[ResultT: BaseModel](self, revision: GitOid, target: type[ResultT]) -> ResultT:
         """Restore a saved MessagePack body using its action-owned schema."""
@@ -132,7 +133,7 @@ class ArtifactStore:
         """Retain the computed report as a Git blob for the action's publication."""
         from nof1_causal_lab.study.persistence.codec import pack_result
 
-        return GitOid(str(self.repo.create_blob(pack_result(report, array_loader=self.read_array))))
+        return GitOid(str(write_blob(self.repo, pack_result(report, array_loader=self.read_array))))
 
     def read_report[ReportT: BaseModel](self, revision: GitOid, target: type[ReportT]) -> ReportT:
         """Parse a retained Git report blob with the caller's expected report schema."""
@@ -200,7 +201,7 @@ class ArtifactStore:
         tree = self.repo.TreeBuilder()
         tree.insert(
             "meta.json",
-            self.repo.create_blob(json.dumps(metadata, sort_keys=True).encode()),
+            write_blob(self.repo, json.dumps(metadata, sort_keys=True).encode()),
             pygit2.GIT_FILEMODE_BLOB,
         )
         tree.insert("result.msgpack", pygit2.Oid(hex=result), pygit2.GIT_FILEMODE_BLOB)

@@ -1,5 +1,6 @@
 """Local Git object storage shared by scientific payloads and study commits."""
 
+import subprocess
 from pathlib import Path
 
 import pygit2
@@ -35,6 +36,22 @@ def open_repository(workspace_id: str, path: Path | None = None) -> pygit2.Repos
     return repository
 
 
+def write_blob(repository: pygit2.Repository, payload: bytes) -> pygit2.Oid:
+    """Write identical Git objects without holding the worker GIL during compression.
+
+    libgit2's Python blob writer retains the GIL for the whole compression,
+    starving concurrent Temporal activations even from an activity thread.
+    The Git process owns that CPU work; the caller retains its publication order.
+    """
+    written = subprocess.run(
+        ["git", "--git-dir", repository.path, "hash-object", "-w", "--stdin"],
+        input=payload,
+        capture_output=True,
+        check=True,
+    )
+    return pygit2.Oid(hex=written.stdout.decode().strip())
+
+
 def write_tree(repository: pygit2.Repository, files: dict[str, bytes]) -> pygit2.Oid:
     """Write path-keyed bytes as nested Git trees and return the root tree identity."""
     builder = repository.TreeBuilder()
@@ -44,7 +61,7 @@ def write_tree(repository: pygit2.Repository, files: dict[str, bytes]) -> pygit2
         if separator:
             directories.setdefault(directory, {})[rest] = content
         else:
-            builder.insert(name, repository.create_blob(content), pygit2.GIT_FILEMODE_BLOB)
+            builder.insert(name, write_blob(repository, content), pygit2.GIT_FILEMODE_BLOB)
     for name, children in directories.items():
         builder.insert(name, write_tree(repository, children), pygit2.GIT_FILEMODE_TREE)
     oid: pygit2.Oid = builder.write()
