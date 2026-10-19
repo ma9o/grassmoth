@@ -28,6 +28,7 @@ if TYPE_CHECKING:
         CompiledObservationPartition,
     )
     from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
+    from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
     from nof1_causal_lab.models.ssm.inference.conditioning import ExactStateConstraints
     from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
     from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
@@ -68,19 +69,23 @@ class ParticleTarget:
         """Keep replay-independent observations in the exact intermediate tree target."""
         if not self.state_space.requires_replay:
             return self
-        channels = jnp.asarray(self.observation_partition.local, dtype=jnp.int32)
+        return replace(
+            self._select_observations(self.observation_partition.local),
+            state_projection=self.fixed_recurrences,
+        )
+
+    def _select_observations(self, channels: tuple[int, ...]) -> ParticleTarget:
+        """Bind only the selected factors and their required interval statistics."""
+        selected = jnp.asarray(channels, dtype=jnp.int32)
         observations = (
             jnp.full_like(self.observations, jnp.nan)
-            .at[:, channels]
-            .set(self.observations[:, channels])
+            .at[:, selected]
+            .set(self.observations[:, selected])
         )
         return replace(
             self,
             observations=observations,
-            state_projection=self.fixed_recurrences,
-            intervals=None
-            if self.intervals is None
-            else self.intervals.select_channels(self.observation_partition.local),
+            intervals=None if self.intervals is None else self.intervals.select_channels(channels),
         )
 
     def replay_correction(
@@ -94,15 +99,26 @@ class ParticleTarget:
             context, path
         )
         if self.observation_partition.replayed:
-            channels = jnp.asarray(self.observation_partition.replayed, dtype=jnp.int32)
-            observations = (
-                jnp.full_like(self.observations, jnp.nan)
-                .at[:, channels]
-                .set(self.observations[:, channels])
-            )
-            correction = correction + jnp.sum(
-                self.observation_log_probs(context, replayed, observations)
-            )
+            deferred = self._select_observations(self.observation_partition.replayed)
+            if deferred.intervals is None:
+                channels = self.observation_partition.replayed
+                observation = cast(
+                    "HeterogeneousObservation", self.dynamical_model(context).observation_model
+                ).select_channels(channels)
+                readings = self.observations[:, jnp.asarray(channels, dtype=jnp.int32)]
+
+                def point_density(state: jax.Array, reading: jax.Array) -> jax.Array:
+                    def exact() -> jax.Array:
+                        return observation(self.project_state(context, state), None, 0).log_prob(
+                            reading
+                        )
+
+                    return exact() if self.bridge is None else self.bridge.observation(exact)
+
+                densities = jax.vmap(point_density)(replayed, readings)
+            else:
+                densities = deferred.observation_log_probs(context, replayed, deferred.observations)
+            correction = correction + jnp.sum(densities)
         return jnp.asarray(correction)
 
     def project_state(self, context: ParticleContext, state: jax.Array) -> jax.Array:

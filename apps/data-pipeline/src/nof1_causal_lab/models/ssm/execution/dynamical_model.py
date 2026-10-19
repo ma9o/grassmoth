@@ -70,6 +70,19 @@ class HeterogeneousObservation(dsx.ObservationModel):
         del u, t
         return self.at_predictor(self.linear_predictor(x))
 
+    def select_channels(self, channels: tuple[int, ...]) -> HeterogeneousObservation:
+        """Marginalize unselected channels before building their exact density programs."""
+        indices = jnp.asarray(channels, dtype=jnp.int32)
+        measurement = self.measurement
+        return HeterogeneousObservation(
+            MeasurementParams(
+                measurement.lambda_mat[indices],
+                measurement.manifest_means[indices],
+                measurement.manifest_cov[jnp.ix_(indices, indices)],
+            ),
+            tuple(self.laws[index] for index in channels),
+        )
+
     def linear_predictor(self, state: jax.Array) -> jax.Array:
         """Map latent states to observation predictors through loadings and manifest intercepts."""
         return self.measurement.lambda_mat @ state + self.measurement.manifest_means

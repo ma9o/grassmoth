@@ -149,6 +149,35 @@ def test_observation_model_keeps_partial_and_complete_missingness(runtime):
 
 
 @pytest.mark.inference(concern="sampling")
+def test_selected_observation_channels_preserve_marginal_density_and_gradients():
+    from nof1_causal_lab.models.ssm.execution.contracts import MeasurementParams
+    from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
+    from tests.support.observation import observation_laws
+
+    covariance = jnp.array(
+        [[1.2, 0.2, 0.3, 0.0], [0.2, 0.9, -0.1, 0.0], [0.3, -0.1, 1.4, 0.0], [0.0, 0.0, 0.0, 1.0]]
+    )
+    observation = HeterogeneousObservation(
+        MeasurementParams(jnp.eye(4), jnp.arange(4.0) / 10, covariance),
+        observation_laws((DistributionFamily.GAUSSIAN,) * 3 + (DistributionFamily.POISSON,)),
+    )
+    channels = (2, 0, 3)
+    selected = observation.select_channels(channels)
+    values = jnp.array([[0.3, jnp.nan, 1.2, 3.0], [jnp.nan, jnp.nan, 0.5, jnp.nan]])
+    state = jnp.array([0.2, -0.1, 1.4, 0.7])
+
+    def score(model, readings, x):
+        return jnp.sum(jax.vmap(lambda row: model(x, None, 0).log_prob(row))(readings))
+
+    expected = jax.jit(jax.value_and_grad(lambda x: score(observation, values, x)))(state)
+    actual = jax.jit(
+        jax.value_and_grad(lambda x: score(selected, values[:, jnp.asarray(channels)], x))
+    )(state)
+    for measured, reference in zip(actual, expected, strict=True):
+        np.testing.assert_allclose(measured, reference, rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.inference(concern="sampling")
 @pytest.mark.inference(concern="predictive")
 def test_native_discrete_law_samples_categories_from_predictors():
     from nof1_causal_lab.models.ssm.execution.contracts import MeasurementParams
