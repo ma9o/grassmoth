@@ -19,6 +19,7 @@ from nof1_causal_lab.artifacts.sampling import (
     ConditionalNutsSpec,
     DsmcSpec,
     FixedLatentStepSpec,
+    GaussianInitializationSpec,
     LapsInitializationSpec,
     MarginalParticleGibbsSpec,
     MetropolisHastingsSpec,
@@ -156,7 +157,7 @@ def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method, retain_p
                 if method == "mh"
                 else ConditionalNutsSpec(max_tree_depth=3, initial_step_size=0.01),
                 dsmc=DsmcSpec(),
-                laps=LapsInitializationSpec(
+                initialization=LapsInitializationSpec(
                     ensemble_size=32, num_unadjusted_steps=100, num_adjusted_steps=5
                 ),
             ),
@@ -208,19 +209,25 @@ def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method, retain_p
 
 
 @pytest.mark.parametrize("method", ["mh", "nuts", "marginal"])
-def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(method):
+@pytest.mark.parametrize("initializer", ["laps", "gaussian"])
+@pytest.mark.inference(concern="warmup")
+def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(
+    method, initializer
+):
     prepared, panel = _nonlinear_fixture()
-    initialization = LapsInitializationSpec(
-        ensemble_size=32, num_unadjusted_steps=100, num_adjusted_steps=5
+    initialization = (
+        LapsInitializationSpec(ensemble_size=32, num_unadjusted_steps=100, num_adjusted_steps=5)
+        if initializer == "laps"
+        else GaussianInitializationSpec()
     )
     algorithm = (
-        MarginalParticleGibbsSpec(laps=initialization)
+        MarginalParticleGibbsSpec(initialization=initialization)
         if method == "marginal"
         else ParticleGibbsSpec(
             parameter_kernel=MetropolisHastingsSpec()
             if method == "mh"
             else ConditionalNutsSpec(max_tree_depth=3, initial_step_size=0.01),
-            laps=initialization,
+            initialization=initialization,
         )
     )
     settings = SamplerSpec(
@@ -247,6 +254,7 @@ def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundt
         return result
 
     full = run(settings)
+    assert full.diagnostics.sampler_diagnostics.initialization.source == initializer
     first = run(settings.revised(num_samples_per_chain=2))
     checkpoint = SamplerCheckpoint.model_validate(
         unpack_result(pack_result(first.diagnostics.checkpoint))

@@ -22,8 +22,8 @@ from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_c
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
 from nof1_causal_lab.models.ssm.inference.warmup import laps_ensemble
-from nof1_causal_lab.models.ssm.inference.warmup.laps import (
-    LapsInitializationResult,
+from nof1_causal_lab.models.ssm.inference.warmup.initialization import (
+    ParticleInitialization,
     prepare_laps_initialization,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import run_laps_ensemble
@@ -134,7 +134,7 @@ def test_laps_ensemble_recovers_analytic_joint_moments_with_paired_paths():
         num_chains=1024,
         compute_budget=COMPUTE_BUDGET,
     )
-    assert isinstance(result, LapsInitializationResult)
+    assert isinstance(result, ParticleInitialization)
     joint = np.concatenate((result.positions, result.paths[:, :, 0]), axis=1)
     whitened = np.linalg.solve(np.linalg.cholesky(covariance), (joint - mean).T).T
     np.testing.assert_allclose(whitened.mean(axis=0), 0, atol=0.15)
@@ -213,7 +213,7 @@ def test_production_fit_consumes_laps_package(leaf):
             retain_latent_paths=leaf == "amala_plus",
             algorithm=MarginalParticleGibbsSpec(
                 diagnostic_metrics_all=leaf == "amala_plus",
-                laps=LapsInitializationSpec(
+                initialization=LapsInitializationSpec(
                     ensemble_size=128, num_unadjusted_steps=1000, num_adjusted_steps=20
                 ),
                 dsmc=DsmcSpec(drift=leaf),

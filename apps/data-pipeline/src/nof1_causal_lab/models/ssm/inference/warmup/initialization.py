@@ -1,10 +1,4 @@
-"""LAPS initialization of the exact joint parameter and latent-path density.
-
-A frozen affine coordinate change scales the free path coordinates before LAPS runs.
-It changes coordinates, never the target: every score uses the production joint
-density, with the transform's constant Jacobian. Neither a particle smoother nor
-an approximate marginal likelihood is evaluated here.
-"""
+"""Owned starts and proposal geometry for exact particle samplers."""
 
 from __future__ import annotations
 
@@ -18,9 +12,13 @@ import numpy as np
 from nof1_causal_lab.artifacts.continuation import ParticleTuning, SamplerCheckpoint
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     ContinuedInitializationDiagnostics,
+    GaussianInitializationDiagnostics,
 )
+from nof1_causal_lab.artifacts.sampling import GaussianInitializationSpec
+from nof1_causal_lab.compute.batching import compiled_memory
 from nof1_causal_lab.models.ssm.inference.joint_coordinates import (
     CentredParameterization,
+    JointChart,
     JointCoordinates,
     build_joint_coordinates,
 )
@@ -32,10 +30,11 @@ from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import (
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
-        InitializationDiagnostics,
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import InitializationDiagnostics
+    from nof1_causal_lab.artifacts.sampling import (
+        LapsInitializationSpec,
+        ParticleInitializationSpec,
     )
-    from nof1_causal_lab.artifacts.sampling import LapsInitializationSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
@@ -49,8 +48,8 @@ class LapsInitializationTrace:
 
 
 @dataclass(frozen=True)
-class LapsInitializationResult:
-    """Paired chain starts and ensemble proposal moments in the production coordinates."""
+class ParticleInitialization:
+    """Paired chain starts and frozen proposal moments in the production coordinates."""
 
     positions: jax.Array
     paths: jax.Array
@@ -68,6 +67,79 @@ class LapsInitializationResult:
         return self.pilot_variance + temporal_variance[None, :] + variance_floor[None, :]
 
 
+def prepare_particle_initialization(
+    target: ParticleTarget,
+    *,
+    spec: ParticleInitializationSpec,
+    key: jax.Array,
+    num_chains: int,
+    compute_budget: ComputeBudget,
+) -> ParticleInitialization | InitializationFailure:
+    """Select explicit starting geometry without changing the retained target."""
+    if isinstance(spec, GaussianInitializationSpec):
+        coordinates = build_joint_coordinates(target, "centred")
+        assert isinstance(coordinates.parameterization, CentredParameterization)
+
+        def draw(chart: JointChart, draw_key: jax.Array) -> tuple[jax.Array, jax.Array]:
+            points = spec.scale * jax.random.normal(
+                draw_key, (num_chains, max(1, coordinates.dimension))
+            )
+            return jax.vmap(coordinates.bind(chart).decode)(points)
+
+        compiled = jax.jit(draw).lower(coordinates.chart, key).compile()
+        if not compute_budget.capacity(compiled_memory(compiled), limit=1):
+            raise MemoryError(
+                "Gaussian initialization exceeds the numerical execution memory budget"
+            )
+        positions, paths = compiled(coordinates.chart, key)
+        if not all(np.isfinite(np.asarray(value)).all() for value in (positions, paths)):
+            return InitializationFailure.unavailable(
+                "The Gaussian initializer produced non-finite starting coordinates"
+            )
+        return ParticleInitialization(
+            positions=positions,
+            paths=paths,
+            parameter_chol=spec.scale
+            * jnp.eye(coordinates.parameter_dimension, dtype=positions.dtype),
+            pilot_mean=jnp.mean(paths, axis=0),
+            pilot_variance=jnp.var(paths, axis=0),
+            diagnostics=GaussianInitializationDiagnostics(
+                joint_dimension=coordinates.dimension, scale=spec.scale
+            ),
+        )
+    return prepare_laps_initialization(
+        target,
+        spec=spec,
+        key=key,
+        num_chains=num_chains,
+        compute_budget=compute_budget,
+    )
+
+
+def continued_particle_initialization(checkpoint: SamplerCheckpoint) -> ParticleInitialization:
+    """Start at retained values, using the particle kernel's saved proposal geometry."""
+    tuning = checkpoint.tuning
+    if not isinstance(tuning, ParticleTuning):
+        positions = jnp.asarray(checkpoint.parameters.values)
+        paths = jnp.asarray(checkpoint.paths.values)
+        return ParticleInitialization(
+            positions=positions,
+            paths=paths,
+            parameter_chol=jnp.eye(positions.shape[-1], dtype=positions.dtype),
+            pilot_mean=jnp.mean(paths, axis=0),
+            pilot_variance=jnp.var(paths, axis=0),
+            diagnostics=ContinuedInitializationDiagnostics(reused_tuning=False),
+        )
+    return ParticleInitialization(
+        positions=jnp.asarray(checkpoint.parameters.values),
+        paths=jnp.asarray(checkpoint.paths.values),
+        parameter_chol=jnp.asarray(tuning.parameter_chol.values),
+        pilot_mean=jnp.asarray(tuning.pilot_mean.values),
+        pilot_variance=jnp.asarray(tuning.pilot_variance.values),
+        diagnostics=ContinuedInitializationDiagnostics(reused_tuning=True),
+    )
+
+
 def prepare_laps_initialization(
     target: ParticleTarget,
     *,
@@ -76,7 +148,7 @@ def prepare_laps_initialization(
     num_chains: int,
     compute_budget: ComputeBudget,
     record_trace: bool = False,
-) -> LapsInitializationResult | InitializationFailure:
+) -> ParticleInitialization | InitializationFailure:
     """Produce one initialization package without executing a particle smoother."""
     if num_chains > spec.ensemble_size:
         return InitializationFailure.unavailable(
@@ -121,7 +193,7 @@ def prepare_laps_initialization(
     selected = jax.random.choice(
         selection_key, spec.ensemble_size, shape=(num_chains,), replace=False
     )
-    return LapsInitializationResult(
+    return ParticleInitialization(
         positions=positions[selected],
         paths=paths[selected],
         parameter_chol=chol,
@@ -131,28 +203,4 @@ def prepare_laps_initialization(
         trace=LapsInitializationTrace(coordinates, ensemble.trace)
         if isinstance(ensemble.trace, LapsTraceRecord)
         else ensemble.trace,
-    )
-
-
-def continued_particle_initialization(checkpoint: SamplerCheckpoint) -> LapsInitializationResult:
-    """Start at retained values, using the particle kernel's saved proposal geometry."""
-    tuning = checkpoint.tuning
-    if not isinstance(tuning, ParticleTuning):
-        positions = jnp.asarray(checkpoint.parameters.values)
-        paths = jnp.asarray(checkpoint.paths.values)
-        return LapsInitializationResult(
-            positions=positions,
-            paths=paths,
-            parameter_chol=jnp.eye(positions.shape[-1], dtype=positions.dtype),
-            pilot_mean=jnp.mean(paths, axis=0),
-            pilot_variance=jnp.var(paths, axis=0),
-            diagnostics=ContinuedInitializationDiagnostics(reused_tuning=False),
-        )
-    return LapsInitializationResult(
-        positions=jnp.asarray(checkpoint.parameters.values),
-        paths=jnp.asarray(checkpoint.paths.values),
-        parameter_chol=jnp.asarray(tuning.parameter_chol.values),
-        pilot_mean=jnp.asarray(tuning.pilot_mean.values),
-        pilot_variance=jnp.asarray(tuning.pilot_variance.values),
-        diagnostics=ContinuedInitializationDiagnostics(reused_tuning=True),
     )

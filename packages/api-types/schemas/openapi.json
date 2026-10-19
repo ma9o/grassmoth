@@ -16714,6 +16714,86 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "GaussianInitializationDiagnostics": {
+        "additionalProperties": false,
+        "description": "Unadapted Gaussian starting points, not posterior or convergence evidence.",
+        "properties": {
+          "source": {
+            "const": "gaussian",
+            "default": "gaussian",
+            "title": "Source",
+            "type": "string"
+          },
+          "joint_dimension": {
+            "title": "Joint Dimension",
+            "type": "integer"
+          },
+          "scale": {
+            "title": "Scale",
+            "type": "number"
+          }
+        },
+        "required": [
+          "source",
+          "joint_dimension",
+          "scale"
+        ],
+        "title": "GaussianInitializationDiagnostics",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "GaussianInitializationSpec-Input": {
+        "additionalProperties": false,
+        "description": "Independent Gaussian starts in the native affine chart, without adaptation.\n\nThis proposal is only an initializer. The subsequent particle transitions\nand every retained diagnostic use the exact nonlinear target.",
+        "properties": {
+          "kind": {
+            "const": "gaussian",
+            "default": "gaussian",
+            "title": "Kind",
+            "type": "string"
+          },
+          "scale": {
+            "default": 0.1,
+            "exclusiveMinimum": 0,
+            "title": "Scale",
+            "type": "number"
+          }
+        },
+        "title": "GaussianInitializationSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "GaussianInitializationSpec-Output": {
+        "additionalProperties": false,
+        "description": "Independent Gaussian starts in the native affine chart, without adaptation.\n\nThis proposal is only an initializer. The subsequent particle transitions\nand every retained diagnostic use the exact nonlinear target.",
+        "properties": {
+          "kind": {
+            "const": "gaussian",
+            "default": "gaussian",
+            "title": "Kind",
+            "type": "string"
+          },
+          "scale": {
+            "default": 0.1,
+            "exclusiveMinimum": 0,
+            "title": "Scale",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "scale"
+        ],
+        "title": "GaussianInitializationSpec",
+        "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "GaussianReferenceTemperingSpec-Input": {
         "additionalProperties": false,
         "description": "Optional replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.",
@@ -17750,6 +17830,9 @@
             "$ref": "#/components/schemas/LapsInitializationDiagnostics"
           },
           {
+            "$ref": "#/components/schemas/GaussianInitializationDiagnostics"
+          },
+          {
             "$ref": "#/components/schemas/ContinuedInitializationDiagnostics"
           }
         ],
@@ -18439,6 +18522,12 @@
         "additionalProperties": false,
         "description": "Joint ensemble initialization; its draws are never reported as posterior samples.",
         "properties": {
+          "kind": {
+            "const": "laps",
+            "default": "laps",
+            "title": "Kind",
+            "type": "string"
+          },
           "ensemble_size": {
             "default": 1024,
             "minimum": 2,
@@ -18486,6 +18575,12 @@
         "additionalProperties": false,
         "description": "Joint ensemble initialization; its draws are never reported as posterior samples.",
         "properties": {
+          "kind": {
+            "const": "laps",
+            "default": "laps",
+            "title": "Kind",
+            "type": "string"
+          },
           "ensemble_size": {
             "default": 1024,
             "minimum": 2,
@@ -18524,6 +18619,7 @@
           }
         },
         "required": [
+          "kind",
           "ensemble_size",
           "num_unadjusted_steps",
           "num_adjusted_steps",
@@ -18996,8 +19092,8 @@
             "title": "Adaptation Scheme",
             "type": "string"
           },
-          "laps": {
-            "$ref": "#/components/schemas/LapsInitializationSpec-Input"
+          "initialization": {
+            "$ref": "#/components/schemas/ParticleInitializationSpec-Input"
           },
           "compute_latent_posterior_summary": {
             "default": true,
@@ -19097,8 +19193,8 @@
             "title": "Adaptation Scheme",
             "type": "string"
           },
-          "laps": {
-            "$ref": "#/components/schemas/LapsInitializationSpec-Output"
+          "initialization": {
+            "$ref": "#/components/schemas/ParticleInitializationSpec-Output"
           },
           "compute_latent_posterior_summary": {
             "default": true,
@@ -19120,7 +19216,7 @@
           "param_target_accept",
           "adaptation_rate",
           "adaptation_scheme",
-          "laps",
+          "initialization",
           "compute_latent_posterior_summary"
         ],
         "title": "MarginalParticleGibbsSpec",
@@ -22198,8 +22294,8 @@
           "dsmc": {
             "$ref": "#/components/schemas/DsmcSpec-Input"
           },
-          "laps": {
-            "$ref": "#/components/schemas/LapsInitializationSpec-Input"
+          "initialization": {
+            "$ref": "#/components/schemas/ParticleInitializationSpec-Input"
           },
           "diagnostic_metrics_all": {
             "default": false,
@@ -22229,8 +22325,8 @@
           "dsmc": {
             "$ref": "#/components/schemas/DsmcSpec-Output"
           },
-          "laps": {
-            "$ref": "#/components/schemas/LapsInitializationSpec-Output"
+          "initialization": {
+            "$ref": "#/components/schemas/ParticleInitializationSpec-Output"
           },
           "diagnostic_metrics_all": {
             "default": false,
@@ -22242,11 +22338,51 @@
           "method",
           "parameter_kernel",
           "dsmc",
-          "laps",
+          "initialization",
           "diagnostic_metrics_all"
         ],
         "title": "ParticleGibbsSpec",
         "type": "object",
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ParticleInitializationSpec-Input": {
+        "discriminator": {
+          "mapping": {
+            "gaussian": "#/components/schemas/GaussianInitializationSpec-Input",
+            "laps": "#/components/schemas/LapsInitializationSpec-Input"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/LapsInitializationSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/GaussianInitializationSpec-Input"
+          }
+        ],
+        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ParticleInitializationSpec-Output": {
+        "discriminator": {
+          "mapping": {
+            "gaussian": "#/components/schemas/GaussianInitializationSpec-Output",
+            "laps": "#/components/schemas/LapsInitializationSpec-Output"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/LapsInitializationSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/GaussianInitializationSpec-Output"
+          }
+        ],
         "x-python-module": "nof1_causal_lab.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"

@@ -109,12 +109,29 @@ class GaussianReferenceTemperingSpec(Value):
 class LapsInitializationSpec(Value):
     """Joint ensemble initialization; its draws are never reported as posterior samples."""
 
+    kind: Literal["laps"] = "laps"
     ensemble_size: int = Field(default=1024, ge=2)
     num_unadjusted_steps: int = Field(default=10000, ge=10)
     num_adjusted_steps: int = Field(default=100, ge=1)
     steps_per_sample: int = Field(default=15, ge=1)
     initial_scale: float = Field(default=1.0, gt=0, allow_inf_nan=False)
     covariance_regularization: float = Field(default=1e-4, gt=0, allow_inf_nan=False)
+
+
+class GaussianInitializationSpec(Value):
+    """Independent Gaussian starts in the native affine chart, without adaptation.
+
+    This proposal is only an initializer. The subsequent particle transitions
+    and every retained diagnostic use the exact nonlinear target.
+    """
+
+    kind: Literal["gaussian"] = "gaussian"
+    scale: float = Field(default=0.1, gt=0, allow_inf_nan=False)
+
+
+type ParticleInitializationSpec = Annotated[
+    LapsInitializationSpec | GaussianInitializationSpec, Field(discriminator="kind")
+]
 
 
 class DsmcSpec(Value):
@@ -145,7 +162,7 @@ class ParticleGibbsSpec(Value):
     method: Literal["pgibbs"] = "pgibbs"
     parameter_kernel: ConditionalParameterSpec = Field(default_factory=MetropolisHastingsSpec)
     dsmc: DsmcSpec = Field(default_factory=DsmcSpec)
-    laps: LapsInitializationSpec = Field(default_factory=LapsInitializationSpec)
+    initialization: ParticleInitializationSpec = Field(default_factory=LapsInitializationSpec)
     diagnostic_metrics_all: bool = False
 
 
@@ -165,7 +182,7 @@ class MarginalParticleGibbsSpec(Value):
     param_target_accept: float = 0.35
     adaptation_rate: float = 0.05
     adaptation_scheme: Literal["simple", "dual_averaging"] = "simple"
-    laps: LapsInitializationSpec = Field(default_factory=LapsInitializationSpec)
+    initialization: ParticleInitializationSpec = Field(default_factory=LapsInitializationSpec)
     compute_latent_posterior_summary: bool = True
 
 

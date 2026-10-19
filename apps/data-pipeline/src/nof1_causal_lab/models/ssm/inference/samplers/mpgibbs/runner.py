@@ -62,7 +62,7 @@ if TYPE_CHECKING:
     )
     from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepStage
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
-    from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
+    from nof1_causal_lab.models.ssm.inference.warmup.initialization import ParticleInitialization
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -192,7 +192,7 @@ def run_marginal_particle_gibbs(
     key: jax.Array,
     adaptation_rate: float,
     retain_latent_paths: bool,
-    initialization: LapsInitializationResult,
+    initialization: ParticleInitialization,
     compute_budget: ComputeBudget,
     compute_latent_posterior_summary: bool = True,
     # Both adaptation policies stop updating after warmup.

@@ -26,7 +26,7 @@ from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.tempering import (
 )
 from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import GaussianReferenceBridge
 from nof1_causal_lab.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
-from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
+from nof1_causal_lab.models.ssm.inference.warmup.initialization import ParticleInitialization
 from tests.models.ssm.compile.test_exact_state_space import _initial, _model, _problem
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.inference import compile_fit_fixture
@@ -328,7 +328,7 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
         adaptation_rate=0.05,
         adaptation_scheme=adaptation_scheme,
         initialization=Mock(
-            spec=LapsInitializationResult,
+            spec=ParticleInitialization,
             positions=jnp.broadcast_to(target.initial_position, (2, 1)),
             paths=jnp.broadcast_to(reference.path_mean, (2, *reference.path_mean.shape)),
         ),

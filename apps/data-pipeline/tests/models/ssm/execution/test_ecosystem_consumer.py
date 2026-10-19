@@ -136,7 +136,7 @@ def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(in
                 parameter_proposal="pseudo_langevin",
                 adaptation_scheme="dual_averaging",
                 param_step_size=0.0005,
-                laps=LapsInitializationSpec(
+                initialization=LapsInitializationSpec(
                     ensemble_size=128, num_unadjusted_steps=1000, num_adjusted_steps=20
                 ),
                 dsmc=DsmcSpec(drift="amala_plus"),

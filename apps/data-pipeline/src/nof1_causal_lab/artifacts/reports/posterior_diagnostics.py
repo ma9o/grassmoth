@@ -328,7 +328,19 @@ class ContinuedInitializationDiagnostics(Value):
     reused_tuning: bool
 
 
-type InitializationDiagnostics = LapsInitializationDiagnostics | ContinuedInitializationDiagnostics
+class GaussianInitializationDiagnostics(Value):
+    """Unadapted Gaussian starting points, not posterior or convergence evidence."""
+
+    source: Literal["gaussian"] = "gaussian"
+    joint_dimension: int
+    scale: float
+
+
+type InitializationDiagnostics = (
+    LapsInitializationDiagnostics
+    | GaussianInitializationDiagnostics
+    | ContinuedInitializationDiagnostics
+)
 
 
 class ParticleWeightMetric(StrEnum):

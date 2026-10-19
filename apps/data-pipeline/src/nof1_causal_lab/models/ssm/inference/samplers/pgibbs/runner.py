@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     )
     from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepStage
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
-    from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
+    from nof1_causal_lab.models.ssm.inference.warmup.initialization import ParticleInitialization
 
 
 @dataclass(frozen=True)
@@ -65,7 +65,7 @@ def run_particle_gibbs[State](
     kernel: ParticleGibbsKernel[State],
     *,
     sampler: SamplerSpec,
-    initialization: LapsInitializationResult,
+    initialization: ParticleInitialization,
     compute_budget: ComputeBudget,
     key: jax.Array,
     clock: Callable[[], float],

@@ -13,7 +13,7 @@ from nof1_causal_lab.artifacts.continuation import ParticleTuning
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import GaussianReference
-    from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
+    from nof1_causal_lab.models.ssm.inference.warmup.initialization import ParticleInitialization
 
 
 def retain_state(state: object) -> tuple[NumericalArray, ...]:
@@ -43,7 +43,7 @@ def restore_state[State](template: State, leaves: tuple[NumericalArray, ...]) ->
 
 
 def frozen_particle_tuning(
-    initialization: LapsInitializationResult,
+    initialization: ParticleInitialization,
     reference: GaussianReference | None,
 ) -> ParticleTuning:
     """Retain only geometry used by subsequent transitions, not an initialization checkpoint."""

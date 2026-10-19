@@ -13,6 +13,7 @@ from nof1_causal_lab.artifacts.sampling import (
     FitSettingsSpec,
     FixedLatentStepSpec,
     InferenceHardware,
+    LapsInitializationSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     ParticleGibbsSpec,
@@ -218,7 +219,8 @@ FULL_CONFIG = textwrap.dedent("""\
           param_step_size_max: 0.7
           param_target_accept: 0.4
           adaptation_rate: 0.03
-          laps:
+          initialization:
+            kind: laps
             ensemble_size: 256
             num_unadjusted_steps: 1000
             num_adjusted_steps: 20
@@ -296,9 +298,10 @@ class TestLoadConfig:
         assert cfg.inference.sampler.algorithm.param_step_size_max == 0.7
         assert cfg.inference.sampler.algorithm.param_target_accept == 0.4
         assert cfg.inference.sampler.algorithm.adaptation_rate == 0.03
-        assert cfg.inference.sampler.algorithm.laps.ensemble_size == 256
-        assert cfg.inference.sampler.algorithm.laps.num_unadjusted_steps == 1000
-        assert cfg.inference.sampler.algorithm.laps.num_adjusted_steps == 20
+        assert isinstance(cfg.inference.sampler.algorithm.initialization, LapsInitializationSpec)
+        assert cfg.inference.sampler.algorithm.initialization.ensemble_size == 256
+        assert cfg.inference.sampler.algorithm.initialization.num_unadjusted_steps == 1000
+        assert cfg.inference.sampler.algorithm.initialization.num_adjusted_steps == 20
         assert cfg.llm.embedded.max_tokens == 4096
         assert cfg.llm.embedded.reasoning_effort == "low"
         assert cfg.llm.claude_code.effort == "medium"
@@ -322,7 +325,8 @@ class TestLoadConfig:
         sampler = cfg.inference.sampler
         assert sampler.num_warmup == 500
         assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
-        assert sampler.algorithm.laps.ensemble_size == 256
+        assert isinstance(sampler.algorithm.initialization, LapsInitializationSpec)
+        assert sampler.algorithm.initialization.ensemble_size == 256
 
         load_config.cache_clear()
 

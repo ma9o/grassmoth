@@ -19,7 +19,8 @@
     "seed": 19,
     "algorithm": {
       "method": "mpgibbs",
-      "laps": {
+      "initialization": {
+        "kind": "laps",
         "ensemble_size": 8,
         "num_unadjusted_steps": 10,
         "num_adjusted_steps": 1,
@@ -34,19 +35,19 @@
     }
   },
   "factors": [
-    "algorithm.laps.num_unadjusted_steps"
+    "algorithm.initialization.num_unadjusted_steps"
   ],
   "arms": [
     {
       "name": "steps10",
       "settings": {
-        "algorithm.laps.num_unadjusted_steps": 10
+        "algorithm.initialization.num_unadjusted_steps": 10
       }
     },
     {
       "name": "steps20",
       "settings": {
-        "algorithm.laps.num_unadjusted_steps": 20
+        "algorithm.initialization.num_unadjusted_steps": 20
       }
     }
   ]

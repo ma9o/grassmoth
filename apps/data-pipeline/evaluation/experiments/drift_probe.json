@@ -19,7 +19,8 @@
     "seed": 19,
     "algorithm": {
       "method": "mpgibbs",
-      "laps": {
+      "initialization": {
+        "kind": "laps",
         "ensemble_size": 8,
         "num_unadjusted_steps": 10,
         "num_adjusted_steps": 1,

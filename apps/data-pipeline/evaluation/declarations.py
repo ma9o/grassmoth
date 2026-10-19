@@ -179,7 +179,7 @@ class Experiment(Value):
         }:
             raise ValueError("Probe draw counts and warmup belong to the probe controls")
         if self.probe_samples is not None and any(
-            path.startswith("algorithm.laps") for path in self.factors
+            path.startswith("algorithm.initialization") for path in self.factors
         ):
             raise ValueError("Initializer comparisons require fresh fits, not continued probes")
         return self

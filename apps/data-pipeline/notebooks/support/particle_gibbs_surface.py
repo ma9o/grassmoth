@@ -48,9 +48,9 @@ from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import (
     trace_step as dsmc_trace_step,
 )
 from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
-from nof1_causal_lab.models.ssm.inference.warmup.laps import (
-    LapsInitializationResult,
+from nof1_causal_lab.models.ssm.inference.warmup.initialization import (
     LapsInitializationTrace,
+    ParticleInitialization,
     prepare_laps_initialization,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
@@ -744,7 +744,7 @@ def run_laps(
     )
     if isinstance(result, InitializationFailure):
         return result
-    assert isinstance(result, LapsInitializationResult)
+    assert isinstance(result, ParticleInitialization)
     assert isinstance(result.trace, LapsInitializationTrace)
     trace = result.trace.ensemble
     coordinates = result.trace.coordinates

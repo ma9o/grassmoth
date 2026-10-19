@@ -52,9 +52,9 @@ from nof1_causal_lab.models.ssm.inference.types import (
     UnretainedRun,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
-from nof1_causal_lab.models.ssm.inference.warmup.laps import (
+from nof1_causal_lab.models.ssm.inference.warmup.initialization import (
     continued_particle_initialization,
-    prepare_laps_initialization,
+    prepare_particle_initialization,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
@@ -124,15 +124,15 @@ def fit_marginal_particle_gibbs(
     )
 
     phase_t0 = clock()
-    logger.info("phase 2/4: joint LAPS initialization (ensemble=%d)", options.laps.ensemble_size)
+    logger.info("phase 2/4: particle initialization (%s)", options.initialization.kind)
     if continuation is not None:
         initialization = continued_particle_initialization(continuation)
     else:
         with inference_phase("mpgibbs", "preparing_initialization", clock=clock):
-            initialization = prepare_laps_initialization(
+            initialization = prepare_particle_initialization(
                 bundle.runtime,
                 compute_budget=compute_budget,
-                spec=options.laps,
+                spec=options.initialization,
                 key=laps_key,
                 num_chains=sampler.num_chains,
             )

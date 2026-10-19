@@ -4530,6 +4530,60 @@ export interface components {
             readonly rate: components["schemas"]["Expression-Output"];
         };
         /**
+         * GaussianInitializationDiagnostics
+         * @description Unadapted Gaussian starting points, not posterior or convergence evidence.
+         */
+        readonly GaussianInitializationDiagnostics: {
+            /**
+             * Source
+             * @default gaussian
+             * @constant
+             */
+            readonly source: "gaussian";
+            /** Joint Dimension */
+            readonly joint_dimension: number;
+            /** Scale */
+            readonly scale: number;
+        };
+        /**
+         * GaussianInitializationSpec
+         * @description Independent Gaussian starts in the native affine chart, without adaptation.
+         *
+         *     This proposal is only an initializer. The subsequent particle transitions
+         *     and every retained diagnostic use the exact nonlinear target.
+         */
+        readonly "GaussianInitializationSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "gaussian";
+            /**
+             * Scale
+             * @default 0.1
+             */
+            readonly scale?: number;
+        };
+        /**
+         * GaussianInitializationSpec
+         * @description Independent Gaussian starts in the native affine chart, without adaptation.
+         *
+         *     This proposal is only an initializer. The subsequent particle transitions
+         *     and every retained diagnostic use the exact nonlinear target.
+         */
+        readonly "GaussianInitializationSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "gaussian";
+            /**
+             * Scale
+             * @default 0.1
+             */
+            readonly scale: number;
+        };
+        /**
          * GaussianReferenceTemperingSpec
          * @description Optional replica exchange; each ladder retains only its exact beta-one chain.
          *
@@ -4873,7 +4927,7 @@ export interface components {
              */
             readonly kind: "initial_state_correlation";
         };
-        readonly InitializationDiagnostics: components["schemas"]["LapsInitializationDiagnostics"] | components["schemas"]["ContinuedInitializationDiagnostics"];
+        readonly InitializationDiagnostics: components["schemas"]["LapsInitializationDiagnostics"] | components["schemas"]["GaussianInitializationDiagnostics"] | components["schemas"]["ContinuedInitializationDiagnostics"];
         /**
          * IntervalEffectTransformSpec
          * @description Divide an interval effect by its explicit duration in days.
@@ -5060,6 +5114,11 @@ export interface components {
          */
         readonly "LapsInitializationSpec-Input": {
             /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "laps";
+            /**
              * Ensemble Size
              * @default 1024
              */
@@ -5095,6 +5154,11 @@ export interface components {
          * @description Joint ensemble initialization; its draws are never reported as posterior samples.
          */
         readonly "LapsInitializationSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "laps";
             /**
              * Ensemble Size
              * @default 1024
@@ -5293,7 +5357,7 @@ export interface components {
              * @enum {string}
              */
             readonly adaptation_scheme?: "simple" | "dual_averaging";
-            readonly laps?: components["schemas"]["LapsInitializationSpec-Input"];
+            readonly initialization?: components["schemas"]["ParticleInitializationSpec-Input"];
             /**
              * Compute Latent Posterior Summary
              * @default true
@@ -5365,7 +5429,7 @@ export interface components {
              * @enum {string}
              */
             readonly adaptation_scheme: "simple" | "dual_averaging";
-            readonly laps: components["schemas"]["LapsInitializationSpec-Output"];
+            readonly initialization: components["schemas"]["ParticleInitializationSpec-Output"];
             /**
              * Compute Latent Posterior Summary
              * @default true
@@ -6267,7 +6331,7 @@ export interface components {
             readonly method: "pgibbs";
             readonly parameter_kernel?: components["schemas"]["ConditionalParameterSpec-Input"];
             readonly dsmc?: components["schemas"]["DsmcSpec-Input"];
-            readonly laps?: components["schemas"]["LapsInitializationSpec-Input"];
+            readonly initialization?: components["schemas"]["ParticleInitializationSpec-Input"];
             /**
              * Diagnostic Metrics All
              * @default false
@@ -6286,13 +6350,15 @@ export interface components {
             readonly method: "pgibbs";
             readonly parameter_kernel: components["schemas"]["ConditionalParameterSpec-Output"];
             readonly dsmc: components["schemas"]["DsmcSpec-Output"];
-            readonly laps: components["schemas"]["LapsInitializationSpec-Output"];
+            readonly initialization: components["schemas"]["ParticleInitializationSpec-Output"];
             /**
              * Diagnostic Metrics All
              * @default false
              */
             readonly diagnostic_metrics_all: boolean;
         };
+        readonly "ParticleInitializationSpec-Input": components["schemas"]["LapsInitializationSpec-Input"] | components["schemas"]["GaussianInitializationSpec-Input"];
+        readonly "ParticleInitializationSpec-Output": components["schemas"]["LapsInitializationSpec-Output"] | components["schemas"]["GaussianInitializationSpec-Output"];
         /**
          * ParticleSamplerDiagnostics
          * @description Typed exact-sampler settings and transition telemetry from the native producer.

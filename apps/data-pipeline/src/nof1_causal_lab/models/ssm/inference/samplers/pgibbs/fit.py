@@ -52,9 +52,9 @@ from nof1_causal_lab.models.ssm.inference.types import (
     ProductionDiagnostics,
     UnretainedRun,
 )
-from nof1_causal_lab.models.ssm.inference.warmup.laps import (
+from nof1_causal_lab.models.ssm.inference.warmup.initialization import (
     continued_particle_initialization,
-    prepare_laps_initialization,
+    prepare_particle_initialization,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
@@ -79,7 +79,7 @@ def fit_particle_gibbs(
     clock: Callable[[], float],
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
-    """Initialize paired draws with LAPS, then retain only exact blocked PG updates."""
+    """Initialize paired starts, then retain only exact blocked PG updates."""
     options = sampler.algorithm
     assert isinstance(options, ParticleGibbsSpec)
     trace_key, laps_key, sample_key = jax.random.split(jax.random.key(sampler.seed), 3)
@@ -96,9 +96,9 @@ def fit_particle_gibbs(
         initialization = continued_particle_initialization(continuation)
     else:
         with inference_phase("pgibbs", "preparing_initialization", clock=clock):
-            initialization = prepare_laps_initialization(
+            initialization = prepare_particle_initialization(
                 target,
-                spec=options.laps,
+                spec=options.initialization,
                 key=laps_key,
                 num_chains=sampler.num_chains,
                 compute_budget=compute_budget,

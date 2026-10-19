@@ -22,7 +22,7 @@ from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
 )
 from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
-from nof1_causal_lab.models.ssm.inference.warmup.laps import LapsInitializationResult
+from nof1_causal_lab.models.ssm.inference.warmup.initialization import ParticleInitialization
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
 from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
@@ -125,7 +125,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
             adaptation_rate=0.1,
             retain_latent_paths=True,
             initialization=Mock(
-                spec=LapsInitializationResult,
+                spec=ParticleInitialization,
                 positions=jnp.asarray(positions),
                 paths=jnp.asarray(paths),
             ),
@@ -146,7 +146,7 @@ def test_laps_failure_stops_production_before_sampling(monkeypatch):
     failure = InitializationFailure.unavailable("No finite LAPS ensemble")
     initialize = Mock(return_value=failure)
     sample = Mock(side_effect=AssertionError("Failed initialization must stop the fit"))
-    monkeypatch.setattr(fitting, "prepare_laps_initialization", initialize)
+    monkeypatch.setattr(fitting, "prepare_particle_initialization", initialize)
     monkeypatch.setattr(fitting, "run_marginal_particle_gibbs", sample)
     result = fitting.fit_marginal_particle_gibbs(
         Mock(spec=PriorRuntimeBundle),
