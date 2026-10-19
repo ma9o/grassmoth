@@ -112,13 +112,22 @@ def _step(
     batch_size: int | None = None,
 ) -> ParticleSmootherResult | TracedResult[ParticleSmootherResult, SmootherTraceRecord]:
     # Reuse traced density and gradient bodies across leaf, seam, and root batches.
-    # These JIT boundaries preserve the tree shapes and the exact factors.
+    # Inline their JAX graphs so sweep closure conversion can lift captured
+    # observations and prior arrays too; the Python traces are still reused.
     ctx = ctx._replace(
-        initial_value_grad_by_param=jax.jit(ctx.initial_value_grad_by_param),
-        transition_current_value_grad_by_param=jax.jit(ctx.transition_current_value_grad_by_param),
-        transition_next_value_grad_by_param=jax.jit(ctx.transition_next_value_grad_by_param),
-        pairwise_transition_log_probs=jax.jit(ctx.pairwise_transition_log_probs),
-        obs_increment_fn=jax.jit(ctx.obs_increment_fn),
+        initial_value_grad_by_param=jax.jit(
+            ctx.initial_value_grad_by_param, inline=jax.Inline.JAX_EARLY
+        ),
+        transition_current_value_grad_by_param=jax.jit(
+            ctx.transition_current_value_grad_by_param, inline=jax.Inline.JAX_EARLY
+        ),
+        transition_next_value_grad_by_param=jax.jit(
+            ctx.transition_next_value_grad_by_param, inline=jax.Inline.JAX_EARLY
+        ),
+        pairwise_transition_log_probs=jax.jit(
+            ctx.pairwise_transition_log_probs, inline=jax.Inline.JAX_EARLY
+        ),
+        obs_increment_fn=jax.jit(ctx.obs_increment_fn, inline=jax.Inline.JAX_EARLY),
     )
     count = ctx.num_free_particles + 1
     steps = ctx.num_steps
@@ -132,7 +141,7 @@ def _step(
     mask = coordinate_proposal_mask(mask_key, ctx.latent_free_mask, ctx.latent_block_coords)
     auxiliary = build_auxiliary(ctx, aux_key, x_ref, mask)
     local_log_density: Callable[[jax.Array, jax.Array, jax.Array, jax.Array], jax.Array] = jax.jit(
-        auxiliary.local_log_density
+        auxiliary.local_log_density, inline=jax.Inline.JAX_EARLY
     )
     with jax.named_scope("dsmc_leaves"):
         particles, proposal_log_prob = auxiliary.propose(leaf_key)

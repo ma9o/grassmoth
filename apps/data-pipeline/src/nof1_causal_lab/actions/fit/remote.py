@@ -141,6 +141,7 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
         # Function environment overrides image defaults without adding a build
         # layer after its add_local_* source mounts (Modal forbids that order).
         env={
+            "PYTHONHASHSEED": "0",
             "DEPLOYMENT_ENV": "development",
             "JAX_PLATFORMS": "cuda,cpu",
             FIT_CACHE_VOLUME_ENV: cache_volume,

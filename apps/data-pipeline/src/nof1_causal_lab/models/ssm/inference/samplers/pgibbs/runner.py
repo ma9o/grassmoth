@@ -32,7 +32,6 @@ if TYPE_CHECKING:
         ParticleGibbsKernel,
         ParticleGibbsState,
     )
-    from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepStage
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
     from nof1_causal_lab.models.ssm.inference.warmup.initialization import ParticleInitialization
 
@@ -109,13 +108,14 @@ def run_particle_gibbs[State](
     }
 
     def step_factory(
-        batch_size: int, stage: SweepStage
+        batch_size: int,
     ) -> Callable[
-        [tuple[ParticleGibbsState[State], jax.Array]],
+        [tuple[ParticleGibbsState[State], jax.Array], jax.Array],
         tuple[tuple[ParticleGibbsState[State], jax.Array], dict[str, jax.Array]],
     ]:
         def sweep(
             carry: tuple[ParticleGibbsState[State], jax.Array],
+            _posterior: jax.Array,
         ) -> tuple[tuple[ParticleGibbsState[State], jax.Array], dict[str, jax.Array]]:
             current, current_key = carry
             next_key: jax.Array
@@ -124,14 +124,12 @@ def run_particle_gibbs[State](
             updated, info = jax.vmap(
                 lambda state, draw_key: kernel.step(state, draw_key, batch_size=batch_size)
             )(current, jax.random.split(step_key, sampler.num_chains))
-            record = {**info, "log_posterior": updated.log_posterior}
-            if stage == "posterior":
-                position = jax.vmap(kernel.parameters.position)(updated.parameters)
-                record = {
-                    **record,
-                    "positions": position,
-                    "paths": updated.path,
-                }
+            record = {
+                **info,
+                "log_posterior": updated.log_posterior,
+                "positions": jax.vmap(kernel.parameters.position)(updated.parameters),
+                "paths": updated.path,
+            }
             next_carry: tuple[ParticleGibbsState[State], jax.Array] = (updated, next_key)
             return next_carry, record
 

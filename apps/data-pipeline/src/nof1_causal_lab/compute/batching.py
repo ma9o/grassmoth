@@ -94,13 +94,18 @@ def compile_from_estimate[Executable](
     An estimate can overstate memory, so even an estimated zero capacity gets one
     minimum-width compilation. Only actual compiled demand can reject that lane.
     """
-    capacity = budget.capacity(single_memory, limit=max_batch_size, overhead=overhead)
+    capacity = budget.planning_capacity(single_memory, limit=max_batch_size, overhead=overhead)
     size = (
         max_batch_size if capacity == max_batch_size else 1 << (max(1, capacity).bit_length() - 1)
     )
     while True:
         executable, memory = compile_batch(size)
-        if budget.capacity(memory, limit=1, overhead=overhead):
+        if budget.planning_capacity(memory, limit=1, overhead=overhead):
+            if not budget.capacity(memory, limit=1, overhead=overhead):
+                raise MemoryError(
+                    "The planned batch width exceeds currently available memory; "
+                    "release other allocations before running it"
+                )
             return CompiledBatch(executable, size, memory)
         if size == 1:
             raise MemoryError("One batch lane exceeds the numerical execution memory budget")

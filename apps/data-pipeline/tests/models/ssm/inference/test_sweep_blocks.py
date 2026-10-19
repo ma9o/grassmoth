@@ -2,12 +2,14 @@
 
 import json
 import logging
+from functools import partial
 from time import monotonic
 from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
 import numpy as np
+import numpyro.distributions as dist
 import pytest
 
 from nof1_causal_lab.artifacts.sampling import DsmcSpec
@@ -34,14 +36,12 @@ class _Carry(NamedTuple):
     state: jax.Array
 
 
-def _factory(_batch, stage):
-    def step(carry):
+def _factory(_batch):
+    def step(carry, posterior):
         key, state = carry
         key, draw = jax.random.split(key)
-        state = state + jax.random.normal(draw, state.shape) * (2 if stage == "warmup" else 1)
-        record = {"telemetry": state.sum(axis=-1)}
-        if stage == "posterior":
-            record = {**record, "paths": state}
+        state = state + jax.random.normal(draw, state.shape) * jnp.where(posterior, 1, 2)
+        record = {"telemetry": state.sum(axis=-1), "paths": state}
         return _Carry(key, state), record
 
     return step
@@ -92,9 +92,14 @@ def test_block_boundaries_and_padding_preserve_key_stream_and_phase_outputs(
     ):
         reference, records = jax.jit(
             lambda state, phase=phase, count=count: jax.lax.scan(
-                lambda carry, _: _factory(8, phase)(carry), state, None, length=count
+                lambda carry, _: _factory(8)(carry, jnp.asarray(phase == "posterior")),
+                state,
+                None,
+                length=count,
             )
         )(reference)
+        if phase == "warmup":
+            records = {name: value for name, value in records.items() if name != "paths"}
         assert set(actual) == set(records)
         for name, expected in records.items():
             assert isinstance(actual[name], jax.Array)
@@ -118,12 +123,12 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     traces = []
     executed = []
 
-    def factory(batch, stage):
+    def factory(batch):
         assert batch <= 2, "An unsafe width must not reach compilation"
         compiled_batches.append(batch)
 
-        def step(state):
-            traces.append((batch, stage))
+        def step(state, _posterior):
+            traces.append(batch)
             jax.debug.callback(lambda: executed.append(True))
             return state + 1, {"value": state}
 
@@ -147,10 +152,13 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     plan = sweep_plan.compile_sweeps(
         factory, initial, num_warmup=3, num_samples=5, max_batch_size=8, budget=budget
     )
-    assert compiled_batches == [1, 1, 2, 2]
-    assert traces == [(1, "warmup"), (1, "posterior"), (2, "warmup"), (2, "posterior")]
-    assert len(compiled_phases) == 2  # Sizing traces must never compile probe executables.
+    assert compiled_batches == [1, 2]
+    assert traces == [1, 2]
+    assert len(compiled_phases) == 1  # Sizing traces must never compile probe executables.
     assert plan.batch_size == 2
+    assert isinstance(plan.warmup, sweep_plan.CompiledSweepPhase)
+    assert isinstance(plan.posterior, sweep_plan.CompiledSweepPhase)
+    assert plan.warmup.executable is plan.posterior.executable
     assert not executed
     run = run_sweeps(plan, initial, clock=monotonic, label="test")
     np.testing.assert_array_equal(run.state, np.full((4, 3), 8))
@@ -194,3 +202,51 @@ def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
         if index >= ADAPTATION_WINDOW + 4:
             for before, after in zip(frozen, state, strict=True):
                 np.testing.assert_array_equal(before, after)
+
+
+def test_runtime_inputs_rebind_nested_observations_priors_geometry_and_tuning():
+    """A compiled sweep accepts another same-layout fit's numerical inputs."""
+
+    def factory(values):
+        observations, location, scale, geometry, tuning = values
+        prior = dist.Normal(location, scale)
+
+        @partial(jax.jit, inline=jax.Inline.JAX_EARLY)
+        def transition(state):
+            position = geometry @ state + tuning * observations
+            return position, {"density": prior.log_prob(position)}
+
+        def step(state, _posterior):
+            return transition(state)
+
+        return lambda _batch: step
+
+    initial = jnp.ones((2, 1))
+    first = (jnp.zeros((2, 1)), jnp.asarray(0.0), jnp.asarray(1.0), jnp.eye(2), jnp.asarray(0.1))
+    second = (
+        jnp.ones((2, 1)),
+        jnp.asarray(2.0),
+        jnp.asarray(3.0),
+        jnp.eye(2) * 2,
+        jnp.asarray(0.2),
+    )
+    plans = tuple(
+        sweep_plan.compile_sweeps(
+            factory(values),
+            initial,
+            num_warmup=1,
+            num_samples=1,
+            max_batch_size=1,
+            budget=COMPUTE_BUDGET,
+        )
+        for values in (first, second)
+    )
+    first_phase, second_phase = (plan.posterior for plan in plans)
+    assert isinstance(first_phase, sweep_plan.CompiledSweepPhase)
+    assert isinstance(second_phase, sweep_plan.CompiledSweepPhase)
+    state, actual = first_phase.executable(
+        second_phase.arguments, initial, jnp.asarray(1), jnp.asarray(True)
+    )
+    expected_state, expected = factory(second)(1)(initial, jnp.asarray(True))
+    np.testing.assert_array_equal(state, expected_state)
+    np.testing.assert_array_equal(actual["density"][0], expected["density"])

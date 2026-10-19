@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 from numpyro.distributions import constraints
@@ -108,5 +110,7 @@ def resolve_site_priors(
     for site in sites:
         prior = supplied[site.name] if site.name in supplied else default_prior_for_descriptor(site)
         validate_site_prior(site, prior)
-        result[site.name] = prior.expand(site.shape)
+        # Native PyTree leaves own numerical hyperparameters; array operands
+        # keep same-law edits out of captured compiler literals.
+        result[site.name] = jax.tree.map(jnp.asarray, prior.expand(site.shape))
     return result

@@ -21,6 +21,7 @@ from nof1_causal_lab.compute.compilation_cache import (
 
 pytestmark = pytest.mark.contract
 AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
+KERNELS = "xla_gpu_kernel_cache_file"
 
 
 def _file(root, name, content, modified):
@@ -33,7 +34,9 @@ def _file(root, name, content, modified):
 def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path):
     working = tmp_path / "working"
     policy = CachePolicy(
-        executables=CacheLimit(files=2, bytes=9), autotune=CacheLimit(files=1, bytes=5)
+        executables=CacheLimit(files=2, bytes=9),
+        autotune=CacheLimit(files=1, bytes=5),
+        kernels=CacheLimit(files=1, bytes=6),
     )
     _file(working, "old-cache", b"1234", 1)
     _file(working, "new-cache", b"12345", 3)
@@ -42,11 +45,12 @@ def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path
     _file(working, "ignored-atime", b"ignored", 5)
     _file(working, f"{AUTOTUNE}/old.opaque", b"123", 1)
     _file(working, f"{AUTOTUNE}/nested/new.opaque", b"1234", 2)
+    _file(working, KERNELS, b"kernel", 2)
     (working / "link-cache").symlink_to(working / "new-cache")
     archive = tmp_path / "volume" / "selected.tar"
     commit = Mock()
     persisted = persist_cache(archive, working, (), policy, commit)
-    assert (persisted.files, persisted.bytes) == (3, 13)
+    assert (persisted.files, persisted.bytes) == (4, 19)
     assert persisted.archive_bytes == archive.stat().st_size <= policy.archive_bytes
     assert min(persisted.copy_seconds, persisted.selection_seconds, persisted.commit_seconds) >= 0
     commit.assert_called_once_with()
@@ -54,11 +58,12 @@ def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path
     assert [entry.path for entry in staged] == [
         "new-cache",
         "old-cache",
+        KERNELS,
         f"{AUTOTUNE}/nested/new.opaque",
     ]
     assert (transfer.files, transfer.bytes, transfer.archive_bytes) == (
-        3,
-        13,
+        4,
+        19,
         persisted.archive_bytes,
     )
     for entry in staged:
@@ -124,12 +129,15 @@ def test_local_lifecycle_isolated_namespaces_failure_cleanup_and_accounting(tmp_
     with local_compilation_cache(persistent, commit=commit, report=reports.append) as working:
         assert not working.is_relative_to(persistent)
         assert jax.config.jax_compilation_cache_dir == str(working)
+        assert jax.config.jax_persistent_cache_enable_xla_caches == f"{AUTOTUNE},{KERNELS}"
         _file(working, "compiled-cache", b"binary", 100)
     assert not working.exists()
     assert [(r.phase, r.files, r.bytes) for r in reports] == [("stage", 0, 0), ("persist", 1, 6)]
     assert {key: jax.config.values[key] for key in before} == before
     reports.clear()
+    first_path = working
     with local_compilation_cache(persistent, commit=commit, report=reports.append) as working:
+        assert working == first_path
         assert (working / "compiled-cache").read_bytes() == b"binary"
     assert [(r.phase, r.files) for r in reports] == [("stage", 1), ("persist", 0)]
     commit.assert_called_once_with()
@@ -157,3 +165,27 @@ def test_commit_failure_propagates_and_restores_configuration(tmp_path, monkeypa
     ):
         _file(working, "one-cache", b"binary", 1)
     assert jax.config.jax_compilation_cache_dir == original
+
+
+def test_kernel_cache_path_does_not_change_executable_keys_between_contexts(tmp_path, monkeypatch):
+    from jax._src import cache_key
+
+    keys = []
+    get_key = cache_key.get
+
+    def observe(*args, **kwargs):
+        key = get_key(*args, **kwargs)
+        keys.append(key)
+        return key
+
+    monkeypatch.setattr(cache_key, "get", observe)
+
+    def arithmetic(value):
+        return value * value + 1
+
+    for _ in range(2):
+        jax.clear_caches()
+        with local_compilation_cache(tmp_path, commit=lambda: None):
+            jax.jit(arithmetic).lower(jax.ShapeDtypeStruct((4,), "float32")).compile()
+    assert len(keys) == 2
+    assert keys[0] == keys[1]

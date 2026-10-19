@@ -59,7 +59,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
         MarginalParticleGibbsKernel,
     )
-    from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepStage
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
     from nof1_causal_lab.models.ssm.inference.warmup.initialization import ParticleInitialization
 
@@ -308,9 +307,11 @@ def run_marginal_particle_gibbs(
     diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=kernel.diagnostic_metrics)
 
     def step_factory(
-        batch_size: int, stage: SweepStage
-    ) -> Callable[[_Population], tuple[_Population, dict[str, jax.Array]]]:
-        def sweep(current: _Population) -> tuple[_Population, dict[str, jax.Array]]:
+        batch_size: int,
+    ) -> Callable[[_Population, jax.Array], tuple[_Population, dict[str, jax.Array]]]:
+        def sweep(
+            current: _Population, posterior: jax.Array
+        ) -> tuple[_Population, dict[str, jax.Array]]:
             next_key, step_key = random.split(current.random_key)
             keys = random.split(step_key, replicas)
             if tempering is None:
@@ -370,12 +371,7 @@ def run_marginal_particle_gibbs(
             if diagnostic_flags.parameter_movement:
                 record = {**record, "parameter_jump_rms": cold_info["parameter_jump_rms"]}
 
-            if stage == "posterior":
-                record = {
-                    **record,
-                    "positions": cold.position,
-                    "paths": cold.latent_trajectory,
-                }
+            def retain(updated: TrajectoryMCMCState) -> _Population:
                 next_moments = current.moments
                 if next_moments is not None:
                     latent_sum, latent_sumsq, count = next_moments
@@ -391,83 +387,94 @@ def run_marginal_particle_gibbs(
                     swap_accepted=current.swap_accepted + exchange.accepted,
                     swap_attempted=current.swap_attempted + exchange.attempted,
                     moments=next_moments,
-                ), record
-
-            tuning = adapt_scales(
-                current.adaptation,
-                kernel.dsmc,
-                info["latent_accepted"],
-                info["latent_proposed"],
-                num_warmup,
-            )
-            updated = updated._replace(latent_delta=tuning.delta)
-            if da_param_update is not None:
-                update_param = da_param_update
-                param_da = jax.vmap(
-                    lambda da, accepted: _clip_dual_averaging_state(
-                        update_param(da, accepted),
-                        min_scale=kernel.min_scale,
-                        max_scale=kernel.max_scale,
-                    )
-                )(updated.param_da, info["parameter_accepted"])
-                log_step = jnp.where(
-                    current.iteration + 1 == num_warmup,
-                    param_da.log_step_size_avg,
-                    param_da.log_step_size,
-                )
-                updated = updated._replace(
-                    param_step_size=_clip_scale(
-                        jnp.exp(log_step).astype(updated.param_step_size.dtype),
-                        min_scale=kernel.min_scale,
-                        max_scale=kernel.max_scale,
-                    ),
-                    param_da=param_da,
-                )
-            else:
-                updated = updated._replace(
-                    param_step_size=_adapt_scale(
-                        updated.param_step_size,
-                        accepted=info["parameter_accepted"],
-                        target_accept=kernel.target_accept,
-                        adaptation_rate=adaptation_rate,
-                        min_scale=kernel.min_scale,
-                        max_scale=kernel.max_scale,
-                    )
-                )
-            next_state: _Population = current._replace(
-                chains=updated,
-                random_key=next_key,
-                iteration=current.iteration + 1,
-                adaptation=tuning,
-            )
-            if tempering is not None:
-                exchange_kernel = tempering
-                next_state = next_state._replace(
-                    warmup_attempts=current.warmup_attempts + exchange.attempted,
-                    warmup_rejections=current.warmup_rejections + exchange.rejection_probability,
                 )
 
-                def adapt_ladder(population: _Population) -> _Population:
-                    ladder = adapt_temperature_ladder(
-                        population.betas, population.warmup_rejections, population.warmup_attempts
+            def adapt(updated: TrajectoryMCMCState) -> _Population:
+                tuning = adapt_scales(
+                    current.adaptation,
+                    kernel.dsmc,
+                    info["latent_accepted"],
+                    info["latent_proposed"],
+                    num_warmup,
+                )
+                updated = updated._replace(latent_delta=tuning.delta)
+                if da_param_update is not None:
+                    update_param = da_param_update
+                    param_da = jax.vmap(
+                        lambda da, accepted: _clip_dual_averaging_state(
+                            update_param(da, accepted),
+                            min_scale=kernel.min_scale,
+                            max_scale=kernel.max_scale,
+                        )
+                    )(updated.param_da, info["parameter_accepted"])
+                    log_step = jnp.where(
+                        current.iteration + 1 == num_warmup,
+                        param_da.log_step_size_avg,
+                        param_da.log_step_size,
                     )
-                    return population._replace(
-                        chains=exchange_kernel.rebind(population.chains, ladder),
-                        betas=ladder,
-                        warmup_attempts=jnp.zeros_like(population.warmup_attempts),
-                        warmup_rejections=jnp.zeros_like(population.warmup_rejections),
-                        ladder_frozen_at=population.iteration,
+                    updated = updated._replace(
+                        param_step_size=_clip_scale(
+                            jnp.exp(log_step).astype(updated.param_step_size.dtype),
+                            min_scale=kernel.min_scale,
+                            max_scale=kernel.max_scale,
+                        ),
+                        param_da=param_da,
+                    )
+                else:
+                    updated = updated._replace(
+                        param_step_size=_adapt_scale(
+                            updated.param_step_size,
+                            accepted=info["parameter_accepted"],
+                            target_accept=kernel.target_accept,
+                            adaptation_rate=adaptation_rate,
+                            min_scale=kernel.min_scale,
+                            max_scale=kernel.max_scale,
+                        )
+                    )
+                next_state: _Population = current._replace(
+                    chains=updated,
+                    random_key=next_key,
+                    iteration=current.iteration + 1,
+                    adaptation=tuning,
+                )
+                if tempering is not None:
+                    exchange_kernel = tempering
+                    next_state = next_state._replace(
+                        warmup_attempts=current.warmup_attempts + exchange.attempted,
+                        warmup_rejections=current.warmup_rejections
+                        + exchange.rejection_probability,
                     )
 
-                adapted: _Population = jax.lax.cond(
-                    (next_state.iteration % tempering.spec.adaptation_interval == 0)
-                    & (next_state.iteration <= num_warmup // 2),
-                    adapt_ladder,
-                    lambda population: population,
-                    next_state,
-                )
-                next_state = adapted
-            return next_state, record
+                    def adapt_ladder(population: _Population) -> _Population:
+                        ladder = adapt_temperature_ladder(
+                            population.betas,
+                            population.warmup_rejections,
+                            population.warmup_attempts,
+                        )
+                        return population._replace(
+                            chains=exchange_kernel.rebind(population.chains, ladder),
+                            betas=ladder,
+                            warmup_attempts=jnp.zeros_like(population.warmup_attempts),
+                            warmup_rejections=jnp.zeros_like(population.warmup_rejections),
+                            ladder_frozen_at=population.iteration,
+                        )
+
+                    adapted: _Population = jax.lax.cond(
+                        (next_state.iteration % tempering.spec.adaptation_interval == 0)
+                        & (next_state.iteration <= num_warmup // 2),
+                        adapt_ladder,
+                        lambda population: population,
+                        next_state,
+                    )
+                    next_state = adapted
+                return next_state
+
+            next_population: _Population = jax.lax.cond(posterior, retain, adapt, updated)
+            return next_population, {
+                **record,
+                "positions": cold.position,
+                "paths": cold.latent_trajectory,
+            }
 
         return sweep
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import io
 import json
@@ -13,7 +14,8 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from importlib.metadata import version
 from pathlib import Path, PurePosixPath
-from tempfile import NamedTemporaryFile, TemporaryDirectory
+from tempfile import NamedTemporaryFile, gettempdir
+from threading import Lock
 from time import perf_counter
 from typing import TYPE_CHECKING, Literal
 
@@ -27,8 +29,34 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
 _AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
+_KERNELS = "xla_gpu_kernel_cache_file"
 _MANIFEST_LIMIT = 256 * 1024
 _LOGGER = logging.getLogger(__name__)
+_CACHE_LOCK = Lock()
+
+
+@contextmanager
+def _local_directory() -> Iterator[Path]:
+    """Serialize the process-global JAX configuration and its stable local path.
+
+    XLA's kernel-cache filename participates in the executable key. A random
+    temporary directory therefore invalidates otherwise identical programs.
+    The lock lives outside the cleared directory and also excludes other local
+    processes; interrupted runs cannot contribute uncommitted cache files.
+    """
+    root = Path(gettempdir()) / f"nof1-fit-jax-{os.getuid()}"
+    root.mkdir(mode=0o700, exist_ok=True)
+    with _CACHE_LOCK, (root / "lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        working = root / "working"
+        if working.exists():
+            shutil.rmtree(working)
+        working.mkdir(mode=0o700)
+        try:
+            yield working
+        finally:
+            shutil.rmtree(working)
+            fcntl.flock(lock, fcntl.LOCK_UN)
 
 
 class CacheLimit(Value):
@@ -39,10 +67,11 @@ class CacheLimit(Value):
 
 
 class CachePolicy(Value):
-    """Separate bounded persistence selections for executables and autotuning."""
+    """Separate bounded persistence for executables, autotuning and GPU kernels."""
 
     executables: CacheLimit
     autotune: CacheLimit
+    kernels: CacheLimit
 
     @property
     def archive_bytes(self) -> int:
@@ -50,8 +79,9 @@ class CachePolicy(Value):
         return (
             self.executables.bytes
             + self.autotune.bytes
+            + self.kernels.bytes
             + _MANIFEST_LIMIT
-            + 1024 * (self.executables.files + self.autotune.files)
+            + 1024 * (self.executables.files + self.autotune.files + self.kernels.files)
             + 10240
         )
 
@@ -60,6 +90,7 @@ FIT_CACHE_MIN_COMPILE_SECONDS = 1.0
 FIT_CACHE_POLICY = CachePolicy(
     executables=CacheLimit(files=64, bytes=256 * 1024**2),
     autotune=CacheLimit(files=128, bytes=16 * 1024**2),
+    kernels=CacheLimit(files=1, bytes=128 * 1024**2),
 )
 
 
@@ -74,12 +105,12 @@ class CacheEntry(Value):
     @field_validator("path")
     @classmethod
     def parse_path(cls, path: str) -> str:
-        """Own canonical relative paths for the two compiler cache families."""
+        """Own canonical relative paths for the three compiler cache families."""
         parts = PurePosixPath(path).parts
         executable = len(parts) == 1 and path.endswith("-cache")
         autotune = len(parts) > 1 and parts[0] == _AUTOTUNE
         if (
-            not (executable or autotune)
+            not (executable or autotune or path == _KERNELS)
             or ".." in parts
             or PurePosixPath(path).is_absolute()
             or str(PurePosixPath(path)) != path
@@ -90,8 +121,10 @@ class CacheEntry(Value):
         return path
 
     @property
-    def family(self) -> Literal["executable", "autotune"]:
+    def family(self) -> Literal["executable", "autotune", "kernels"]:
         """Project the family already established by path parsing."""
+        if self.path == _KERNELS:
+            return "kernels"
         return "autotune" if self.path.startswith(_AUTOTUNE + "/") else "executable"
 
 
@@ -150,6 +183,7 @@ def _selected(working: Path, policy: CachePolicy) -> tuple[CacheEntry, ...]:
     for candidates, limit in (
         (working.glob("*-cache"), policy.executables),
         ((working / _AUTOTUNE).rglob("*"), policy.autotune),
+        ((working / _KERNELS,), policy.kernels),
     ):
         files = sorted(
             (path for path in candidates if not path.is_symlink() and path.is_file()),
@@ -184,6 +218,7 @@ def _parse_manifest(data: bytes, policy: CachePolicy) -> tuple[CacheEntry, ...]:
     for family, limit in (
         ("executable", policy.executables),
         ("autotune", policy.autotune),
+        ("kernels", policy.kernels),
     ):
         selected = tuple(entry for entry in entries if entry.family == family)
         if len(selected) > limit.files or sum(entry.size for entry in selected) > limit.bytes:
@@ -299,8 +334,7 @@ def local_compilation_cache(
 ) -> Iterator[Path]:
     """Stage before fitting and persist on success; restore JAX settings on every exit."""
     archive_path = persistent_root / f"{cache_namespace(policy)}.tar"
-    with TemporaryDirectory(prefix="nof1-fit-jax-") as directory:
-        working = Path(directory)
+    with _local_directory() as working:
         previous, staged = stage_cache(archive_path, working, policy)
         report(staged)
         settings = {
@@ -308,7 +342,7 @@ def local_compilation_cache(
             "jax_enable_compilation_cache": True,
             "jax_persistent_cache_min_compile_time_secs": FIT_CACHE_MIN_COMPILE_SECONDS,
             "jax_persistent_cache_min_entry_size_bytes": 0,
-            "jax_persistent_cache_enable_xla_caches": _AUTOTUNE,
+            "jax_persistent_cache_enable_xla_caches": f"{_AUTOTUNE},{_KERNELS}",
             "jax_compilation_cache_max_size": -1,
         }
         old = {name: jax.config.values[name] for name in settings}

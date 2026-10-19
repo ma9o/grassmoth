@@ -36,6 +36,7 @@ processes:
     working_dir: apps/data-pipeline
     command: uv run python -m nof1_causal_lab.actions.temporal.worker
     environment:
+      - PYTHONHASHSEED=0
       - TEMPORAL_ADDRESS=localhost:7233
     depends_on:
       temporal:

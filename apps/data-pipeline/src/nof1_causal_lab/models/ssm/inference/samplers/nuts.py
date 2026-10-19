@@ -49,7 +49,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.compute.budget import ComputeBudget
     from nof1_causal_lab.models.ssm.inference.joint_coordinates import JointChart
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
-    from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepStage
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
@@ -224,24 +223,33 @@ def run_nuts_da(
         return {"positions": parameters, "paths": path}
 
     def step_factory(
-        _batch_size: int, stage: SweepStage
+        _batch_size: int,
     ) -> Callable[
-        [tuple[HMCState, jax.Array, JointChart]],
+        [tuple[HMCState, jax.Array, JointChart], jax.Array],
         tuple[tuple[HMCState, jax.Array, JointChart], dict[str, jax.Array]],
     ]:
         def sweep(
             carry: tuple[HMCState, jax.Array, JointChart],
+            posterior: jax.Array,
         ) -> tuple[tuple[HMCState, jax.Array, JointChart], dict[str, jax.Array]]:
             current, key, runtime_chart = carry
             next_key, step_key = jax.random.split(key)
             current = current._replace(rng_key=jax.random.split(step_key, sampler.num_chains))
             updated = jax.vmap(step, in_axes=(0, None))(current, runtime_chart)
             record = dict(_extra_fields(updated, trajectory=trajectory))
-            if stage == "posterior":
-                record = {
-                    **record,
-                    **jax.vmap(project, in_axes=(0, None))(updated.z, runtime_chart),
-                }
+            projected = jax.lax.cond(
+                posterior,
+                lambda: jax.vmap(project, in_axes=(0, None))(updated.z, runtime_chart),
+                lambda: {
+                    "positions": jnp.zeros(
+                        (sampler.num_chains, target.initial_position.size), dtype=updated.z.dtype
+                    ),
+                    "paths": jnp.zeros(
+                        (sampler.num_chains, *target.independent_mask.shape), dtype=updated.z.dtype
+                    ),
+                },
+            )
+            record = {**record, **projected}
             return (updated, next_key, runtime_chart), record
 
         return sweep

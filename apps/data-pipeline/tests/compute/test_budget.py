@@ -52,6 +52,39 @@ def test_batch_width_adapts_to_memory_and_workload_without_executing():
     executable.assert_not_called()
 
 
+def test_width_depends_on_total_capacity_and_busy_memory_rejects_before_execution():
+    widths = []
+    executable = Mock(side_effect=AssertionError("Planning must not execute numerical kernels"))
+
+    def compile_batch(size):
+        widths.append(size)
+        return executable, MemoryDemand(host_bytes=0, device_bytes=10 * size)
+
+    for occupied in (0, 30):
+        selected = compile_from_estimate(
+            compile_batch,
+            single_memory=MemoryDemand(host_bytes=0, device_bytes=20),
+            max_batch_size=16,
+            budget=ComputeBudget(
+                memory=SharedMemoryBudget(available_bytes=100),
+                occupied=MemoryDemand(host_bytes=occupied, device_bytes=0),
+            ),
+        )
+        assert selected.batch_size == 4
+    with pytest.raises(MemoryError, match="currently available"):
+        compile_from_estimate(
+            compile_batch,
+            single_memory=MemoryDemand(host_bytes=0, device_bytes=20),
+            max_batch_size=16,
+            budget=ComputeBudget(
+                memory=SharedMemoryBudget(available_bytes=100),
+                occupied=MemoryDemand(host_bytes=70, device_bytes=0),
+            ),
+        )
+    assert widths == [4, 4, 4]
+    executable.assert_not_called()
+
+
 def test_compiled_memory_is_verified_when_workspaces_scale_non_linearly():
     widths = []
     executable = Mock(side_effect=AssertionError("Planning must not execute numerical kernels"))

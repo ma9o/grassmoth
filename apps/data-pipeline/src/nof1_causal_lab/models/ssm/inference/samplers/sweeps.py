@@ -22,6 +22,7 @@ from nof1_causal_lab.models.ssm.inference.samplers.progress import (
 from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import (
     CompiledSweepPhase,
     compile_sweeps,
+    runtime_program,
 )
 
 if TYPE_CHECKING:
@@ -32,7 +33,7 @@ if TYPE_CHECKING:
     from jax.typing import DTypeLike
 
     from nof1_causal_lab.compute.budget import ComputeBudget
-    from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepPlan, SweepStage
+    from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepPlan
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
 
@@ -59,9 +60,7 @@ class SweepRun[Carry]:
 
 
 def compile_projected_sweeps[Carry](
-    step_factory: Callable[
-        [int, SweepStage], Callable[[Carry], tuple[Carry, dict[str, jax.Array]]]
-    ],
+    step_factory: Callable[[int], Callable[[Carry, jax.Array], tuple[Carry, dict[str, jax.Array]]]],
     initial: Carry,
     *,
     target: ParticleTarget,
@@ -90,7 +89,12 @@ def compile_projected_sweeps[Carry](
     paths = jax.ShapeDtypeStruct(
         (block_size, num_chains, len(target.times), target.independent_mask.shape[-1]), path_dtype
     )
-    projection_trace: Traced = jax.jit(jax.vmap(jax.vmap(project))).trace(positions, paths)
+    project_program, projection_arguments = runtime_program(
+        jax.vmap(jax.vmap(project)), positions, paths
+    )
+    projection_trace: Traced = jax.jit(project_program).trace(
+        projection_arguments, positions, paths
+    )
     estimate = traced_memory(projection_trace.jaxpr)
     shape = projection_trace.out_info
     transfer = shape.size * shape.dtype.itemsize
@@ -126,7 +130,9 @@ def compile_projected_sweeps[Carry](
         raise MemoryError(
             "Sweep and observation projection exceed the numerical execution memory budget"
         )
-    return replace(plan, projection=projection, memory=demand)
+    return replace(
+        plan, projection=projection, projection_arguments=projection_arguments, memory=demand
+    )
 
 
 def run_sweeps[Carry](
@@ -169,19 +175,19 @@ def run_sweeps[Carry](
                 while remaining:
                     count = 1 if completed == 0 else min(plan.block_size, remaining)
                     transition: tuple[Carry, dict[str, jax.Array]] = phase.executable(
-                        state, jnp.asarray(count)
+                        phase.arguments, state, jnp.asarray(count), jnp.asarray(stage == "sampling")
                     )
                     state, block = transition
                     if stage == "sampling" and plan.projection is not None:
                         block = {
                             **block,
                             "observation_log_probs": plan.projection(
-                                block["positions"], block["paths"]
+                                plan.projection_arguments, block["positions"], block["paths"]
                             ),
                         }
                     host_block = jax.device_get(block)
                     start = phase.steps - remaining
-                    for name in host_block:
+                    for name in buffers:
                         buffers[name][:, start : start + count] = host_block[name][:count].swapaxes(
                             0, 1
                         )

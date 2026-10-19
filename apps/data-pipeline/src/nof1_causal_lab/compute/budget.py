@@ -34,8 +34,26 @@ class ComputeBudget(Value):
     """Resolved resources, with headroom already reserved at the application boundary."""
 
     memory: SharedMemoryBudget | AcceleratorMemoryBudget
+    occupied: MemoryDemand = NO_MEMORY_DEMAND
 
     def capacity(
+        self,
+        demand: MemoryDemand,
+        *,
+        limit: int,
+        overhead: MemoryDemand = NO_MEMORY_DEMAND,
+    ) -> int:
+        """Count operations that fit the unoccupied part of the allocation."""
+        return self.planning_capacity(
+            demand,
+            limit=limit,
+            overhead=MemoryDemand(
+                host_bytes=overhead.host_bytes + self.occupied.host_bytes,
+                device_bytes=overhead.device_bytes + self.occupied.device_bytes,
+            ),
+        )
+
+    def planning_capacity(
         self,
         demand: MemoryDemand,
         *,
