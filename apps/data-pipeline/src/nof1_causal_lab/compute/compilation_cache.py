@@ -152,28 +152,29 @@ def _program_key(structure: bytes, examples: object) -> str:
     digest = hashlib.sha256(structure)
     digest.update(_program_bytes(tuple(components.values())))
     key = digest.hexdigest()
-    _LOGGER.info(
-        "Staged program identity: %s",
-        json.dumps(
-            {
-                "key": key,
-                "components": {
-                    "structure": hashlib.sha256(structure).hexdigest(),
-                    **{
-                        name: hashlib.sha256(_program_bytes(value)).hexdigest()
-                        for name, value in components.items()
+    if _LOGGER.isEnabledFor(logging.DEBUG):
+        _LOGGER.debug(
+            "Staged program identity: %s",
+            json.dumps(
+                {
+                    "key": key,
+                    "components": {
+                        "structure": hashlib.sha256(structure).hexdigest(),
+                        **{
+                            name: hashlib.sha256(_program_bytes(value)).hexdigest()
+                            for name, value in components.items()
+                        },
                     },
+                    "source": components["source"],
+                    "jax_config": dict(
+                        sorted((name, str(value)) for name, value in jax.config.values.items())
+                    ),
+                    "pythonhashseed": os.environ.get("PYTHONHASHSEED"),
+                    "hash_randomization": sys.flags.hash_randomization,
                 },
-                "source": components["source"],
-                "jax_config": dict(
-                    sorted((name, str(value)) for name, value in jax.config.values.items())
-                ),
-                "pythonhashseed": os.environ.get("PYTHONHASHSEED"),
-                "hash_randomization": sys.flags.hash_randomization,
-            },
-            sort_keys=True,
-        ),
-    )
+                sort_keys=True,
+            ),
+        )
     return key
 
 
