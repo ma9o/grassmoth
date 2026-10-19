@@ -15,6 +15,7 @@ from nof1_causal_lab.artifacts.joint_parameterization import (
     MixedParameterizationRecord,
     NonCentredParameterizationRecord,
 )
+from nof1_causal_lab.compute.programs import ProgramCompiler, compile_jit
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.sampling import JointParameterization
@@ -205,7 +206,10 @@ class JointCoordinates:
 
 
 def build_joint_coordinates(
-    target: ParticleTarget, parameterization: JointParameterization = "centred"
+    target: ParticleTarget,
+    parameterization: JointParameterization = "centred",
+    *,
+    compiler: ProgramCompiler = compile_jit,
 ) -> JointCoordinates:
     """Freeze the policy; parameter-dependent innovation maps bind at each evaluation."""
     position = target.initial_position
@@ -234,4 +238,5 @@ def build_joint_coordinates(
         embedded = embedded + jax.vmap(jnp.diag)((~free).astype(path.dtype))
         return CentredParameterization(path, jnp.linalg.cholesky(embedded))
 
-    return JointCoordinates(target, position, free, indices, jax.jit(affine_chart)(position))
+    chart = compiler(affine_chart, position).call(position)
+    return JointCoordinates(target, position, free, indices, chart)

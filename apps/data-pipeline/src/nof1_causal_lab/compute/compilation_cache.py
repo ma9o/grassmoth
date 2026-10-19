@@ -20,7 +20,7 @@ from pathlib import Path, PurePosixPath
 from tempfile import NamedTemporaryFile, gettempdir
 from threading import Lock
 from time import perf_counter
-from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, cast
+from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, cast, override
 
 import cloudpickle
 import jax
@@ -32,12 +32,15 @@ from jaxlib import xla_client
 from pydantic import Field, TypeAdapter, field_validator
 
 from nof1_causal_lab.artifacts.base import Value
+from nof1_causal_lab.compute.programs import PreparedProgram
 from nof1_causal_lab.compute.traced_memory import traced_memory
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
+    from types import CellType, FunctionType, NotImplementedType
 
     from jax.stages import Compiled
+    from jax.tree_util import PyTreeDef
 
     from nof1_causal_lab.compute.budget import MemoryDemand
 
@@ -55,6 +58,16 @@ def numerical_source_digest() -> str:
 class _ModuleCallable(Protocol):
     __module__: str
     __name__: str
+
+
+type _FunctionReduction = tuple[
+    Callable[..., FunctionType],
+    tuple[object, object, None, None, tuple[CellType, ...] | None],
+    tuple[dict[str, object], dict[str, object]],
+    None,
+    None,
+    Callable[..., None],
+]
 
 
 def _module_callable_reduce(obj: _ModuleCallable) -> str | tuple[object, ...]:
@@ -75,6 +88,15 @@ class _ProgramPickler(cloudpickle.CloudPickler):
         jnp.ufunc: _module_callable_reduce,
         type(jnp.log): _module_callable_reduce,
     }
+
+    @override
+    def _function_reduce(self, obj: FunctionType) -> _FunctionReduction | NotImplementedType:
+        # Generated functions without a declared module carry their code and
+        # globals by value. Searching every imported module for each such
+        # function repeats thousands of failed lookups during cache keying.
+        if cast("str | None", obj.__module__) is None:
+            return self._dynamic_function_reduce(obj)
+        return super()._function_reduce(obj)
 
 
 def _program_bytes(value: object) -> bytes:
@@ -192,7 +214,10 @@ def _write_program(path: Path, data: bytes) -> None:
 
 
 def prepare_program[Result](
-    function: Callable[..., Result], *args: object, **kwargs: object
+    function: Callable[..., Result],
+    *args: object,
+    static_tree: PyTreeDef | None = None,  # pyright: ignore[reportInvalidTypeForm] - JAX exports this public type through its untyped nanobind registry.
+    **kwargs: object,
 ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
     """Reuse an exported program and sizing metadata before any model tracing.
 
@@ -207,7 +232,7 @@ def prepare_program[Result](
     # resolve these references against that process's constructed input tree.
     static_buffer = io.BytesIO()
     static_pickler = _ProgramPickler(static_buffer, protocol=5)
-    static_pickler.dump(jax.tree.structure((args, kwargs)))
+    static_pickler.dump((jax.tree.structure((args, kwargs)), static_tree))
     static_memo = cast("Mapping[int, tuple[int, object]]", static_pickler.memo.copy())
     static_values = dict(static_memo.values())
     structure, arguments = _program_structure(function, static_memo)
@@ -275,6 +300,17 @@ def prepare_program[Result](
                 _write_program(program_path, bytes(exported.serialize()))
         _LOGGER.info("Staged program %s: %s", "hit" if hit else "miss", key)
 
+        # Export serialization drops weak_type. Restore the recorded output
+        # types so later programs see the same promotion rules and cache keys.
+        output_shapes = cast("tuple[jax.ShapeDtypeStruct, ...]", tuple(jax.tree.leaves(shapes)))
+        exported = replace(
+            exported,
+            out_avals=tuple(
+                aval.update(weak_type=shape.weak_type)
+                for aval, shape in zip(exported.out_avals, output_shapes, strict=True)
+            ),
+        )
+
         def restored(values: tuple[jax.Array, ...], *inputs: object, **options: object) -> Result:
             leaves = jax.tree.leaves((values, inputs, options))
             return cast("Result", jax.tree.unflatten(output_tree, exported.call(*leaves)))
@@ -282,6 +318,24 @@ def prepare_program[Result](
         return jax.jit(restored).lower(arguments, *args, **kwargs).compile()
 
     return compile_program, arguments, shapes, memory
+
+
+def compile_staged[Result](
+    function: Callable[..., Result],
+    *args: object,
+    static_tree: PyTreeDef | None = None,  # pyright: ignore[reportInvalidTypeForm] - JAX exports this public type through its untyped nanobind registry.
+    **kwargs: object,
+) -> PreparedProgram[Result]:
+    """Bind a setup program through the same staged cache used by sweep programs."""
+    compile_program, operands, _, _ = prepare_program(
+        function, *args, static_tree=static_tree, **kwargs
+    )
+    executable = compile_program()
+
+    def call(*inputs: object, **options: object) -> Result:
+        return cast("Result", executable(operands, *inputs, **options))
+
+    return PreparedProgram(executable, call)
 
 
 _AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"

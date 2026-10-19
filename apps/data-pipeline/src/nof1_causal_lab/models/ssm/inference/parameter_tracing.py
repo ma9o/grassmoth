@@ -25,6 +25,7 @@ import jax.numpy as jnp
 import numpyro.distributions as dist
 from numpyro import handlers
 
+from nof1_causal_lab.compute.programs import ProgramCompiler, compile_jit
 from nof1_causal_lab.models.ssm.constants import INTERNAL_DIAGNOSTIC_SITES
 from nof1_causal_lab.models.ssm.inference.parameter_transform import (
     ParameterTransform,
@@ -61,6 +62,8 @@ def _discover_sites(
     rng_key: jax.Array,
     likelihood_backend: InitializationLikelihoodBackend,
     reparam: Strategy | None = None,
+    *,
+    compiler: ProgramCompiler = compile_jit,
 ) -> SiteInfo:
     """Trace model once to discover sample sites (names, shapes, transforms).
 
@@ -95,7 +98,7 @@ def _discover_sites(
                 transform=dist.transforms.biject_to(distribution.support),
                 value=value,
             )
-            for name, (distribution, value) in jax.jit(draw_sites)(rng_key).items()
+            for name, (distribution, value) in compiler(draw_sites, rng_key).call(rng_key).items()
         }
     )
 
@@ -113,7 +116,12 @@ class _DummyLikelihoodBackend:
 
 
 def prepare_model_parameters(
-    priors: PriorRuntimeBundle, panel: BoundPanel, trace_key: jax.Array, reparam: Strategy | None
+    priors: PriorRuntimeBundle,
+    panel: BoundPanel,
+    trace_key: jax.Array,
+    reparam: Strategy | None,
+    *,
+    compiler: ProgramCompiler = compile_jit,
 ) -> tuple[ParameterTransform, SiteInfo, frozenset[str]]:
     """Use NumPyro's prior replay and transformations for every inference path."""
     prior_model = functools.partial(
@@ -121,7 +129,7 @@ def prepare_model_parameters(
     )
     public_sites = _trace_public_sites(prior_model)
     site_info = _discover_sites(
-        priors, panel, trace_key, _DummyLikelihoodBackend(), reparam=reparam
+        priors, panel, trace_key, _DummyLikelihoodBackend(), reparam=reparam, compiler=compiler
     )
     if reparam is not None:
         prior_model = handlers.reparam(prior_model, config=reparam)

@@ -11,6 +11,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
+from nof1_causal_lab.compute.programs import ProgramCompiler, compile_jit
 from nof1_causal_lab.models.ssm.compile.interval_tree import compile_interval_tree
 from nof1_causal_lab.models.ssm.compile.observation_partition import compile_observation_partition
 from nof1_causal_lab.models.ssm.compile.point_readings import compile_point_reading_mask
@@ -58,6 +59,7 @@ def build_particle_problem(
     scheme: str,
     trace_key: jax.Array,
     reparam: Strategy | None,
+    compiler: ProgramCompiler = compile_jit,
 ) -> ParticleProblem:
     """Prepare the parameter transform and the exact discrete model for sampling."""
     observations, times = panel.observations, panel.times
@@ -68,7 +70,7 @@ def build_particle_problem(
         compiled_dynamical_model, observations, input_values=panel.input_values
     )
     scientific_parameters, site_info, public_sites = prepare_model_parameters(
-        priors, panel, trace_key, reparam
+        priors, panel, trace_key, reparam, compiler=compiler
     )
     parameter_size = scientific_parameters.initial_position.size
     state_space = compiled_dynamical_model.state_space

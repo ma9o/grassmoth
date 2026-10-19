@@ -9,7 +9,7 @@ import subprocess
 import sys
 import tarfile
 import textwrap
-from types import SimpleNamespace
+from types import FunctionType, SimpleNamespace
 from unittest.mock import Mock
 
 import jax
@@ -38,9 +38,15 @@ def test_staging_preserves_public_and_user_created_jax_callables():
     assert all(left is right for left, right in zip(public, restored, strict=True))
 
     def programs(offset):
+        generated = FunctionType(
+            (lambda value, increment: value + increment).__code__,
+            {},
+            argdefs=(offset,),
+        )
         return (
             jax.jit(lambda value: value + offset),
             jnp.frompyfunc(lambda value: value + offset, 1, 1),
+            generated,
         )
 
     first = cache._program_bytes(programs(1))
@@ -70,7 +76,8 @@ def test_staged_program_key_tracks_all_installed_dependency_versions(monkeypatch
     assert cache._program_key(b"same structure", layout) != original
 
 
-def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp_path):
+@pytest.mark.parametrize("output_only", [False, True])
+def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp_path, output_only):
     script = textwrap.dedent(
         """
         import json, os
@@ -88,18 +95,27 @@ def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp
         def make_program(offset, power):
             def program(carry):
                 assert os.environ['FORBID_TRACE'] == '0', 'cache hit retraced the program'
+                if os.environ['OUTPUT_ONLY'] == '1':
+                    return template, (carry + offset) ** power
                 return jax.lax.cond(
                     True, lambda: (template, (carry[1] + offset) ** power), lambda: carry
                 )
             return program
 
+        output_only = os.environ['OUTPUT_ONLY'] == '1'
+        example = jax.ShapeDtypeStruct((2,), jnp.float32)
         compile_program, arguments, shapes, memory = prepare_program(
             make_program(jnp.asarray(float(os.environ['OFFSET'])), int(os.environ['POWER'])),
-            (template, jax.ShapeDtypeStruct((2,), jnp.float32)),
+            example if output_only else (template, example),
+            static_tree=jax.tree.structure(template) if output_only else None,
         )
         executable = compile_program()
-        actual = executable(arguments, (template, jnp.ones((2,), dtype=jnp.float32)))
-        executable(arguments, actual)  # Returned static metadata must remain valid carry metadata.
+        value = jnp.ones((2,), dtype=jnp.float32)
+        actual = executable(arguments, value if output_only else (template, value))
+        if not output_only:
+            executable(arguments, actual)
+        # Returned static metadata must remain compatible with the live caller's model.
+        jax.jit(lambda carry: jax.lax.cond(True, lambda: carry, lambda: (template, carry[1])))(actual)
         assert actual[0].evaluate_fn is template.evaluate_fn
         print(json.dumps({'value': actual[1].tolist(), 'shape': shapes[1].shape,
                           'bytes': memory.device_bytes}))
@@ -116,6 +132,7 @@ def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp
                 "OFFSET": str(offset),
                 "POWER": str(power),
                 "FORBID_TRACE": str(forbid_trace),
+                "OUTPUT_ONLY": str(int(output_only)),
             },
             check=True,
             capture_output=True,
@@ -139,6 +156,21 @@ def test_staged_key_keeps_input_tree_identity_with_identical_leaf_layouts(tmp_pa
         for argument in ({"a": leaf}, {"b": leaf}, (leaf,), {"a": leaf}):
             prepare_program(identity, argument)
         assert len(tuple(working.glob("nof1-shapes-*-cache"))) == 3
+
+
+def test_restored_staged_outputs_preserve_weak_scalar_types(tmp_path):
+    from nof1_causal_lab.compute.compilation_cache import compile_staged
+
+    def increment(value):
+        return value + 1
+
+    scalar = jnp.asarray(2.0)
+    with local_compilation_cache(tmp_path, commit=lambda: None):
+        cold = compile_staged(increment, scalar).call(scalar)
+    with local_compilation_cache(tmp_path, commit=lambda: None):
+        warm = compile_staged(increment, scalar).call(scalar)
+    assert jax.typeof(cold) == jax.typeof(warm) == jax.typeof(scalar)
+    assert cold == warm == 3
 
 
 def _file(root, name, content, modified):

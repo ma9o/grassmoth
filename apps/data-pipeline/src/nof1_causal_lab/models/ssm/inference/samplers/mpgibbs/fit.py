@@ -18,6 +18,7 @@ from nof1_causal_lab.artifacts.continuation import (
 from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
 from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec
+from nof1_causal_lab.compute.compilation_cache import compile_staged
 from nof1_causal_lab.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
@@ -115,6 +116,7 @@ def fit_marginal_particle_gibbs(
             scheme=scheme,
             trace_key=trace_key,
             reparam=reparam,
+            compiler=compile_staged,
         )
     logger.info(
         "phase 1/4: bundle ready in %.1fs (dim=%d, public_sites=%d)",
@@ -135,6 +137,7 @@ def fit_marginal_particle_gibbs(
                 spec=options.initialization,
                 key=laps_key,
                 num_chains=sampler.num_chains,
+                compiler=compile_staged,
             )
     if isinstance(initialization, InitializationFailure):
         return initialization

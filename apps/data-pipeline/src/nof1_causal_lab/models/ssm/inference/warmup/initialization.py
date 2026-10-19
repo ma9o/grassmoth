@@ -16,6 +16,7 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
 )
 from nof1_causal_lab.artifacts.sampling import GaussianInitializationSpec
 from nof1_causal_lab.compute.batching import compiled_memory
+from nof1_causal_lab.compute.programs import ProgramCompiler, compile_jit
 from nof1_causal_lab.models.ssm.inference.joint_coordinates import (
     CentredParameterization,
     JointChart,
@@ -74,10 +75,11 @@ def prepare_particle_initialization(
     key: jax.Array,
     num_chains: int,
     compute_budget: ComputeBudget,
+    compiler: ProgramCompiler = compile_jit,
 ) -> ParticleInitialization | InitializationFailure:
     """Select explicit starting geometry without changing the retained target."""
     if isinstance(spec, GaussianInitializationSpec):
-        coordinates = build_joint_coordinates(target, "centred")
+        coordinates = build_joint_coordinates(target, "centred", compiler=compiler)
         assert isinstance(coordinates.parameterization, CentredParameterization)
 
         def draw(
@@ -95,12 +97,12 @@ def prepare_particle_initialization(
                 jnp.var(paths, axis=0),
             )
 
-        compiled = jax.jit(draw).lower(coordinates.chart, key).compile()
-        if not compute_budget.capacity(compiled_memory(compiled), limit=1):
+        program = compiler(draw, coordinates.chart, key)
+        if not compute_budget.capacity(compiled_memory(program.executable), limit=1):
             raise MemoryError(
                 "Gaussian initialization exceeds the numerical execution memory budget"
             )
-        positions, paths, parameter_chol, pilot_mean, pilot_variance = compiled(
+        positions, paths, parameter_chol, pilot_mean, pilot_variance = program.call(
             coordinates.chart, key
         )
         if not all(np.isfinite(np.asarray(value)).all() for value in (positions, paths)):
@@ -123,6 +125,7 @@ def prepare_particle_initialization(
         key=key,
         num_chains=num_chains,
         compute_budget=compute_budget,
+        compiler=compiler,
     )
 
 
@@ -158,13 +161,14 @@ def prepare_laps_initialization(
     num_chains: int,
     compute_budget: ComputeBudget,
     record_trace: bool = False,
+    compiler: ProgramCompiler = compile_jit,
 ) -> ParticleInitialization | InitializationFailure:
     """Produce one initialization package without executing a particle smoother."""
     if num_chains > spec.ensemble_size:
         return InitializationFailure.unavailable(
             "LAPS ensemble_size must cover all requested particle chains"
         )
-    coordinates = build_joint_coordinates(target, "centred")
+    coordinates = build_joint_coordinates(target, "centred", compiler=compiler)
     assert isinstance(coordinates.parameterization, CentredParameterization)
     if not all(
         np.isfinite(np.asarray(value)).all()
@@ -189,7 +193,9 @@ def prepare_laps_initialization(
     )
     if isinstance(ensemble, InitializationFailure):
         return ensemble
-    positions, paths = jax.jit(jax.vmap(coordinates.decode))(ensemble.positions)
+    positions, paths = compiler(jax.vmap(coordinates.decode), ensemble.positions).call(
+        ensemble.positions
+    )
     centered = positions - jnp.mean(positions, axis=0)
     covariance = centered.T @ centered / (spec.ensemble_size - 1)
     covariance = covariance + spec.covariance_regularization * jnp.eye(
