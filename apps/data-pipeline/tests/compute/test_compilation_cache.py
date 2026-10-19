@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import pickle
 import subprocess
 import sys
 import tarfile
@@ -12,6 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import jax
+import jax.numpy as jnp
 import pytest
 
 from nof1_causal_lab.compute.compilation_cache import (
@@ -26,6 +28,27 @@ from nof1_causal_lab.compute.compilation_cache import (
 pytestmark = pytest.mark.contract
 AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
 KERNELS = "xla_gpu_kernel_cache_file"
+
+
+def test_staging_preserves_public_and_user_created_jax_callables():
+    from nof1_causal_lab.compute import compilation_cache as cache
+
+    public = (jnp.log, jnp.add)
+    restored = pickle.loads(cache._program_bytes(public))
+    assert all(left is right for left, right in zip(public, restored, strict=True))
+
+    def programs(offset):
+        return (
+            jax.jit(lambda value: value + offset),
+            jnp.frompyfunc(lambda value: value + offset, 1, 1),
+        )
+
+    first = cache._program_bytes(programs(1))
+    second = cache._program_bytes(programs(2))
+    assert first != second
+    for data, expected in ((first, 4), (second, 5)):
+        for function in pickle.loads(data):
+            assert function(jnp.asarray(3, dtype=jnp.float32)) == expected
 
 
 @pytest.mark.parametrize("dependency", ["cuthbert", "cuthbertlib", "cd-dynamax"])
@@ -115,6 +138,7 @@ def _file(root, name, content, modified):
 def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path):
     working = tmp_path / "working"
     policy = CachePolicy(
+        staged=CacheLimit(files=2, bytes=9),
         executables=CacheLimit(files=2, bytes=9),
         autotune=CacheLimit(files=1, bytes=5),
         kernels=CacheLimit(files=1, bytes=6),
@@ -130,12 +154,12 @@ def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path
     (working / "link-cache").symlink_to(working / "new-cache")
     archive = tmp_path / "volume" / "selected.tar"
     commit = Mock()
-    persisted = persist_cache(archive, working, (), policy, commit)
+    persisted = persist_cache(archive, working, (), policy, "accelerator", commit)
     assert (persisted.files, persisted.bytes) == (4, 19)
-    assert persisted.archive_bytes == archive.stat().st_size <= policy.archive_bytes
+    assert persisted.archive_bytes == archive.stat().st_size <= policy.archive_bytes("accelerator")
     assert min(persisted.copy_seconds, persisted.selection_seconds, persisted.commit_seconds) >= 0
     commit.assert_called_once_with()
-    staged, transfer = stage_cache(archive, tmp_path / "fresh", policy)
+    staged, transfer = stage_cache(archive, tmp_path / "fresh", policy, "accelerator")
     assert [entry.path for entry in staged] == [
         "new-cache",
         "old-cache",
@@ -151,7 +175,7 @@ def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path
         assert (tmp_path / "fresh" / entry.path).read_bytes() == (working / entry.path).read_bytes()
         assert (tmp_path / "fresh" / entry.path).stat().st_mtime_ns == entry.modified_ns
     commit.reset_mock()
-    unchanged = persist_cache(archive, tmp_path / "fresh", staged, policy, commit)
+    unchanged = persist_cache(archive, tmp_path / "fresh", staged, policy, "accelerator", commit)
     assert (unchanged.files, unchanged.bytes, unchanged.copy_seconds, unchanged.commit_seconds) == (
         0,
         0,
@@ -190,9 +214,9 @@ def test_invalid_bundles_fail_before_use_without_fallback(tmp_path, defect):
     _bundle(archive, entries)
     if defect == "archive":
         with archive.open("r+b") as target:
-            target.truncate(policy.archive_bytes + 1)
+            target.truncate(policy.archive_bytes("accelerator") + 1)
     with pytest.raises(ValueError, match="cache"):
-        stage_cache(archive, tmp_path / "local", policy)
+        stage_cache(archive, tmp_path / "local", policy, "accelerator")
     assert not (tmp_path / "escape").exists()
 
 
@@ -213,14 +237,24 @@ def test_local_lifecycle_isolated_namespaces_failure_cleanup_and_accounting(tmp_
         assert jax.config.jax_persistent_cache_enable_xla_caches == f"{AUTOTUNE},{KERNELS}"
         _file(working, "compiled-cache", b"binary", 100)
     assert not working.exists()
-    assert [(r.phase, r.files, r.bytes) for r in reports] == [("stage", 0, 0), ("persist", 1, 6)]
+    assert [(r.phase, r.files, r.bytes) for r in reports] == [
+        ("stage", 0, 0),
+        ("stage", 0, 0),
+        ("persist", 0, 0),
+        ("persist", 1, 6),
+    ]
     assert {key: jax.config.values[key] for key in before} == before
     reports.clear()
     first_path = working
     with local_compilation_cache(persistent, commit=commit, report=reports.append) as working:
         assert working == first_path
         assert (working / "compiled-cache").read_bytes() == b"binary"
-    assert [(r.phase, r.files) for r in reports] == [("stage", 1), ("persist", 0)]
+    assert [(r.phase, r.files) for r in reports] == [
+        ("stage", 0),
+        ("stage", 1),
+        ("persist", 0),
+        ("persist", 0),
+    ]
     commit.assert_called_once_with()
     with (
         pytest.raises(RuntimeError, match="fit failed"),
@@ -270,3 +304,66 @@ def test_kernel_cache_path_does_not_change_executable_keys_between_contexts(tmp_
             jax.jit(arithmetic).lower(jax.ShapeDtypeStruct((4,), "float32")).compile()
     assert len(keys) == 2
     assert keys[0] == keys[1]
+
+
+def test_topology_writers_keep_separate_binaries_and_share_staged_artifacts(tmp_path, monkeypatch):
+    from nof1_causal_lab.compute import compilation_cache as cache
+
+    monkeypatch.setattr(cache, "cache_namespace", lambda _policy: "namespace")
+    commit = Mock()
+    for topology in ("a" * 64, "b" * 64):
+        monkeypatch.setattr(cache, "accelerator_partition", lambda topology=topology: topology)
+        with local_compilation_cache(tmp_path, commit=commit) as working:
+            assert not (working / "compiled-cache").exists()
+            assert not (working / KERNELS).exists()
+            if topology.startswith("a"):
+                _file(working, "nof1-program-shared-cache", b"staged", 1)
+            else:
+                assert (working / "nof1-program-shared-cache").read_bytes() == b"staged"
+            _file(working, "compiled-cache", topology.encode(), 2)
+            _file(working, KERNELS, topology.encode(), 2)
+    assert commit.call_count == 2  # One volume commit per fit, not per archive.
+    snapshots = {path.name: path.read_bytes() for path in (tmp_path / "namespace").iterdir()}
+    assert set(snapshots) == {"shared.tar", "a" * 64 + ".tar", "b" * 64 + ".tar"}
+    for topology in ("a" * 64, "b" * 64):
+        monkeypatch.setattr(cache, "accelerator_partition", lambda topology=topology: topology)
+        with local_compilation_cache(tmp_path, commit=commit) as working:
+            assert (working / "compiled-cache").read_bytes() == topology.encode()
+            assert (working / KERNELS).read_bytes() == topology.encode()
+            assert (working / "nof1-program-shared-cache").read_bytes() == b"staged"
+    assert commit.call_count == 2
+    assert snapshots == {
+        path.name: path.read_bytes() for path in (tmp_path / "namespace").iterdir()
+    }
+    previous_limit = 400 * 1024**2 + 256 * 1024 + 193 * 1024 + 10240
+    assert (
+        sum(FIT_CACHE_POLICY.archive_bytes(p) for p in ("shared", "accelerator")) <= previous_limit
+    )
+
+
+@pytest.mark.parametrize(
+    ("partition", "name"),
+    [("shared", "binary-cache"), ("accelerator", "nof1-program-export-cache")],
+)
+def test_bundle_rejects_entries_owned_by_other_partition(tmp_path, partition, name):
+    archive = tmp_path / "wrong.tar"
+    _bundle(
+        archive,
+        [{"path": name, "size": 3, "modified_ns": 1, "sha256": hashlib.sha256(b"abc").hexdigest()}],
+    )
+    with pytest.raises(ValueError, match="another partition"):
+        stage_cache(archive, tmp_path / "working", FIT_CACHE_POLICY, partition)
+
+
+def test_accelerator_partition_matches_jax_fingerprint_component(monkeypatch):
+    from nof1_causal_lab.compute import compilation_cache as cache
+
+    devices = [object()]
+    monkeypatch.setattr(cache.jax, "local_devices", lambda: devices)
+    topology = SimpleNamespace(fingerprint=lambda: 123456789)
+    describe = Mock(return_value=topology)
+    monkeypatch.setattr(cache.xla_client, "get_topology_for_devices", describe)
+    assert (
+        cache.accelerator_partition() == hashlib.sha256((123456789).to_bytes(8, "big")).hexdigest()
+    )
+    describe.assert_called_once_with(devices)

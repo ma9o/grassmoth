@@ -11,21 +11,24 @@ import os
 import pickle
 import platform
 import shutil
+import sys
 import tarfile
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from importlib.metadata import distributions, version
 from pathlib import Path, PurePosixPath
 from tempfile import NamedTemporaryFile, gettempdir
 from threading import Lock
 from time import perf_counter
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, ClassVar, Literal, Protocol, cast
 
 import cloudpickle
 import jax
+import jax.numpy as jnp
 from jax import export
 from jax.core import Tracer
 from jax.experimental.compilation_cache import compilation_cache
+from jaxlib import xla_client
 from pydantic import Field, TypeAdapter, field_validator
 
 from nof1_causal_lab.artifacts.base import Value
@@ -47,6 +50,37 @@ def numerical_source_digest() -> str:
         digest.update(str(path.relative_to(root)).encode())
         digest.update(path.read_bytes())
     return digest.hexdigest()
+
+
+class _ModuleCallable(Protocol):
+    __module__: str
+    __name__: str
+
+
+def _module_callable_reduce(obj: _ModuleCallable) -> str | tuple[object, ...]:
+    # Public JAX callables are versioned module objects, like ordinary imported
+    # functions. Serializing their implementation captures JIT runtime state
+    # whose string aliases vary between processes. User-created callables retain
+    # their full definition and captured values.
+    if getattr(sys.modules[obj.__module__], obj.__name__, None) is obj:
+        return obj.__name__
+    return obj.__reduce_ex__(5)
+
+
+class _ProgramPickler(cloudpickle.CloudPickler):
+    """Preserve imported callable identity without copying compiler runtime state."""
+
+    dispatch_table: ClassVar[dict[type, Callable[..., object]]] = {  # ty: ignore[invalid-attribute-override] - pickle supports class-level reducer tables; its stub declares an instance attribute.
+        **cloudpickle.CloudPickler.dispatch_table,
+        jnp.ufunc: _module_callable_reduce,
+        type(jnp.log): _module_callable_reduce,
+    }
+
+
+def _program_bytes(value: object) -> bytes:
+    buffer = io.BytesIO()
+    _ProgramPickler(buffer, protocol=5).dump(value)
+    return buffer.getvalue()
 
 
 def _program_structure(
@@ -82,7 +116,7 @@ def _program_structure(
         return None
 
     buffer = io.BytesIO()
-    pickler = cloudpickle.CloudPickler(buffer, protocol=5)
+    pickler = _ProgramPickler(buffer, protocol=5)
     pickler.persistent_id = array_id  # ty: ignore[invalid-assignment] # noqa: V101 - pickle supports per-instance callbacks, consumed internally.
     pickler.dump(function)
     return buffer.getvalue(), tuple(arrays)
@@ -94,26 +128,51 @@ def _program_key(structure: bytes, examples: object) -> str:
     layouts = tuple(
         (value.shape, str(value.dtype), bool(jax.typeof(value).weak_type)) for value in leaves
     )
-    identity = (
-        numerical_source_digest(),
-        platform.python_version(),
+    components = {
+        "source": numerical_source_digest(),
+        "python": platform.python_version(),
         # Cloudpickle references installed functions by name, including transitive
         # dependencies. Their versions must invalidate exports before tracing.
-        tuple(sorted((package.name, package.version) for package in distributions())),
-        cache_namespace(FIT_CACHE_POLICY),
-        tuple(
+        "dependencies": tuple(
+            sorted((package.name, package.version) for package in distributions())
+        ),
+        "namespace": cache_namespace(FIT_CACHE_POLICY),
+        "jax_config": tuple(
             sorted(
                 (name, str(value))
                 for name, value in jax.config.values.items()
                 if name != "jax_compilation_cache_dir"
             )
         ),
-        layouts,
-        tree,
-    )
+        "layouts": layouts,
+        "tree": tree,
+    }
     digest = hashlib.sha256(structure)
-    digest.update(cloudpickle.dumps(identity, protocol=5))
-    return digest.hexdigest()
+    digest.update(_program_bytes(tuple(components.values())))
+    key = digest.hexdigest()
+    _LOGGER.info(
+        "Staged program identity: %s",
+        json.dumps(
+            {
+                "key": key,
+                "components": {
+                    "structure": hashlib.sha256(structure).hexdigest(),
+                    **{
+                        name: hashlib.sha256(_program_bytes(value)).hexdigest()
+                        for name, value in components.items()
+                    },
+                },
+                "source": components["source"],
+                "jax_config": dict(
+                    sorted((name, str(value)) for name, value in jax.config.values.items())
+                ),
+                "pythonhashseed": os.environ.get("PYTHONHASHSEED"),
+                "hash_randomization": sys.flags.hash_randomization,
+            },
+            sort_keys=True,
+        ),
+    )
+    return key
 
 
 def _write_program(path: Path, data: bytes) -> None:
@@ -144,7 +203,7 @@ def prepare_program[Result](
     # refer to the same static evaluator function. Fresh-process cache loads
     # resolve these references against that process's constructed input tree.
     static_buffer = io.BytesIO()
-    static_pickler = cloudpickle.CloudPickler(static_buffer, protocol=5)
+    static_pickler = _ProgramPickler(static_buffer, protocol=5)
     static_pickler.dump(jax.tree.structure((args, kwargs)))
     static_memo = cast("Mapping[int, tuple[int, object]]", static_pickler.memo.copy())
     static_values = dict(static_memo.values())
@@ -190,7 +249,7 @@ def prepare_program[Result](
         memory = traced_memory(flattened.trace(*flat_args).jaxpr)
         if metadata_path is not None:
             metadata = io.BytesIO()
-            pickler = cloudpickle.CloudPickler(metadata, protocol=5)
+            pickler = _ProgramPickler(metadata, protocol=5)
 
             def static_id(value: object) -> int | None:
                 entry = static_memo.get(id(value))
@@ -224,9 +283,21 @@ def prepare_program[Result](
 
 _AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
 _KERNELS = "xla_gpu_kernel_cache_file"
-_MANIFEST_LIMIT = 256 * 1024
 _LOGGER = logging.getLogger(__name__)
 _CACHE_LOCK = Lock()
+
+type CachePartition = Literal["shared", "accelerator"]
+type CacheFamily = Literal["staged", "executable", "autotune", "kernels"]
+
+
+def accelerator_partition() -> str:
+    """Use the same topology fingerprint bytes as JAX's accelerator_config key."""
+    topology = xla_client.get_topology_for_devices(jax.local_devices())
+    return hashlib.sha256(topology.fingerprint().to_bytes(8, "big")).hexdigest()
+
+
+def _manifest_limit(partition: CachePartition) -> int:
+    return (64 if partition == "shared" else 128) * 1024
 
 
 @contextmanager
@@ -261,28 +332,38 @@ class CacheLimit(Value):
 
 
 class CachePolicy(Value):
-    """Separate bounded persistence for executables, autotuning and GPU kernels."""
+    """Bound shared staged artifacts separately from each accelerator's binaries."""
 
+    staged: CacheLimit
     executables: CacheLimit
     autotune: CacheLimit
     kernels: CacheLimit
 
-    @property
-    def archive_bytes(self) -> int:
-        """Bound payload plus manifest, tar headers, padding and end records."""
+    def families(self, partition: CachePartition) -> tuple[tuple[CacheFamily, CacheLimit], ...]:
+        """A partition owns disjoint families; no writer replaces another topology."""
+        if partition == "shared":
+            return (("staged", self.staged),)
         return (
-            self.executables.bytes
-            + self.autotune.bytes
-            + self.kernels.bytes
-            + _MANIFEST_LIMIT
-            + 1024 * (self.executables.files + self.autotune.files + self.kernels.files)
+            ("executable", self.executables),
+            ("autotune", self.autotune),
+            ("kernels", self.kernels),
+        )
+
+    def archive_bytes(self, partition: CachePartition) -> int:
+        """Bound this partition's payload, manifest, headers and tar padding."""
+        limits = tuple(limit for _, limit in self.families(partition))
+        return (
+            sum(limit.bytes for limit in limits)
+            + _manifest_limit(partition)
+            + 1024 * sum(limit.files for limit in limits)
             + 10240
         )
 
 
 FIT_CACHE_MIN_COMPILE_SECONDS = 1.0
 FIT_CACHE_POLICY = CachePolicy(
-    executables=CacheLimit(files=64, bytes=256 * 1024**2),
+    staged=CacheLimit(files=16, bytes=64 * 1024**2),
+    executables=CacheLimit(files=48, bytes=192 * 1024**2),
     autotune=CacheLimit(files=128, bytes=16 * 1024**2),
     kernels=CacheLimit(files=1, bytes=128 * 1024**2),
 )
@@ -299,7 +380,7 @@ class CacheEntry(Value):
     @field_validator("path")
     @classmethod
     def parse_path(cls, path: str) -> str:
-        """Own canonical relative paths for the three compiler cache families."""
+        """Own canonical relative paths for the compiler cache families."""
         parts = PurePosixPath(path).parts
         executable = len(parts) == 1 and path.endswith("-cache")
         autotune = len(parts) > 1 and parts[0] == _AUTOTUNE
@@ -315,10 +396,12 @@ class CacheEntry(Value):
         return path
 
     @property
-    def family(self) -> Literal["executable", "autotune", "kernels"]:
+    def family(self) -> CacheFamily:
         """Project the family already established by path parsing."""
         if self.path == _KERNELS:
             return "kernels"
+        if self.path.startswith(("nof1-program-", "nof1-shapes-")):
+            return "staged"
         return "autotune" if self.path.startswith(_AUTOTUNE + "/") else "executable"
 
 
@@ -330,6 +413,7 @@ class CacheTransfer:
     """Boundary costs, including the commit required to expose persisted entries."""
 
     phase: Literal["stage", "persist"]
+    partition: str
     files: int
     bytes: int
     archive_bytes: int
@@ -356,7 +440,7 @@ def _report(transfer: CacheTransfer) -> None:
 def cache_namespace(policy: CachePolicy) -> str:
     """Isolate compiler/device/options; JAX's own keys still validate each executable."""
     identity = {
-        "bundle_version": 1,
+        "bundle_version": 2,
         "jax": jax.__version__,
         "jaxlib": version("jaxlib"),
         "devices": tuple(
@@ -372,13 +456,22 @@ def cache_namespace(policy: CachePolicy) -> str:
     return hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
 
 
-def _selected(working: Path, policy: CachePolicy) -> tuple[CacheEntry, ...]:
+def _selected(
+    working: Path, policy: CachePolicy, partition: CachePartition
+) -> tuple[CacheEntry, ...]:
     entries: list[CacheEntry] = []
-    for candidates, limit in (
-        (working.glob("*-cache"), policy.executables),
-        ((working / _AUTOTUNE).rglob("*"), policy.autotune),
-        ((working / _KERNELS,), policy.kernels),
-    ):
+    for family, limit in policy.families(partition):
+        candidates = (
+            (working / _AUTOTUNE).rglob("*")
+            if family == "autotune"
+            else (working / _KERNELS,)
+            if family == "kernels"
+            else (
+                path
+                for path in working.glob("*-cache")
+                if path.name.startswith(("nof1-program-", "nof1-shapes-")) == (family == "staged")
+            )
+        )
         files = sorted(
             (path for path in candidates if not path.is_symlink() and path.is_file()),
             key=lambda path: (-path.stat().st_mtime_ns, path.as_posix()),
@@ -405,15 +498,16 @@ def _selected(working: Path, policy: CachePolicy) -> tuple[CacheEntry, ...]:
     return tuple(sorted(entries, key=lambda entry: entry.path))
 
 
-def _parse_manifest(data: bytes, policy: CachePolicy) -> tuple[CacheEntry, ...]:
+def _parse_manifest(
+    data: bytes, policy: CachePolicy, partition: CachePartition
+) -> tuple[CacheEntry, ...]:
     entries = _ENTRIES.validate_json(data)
     if len({entry.path for entry in entries}) != len(entries):
         raise ValueError("Duplicate compilation cache entry")
-    for family, limit in (
-        ("executable", policy.executables),
-        ("autotune", policy.autotune),
-        ("kernels", policy.kernels),
-    ):
+    families = policy.families(partition)
+    if any(entry.family not in {name for name, _ in families} for entry in entries):
+        raise ValueError("Compilation cache entry belongs to another partition")
+    for family, limit in families:
         selected = tuple(entry for entry in entries if entry.family == family)
         if len(selected) > limit.files or sum(entry.size for entry in selected) > limit.bytes:
             raise ValueError("Compilation cache bundle exceeds its staging policy")
@@ -428,19 +522,21 @@ def _member(archive: tarfile.TarFile, name: str, size_limit: int) -> tarfile.Tar
 
 
 def stage_cache(
-    archive_path: Path, working: Path, policy: CachePolicy
+    archive_path: Path, working: Path, policy: CachePolicy, partition: CachePartition
 ) -> tuple[tuple[CacheEntry, ...], CacheTransfer]:
     """Read one bounded bundle, never inventory the persistent volume."""
     start = perf_counter()
     if not archive_path.exists():
-        return (), CacheTransfer("stage", 0, 0, 0, perf_counter() - start)
+        return (), CacheTransfer("stage", archive_path.stem, 0, 0, 0, perf_counter() - start)
     archive_size = archive_path.stat().st_size
-    if archive_size > policy.archive_bytes:
+    if archive_size > policy.archive_bytes(partition):
         raise ValueError("Compilation cache archive exceeds its staging policy")
     with tarfile.open(archive_path, "r|") as archive:
-        manifest = archive.extractfile(_member(archive, "manifest.json", _MANIFEST_LIMIT))
+        manifest = archive.extractfile(
+            _member(archive, "manifest.json", _manifest_limit(partition))
+        )
         assert manifest is not None
-        entries = _parse_manifest(manifest.read(), policy)
+        entries = _parse_manifest(manifest.read(), policy, partition)
         for index, entry in enumerate(entries):
             member = _member(archive, f"files/{index}", entry.size)
             if member.size != entry.size:
@@ -459,6 +555,7 @@ def stage_cache(
             raise ValueError("Unexpected compilation cache bundle member")
     return entries, CacheTransfer(
         "stage",
+        archive_path.stem,
         len(entries),
         sum(entry.size for entry in entries),
         archive_size,
@@ -471,17 +568,18 @@ def persist_cache(
     working: Path,
     previous: tuple[CacheEntry, ...],
     policy: CachePolicy,
+    partition: CachePartition,
     commit: Callable[[], None],
 ) -> CacheTransfer:
     """Publish selected entries atomically, then commit; unchanged bundles do no I/O."""
     start = perf_counter()
-    entries = _selected(working, policy)
+    entries = _selected(working, policy, partition)
     selection_seconds = perf_counter() - start
     if entries == previous:
-        return CacheTransfer("persist", 0, 0, 0, 0.0, selection_seconds)
+        return CacheTransfer("persist", archive_path.stem, 0, 0, 0, 0.0, selection_seconds)
     start = perf_counter()
     manifest = _ENTRIES.dump_json(entries)
-    if len(manifest) > _MANIFEST_LIMIT:
+    if len(manifest) > _manifest_limit(partition):
         raise ValueError("Compilation cache manifest exceeds its staging policy")
     with NamedTemporaryFile() as local:
         with tarfile.open(fileobj=local, mode="w", format=tarfile.USTAR_FORMAT) as archive:
@@ -509,6 +607,7 @@ def persist_cache(
     commit()
     return CacheTransfer(
         "persist",
+        archive_path.stem,
         len(entries),
         sum(entry.size for entry in entries),
         archive_size,
@@ -527,10 +626,17 @@ def local_compilation_cache(
     report: Callable[[CacheTransfer], None] = _report,
 ) -> Iterator[Path]:
     """Stage before fitting and persist on success; restore JAX settings on every exit."""
-    archive_path = persistent_root / f"{cache_namespace(policy)}.tar"
+    namespace = persistent_root / cache_namespace(policy)
+    partitions: tuple[tuple[CachePartition, Path], ...] = (
+        ("shared", namespace / "shared.tar"),
+        ("accelerator", namespace / f"{accelerator_partition()}.tar"),
+    )
     with _local_directory() as working:
-        previous, staged = stage_cache(archive_path, working, policy)
-        report(staged)
+        previous = {}
+        for partition, archive_path in partitions:
+            entries, staged = stage_cache(archive_path, working, policy, partition)
+            previous[partition] = entries
+            report(staged)
         settings = {
             "jax_compilation_cache_dir": str(working),
             "jax_enable_compilation_cache": True,
@@ -545,7 +651,21 @@ def local_compilation_cache(
             for name, value in settings.items():
                 jax.config.update(name, value)
             yield working
-            report(persist_cache(archive_path, working, previous, policy, commit))
+            transfers = tuple(
+                persist_cache(
+                    archive_path, working, previous[partition], policy, partition, lambda: None
+                )
+                for partition, archive_path in partitions
+            )
+            if any(transfer.copy_seconds for transfer in transfers):
+                started = perf_counter()
+                commit()
+                transfers = (
+                    *transfers[:-1],
+                    replace(transfers[-1], commit_seconds=perf_counter() - started),
+                )
+            for transfer in transfers:
+                report(transfer)
         finally:
             compilation_cache.reset_cache()
             for name, value in old.items():
