@@ -5,6 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+import jax.numpy as jnp
+import numpyro
+
 from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField
 
 if TYPE_CHECKING:
@@ -57,20 +60,25 @@ def compile_dynamics(spec: DynamicsSpec, *, prefix: str = "vf") -> CompiledDynam
             i for i, item in enumerate(spec.components) if item.kind == "potential"
         ),
     )
-    component_specs = spec.components
-    site_registry = tuple(
-        site
-        for i, component_spec in enumerate(component_specs)
-        for site in component_spec.iter_sites(
-            prefix=f"{prefix}_{i}",
-            n_latent=spec.n_latent,
+    component_sites = tuple(
+        tuple(
+            zip(
+                (identity for identity, _ in component.parameters),
+                component.iter_sites(prefix=f"{prefix}_{index}", n_latent=spec.n_latent),
+                strict=True,
+            )
         )
+        for index, component in enumerate(spec.components)
     )
+    site_registry = tuple(site for sites in component_sites for _, site in sites)
 
     def _sample_all_params(prior_fn: PriorFn) -> tuple[dict[str, Array], ...]:
         return tuple(
-            component_spec.sample_params(prefix=f"{prefix}_{i}", prior_fn=prior_fn)
-            for i, component_spec in enumerate(component_specs)
+            {
+                identity: jnp.asarray(numpyro.sample(site.name, prior_fn(site.name)))
+                for identity, site in sites
+            }
+            for sites in component_sites
         )
 
     return CompiledDynamics(

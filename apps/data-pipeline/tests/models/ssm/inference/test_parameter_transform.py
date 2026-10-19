@@ -1,5 +1,7 @@
 """Prior-coordinate preparation preserves conditional laws and initialization rejection."""
 
+from functools import partial
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -8,6 +10,10 @@ import numpyro.distributions as dist
 import pytest
 
 from nof1_causal_lab.models.ssm.inference.parameter_transform import prepare_parameter_transform
+from nof1_causal_lab.models.ssm.inference.prior_program import numpyro_model
+from nof1_causal_lab.models.ssm.inference.reparameterization import AutoReparam
+from tests.support.inference import bind_panel_fixture, compile_fit_fixture
+from tests.support.model import two_state_gaussian_model
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -63,3 +69,57 @@ def test_prepared_prior_rejects_a_finite_start_with_a_nonfinite_gradient():
             model_args=(),
             initial_values={"value": jnp.array(0.0)},
         )
+
+
+@pytest.mark.parametrize("centered", [None, 0.0, 0.5])
+def test_prior_replay_omits_unused_likelihood_without_changing_density(centered):
+    """Structural replay retains the zero-backend sites, transforms, factors and gradients."""
+
+    class ZeroLikelihood:
+        def compute_log_likelihood(self, *_args, **_kwargs):
+            return jnp.array(0.0)
+
+    compiled = compile_fit_fixture(two_state_gaussian_model())
+    panel = bind_panel_fixture(
+        compiled.compiled_dynamical_model,
+        jnp.zeros((5, 2), dtype=jnp.float32),
+        jnp.arange(5, dtype=jnp.float32),
+    )
+    models = tuple(
+        partial(numpyro_model, panel, compiled.prior_runtime_bundle, likelihood_backend=backend)
+        for backend in (ZeroLikelihood(), None)
+    )
+    if centered is not None:
+        models = tuple(
+            numpyro.handlers.reparam(model, config=AutoReparam(centered=centered))
+            for model in models
+        )
+    traces = tuple(
+        numpyro.handlers.trace(numpyro.handlers.seed(model, rng_seed=19)).get_trace()
+        for model in models
+    )
+    assert tuple(traces[0]) == tuple(traces[1])
+    for name, site in traces[0].items():
+        if site["type"] in ("sample", "deterministic"):
+            np.testing.assert_allclose(
+                traces[1][name]["value"], site["value"], rtol=1e-5, atol=1e-6
+            )
+    values = {
+        name: site["value"]
+        for name, site in traces[0].items()
+        if site["type"] == "sample" and not site["is_observed"]
+    }
+    transforms = tuple(
+        prepare_parameter_transform(model, jax.random.key(19), model_args=(), initial_values=values)
+        for model in models
+    )
+    np.testing.assert_allclose(
+        transforms[1].initial_position, transforms[0].initial_position, rtol=1e-5, atol=1e-6
+    )
+    for offset in (-0.1, 0.0, 0.1):
+        position = transforms[0].initial_position + offset
+        reference = jax.value_and_grad(transforms[0].log_prior)(position)
+        actual = jax.value_and_grad(transforms[1].log_prior)(position)
+        for value, expected in zip(actual, reference, strict=True):
+            assert np.isfinite(value).all()
+            np.testing.assert_allclose(value, expected, rtol=1e-5, atol=1e-6)

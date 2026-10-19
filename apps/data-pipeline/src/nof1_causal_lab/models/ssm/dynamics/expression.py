@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING, Literal
 
 import equinox as eqx
 import jax.numpy as jnp
-import numpyro
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.artifacts.model.expressions import (
@@ -30,7 +29,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.identity import ConstructId, ParameterId
     from nof1_causal_lab.artifacts.model.likelihood import LinkFunction
     from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
-    from nof1_causal_lab.models.ssm.dynamics.spec import PriorFn
 
 
 class ExpressionComponent(eqx.Module):
@@ -161,13 +159,6 @@ class ExpressionComponentSpec:
             raise ValueError("Expression state axes must fit the vector field")
         for _, site in self.parameter_sites(prefix):
             yield site
-
-    def sample_params(self, prefix: str, prior_fn: PriorFn) -> dict[str, Array]:
-        """Sample each component parameter from its site prior and key the values by parameter identity."""
-        return {
-            identity: jnp.asarray(numpyro.sample(site.name, prior_fn(site.name)))
-            for identity, site in self.parameter_sites(prefix)
-        }
 
     def pack_params(self, prefix: str, samples: Mapping[str, Array]) -> dict[str, Array]:
         """Project named sampling-site values into the parameter identities used by this expression."""

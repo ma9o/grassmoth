@@ -29,7 +29,6 @@ from nof1_causal_lab.artifacts.model.parameter_spec import (
 from nof1_causal_lab.artifacts.probability.families import PriorDistributionFamily
 from nof1_causal_lab.artifacts.probability.native import distribution_from_params
 from nof1_causal_lab.models.ssm import compiled_access as numeric
-from nof1_causal_lab.models.ssm.inference.parameter_tracing import _DummyLikelihoodBackend
 from nof1_causal_lab.models.ssm.inference.prior_program import numpyro_model
 from nof1_causal_lab.models.ssm.parameterization import build_site_registry
 from nof1_causal_lab.models.ssm.priors import resolve_site_priors
@@ -320,7 +319,7 @@ class TestDynamicsMask:
                 model.compiled_dynamical_model, jnp.zeros((2, 4)), jnp.arange(2, dtype=jnp.float32)
             ),
             priors=model.prior_runtime_bundle,
-            likelihood_backend=_DummyLikelihoodBackend(),
+            likelihood_backend=None,
         )
 
         weight_sites = [
@@ -346,7 +345,7 @@ class TestDynamicsMask:
                 model.compiled_dynamical_model, jnp.zeros((2, 4)), jnp.arange(2, dtype=jnp.float32)
             ),
             priors=model.prior_runtime_bundle,
-            likelihood_backend=_DummyLikelihoodBackend(),
+            likelihood_backend=None,
         )
 
         weight_sites = [
@@ -368,7 +367,7 @@ class TestDynamicsMask:
                 model.compiled_dynamical_model, jnp.zeros((2, 1)), jnp.arange(2, dtype=jnp.float32)
             ),
             priors=model.prior_runtime_bundle,
-            likelihood_backend=_DummyLikelihoodBackend(),
+            likelihood_backend=None,
         )
 
         dynamics_sites = [
@@ -405,7 +404,7 @@ class TestLambdaMask:
                 model.compiled_dynamical_model, jnp.zeros((2, 4)), jnp.arange(2, dtype=jnp.float32)
             ),
             priors=model.prior_runtime_bundle,
-            likelihood_backend=_DummyLikelihoodBackend(),
+            likelihood_backend=None,
         )
 
         # Only 1 free loading sampled
@@ -433,7 +432,7 @@ class TestLambdaMask:
                 model.compiled_dynamical_model, jnp.zeros((2, 4)), jnp.arange(2, dtype=jnp.float32)
             ),
             priors=model.prior_runtime_bundle,
-            likelihood_backend=_DummyLikelihoodBackend(),
+            likelihood_backend=None,
         )
 
         # No lambda_free sampled
@@ -546,7 +545,7 @@ class TestPerElementPriors:
                 model.compiled_dynamical_model, jnp.zeros((2, 2)), jnp.arange(2, dtype=jnp.float32)
             ),
             priors=model.prior_runtime_bundle,
-            likelihood_backend=_DummyLikelihoodBackend(),
+            likelihood_backend=None,
         )
 
         # Verify the authored law, independently of one lucky prior draw.
@@ -863,10 +862,13 @@ class TestGradualBuildComponents:
         model = compile_fit_fixture(dynamical_model_spec)
         trace = handlers.trace(handlers.seed(numpyro_model, random.PRNGKey(0))).get_trace(
             bind_panel_fixture(
-                model.compiled_dynamical_model, jnp.zeros((2, 4)), jnp.arange(2, dtype=jnp.float32)
+                model.compiled_dynamical_model,
+                # This prior trace has no readings, including incomplete interval windows.
+                jnp.full((2, 4), jnp.nan),
+                jnp.arange(2, dtype=jnp.float32),
             ),
             priors=model.prior_runtime_bundle,
-            likelihood_backend=_DummyLikelihoodBackend(),
+            likelihood_backend=None,
         )
         registry = build_site_registry(compile_model_fixture(dynamical_model_spec))
         quartic_sites = [

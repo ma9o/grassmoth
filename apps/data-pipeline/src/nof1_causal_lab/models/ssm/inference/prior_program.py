@@ -105,9 +105,9 @@ def initialization_input_intervention(panel: BoundPanel, times: jnp.ndarray) -> 
 def numpyro_model(
     panel: BoundPanel,
     priors: PriorRuntimeBundle,
-    likelihood_backend: InitializationLikelihoodBackend,
+    likelihood_backend: InitializationLikelihoodBackend | None,
 ) -> None:
-    """Replay compiled priors with a likelihood placeholder for structural tracing."""
+    """Replay declared priors, constructing dynamics only for an initialization likelihood."""
     compiled_dynamical_model = panel.compiled_dynamical_model
     observations, times = panel.observations, panel.times
     sampled = sample_parameters(compiled_dynamical_model, priors)
@@ -120,13 +120,17 @@ def numpyro_model(
     manifest_cov = sampled["manifest_cov"]
     t0_cov = sampled["t0_cov"]
     sample_sites(process_sites(compiled_dynamical_model), priors.priors.__getitem__)
-    observation_laws = materialize_observation_laws(
-        compiled_dynamical_model,
-        sample_sites(likelihood_sites(compiled_dynamical_model), priors.priors.__getitem__),
+    observation_sites = sample_sites(
+        likelihood_sites(compiled_dynamical_model), priors.priors.__getitem__
     )
+    dynamics_params = compiled_dynamical_model.dynamics.sample_params(priors.priors.__getitem__)
+    if likelihood_backend is None:
+        numpyro.factor("log_likelihood", jnp.array(0.0))
+        return
+    observation_laws = materialize_observation_laws(compiled_dynamical_model, observation_sites)
     dynamics = continuous_state_evolution(
         vector_field=compiled_dynamical_model.dynamics.vector_field,
-        vf_params=compiled_dynamical_model.dynamics.sample_params(priors.priors.__getitem__),
+        vf_params=dynamics_params,
         diffusion=diffusion_chol,
         intervention=initialization_input_intervention(panel, times),
     )

@@ -22,7 +22,6 @@ from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.execution.parameters import sample_sites
 from nof1_causal_lab.models.ssm.inference.parameter_tracing import (
     _discover_sites,
-    _DummyLikelihoodBackend,
 )
 from nof1_causal_lab.models.ssm.inference.prior_program import sample_parameters
 from nof1_causal_lab.models.ssm.parameterization import (
@@ -233,7 +232,6 @@ class TestSiteRegistry:
         """Registry produces the same site names as model tracing."""
         compiled = simple_model.compiled_dynamical_model
         registry = build_site_registry(compiled)
-        backend = _DummyLikelihoodBackend()
         T = 2
         obs = jnp.zeros((T, numeric.n_observations(compiled)))
         times = jnp.linspace(0, 1, T)
@@ -241,7 +239,6 @@ class TestSiteRegistry:
             simple_model.prior_runtime_bundle,
             bind_panel_fixture(simple_model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
-            backend,
         )
         _assert_registry_matches_trace(registry, site_info)
 
@@ -250,7 +247,6 @@ class TestSiteRegistry:
         """Registry matches trace for DAG-constrained model with cint."""
         compiled = dag_model.compiled_dynamical_model
         registry = build_site_registry(compiled)
-        backend = _DummyLikelihoodBackend()
         T = 2
         obs = jnp.zeros((T, numeric.n_observations(compiled)))
         times = jnp.linspace(0, 1, T)
@@ -258,7 +254,6 @@ class TestSiteRegistry:
             dag_model.prior_runtime_bundle,
             bind_panel_fixture(dag_model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
-            backend,
         )
         _assert_registry_matches_trace(registry, site_info)
 
@@ -268,7 +263,6 @@ class TestSiteRegistry:
         dynamical_model_spec = _partial_manifest_variance_model()
         model = compile_fit_fixture(dynamical_model_spec)
         registry = build_site_registry(compile_model_fixture(dynamical_model_spec))
-        backend = _DummyLikelihoodBackend()
         T = 2
         obs = jnp.zeros((T, numeric.n_observations(compile_model_fixture(dynamical_model_spec))))
         times = jnp.linspace(0, 1, T)
@@ -276,7 +270,6 @@ class TestSiteRegistry:
             model.prior_runtime_bundle,
             bind_panel_fixture(model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
-            backend,
         )
 
         _assert_registry_matches_trace(registry, site_info)
@@ -370,14 +363,12 @@ class TestSiteRegistry:
         assert site_map["static_state_sd_free"].shape == (1,)
         assert site_map["static_state_sd_free"].support == SupportClass.POSITIVE
 
-        backend = _DummyLikelihoodBackend()
         obs = jnp.zeros((5, numeric.n_observations(compile_model_fixture(dynamical_model_spec))))
         times = jnp.arange(5, dtype=jnp.float32)
         site_info = _discover_sites(
             model.prior_runtime_bundle,
             bind_panel_fixture(model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
-            backend,
         )
         _assert_registry_matches_trace(registry, site_info)
         assert site_info["static_state_sd_free"].shape == (1,)

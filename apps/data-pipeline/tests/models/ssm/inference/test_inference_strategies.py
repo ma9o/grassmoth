@@ -248,21 +248,28 @@ class TestInferenceTracing:
     """Tracing behavior for resolved inference inputs."""
 
     @pytest.mark.inference(concern="sampling")
-    def test_discover_sites_uses_dummy_backend_for_structural_trace(self):
+    def test_discover_sites_omits_likelihood_construction(self, monkeypatch):
         dynamical_model_spec = one_state_gaussian_model()
         model = compile_fit_fixture(dynamical_model_spec)
         observations = jnp.array([[1.0], [2.0]], dtype=jnp.float32)
         times = jnp.array([0.0, 1.0], dtype=jnp.float32)
 
-        class _ExplodingBackend:
-            def compute_log_likelihood(self, *_args, **_kwargs):
-                raise AssertionError("site discovery should not evaluate the real likelihood")
+        def unexpected(*_args, **_kwargs):
+            raise AssertionError("site discovery must not construct an unused likelihood")
+
+        from nof1_causal_lab.models.ssm.inference import prior_program
+
+        for name in (
+            "continuous_state_evolution",
+            "initial_state_distribution",
+            "materialize_observation_laws",
+        ):
+            monkeypatch.setattr(prior_program, name, unexpected)
 
         site_info = _discover_sites(
             model.prior_runtime_bundle,
             bind_panel_fixture(model.compiled_dynamical_model, observations, times),
             random.PRNGKey(0),
-            _ExplodingBackend(),
         )
 
         assert "vf_0_p0" in site_info

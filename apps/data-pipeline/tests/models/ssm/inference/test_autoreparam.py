@@ -25,7 +25,6 @@ from nof1_causal_lab.artifacts.model.expressions import restoring_force
 from nof1_causal_lab.artifacts.model.mechanism import DriftMechanismSpec
 from nof1_causal_lab.artifacts.model.parameter import SiteKind
 from nof1_causal_lab.models.ssm.dynamics.vector_field import StructuralDrift
-from nof1_causal_lab.models.ssm.inference.parameter_tracing import _DummyLikelihoodBackend
 from nof1_causal_lab.models.ssm.inference.prior_program import numpyro_model
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
 from nof1_causal_lab.models.ssm.inference.reparameterization import (
@@ -461,7 +460,7 @@ class TestAutoReparamSSM:
         model = compile_fit_fixture(two_state_gaussian_model())
         strategy = AutoReparam(centered=0.0)
 
-        model_fn = functools.partial(numpyro_model, likelihood_backend=_DummyLikelihoodBackend())
+        model_fn = functools.partial(numpyro_model, likelihood_backend=None)
         reparam_model = handlers.reparam(model_fn, config=strategy)
 
         T = 2

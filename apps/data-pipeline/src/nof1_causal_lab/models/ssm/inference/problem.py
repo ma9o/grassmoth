@@ -106,9 +106,7 @@ def build_particle_problem(
 
     # Partition once to retain static metadata outside the sampler state. Every
     # parameter-dependent value in the declared model is an explicit array leaf.
-    _, static_model = eqx.partition(
-        continuous_model(parameters.initial_position, times), eqx.is_array
-    )
+    _, static_model = eqx.partition(initial_model, eqx.is_array)
 
     def context_fn(position: jax.Array, runtime_times: jax.Array) -> ParticleContext:
         model = continuous_model(position, runtime_times)

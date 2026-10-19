@@ -13,7 +13,6 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.models.ssm.execution.contracts import InitializationLikelihoodBackend
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
     from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
@@ -60,7 +59,6 @@ def _discover_sites(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     rng_key: jax.Array,
-    likelihood_backend: InitializationLikelihoodBackend,
     reparam: Strategy | None = None,
     *,
     compiler: ProgramCompiler = compile_jit,
@@ -72,10 +70,7 @@ def _discover_sites(
     likelihood; the particle target owns the exact joint likelihood used by
     LAPS and sampling.
     """
-    _ = likelihood_backend
-    model_fn = functools.partial(
-        numpyro_model, panel, priors, likelihood_backend=_DummyLikelihoodBackend()
-    )
+    model_fn = functools.partial(numpyro_model, panel, priors, likelihood_backend=None)
     if reparam is not None:
         model_fn = handlers.reparam(model_fn, config=reparam)
 
@@ -108,13 +103,6 @@ def _discover_sites(
 # ---------------------------------------------------------------------------
 
 
-class _DummyLikelihoodBackend:
-    """Dummy backend for model replay — returns zero log-likelihood."""
-
-    def compute_log_likelihood(self, *_args: object, **_kwargs: object) -> jax.Array:
-        return jnp.array(0.0)
-
-
 def prepare_model_parameters(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
@@ -124,13 +112,9 @@ def prepare_model_parameters(
     compiler: ProgramCompiler = compile_jit,
 ) -> tuple[ParameterTransform, SiteInfo, frozenset[str]]:
     """Use NumPyro's prior replay and transformations for every inference path."""
-    prior_model = functools.partial(
-        numpyro_model, panel, priors, likelihood_backend=_DummyLikelihoodBackend()
-    )
-    public_sites = _trace_public_sites(prior_model)
-    site_info = _discover_sites(
-        priors, panel, trace_key, _DummyLikelihoodBackend(), reparam=reparam, compiler=compiler
-    )
+    prior_model = functools.partial(numpyro_model, panel, priors, likelihood_backend=None)
+    site_info = _discover_sites(priors, panel, trace_key, reparam=reparam, compiler=compiler)
+    public_sites = _trace_public_sites(prior_model) if reparam is not None else frozenset(site_info)
     if reparam is not None:
         prior_model = handlers.reparam(prior_model, config=reparam)
     parameters = prepare_parameter_transform(
