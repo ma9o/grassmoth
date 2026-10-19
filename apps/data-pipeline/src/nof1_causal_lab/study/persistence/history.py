@@ -22,7 +22,12 @@ from nof1_causal_lab.actions.contracts.requests import (
 from nof1_causal_lab.artifacts.identity import CallId, GitOid
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.study.errors import StudyLookupError
-from nof1_causal_lab.study.persistence.git_objects import open_repository, read_file, write_tree
+from nof1_causal_lab.study.persistence.git_objects import (
+    open_repository,
+    read_blob,
+    read_file,
+    write_tree,
+)
 from nof1_causal_lab.study.records import Applied, StudyRevision
 from nof1_causal_lab.study.state import ArtifactRecord, StudyState
 
@@ -277,9 +282,7 @@ class StudyRepository:
                 tree.insert(
                     "result.msgpack", pygit2.Oid(hex=outcome.result), pygit2.GIT_FILEMODE_BLOB
                 )
-                result = unpack_result(
-                    self.repo[pygit2.Oid(hex=outcome.result)].peel(pygit2.Blob).data
-                )
+                result = unpack_result(read_blob(self.repo, pygit2.Oid(hex=outcome.result)))
                 array_ids = tuple(owned_arrays(result))
                 for identity in array_ids:
                     array_ref = f"refs/arrays/{identity}"

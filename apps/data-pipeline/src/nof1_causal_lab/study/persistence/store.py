@@ -27,6 +27,7 @@ from nof1_causal_lab.study.errors import StudyLookupError
 from nof1_causal_lab.study.persistence.git_objects import (
     object_tree,
     open_repository,
+    read_blob,
     read_file,
     write_tree,
 )
@@ -104,9 +105,9 @@ class ArtifactStore:
         if ref in self.repo.references:
             from nof1_causal_lab.study.persistence.arrays import owned_arrays
 
-            payload = unpack_result(
-                self.repo[self.repo.references[ref].target].peel(pygit2.Blob).data
-            )
+            target = self.repo.references[ref].resolve().target
+            assert isinstance(target, pygit2.Oid)
+            payload = unpack_result(read_blob(self.repo, target))
             return owned_arrays(payload)[identity].npy
         return read_array_bytes(storage.join(self._root, "arrays"), identity)
 
@@ -122,7 +123,7 @@ class ArtifactStore:
 
         from nof1_causal_lab.study.persistence.codec import unpack_result
 
-        payload = self.repo[pygit2.Oid(hex=revision)].peel(pygit2.Blob).data
+        payload = read_blob(self.repo, pygit2.Oid(hex=revision))
         return target.model_validate(
             unpack_result(payload), context={"distribution_array_loader": cache(self.read_array)}
         )
@@ -135,7 +136,7 @@ class ArtifactStore:
 
     def read_report[ReportT: BaseModel](self, revision: GitOid, target: type[ReportT]) -> ReportT:
         """Parse a retained Git report blob with the caller's expected report schema."""
-        payload = self.repo[pygit2.Oid(hex=revision)].peel(pygit2.Blob).data
+        payload = read_blob(self.repo, pygit2.Oid(hex=revision))
         from functools import cache
 
         from nof1_causal_lab.study.persistence.codec import unpack_result
@@ -244,9 +245,7 @@ class ArtifactStore:
         if isinstance(info.source, ArtifactResult):
             from nof1_causal_lab.study.persistence.codec import unpack_result
 
-            output = unpack_result(
-                self.repo[pygit2.Oid(hex=info.source.result)].peel(pygit2.Blob).data
-            )
+            output = unpack_result(read_blob(self.repo, pygit2.Oid(hex=info.source.result)))
             key = {
                 "model": "dynamical_model_spec",
                 "question": "question",

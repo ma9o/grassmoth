@@ -51,6 +51,14 @@ def write_tree(repository: pygit2.Repository, files: dict[str, bytes]) -> pygit2
     return oid
 
 
+def read_blob(repository: pygit2.Repository, identity: pygit2.Oid) -> bytes:
+    """Decode one exact blob directly, without the object lookup's extra inflation."""
+    kind, payload = repository.odb.read(identity)
+    if kind != pygit2.enums.ObjectType.BLOB:
+        raise ValueError("The selected object is not a stored payload blob")
+    return payload
+
+
 def object_tree(repository: pygit2.Repository, revision: str) -> pygit2.Tree:
     """Resolve an exact commit or tree identity, rejecting missing objects and non-tree content."""
     from nof1_causal_lab.study.errors import StudyLookupError
