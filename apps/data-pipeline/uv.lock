@@ -1036,6 +1036,14 @@ wheels = [
 ]
 
 [[package]]
+name = "flatbuffers"
+version = "25.12.19"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e8/2d/d2a548598be01649e2d46231d151a6c56d10b964d94043a335ae56ea2d92/flatbuffers-25.12.19-py2.py3-none-any.whl", hash = "sha256:7634f50c427838bb021c2d66a3d1168e9d199b0607e6329399f04846d42e20b4", size = 26661, upload-time = "2025-12-19T23:16:13.622Z" },
+]
+
+[[package]]
 name = "flax"
 version = "0.12.10"
 source = { registry = "https://pypi.org/simple" }
@@ -2778,10 +2786,12 @@ dependencies = [
     { name = "arviz-base" },
     { name = "arviz-stats", extra = ["xarray"] },
     { name = "blackjax" },
+    { name = "cloudpickle" },
     { name = "diffrax" },
     { name = "dynestyx" },
     { name = "equinox" },
     { name = "fastapi" },
+    { name = "flatbuffers" },
     { name = "fsspec" },
     { name = "jax" },
     { name = "jaxtyping" },
@@ -2819,7 +2829,6 @@ cloud = [
 dev = [
     { name = "basedpyright" },
     { name = "beartype" },
-    { name = "cloudpickle" },
     { name = "complexipy" },
     { name = "deptry" },
     { name = "grimp" },
@@ -2852,10 +2861,12 @@ requires-dist = [
     { name = "arviz-base", specifier = ">=1.3.1" },
     { name = "arviz-stats", extras = ["xarray"], specifier = ">=1.3.3" },
     { name = "blackjax", specifier = ">=1.6.2" },
+    { name = "cloudpickle", specifier = ">=3.1.2" },
     { name = "diffrax", specifier = ">=0.7.2" },
     { name = "dynestyx", specifier = ">=0.6.0" },
     { name = "equinox", specifier = ">=0.13.8" },
     { name = "fastapi", specifier = ">=0.142.2" },
+    { name = "flatbuffers", specifier = ">=25.12.19" },
     { name = "fsspec", specifier = ">=2026.9.0" },
     { name = "jax", specifier = ">=0.11.2" },
     { name = "jaxtyping", specifier = ">=0.3.11" },
@@ -2893,7 +2904,6 @@ cloud = [
 dev = [
     { name = "basedpyright", specifier = ">=1.40.1" },
     { name = "beartype", specifier = ">=0.22.9" },
-    { name = "cloudpickle", specifier = ">=3.1.2" },
     { name = "complexipy", specifier = ">=8.0.1" },
     { name = "deptry", specifier = ">=0.25.1" },
     { name = "grimp", specifier = ">=3.17" },

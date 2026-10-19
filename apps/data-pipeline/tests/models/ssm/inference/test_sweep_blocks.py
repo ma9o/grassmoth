@@ -13,13 +13,14 @@ import numpyro.distributions as dist
 import pytest
 
 from nof1_causal_lab.artifacts.sampling import DsmcSpec
+from nof1_causal_lab.compute import compilation_cache
 from nof1_causal_lab.compute.budget import (
     AcceleratorMemoryBudget,
     ComputeBudget,
     MemoryDemand,
     SharedMemoryBudget,
 )
-from nof1_causal_lab.models.ssm.inference.samplers import sweep_plan
+from nof1_causal_lab.models.ssm.inference.samplers import sweep_plan, sweeps
 from nof1_causal_lab.models.ssm.inference.samplers.particle.adaptation import (
     ADAPTATION_WINDOW,
     adapt_scales,
@@ -53,7 +54,7 @@ def test_block_boundaries_and_padding_preserve_key_stream_and_phase_outputs(
 ):
     caplog.set_level(logging.INFO, logger="nof1_causal_lab.models.ssm.inference.samplers.progress")
     initial = _Carry(jax.random.key(791), jnp.zeros((3, 4)))
-    plan = sweep_plan.compile_sweeps(
+    plan = sweeps.compile_sweeps(
         _factory,
         initial,
         num_warmup=warmup,
@@ -120,7 +121,6 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
 ):
     compiled_batches = []
     compiled_phases = []
-    traces = []
     executed = []
 
     def factory(batch):
@@ -128,8 +128,6 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
         compiled_batches.append(batch)
 
         def step(state, _posterior):
-            traces.append(batch)
-            jax.debug.callback(lambda: executed.append(True))
             return state + 1, {"value": state}
 
         return step
@@ -138,9 +136,18 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
         compiled_phases.append(executable)
         return MemoryDemand(host_bytes=0, device_bytes=compiled_batches[-1] * 100_000)
 
-    monkeypatch.setattr(sweep_plan, "compiled_memory", memory)
+    original_call = jax.stages.Compiled.__call__
+
+    def execute(self, *args, **kwargs):
+        executed.append(True)
+        return original_call(self, *args, **kwargs)
+
+    monkeypatch.setattr(jax.stages.Compiled, "__call__", execute)
+    monkeypatch.setattr(sweeps, "compiled_memory", memory)
     monkeypatch.setattr(
-        sweep_plan, "traced_memory", lambda _graph: MemoryDemand(host_bytes=0, device_bytes=100_000)
+        compilation_cache,
+        "traced_memory",
+        lambda _graph: MemoryDemand(host_bytes=0, device_bytes=100_000),
     )
     budget = ComputeBudget(
         # History (384) plus one transferred block (240) fit; two full histories do not.
@@ -149,11 +156,10 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
         else SharedMemoryBudget(available_bytes=300_000)
     )
     initial = jnp.zeros((4, 3))
-    plan = sweep_plan.compile_sweeps(
+    plan = sweeps.compile_sweeps(
         factory, initial, num_warmup=3, num_samples=5, max_batch_size=8, budget=budget
     )
     assert compiled_batches == [1, 2]
-    assert traces == [1, 2]
     assert len(compiled_phases) == 1  # Sizing traces must never compile probe executables.
     assert plan.batch_size == 2
     assert isinstance(plan.warmup, sweep_plan.CompiledSweepPhase)
@@ -163,10 +169,9 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     run = run_sweeps(plan, initial, clock=monotonic, label="test")
     np.testing.assert_array_equal(run.state, np.full((4, 3), 8))
     assert run.history.posterior["value"].shape == (4, 5, 3)
-    jax.effects_barrier()
-    assert len(executed) == 8
+    assert len(executed) == 3  # First-step timing, remaining warmup, posterior.
     with pytest.raises(MemoryError, match="One batch lane"):
-        sweep_plan.compile_sweeps(
+        sweeps.compile_sweeps(
             factory,
             initial,
             num_warmup=3,
@@ -231,7 +236,7 @@ def test_runtime_inputs_rebind_nested_observations_priors_geometry_and_tuning():
         jnp.asarray(0.2),
     )
     plans = tuple(
-        sweep_plan.compile_sweeps(
+        sweeps.compile_sweeps(
             factory(values),
             initial,
             num_warmup=1,

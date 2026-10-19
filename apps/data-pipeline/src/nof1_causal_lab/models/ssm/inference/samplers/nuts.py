@@ -135,6 +135,7 @@ def run_nuts_da(
     initial = coordinates.encode(*scientific_start)
     chart = coordinates.chart
     trajectory = options.trajectory
+    num_warmup, num_chains = sampler.num_warmup, sampler.num_chains
 
     def potential(runtime_chart: JointChart) -> Callable[[jax.Array], jax.Array]:
         bound = coordinates.bind(runtime_chart)
@@ -160,7 +161,7 @@ def run_nuts_da(
         )
         moved = raw_step(varied, model_args=(runtime_chart,))
         adaptation = jax.lax.cond(
-            state.i < sampler.num_warmup, lambda: moved.adapt_state, lambda: state.adapt_state
+            state.i < num_warmup, lambda: moved.adapt_state, lambda: state.adapt_state
         )
         return moved._replace(adapt_state=adaptation)
 
@@ -234,7 +235,7 @@ def run_nuts_da(
         ) -> tuple[tuple[HMCState, jax.Array, JointChart], dict[str, jax.Array]]:
             current, key, runtime_chart = carry
             next_key, step_key = jax.random.split(key)
-            current = current._replace(rng_key=jax.random.split(step_key, sampler.num_chains))
+            current = current._replace(rng_key=jax.random.split(step_key, num_chains))
             updated = jax.vmap(step, in_axes=(0, None))(current, runtime_chart)
             record = dict(_extra_fields(updated, trajectory=trajectory))
             projected = jax.lax.cond(
@@ -242,10 +243,10 @@ def run_nuts_da(
                 lambda: jax.vmap(project, in_axes=(0, None))(updated.z, runtime_chart),
                 lambda: {
                     "positions": jnp.zeros(
-                        (sampler.num_chains, target.initial_position.size), dtype=updated.z.dtype
+                        (num_chains, target.initial_position.size), dtype=updated.z.dtype
                     ),
                     "paths": jnp.zeros(
-                        (sampler.num_chains, *target.independent_mask.shape), dtype=updated.z.dtype
+                        (num_chains, *target.independent_mask.shape), dtype=updated.z.dtype
                     ),
                 },
             )

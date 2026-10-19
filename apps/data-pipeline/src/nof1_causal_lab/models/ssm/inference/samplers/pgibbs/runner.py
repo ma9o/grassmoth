@@ -71,6 +71,7 @@ def run_particle_gibbs[State](
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleGibbsRun | InitializationFailure:
     """Advance chains together, retaining aligned draws only after warmup."""
+    num_chains = sampler.num_chains
     initial_key, key = jax.random.split(key)
     with inference_phase("pgibbs", "initializing_chains", clock=clock):
         states = jax.jit(jax.vmap(kernel.initialize))(
@@ -123,7 +124,7 @@ def run_particle_gibbs[State](
             next_key, step_key = jax.random.split(current_key)
             updated, info = jax.vmap(
                 lambda state, draw_key: kernel.step(state, draw_key, batch_size=batch_size)
-            )(current, jax.random.split(step_key, sampler.num_chains))
+            )(current, jax.random.split(step_key, num_chains))
             record = {
                 **info,
                 "log_posterior": updated.log_posterior,

@@ -8,6 +8,8 @@ import io
 import json
 import logging
 import os
+import pickle
+import platform
 import shutil
 import tarfile
 from contextlib import contextmanager
@@ -17,16 +19,221 @@ from pathlib import Path, PurePosixPath
 from tempfile import NamedTemporaryFile, gettempdir
 from threading import Lock
 from time import perf_counter
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
+import cloudpickle
 import jax
+from jax import export
+from jax.core import Tracer
 from jax.experimental.compilation_cache import compilation_cache
 from pydantic import Field, TypeAdapter, field_validator
 
 from nof1_causal_lab.artifacts.base import Value
+from nof1_causal_lab.compute.traced_memory import traced_memory
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Mapping
+
+    from jax.stages import Compiled
+
+    from nof1_causal_lab.compute.budget import MemoryDemand
+
+
+def numerical_source_digest() -> str:
+    """Identify the shipped numerical source, including uncommitted edits."""
+    root = Path(__file__).resolve().parents[1]
+    digest = hashlib.sha256()
+    for path in sorted(root.rglob("*.py")):
+        digest.update(str(path.relative_to(root)).encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def _program_structure(
+    function: object, memo: Mapping[int, tuple[int, object]]
+) -> tuple[bytes, tuple[jax.Array, ...]]:
+    """Extract runtime arrays without tracing; NumPy structural masks stay static."""
+    arrays: list[jax.Array] = []
+    indices: dict[int, int] = {}
+
+    def array_id(
+        value: object,
+    ) -> int | tuple[int, tuple[int, ...], str, bool] | jax.ShapeDtypeStruct | None:
+        if id(value) in memo:
+            return memo[id(value)][0]
+        if isinstance(value, Tracer):
+            # NumPyro retains unused initialization closures. Their expired
+            # symbolic values have no runtime buffers. Preserve the abstract
+            # value: using it in a live computation must still fail tracing.
+            return jax.ShapeDtypeStruct(
+                value.shape, value.dtype, weak_type=jax.typeof(value).weak_type
+            )
+        if isinstance(value, jax.Array):
+            identity = id(value)
+            if identity not in indices:
+                indices[identity] = len(arrays)
+                arrays.append(value)
+            return (
+                indices[identity],
+                value.shape,
+                str(value.dtype),
+                bool(jax.typeof(value).weak_type),
+            )
+        return None
+
+    buffer = io.BytesIO()
+    pickler = cloudpickle.CloudPickler(buffer, protocol=5)
+    pickler.persistent_id = array_id  # ty: ignore[invalid-assignment] # noqa: V101 - pickle supports per-instance callbacks, consumed internally.
+    pickler.dump(function)
+    return buffer.getvalue(), tuple(arrays)
+
+
+def _program_key(structure: bytes, examples: object) -> str:
+    """Scope staged programs to source, dependencies, compiler settings and layout."""
+    leaves, tree = jax.tree.flatten(examples)
+    layouts = tuple(
+        (value.shape, str(value.dtype), bool(jax.typeof(value).weak_type)) for value in leaves
+    )
+    identity = (
+        numerical_source_digest(),
+        platform.python_version(),
+        tuple(
+            (name, version(name))
+            for name in (
+                "jax",
+                "jaxlib",
+                "numpy",
+                "numpyro",
+                "equinox",
+                "dynestyx",
+                "blackjax",
+                "diffrax",
+                "scipy",
+                "cloudpickle",
+                "flatbuffers",
+            )
+        ),
+        cache_namespace(FIT_CACHE_POLICY),
+        tuple(
+            sorted(
+                (name, str(value))
+                for name, value in jax.config.values.items()
+                if name != "jax_compilation_cache_dir"
+            )
+        ),
+        layouts,
+        tree,
+    )
+    digest = hashlib.sha256(structure)
+    digest.update(cloudpickle.dumps(identity, protocol=5))
+    return digest.hexdigest()
+
+
+def _write_program(path: Path, data: bytes) -> None:
+    """Publish a complete staged artifact under the existing bounded cache policy."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(dir=path.parent, delete=False) as target:
+        temporary = Path(target.name)
+        try:
+            target.write(data)
+            target.flush()
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+
+
+def prepare_program[Result](
+    function: Callable[..., Result], *args: object, **kwargs: object
+) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
+    """Reuse an exported program and sizing metadata before any model tracing.
+
+    Only locally constructed closures are unpickled for binding. Persistent
+    artifacts share the executable cache's trusted directory, bounded transfer,
+    source/version identity and atomic publication. Numerical JAX arrays are
+    operands; structural Python values and NumPy masks participate in the key.
+    """
+    # Seed both serializers with the caller's static PyTree objects. In
+    # particular, a carried Equinox expression and the rebuilt transition must
+    # refer to the same static evaluator function. Fresh-process cache loads
+    # resolve these references against that process's constructed input tree.
+    static_buffer = io.BytesIO()
+    static_pickler = cloudpickle.CloudPickler(static_buffer, protocol=5)
+    static_pickler.dump(jax.tree.structure((args, kwargs)))
+    static_memo = cast("dict[int, tuple[int, object]]", static_pickler.memo.copy())
+    static_values = dict(static_memo.values())
+    structure, arguments = _program_structure(function, static_memo)
+    key = _program_key(static_buffer.getvalue() + structure, (args, kwargs))
+    directory = jax.config.jax_compilation_cache_dir
+    working = Path(directory) if directory and jax.config.jax_enable_compilation_cache else None
+    metadata_path = working / f"nof1-shapes-{key}-cache" if working is not None else None
+    program_path = working / f"nof1-program-{key}-cache" if working is not None else None
+
+    def invoke(values: tuple[jax.Array, ...], *inputs: object, **options: object) -> Result:
+        loader = pickle.Unpickler(io.BytesIO(structure))
+
+        def bind(
+            token: int | tuple[int, tuple[int, ...], str, bool] | jax.ShapeDtypeStruct,
+        ) -> object:
+            if isinstance(token, int):
+                return static_values[token]
+            return token if isinstance(token, jax.ShapeDtypeStruct) else values[token[0]]
+
+        loader.persistent_load = bind  # ty: ignore[invalid-assignment] # noqa: V101 - pickle supports per-instance callbacks, consumed internally.
+        bound = cast("Callable[..., Result]", loader.load())
+        return bound(*inputs, **options)
+
+    program = jax.jit(invoke)
+    flat_args, input_tree = jax.tree.flatten((arguments, args, kwargs))
+
+    def flat_program(*values: jax.Array) -> tuple[jax.Array, ...]:
+        runtime, inputs, options = jax.tree.unflatten(input_tree, values)
+        return cast(
+            "tuple[jax.Array, ...]", tuple(jax.tree.leaves(program(runtime, *inputs, **options)))
+        )
+
+    flattened = jax.jit(flat_program)
+    hit = metadata_path is not None and metadata_path.exists()
+    if hit:
+        assert metadata_path is not None
+        loader = pickle.Unpickler(io.BytesIO(metadata_path.read_bytes()))
+        loader.persistent_load = static_values.__getitem__  # ty: ignore[invalid-assignment] # noqa: V101 - pickle supports per-instance callbacks, consumed internally.
+        shapes, memory = cast("tuple[Result, MemoryDemand]", loader.load())
+    else:
+        shapes = cast("Result", jax.eval_shape(program, arguments, *args, **kwargs))
+        memory = traced_memory(flattened.trace(*flat_args).jaxpr)
+        if metadata_path is not None:
+            metadata = io.BytesIO()
+            pickler = cloudpickle.CloudPickler(metadata, protocol=5)
+
+            def static_id(value: object) -> int | None:
+                entry = static_memo.get(id(value))
+                return entry[0] if entry is not None else None
+
+            pickler.persistent_id = static_id  # ty: ignore[invalid-assignment] # noqa: V101 - pickle supports per-instance callbacks, consumed internally.
+            pickler.dump((shapes, memory))
+            _write_program(metadata_path, metadata.getvalue())
+    _LOGGER.info("Staged program shapes %s: %s", "hit" if hit else "miss", key)
+    output_tree = jax.tree.structure(shapes)
+
+    def compile_program() -> Compiled:
+        hit = program_path is not None and program_path.exists()
+        if hit:
+            assert program_path is not None
+            exported = export.deserialize(bytearray(program_path.read_bytes()))
+        else:
+            exported = export.export(flattened)(*flat_args)
+            if program_path is not None:
+                _write_program(program_path, bytes(exported.serialize()))
+        _LOGGER.info("Staged program %s: %s", "hit" if hit else "miss", key)
+
+        def restored(values: tuple[jax.Array, ...], *inputs: object, **options: object) -> Result:
+            leaves = jax.tree.leaves((values, inputs, options))
+            return cast("Result", jax.tree.unflatten(output_tree, exported.call(*leaves)))
+
+        return jax.jit(restored).lower(arguments, *args, **kwargs).compile()
+
+    return compile_program, arguments, shapes, memory
+
 
 _AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
 _KERNELS = "xla_gpu_kernel_cache_file"

@@ -5,35 +5,35 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
-from nof1_causal_lab.compute.batching import compiled_memory
-from nof1_causal_lab.compute.budget import MemoryDemand
-from nof1_causal_lab.compute.traced_memory import traced_memory
+from nof1_causal_lab.compute.batching import compile_from_estimate, compiled_memory
+from nof1_causal_lab.compute.budget import NO_MEMORY_DEMAND, MemoryDemand
+from nof1_causal_lab.compute.compilation_cache import prepare_program
 from nof1_causal_lab.models.ssm.inference.samplers.progress import (
     inference_phase,
     log_inference_event,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import (
     CompiledSweepPhase,
-    compile_sweeps,
-    runtime_program,
+    EmptySweepPhase,
+    SweepPlan,
+    sweep_block,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from concurrent.futures import Future
 
-    from jax.stages import Compiled, Traced
+    from jax.stages import Compiled
     from jax.typing import DTypeLike
 
     from nof1_causal_lab.compute.budget import ComputeBudget
-    from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepPlan
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
 
@@ -57,6 +57,98 @@ class SweepRun[Carry]:
     history: SweepHistory
     first_step_seconds: float
     sampling_loop_seconds: float
+
+
+def compile_sweeps[Carry](
+    step_factory: Callable[[int], Callable[[Carry, jax.Array], tuple[Carry, dict[str, jax.Array]]]],
+    initial: Carry,
+    *,
+    num_warmup: int,
+    num_samples: int,
+    max_batch_size: int,
+    budget: ComputeBudget,
+    additional_overhead: MemoryDemand = NO_MEMORY_DEMAND,
+) -> SweepPlan:
+    """Check compiled peak memory plus histories, without timing or executing a sweep.
+
+    Trace one node/root lane and size concurrency arithmetically before compiling
+    the selected width. Independent chains remain vectorized. The common cap of
+    25 sequential sweeps bounds output buffers and host progress latency.
+    """
+    block_size = min(25, max(1, num_warmup, num_samples))
+
+    def prepare_phase(
+        batch: int,
+    ) -> tuple[
+        Callable[[], Compiled],
+        tuple[jax.Array, ...],
+        Mapping[str, jax.ShapeDtypeStruct],
+        MemoryDemand,
+    ]:
+        compile_program, arguments, (_, block_shapes), estimate = prepare_program(
+            sweep_block(step_factory(batch), block_size),
+            initial,
+            jax.ShapeDtypeStruct((), jnp.int32),
+            jax.ShapeDtypeStruct((), jnp.bool_),
+        )
+        shapes = {
+            name: jax.ShapeDtypeStruct(shape.shape[1:], shape.dtype)
+            for name, shape in block_shapes.items()
+        }
+        return compile_program, arguments, shapes, estimate
+
+    single = prepare_phase(1)
+    _, _, single_shapes, single_memory = single
+    warmup_shapes = {
+        name: shape for name, shape in single_shapes.items() if name not in {"positions", "paths"}
+    }
+
+    def compile_plan(batch: int) -> tuple[SweepPlan, MemoryDemand]:
+        compile_program, arguments, shapes, _ = single if batch == 1 else prepare_phase(batch)
+        executable = compile_program()
+        warmup = (
+            CompiledSweepPhase(num_warmup, executable, warmup_shapes, arguments)
+            if num_warmup or num_warmup + num_samples == 0
+            else EmptySweepPhase(warmup_shapes)
+        )
+        posterior = (
+            CompiledSweepPhase(num_samples, executable, shapes, arguments)
+            if num_samples or num_warmup + num_samples == 0
+            else EmptySweepPhase(shapes)
+        )
+        return SweepPlan(warmup, posterior, block_size, batch, executable), compiled_memory(
+            executable
+        )
+
+    history_bytes = sum(
+        steps * sum(shape.size * shape.dtype.itemsize for shape in shapes.values())
+        for steps, shapes in ((num_warmup, warmup_shapes), (num_samples, single_shapes))
+    )
+    transfer_bytes = block_size * sum(
+        shape.size * shape.dtype.itemsize for shape in single_shapes.values()
+    )
+    # Host assembly buffers coexist with one device_get block, including its
+    # padded tail. XLA accounts for device block buffers; returned phases and
+    # combined diagnostics can also coexist on device. These do not scale with
+    # node concurrency and must be reserved only once.
+    overhead = MemoryDemand(
+        host_bytes=history_bytes + transfer_bytes + additional_overhead.host_bytes,
+        device_bytes=2 * history_bytes + additional_overhead.device_bytes,
+    )
+    chosen = compile_from_estimate(
+        compile_plan,
+        single_memory=single_memory,
+        max_batch_size=max_batch_size,
+        budget=budget,
+        overhead=overhead,
+    )
+    return replace(
+        chosen.executable,
+        memory=MemoryDemand(
+            host_bytes=chosen.memory.host_bytes + overhead.host_bytes,
+            device_bytes=chosen.memory.device_bytes + overhead.device_bytes,
+        ),
+    )
 
 
 def compile_projected_sweeps[Carry](
@@ -89,14 +181,9 @@ def compile_projected_sweeps[Carry](
     paths = jax.ShapeDtypeStruct(
         (block_size, num_chains, len(target.times), target.independent_mask.shape[-1]), path_dtype
     )
-    project_program, projection_arguments = runtime_program(
+    compile_program, projection_arguments, shape, estimate = prepare_program(
         jax.vmap(jax.vmap(project)), positions, paths
     )
-    projection_trace: Traced = jax.jit(project_program).trace(
-        projection_arguments, positions, paths
-    )
-    estimate = traced_memory(projection_trace.jaxpr)
-    shape = projection_trace.out_info
     transfer = shape.size * shape.dtype.itemsize
     retained = transfer // block_size * num_samples
     overhead = MemoryDemand(
@@ -106,7 +193,7 @@ def compile_projected_sweeps[Carry](
 
     def compile_projection() -> Compiled:
         with inference_phase(label, "compiling_observation_projection", clock=clock):
-            return cast("Compiled", projection_trace.lower().compile())
+            return compile_program()
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         context = copy_context()

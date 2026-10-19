@@ -4,7 +4,10 @@ import hashlib
 import io
 import json
 import os
+import subprocess
+import sys
 import tarfile
+import textwrap
 from unittest.mock import Mock
 
 import jax
@@ -22,6 +25,64 @@ from nof1_causal_lab.compute.compilation_cache import (
 pytestmark = pytest.mark.contract
 AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
 KERNELS = "xla_gpu_kernel_cache_file"
+
+
+def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp_path):
+    script = textwrap.dedent(
+        """
+        import json, os
+        import jax
+        import jax.numpy as jnp
+        from nof1_causal_lab.compute.compilation_cache import prepare_program
+        from nof1_causal_lab.artifacts.model.expressions import StateExpression
+        from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponent
+
+        template = ExpressionComponent(
+            target=0, edge_owned=False, expression=StateExpression(construct_id='construct:test'),
+            evaluate_fn=lambda values, params: values,
+        )
+
+        def make_program(offset, power):
+            def program(carry):
+                assert os.environ['FORBID_TRACE'] == '0', 'cache hit retraced the program'
+                return jax.lax.cond(
+                    True, lambda: (template, (carry[1] + offset) ** power), lambda: carry
+                )
+            return program
+
+        compile_program, arguments, shapes, memory = prepare_program(
+            make_program(jnp.asarray(float(os.environ['OFFSET'])), int(os.environ['POWER'])),
+            (template, jax.ShapeDtypeStruct((2,), jnp.float32)),
+        )
+        executable = compile_program()
+        actual = executable(arguments, (template, jnp.ones((2,), dtype=jnp.float32)))
+        executable(arguments, actual)  # Returned static metadata must remain valid carry metadata.
+        assert actual[0].evaluate_fn is template.evaluate_fn
+        print(json.dumps({'value': actual[1].tolist(), 'shape': shapes[1].shape,
+                          'bytes': memory.device_bytes}))
+        """
+    )
+    results = []
+    for offset, power, forbid_trace in ((1, 2, 0), (3, 2, 1), (3, 3, 0)):
+        process = subprocess.run(
+            [sys.executable, "-c", script],
+            env={
+                **os.environ,
+                "PYTHONHASHSEED": "0",
+                "JAX_COMPILATION_CACHE_DIR": str(tmp_path),
+                "OFFSET": str(offset),
+                "POWER": str(power),
+                "FORBID_TRACE": str(forbid_trace),
+            },
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        results.append(json.loads(process.stdout))
+    assert [result["value"] for result in results] == [[4.0, 4.0], [16.0, 16.0], [64.0, 64.0]]
+    assert all(result["shape"] == [2] and result["bytes"] > 0 for result in results)
+    assert len(tuple(tmp_path.glob("nof1-shapes-*-cache"))) == 2
+    assert len(tuple(tmp_path.glob("nof1-program-*-cache"))) == 2
 
 
 def _file(root, name, content, modified):
