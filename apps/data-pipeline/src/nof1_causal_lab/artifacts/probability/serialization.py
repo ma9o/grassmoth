@@ -10,6 +10,7 @@ import inspect
 import re
 from collections.abc import Callable, Mapping, Sequence
 from functools import cached_property
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Annotated, cast, overload
 
 import jax
@@ -36,6 +37,7 @@ type ArrayLoader = Callable[[str], np.ndarray]
 type NumPyroValue = JsonScalar | NumericalArray | NumPyroArray | NumPyroObject
 type NumPyroArray = Sequence[NumPyroValue]
 type NumPyroObject = Mapping[str, NumPyroValue]
+_NO_BUFFERS: Mapping[str, NumericalArray] = MappingProxyType({})
 
 
 def _stored_constructor(value: NumPyroValue, arrays: dict[str, NumericalArray]) -> JsonValue:
@@ -57,7 +59,11 @@ def _stored_constructor(value: NumPyroValue, arrays: dict[str, NumericalArray]) 
 
 
 def serialize_constructor(
-    value: NumPyroValue, *, binary: bool, array_loader: ArrayLoader | None = None
+    value: NumPyroValue,
+    *,
+    binary: bool,
+    array_loader: ArrayLoader | None = None,
+    buffers: Mapping[str, NumericalArray] = _NO_BUFFERS,
 ) -> NumPyroValue:
     """Keep storage references internal; published native arguments own exact NPY values."""
     if isinstance(value, NumericalArray):
@@ -66,18 +72,24 @@ def serialize_constructor(
         return _stored_constructor(value, {})
     if isinstance(value, Mapping):
         if binary and "array_ref" in value:
+            identity = str(value["array_ref"])
+            if not value["index"] and identity in buffers:
+                return buffers[identity]
             if array_loader is None:
                 raise ValueError("Publishing a stored law requires its numerical values")
             return NumericalArray.from_numpy(
                 np.asarray(_decode(_stored_constructor(value, {}), array_loader))
             )
         return {
-            key: serialize_constructor(item, binary=binary, array_loader=array_loader)
+            key: serialize_constructor(
+                item, binary=binary, array_loader=array_loader, buffers=buffers
+            )
             for key, item in value.items()
         }
     if isinstance(value, Sequence) and not isinstance(value, str):
         return [
-            serialize_constructor(item, binary=binary, array_loader=array_loader) for item in value
+            serialize_constructor(item, binary=binary, array_loader=array_loader, buffers=buffers)
+            for item in value
         ]
     return value
 
@@ -90,7 +102,12 @@ def serialize_distribution(value: dist.Distribution, info: SerializationInfo) ->
         loader = (info.context or {}).get("distribution_array_loader")
     return cast(
         "NumPyroObject",
-        serialize_constructor(encode_distribution(value), binary=binary, array_loader=loader),
+        serialize_constructor(
+            encode_distribution(value),
+            binary=binary,
+            array_loader=loader,
+            buffers=value.buffers if isinstance(value, _StoredDistribution) else _NO_BUFFERS,
+        ),
     )
 
 
@@ -103,10 +120,17 @@ class _StoredDistribution(dist.Distribution):
 
     constructor: dict[str, JsonValue]
     loader: ArrayLoader | None
+    buffers: Mapping[str, NumericalArray]
 
-    def __init__(self, constructor: dict[str, JsonValue], loader: ArrayLoader | None) -> None:
+    def __init__(
+        self,
+        constructor: dict[str, JsonValue],
+        loader: ArrayLoader | None,
+        buffers: Mapping[str, NumericalArray],
+    ) -> None:
         self.constructor = constructor
         self.loader = loader
+        self.buffers = MappingProxyType(dict(buffers))
 
     @cached_property
     def native(self) -> dist.Distribution:
@@ -421,14 +445,17 @@ def encode_distribution(value: dist.Distribution) -> dict[str, JsonValue]:
 
 
 def decode_distribution(
-    value: dict[str, JsonValue], *, array_loader: ArrayLoader | None = None
+    value: dict[str, JsonValue],
+    *,
+    array_loader: ArrayLoader | None = None,
+    buffers: Mapping[str, NumericalArray] = _NO_BUFFERS,
 ) -> dist.Distribution:
     """Restore and validate the exact native constructor tree."""
     if _has_array_refs(value):
         _validate_stored_tree(value)
         if "distribution" not in value:
             raise ValueError("Expected a NumPyro distribution constructor")
-        return _StoredDistribution(value, array_loader)
+        return _StoredDistribution(value, array_loader, buffers)
     decoded = _decode(value, array_loader)
     if not isinstance(decoded, dist.Distribution):
         raise ValueError("Expected a NumPyro distribution constructor")
@@ -472,7 +499,9 @@ def _distribution_schema(_source: object, handler: GetCoreSchemaHandler) -> core
                 raise ValueError("Stored law is missing its numerical value")
             return external(identity)
 
-        return decode_distribution(constructor, array_loader=load if arrays else external)
+        return decode_distribution(
+            constructor, array_loader=load if arrays else external, buffers=arrays
+        )
 
     decoder = core_schema.with_info_after_validator_function(decode, wire)
     return core_schema.json_or_python_schema(

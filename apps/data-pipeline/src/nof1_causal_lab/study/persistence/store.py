@@ -81,13 +81,13 @@ class ArtifactStore:
 
     def write_array(self, values: ArrayLike) -> str:
         """Persist numerical values in the workspace array store and return their content identity."""
-        from nof1_causal_lab.storage.arrays import encode_array, write_array
+        from nof1_causal_lab.artifacts.arrays import NumericalArray
+        from nof1_causal_lab.storage.arrays import write_owned_array
 
-        array = np.asarray(values)
-        identity, _ = encode_array(array)
-        if f"refs/arrays/{identity}" in self.repo.references:
-            return identity
-        return write_array(storage.join(self._root, "arrays"), array)
+        array = NumericalArray.from_numpy(np.asarray(values))
+        if f"refs/arrays/{array.identity}" in self.repo.references:
+            return array.identity
+        return write_owned_array(storage.join(self._root, "arrays"), array)
 
     def read_array(self, identity: str) -> np.ndarray:
         """Load and verify a numerical array using its retained content identity."""

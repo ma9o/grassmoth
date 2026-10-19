@@ -353,3 +353,33 @@ def test_domain_views_share_one_wire_buffer_and_decode_without_a_store():
     assert resolve_vector(restored.view) == (2.0, 6.0, 10.0)
     with pytest.raises(ValueError, match="earlier"):
         unpack_result(msgpack.packb({"npy": msgpack.ExtType(42, (0).to_bytes(8, "big"))}))
+
+
+def test_restored_distribution_keeps_its_owned_buffer_when_published_again(monkeypatch):
+    from nof1_causal_lab.artifacts.base import Value
+    from nof1_causal_lab.artifacts.probability.serialization import NumPyroDistribution
+    from nof1_causal_lab.study.persistence.arrays import owned_arrays
+    from nof1_causal_lab.study.persistence.codec import result_payload
+
+    class Law(Value):
+        distribution: NumPyroDistribution
+
+    array = NumericalArray.from_numpy(np.arange(12, dtype=np.float32).reshape(3, 4))
+    law = Law.model_validate(
+        {
+            "distribution": {
+                "distribution": "Delta",
+                "params": {"v": {"npy": array.npy}, "event_dim": 1},
+            }
+        }
+    )
+    restored = Law.model_validate(unpack_result(pack_result(law)))
+    owned = owned_arrays(result_payload(restored))
+
+    def forbid_reencoding(_values):
+        raise AssertionError("An owned binary distribution must not be re-encoded")
+
+    monkeypatch.setattr(NumericalArray, "from_numpy", forbid_reencoding)
+    published = result_payload(restored)
+    assert owned_arrays(published)[array.identity].npy is owned[array.identity].npy
+    assert unpack_result(pack_result(restored)) == published

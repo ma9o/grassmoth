@@ -24,12 +24,17 @@ def decode_array(identity: str, payload: bytes) -> np.ndarray:
 
 def write_array(directory: str, values: np.ndarray) -> str:
     """Persist a content-addressed NumPy array only when its encoded content is not already stored."""
-    identity, payload = encode_array(values)
+    return write_owned_array(directory, NumericalArray.from_numpy(values))
+
+
+def write_owned_array(directory: str, value: NumericalArray) -> str:
+    """Persist an already encoded numerical owner without another copy or hash."""
+    identity = value.identity
     storage.makedirs(directory)
     path = storage.join(directory, f"{identity}.npy")
     if not storage.exists(path):
         with storage.open_file(path, "wb") as stream:
-            stream.write(payload)
+            stream.write(value.npy)
     return identity
 
 
