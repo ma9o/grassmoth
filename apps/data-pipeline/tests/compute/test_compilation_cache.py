@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tarfile
 import textwrap
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import jax
@@ -25,6 +26,25 @@ from nof1_causal_lab.compute.compilation_cache import (
 pytestmark = pytest.mark.contract
 AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
 KERNELS = "xla_gpu_kernel_cache_file"
+
+
+@pytest.mark.parametrize("dependency", ["cuthbert", "cuthbertlib", "cd-dynamax"])
+def test_staged_program_key_tracks_all_installed_dependency_versions(monkeypatch, dependency):
+    from nof1_causal_lab.compute import compilation_cache as cache
+
+    monkeypatch.setattr(cache, "numerical_source_digest", lambda: "source")
+    monkeypatch.setattr(cache, "cache_namespace", lambda _policy: "namespace")
+    packages = [
+        SimpleNamespace(name="jax", version="unchanged"),
+        SimpleNamespace(name=dependency, version="1"),
+    ]
+    monkeypatch.setattr(cache, "distributions", lambda: iter(packages))
+    layout = (jax.ShapeDtypeStruct((2,), "float32"),)
+    original = cache._program_key(b"same structure", layout)
+    packages.reverse()
+    assert cache._program_key(b"same structure", layout) == original
+    packages[0] = SimpleNamespace(name=dependency, version="2")
+    assert cache._program_key(b"same structure", layout) != original
 
 
 def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp_path):

@@ -14,7 +14,7 @@ import shutil
 import tarfile
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
-from importlib.metadata import version
+from importlib.metadata import distributions, version
 from pathlib import Path, PurePosixPath
 from tempfile import NamedTemporaryFile, gettempdir
 from threading import Lock
@@ -97,22 +97,9 @@ def _program_key(structure: bytes, examples: object) -> str:
     identity = (
         numerical_source_digest(),
         platform.python_version(),
-        tuple(
-            (name, version(name))
-            for name in (
-                "jax",
-                "jaxlib",
-                "numpy",
-                "numpyro",
-                "equinox",
-                "dynestyx",
-                "blackjax",
-                "diffrax",
-                "scipy",
-                "cloudpickle",
-                "flatbuffers",
-            )
-        ),
+        # Cloudpickle references installed functions by name, including transitive
+        # dependencies. Their versions must invalidate exports before tracing.
+        tuple(sorted((package.name, package.version) for package in distributions())),
         cache_namespace(FIT_CACHE_POLICY),
         tuple(
             sorted(
@@ -159,7 +146,7 @@ def prepare_program[Result](
     static_buffer = io.BytesIO()
     static_pickler = cloudpickle.CloudPickler(static_buffer, protocol=5)
     static_pickler.dump(jax.tree.structure((args, kwargs)))
-    static_memo = cast("dict[int, tuple[int, object]]", static_pickler.memo.copy())
+    static_memo = cast("Mapping[int, tuple[int, object]]", static_pickler.memo.copy())
     static_values = dict(static_memo.values())
     structure, arguments = _program_structure(function, static_memo)
     key = _program_key(static_buffer.getvalue() + structure, (args, kwargs))
