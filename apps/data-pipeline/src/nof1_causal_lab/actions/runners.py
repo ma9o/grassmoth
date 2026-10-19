@@ -69,9 +69,8 @@ def _fit_selected(
     from nof1_causal_lab.study.persistence.store import read_model, read_question
 
     dynamical_model_spec = read_model(store, pins["model"])
-    selection = StructuralSelection.for_question(
-        dynamical_model_spec, read_question(store, pins["question"])
-    )
+    question = read_question(store, pins["question"])
+    selection = StructuralSelection.for_question(dynamical_model_spec, question)
     sampler = resolve_sampler_spec(
         request.settings, None if continuation is None else continuation.settings
     )
@@ -151,7 +150,13 @@ def _fit_selected(
         )
         report = read_inference_report(store, info.revision, evidence, result["metadata"])
         effects = ActionEffects(produced=(info,), reports={"inference": store.write_report(report)})
-    return Applied(result=evidence, effects=effects)
+    from nof1_causal_lab.actions.model_checks import fit_check_report
+
+    checks = fit_check_report(selection, question, history, preflight=findings)
+    return Applied(
+        result=evidence,
+        effects=effects.revised(reports={**effects.reports, "checks": store.write_report(checks)}),
+    )
 
 
 async def _run_simulate(

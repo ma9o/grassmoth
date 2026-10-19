@@ -119,7 +119,7 @@ async def edit_question_activity(
 async def evaluate_model_checks_activity(
     activity_input: EvaluateChecksInput[ModelEditResult | None],
 ) -> ChecksResult:
-    """Run model checks off the event loop and persist their reports.
+    """Read retained fit findings or evaluate model edits off the event loop.
 
     Args:
         activity_input: Successful edit or fit, its request, and selected input state.
@@ -149,7 +149,7 @@ async def evaluate_model_checks_activity(
 
     if isinstance(evaluated, FitCheckReport):
         return ChecksResult(
-            reports={"checks": store.write_report(evaluated)},
+            reports={"checks": activity_input.applied.effects.reports["checks"]},
             messages=fit_check_messages(evaluated, datetime.now(UTC)),
         )
     checks, identification = evaluated

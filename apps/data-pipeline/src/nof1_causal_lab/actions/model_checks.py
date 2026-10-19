@@ -16,7 +16,10 @@ from nof1_causal_lab.study.queries.data import read_data_history
 from nof1_causal_lab.study.state import apply_effects
 
 if TYPE_CHECKING:
+    from nof1_causal_lab.artifacts.model.question import QuestionSpec
+    from nof1_causal_lab.artifacts.reports.checks import SpecificationAssessment
     from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
+    from nof1_causal_lab.study.queries.data import DataHistory
     from nof1_causal_lab.study.records import Applied
     from nof1_causal_lab.study.state import StudyState
 
@@ -52,13 +55,12 @@ def read_model_checks(
     if action == "fit":
         assert state.data is not None, "A completed fit owns one selected history"
         history = read_data_history(store, state.data)
-        return FitCheckReport(
-            data=validate_extraction(dynamical_model_spec, [history.observations.recorded.frame]),
+        return fit_check_report(
+            selection,
+            question,
+            history,
             preflight=check_model_data(
                 inputs, history.observations, time_origin=history.time_origin
-            ),
-            question=QuestionCheckReport(
-                findings=question_findings(question, selection, history=history.observations),
             ),
         )
     return (
@@ -69,6 +71,25 @@ def read_model_checks(
             ),
         ),
         selection.identification,
+    )
+
+
+def fit_check_report(
+    selection: StructuralSelection,
+    question: QuestionSpec,
+    history: DataHistory,
+    *,
+    preflight: tuple[SpecificationAssessment, ...],
+) -> FitCheckReport:
+    """Record findings using the fit's selected inputs and completed preflight."""
+    return FitCheckReport(
+        data=validate_extraction(
+            selection.dynamical_model_spec, [history.observations.recorded.frame]
+        ),
+        preflight=preflight,
+        question=QuestionCheckReport(
+            findings=question_findings(question, selection, history=history.observations),
+        ),
     )
 
 
@@ -95,11 +116,13 @@ def evaluate_model_checks[ResultT](
     *,
     action: Literal["edit_model", "fit"],
 ) -> tuple[ModelCheckReport, IdentificationReport] | FitCheckReport:
-    """Check the edited model, or the selected inputs that a fit actually consumed."""
+    """Check an edit or reuse the findings retained by the executing fit."""
+    if action == "fit":
+        return ArtifactStore(workspace_id).read_report(
+            applied.effects.reports["checks"], FitCheckReport
+        )
     return read_model_checks(
         workspace_id,
-        state
-        if action == "fit"
-        else apply_effects(state, applied.effects.produced, applied.effects.retracted),
+        apply_effects(state, applied.effects.produced, applied.effects.retracted),
         action=action,
     )

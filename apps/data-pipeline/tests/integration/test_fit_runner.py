@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -96,9 +97,29 @@ def test_inference_advances_model_and_uses_the_selected_input(
         "panel": panel.revision,
         "question": question.revision,
     }
-    for _ in range(2):
+    from nof1_causal_lab.actions import checks
+    from nof1_causal_lab.actions.model_checks import read_model_checks
+    from nof1_causal_lab.artifacts.reports.inference import FitCheckReport
+    from nof1_causal_lab.study.queries import data
+
+    assert isinstance(request.input.target, NewFitTarget)
+    expected_checks = read_model_checks(
+        integration_workspace,
+        state.with_artifacts([question]).revised(data=request.input.target.data_ref),
+        action="fit",
+    )
+    history_reader = Mock(wraps=data.read_data_history)
+    preflight = Mock(wraps=checks.check_model_data)
+    monkeypatch.setattr(data, "read_data_history", history_reader)
+    monkeypatch.setattr(checks, "check_model_data", preflight)
+    for index in range(2):
         assert isinstance(request.input.target, NewFitTarget)
         applied = run_async(run_action_locally(integration_workspace, request, pins))
+        assert history_reader.call_count == preflight.call_count == index + 1
+        assert (
+            artifact_store.read_report(applied.effects.reports["checks"], FitCheckReport)
+            == expected_checks
+        )
         info = next(info for info in applied.effects.produced if info.artifact_id == "model")
         assert info.revision not in revisions
         revisions.append(info.revision)
@@ -136,3 +157,48 @@ def test_inference_advances_model_and_uses_the_selected_input(
     ]
     assert read_model(artifact_store, original.revision).model_dump(mode="json") == fitted_inputs[0]
     assert artifact_revisions(artifact_store, "model") == revisions
+
+
+@pytest.mark.parametrize("evaluated", [False, True])
+def test_failed_preflight_still_stops_before_compute_or_reports(
+    integration_workspace, artifact_store, monkeypatch, evaluated
+):
+    from nof1_causal_lab.actions import checks
+    from nof1_causal_lab.actions.errors import ModelFitError
+    from nof1_causal_lab.actions.fit import action as flow
+    from nof1_causal_lab.artifacts.reports.checks import Evaluated, NotEvaluated
+
+    model = fx.seed_model(artifact_store)
+    panel = fx.seed_panel(artifact_store, model_revision=model.revision)
+    question = write_question(artifact_store)
+    finding = (
+        Evaluated(code="fit_preflight", subject="model", outcome="failed", evidence="unsupported")
+        if evaluated
+        else NotEvaluated(
+            code="fit_preflight", subject="model", reason="MODEL_INCOMPLETE", detail="incomplete"
+        )
+    )
+    monkeypatch.setattr(checks, "check_model_data", Mock(return_value=(finding,)))
+    compute = Mock()
+    write_report = Mock()
+    monkeypatch.setattr(flow, "fit", compute)
+    monkeypatch.setattr(type(artifact_store), "write_report", write_report)
+    request = FitRequest[GitOid](
+        input=FitInput[GitOid](
+            target=NewFitTarget(
+                dynamical_model_spec_ref=model.revision,
+                data_ref=DataRef(revision=panel.revision, replicate_index=0),
+            ),
+        )
+    )
+    with pytest.raises(ModelFitError, match="preflight rejected") as caught:
+        run_async(
+            run_action_locally(
+                integration_workspace,
+                request,
+                {"model": model.revision, "question": question.revision},
+            )
+        )
+    assert caught.value.diagnostics == {"findings": [finding.model_dump(mode="json")]}
+    compute.assert_not_called()
+    write_report.assert_not_called()

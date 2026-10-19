@@ -1,7 +1,5 @@
 """Model edits evaluate and reuse data-independent checks without numerical execution."""
 
-from unittest.mock import Mock
-
 import pytest
 from pydantic import ValidationError
 
@@ -86,8 +84,21 @@ def test_edit_model_contract_rejects_panel_selection():
         )
 
 
-def test_fit_checks_use_selected_input_model_not_conditioned_output(monkeypatch):
+def test_fit_checks_reuse_the_retained_input_report_without_rebuilding(tmp_path, monkeypatch):
     from nof1_causal_lab.actions import model_checks
+    from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
+    from nof1_causal_lab.artifacts.reports.inference import FitCheckReport
+    from nof1_causal_lab.artifacts.reports.model_checks import QuestionCheckReport
+    from nof1_causal_lab.storage import paths as data
+    from nof1_causal_lab.study.persistence.store import ArtifactStore
+
+    monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
+    report = FitCheckReport(
+        data=DataProfileReport(indicators={}, findings=()),
+        preflight=(),
+        question=QuestionCheckReport(findings=()),
+    )
+    reference = ArtifactStore("checks").write_report(report)
 
     original = ArtifactRecord(artifact_id="model", revision=git_oid(1))
     posterior = original.revised(revision=git_oid(2), derived_from={"model": original.revision})
@@ -95,12 +106,13 @@ def test_fit_checks_use_selected_input_model_not_conditioned_output(monkeypatch)
         current={"model": original},
         data=DataRef[GitOid, int](revision=git_oid(3), replicate_index=0),
     )
-    applied = Applied(result=None, effects=ActionEffects(produced=(posterior,)))
-    read_checks = Mock()
-    monkeypatch.setattr(model_checks, "read_model_checks", read_checks)
+    applied = Applied(
+        result=None,
+        effects=ActionEffects(produced=(posterior,), reports={"checks": reference}),
+    )
 
-    evaluate_model_checks("checks", inputs, applied, action="fit")
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("A completed fit must reuse its selected-input findings")
 
-    # Fitting produces a shared empirical law; input preflight must never try
-    # to compile that posterior as independent scalar priors.
-    read_checks.assert_called_once_with("checks", inputs, action="fit")
+    monkeypatch.setattr(model_checks, "read_model_checks", unexpected)
+    assert evaluate_model_checks("checks", inputs, applied, action="fit") == report
