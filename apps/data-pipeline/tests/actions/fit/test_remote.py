@@ -7,10 +7,23 @@ from unittest.mock import Mock
 import modal
 import pytest
 
-from nof1_causal_lab.actions.fit.remote import FitComputeInput, FitComputeResult, _dispatch_fit
+from nof1_causal_lab.actions.fit.remote import (
+    FIT_CACHE_VOLUME_ENV,
+    FitComputeInput,
+    FitComputeResult,
+    _dispatch_fit,
+)
 from nof1_causal_lab.artifacts.sampling import InferenceHardware, NutsDASpec, SamplerSpec
 
 pytestmark = pytest.mark.contract
+
+
+@pytest.fixture(autouse=True)
+def isolated_cache_volume(monkeypatch):
+    monkeypatch.setenv(FIT_CACHE_VOLUME_ENV, "test-fit-cache")
+    volume = Mock()
+    monkeypatch.setattr(modal.Volume, "from_name", volume)
+    return volume
 
 
 def test_pytest_fits_locally_and_rejects_live_modal_apps():
@@ -24,7 +37,7 @@ def test_pytest_fits_locally_and_rejects_live_modal_apps():
 @pytest.mark.parametrize("hardware", [InferenceHardware.L40S, InferenceHardware.H100])
 @pytest.mark.parametrize("time_limit", [14400, 90])
 def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
-    monkeypatch, hardware, time_limit
+    monkeypatch, hardware, time_limit, isolated_cache_volume
 ):
     # The SDK's process-global terminal renderer races when independent fit
     # activities create apps concurrently. Service dispatch must stay headless.
@@ -55,6 +68,15 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     assert "max_containers" not in app.function.call_args.kwargs
     assert app.function.call_args.kwargs["cpu"] == (8, 8)
     assert app.function.call_args.kwargs["memory"] == (32768, 32768)
+    assert app.function.call_args.kwargs["env"][FIT_CACHE_VOLUME_ENV] == "test-fit-cache"
+    assert app.function.call_args.kwargs["env"]["JAX_COMPILATION_CACHE_DIR"].startswith("/tmp/")
+    assert (
+        app.function.call_args.kwargs["env"]["JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS"] == "1.0"
+    )
+    assert app.function.call_args.kwargs["volumes"] == {
+        "/cache": isolated_cache_volume.return_value
+    }
+    isolated_cache_volume.assert_called_once_with("test-fit-cache", create_if_missing=True)
     remote.remote.assert_called_once_with(payload)
     remote.spawn.assert_not_called()
 

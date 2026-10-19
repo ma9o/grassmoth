@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import io
 import logging
+import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nof1_causal_lab.actions.contracts.bodies import FitOutput
@@ -31,6 +33,7 @@ if TYPE_CHECKING:
 
 _FIT_CPU_CORES = 8
 _FIT_HOST_MEMORY_MIB = 32768
+FIT_CACHE_VOLUME_ENV = "NOF1_FIT_CACHE_VOLUME"
 
 
 @dataclass(frozen=True)
@@ -110,23 +113,29 @@ def _fit_gpu(payload: FitComputeInput) -> FitComputeResult:
     import jax
     import modal
 
+    from nof1_causal_lab.bootstrap import initialize_numerical_runtime
+    from nof1_causal_lab.compute.compilation_cache import local_compilation_cache
+
     logging.basicConfig(level=logging.INFO)
+    initialize_numerical_runtime()
     if jax.default_backend() != "gpu":
         raise RuntimeError("Modal fit requires a GPU backend")
     logging.getLogger(__name__).info("Fit compute devices: %s", jax.devices())
-    result = execute_fit_compute(payload)
-    modal.Volume.from_name("nof1-cached-fit-cache").commit()
-    return result
+    volume = modal.Volume.from_name(os.environ[FIT_CACHE_VOLUME_ENV])
+    with local_compilation_cache(Path("/cache/jax-bundles"), commit=volume.commit):
+        return execute_fit_compute(payload)
 
 
 def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> FitComputeResult:
     import modal
 
+    from nof1_causal_lab.compute.compilation_cache import FIT_CACHE_MIN_COMPILE_SECONDS
     from nof1_causal_lab.compute.modal_images import gpu_image
 
     # A separate ephemeral app per call supports concurrent local study workers
     # and ships their current source; no deployed production function is replaced.
     app = modal.App("nof1-causal-lab-pipeline")
+    cache_volume = os.environ.get(FIT_CACHE_VOLUME_ENV, "nof1-cached-fit-cache")
     remote_fit = app.function(
         image=gpu_image,
         # Function environment overrides image defaults without adding a build
@@ -134,9 +143,10 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
         env={
             "DEPLOYMENT_ENV": "development",
             "JAX_PLATFORMS": "cuda,cpu",
-            "JAX_COMPILATION_CACHE_DIR": "/cache/jax",
+            FIT_CACHE_VOLUME_ENV: cache_volume,
+            "JAX_COMPILATION_CACHE_DIR": "/tmp/nof1-jax",
             "JAX_ENABLE_COMPILATION_CACHE": "true",
-            "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": "0",
+            "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": str(FIT_CACHE_MIN_COMPILE_SECONDS),
             "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES": "0",
             HOST_MEMORY_ALLOCATION_ENV: str(_FIT_HOST_MEMORY_MIB * 1024**2),
             # Keep small host-side NumPy/SciPy operations within one BLAS thread.
@@ -151,7 +161,7 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
         startup_timeout=payload.sampler.time_limit_seconds,
         scaledown_window=2,
         retries=0,
-        volumes={"/cache": modal.Volume.from_name("nof1-cached-fit-cache", create_if_missing=True)},
+        volumes={"/cache": modal.Volume.from_name(cache_volume, create_if_missing=True)},
     )(_fit_gpu)
     with app.run():
         return remote_fit.remote(payload)

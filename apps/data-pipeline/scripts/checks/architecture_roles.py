@@ -76,6 +76,7 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "bootstrap": "edge",
     "compilation_errors": "domain",
     "compute/batching": "compiler",
+    "compute/compilation_cache": "edge",
     "compute/traced_memory": "compiler",
     "compute/modal_images": "edge",
     "compute/resources": "edge",
