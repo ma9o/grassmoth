@@ -190,6 +190,13 @@ def run_nuts_da(
         )
         if continuation is not None and sampler.num_warmup == 0:
             states = restore_state(states, continuation.native_state)
+            # Persisted scores are caches of the current executable's density,
+            # not transition identity. Rebind them at the restored native point
+            # while retaining the same chart, random stream and frozen tuning.
+            potential, gradient = jax.jit(
+                jax.vmap(jax.value_and_grad(lambda point: -coordinates.log_density(point)))
+            )(states.z)
+            states = states._replace(potential_energy=potential, z_grad=gradient)
         jax.block_until_ready(states)
     if not all(
         np.isfinite(np.asarray(value)).all() for value in (states.potential_energy, states.z_grad)

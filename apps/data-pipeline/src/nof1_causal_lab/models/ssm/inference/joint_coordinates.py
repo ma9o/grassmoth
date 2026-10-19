@@ -140,18 +140,40 @@ class JointCoordinates:
         """
         parameters, values = self._unpack(position)
         context = self.target.context(parameters, self.target.times)
-        path, log_jacobian = self._path(context, values)
-        density = jnp.asarray(
-            self.target.log_prior(parameters)
-            + self.target.factor_log_prob(context, path, self.target.observations)
-        )
+        match self.parameterization:
+            case CentredParameterization():
+                path, log_jacobian = self._path(context, values)
+                density = (
+                    jnp.asarray(
+                        self.target.log_prior(parameters)
+                        + self.target.factor_log_prob(context, path, self.target.observations)
+                    )
+                    + log_jacobian
+                )
+            case NonCentredParameterization() | MixedParameterization():
+                mapping = self.target.innovation_map(context, self.innovation_mask)
+                path, log_jacobian = mapping.decode(values)
+
+                def exact_path_density() -> jax.Array:
+                    return mapping.transformed_log_prob(values, path)
+
+                bridge = self.target.bridge
+                path_density = (
+                    exact_path_density()
+                    if bridge is None
+                    else bridge.combine(
+                        exact_path_density, bridge.reference.path_log_prob(path) + log_jacobian
+                    )
+                )
+                density = jnp.asarray(
+                    self.target.log_prior(parameters)
+                    + path_density
+                    + jnp.sum(
+                        self.target.observation_log_probs(context, path, self.target.observations)
+                    )
+                )
         auxiliary = position[self.dimension :]
-        return (
-            density
-            + log_jacobian
-            - 0.5 * jnp.sum(auxiliary**2)
-            - 0.5 * auxiliary.size * jnp.log(2 * jnp.pi)
-        )
+        return density - 0.5 * jnp.sum(auxiliary**2) - 0.5 * auxiliary.size * jnp.log(2 * jnp.pi)
 
 
 def build_joint_coordinates(

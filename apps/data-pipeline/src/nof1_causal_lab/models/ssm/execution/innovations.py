@@ -167,3 +167,37 @@ class GaussianPathMap:
 
         tail = jax.vmap(inverse)(path[:-1], path[1:], jnp.arange(1, path.shape[0]), factors)
         return jnp.concatenate((initial[None], tail))
+
+    def transformed_log_prob(self, coordinates: jax.Array, path: jax.Array) -> jax.Array:
+        """Score native innovations and every conditioned Gaussian marginal directly.
+
+        The conditional Gaussian density and its decode Jacobian cancel
+        analytically. Never reconstruct a small innovation by subtracting two
+        rounded states. Centred, pinned and static coordinates still contribute
+        their joint marginal, including their correlations in the initial law.
+        """
+        means = jnp.concatenate(
+            (
+                self.initial_mean[None],
+                jax.vmap(self.transition_mean)(path[:-1], jnp.arange(1, path.shape[0])),
+            )
+        )
+        centred = self.density_mask & ~self.innovation_mask
+        covariance = jnp.where(
+            centred[:, :, None] & centred[:, None, :], self.covariances, 0.0
+        ) + jax.vmap(jnp.diag)((~centred).astype(self.covariances.dtype))
+        chol = jnp.linalg.cholesky(covariance)
+        residual = jnp.where(centred, path - means, 0.0)
+        whitened = jax.vmap(lambda factor, value: solve_triangular(factor, value, lower=True))(
+            chol, residual
+        )
+        log_two_pi = jnp.log(2 * jnp.pi)
+        marginal = (
+            -0.5 * jnp.sum(whitened**2)
+            - jnp.sum(jnp.log(jnp.diagonal(chol, axis1=-2, axis2=-1)))
+            - 0.5 * jnp.sum(centred) * log_two_pi
+        )
+        innovations = -0.5 * jnp.sum(
+            jnp.where(self.innovation_mask, coordinates**2 + log_two_pi, 0.0)
+        )
+        return innovations + marginal

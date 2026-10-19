@@ -102,7 +102,9 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
     "trajectory", [NutsTrajectorySpec(max_tree_depth=3), FixedTrajectorySpec(steps=4)]
 )
 @pytest.mark.parametrize("parameterization", ["centred", "non_centred", "mixed"])
-def test_continuation_matches_uninterrupted_random_stream_and_tuning(trajectory, parameterization):
+def test_continuation_matches_uninterrupted_random_stream_and_tuning(
+    trajectory, parameterization, monkeypatch
+):
     target, _, _ = gaussian_interval_case()
     settings = SamplerSpec(
         algorithm=NutsDASpec(
@@ -139,6 +141,26 @@ def test_continuation_matches_uninterrupted_random_stream_and_tuning(trajectory,
     np.testing.assert_array_equal(
         second.checkpoint.random_key.values, full.checkpoint.random_key.values
     )
+
+    from nof1_causal_lab.models.ssm.inference.samplers import nuts
+
+    restore = nuts.restore_state
+
+    def stale_scores(template, leaves):
+        restored = restore(template, leaves)
+        return restored._replace(
+            potential_energy=jnp.full_like(restored.potential_energy, jnp.nan),
+            z_grad=jnp.full_like(restored.z_grad, jnp.inf),
+        )
+
+    monkeypatch.setattr(nuts, "restore_state", stale_scores)
+    refreshed = run(settings.revised(num_warmup=0, num_samples_per_chain=4), first.checkpoint)
+    assert isinstance(refreshed, NutsDARun)
+    np.testing.assert_array_equal(refreshed.positions, second.positions)
+    for actual, expected in zip(
+        refreshed.checkpoint.native_state, second.checkpoint.native_state, strict=True
+    ):
+        np.testing.assert_array_equal(actual.values, expected.values)
 
 
 @pytest.mark.parametrize("parameterization", ["centred", "non_centred", "mixed"])
