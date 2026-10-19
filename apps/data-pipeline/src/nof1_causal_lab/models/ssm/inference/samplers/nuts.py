@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from jax.stages import Compiled
 
     from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.models.ssm.inference.joint_coordinates import JointChart
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import SweepStage
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
@@ -133,15 +134,21 @@ def run_nuts_da(
         jnp.zeros(max(1, centred.dimension), dtype=target.initial_position.dtype)
     )
     initial = coordinates.encode(*scientific_start)
+    chart = coordinates.chart
     trajectory = options.trajectory
+
+    def potential(runtime_chart: JointChart) -> Callable[[jax.Array], jax.Array]:
+        bound = coordinates.bind(runtime_chart)
+        return lambda point: -bound.log_density(point)
+
     initialize, raw_step = hmc(
-        lambda point: -coordinates.log_density(point),
+        potential_fn_gen=potential,
         algo="HMC" if isinstance(trajectory, FixedTrajectorySpec) else "NUTS",
     )
 
-    def step(state: HMCState) -> HMCState:
+    def step(state: HMCState, runtime_chart: JointChart) -> HMCState:
         if isinstance(trajectory, NutsTrajectorySpec):
-            return raw_step(state)
+            return raw_step(state, model_args=(runtime_chart,))
         # A mixture of exact Metropolis-adjusted HMC kernels avoids resonances.
         # The ±20% jitter belongs to this proposal, never to frozen base tuning.
         kernel_key, jitter_key = jax.random.split(state.rng_key)
@@ -152,13 +159,15 @@ def run_nuts_da(
                 step_size=state.adapt_state.step_size * multiplier
             ),
         )
-        moved = raw_step(varied)
+        moved = raw_step(varied, model_args=(runtime_chart,))
         adaptation = jax.lax.cond(
             state.i < sampler.num_warmup, lambda: moved.adapt_state, lambda: state.adapt_state
         )
         return moved._replace(adapt_state=adaptation)
 
-    def initialize_chain(point: jax.Array, chain_key: jax.Array) -> HMCState:
+    def initialize_chain(
+        point: jax.Array, chain_key: jax.Array, runtime_chart: JointChart
+    ) -> HMCState:
         return initialize(
             point,
             num_warmup=sampler.num_warmup,
@@ -173,6 +182,7 @@ def run_nuts_da(
             num_steps=trajectory.steps if isinstance(trajectory, FixedTrajectorySpec) else None,
             trajectory_length=None,  # pyright: ignore[reportArgumentType] - NumPyro documents None for fixed-step HMC; its unannotated default is a float.
             rng_key=chain_key,
+            model_args=(runtime_chart,),
         )
 
     with inference_phase("nuts_da", "initializing_chains", clock=clock):
@@ -185,18 +195,22 @@ def run_nuts_da(
         )
         if continuation is not None:
             key = jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values))
-        states = jax.jit(jax.vmap(initialize_chain))(
-            starts, jax.random.split(key, sampler.num_chains)
+        states = jax.jit(jax.vmap(initialize_chain, in_axes=(0, 0, None)))(
+            starts, jax.random.split(key, sampler.num_chains), chart
         )
         if continuation is not None and sampler.num_warmup == 0:
             states = restore_state(states, continuation.native_state)
+
             # Persisted scores are caches of the current executable's density,
             # not transition identity. Rebind them at the restored native point
             # while retaining the same chart, random stream and frozen tuning.
-            potential, gradient = jax.jit(
-                jax.vmap(jax.value_and_grad(lambda point: -coordinates.log_density(point)))
-            )(states.z)
-            states = states._replace(potential_energy=potential, z_grad=gradient)
+            def evaluate(point: jax.Array, runtime_chart: JointChart) -> jax.Array:
+                return potential(runtime_chart)(point)
+
+            energy, gradient = jax.jit(jax.vmap(jax.value_and_grad(evaluate), in_axes=(0, None)))(
+                states.z, chart
+            )
+            states = states._replace(potential_energy=energy, z_grad=gradient)
         jax.block_until_ready(states)
     if not all(
         np.isfinite(np.asarray(value)).all() for value in (states.potential_energy, states.z_grad)
@@ -205,33 +219,37 @@ def run_nuts_da(
             "NUTS-DA requires a finite exact joint density and gradient at its starting point"
         )
 
-    def project(point: jax.Array) -> dict[str, jax.Array]:
-        parameters, path = coordinates.decode(point)
+    def project(point: jax.Array, runtime_chart: JointChart) -> dict[str, jax.Array]:
+        parameters, path = coordinates.bind(runtime_chart).decode(point)
         return {"positions": parameters, "paths": path}
 
     def step_factory(
         _batch_size: int, stage: SweepStage
     ) -> Callable[
-        [tuple[HMCState, jax.Array]], tuple[tuple[HMCState, jax.Array], dict[str, jax.Array]]
+        [tuple[HMCState, jax.Array, JointChart]],
+        tuple[tuple[HMCState, jax.Array, JointChart], dict[str, jax.Array]],
     ]:
         def sweep(
-            carry: tuple[HMCState, jax.Array],
-        ) -> tuple[tuple[HMCState, jax.Array], dict[str, jax.Array]]:
-            current, key = carry
+            carry: tuple[HMCState, jax.Array, JointChart],
+        ) -> tuple[tuple[HMCState, jax.Array, JointChart], dict[str, jax.Array]]:
+            current, key, runtime_chart = carry
             next_key, step_key = jax.random.split(key)
             current = current._replace(rng_key=jax.random.split(step_key, sampler.num_chains))
-            updated = jax.vmap(step)(current)
+            updated = jax.vmap(step, in_axes=(0, None))(current, runtime_chart)
             record = dict(_extra_fields(updated, trajectory=trajectory))
             if stage == "posterior":
-                record = {**record, **jax.vmap(project)(updated.z)}
-            return (updated, next_key), record
+                record = {
+                    **record,
+                    **jax.vmap(project, in_axes=(0, None))(updated.z, runtime_chart),
+                }
+            return (updated, next_key, runtime_chart), record
 
         return sweep
 
     with inference_phase("nuts_da", "compiling_sweeps", clock=clock):
         plan = compile_projected_sweeps(
             step_factory,
-            (states, key),
+            (states, key, chart),
             num_warmup=sampler.num_warmup,
             num_samples=sampler.num_samples_per_chain,
             max_batch_size=1,
@@ -242,8 +260,8 @@ def run_nuts_da(
             clock=clock,
             label="nuts_da",
         )
-    run = run_sweeps(plan, (states, key), clock=clock, label="nuts_da")
-    states, next_key = run.state
+    run = run_sweeps(plan, (states, key, chart), clock=clock, label="nuts_da")
+    states, next_key, _ = run.state
     last_parameters, last_paths = jax.vmap(coordinates.decode)(states.z)
     draw_fields = frozenset(("positions", "paths", "observation_log_probs"))
     posterior = {

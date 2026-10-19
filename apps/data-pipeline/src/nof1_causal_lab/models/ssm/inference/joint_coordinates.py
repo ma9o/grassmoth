@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 import jax
@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     )
 
 
+@jax.tree_util.register_dataclass
 @dataclass(frozen=True, eq=False)
 class CentredParameterization:
     """The original frozen affine path scale; independent of the sampled parameters."""
@@ -44,6 +45,15 @@ class MixedParameterization:
     centred_mask: jax.Array
 
 
+@jax.tree_util.register_dataclass
+@dataclass(frozen=True, eq=False)
+class JointChart:
+    """Seed-dependent numerical inputs; the compiled coordinate policy stays fixed."""
+
+    parameter_center: jax.Array
+    affine: CentredParameterization | None
+
+
 @dataclass(frozen=True, eq=False)
 class JointCoordinates:
     """One owned parameterization, with exact constraints excluded from its sampled vector."""
@@ -53,6 +63,24 @@ class JointCoordinates:
     free_mask: jax.Array
     free_indices: jax.Array
     parameterization: CentredParameterization | NonCentredParameterization | MixedParameterization
+
+    @property
+    def chart(self) -> JointChart:
+        """Expose the numerical chart independently of masks and model structure."""
+        return JointChart(
+            self.parameter_center,
+            self.parameterization
+            if isinstance(self.parameterization, CentredParameterization)
+            else None,
+        )
+
+    def bind(self, chart: JointChart) -> JointCoordinates:
+        """Bind a fit's numerical inputs without changing its coordinate policy."""
+        return replace(
+            self,
+            parameter_center=chart.parameter_center,
+            parameterization=self.parameterization if chart.affine is None else chart.affine,
+        )
 
     @property
     def record(self) -> JointParameterizationRecord:

@@ -30,6 +30,32 @@ pytestmark = pytest.mark.inference(concern="sampling")
 PARAMETERIZATIONS = ("centred", "non_centred", "mixed")
 
 
+@pytest.mark.parametrize("parameterization_name", PARAMETERIZATIONS)
+def test_runtime_charts_preserve_each_fits_scientific_start_and_density(parameterization_name):
+    with jax.enable_x64():
+        target = _correlated_target()
+        first = build_joint_coordinates(target, parameterization_name)
+        other_target = replace(
+            target, parameters=replace(target.parameters, initial_position=jnp.array([0.7]))
+        )
+        second = build_joint_coordinates(other_target, parameterization_name)
+        dynamic = jax.jit(
+            jax.value_and_grad(lambda point, chart: first.bind(chart).log_density(point))
+        )
+        for coordinates in (first, second):
+            point = jnp.linspace(-0.2, 0.3, coordinates.dimension)
+            expected = jax.jit(jax.value_and_grad(coordinates.log_density))(point)
+            measured = dynamic(point, coordinates.chart)
+            for actual, reference in zip(measured, expected, strict=True):
+                np.testing.assert_allclose(actual, reference, atol=1e-10, rtol=1e-10)
+            bound = first.bind(coordinates.chart)
+            np.testing.assert_array_equal(bound.parameter_center, coordinates.parameter_center)
+            assert bound.record == coordinates.record
+            centred = build_joint_coordinates(coordinates.target)
+            start = centred.decode(jnp.zeros(centred.dimension))
+            np.testing.assert_array_equal(bound.encode(*start), coordinates.encode(*start))
+
+
 def _direct_constraints(value):
     from nof1_causal_lab.artifacts.identity import MechanismId
     from nof1_causal_lab.artifacts.model.construct import replace_constructs
