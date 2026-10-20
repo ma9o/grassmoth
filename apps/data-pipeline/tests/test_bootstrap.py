@@ -26,6 +26,8 @@ assert "jax" not in sys.modules
 initialize_numerical_runtime()
 
 import numpyro.distributions as dist
+import jax
+assert jax.config.jax_threefry_gpu_kernel_lowering is True
 assert dist.Normal(0.0, 1.0)._validate_args is False
 assert dist.Normal(0.0, 1.0, validate_args=True)._validate_args is True
 """,

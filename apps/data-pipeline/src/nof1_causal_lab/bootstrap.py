@@ -2,7 +2,7 @@
 
 
 def initialize_numerical_runtime() -> None:
-    """Use float32 production arrays and opt-in NumPyro argument validation.
+    """Use float32 arrays, native GPU Threefry, and opt-in NumPyro validation.
 
     Reference calculations can explicitly opt into ``jax.enable_x64()`` afterward.
     Authored and decoded laws choose their own validation. Internal selectors
@@ -13,4 +13,5 @@ def initialize_numerical_runtime() -> None:
     import numpyro
 
     jax.config.update("jax_enable_x64", False)
+    jax.config.update("jax_threefry_gpu_kernel_lowering", True)
     numpyro.enable_validation(False)
