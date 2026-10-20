@@ -22,8 +22,6 @@ dependencies = [
     "jax>=0.11.2",
     "jaxlib>=0.11.2",
     "jaxtyping>=0.3.11",
-    "jsonschema>=4.26.0",
-    "mcp>=2.2.0",
     "openai>=3.22.1",
     "networkx>=3.7",
     "numpy>=2.5.3",
@@ -63,6 +61,7 @@ cloud = [
 ]
 dev = [
     "httpx>=0.28.1",
+    "jsonschema>=4.26.0",
     "beartype>=0.22.9",
     "deptry>=0.25.1",
     "ipykernel>=7.4.0",
@@ -373,6 +372,7 @@ non_dev_dependency_groups = ["cloud", "gpu"]
 DEP002 = [
     "s3fs",
     "flatbuffers", # JAX export serialization imports this required optional dependency internally.
+    "uvicorn", # The tool server runs under the uvicorn CLI; production code never imports it.
 ]
 
 [tool.ty.analysis]

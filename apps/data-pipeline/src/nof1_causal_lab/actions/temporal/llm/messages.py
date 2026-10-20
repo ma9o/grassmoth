@@ -7,7 +7,7 @@ from typing import Literal, TypedDict
 from pydantic import BaseModel, ConfigDict, Field
 
 from nof1_causal_lab.json_types import JsonObject
-from nof1_causal_lab.llm.specs import EmbeddedLLMSpec, HarnessLLMSpec, LLMProfileSpec
+from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
 
 
 class LLMToolSpec(BaseModel):
@@ -38,7 +38,7 @@ class LLMSubroutineInput(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     subroutine: LLMSubroutineRef
-    llm: LLMProfileSpec
+    llm: EmbeddedLLMSpec
     max_tool_turns: int
 
 
@@ -54,8 +54,6 @@ class LLMSubroutineStart(BaseModel):
     call_ref_base: str
     assistant_ref_base: str
     tool_execution_ref_base: str
-    harness_state_ref: str
-    harness_tool_ref_base: str
     result_ref_base: str
 
 
@@ -121,62 +119,6 @@ class LLMToolExecutionResult(BaseModel):
     tool_calls_fired: list[str] = Field(default_factory=list)
 
 
-class HarnessTurnInput(BaseModel):
-    """Harness session inputs and Temporal routing identities for one model turn."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    workflow_id: str
-    workflow_run_id: str
-    subroutine: LLMSubroutineRef
-    harness_state_ref: str
-    harness_tool_ref_base: str
-    result_ref: str
-    llm: HarnessLLMSpec
-    tools: list[LLMToolSpec] = Field(default_factory=list)
-    user_message_index: int
-    log_label: str
-
-
-class HarnessToolRequest(BaseModel):
-    """Harness tool invocation with the request and response paths used for rendezvous."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    request_id: str
-    subroutine: LLMSubroutineRef
-    result_ref: str
-    tool: LLMToolSpec
-    tool_name: str
-    arguments: JsonObject
-    request_ref: str
-    response_ref: str
-
-
-class HarnessToolExecutionResult(BaseModel):
-    """Correlated harness tool response and any successfully retained scientific output."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    request_id: str
-    tool_name: str
-    output: str
-    result_ref: str | None = None
-    success: bool = False
-
-
-class HarnessTurnResult(BaseModel):
-    """Saved harness session and trace, with any terminal output produced by the turn."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    harness_state_ref: str
-    trace_ref: str
-    result_ref: str | None = None
-    terminal_tool_name: str | None = None
-    tool_calls_fired: list[str] = Field(default_factory=list)
-
-
 class LLMSubroutineResult(BaseModel):
     """Completed extraction output and conversation provenance, including model call counts."""
 
@@ -186,7 +128,6 @@ class LLMSubroutineResult(BaseModel):
     conversation_ref: str
     trace_ref: str
     n_llm_calls: int = 0
-    n_harness_turns: int = 0
 
 
 class LLMSubroutineTraceInput(BaseModel):
@@ -197,7 +138,6 @@ class LLMSubroutineTraceInput(BaseModel):
     subroutine: LLMSubroutineRef
     conversation_ref: str
     call_ref_base: str
-    harness_trace_refs: list[str] = Field(default_factory=list)
 
 
 class LLMSubroutineTraceResult(BaseModel):

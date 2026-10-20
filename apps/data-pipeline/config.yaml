@@ -1,48 +1,23 @@
 # N-of-1 Causal Lab Pipeline Configuration
 
-# --- LLM backend defaults --------------------------------------------------
-# Each agentic context below picks a harness via `llm.harness`; these defaults
-# apply when a context doesn't override individual fields.
+# --- LLM defaults ----------------------------------------------------------
+# OpenRouter defaults; each agentic context below may override individual fields.
 llm:
-  # harness: none  (OpenRouter direct)
   embedded:
     max_tokens: 65536
     timeout: 900
     reasoning_effort: xhigh
 
-  # harness: claude-code  (spawns `claude -p`)
-  claude_code:
-    bin: claude
-    effort: high          # low | medium | high | xhigh | max
-    max_turns: 40
-    max_budget_usd: null
-    fallback_model: null
-
-  # harness: codex  (spawns `codex exec`)
-  codex:
-    bin: codex
-    reasoning_effort: xhigh  # low | medium | high | xhigh | max
-    service_tier: fast
-
-  # harness: pi  (spawns `pi --mode json`)
-  pi:
-    bin: pi
-    provider: openai-codex
-    thinking: high          # off | minimal | low | medium | high | xhigh
-
 # --- Agentic contexts ------------------------------------------------------
 
 # extraction: Support-Window Extraction (Workers)
-# extraction fans out across thousands of workers; harness cold-start per worker
-# is untenable, so `harness` is locked to `none` (enforced by config validator).
 extraction_workers:
   max_concurrent_workers: 200
   max_events_per_window: 300
-  max_rpm: 450               # OpenRouter sliding-window RPM (embedded-only)
+  max_rpm: 450               # OpenRouter sliding-window RPM
   worker_timeout: 120        # per-LLM-call timeout in seconds
   max_tool_turns: 40
   llm:
-    harness: none
     model: openrouter/deepseek/deepseek-v4-flash
 
 # validation: Validation — no LLM (rule-based)

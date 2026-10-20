@@ -131,8 +131,6 @@ class Tool:
     description: str
     parameters: JsonSchemaValue
     execute: Callable[..., Awaitable[str]]
-    stop_on_success: bool = False
-    success_output: str | None = None
 
     async def __call__(self, *args: object, **kwargs: object) -> str:
         """Await the underlying tool implementation with the supplied positional and keyword arguments."""

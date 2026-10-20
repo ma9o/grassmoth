@@ -17,18 +17,6 @@ MODEL_CHECKS_TASK_QUEUE = os.environ.get(
     "nof1-model-checks",
 )
 OPENROUTER_TASK_QUEUE = os.environ.get("TEMPORAL_OPENROUTER_TASK_QUEUE", "nof1-openrouter")
-HARNESS_CLAUDE_TASK_QUEUE = os.environ.get(
-    "TEMPORAL_HARNESS_CLAUDE_TASK_QUEUE",
-    "nof1-harness-claude",
-)
-HARNESS_CODEX_TASK_QUEUE = os.environ.get(
-    "TEMPORAL_HARNESS_CODEX_TASK_QUEUE",
-    "nof1-harness-codex",
-)
-HARNESS_PI_TASK_QUEUE = os.environ.get(
-    "TEMPORAL_HARNESS_PI_TASK_QUEUE",
-    "nof1-harness-pi",
-)
 
 
 def study_workflow_id(workspace_id: str) -> str:

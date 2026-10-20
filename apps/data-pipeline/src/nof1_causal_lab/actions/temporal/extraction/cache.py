@@ -8,7 +8,7 @@ from nof1_causal_lab.actions.temporal.llm.context import subroutine_context_mess
 from nof1_causal_lab.storage.cache import cache_path, content_key
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.llm.specs import LLMProfileSpec
+    from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
 
 # Bump the version when extraction prompts, tools, schemas, or validation change.
 EXTRACTION_POLICY_VERSION = "extraction-v4"
@@ -16,7 +16,7 @@ EXTRACTION_POLICY_VERSION = "extraction-v4"
 
 def preparation_cache_path(
     context_ref: str,
-    llm: LLMProfileSpec,
+    llm: EmbeddedLLMSpec,
     max_tool_turns: int,
     inputs: object,
 ) -> str:

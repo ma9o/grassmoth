@@ -123,7 +123,6 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
     extraction_llm = extraction_workers.llm
     embedded_defaults = config.llm.embedded
     llm = EmbeddedLLMSpec(
-        harness="none",
         model=extraction_llm.model,
         max_tokens=first_config_value(extraction_llm.max_tokens, embedded_defaults.max_tokens),
         timeout=extraction_workers.worker_timeout,
@@ -243,8 +242,6 @@ class OpenRouterActivities:
                 description=tool.description,
                 parameters=dict(tool.parameters),
                 execute=_unused_tool,
-                stop_on_success=tool.kind == "terminal",
-                success_output="VALID" if tool.kind == "terminal" else None,
             )
             for tool in activity_input.tools
         ] or None

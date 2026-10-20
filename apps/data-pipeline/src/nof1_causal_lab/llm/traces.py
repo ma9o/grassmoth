@@ -63,23 +63,6 @@ class LLMTrace(Value):
     usage: TraceUsage = Field(default_factory=TraceUsage)
 
 
-def _merge_trace(existing: LLMTrace, new_trace: LLMTrace) -> LLMTrace:
-    """Append a trace segment onto an existing stage-local trace."""
-    return LLMTrace(
-        messages=(*existing.messages, *new_trace.messages),
-        model=new_trace.model or existing.model,
-        total_time_seconds=existing.total_time_seconds + new_trace.total_time_seconds,
-        usage=TraceUsage(
-            input_tokens=existing.usage.input_tokens + new_trace.usage.input_tokens,
-            output_tokens=existing.usage.output_tokens + new_trace.usage.output_tokens,
-            reasoning_tokens=(
-                (existing.usage.reasoning_tokens or 0) + (new_trace.usage.reasoning_tokens or 0)
-            )
-            or None,
-        ),
-    )
-
-
 def _truncate_tool_error(error_text: str, limit: int = MAX_TOOL_REPAIR_ERROR_CHARS) -> str:
     """Trim provider error payloads before echoing them back to the model."""
     if len(error_text) <= limit:

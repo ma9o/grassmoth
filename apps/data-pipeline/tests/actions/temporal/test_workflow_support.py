@@ -46,7 +46,6 @@ def test_openrouter_transport_is_scoped_to_the_worker_lifetime(monkeypatch, fail
     for name in (
         "build_worker",
         "build_openrouter_worker",
-        "build_harness_worker",
         "build_model_checks_worker",
     ):
         run = AsyncMock(

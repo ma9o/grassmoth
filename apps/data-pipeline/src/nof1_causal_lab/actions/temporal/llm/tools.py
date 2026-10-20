@@ -10,10 +10,7 @@ from nof1_causal_lab.actions.temporal.extraction.messages import MeasurementChun
 from nof1_causal_lab.actions.temporal.llm.storage import read_subroutine_json, write_subroutine_json
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.actions.temporal.llm.messages import (
-        HarnessToolRequest,
-        LLMToolExecutionInput,
-    )
+    from nof1_causal_lab.actions.temporal.llm.messages import LLMToolExecutionInput
     from nof1_causal_lab.json_types import JsonObject
 
 
@@ -40,7 +37,7 @@ def _validate_measurement_payload(
 
 async def execute_subroutine_tool(
     *,
-    activity_input: LLMToolExecutionInput | HarnessToolRequest,
+    activity_input: LLMToolExecutionInput,
     args: object,
     result_ref: str,
 ) -> tuple[str, str | None]:

@@ -6,7 +6,6 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from nof1_causal_lab.actions.fit.execution import resolve_sampler_spec
-from nof1_causal_lab.actions.temporal.llm.messages import LLMSubroutineInput, LLMSubroutineRef
 from nof1_causal_lab.artifacts.sampling import (
     AdaptedLatentStepSpec,
     DsmcSpec,
@@ -20,19 +19,16 @@ from nof1_causal_lab.artifacts.sampling import (
     SamplerSpec,
 )
 from nof1_causal_lab.config import (
-    ClaudeCodeDefaults,
-    CodexDefaults,
     EmbeddedLLMDefaults,
     ExtractionWorkersConfig,
     InferenceConfig,
     LLMDefaults,
-    PiDefaults,
     PipelineConfig,
     get_secret,
     load_config,
     validate_config,
 )
-from nof1_causal_lab.llm.specs import CodexLLMSpec, EmbeddedLLMSpec, LLMProfileSpec
+from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
 
 pytestmark = pytest.mark.contract
 
@@ -171,7 +167,6 @@ class TestSamplerSpec:
 MINIMAL_CONFIG = textwrap.dedent("""\
     extraction_workers:
       llm:
-        harness: none
         model: openrouter/gpt-4
 """)
 
@@ -181,21 +176,11 @@ FULL_CONFIG = textwrap.dedent("""\
         max_tokens: 4096
         timeout: 120
         reasoning_effort: low
-      claude_code:
-        effort: medium
-      codex:
-        reasoning_effort: medium
-        service_tier: fast
-      pi:
-        bin: pi-custom
-        provider: openai-codex
-        thinking: high
 
     extraction_workers:
       max_concurrent_workers: 6
       max_tool_turns: 45
       llm:
-        harness: none
         model: openrouter/claude-3
 
     inference:
@@ -232,7 +217,6 @@ class TestLoadConfig:
         "invalid",
         [
             "llm:\n  embedded:\n    reasoning_effort: invalid\n",
-            "llm:\n  codex:\n    reasoning_effort: invalid\n",
             "inference:\n  hardware: imaginary_gpu\n",
             "inference:\n  sampler:\n    algorithm:\n      method: map\n",
             "inference:\n  sampler:\n    algorithm:\n      method: nuts_da\n      target_accept_prob: 1.0\n",
@@ -263,10 +247,6 @@ class TestLoadConfig:
         assert cfg.extraction_workers.max_tool_turns == 40
         # Defaults for optional sections
         assert cfg.llm.embedded.max_tokens == 65536
-        assert cfg.llm.codex.reasoning_effort == "xhigh"
-        assert cfg.llm.codex.service_tier == "fast"
-        assert cfg.llm.pi.provider == "openai-codex"
-        assert cfg.llm.pi.thinking == "high"
 
         load_config.cache_clear()
 
@@ -304,10 +284,6 @@ class TestLoadConfig:
         assert cfg.inference.sampler.algorithm.initialization.num_adjusted_steps == 20
         assert cfg.llm.embedded.max_tokens == 4096
         assert cfg.llm.embedded.reasoning_effort == "low"
-        assert cfg.llm.claude_code.effort == "medium"
-        assert cfg.llm.codex.reasoning_effort == "medium"
-        assert cfg.llm.codex.service_tier == "fast"
-        assert cfg.llm.pi == PiDefaults(bin="pi-custom", provider="openai-codex", thinking="high")
 
         load_config.cache_clear()
 
@@ -339,17 +315,13 @@ class TestLoadConfig:
 def _make_pipeline_config(**profile_llm_overrides) -> PipelineConfig:
     """Build a valid PipelineConfig with optional per-context llm overrides."""
     defaults = {
-        "extraction_workers": EmbeddedLLMSpec(harness="none", model="openrouter/x"),
+        "extraction_workers": EmbeddedLLMSpec(model="openrouter/x"),
     }
     defaults.update(profile_llm_overrides)
     return PipelineConfig(
         extraction_workers=ExtractionWorkersConfig(llm=defaults["extraction_workers"]),
         inference=InferenceConfig(),
-        llm=LLMDefaults(
-            embedded=EmbeddedLLMDefaults(),
-            claude_code=ClaudeCodeDefaults(),
-            codex=CodexDefaults(),
-        ),
+        llm=LLMDefaults(embedded=EmbeddedLLMDefaults()),
     )
 
 
@@ -358,78 +330,11 @@ class TestValidateConfig:
         config = _make_pipeline_config()
         assert validate_config(config) == []
 
-    @pytest.mark.parametrize("harness", ["claude-code", "codex", "pi"])
-    def test_extraction_workers_require_embedded_backend(self, harness):
-        with pytest.raises(ValidationError, match=r"llm\.harness"):
-            TypeAdapter(ExtractionWorkersConfig).validate_python(
-                {"llm": {"harness": harness, "model": "worker-model"}}
-            )
-
     def test_embedded_model_must_be_openrouter_prefix(self):
         config = _make_pipeline_config(
             extraction_workers=EmbeddedLLMSpec(model="gpt-5.4"),
         )
         assert any("openrouter/" in error for error in validate_config(config))
-
-    @pytest.mark.parametrize(
-        "payload",
-        [
-            {"harness": "anthropic"},
-            {"harness": "none", "effort": "high"},
-            {"harness": "none", "service_tier": "fast"},
-            {"harness": "none", "reasoning_effort": "max"},
-            {"harness": "claude-code", "reasoning_effort": "high"},
-            {"harness": "claude-code", "effort": "ultra"},
-            {"harness": "codex", "max_budget_usd": 5.0},
-            {"harness": "codex", "reasoning_effort": "minimal"},
-            {"harness": "pi", "reasoning_effort": "high"},
-            {"harness": "pi", "thinking": "max"},
-        ],
-    )
-    def test_profile_schema_rejects_incompatible_backend_fields(self, payload):
-        with pytest.raises(ValidationError):
-            TypeAdapter(LLMProfileSpec).validate_python({"model": "openrouter/x", **payload})
-
-    def test_codex_max_effort_survives_default_resolution_and_transport(self):
-        llm = CodexLLMSpec(model="codex-test", bin="custom-codex", reasoning_effort="max")
-        request = LLMSubroutineInput(
-            subroutine=LLMSubroutineRef(
-                workspace_id="test",
-                run_id="run",
-                subroutine_id="raw_data",
-                context_ref="context.json",
-            ),
-            llm=llm,
-            max_tool_turns=5,
-        )
-        restored = LLMSubroutineInput.model_validate_json(request.model_dump_json())
-        assert restored.subroutine == request.subroutine
-        assert restored.llm == CodexLLMSpec(
-            model="codex-test",
-            bin="custom-codex",
-            reasoning_effort="max",
-        )
-
-    def test_load_config_raises_on_stage2_harness_violation(self, tmp_path, monkeypatch):
-        bad_config = textwrap.dedent("""\
-            extraction_workers:
-              llm:
-                harness: claude-code
-                model: sonnet
-        """)
-        config_file = tmp_path / "config.yaml"
-        config_file.write_text(bad_config)
-
-        load_config.cache_clear()
-
-        import nof1_causal_lab.config as config_mod
-
-        monkeypatch.setattr(config_mod, "_find_config_path", lambda: config_file)
-
-        with pytest.raises(ValueError, match=r"extraction_workers\.llm\.harness"):
-            load_config()
-
-        load_config.cache_clear()
 
 
 # =============================================================================
@@ -445,36 +350,3 @@ class TestGetSecret:
     def test_returns_none_when_missing(self, monkeypatch):
         monkeypatch.delenv("DEFINITELY_NOT_SET_XYZ_789", raising=False)
         assert get_secret("DEFINITELY_NOT_SET_XYZ_789") is None
-
-
-# =============================================================================
-# ensure_harness_prereqs
-# =============================================================================
-
-
-class TestEnsureHarnessPrereqs:
-    def _reset(self):
-        from nof1_causal_lab import config as config_module
-
-        config_module._verified_harnesses.clear()
-
-    def test_missing_openrouter_key_raises_for_embedded(self, monkeypatch):
-        from nof1_causal_lab.config import ensure_harness_prereqs
-
-        self._reset()
-        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-
-        with pytest.raises(RuntimeError, match="OPENROUTER_API_KEY"):
-            ensure_harness_prereqs("none")
-
-    def test_caches_successful_check(self, monkeypatch):
-        """Once verified, removing the env var doesn't re-trigger the check."""
-        from nof1_causal_lab.config import ensure_harness_prereqs
-
-        self._reset()
-        monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
-        ensure_harness_prereqs("none")
-
-        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-        # Still cached — does not raise.
-        ensure_harness_prereqs("none")

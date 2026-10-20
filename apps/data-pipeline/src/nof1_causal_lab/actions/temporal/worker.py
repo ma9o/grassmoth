@@ -15,9 +15,6 @@ from temporalio.worker import Worker
 from temporalio.worker.workflow_sandbox import SandboxedWorkflowRunner, SandboxRestrictions
 
 from nof1_causal_lab.actions.temporal.client import (
-    HARNESS_CLAUDE_TASK_QUEUE,
-    HARNESS_CODEX_TASK_QUEUE,
-    HARNESS_PI_TASK_QUEUE,
     MODEL_CHECKS_TASK_QUEUE,
     OPENROUTER_TASK_QUEUE,
     STUDY_TASK_QUEUE,
@@ -28,7 +25,6 @@ from nof1_causal_lab.actions.temporal.extraction.workflow import (
     ExtractionChunkWorkflow,
     MeasurementsWorkflow,
 )
-from nof1_causal_lab.actions.temporal.llm.activities import run_harness_turn_activity
 from nof1_causal_lab.actions.temporal.llm.workflow import LLMSubroutineWorkflow
 from nof1_causal_lab.actions.temporal.study.activities import (
     ALL_ACTIVITIES,
@@ -97,18 +93,6 @@ def build_openrouter_worker(
     )
 
 
-def build_harness_worker(
-    client: Client,
-    task_queue: str,
-) -> Worker:
-    """Build a worker dedicated to harness model turns on the supplied task queue."""
-    return Worker(
-        client,
-        task_queue=task_queue,
-        activities=[run_harness_turn_activity],
-    )
-
-
 def build_model_checks_worker(
     client: Client,
     task_queue: str = MODEL_CHECKS_TASK_QUEUE,
@@ -123,7 +107,7 @@ def build_model_checks_worker(
 
 
 async def run_worker() -> None:
-    """Run study, provider, harness, and model-check workers until shutdown or worker failure."""
+    """Run study, provider, and model-check workers until shutdown or worker failure."""
     from nof1_causal_lab.bootstrap import initialize_numerical_runtime
 
     initialize_numerical_runtime()
@@ -135,37 +119,15 @@ async def run_worker() -> None:
     async with create_openrouter_client() as openrouter_client:
         study_worker = build_worker(client)
         openrouter_worker = build_openrouter_worker(client, openrouter_client)
-        claude_worker = build_harness_worker(
-            client,
-            HARNESS_CLAUDE_TASK_QUEUE,
-        )
-        codex_worker = build_harness_worker(
-            client,
-            HARNESS_CODEX_TASK_QUEUE,
-        )
-        pi_worker = build_harness_worker(
-            client,
-            HARNESS_PI_TASK_QUEUE,
-        )
         model_checks_worker = build_model_checks_worker(client)
         logger.info("Study worker started on task queue %s", STUDY_TASK_QUEUE)
         logger.info("OpenRouter worker started on task queue %s", OPENROUTER_TASK_QUEUE)
-        logger.info("Claude harness worker started on task queue %s", HARNESS_CLAUDE_TASK_QUEUE)
-        logger.info("Codex harness worker started on task queue %s", HARNESS_CODEX_TASK_QUEUE)
-        logger.info("Pi harness worker started on task queue %s", HARNESS_PI_TASK_QUEUE)
         logger.info(
             "Model checks worker started on task queue %s",
             MODEL_CHECKS_TASK_QUEUE,
         )
         async with asyncio.TaskGroup() as tasks:
-            for worker in (
-                study_worker,
-                openrouter_worker,
-                claude_worker,
-                codex_worker,
-                pi_worker,
-                model_checks_worker,
-            ):
+            for worker in (study_worker, openrouter_worker, model_checks_worker):
                 tasks.create_task(worker.run())
 
 
