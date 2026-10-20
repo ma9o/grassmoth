@@ -31,12 +31,15 @@ def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(
     trajectory, parameterization
 ):
     target, mean, covariance = gaussian_interval_case()
+    # Fixed-length HMC has more autocorrelated squared coordinates; retain enough
+    # effective draws to check covariance with the same tolerance as NUTS.
+    num_samples = 3000 if isinstance(trajectory, FixedTrajectorySpec) else 750
     run = run_nuts_da(
         target,
         sampler=SamplerSpec(
             algorithm=NutsDASpec(trajectory=trajectory, parameterization=parameterization),
             num_warmup=250,
-            num_samples_per_chain=750,
+            num_samples_per_chain=num_samples,
             num_chains=4,
         ),
         compute_budget=COMPUTE_BUDGET,
@@ -45,19 +48,19 @@ def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(
     )
     assert isinstance(run, NutsDARun)
     assert run.paths is not None
-    assert run.positions.shape[:2] == run.paths.shape[:2] == (4, 750)
+    assert run.positions.shape[:2] == run.paths.shape[:2] == (4, num_samples)
     joint = np.concatenate((run.positions, run.paths[:, :, :, 0]), axis=-1).reshape(-1, mean.size)
     whitened = np.linalg.solve(np.linalg.cholesky(covariance), (joint - mean).T).T
     np.testing.assert_allclose(whitened.mean(axis=0), 0, atol=0.12)
     np.testing.assert_allclose(np.cov(whitened, rowvar=False), np.eye(mean.size), atol=0.18)
     assert not np.array_equal(run.positions[0], run.positions[1])
     extra = run.phase_extra_fields["post_warmup"]
-    assert extra["diverging"].shape == (4, 750)
+    assert extra["diverging"].shape == (4, num_samples)
     assert float(jnp.mean(extra["diverging"])) < 0.02
     assert run.phase_extra_fields["warmup"]["energy"].shape == (4, 250)
     # Adaptation has ended before any retained draw.
     np.testing.assert_allclose(
-        extra["step_size"], np.broadcast_to(run.final_step_size[:, None], (4, 750))
+        extra["step_size"], np.broadcast_to(run.final_step_size[:, None], (4, num_samples))
     )
     if isinstance(trajectory, NutsTrajectorySpec):
         np.testing.assert_array_equal(extra["tree_depth"], np.ceil(np.log2(extra["num_steps"] + 1)))
