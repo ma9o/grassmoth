@@ -9,7 +9,7 @@ from dynestyx import (
     StochasticContinuousTimeStateEvolution,
 )
 
-from nof1_causal_lab.models.ssm.dynamics.vector_field import StructuralDrift, VectorField
+from nof1_causal_lab.models.ssm.dynamics.vector_field import StructuralDrift
 from nof1_causal_lab.models.ssm.execution.dynamical_model import continuous_state_evolution
 from tests.support.dynamics import (
     DenseLinear,
@@ -18,6 +18,7 @@ from tests.support.dynamics import (
     LinearEdge,
     StateDecay,
     StateIntercept,
+    reference_vector_field,
 )
 
 
@@ -44,7 +45,7 @@ def _constant_runtime_dynamics() -> StochasticContinuousTimeStateEvolution:
     )
     cint = jnp.array([0.03, -0.04, 0.02], dtype=jnp.float32)
     return continuous_state_evolution(
-        vector_field=VectorField(
+        vector_field=reference_vector_field(
             n_latent=3,
             components=(
                 DenseLinear(),

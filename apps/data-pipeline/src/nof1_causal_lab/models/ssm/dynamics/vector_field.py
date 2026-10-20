@@ -5,7 +5,7 @@ supply scalar energies for Dynestyx's negative-gradient drift. Hard intervention
 replace the owning derivative and remove its natural potential contribution.
 """
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, cast, overload
 
 import dynestyx as dsx
@@ -19,6 +19,30 @@ from nof1_causal_lab.models.ssm.shapes import Array, Float
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponent
+
+
+type DriftProgram = Callable[[Array, Array, Array, tuple[Mapping[str, Array], ...]], Array]
+
+
+class ComponentDrift(eqx.Module):
+    """Compose numerical contributions with the same parameter and potential ownership."""
+
+    components: tuple[VectorFieldComponent, ...]
+    potential_indices: tuple[int, ...] = eqx.field(static=True, default=())
+
+    def __call__(
+        self,
+        t: Array,
+        eta: Array,
+        eta_per_edge: Array,
+        params: tuple[Mapping[str, Array], ...],
+    ) -> Array:
+        """Accumulate directed and intrinsic terms, leaving node energies to the potential."""
+        value = jnp.zeros_like(eta)
+        for index, (component, values) in enumerate(zip(self.components, params, strict=True)):
+            if index not in self.potential_indices:
+                value = component.contribute(value, eta, eta_per_edge, t, values)
+        return value
 
 
 class VectorFieldArgs(eqx.Module):
@@ -76,6 +100,7 @@ class VectorField(eqx.Module):
 
     n_latent: int = eqx.field(static=True)
     components: tuple[VectorFieldComponent, ...]
+    drift_program: DriftProgram | ComponentDrift = eqx.field(static=True)
     potential_indices: tuple[int, ...] = eqx.field(static=True, default=())
 
     @overload
@@ -120,19 +145,14 @@ class VectorField(eqx.Module):
         """Apply whole-state interventions to the initial state at the requested start time."""
         return apply_variable_overrides_to_state(eta0, jnp.asarray(t0), args.intervention)
 
+    @eqx.filter_jit(inline=jax.Inline.XLA_LATE)  # ty: ignore[no-matching-overload]  # pyright: ignore[reportCallIssue] -- Equinox forwards jitkwargs to JAX; its overloads omit them.
     def _natural_derivative(
         self, t: Array, eta: Float[Array, " D"], args: VectorFieldArgs
     ) -> Float[Array, " D"]:
         eta_eff = jnp.broadcast_to(eta[None, :], (self.n_latent, self.n_latent))
         eta_eff = _apply_edge_input_overrides(eta_eff, t, args.intervention)
 
-        accumulator = jnp.zeros(self.n_latent, dtype=eta.dtype)
-        for index, (component, slice_params) in enumerate(
-            zip(self.components, args.params, strict=True)
-        ):
-            if index not in self.potential_indices:
-                accumulator = component.contribute(accumulator, eta, eta_eff, t, slice_params)
-        return accumulator
+        return self.drift_program(t, eta, eta_eff, args.params)
 
 
 class StructuralDrift(eqx.Module):

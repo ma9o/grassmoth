@@ -15,12 +15,11 @@ from nof1_causal_lab.models.ssm.dynamics.simulator import (
     SimulationConfig,
     simulate,
 )
-from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField
-from tests.support.dynamics import DenseLinear
+from tests.support.dynamics import DenseLinear, reference_vector_field
 
 
 def _linear_setup():
-    vf = VectorField(n_latent=1, components=(DenseLinear(),))
+    vf = reference_vector_field(n_latent=1, components=(DenseLinear(),))
     params = ({"drift": jnp.array([[-1.0]]), "cint": jnp.array([0.5])},)
     return vf, params, jnp.zeros(1), jnp.linspace(0.0, 2.0, 9)
 

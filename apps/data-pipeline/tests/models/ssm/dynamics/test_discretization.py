@@ -9,7 +9,7 @@ import pytest
 from nof1_causal_lab.artifacts.identity import scientific_id
 from nof1_causal_lab.models.ssm.dynamics.intervention import Intervention
 from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField, VectorFieldArgs
-from tests.support.dynamics import DenseLinear, hill_term, interaction_term
+from tests.support.dynamics import DenseLinear, hill_term, interaction_term, reference_vector_field
 
 pytestmark = pytest.mark.inference(concern="simulation")
 
@@ -20,7 +20,7 @@ def _drift_derivatives(field, state, args):
 
 
 def _dense_matrix_vector_field(n_latent: int) -> VectorField:
-    return VectorField(n_latent=n_latent, components=(DenseLinear(),))
+    return reference_vector_field(n_latent=n_latent, components=(DenseLinear(),))
 
 
 # =============================================================================
@@ -45,7 +45,7 @@ class TestLinearizePrimitives:
         """At ``x = EC50``, ``dHill/dx = Emax · n / (4 · EC50)``. The
         Jacobian entry for the source must match this."""
         Emax, EC50, n = 2.0, 1.0, 2.0
-        vf = VectorField(
+        vf = reference_vector_field(
             n_latent=2,
             components=(hill_term(source=0, target=1).build(),),
         )
@@ -71,7 +71,7 @@ class TestLinearizePrimitives:
         ``∂f/∂η_b = w · a₀``."""
         w = 0.5
         a0, b0 = 3.0, 4.0
-        vf = VectorField(
+        vf = reference_vector_field(
             n_latent=3,
             components=(interaction_term(source_a=0, source_b=1, target=2).build(),),
         )

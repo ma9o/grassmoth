@@ -21,9 +21,8 @@ from nof1_causal_lab.models.ssm.counterfactual.orchestration import (
 )
 from nof1_causal_lab.models.ssm.dynamics.draws import DynamicsDraws
 from nof1_causal_lab.models.ssm.dynamics.simulator import ProcessNoise
-from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
-from tests.support.dynamics import DenseLinear
+from tests.support.dynamics import DenseLinear, reference_vector_field
 from tests.support.inference import compile_model_fixture
 from tests.support.model import (
     _exact_model_model,
@@ -59,6 +58,7 @@ def _fully_fixed_dynamics_keep_the_explicit_draw_axis_model_fixture() -> Dynamic
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField
 
 
 # var1 is driven by var0; both stable. Baseline steady state is η* = -A⁻¹c = [1, 1].
@@ -73,7 +73,7 @@ def _event(index, **payload):
 
 
 def _vf() -> VectorField:
-    return VectorField(n_latent=2, components=(DenseLinear(),))
+    return reference_vector_field(n_latent=2, components=(DenseLinear(),))
 
 
 def _run(interventions, initial_states=_STEADY_STATE):
@@ -255,7 +255,7 @@ def test_fully_fixed_dynamics_keep_the_explicit_draw_axis():
 
 @pytest.mark.contract
 def test_zero_dynamics_draws_return_empty_trajectories():
-    empty = DynamicsDraws(VectorField(n_latent=2, components=()), (), n_draws=0)
+    empty = DynamicsDraws(reference_vector_field(n_latent=2, components=()), (), n_draws=0)
     outputs = vmap_simulate_interventions_from_state(
         empty, jnp.zeros((0, 2)), [], time_grid=_TIME_GRID
     )
@@ -265,7 +265,7 @@ def test_zero_dynamics_draws_return_empty_trajectories():
 @pytest.mark.contract
 @pytest.mark.parametrize("bad_axis", ["state", "key", "covariance"])
 def test_event_simulation_rejects_misaligned_draw_inputs(bad_axis):
-    draws = DynamicsDraws(VectorField(n_latent=2, components=()), (), n_draws=3)
+    draws = DynamicsDraws(reference_vector_field(n_latent=2, components=()), (), n_draws=3)
     initial = jnp.zeros((2 if bad_axis == "state" else 3, 2))
     keys = jax.random.split(jax.random.PRNGKey(0), 2 if bad_axis == "key" else 3)
     covariances = jnp.zeros((3, 1, 1)) if bad_axis == "covariance" else jnp.zeros((3, 2, 2))

@@ -1,5 +1,7 @@
 """Expression ownership, parameter binding, and exact local drift; no fitting or rollouts."""
 
+from dataclasses import replace
+
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -147,6 +149,52 @@ def test_symbolic_compilation_preserves_native_values_gradients_and_domains():
     quotient = _component(x / x, source=0).build()
     assert np.isnan(quotient.evaluate(jnp.zeros(3), {}))
     assert expression_states(x / x) == {"construct:x"}
+
+
+@pytest.mark.inference(concern="simulation")
+@pytest.mark.parametrize("component_count", [0, 3])
+def test_shared_drift_preserves_component_parameters_and_edge_ownership(component_count):
+    identity = scientific_id("parameter", "gain")
+    formula = coefficient(identity, "weight") * CallExpression(
+        function="exp", arguments=(state(ConstructId("construct:x")),)
+    )
+    components = (
+        _component(formula),
+        _component(formula, source=0),
+        replace(_component(formula, source=0), target=2),
+    )[:component_count]
+    native = compile_dynamics(DynamicsSpec(n_latent=3, components=components))
+    intervention = Intervention(
+        overrides=(
+            EdgeInputOverride(source=0, target=1, value_fn=ConstantValueFn(jnp.asarray(-0.5))),
+        )
+    )
+
+    def compiled(values: jax.Array, weights: jax.Array):
+        params: tuple[dict[str, jax.Array], ...] = tuple(
+            {identity: weights[index]} for index in range(component_count)
+        )
+        return native.vector_field(
+            jnp.asarray(0.0), values, VectorFieldArgs(params=params, intervention=intervention)
+        )
+
+    def reference(values, weights):
+        if component_count == 0:
+            return jnp.zeros_like(values)
+        return jnp.array(
+            [
+                0.0,
+                weights[0] * jnp.exp(values[0]) + weights[1] * jnp.exp(-0.5),
+                weights[2] * jnp.exp(values[0]),
+            ]
+        )
+
+    values, weights = jnp.array([1.2, 0.8, 0.9]), jnp.array([0.4, 0.7, 1.2])
+    np.testing.assert_allclose(compiled(values, weights), reference(values, weights), rtol=1e-6)
+    actual = jax.jit(jax.jacrev(compiled, argnums=(0, 1)))(values, weights)
+    expected = jax.jacrev(reference, argnums=(0, 1))(values, weights)
+    for result, target in zip(actual, expected, strict=True):
+        np.testing.assert_allclose(result, target, rtol=1e-6, atol=1e-7)
 
 
 @pytest.mark.inference(concern="sampling")

@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 import jax.numpy as jnp
 import numpyro
 
+from nof1_causal_lab.models.ssm.compile.expression_programs import compile_shared_drift
 from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField
 
 if TYPE_CHECKING:
@@ -56,6 +57,7 @@ def compile_dynamics(spec: DynamicsSpec, *, prefix: str = "vf") -> CompiledDynam
     vector_field = VectorField(
         n_latent=spec.n_latent,
         components=components,
+        drift_program=compile_shared_drift(spec),
         potential_indices=tuple(
             i for i, item in enumerate(spec.components) if item.kind == "potential"
         ),

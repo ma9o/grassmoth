@@ -15,7 +15,7 @@ from nof1_causal_lab.models.ssm.dynamics.intervention import (
 )
 from nof1_causal_lab.models.ssm.dynamics.simulator import SimulationConfig, simulate
 from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField, VectorFieldArgs
-from tests.support.dynamics import DenseLinear
+from tests.support.dynamics import DenseLinear, reference_vector_field
 from tests.support.steady_state_reference import compute_steady_state
 
 
@@ -63,7 +63,7 @@ def vmap_steady_state_effect_dynamics(
 
 
 def _dense_matrix_vector_field(n_latent: int) -> VectorField:
-    return VectorField(n_latent=n_latent, components=(DenseLinear(),))
+    return reference_vector_field(n_latent=n_latent, components=(DenseLinear(),))
 
 
 # =============================================================================

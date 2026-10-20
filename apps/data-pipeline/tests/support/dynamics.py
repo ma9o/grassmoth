@@ -17,11 +17,26 @@ from nof1_causal_lab.artifacts.model.expressions import (
     state,
 )
 from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponentSpec
+from nof1_causal_lab.models.ssm.dynamics.vector_field import ComponentDrift, VectorField
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from nof1_causal_lab.models.ssm.dynamics.edges import VectorFieldComponent
+
 _ZERO = 0
+
+
+def reference_vector_field(
+    n_latent: int,
+    components: tuple[VectorFieldComponent, ...],
+    potential_indices: tuple[int, ...] = (),
+) -> VectorField:
+    """Bind independent numerical reference components to the explicit drift program."""
+
+    return VectorField(
+        n_latent, components, ComponentDrift(components, potential_indices), potential_indices
+    )
 
 
 def _coefficient(slot, role):

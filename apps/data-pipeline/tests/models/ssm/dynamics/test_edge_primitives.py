@@ -34,12 +34,13 @@ from tests.support.dynamics import (
     LinearEdge,
     hill_term,
     interaction_term,
+    reference_vector_field,
 )
 from tests.support.steady_state_reference import compute_steady_state
 
 
 def _dense_matrix_vector_field(n_latent: int) -> VectorField:
-    return VectorField(n_latent=n_latent, components=(DenseLinear(),))
+    return reference_vector_field(n_latent=n_latent, components=(DenseLinear(),))
 
 
 # =============================================================================
@@ -182,7 +183,7 @@ class TestVectorFieldEquivalence:
         cint = jnp.array([0.1, -0.2])
         eta = jnp.array([1.5, 0.8])
 
-        dense_vf = VectorField(n_latent=2, components=(DenseLinear(),))
+        dense_vf = reference_vector_field(n_latent=2, components=(DenseLinear(),))
         factory_vf = _dense_matrix_vector_field(n_latent=2)
 
         params = ({"drift": A, "cint": cint},)
@@ -200,7 +201,7 @@ class TestVectorFieldInterventions:
     """Override semantics on vector fields."""
 
     def test_variable_override_pins_state(self):
-        vf = VectorField(
+        vf = reference_vector_field(
             n_latent=2,
             components=(
                 DiagonalDecay(),
@@ -222,7 +223,7 @@ class TestVectorFieldInterventions:
         assert float(steady[1]) == pytest.approx(2.5, abs=1e-4)
 
     def test_edge_input_override_changes_target_only(self):
-        vf = VectorField(
+        vf = reference_vector_field(
             n_latent=2,
             components=(
                 DiagonalDecay(),
@@ -267,7 +268,7 @@ class TestEffectCompartment:
 
     def test_steady_state_matches_input(self):
         # Latents: 0 = C_p (pinned via intervention), 1 = C_e
-        vf = VectorField(
+        vf = reference_vector_field(
             n_latent=2,
             components=(
                 DiagonalDecay(),
@@ -287,7 +288,7 @@ class TestEffectCompartment:
         assert float(steady[1]) == pytest.approx(3.0, abs=1e-4)
 
     def test_transient_half_life(self):
-        vf = VectorField(
+        vf = reference_vector_field(
             n_latent=2,
             components=(
                 DiagonalDecay(),
@@ -327,7 +328,7 @@ class TestSSRIChain:
     AFFECTIVE = 4
 
     def _build(self):
-        vf = VectorField(
+        vf = reference_vector_field(
             n_latent=5,
             components=(
                 DiagonalDecay(),

@@ -1,0 +1,139 @@
+"""Compile shared nonlinear drift expressions with explicit operand ownership."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+import jax
+import jax.numpy as jnp
+from sympy import Basic, Symbol, evaluate, lambdify
+
+from nof1_causal_lab.artifacts.model.expressions import (
+    CoefficientExpression,
+    StateExpression,
+    symbolic_expression,
+)
+from nof1_causal_lab.models.ssm.compile.expressions import structural_cse
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from nof1_causal_lab.artifacts.identity import ParameterId
+    from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponentSpec
+    from nof1_causal_lab.models.ssm.dynamics.spec import DynamicsSpec
+    from nof1_causal_lab.models.ssm.dynamics.vector_field import DriftProgram
+
+
+@dataclass(frozen=True)
+class _StateRead:
+    index: int
+
+
+@dataclass(frozen=True)
+class _EdgeRead:
+    target: int
+    index: int
+
+
+@dataclass(frozen=True)
+class _ParameterRead:
+    component: int
+    identity: ParameterId
+
+
+@dataclass(frozen=True)
+class _LiteralRead:
+    value: float
+
+
+type _DriftRead = _StateRead | _EdgeRead | _ParameterRead | _LiteralRead
+
+
+def _bind_operand(
+    index: int,
+    component: ExpressionComponentSpec,
+    operand: StateExpression | CoefficientExpression,
+) -> _DriftRead:
+    match operand:
+        case StateExpression():
+            state = component.state_index[operand.construct_id]
+            return _EdgeRead(component.target, state) if component.edge_owned else _StateRead(state)
+        case CoefficientExpression():
+            reference = component.coefficients[operand]
+            return (
+                _ParameterRead(index, reference)
+                if isinstance(reference, str)
+                else _LiteralRead(reference)
+            )
+
+
+def _read_operand(
+    operand: _DriftRead,
+    eta: jax.Array,
+    eta_per_edge: jax.Array,
+    params: tuple[Mapping[str, jax.Array], ...],
+) -> jax.Array:
+    match operand:
+        case _StateRead(index):
+            return eta[index]
+        case _EdgeRead(target, index):
+            return eta_per_edge[target, index]
+        case _ParameterRead(component, identity):
+            return params[component][identity]
+        case _LiteralRead(value):
+            return jnp.asarray(value)
+
+
+def compile_shared_drift(spec: DynamicsSpec) -> DriftProgram:
+    """Share structural subexpressions across drift outputs while preserving parameter slices."""
+    roots: list[Basic] = []
+    providers: dict[_DriftRead, Symbol] = {}
+    targets: list[int] = []
+    for index, component in enumerate(spec.components):
+        if component.kind == "potential":
+            continue
+        symbolic = symbolic_expression(component.expression)
+        renamed: dict[Symbol, Symbol] = {}
+        for symbol, operand in symbolic.operands.items():
+            owner = _bind_operand(index, component, operand)
+            if owner not in providers:
+                providers[owner] = Symbol(f"operand_{len(providers)}")
+            renamed[symbol] = providers[owner]
+        with evaluate(False):
+            roots.append(symbolic.root.xreplace(renamed))
+        targets.append(component.target)
+    entries = tuple(providers)
+    with evaluate(False):
+        numerical = lambdify(
+            tuple(providers.values()),
+            tuple(roots),
+            modules=[
+                {
+                    "maximum": jnp.maximum,
+                    "sigmoid": jax.nn.sigmoid,
+                    "normal_cdf": jax.scipy.special.ndtr,
+                },
+                "jax",
+            ],
+            cse=structural_cse,  # pyright: ignore[reportArgumentType] -- SymPy supports callable CSE; its annotation only declares bool.
+            dummify=True,
+            docstring_limit=0,
+        )
+    target_indices = tuple(targets)
+
+    def drift(
+        _t: jax.Array,
+        eta: jax.Array,
+        eta_per_edge: jax.Array,
+        params: tuple[Mapping[str, jax.Array], ...],
+    ) -> jax.Array:
+        if not target_indices:
+            return jnp.zeros_like(eta)
+        values = tuple(_read_operand(operand, eta, eta_per_edge, params) for operand in entries)
+        contributions = jnp.stack(tuple(jnp.asarray(value) for value in numerical(*values)))
+        return (
+            jnp.zeros_like(eta).at[jnp.asarray(target_indices, dtype=jnp.int32)].add(contributions)
+        )
+
+    return drift
