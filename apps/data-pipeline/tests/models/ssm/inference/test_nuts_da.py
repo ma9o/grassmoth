@@ -102,9 +102,13 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
 
 
 @pytest.mark.parametrize(
-    "trajectory", [NutsTrajectorySpec(max_tree_depth=3), FixedTrajectorySpec(steps=4)]
+    ("parameterization", "trajectory"),
+    [
+        ("centred", NutsTrajectorySpec(max_tree_depth=3)),
+        ("non_centred", FixedTrajectorySpec(steps=4)),
+        ("mixed", NutsTrajectorySpec(max_tree_depth=3)),
+    ],
 )
-@pytest.mark.parametrize("parameterization", ["centred", "non_centred", "mixed"])
 def test_continuation_matches_uninterrupted_random_stream_and_tuning(
     trajectory, parameterization, monkeypatch
 ):

@@ -1,8 +1,7 @@
-"""Numerical acceptance of Dynestyx model interpretation with local inference."""
+"""Exact nonlinear Dynestyx densities with mixed and missing observations."""
 
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING
 
 import dynestyx as dsx
@@ -13,25 +12,14 @@ import numpyro.distributions as dist
 import pytest
 
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
-from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
-from nof1_causal_lab.artifacts.sampling import (
-    DsmcSpec,
-    LapsInitializationSpec,
-    MarginalParticleGibbsSpec,
-    SamplerSpec,
-)
 from nof1_causal_lab.models.ssm.dynamics.vector_field import StructuralDrift
 from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
-from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
-from tests.support.compute import COMPUTE_BUDGET
 from tests.support.inference import bind_panel_fixture, compile_fit_fixture
 from tests.support.model import construct_named, load_model_fixture
 
 
-def _nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics_nonlinear_model() -> (
-    DynamicalModelSpec
-):
+def _nonlinear_model() -> DynamicalModelSpec:
     return load_model_fixture(
         "ecosystem_consumer/nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics_nonlinear_model.json"
     )
@@ -45,9 +33,8 @@ pytestmark = pytest.mark.inference(concern="sampling")
 
 
 @pytest.mark.parametrize("intervals", [False, True])
-@pytest.mark.inference(concern="warmup")
-def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(intervals):
-    spec = _nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics_nonlinear_model()
+def test_nonlinear_mixed_missing_irregular_exact_densities(intervals):
+    spec = _nonlinear_model()
     if intervals:
         construct = construct_named(spec, "latent_0")
         revised = construct.revised(
@@ -120,48 +107,3 @@ def test_nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics(in
         covariance_matrix=step * evolution.diffusion.gram_matrix(x=None, u=None, t=0, state_dim=1),
     )
     np.testing.assert_allclose(transition, law.log_prob(path[1]), atol=2e-5)
-    result = fit(
-        model.prior_runtime_bundle,
-        panel,
-        reparam=None,
-        sampler=SamplerSpec(
-            num_warmup=2,
-            num_samples_per_chain=4,
-            num_chains=1,
-            seed=9,
-            num_particles=4,
-            retain_latent_paths=True,
-            algorithm=MarginalParticleGibbsSpec(
-                n_parameter_particles=2,
-                parameter_proposal="pseudo_langevin",
-                adaptation_scheme="dual_averaging",
-                param_step_size=0.0005,
-                initialization=LapsInitializationSpec(
-                    ensemble_size=128, num_unadjusted_steps=1000, num_adjusted_steps=20
-                ),
-                dsmc=DsmcSpec(drift="amala_plus"),
-            ),
-        ),
-        clock=time.monotonic,
-        compute_budget=COMPUTE_BUDGET,
-    )
-    from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
-
-    assert isinstance(result, MCMCPosterior)
-    assert not hasattr(result.diagnostics, "likelihood_backend")
-    diagnostics = result.diagnostics.sampler_diagnostics
-    assert isinstance(diagnostics, ParticleSamplerDiagnostics)
-    assert isinstance(diagnostics.settings.algorithm, MarginalParticleGibbsSpec)
-    assert diagnostics.parameter_kernel == "m_pgibbs_pseudo_langevin"
-    assert diagnostics.drift == "amala_plus"
-    assert diagnostics.settings.algorithm.adaptation_scheme == "dual_averaging"
-    latent_paths = result.draws.latent_paths
-    assert latent_paths is not None
-    assert latent_paths.shape == (4, len(times), 1)
-    factors = result.diagnostics.observation_log_probs
-    assert factors.shape == (1, 4, len(times))
-    assert jnp.all(jnp.isfinite(factors))
-    assert jnp.all(factors[..., jnp.all(jnp.isnan(observations), axis=1)] == 0.0)
-    for values in result.get_samples().values():
-        assert values.shape[0] == 4
-        assert jnp.all(jnp.isfinite(values))

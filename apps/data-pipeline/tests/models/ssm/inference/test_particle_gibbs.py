@@ -208,8 +208,11 @@ def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method, retain_p
     )
 
 
-@pytest.mark.parametrize("method", ["mh", "nuts", "marginal"])
-@pytest.mark.parametrize("initializer", ["laps", "gaussian"])
+# Both sampler families exercise each initializer; PG also covers both parameter kernels.
+@pytest.mark.parametrize(
+    ("method", "initializer"),
+    [("mh", "laps"), ("nuts", "gaussian"), ("marginal", "laps"), ("marginal", "gaussian")],
+)
 @pytest.mark.inference(concern="warmup")
 def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(
     method, initializer

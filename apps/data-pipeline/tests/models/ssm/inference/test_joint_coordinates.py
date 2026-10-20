@@ -374,9 +374,18 @@ def test_scientific_tempering_reference_gets_the_same_parameterization_jacobian(
     )
 
 
-@pytest.mark.parametrize("parameterization_name", ["non_centred", "mixed"])
-@pytest.mark.parametrize("beta", [0.0, 0.35, 1.0])
-@pytest.mark.parametrize("support", ["pinned_interval", "static_replay"])
+# Every pair of coordinate system, temperature and support remains covered.
+@pytest.mark.parametrize(
+    ("parameterization_name", "beta", "support"),
+    [
+        ("non_centred", 0.0, "pinned_interval"),
+        ("mixed", 0.0, "static_replay"),
+        ("non_centred", 0.35, "static_replay"),
+        ("mixed", 0.35, "pinned_interval"),
+        ("non_centred", 1.0, "pinned_interval"),
+        ("mixed", 1.0, "static_replay"),
+    ],
+)
 def test_direct_scoring_float64_identity_preserves_support_and_tempering(
     parameterization_name, beta, support
 ):

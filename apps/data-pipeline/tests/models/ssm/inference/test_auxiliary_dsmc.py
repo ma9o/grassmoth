@@ -194,15 +194,19 @@ def _stationarity_features(paths, mean, chol):
     )
 
 
-@pytest.mark.parametrize("interval", [False, True], ids=["point", "overlapping_intervals"])
-@pytest.mark.parametrize("parameter_count", [1, 2], ids=["fixed_parameter", "fixed_mixture"])
+# Cover every pair of support, parameter count, drift and pilot-mixture choices.
 @pytest.mark.parametrize(
-    ("method", "kappa"), [("amala", 1.0), ("amala_plus", 1.0), ("amala_plus", 0.0)]
+    ("interval", "parameter_count", "drift", "mixture"),
+    [
+        (False, 1, "amala", False),
+        (True, 2, "amala", True),
+        (False, 2, "amala_plus", True),
+        (True, 1, "amala_plus", False),
+        (False, 1, "none", True),
+        (True, 2, "none", False),
+    ],
 )
-@pytest.mark.parametrize("mixture", [False, True], ids=["paid_off", "paid_on"])
-def test_conditional_tree_preserves_analytic_posterior(
-    interval, parameter_count, method, kappa, mixture
-):
+def test_conditional_tree_preserves_analytic_posterior(interval, parameter_count, drift, mixture):
     """One transition from exact independent draws isolates invariance without burn-in."""
     target, joint_mean, joint_covariance = _gaussian_smoother_case(interval)
     parameters = np.array([0.3]) if parameter_count == 1 else np.array([-0.4, 0.7])
@@ -224,7 +228,7 @@ def test_conditional_tree_preserves_analytic_posterior(
     before = jnp.asarray(
         (means[labels] + rng.normal(size=(size, len(mean))) @ conditional_chol.T)[..., None]
     )
-    spec = DsmcSpec(drift=method if kappa else "none", pilot_mixture=mixture)
+    spec = DsmcSpec(drift=drift, pilot_mixture=mixture)
     setup = build_smoother_setup(
         target,
         spec,
@@ -253,9 +257,9 @@ def test_conditional_tree_preserves_analytic_posterior(
     paths, log_probs = jax.jit(jax.vmap(advance))(before, keys)
     initial_paths = np.asarray(before)[..., 0]
     initial_features = _stationarity_features(initial_paths, mean, chol)
-    # Bonferroni across 24 cases and every tested moment/function. Repeated sweeps
+    # Bonferroni across six cases and every tested moment/function. Repeated sweeps
     # belong in the mixing benchmark; they are not needed to test invariance.
-    critical = norm.isf(0.001 / (2 * 24 * initial_features.shape[1]))
+    critical = norm.isf(0.001 / (2 * 6 * initial_features.shape[1]))
     observed = np.asarray(paths)[..., 0]
     differences = _stationarity_features(observed, mean, chol) - initial_features
     uncertainty = differences.std(axis=0, ddof=1) / np.sqrt(size)
@@ -353,9 +357,15 @@ def test_pairwise_transition_matrix_matches_individual_declared_densities(state_
         np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-5)
 
 
-@pytest.mark.parametrize("method", ["amala", "amala_plus"])
 @pytest.mark.parametrize(
-    ("steps", "mixture"), [(1, False), (2, False), (4, True), (5, True), (33, True)]
+    ("method", "steps", "mixture"),
+    [
+        ("amala", 1, False),
+        ("amala_plus", 2, False),
+        ("amala", 4, True),
+        ("amala_plus", 5, True),
+        ("amala_plus", 33, True),
+    ],
 )
 def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, steps, mixture):
     from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import trace_step
