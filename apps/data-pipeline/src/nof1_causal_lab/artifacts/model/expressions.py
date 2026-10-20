@@ -8,7 +8,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Annotated, Literal, cast
 
 from pydantic import ConfigDict, Field, FiniteFloat, model_validator
-from sympy import Add, Basic, Expr, Float, Function, Mul, Pow, Symbol, preorder_traversal
+from sympy import Add, Basic, Expr, Float, Function, Mul, Pow, Symbol
 
 from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.identity import ConstructId, ParameterId
@@ -333,11 +333,17 @@ def symbolic_expression(value: Expression) -> SymbolicExpression:
 
 
 def walk_expression(value: Expression) -> Iterator[Expression]:
-    """Yield authored expression nodes in symbolic preorder, omitting synthetic algebra nodes."""
-    symbolic = symbolic_expression(value)
-    yield from (
-        symbolic.nodes[node] for node in preorder_traversal(symbolic.root) if node in symbolic.nodes
-    )
+    """Yield authored expression nodes in preorder without lowering to symbolic algebra."""
+    yield value
+    match value:
+        case LiteralExpression() | StateExpression() | CoefficientExpression():
+            return
+        case BinaryExpression(left=left, right=right):
+            yield from walk_expression(left)
+            yield from walk_expression(right)
+        case CallExpression(arguments=arguments):
+            for argument in arguments:
+                yield from walk_expression(argument)
 
 
 def expression_states(value: Expression) -> frozenset[ConstructId]:

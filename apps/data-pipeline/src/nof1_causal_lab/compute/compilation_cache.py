@@ -14,6 +14,7 @@ import shutil
 import sys
 import tarfile
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import asdict, dataclass, replace
 from importlib.metadata import distributions, version
 from pathlib import Path, PurePosixPath
@@ -144,20 +145,41 @@ def _program_structure(
     return buffer.getvalue(), tuple(arrays)
 
 
+@dataclass(frozen=True)
+class _CompilationIdentity:
+    """Source and installed dependencies shared by all staged programs in one fit."""
+
+    source_digest: str
+    dependencies: tuple[tuple[str, str], ...]
+
+
+_FIT_COMPILATION_IDENTITY: ContextVar[_CompilationIdentity | None] = ContextVar(
+    "fit_compilation_identity", default=None
+)
+
+
+def _read_compilation_identity() -> _CompilationIdentity:
+    return _CompilationIdentity(
+        source_digest=numerical_source_digest(),
+        # Cloudpickle references installed functions by name, including transitive
+        # dependencies. Their versions must invalidate exports before tracing.
+        dependencies=tuple(sorted((package.name, package.version) for package in distributions())),
+    )
+
+
 def _program_key(structure: bytes, examples: object) -> str:
     """Scope staged programs to source, dependencies, compiler settings and layout."""
     leaves = jax.tree.leaves(examples)
     layouts = tuple(
         (value.shape, str(value.dtype), bool(jax.typeof(value).weak_type)) for value in leaves
     )
+    identity = _FIT_COMPILATION_IDENTITY.get()
+    if identity is None:
+        identity = _read_compilation_identity()
     components = {
-        "source": numerical_source_digest(),
+        "source": identity.source_digest,
         "python": platform.python_version(),
-        # Cloudpickle references installed functions by name, including transitive
-        # dependencies. Their versions must invalidate exports before tracing.
-        "dependencies": tuple(
-            sorted((package.name, package.version) for package in distributions())
-        ),
+        "dependencies": identity.dependencies,
         "namespace": cache_namespace(FIT_CACHE_POLICY),
         "jax_config": tuple(
             sorted(
@@ -707,7 +729,11 @@ def local_compilation_cache(
         try:
             for name, value in settings.items():
                 jax.config.update(name, value)
-            yield working
+            identity_token = _FIT_COMPILATION_IDENTITY.set(_read_compilation_identity())
+            try:
+                yield working
+            finally:
+                _FIT_COMPILATION_IDENTITY.reset(identity_token)
             transfers = tuple(
                 persist_cache(
                     archive_path, working, previous[partition], policy, partition, lambda: None
