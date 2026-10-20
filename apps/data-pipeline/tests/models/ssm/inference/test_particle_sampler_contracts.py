@@ -113,6 +113,10 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
     )
     step = Mock(side_effect=AssertionError("Invalid initial states must fail before sampling"))
     monkeypatch.setattr(runner, "compile_projected_sweeps", step)
+    # Execute the synthetic initializer without serializing its mocks into a cached program.
+    monkeypatch.setattr(
+        runner, "compile_staged", lambda function, *_args, **_kwargs: Mock(call=function)
+    )
     with pytest.raises(ValueError, match=error):
         runner.run_marginal_particle_gibbs(
             target,

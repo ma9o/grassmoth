@@ -262,7 +262,11 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         Applied(
             result=evidence,
             effects=ActionEffects(
-                produced=(fitted,), reports={"inference": store.write_report(inference)}
+                produced=(fitted,),
+                reports={
+                    "inference": store.write_report(inference),
+                    "checks": store.write_report(validation),
+                },
             ),
         ),
         request=FitRequest[GitOid](
