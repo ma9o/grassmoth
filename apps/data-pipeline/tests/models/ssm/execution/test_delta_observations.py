@@ -1,6 +1,5 @@
 """Exact measurement semantics across authoring, compilation, and observation execution."""
 
-import time
 from pathlib import Path
 
 import jax
@@ -568,7 +567,7 @@ def test_exact_observations_pass_through_full_construct_diagnostics(exact_model)
     )
     target = exact_model.constructs[0]
     indicator_id = target.indicators[0].observation.id
-    results, _ = measure_construct_simulation(
+    results = measure_construct_simulation(
         compiled_dynamical_model,
         prediction,
         DesignInfo(
@@ -580,7 +579,6 @@ def test_exact_observations_pass_through_full_construct_diagnostics(exact_model)
         ConstructSimulationTarget(
             next(state for state in compiled_dynamical_model.states if state.id == target.id)
         ),
-        clock=time.monotonic,
         edge_contrasts=COMPUTE_BUDGET,
     )
     transmission = next(result for result in results if result.check == "C5c transmission")

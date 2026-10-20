@@ -140,7 +140,7 @@ def test_predictive_edge_findings_exclude_the_response_state(monkeypatch):
         _design: DesignInfo,
         target: ConstructSimulationTarget,
         **_kwargs: object,
-    ) -> tuple[list[CheckResult], list[object]]:
+    ) -> list[CheckResult]:
         received.append(target)
         return [
             CheckResult.measured(
@@ -153,7 +153,7 @@ def test_predictive_edge_findings_exclude_the_response_state(monkeypatch):
                 measurements=(),
             )
             for parent in target.edge_parents
-        ], []
+        ]
 
     monkeypatch.setattr(simulation, "measure_construct_simulation", measured)
     latent = jnp.zeros((1, 2, len(compiled_dynamical_model.states)))
@@ -170,7 +170,7 @@ def test_predictive_edge_findings_exclude_the_response_state(monkeypatch):
         time_origin=datetime(2024, 1, 1, tzinfo=UTC),
     )
     findings, _ = simulation.measure_simulation_batch(
-        compiled_dynamical_model, batch, groups=("dynamics",), clock=lambda: 0.0
+        compiled_dynamical_model, batch, groups=("dynamics",)
     )
     response = next(target for target in received if target.construct.id == edge.effect.id)
     assert response.edge_parents == (edge.cause.name,)

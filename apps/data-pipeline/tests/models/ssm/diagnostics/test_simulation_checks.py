@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
@@ -110,12 +109,11 @@ def test_time_invariant_construct_omits_temporal_transmission_check():
         construct=compile_model_fixture(dynamical_model_spec).states[0],
     )
 
-    results, _timings = measure_construct_simulation(
+    results = measure_construct_simulation(
         compile_model_fixture(dynamical_model_spec),
         pred,
         design,
         target,
-        clock=time.monotonic,
         edge_contrasts=COMPUTE_BUDGET,
     )
     checks = {result.check for result in results}
@@ -205,7 +203,7 @@ def test_fixed_hill_coefficients_participate_in_checks_and_edge_off(
         },
         n_draws=draws,
     )
-    results, _ = measure_construct_simulation(
+    results = measure_construct_simulation(
         compile_model_fixture(spec),
         predictive,
         design,
@@ -216,7 +214,6 @@ def test_fixed_hill_coefficients_participate_in_checks_and_edge_off(
         ),
         dynamics=dynamics,
         measurement=measurement,
-        clock=time.monotonic,
         edge_contrasts=COMPUTE_BUDGET,
     )
     assert len(captured) == int(dynamics)

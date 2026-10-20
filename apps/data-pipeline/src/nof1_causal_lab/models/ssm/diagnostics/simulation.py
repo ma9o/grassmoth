@@ -35,7 +35,7 @@ from nof1_causal_lab.models.ssm.predictive.registry_runtime import predictive_ke
 from nof1_causal_lab.models.ssm.predictive.statistics import observation_signal_and_variance
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
 
     import jax.numpy as jnp
 
@@ -59,16 +59,6 @@ class ConstructSimulationTarget:
     def name(self) -> str:
         """Display label of the construct whose simulated behavior is being assessed."""
         return self.construct.name
-
-
-@dataclass(frozen=True)
-class MeasurementTiming:
-    """One measured phase of a predictive check."""
-
-    phase: str
-    label: str
-    duration_ms: float
-    checks: tuple[str, ...] = ()
 
 
 def _edge_components(compiled_dynamical_model: CompiledDynamicalModel, source: int, target: int):
@@ -171,29 +161,24 @@ def measure_construct_simulation(
     dynamics: bool = True,
     measurement: bool = True,
     edge_contrasts: ComputeBudget | None,
-    clock: Callable[[], float],
-) -> tuple[list[CheckResult], list[MeasurementTiming]]:
+) -> list[CheckResult]:
     """Execute selected check groups over a shared predictive batch."""
     results: list[CheckResult] = []
-    timings: list[MeasurementTiming] = []
     if dynamics:
-        checked, measured = measure_construct_dynamics(
-            compiled_dynamical_model,
-            pred,
-            design,
-            target,
-            edge_contrasts=edge_contrasts,
-            clock=clock,
+        results.extend(
+            measure_construct_dynamics(
+                compiled_dynamical_model,
+                pred,
+                design,
+                target,
+                edge_contrasts=edge_contrasts,
+            )
         )
-        results.extend(checked)
-        timings.extend(measured)
     if measurement:
-        checked, measured = measure_construct_measurement(
-            compiled_dynamical_model, pred, design, target, clock=clock
+        results.extend(
+            measure_construct_measurement(compiled_dynamical_model, pred, design, target)
         )
-        results.extend(checked)
-        timings.extend(measured)
-    return results, timings
+    return results
 
 
 def measure_construct_dynamics(
@@ -203,8 +188,7 @@ def measure_construct_dynamics(
     target: ConstructSimulationTarget,
     *,
     edge_contrasts: ComputeBudget | None,
-    clock: Callable[[], float],
-) -> tuple[list[CheckResult], list[MeasurementTiming]]:
+) -> list[CheckResult]:
     """Measure confinement, scale, resolvability, edge contrasts and saturation."""
     latent_names = numeric.state_names(compiled_dynamical_model)
     d = latent_names.index(target.name)
@@ -219,9 +203,7 @@ def measure_construct_dynamics(
     structural_indices = target_obs if target_obs.size else np.arange(times.size)
 
     results: list[CheckResult] = []
-    timings: list[MeasurementTiming] = []
 
-    started = clock()
     phase_results = (
         list(
             check_confinement(
@@ -276,27 +258,9 @@ def measure_construct_dynamics(
                 "C4c saturation",
             )
         )
-        return results, timings
-    timings.append(
-        MeasurementTiming(
-            phase="c1_confinement",
-            label="C1 confinement",
-            duration_ms=(clock() - started) * 1000.0,
-            checks=tuple(result.check for result in phase_results),
-        )
-    )
+        return results
 
-    started = clock()
-    result = check_scale(target.name, x)
-    results.append(result)
-    timings.append(
-        MeasurementTiming(
-            phase="c2_latent_scale",
-            label="C2 latent scale",
-            duration_ms=(clock() - started) * 1000.0,
-            checks=(result.check,),
-        )
-    )
+    results.append(check_scale(target.name, x))
 
     # C3 resolvability uses the declared stiffness, whether fixed or estimated.
     potentials = [
@@ -307,21 +271,11 @@ def measure_construct_dynamics(
         if operand.role == "decay"
     ]
     if potentials:
-        started = clock()
         stiffness = sum(
             _coefficient_draws(operand, comp, pred, f"vf_{i}") for i, comp, operand in potentials
         )
         tau = 1.0 / np.asarray(stiffness)
-        result = check_resolvability(target.name, tau, times[target_obs])
-        results.append(result)
-        timings.append(
-            MeasurementTiming(
-                phase="c3_resolvability",
-                label="C3 resolvability",
-                duration_ms=(clock() - started) * 1000.0,
-                checks=(result.check,),
-            )
-        )
+        results.append(check_resolvability(target.name, tau, times[target_obs]))
     else:
         results.append(
             CheckResult.unevaluated(
@@ -349,7 +303,6 @@ def measure_construct_dynamics(
         else ()
     )
     for parent, compute_budget in contrasts:
-        started = clock()
         edge_target = _incoming_edge_off_target(
             compiled_dynamical_model, replace(target, edge_parents=(parent,)), latent_names, d
         )
@@ -361,21 +314,11 @@ def measure_construct_dynamics(
             design.seed,
             compute_budget=compute_budget,
         )[:, :, d]
-        edge_label = f"{parent}->{target.name}"
-        phase_results = list(
+        results.extend(
             check_edge_share(
-                edge_label,
+                f"{parent}->{target.name}",
                 x[:, structural_indices],
                 np.asarray(x_off)[:, structural_indices],
-            )
-        )
-        results.extend(phase_results)
-        timings.append(
-            MeasurementTiming(
-                phase=f"c4b_edge_overwhelm:{edge_label}",
-                label=f"C4b edge-off resimulation: {parent} → {target.name}",
-                duration_ms=(clock() - started) * 1000.0,
-                checks=tuple(result.check for result in phase_results),
             )
         )
 
@@ -391,7 +334,6 @@ def measure_construct_dynamics(
         if not applications:
             raise ValueError(f"No Hill expression for {parent!r} -> {target.name!r}")
         for comp_idx, comp, source, ec50, exponent in applications:
-            started = clock()
             operands, numerical = compile_expression(source)
             parent_vals = numerical(
                 0.0,
@@ -408,23 +350,16 @@ def measure_construct_dynamics(
                     for operand in operands
                 ),
             )
-            result = check_saturation(
-                f"{parent}->{target.name}",
-                _coefficient_draws(ec50, comp, pred, f"vf_{comp_idx}"),
-                _coefficient_draws(exponent, comp, pred, f"vf_{comp_idx}"),
-                np.asarray(parent_vals),
-            )
-            results.append(result)
-            timings.append(
-                MeasurementTiming(
-                    phase=f"c4c_saturation:{parent}->{target.name}",
-                    label=f"C4c saturation: {parent} → {target.name}",
-                    duration_ms=(clock() - started) * 1000.0,
-                    checks=(result.check,),
+            results.append(
+                check_saturation(
+                    f"{parent}->{target.name}",
+                    _coefficient_draws(ec50, comp, pred, f"vf_{comp_idx}"),
+                    _coefficient_draws(exponent, comp, pred, f"vf_{comp_idx}"),
+                    np.asarray(parent_vals),
                 )
             )
 
-    return results, timings
+    return results
 
 
 def measure_construct_measurement(
@@ -432,13 +367,10 @@ def measure_construct_measurement(
     pred: PredictiveDraws,
     design: DesignInfo,
     target: ConstructSimulationTarget,
-    *,
-    clock: Callable[[], float],
-) -> tuple[list[CheckResult], list[MeasurementTiming]]:
+) -> list[CheckResult]:
     """Measure observation coverage and exact-law temporal transmission."""
     d = numeric.state_names(compiled_dynamical_model).index(target.name)
     results: list[CheckResult] = []
-    timings: list[MeasurementTiming] = []
     target_is_time_invariant = compiled_dynamical_model.states[d].time_invariant
 
     # C5a/C5b coverage for every indicator; C5c transmission only for dynamic constructs.
@@ -446,7 +378,6 @@ def measure_construct_measurement(
         if indicator.state_index != d:
             continue
         lik = indicator.law
-        started = clock()
         var = indicator.id
         observed = np.asarray(design.values_by_indicator[var])
         m = design.manifest_ids.index(var)
@@ -538,16 +469,8 @@ def measure_construct_measurement(
                 )
             )
         results.extend(phase_results)
-        timings.append(
-            MeasurementTiming(
-                phase=f"c5_coverage:{var}",
-                label=f"C5 emission reachability: {var}",
-                duration_ms=(clock() - started) * 1000.0,
-                checks=tuple(result.check for result in phase_results),
-            )
-        )
 
-    return results, timings
+    return results
 
 
 def _incoming_edge_off_target(

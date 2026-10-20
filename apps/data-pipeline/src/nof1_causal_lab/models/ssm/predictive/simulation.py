@@ -37,7 +37,6 @@ from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPrefligh
 from nof1_causal_lab.observations.rows import observation_window_boundaries
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from datetime import datetime
 
     from nof1_causal_lab.artifacts.reports.posterior_diagnostics import PosteriorPredictiveChecks
@@ -303,7 +302,6 @@ def measure_simulation_batch(
     *,
     groups: tuple[str, ...] = ("dynamics", "measurement"),
     edge_contrasts: ComputeBudget | None = None,
-    clock: Callable[[], float],
 ) -> tuple[tuple[PredictiveAssessment, ...], PosteriorPredictiveChecks | None]:
     """All selected reducers consume the same generated paths."""
     prediction = batch.prediction
@@ -357,7 +355,7 @@ def measure_simulation_batch(
                 compiled_dynamical_model.states[source].name for source in sorted(hills)
             ),
         )
-        measured, _ = measure_construct_simulation(
+        measured = measure_construct_simulation(
             compiled_dynamical_model,
             prediction,
             measurement_design,
@@ -365,7 +363,6 @@ def measure_simulation_batch(
             dynamics="dynamics" in groups,
             measurement="measurement" in groups,
             edge_contrasts=edge_contrasts,
-            clock=clock,
         )
         findings.extend(result.finding(identity, targets[result.target]) for result in measured)
     modeled_columns = [

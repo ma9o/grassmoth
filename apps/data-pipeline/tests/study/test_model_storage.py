@@ -1,6 +1,5 @@
 """Saved model revisions preserve scientific identity and their owned numerical laws."""
 
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -125,7 +124,7 @@ def test_predictive_findings_use_entity_ids_and_keep_served_reasons(monkeypatch)
 
     def measured(_model, _prediction, _design, target, **_kwargs):
         if target.construct.id != edge.effect.id:
-            return [], []
+            return []
         return [
             CheckResult.measured(
                 "measured",
@@ -141,7 +140,7 @@ def test_predictive_findings_use_entity_ids_and_keep_served_reasons(monkeypatch)
                 edge.effect.indicators[0].observation.id,
                 f"{edge.cause.name}->{edge.effect.name}",
             )
-        ], []
+        ]
 
     monkeypatch.setattr(simulation, "measure_construct_simulation", measured)
     paths = jnp.zeros((1, 2, 2))
@@ -157,7 +156,6 @@ def test_predictive_findings_use_entity_ids_and_keep_served_reasons(monkeypatch)
         compile_model_fixture(dynamical_model_spec),
         batch,
         groups=("measurement",),
-        clock=time.monotonic,
     )
     targets = [finding.subject.target for finding in findings]
     assert all(not isinstance(target, str) for target in targets)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from typing import TYPE_CHECKING, cast
 
 import numpy as np
@@ -269,9 +268,7 @@ def read_simulation_report(
             ),
             time_origin=evidence.time_origin,
         )
-        findings, _ = measure_simulation_batch(
-            compiled_dynamical_model, batch, clock=time.monotonic
-        )
+        findings, _ = measure_simulation_batch(compiled_dynamical_model, batch)
         return SimulationReport(
             evidence=evidence,
             summary=summary,
