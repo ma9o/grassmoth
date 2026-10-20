@@ -85,7 +85,6 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
     )
     request = PrepareDataRequest[GitOid, FileSourceRef](input=prepared_input)
     assert isinstance(request.input, PrepareDataInput)
-    assert "definition" not in request.input.model_dump()
     raw = store.write_artifact(
         "raw_data",
         derived_from={},

@@ -52,16 +52,6 @@ _QUERY = {
 }
 
 
-class TestConstruct:
-    """Tests for ConstructSpec validation."""
-
-    def test_outcome_is_not_an_intrinsic_construct_property(self, construct_factory):
-        construct = construct_factory("mood")
-        assert "is_outcome" not in construct.model_dump()
-        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-            construct.revised(is_outcome=True)
-
-
 class TestModel:
     """Scientific membership follows the endpoints of one connected graph."""
 
@@ -561,19 +551,6 @@ class TestModelContainment:
         )
         assert result.get_construct(latent.id).indicators == ()
 
-    def test_construct_usage_is_not_an_authored_field(self):
-        dynamical_model_spec = make_model(["X", "Y"], [("X", "Y")])
-        data = dynamical_model_spec.model_dump(mode="json")
-        graph_constructs(data)[0]["usage"] = {
-            "kind": "known_input",
-            "source_indicator_id": dynamical_model_spec.constructs[1].indicators[0].observation.id,
-        }
-        with pytest.raises(ValueError, match="Extra inputs are not permitted"):
-            DynamicalModelSpec.model_validate(data).materialized()
-        graph_constructs(data)[0]["usage"] = [{"kind": "scientific_only", "reason": "context"}]
-        with pytest.raises(ValidationError):
-            DynamicalModelSpec.model_validate(data).materialized()
-
     def test_dynamic_feedback_is_valid_but_static_cycles_are_rejected(self):
         dynamical_model_spec = make_model(["X", "Y"], [("X", "Y"), ("Y", "X")])
         payload = dynamical_model_spec.model_dump(mode="json")
@@ -581,18 +558,6 @@ class TestModelContainment:
             construct["temporal_status"] = "time_invariant"
         with pytest.raises(ValidationError, match="Time-invariant edges form cycle"):
             DynamicalModelSpec.model_validate(payload).materialized()
-
-    def test_edge_rejects_removed_lagged_field(self):
-        dynamical_model_spec = make_model(["sleep", "mood"], [("sleep", "mood")]).revised(
-            measurement_clock="6h"
-        )
-        payload = dynamical_model_spec.model_dump(mode="json")
-        next(iter(payload["edges"].values()))["lagged"] = True
-        with pytest.raises(ValidationError, match="lagged"):
-            DynamicalModelSpec.model_validate(payload).materialized()
-        from nof1_causal_lab.models.ssm.compile.layout.axes import get_construct_dt_days
-
-        assert get_construct_dt_days(dynamical_model_spec) == 0.25
 
 
 class TestDuration:

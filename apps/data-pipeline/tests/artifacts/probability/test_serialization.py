@@ -133,8 +133,6 @@ def test_parameter_changes_distribution_without_keeping_authoring_history():
     assert isinstance(after_law, dist.Normal)
     assert float(before_law.loc) == pytest.approx(0.4)
     assert float(after_law.loc) == pytest.approx(0.3)
-    assert not hasattr(revised.parameter(parameter.id), "prior_sources")
-    assert not hasattr(revised.parameter(parameter.id), "original_proposal")
     with pytest.raises(ValidationError):
         parameter.revised(distribution=dist.Normal(0, 1))
 

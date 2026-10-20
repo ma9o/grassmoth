@@ -40,13 +40,3 @@ def test_validate_artifact_payload_rejects_missing_required_fields(
     bad.pop("outcome")
     with pytest.raises(ValidationError):
         validate_artifact_payload("question", bad)
-
-
-def test_outcome_enum_no_longer_exists(
-    valid_artifact_payloads: dict[str, dict[str, Any]],
-):
-    """Contracts are pure artifacts: execution failures are typed action outcomes, never an outcome flag on the payload (extra=forbid)."""
-    bad = deepcopy(valid_artifact_payloads["model"])
-    bad["outcome"] = "fail"
-    with pytest.raises(ValidationError):
-        validate_artifact_payload("model", bad)

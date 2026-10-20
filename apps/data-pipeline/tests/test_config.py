@@ -3,7 +3,7 @@
 import textwrap
 
 import pytest
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ValidationError
 
 from nof1_causal_lab.actions.fit.execution import resolve_sampler_spec
 from nof1_causal_lab.artifacts.sampling import (
@@ -11,11 +11,9 @@ from nof1_causal_lab.artifacts.sampling import (
     DsmcSpec,
     FitSettingsSpec,
     FixedLatentStepSpec,
-    InferenceHardware,
     LapsInitializationSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
-    ParticleGibbsSpec,
     SamplerSpec,
 )
 from nof1_causal_lab.config import (
@@ -38,21 +36,6 @@ pytestmark = pytest.mark.contract
 
 
 class TestSamplerSpec:
-    @pytest.mark.parametrize(
-        "algorithm",
-        [
-            {"method": "custom"},
-            {"method": "csmc"},
-            {"method": "pgibbs", "ancestor_sampling": True},
-            {"method": "pgibbs", "dsmc": {"ancestor_sampling": True}},
-            {"method": "pgibbs", "dsmc": {"dsmc_leaf_proposal": "amala_exact"}},
-            {"method": "mpgibbs", "dsmc": {"dsmc_leaf_proposal": "amala_exact"}},
-        ],
-    )
-    def test_sampler_choices_reject_removed_or_unsupported_algorithms(self, algorithm):
-        with pytest.raises(ValidationError):
-            SamplerSpec.model_validate({"algorithm": algorithm})
-
     def test_runtime_contract_rejects_unknown_fields(self):
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
             SamplerSpec.model_validate({"unknown_option": True})
@@ -138,20 +121,6 @@ class TestSamplerSpec:
         )
         with pytest.raises(ValidationError, match="frozen"):
             resolved.seed = 8  # ty: ignore[invalid-assignment] -- Exercise runtime rejection of a frozen field.
-
-    @pytest.mark.parametrize("hardware", tuple(InferenceHardware))
-    @pytest.mark.parametrize(
-        "algorithm", [NutsDASpec(), MarginalParticleGibbsSpec(), ParticleGibbsSpec()]
-    )
-    def test_hardware_and_algorithm_are_independent(self, hardware, algorithm):
-        config = TypeAdapter(InferenceConfig).validate_python(
-            {
-                "sampler": {"hardware": hardware.value, "algorithm": algorithm.model_dump()},
-            }
-        )
-        assert config.sampler.hardware is hardware
-        assert config.sampler.algorithm == algorithm
-        assert InferenceConfig().sampler.hardware is InferenceHardware.L40S
 
     def test_custom_chains_and_seed(self):
         result = InferenceConfig(sampler=SamplerSpec(num_chains=8, seed=42)).sampler

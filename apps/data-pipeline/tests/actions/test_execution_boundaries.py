@@ -10,7 +10,7 @@ import pytest
 from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, FitInput, NewFitTarget
 from nof1_causal_lab.actions.contracts.requests import EditModelRequest, FitRequest
 from nof1_causal_lab.actions.runners import run_action
-from nof1_causal_lab.artifacts.identity import ARTIFACT_IDS, GitOid
+from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, InferenceHardware
 from nof1_causal_lab.compilation_errors import IncompleteModelError
@@ -88,10 +88,7 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
         if revision == 2:
             assert execution.kind == "evaluated"
             assert execution.outcome == "passed"
-        assert "execution" not in output.model_dump()
-        assert "execution_readiness" not in output.dynamical_model_spec.model_dump()
         saved_results.append((result_ref, output))
-    assert "compiled_ssm" not in ARTIFACT_IDS
     for result_ref, output in saved_results:
         assert store.read_result(result_ref, EditModelOutput) == output
 

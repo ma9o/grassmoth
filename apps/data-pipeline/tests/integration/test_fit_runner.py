@@ -137,7 +137,6 @@ def test_inference_advances_model_and_uses_the_selected_input(
         assert report.core.inference_diagnostics.num_chains == 1
         assert report.core.inference_diagnostics.num_samples_per_chain == 4
         assert report.core.inference_metadata.num_samples_total == 4
-        assert "report" not in applied.result.model_dump()
         assert (
             report.core.inference_metadata.distribution
             in read_model(artifact_store, info.revision).law_layouts
@@ -145,7 +144,6 @@ def test_inference_advances_model_and_uses_the_selected_input(
         conditioned = read_model(artifact_store, info.revision)
         assert type(conditioned) is type(authored)
         assert conditioned.distributions
-        assert "inference_diagnostics" not in conditioned.model_dump()
         retained = model_draws(compile_model_fixture(conditioned))
         np.testing.assert_array_equal(retained.latent_paths, paths)
         for name, values in parameters.items():

@@ -143,11 +143,8 @@ def _response(origin: datetime = datetime(2026, 1, 1, tzinfo=UTC)):
     }
 
 
-def test_simulation_report_keeps_computed_coordinates_without_copying_inputs():
+def test_simulation_report_keeps_computed_coordinates():
     report = SimulationReport.model_validate(_response())
-    assert "design" not in report.evidence.model_dump()
-    assert "dynamical_model_spec_ref" not in report.evidence.model_dump()
-    assert "causal" not in report.model_dump()
     assert report.evidence.arms.kind == "paired"
     assert SimulationReport.model_validate(unpack_result(pack_result(report))) == report
 

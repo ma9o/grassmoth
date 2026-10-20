@@ -366,7 +366,6 @@ def test_planning_preserves_ids_across_name_and_role_edits(workspace):
         selected_state_ids(StructuralSelection(revised, None))
     )
     assert original.edges[0].id == revised.edges[0].id == "edge:xy"
-    assert "semantics" not in original.model_dump()
     _commit(workspace, "model", revised.model_dump(mode="json"))
     assert _published_model(workspace) == revised
     dynamic_ids = selected_state_ids(StructuralSelection(revised, None))

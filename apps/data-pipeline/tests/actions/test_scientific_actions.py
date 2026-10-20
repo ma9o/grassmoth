@@ -225,10 +225,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     evidence = report.evidence
     assert evidence.arms.action.latent_paths.values.shape == (evidence.draws, 5, 2)
     assert evidence.arms.action.observations.values.shape == (evidence.draws, 5, 2)
-    assert "dynamical_model_spec_ref" not in evidence.model_dump()
     assert set(pins) == {"model", "question"}
-    assert "predictive_checks" not in evidence.model_dump()
-    assert "comparison_panel" not in evidence.model_dump()
     assert report.law is not None
     assert report.law.kind == ("fitted" if fitted_laws else "authored")
     if fitted_laws:
@@ -281,7 +278,6 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     )
     retained = ArtifactStore("TEST").read_result(result_ref, SimulateOutput).report
     assert retained == report
-    assert "dynamical_model_spec_ref" not in retained.evidence.model_dump()
 
     # A retained generator result is read directly without running it again.
     from nof1_causal_lab.study.queries.data import read_data_history

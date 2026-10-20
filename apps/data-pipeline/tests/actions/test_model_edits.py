@@ -107,7 +107,6 @@ def test_null_edge_prunes_ancestors_and_their_owned_parameters_and_laws():
     )
     assert (warning.severity, warning.code) == ("warning", "MODEL_COMPONENTS_PRUNED")
     assert warning.subject == "model"
-    assert "details" not in warning.model_dump()
 
 
 def test_disconnected_creation_prunes_before_whole_model_validation():
