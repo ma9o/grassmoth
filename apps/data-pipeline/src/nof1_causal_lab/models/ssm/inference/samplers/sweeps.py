@@ -12,7 +12,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from nof1_causal_lab.artifacts.immutability import freeze_fields
-from nof1_causal_lab.compute.batching import compile_from_estimate, compiled_memory
+from nof1_causal_lab.compute.batching import compiled_memory
 from nof1_causal_lab.compute.budget import NO_MEMORY_DEMAND, MemoryDemand
 from nof1_causal_lab.compute.compilation_cache import prepare_program
 from nof1_causal_lab.models.ssm.inference.samplers.progress import (
@@ -71,8 +71,8 @@ def compile_sweeps[Carry](
 ) -> SweepPlan:
     """Check compiled peak memory plus histories, without timing or executing a sweep.
 
-    Trace one node/root lane and size concurrency arithmetically before compiling
-    the selected width. Independent chains remain vectorized. The common cap of
+    Compile the maximum node/root width first and halve it until compiled memory
+    fits the budget. Independent chains remain vectorized. The common cap of
     25 sequential sweeps bounds output buffers and host progress latency.
     """
     block_size = min(25, max(1, num_warmup, num_samples))
@@ -83,9 +83,8 @@ def compile_sweeps[Carry](
         Callable[[], Compiled],
         tuple[jax.Array, ...],
         Mapping[str, jax.ShapeDtypeStruct],
-        MemoryDemand,
     ]:
-        compile_program, arguments, (_, block_shapes), estimate = prepare_program(
+        compile_program, arguments, (_, block_shapes), _ = prepare_program(
             sweep_block(step_factory(batch), block_size),
             initial,
             jax.ShapeDtypeStruct((), jnp.int32),
@@ -95,16 +94,18 @@ def compile_sweeps[Carry](
             name: jax.ShapeDtypeStruct(shape.shape[1:], shape.dtype)
             for name, shape in block_shapes.items()
         }
-        return compile_program, arguments, shapes, estimate
+        return compile_program, arguments, shapes
 
-    single = prepare_phase(1)
-    _, _, single_shapes, single_memory = single
+    maximum = prepare_phase(max_batch_size)
+    _, _, history_shapes = maximum
     warmup_shapes = {
-        name: shape for name, shape in single_shapes.items() if name not in {"positions", "paths"}
+        name: shape for name, shape in history_shapes.items() if name not in {"positions", "paths"}
     }
 
     def compile_plan(batch: int) -> tuple[SweepPlan, MemoryDemand]:
-        compile_program, arguments, shapes, _ = single if batch == 1 else prepare_phase(batch)
+        compile_program, arguments, shapes = (
+            maximum if batch == max_batch_size else prepare_phase(batch)
+        )
         executable = compile_program()
         warmup = (
             CompiledSweepPhase(num_warmup, executable, warmup_shapes, arguments)
@@ -122,10 +123,10 @@ def compile_sweeps[Carry](
 
     history_bytes = sum(
         steps * sum(shape.size * shape.dtype.itemsize for shape in shapes.values())
-        for steps, shapes in ((num_warmup, warmup_shapes), (num_samples, single_shapes))
+        for steps, shapes in ((num_warmup, warmup_shapes), (num_samples, history_shapes))
     )
     transfer_bytes = block_size * sum(
-        shape.size * shape.dtype.itemsize for shape in single_shapes.values()
+        shape.size * shape.dtype.itemsize for shape in history_shapes.values()
     )
     # Host assembly buffers coexist with one device_get block, including its
     # padded tail. XLA accounts for device block buffers; returned phases and
@@ -135,20 +136,22 @@ def compile_sweeps[Carry](
         host_bytes=history_bytes + transfer_bytes + additional_overhead.host_bytes,
         device_bytes=2 * history_bytes + additional_overhead.device_bytes,
     )
-    chosen = compile_from_estimate(
-        compile_plan,
-        single_memory=single_memory,
-        max_batch_size=max_batch_size,
-        budget=budget,
-        overhead=overhead,
-    )
-    return replace(
-        chosen.executable,
-        memory=MemoryDemand(
-            host_bytes=chosen.memory.host_bytes + overhead.host_bytes,
-            device_bytes=chosen.memory.device_bytes + overhead.device_bytes,
-        ),
-    )
+    batch = max_batch_size
+    while True:
+        plan, memory = compile_plan(batch)
+        if budget.planning_capacity(memory, limit=1, overhead=overhead):
+            if not budget.capacity(memory, limit=1, overhead=overhead):
+                raise MemoryError("Compiled sweep exceeds available memory")
+            return replace(
+                plan,
+                memory=MemoryDemand(
+                    host_bytes=memory.host_bytes + overhead.host_bytes,
+                    device_bytes=memory.device_bytes + overhead.device_bytes,
+                ),
+            )
+        if batch == 1:
+            raise MemoryError("One sweep lane exceeds the memory budget")
+        batch //= 2
 
 
 def compile_projected_sweeps[Carry](

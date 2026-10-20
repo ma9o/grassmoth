@@ -13,7 +13,6 @@ import numpyro.distributions as dist
 import pytest
 
 from nof1_causal_lab.artifacts.sampling import DsmcSpec
-from nof1_causal_lab.compute import compilation_cache
 from nof1_causal_lab.compute.budget import (
     AcceleratorMemoryBudget,
     ComputeBudget,
@@ -124,7 +123,6 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     executed = []
 
     def factory(batch):
-        assert batch <= 2, "An unsafe width must not reach compilation"
         compiled_batches.append(batch)
 
         def step(state, _posterior):
@@ -144,11 +142,6 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
 
     monkeypatch.setattr(jax.stages.Compiled, "__call__", execute)
     monkeypatch.setattr(sweeps, "compiled_memory", memory)
-    monkeypatch.setattr(
-        compilation_cache,
-        "traced_memory",
-        lambda _graph: MemoryDemand(host_bytes=0, device_bytes=100_000),
-    )
     budget = ComputeBudget(
         # History (384) plus one transferred block (240) fit; two full histories do not.
         memory=AcceleratorMemoryBudget(host_bytes=700, device_bytes=300_000)
@@ -159,8 +152,8 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     plan = sweeps.compile_sweeps(
         factory, initial, num_warmup=3, num_samples=5, max_batch_size=8, budget=budget
     )
-    assert compiled_batches == [1, 2]
-    assert len(compiled_phases) == 1  # Sizing traces must never compile probe executables.
+    assert compiled_batches == [8, 4, 2]
+    assert len(compiled_phases) == 3
     assert plan.batch_size == 2
     assert isinstance(plan.warmup, sweep_plan.CompiledSweepPhase)
     assert isinstance(plan.posterior, sweep_plan.CompiledSweepPhase)
@@ -170,7 +163,7 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     np.testing.assert_array_equal(run.state, np.full((4, 3), 8))
     assert run.history.posterior["value"].shape == (4, 5, 3)
     assert len(executed) == 3  # First-step timing, remaining warmup, posterior.
-    with pytest.raises(MemoryError, match="One batch lane"):
+    with pytest.raises(MemoryError, match="One sweep lane"):
         sweeps.compile_sweeps(
             factory,
             initial,
