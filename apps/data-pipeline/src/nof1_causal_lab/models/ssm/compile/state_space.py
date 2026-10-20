@@ -22,6 +22,13 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class AdditiveRecurrences:
+    """Coordinates with exact additive increments independent of replayed states."""
+
+    indices: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class ParallelRecurrences:
     """Coordinates whose exact recurrence is affine in the deterministic subsystem."""
 
@@ -44,7 +51,7 @@ class StateSpace:
     initial: tuple[int, ...]
     transition: tuple[int, ...]
     static: tuple[int, ...]
-    recurrence: ParallelRecurrences | SequentialRecurrences
+    recurrence: AdditiveRecurrences | ParallelRecurrences | SequentialRecurrences
 
     @property
     def initial_path_coordinates(self) -> tuple[int, ...]:
@@ -101,8 +108,9 @@ def compile_state_space(
 
 def _compile_recurrence(
     dynamics: DynamicsSpec, indices: tuple[int, ...]
-) -> ParallelRecurrences | SequentialRecurrences:
+) -> AdditiveRecurrences | ParallelRecurrences | SequentialRecurrences:
     """Prove affine closure symbolically; numerical execution never linearizes a recurrence."""
+    additive = True
     for component in dynamics.components:
         if component.target not in indices:
             continue
@@ -148,4 +156,6 @@ def _compile_recurrence(
             or Poly(expression, *variables).total_degree() > 1
         ):
             return SequentialRecurrences(indices)
-    return ParallelRecurrences(indices)
+        if variables and Poly(expression, *variables).total_degree() > 0:
+            additive = False
+    return AdditiveRecurrences(indices) if additive else ParallelRecurrences(indices)

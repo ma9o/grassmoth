@@ -11,7 +11,7 @@ import jax.numpy as jnp
 import numpyro.distributions as dist
 from jax.scipy.linalg import solve_triangular
 
-from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences
+from nof1_causal_lab.models.ssm.compile.state_space import AdditiveRecurrences, ParallelRecurrences
 from nof1_causal_lab.models.ssm.execution.affine import compose_affine_maps
 from nof1_causal_lab.models.ssm.execution.innovations import GaussianPathMap
 from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import (
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
     )
     from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
     from nof1_causal_lab.models.ssm.execution.dynamical_model import HeterogeneousObservation
+    from nof1_causal_lab.models.ssm.execution.state_transition import SupportedEulerMaruyama
     from nof1_causal_lab.models.ssm.inference.conditioning import ExactStateConstraints
     from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
     from nof1_causal_lab.models.ssm.inference.targets.intervals import ParticleIntervalObservations
@@ -171,6 +172,25 @@ class ParticleTarget:
         inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
         initial = initial.at[inputs].set(coordinates[0, inputs])
         initial = initial.at[static].set(context[2][static])
+        if isinstance(self.state_space.recurrence, AdditiveRecurrences):
+            coordinates = coordinates.at[0].set(initial)
+            deterministic = jnp.asarray(self.state_space.recurrence.indices, dtype=jnp.int32)
+            if not self.state_space.recurrence.indices or self.times.size == 1:
+                return coordinates
+            evolution = cast(
+                "SupportedEulerMaruyama", self.dynamical_model(context).state_evolution
+            )
+
+            def increment(previous: jax.Array, index: jax.Array) -> jax.Array:
+                state = self.project_state(context, previous)
+                start, stop = context[1][index - 1], context[1][index]
+                drift = evolution.continuous.total_drift(x=state, u=None, t=start)
+                return (stop - start) * drift[deterministic]
+
+            increments = jax.vmap(increment)(coordinates[:-1], jnp.arange(1, self.times.size))
+            values = initial[deterministic] + jnp.cumsum(increments, axis=0)
+            return coordinates.at[1:, deterministic].set(values)
+
         if isinstance(self.state_space.recurrence, ParallelRecurrences):
             coordinates = coordinates.at[0].set(initial)
             deterministic = jnp.asarray(self.state_space.recurrence.indices, dtype=jnp.int32)

@@ -20,6 +20,7 @@ from nof1_causal_lab.artifacts.model.mechanism import DriftMechanismSpec, Potent
 from nof1_causal_lab.artifacts.sampling import DsmcSpec, SamplerSpec
 from nof1_causal_lab.models.ssm.compile.observation_partition import compile_observation_partition
 from nof1_causal_lab.models.ssm.compile.state_space import (
+    AdditiveRecurrences,
     ParallelRecurrences,
     SequentialRecurrences,
 )
@@ -358,7 +359,7 @@ def test_static_promotion_keeps_correlated_initial_density_and_shared_coordinate
 
 def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_subsystem():
     model = _model()
-    assert isinstance(_problem(model)[0].state_space.recurrence, ParallelRecurrences)
+    assert isinstance(_problem(model)[0].state_space.recurrence, AdditiveRecurrences)
     driver = next(c for c in model.constructs if c.name == "driver")
     driver = driver.revised(
         dynamics=(
@@ -368,7 +369,7 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
         )
     )
     model = model.with_entities(edges=replace_constructs(model.edges, (driver,)))
-    assert isinstance(_problem(model)[0].state_space.recurrence, ParallelRecurrences)
+    assert isinstance(_problem(model)[0].state_space.recurrence, AdditiveRecurrences)
     total = next(c for c in model.constructs if c.name == "total")
     potential = total.revised(
         dynamics=(

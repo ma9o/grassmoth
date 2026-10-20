@@ -40,7 +40,7 @@ import jax.numpy as jnp
 from jax import random
 
 from nof1_causal_lab.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec
-from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences
+from nof1_causal_lab.models.ssm.compile.state_space import AdditiveRecurrences, ParallelRecurrences
 from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCState, _clip_scale
 from nof1_causal_lab.models.ssm.inference.samplers.particle.context import (
     build_smoother_context,
@@ -151,7 +151,7 @@ def build_marginal_particle_gibbs_kernel(
     if target_accept is None:
         target_accept = _DEFAULT_OPTIONS.param_target_accept
 
-    assert isinstance(target.state_space.recurrence, ParallelRecurrences), (
+    assert isinstance(target.state_space.recurrence, (AdditiveRecurrences, ParallelRecurrences)), (
         "The fitting preflight must establish an associative deterministic recurrence"
     )
     local_target = target.tree_target()
