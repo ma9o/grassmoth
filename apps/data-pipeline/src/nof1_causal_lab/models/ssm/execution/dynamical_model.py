@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 import dynestyx as dsx
+import equinox as eqx
 import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
@@ -23,7 +24,11 @@ from nof1_causal_lab.models.ssm.dynamics.spec import (
 )
 from nof1_causal_lab.models.ssm.dynamics.vector_field import VectorField, VectorFieldArgs
 from nof1_causal_lab.models.ssm.execution.contracts import MeasurementParams
-from nof1_causal_lab.models.ssm.execution.observation_model import compile_observation_model
+from nof1_causal_lab.models.ssm.execution.observation_dispatch import (
+    build_point_observation_sampler,
+)
+from nof1_causal_lab.models.ssm.execution.observation_groups import LawGroup, compile_law_groups
+from nof1_causal_lab.models.ssm.execution.observation_model import grouped_density, grouped_response
 from nof1_causal_lab.models.ssm.execution.supported_normal import SupportedNormal
 
 if TYPE_CHECKING:
@@ -36,8 +41,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.dynamics.spec import DynamicsSpec
     from nof1_causal_lab.models.ssm.execution.contracts import ObservationLaws
-    from nof1_causal_lab.models.ssm.execution.observation_dispatch import ObservationSampleFn
-    from nof1_causal_lab.models.ssm.execution.observation_model import ObservationKernel
 
 
 def continuous_state_evolution(
@@ -62,6 +65,13 @@ class HeterogeneousObservation(dsx.ObservationModel):
 
     measurement: MeasurementParams
     laws: ObservationLaws
+    group_indices: tuple[tuple[int, ...], ...] = eqx.field(static=True)
+
+    def __init__(self, measurement: MeasurementParams, laws: ObservationLaws) -> None:
+        """Own the channel grouping once, with numerical law operands retained as array leaves."""
+        self.measurement = measurement
+        self.laws = laws
+        self.group_indices = tuple(group.indices for group in compile_law_groups(laws))
 
     @override
     def __call__(
@@ -97,8 +107,7 @@ class _ObservationDistribution(dist.Distribution):
 
     _predictor: jax.Array
     _measurement: MeasurementParams
-    _kernel: ObservationKernel
-    _sampler: ObservationSampleFn
+    _groups: tuple[LawGroup, ...]
     _laws: ObservationLaws
 
     @property
@@ -110,12 +119,10 @@ class _ObservationDistribution(dist.Distribution):
         self._predictor = predictor
         self._laws = observation.laws
         self._measurement = observation.measurement
-        compiled = compile_observation_model(
-            observation.laws,
-            manifest_cov=self._measurement.manifest_cov,
+        self._groups = tuple(
+            LawGroup(indices, tuple(observation.laws[index] for index in indices))
+            for indices in observation.group_indices
         )
-        self._kernel = compiled.kernel
-        self._sampler = compiled.point_sampler.sample_point
         super().__init__(
             batch_shape=(),
             event_shape=(int(self._measurement.lambda_mat.shape[0]),),
@@ -125,7 +132,7 @@ class _ObservationDistribution(dist.Distribution):
     @property
     def response(self) -> jax.Array:
         """Declared response/location for observation projection."""
-        return self._kernel.response_fn(self._predictor)
+        return grouped_response(self._groups, self._predictor, self._measurement.manifest_cov)
 
     @property
     def mean(self) -> jax.Array:
@@ -154,12 +161,15 @@ class _ObservationDistribution(dist.Distribution):
 
     def sample(self, key: jax.Array | None, sample_shape: tuple[int, ...] = ()) -> jax.Array:
         assert key is not None  # This stochastic distribution requires a NumPyro PRNG key.
+        sampler = build_point_observation_sampler(
+            self._laws, self._measurement.manifest_cov, groups=self._groups
+        )
         if not sample_shape:
-            return self._sampler(key, self._predictor)
+            return sampler.sample_point(key, self._predictor)
         from math import prod
 
         keys = jax.random.split(key, prod(sample_shape))
-        flat = jax.vmap(lambda k: self._sampler(k, self._predictor))(keys)
+        flat = jax.vmap(lambda k: sampler.sample_point(k, self._predictor))(keys)
         return flat.reshape((*sample_shape, *self.event_shape))
 
     def log_prob(self, value: ArrayLike, intermediates: list[object] | None = None) -> jax.Array:
@@ -169,7 +179,8 @@ class _ObservationDistribution(dist.Distribution):
         filled = jnp.nan_to_num(observation, nan=0.0)
         measurement = self._measurement
         return jnp.asarray(
-            self._kernel.log_prob_fn(
+            grouped_density(
+                self._groups,
                 filled,
                 self._predictor,
                 measurement.manifest_cov,

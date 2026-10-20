@@ -75,6 +75,40 @@ def _group_density(
     return masked_law_log_prob(law, y[indices], mask[indices])
 
 
+def grouped_density(
+    groups: tuple[LawGroup, ...],
+    y: jax.Array,
+    eta: jax.Array,
+    R: jax.Array,
+    mask: jax.Array,
+) -> jax.Array:
+    """Evaluate an already-owned observation grouping with explicit numerical inputs."""
+    return sum(
+        (_group_density(group, y, eta, R, mask) for group in groups),
+        jnp.zeros((), dtype=y.dtype),
+    )
+
+
+def grouped_response(
+    groups: tuple[LawGroup, ...], eta: jax.Array, manifest_cov: jax.Array
+) -> jax.Array:
+    """Project declared responses using the same grouping as the observation density."""
+    values = jnp.zeros_like(eta)
+    for group in groups:
+        native = group.evaluate(eta, jnp.sqrt(jnp.diag(manifest_cov)))
+        if isinstance(native, (CategoricalLawSpec, OrderedLogisticLawSpec)):
+            declared = law_response(native)
+        else:
+            declared = jnp.stack(
+                tuple(
+                    next(iter(law.operands()))[1].response_fn(eta[index])
+                    for index, law in zip(group.indices, group.laws, strict=True)
+                )
+            )
+        values = values.at[jnp.asarray(group.indices)].set(declared)
+    return values
+
+
 def compile_observation_model(
     laws: ObservationLaws,
     *,
@@ -98,26 +132,10 @@ def compile_observation_model(
     groups = compile_law_groups(laws, roles=roles)
 
     def density(y: jax.Array, eta: jax.Array, R: jax.Array, mask: jax.Array) -> jax.Array:
-        return sum(
-            (_group_density(group, y, eta, R, mask) for group in groups),
-            jnp.zeros((), dtype=y.dtype),
-        )
+        return grouped_density(groups, y, eta, R, mask)
 
     def response(eta: jax.Array) -> jax.Array:
-        values = jnp.zeros_like(eta)
-        for group in groups:
-            native = group.evaluate(eta, jnp.sqrt(jnp.diag(manifest_cov)))
-            if isinstance(native, (CategoricalLawSpec, OrderedLogisticLawSpec)):
-                declared = law_response(native)
-            else:
-                declared = jnp.stack(
-                    tuple(
-                        next(iter(law.operands()))[1].response_fn(eta[index])
-                        for index, law in zip(group.indices, group.laws, strict=True)
-                    )
-                )
-            values = values.at[jnp.asarray(group.indices)].set(declared)
-        return values
+        return grouped_response(groups, eta, manifest_cov)
 
     operator = compile_observation_operator(observation_support)
     kernel = ObservationKernel(density, response)

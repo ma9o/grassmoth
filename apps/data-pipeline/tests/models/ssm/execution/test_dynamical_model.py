@@ -18,7 +18,7 @@ from nof1_causal_lab.models.ssm.dynamics.intervention import Intervention
 from nof1_causal_lab.models.ssm.inference import problem as problem_module
 from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
 from tests.support.dynamics import potential_term
-from tests.support.inference import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
+from tests.support.inference import bind_panel_fixture, compile_fit_fixture
 from tests.support.model import load_model_fixture
 
 
@@ -42,7 +42,7 @@ def runtime(monkeypatch):
 
     def constrain(z):
         samples = {"vf_0_p0": z[0]}
-        matrices, _ = assemble_model_matrices(compile_model_fixture(dynamical_model_spec), samples)
+        matrices, _ = assemble_model_matrices(inputs.compiled_dynamical_model, samples)
         return {**samples, **matrices}
 
     parameters = ParameterTransform(
@@ -52,7 +52,9 @@ def runtime(monkeypatch):
         log_prior=lambda z: -jnp.sum(z**2),
     )
     monkeypatch.setattr(
-        problem_module, "prepare_model_parameters", lambda *_: (parameters, {}, {"vf_0_p0"})
+        problem_module,
+        "prepare_model_parameters",
+        lambda *_, **_kwargs: (parameters, {}, {"vf_0_p0"}),
     )
     return problem_module.build_particle_problem(
         inputs.prior_runtime_bundle,
@@ -98,7 +100,7 @@ def test_model_keeps_nonlinear_drift(runtime):
 
 @pytest.mark.inference(concern="sampling")
 def test_exact_target_and_parameter_gradient_trace_through_the_model(runtime):
-    path = jnp.array([[0.1], [0.3], [-0.2]])
+    path = jnp.linspace(0.1, -0.2, runtime.times.size)[:, None]
 
     def evaluate(position):
         context = runtime.context(position, runtime.times)
@@ -113,7 +115,7 @@ def test_exact_target_and_parameter_gradient_trace_through_the_model(runtime):
         ),
         runtime.initial_position,
     )
-    assert factors.shape == (3,)
+    assert factors.shape == (runtime.times.size,)
 
 
 @pytest.mark.inference(concern="sampling")
