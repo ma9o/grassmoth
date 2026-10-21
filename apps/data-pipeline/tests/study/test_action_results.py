@@ -239,7 +239,7 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
             dynamical_model_spec=dynamical_model_spec,
         )
     )
-    staged = edit_and_check(workspace, request, repository.state(repository.head()))
+    staged = edit_and_check(workspace, request, repository.state())
     assert isinstance(staged, Applied)
     attempt = complete_attempt(workspace, applied_attempt(request, staged))
     repository.append(AttemptRecord(seq=2, ts="2026-01-01T00:00:00Z", attempt=attempt))
@@ -307,17 +307,26 @@ def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
             parent_ref=git_oid(1), dynamical_model_spec=DynamicalModelSpec()
         )
     )
-    repository.append(
-        AttemptRecord(
-            seq=1,
-            ts="2026-01-01T00:00:00Z",
-            attempt=EditAttempt(
-                action="edit_model",
-                request=request,
-                outcome=Applied(result=ref, effects=ActionEffects()),
-            ),
-        )
+    publication = AttemptRecord(
+        seq=1,
+        ts="2026-01-01T00:00:00Z",
+        attempt=EditAttempt(
+            action="edit_model",
+            request=request,
+            outcome=Applied(result=ref, effects=ActionEffects()),
+        ),
     )
+    from nof1_causal_lab.storage import arrays
+
+    read_staging = arrays.read_array_bytes
+
+    def publish_during_staging_read(directory, selected):
+        repository.append(publication)
+        return read_staging(directory, selected)
+
+    with monkeypatch.context() as concurrent:
+        concurrent.setattr(arrays, "read_array_bytes", publish_during_staging_read)
+        np.testing.assert_array_equal(store.read_array(identity), values)
     assert not (tmp_path / "BUFFERS/store/arrays" / f"{identity}.npy").exists()
     np.testing.assert_array_equal(ArtifactStore("BUFFERS").read_array(identity), values)
     payload = unpack_result(repository.read_file(repository.head(), "result.msgpack"))

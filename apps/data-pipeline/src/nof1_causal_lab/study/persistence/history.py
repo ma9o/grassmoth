@@ -1,8 +1,9 @@
-"""Git trees select artifacts; commits own action logs and the study journal."""
+"""Git parents record pinned inputs; attempt sequence selects current scientific values."""
 
 from __future__ import annotations
 
 import json
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -28,8 +29,14 @@ from nof1_causal_lab.study.persistence.git_objects import (
     read_file,
     write_tree,
 )
-from nof1_causal_lab.study.records import Applied, StudyRevision
-from nof1_causal_lab.study.state import ArtifactRecord, StudyState
+from nof1_causal_lab.study.records import (
+    ActionMessage,
+    Applied,
+    Rejected,
+    StudyRevision,
+    argument_parents,
+)
+from nof1_causal_lab.study.state import ArtifactRecord, StudyState, apply_effects
 
 
 class StudyRepository:
@@ -42,8 +49,15 @@ class StudyRepository:
         self.path = Path(self.repo.path)
 
     def head(self) -> GitOid:
-        """Return the exact commit currently published as the main study head."""
-        return GitOid(str(self.repo.references["refs/heads/main"].target))
+        """Return the newest applied scientific attempt in submission order."""
+        for revision in reversed(self.attempts()):
+            attempt = revision.record.attempt
+            if isinstance(attempt.outcome, Applied) and attempt.action not in {
+                "data_diff",
+                "model_diff",
+            }:
+                return revision.commit_id
+        raise StudyLookupError("The study has no applied scientific attempts")
 
     def _commit(self, revision: str) -> pygit2.Commit:
         oid = pygit2.Oid(hex=revision)
@@ -58,36 +72,29 @@ class StudyRepository:
         """Read a named file from an exact Git revision without changing the working selection."""
         return read_file(self.repo, revision, name)
 
-    def state(self, revision: str) -> StudyState:
-        """Reconstruct artifact selections and the most recent selected data history at a checkpoint."""
-        tree = self._commit(revision).tree
-        if "artifacts" not in tree:
-            return StudyState()
-        current = {}
-        artifacts = tree["artifacts"].peel(pygit2.Tree)
-        for artifact in artifacts:
-            info = ArtifactRecord(
-                **json.loads(read_file(self.repo, str(artifact.id), "meta.json")),
-                revision=GitOid(str(artifact.id)),
-            )
-            if info.artifact_id != artifact.name:
-                raise StudyLookupError("Artifact tree does not match its scientific identity")
-            current[info.artifact_id] = info
-        data = None
-        for record in reversed(self.records(revision)):
+    def state(self, revision: str | None = None) -> StudyState:
+        """Fold published effects and selected data in submission order, optionally through a revision."""
+        state = StudyState()
+        for record in self.records(revision):
             attempt = record.record.attempt
-            if not isinstance(attempt.outcome, Applied):
+            if not isinstance(attempt.outcome, Applied) or attempt.action in {
+                "data_diff",
+                "model_diff",
+            }:
                 continue
+            state = apply_effects(
+                state, attempt.outcome.effects.produced, attempt.outcome.effects.retracted
+            )
             if attempt.action == "fit":
                 assert isinstance(attempt.request, FitRequest)
-                data = self.fit_source(attempt.request.input.target).data_ref
-                break
-            if attempt.action == "prepare_data" and any(
+                state = state.revised(data=self.fit_source(attempt.request.input.target).data_ref)
+            elif attempt.action == "prepare_data" and any(
                 info.artifact_id == "panel" for info in attempt.outcome.effects.produced
             ):
-                data = DataRef[GitOid, int](revision=record.commit_id, replicate_index=0)
-                break
-        return StudyState(current=current, data=data)
+                state = state.revised(
+                    data=DataRef[GitOid, int](revision=record.commit_id, replicate_index=0)
+                )
+        return state
 
     def fit_source(self, target: FitTarget[GitOid]) -> NewFitTarget[GitOid]:
         """Walk successful fit revisions to the original model and data inputs."""
@@ -124,16 +131,14 @@ class StudyRepository:
             parent_ids=tuple(GitOid(str(parent)) for parent in commit.parent_ids),
         )
 
-    def records(self, revision: str) -> list[StudyRevision]:
-        """Read only the selected Git ancestry, in parent-before-child order."""
-        return [
-            self.record(str(commit.id))
-            for commit in self.repo.walk(
-                pygit2.Oid(hex=revision),
-                pygit2.enums.SortMode.TOPOLOGICAL | pygit2.enums.SortMode.REVERSE,
-            )
-            if "logs" in commit.tree
-        ]
+    def records(self, revision: str | None = None) -> list[StudyRevision]:
+        """Read indexed attempts in submission order, optionally through one attempt's sequence."""
+        if revision is None:
+            return self.attempts()
+        if "logs" not in self._commit(revision).tree:
+            return []
+        seq = self.record(revision).record.seq
+        return [item for item in self.attempts() if item.record.seq <= seq]
 
     def attempts(self) -> list[StudyRevision]:
         """Read all indexed attempts in numerical study-sequence order."""
@@ -194,17 +199,11 @@ class StudyRepository:
         self,
         record: AttemptRecord,
         *,
-        parent_id: str | None = None,
         logs: dict[str, bytes] | None = None,
     ) -> StudyRevision:
-        """Atomically publish the action's tree and advance successful scientific state."""
+        """Publish an independent attempt, deduplicating calls and admitting one question."""
         outcome = record.attempt.outcome
-        advances = isinstance(outcome, Applied) and record.attempt.action not in {
-            "data_diff",
-            "model_diff",
-        }
         attempt_ref = f"refs/attempts/{record.seq}"
-        head_ref = "refs/heads/main"
         log = record.model_dump(mode="json", round_trip=True)
         array_ids: tuple[str, ...] = ()
         with self.repo.transaction() as transaction:
@@ -234,30 +233,33 @@ class StudyRepository:
             if existing is not None:
                 if existing.record.model_dump(mode="json", round_trip=True) != log:
                     raise FileExistsError(f"Attempt {record.seq} already has different content")
-                if parent_id is not None and existing.parent_ids != (parent_id,):
-                    raise FileExistsError(f"Attempt {record.seq} has a different journal parent")
                 return existing
-            transaction.lock_ref(head_ref)
-            head = self.head()
-            parent = parent_id if parent_id is not None else head
-            if advances and parent != head:
-                raise RuntimeError("The serialized study writer lost its journal parent")
-            previous = self._commit(parent).tree
-            artifacts = (
-                self.repo.TreeBuilder(previous["artifacts"].id)
-                if "artifacts" in previous
-                else self.repo.TreeBuilder()
-            )
-            if advances and isinstance(outcome, Applied):
-                for item in outcome.effects.retracted:
-                    if artifacts.get(item.artifact_id) is not None:  # pyright: ignore[reportUnnecessaryComparison] - pygit2 documents None for a missing entry, but its stub returns Object.
-                        artifacts.remove(item.artifact_id)
-                for item in outcome.effects.produced:
-                    artifacts.insert(
-                        item.artifact_id, pygit2.Oid(hex=item.revision), pygit2.GIT_FILEMODE_TREE
+            question_ref = None
+            if record.attempt.action == "edit_question" and isinstance(outcome, Applied):
+                transaction.lock_ref("refs/question")
+                if "refs/question" in self.repo.references:
+                    outcome = Rejected(
+                        code="INPUT_UNAVAILABLE",
+                        subject="inputs",
+                        detail="The question is set by the study's first action",
                     )
+                    record = record.revised(
+                        attempt=record.attempt.revised(outcome=outcome),
+                        messages=(
+                            *record.messages[:-1],
+                            ActionMessage(
+                                timestamp=datetime.fromisoformat(record.ts),
+                                severity="error",
+                                code=outcome.code,
+                                subject=outcome.subject,
+                                detail=outcome.detail,
+                            ),
+                        ),
+                    )
+                    log = record.model_dump(mode="json", round_trip=True)
+                else:
+                    question_ref = "refs/question"
             tree = self.repo.TreeBuilder()
-            tree.insert("artifacts", artifacts.write(), pygit2.GIT_FILEMODE_TREE)
             log_files = {
                 "attempt.json": json.dumps(log, sort_keys=True).encode(),
                 **(logs or {}),
@@ -286,28 +288,30 @@ class StudyRepository:
                 array_ids = tuple(owned_arrays(result))
                 for identity in array_ids:
                     array_ref = f"refs/arrays/{identity}"
-                    transaction.lock_ref(array_ref)
                     if array_ref not in self.repo.references:
-                        transaction.set_target(array_ref, pygit2.Oid(hex=outcome.result))
+                        # Every owner embeds the same content-addressed array.
+                        with suppress(pygit2.AlreadyExistsError):
+                            self.repo.references.create(array_ref, pygit2.Oid(hex=outcome.result))
             tree.insert("logs", log_tree.write(), pygit2.GIT_FILEMODE_TREE)
             timestamp = int(datetime.fromisoformat(record.ts).timestamp())
             signature = pygit2.Signature("nof1-causal-lab", "study@local", timestamp, 0)
             action = record.attempt.action
+            parents = argument_parents(record.attempt, self.attempts())
             oid = self.repo.create_commit(
                 None,
                 signature,
                 signature,
                 f"{action} ({outcome.status})",
                 tree.write(),
-                [pygit2.Oid(hex=parent)],
+                [pygit2.Oid(hex=parent) for parent in parents],
             )
             transaction.set_target(attempt_ref, oid)
             if call_ref is not None:
                 transaction.set_target(call_ref, oid)
             if action_ref is not None:
                 transaction.set_target(action_ref, oid)
-            if advances:
-                transaction.set_target(head_ref, oid, message=f"{action} ({outcome.status})")
+            if question_ref is not None:
+                transaction.set_target(question_ref, oid)
         if isinstance(outcome, Applied):
             from nof1_causal_lab.storage import paths as data_module
 
@@ -315,8 +319,5 @@ class StudyRepository:
             arrays = Path(data_module.store_dir(self.workspace_id)) / "arrays"
             for identity in array_ids:
                 path = arrays / f"{identity}.npy"
-                if path.exists():
-                    path.unlink()
-        return StudyRevision(
-            commit_id=GitOid(str(oid)), parent_ids=(GitOid(str(parent)),), record=record
-        )
+                path.unlink(missing_ok=True)
+        return StudyRevision(commit_id=GitOid(str(oid)), parent_ids=parents, record=record)

@@ -119,5 +119,4 @@ class AttemptPublication(Value):
     """The writer receives the same record; Git publication identity is computed outside it."""
 
     workspace_id: str
-    parent_id: GitOid | None
     record: AttemptRecord

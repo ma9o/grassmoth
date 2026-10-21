@@ -187,11 +187,10 @@ async def evaluate_data_checks_activity(
 
 @activity.defn
 async def read_inputs_activity(activity_input: ReadInputsInput) -> ActionBase:
-    """Capture the publication head and input state, or locate an already saved identical call."""
+    """Read pinned input state or locate an already saved identical call."""
     repository = StudyRepository(activity_input.workspace_id)
     saved = repository.saved_call(activity_input.request)
     return ActionBase(
-        commit_id=repository.head(),
         state=StudyState()
         if saved is not None
         else input_state(repository, activity_input.request),
@@ -220,7 +219,7 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
     journal = StudyRepository(activity_input.workspace_id)
     existing = journal.read_attempt(activity_input.record.seq)
     if existing is not None:
-        return journal.append(existing.record, parent_id=activity_input.parent_id)
+        return existing
     record = activity_input.record
     messages = record.messages
     if isinstance(record.attempt.outcome, Applied):
@@ -261,7 +260,7 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
         logs["progress.json"] = TypeAdapter(tuple[ProgressEvent, ...]).dump_json(
             tuple(read_events(activity_input.workspace_id, record.attempt_id))
         )
-    return journal.append(record, parent_id=activity_input.parent_id, logs=logs)
+    return journal.append(record, logs=logs)
 
 
 @activity.defn

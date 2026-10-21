@@ -230,8 +230,8 @@ The command validates the selected Git snapshot, copies the durable workspace in
 `data/HEALTHDEMO`, and rebuilds stable JSON and trace copies under `data/HEALTHDEMO/fixture/`
 for Storybook. It replaces `data/HEALTHDEMO` as a unit rather than merging,
 and excludes `cache/` and `scratch/`. It exports all Git refs and objects to
-`study/history.bundle` so the tracked fixture retains the main history, attempts and
-artifact trees while its local bare repository remains gitignored. The files in
+`study/history.bundle` so the tracked fixture retains attempt lineage and action
+results while its local bare repository remains gitignored. The files in
 `store/` retain uploaded input tables.
 
 The tracked `data/HEALTHDEMO/study/history.bundle` and `data/HEALTHDEMO/store/` are the fixture's authoritative inputs. Files under `data/HEALTHDEMO/fixture/` are generated projections for Storybook. General behavior tests use small, test-owned fixtures independent of HEALTHDEMO. Regenerate Storybook fixtures with:
@@ -283,10 +283,10 @@ The study facade (tool server, port `8100`) is the source of truth:
 curl -s http://localhost:8100/api/studies/$WORKSPACE_ID/timeline \
   | jq '.attempts[] | {commit_id, seq: .record.seq, attempt: .record.attempt}'
 
-# Read the running call without submitting work
+# Read a running call without submitting work
 curl -s http://localhost:8100/api/studies/$WORKSPACE_ID/timeline > /tmp/study-timeline.json
-ACTION=$(jq -r '.running.action' /tmp/study-timeline.json)
-CALL_ID=$(jq -r '.running.call_id' /tmp/study-timeline.json)
+ACTION=$(jq -r '.running[0].action' /tmp/study-timeline.json)
+CALL_ID=$(jq -r '.running[0].call_id' /tmp/study-timeline.json)
 curl -s "http://localhost:8100/api/studies/$WORKSPACE_ID/$ACTION/$CALL_ID" \
   -o /tmp/action.msgpack
 uv run --directory apps/data-pipeline python - <<'PY'

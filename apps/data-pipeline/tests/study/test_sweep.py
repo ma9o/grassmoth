@@ -11,7 +11,7 @@ from nof1_causal_lab.storage import backend as storage
 from nof1_causal_lab.storage import paths as data_module
 from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.records import AttemptRecord, EditAttempt, Raised
-from nof1_causal_lab.study.sweep import sweep_workspace
+from nof1_causal_lab.study.sweep import collect_completed_runs, sweep_workspace
 
 pytestmark = pytest.mark.contract
 
@@ -54,9 +54,14 @@ def test_offline_run_collection_removes_completed_and_abandoned_runs(monkeypatch
     raised_run = _run_file(workspace_id, "seq-000003")
     unjournaled_run = _run_file(workspace_id, "seq-000004")
 
+    assert collect_completed_runs(workspace_id) == 1
+    assert storage.exists(old_run)
+    assert not storage.exists(raised_run)
+    assert storage.exists(unjournaled_run)
+
     result = sweep_workspace(workspace_id, now_seconds=1_000, collect_runs=True)
 
-    assert result.removed_runs == 3
+    assert result.removed_runs == 2
     assert not storage.exists(old_run)
     assert not storage.exists(raised_run)
     assert not storage.exists(unjournaled_run)

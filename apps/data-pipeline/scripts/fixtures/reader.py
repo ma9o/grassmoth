@@ -74,7 +74,7 @@ class ModelReader:
 
     @cached_property
     def records(self) -> list[StudyRevision]:
-        """Retained journal records reachable from the pinned study commit."""
+        """Indexed journal records through the pinned submission sequence."""
         return self.repository.records(self.commit_id)
 
     @cached_property

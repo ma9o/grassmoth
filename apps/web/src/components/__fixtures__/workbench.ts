@@ -701,33 +701,35 @@ export function workbenchHandlers() {
   const timeline = (): TimelineResponse => ({
     attempts: workbenchJournal,
     dependencies: workbenchDependencies,
-    running: {
-      call_id: callId(14),
-      action: "fit",
-      request: {
+    running: [
+      {
+        call_id: callId(14),
         action: "fit",
-        reasoning: null,
-        input: {
-          target: {
-            kind: "new",
-            dynamical_model_spec_ref: modelId(7),
-            data_ref: { revision: panelId, replicate_index: 0 },
+        request: {
+          action: "fit",
+          reasoning: null,
+          input: {
+            target: {
+              kind: "new",
+              dynamical_model_spec_ref: modelId(7),
+              data_ref: { revision: panelId, replicate_index: 0 },
+            },
+            repeat: 0,
+            settings: settings(13),
           },
-          repeat: 0,
-          settings: settings(13),
         },
+        messages: [
+          {
+            kind: "log",
+            timestamp: "2026-09-16T12:05:00Z",
+            severity: "info",
+            code: "FIT_STARTED",
+            subject: "action",
+            detail: "",
+          },
+        ],
       },
-      messages: [
-        {
-          kind: "log",
-          timestamp: "2026-09-16T12:05:00Z",
-          severity: "info",
-          code: "FIT_STARTED",
-          subject: "action",
-          detail: "",
-        },
-      ],
-    },
+    ],
   });
   return [
     http.get(`/api/studies/${WORKBENCH_WORKSPACE}/timeline`, () => HttpResponse.json(timeline())),

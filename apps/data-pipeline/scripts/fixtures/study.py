@@ -51,8 +51,8 @@ TRACES = {
 
 
 def read_fixture_files(repository: StudyRepository, state: StudyState) -> dict[str, bytes]:
-    """Project retained payloads and logs from the selected Git ancestry."""
-    records = repository.records(repository.head())
+    """Project retained payloads and logs from attempts in submission order."""
+    records = repository.records()
     store = ArtifactStore(repository.workspace_id)
     files = {}
     for aid, filename in ARTIFACTS.items():
@@ -99,7 +99,7 @@ def read_fixture_files(repository: StudyRepository, state: StudyState) -> dict[s
 def project(source: Path, destination: Path | None = None):
     data_module._DATA_URI = str(source.parent)
     repository = StudyRepository(source.name)
-    state = repository.state(repository.head())
+    state = repository.state()
     required: tuple[ArtifactId, ...] = (
         "raw_data",
         "model",
@@ -231,8 +231,7 @@ def build_outputs():
         shutil.copytree(HEALTHDEMO_ROOT / "store", workspace / "store")
         repository = StudyRepository("HEALTHDEMO")
         reader = ModelReader("HEALTHDEMO", at=repository.head())
-        commits = {0: reader.records[0].parent_ids[0]}
-        commits.update({record.record.seq: record.commit_id for record in reader.records})
+        commits = {record.record.seq: record.commit_id for record in reader.records}
         outputs = {
             HEALTHDEMO_ROOT / "fixture" / name: json.loads(content)
             for name, content in read_fixture_files(repository, reader.state).items()

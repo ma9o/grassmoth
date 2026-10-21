@@ -44,7 +44,9 @@ from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.records import (
     Applied,
     AttemptRecord,
+    EditAttempt,
     FitAttempt,
+    PrepareAttempt,
     Raised,
     SimulateAttempt,
 )
@@ -56,6 +58,21 @@ pytestmark = pytest.mark.contract
 
 
 def _publish(repository, *artifacts, retracted=()):
+    if not any(artifact.artifact_id == "model" for artifact in artifacts):
+        # Routing fixtures need retained effects; these result bodies are never read.
+        outcome = Applied(
+            result=GitOid(str(repository.repo.create_blob(msgpack.packb({})))),
+            effects=ActionEffects(produced=artifacts, retracted=retracted),
+        )
+        return repository.append(
+            AttemptRecord(
+                seq=repository.latest_seq() + 1,
+                ts="2026-01-01T00:00:00Z",
+                attempt=PrepareAttempt(action="prepare_data", request=None, outcome=outcome)
+                if artifacts
+                else EditAttempt(action="edit_model", request=None, outcome=outcome),
+            )
+        )
     return repository.append(
         applied_record(
             repository.workspace_id,

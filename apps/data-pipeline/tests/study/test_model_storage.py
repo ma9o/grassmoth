@@ -179,7 +179,7 @@ def _commit(workspace, artifact_id, payload, *, pins=None, retracted=(), reports
         json_files={json_filename(artifact_id, artifact_id): payload},
     )
     # Every lineage carries its question; the first commit adds it alongside.
-    rooted = journal.state(journal.head()).has("question")
+    rooted = journal.state().has("question")
     journal.append(
         applied_record(
             store.workspace_id,
@@ -205,7 +205,7 @@ def _measured(workspace):
 
 def _published_model(workspace, at=None):
     repository = StudyRepository(workspace)
-    state = repository.state(repository.head() if at is None else at)
+    state = repository.state(at)
     return read_model(ArtifactStore(workspace), state.current["model"].revision)
 
 
@@ -295,12 +295,12 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
 
 def test_partial_model_can_be_read_before_any_compilation(workspace):
     repository = StudyRepository(workspace)
-    assert not repository.state(repository.head()).current
+    assert not repository.state().current
     question_root(
         workspace, QuestionSpec(text="Does X change Y?", outcome=ConstructId("construct:y"))
     )
     info = _commit(workspace, "model", {"measurement_clock": "1d"})
-    state = repository.state(repository.head())
+    state = repository.state()
     assert (
         read_question(ArtifactStore(workspace), state.current["question"].revision).text
         == "Does X change Y?"

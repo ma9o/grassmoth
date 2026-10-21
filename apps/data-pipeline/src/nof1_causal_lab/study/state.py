@@ -1,8 +1,8 @@
-"""Study state: the artifact versions a Git commit selects, and their freshness.
+"""Study state: artifact versions selected by successful attempts in submission order.
 
-Git trees select immutable scientific artifacts. Each artifact records its input
-tree OIDs, which identify the facts used by execution. StudyState is the
-runtime projection of a selected commit tree.
+Each artifact records its pinned input OIDs, which identify the facts used by
+execution. StudyState projects the indexed attempts, independently of their
+publication order and Git ancestry.
 
 These are pydantic models (frozen) rather than dataclasses because they
 cross serialization boundaries verbatim: Temporal update/activity payloads
@@ -54,7 +54,7 @@ class ArtifactRecord(Value):
 
 
 class StudyState(Value):
-    """Study state projects the artifact trees selected by one Git commit.
+    """Study state projects the artifacts selected by a sequence of attempts.
 
     ``current`` maps artifact id → the revision info that is *current* for the
     study. Absent key = the artifact does not exist (either never produced,
@@ -110,9 +110,9 @@ class RetractedArtifact(Value):
 
 
 def validate_lineage(state: StudyState, action: ScientificActionId) -> str | None:
-    """The question roots every lineage: it is set first, and only then."""
+    """Require an existing question for its consumers; publication owns question exclusivity."""
     if action == "edit_question":
-        return "The question is set by the study's first action" if state.current else None
+        return None
     return None if state.has("question") else "Set the study question first"
 
 

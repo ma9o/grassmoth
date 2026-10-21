@@ -27,7 +27,23 @@ class SweepResult(BaseModel):
 
 
 def collect_completed_runs(workspace_id: str) -> int:
-    """Delete completed run scratch while holding the action lock or working offline."""
+    """Delete only scratch whose attempt is published; other calls may still be executing."""
+    from nof1_causal_lab.study.persistence.history import StudyRepository
+
+    completed = {
+        f"seq-{revision.record.seq:06d}" for revision in StudyRepository(workspace_id).attempts()
+    }
+    entries = [
+        entry
+        for entry in storage.listdir(data_module.scratch_runs_dir(workspace_id))
+        if entry.rsplit("/", 1)[-1] in completed
+    ]
+    for entry in entries:
+        storage.rm_tree(entry)
+    return len(entries)
+
+
+def _collect_offline_runs(workspace_id: str) -> int:
     entries = storage.listdir(data_module.scratch_runs_dir(workspace_id))
     for entry in entries:
         storage.rm_tree(entry)
@@ -91,7 +107,7 @@ def sweep_workspace(
     """Expire telemetry/caches and optionally collect runs while the study is offline."""
     now = time.time() if now_seconds is None else now_seconds
     if collect_runs:
-        removed_runs = collect_completed_runs(workspace_id)
+        removed_runs = _collect_offline_runs(workspace_id)
     else:
         removed_runs = 0
     removed_events = _sweep_events(

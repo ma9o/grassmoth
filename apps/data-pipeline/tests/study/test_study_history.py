@@ -73,27 +73,108 @@ def _model(store, clock, parent=0):
 
 def test_failed_attempt_and_invalid_publication_do_not_advance_scientific_state(study):
     repository, _ = study
-    base = repository.head()
     attempt_id = uuid4()
     accepted = _record(1, attempt_id=attempt_id)
-    head = repository.append(accepted, parent_id=base).commit_id
-    assert repository.append(accepted, parent_id=base).commit_id == head
+    head = repository.append(accepted).commit_id
+    assert repository.append(accepted).commit_id == head
     persisted = StudyRepository("STUDY")
     assert str(persisted.repo.references[f"refs/actions/{attempt_id}"].target) == head
     with pytest.raises(FileExistsError):
-        repository.append(_record(2, attempt_id=attempt_id), parent_id=head)
-    with pytest.raises(RuntimeError, match="journal parent"):
-        repository.append(_record(2), parent_id=base)
+        repository.append(_record(2, attempt_id=attempt_id))
     assert repository.read_attempt(2) is None
     failed = repository.append(
         _record(2, outcome=Raised(error_type="SavedError", error_message="failure")),
-        parent_id=base,
     ).commit_id
     assert repository.head() == head
     assert repository.record(failed).record.attempt.outcome.status == "raised"
     with pytest.raises(StudyLookupError):
         repository.resolve(at=failed)
     assert [record.record.seq for record in StudyRepository("STUDY").attempts()] == [1, 2]
+
+
+def test_out_of_order_publication_selects_submission_order_and_retains_input_parents(study):
+    from tests.support.action import question_root
+
+    repository, store = study
+    root = question_root("STUDY")
+    earlier, later = _model(store, "1d"), _model(store, "2d")
+    records = []
+    for seq, model, clock in ((2, earlier, "1d"), (3, later, "2d")):
+        record = _record(seq, produced=(model,))
+        records.append(
+            record.revised(
+                attempt=record.attempt.revised(
+                    request=EditModelRequest[GitOid](
+                        input=EditModelInput[GitOid](
+                            parent_ref=repository.question().revision,
+                            dynamical_model_spec=DynamicalModelSpec(measurement_clock=clock),
+                        )
+                    )
+                )
+            )
+        )
+    first, second = records
+    published_second = repository.append(second)
+    published_first = repository.append(first)
+    assert repository.head() == published_second.commit_id
+    assert repository.state().current["model"] == later
+    assert repository.state(published_first.commit_id).current["model"] == earlier
+    assert [item.record.seq for item in repository.records()] == [1, 2, 3]
+    for publication in (published_first, published_second):
+        assert publication.parent_ids == (root.commit_id,)
+        assert "artifacts" not in repository.repo[publication.commit_id].tree
+    assert "refs/heads/main" not in repository.repo.references
+
+    from nof1_causal_lab.actions.contracts.requests import DataDiffRequest
+    from nof1_causal_lab.study.records import failed_attempt
+    from tests.support.git import git_oid
+
+    compared = repository.append(
+        AttemptRecord(
+            seq=4,
+            ts="2026-10-21T00:00:00Z",
+            attempt=failed_attempt(
+                DataDiffRequest[GitOid](
+                    input=DataDiffInput[GitOid](
+                        left_ref=tuple(
+                            DataRef[GitOid, int](revision=identity, replicate_index=0)
+                            for identity in (later.revision, earlier.revision, later.revision)
+                        ),
+                        right_ref=(
+                            DataRef[GitOid, int](revision=root.commit_id, replicate_index=0),
+                            DataRef[GitOid, int](revision=git_oid(999), replicate_index=0),
+                        ),
+                    )
+                ),
+                Rejected(
+                    code="INPUT_UNAVAILABLE", subject="inputs", detail="Not observation inputs"
+                ),
+            ),
+        )
+    )
+    assert compared.parent_ids == (
+        published_second.commit_id,
+        published_first.commit_id,
+        root.commit_id,
+    )
+
+
+def test_question_publication_admits_one_call_and_reuses_its_result(study):
+    from nof1_causal_lab.artifacts.model.question import QuestionSpec
+    from tests.support.action import question_root
+
+    repository, _ = study
+    first = question_root("STUDY", QuestionSpec(text="First?", outcome="construct:outcome"))
+    second = question_root("STUDY", QuestionSpec(text="Second?", outcome="construct:outcome"))
+    assert isinstance(first.record.attempt.outcome, Applied)
+    assert first.parent_ids == ()
+    assert isinstance(second.record.attempt.outcome, Rejected)
+    assert second.record.messages[-1].code == "INPUT_UNAVAILABLE"
+    assert str(repository.repo.references["refs/question"].target) == first.commit_id
+    assert (
+        repository.state().current["question"] == first.record.attempt.outcome.effects.produced[0]
+    )
+    assert question_root("STUDY", QuestionSpec(text="First?", outcome="construct:outcome")) == first
 
 
 @pytest.mark.parametrize("fails", [False, True])
@@ -219,7 +300,8 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
     run_async(study_workflow.StudyWorkflow.execute_action(worker, action))
     leaf = repository.read_attempt(3)
     assert leaf is not None
-    assert leaf.parent_ids == (head,)
+    assert leaf.parent_ids == (root, head)
+    assert "artifacts" not in repository.repo[leaf.commit_id].tree
     assert leaf.record.attempt.action == comparison_action
     assert leaf.record.attempt.request == request
     outcome = leaf.record.attempt.outcome

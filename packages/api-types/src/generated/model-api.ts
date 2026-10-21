@@ -7510,7 +7510,7 @@ export interface components {
         };
         /**
          * StudyState
-         * @description Study state projects the artifact trees selected by one Git commit.
+         * @description Study state projects the artifacts selected by a sequence of attempts.
          *
          *     ``current`` maps artifact id → the revision info that is *current* for the
          *     study. Absent key = the artifact does not exist (either never produced,
@@ -7696,14 +7696,15 @@ export interface components {
         };
         /**
          * TimelineResponse
-         * @description Journal attempts, declared input dependencies, and the currently running action.
+         * @description Journal attempts, declared input dependencies, and all currently running actions.
          */
         readonly TimelineResponse: {
             /** Attempts */
             readonly attempts: readonly components["schemas"]["TimelineRevision"][];
             /** Dependencies */
             readonly dependencies: readonly components["schemas"]["RecordDependency"][];
-            readonly running: components["schemas"]["RunningAction"] | null;
+            /** Running */
+            readonly running: readonly components["schemas"]["RunningAction"][];
         };
         /**
          * TimelineRevision

@@ -161,8 +161,7 @@ function ActionTrace({
  * - simulate: the simulator's log and nothing more; everything the simulation produced is state.
  * - data_diff: which saved observations were compared, the failing checks and their reasons,
  *   and why a variable could not be compared. The comparison evidence belongs to the state panes.
- * An action the study workflow is still executing has no timeline node yet, so it streams in
- * under the head it started from, with the progress it reports.
+ * Executing calls have no completed timeline node yet, so each streams its own progress.
  */
 export function ActionRecord({
   workspaceId,
@@ -174,7 +173,7 @@ export function ActionRecord({
   workspaceId: string;
   context: ScopeContext | null;
   tick: TimelineRevision | undefined;
-  running: RunningAction | null;
+  running: readonly RunningAction[];
   useActionTrace: UseActionTrace;
 }) {
   const request = tick?.record.attempt.request;
@@ -257,26 +256,29 @@ export function ActionRecord({
             )}
           </>
         ) : (
-          !running && <p className="px-4 text-xs text-muted-foreground">No actions yet.</p>
+          running.length === 0 && (
+            <p className="px-4 text-xs text-muted-foreground">No actions yet.</p>
+          )
         )}
-        {running && (
+        {running.map((call) => (
           <section
+            key={call.call_id}
             role="log"
             aria-live="polite"
-            aria-label={`${running.action} · running`}
+            aria-label={`${call.action} · running`}
             className="border-t pt-2 first:border-t-0 first:pt-0"
           >
             <h3 className="flex items-center gap-2 px-4 pb-1 text-[11px] font-medium">
               <LoaderCircle className="size-3.5 animate-spin" aria-hidden="true" />
-              {running.action} · running
+              {call.action} · running
             </h3>
-            <ActionReasoning reasoning={running.request.reasoning} />
-            <ActionLabels messages={running.messages.filter((message) => message.kind === "log")} />
-            {running.action === "prepare_data" && (
-              <AttemptProgress workspaceId={workspaceId} running={running} />
+            <ActionReasoning reasoning={call.request.reasoning} />
+            <ActionLabels messages={call.messages.filter((message) => message.kind === "log")} />
+            {call.action === "prepare_data" && (
+              <AttemptProgress workspaceId={workspaceId} running={call} />
             )}
           </section>
-        )}
+        ))}
       </div>
     </div>
   );

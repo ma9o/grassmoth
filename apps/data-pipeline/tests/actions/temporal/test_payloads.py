@@ -106,7 +106,7 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
                     ]
                     activity_payloads = converter.to_payloads(inputs)
                     journal = AttemptPublication(
-                        workspace_id="test", parent_id=None,
+                        workspace_id="test",
                         record=AttemptRecord(
                             seq=1, ts="2026-10-01T00:00:00Z", attempt_id=restored.attempt_id,
                             attempt=EditAttempt(action="edit_model", request=restored.request,

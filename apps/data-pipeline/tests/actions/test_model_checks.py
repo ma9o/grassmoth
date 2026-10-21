@@ -35,7 +35,7 @@ def test_edit_checks_depend_only_on_model_and_question_inputs(tmp_path, monkeypa
         ),
     )
     repository = StudyRepository("checks")
-    root = repository.state(repository.head())
+    root = repository.state()
 
     def unexpected(*_args, **_kwargs):
         pytest.fail("Model edits must not access observations or generate predictions")

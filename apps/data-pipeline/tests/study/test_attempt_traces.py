@@ -73,6 +73,7 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     from tests.support.helpers import write_question
 
     question = write_question(ArtifactStore("ws-trace"))
+    previous_state = StudyRepository("ws-trace").state()
     base = asyncio.run(
         read_inputs_activity(
             ReadInputsInput(
@@ -108,7 +109,6 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     assert {message.kind for message in live.messages} == {"log", "progress", "trace"}
     publication_input = AttemptPublication(
         workspace_id="ws-trace",
-        parent_id=base.commit_id,
         record=AttemptRecord(
             seq=1,
             attempt_id=attempt_id,
@@ -123,7 +123,8 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     )
 
     publication = asyncio.run(journal_activity(publication_input))
-    assert StudyRepository("ws-trace").head() == base.commit_id
+    assert base.state.current["question"] == question
+    assert StudyRepository("ws-trace").state() == previous_state
     storage.rm_tree(data_module.scratch_run_dir("ws-trace", "seq-000001"))
     storage.rm_tree(data_module.scratch_events_dir("ws-trace"))
     asyncio.run(journal_activity(publication_input))

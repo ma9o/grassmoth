@@ -393,7 +393,7 @@ def test_failed_check_publishes_no_state(workspace, monkeypatch):
             ),
             root,
         )
-    assert StudyRepository(workspace).state(StudyRepository(workspace).head()) == root
+    assert StudyRepository(workspace).state() == root
 
 
 def test_invalid_model_rejected_before_any_write(workspace):

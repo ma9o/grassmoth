@@ -20,6 +20,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pygit2
 
+from nof1_causal_lab.actions.errors import execution_failure_handler
 from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid, GitRef
 from nof1_causal_lab.storage import backend as storage
 from nof1_causal_lab.storage import paths as data_module
@@ -97,20 +98,23 @@ class ArtifactStore:
 
         return decode_array(identity, self.read_array_bytes(identity))
 
+    @execution_failure_handler
     def read_array_bytes(self, identity: str) -> bytes:
-        """Read retained NPY bytes from a published result or its execution buffer."""
+        """Read staging once; publication removing it redirects the read to its retained owner."""
         from nof1_causal_lab.storage.arrays import read_array_bytes
         from nof1_causal_lab.study.persistence.codec import unpack_result
 
-        ref = f"refs/arrays/{identity}"
-        if ref in self.repo.references:
+        try:
+            return read_array_bytes(storage.join(self._root, "arrays"), identity)
+        except FileNotFoundError:
+            # Publication installs the immutable owner before deleting staging.
             from nof1_causal_lab.study.persistence.arrays import owned_arrays
 
+            ref = f"refs/arrays/{identity}"
             target = self.repo.references[ref].resolve().target
             assert isinstance(target, pygit2.Oid)
             payload = unpack_result(read_blob(self.repo, target))
             return owned_arrays(payload)[identity].npy
-        return read_array_bytes(storage.join(self._root, "arrays"), identity)
 
     def write_result(self, result: BaseModel) -> GitOid:
         """Store the exact public result, including display values evaluated during execution."""

@@ -1,6 +1,8 @@
 """Content-addressed numerical values for native distribution constructor trees."""
 
 import re
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 
 import numpy as np
 
@@ -32,9 +34,18 @@ def write_owned_array(directory: str, value: NumericalArray) -> str:
     identity = value.identity
     storage.makedirs(directory)
     path = storage.join(directory, f"{identity}.npy")
-    if not storage.exists(path):
+    if storage.is_remote():
         with storage.open_file(path, "wb") as stream:
             stream.write(value.npy)
+    else:
+        with NamedTemporaryFile(dir=directory, delete=False) as stream:
+            temporary = Path(stream.name)
+            try:
+                stream.write(value.npy)
+                stream.close()
+                temporary.replace(path)
+            finally:
+                temporary.unlink(missing_ok=True)
     return identity
 
 

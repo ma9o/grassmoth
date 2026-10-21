@@ -210,7 +210,7 @@ it("keeps JSON requests, timeline responses and HTTP errors alongside binary act
   const sent = fixtureValue(fetcher.mock.calls[0])[0];
   expect(sent.headers.get("Content-Type")).toBe("application/json");
   expect(await sent.json()).toEqual(request);
-  const timeline = { attempts: [], dependencies: [], running: null };
+  const timeline = { attempts: [], dependencies: [], running: [] };
   fetcher.mockResolvedValueOnce(Response.json(timeline));
   expect(
     (

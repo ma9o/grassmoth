@@ -343,25 +343,44 @@ def argument_revisions(attempt: ActionAttempt) -> tuple[tuple[str, GitOid], ...]
     return tuple(references)
 
 
-def record_dependencies(revisions: Sequence[StudyRevision]) -> list[RecordDependency]:
-    """Join declared input references to their first successful publication."""
-    producers: dict[GitOid, int] = {}
+def _producer_index(revisions: Sequence[StudyRevision]) -> dict[GitOid, StudyRevision]:
+    producers: dict[GitOid, StudyRevision] = {}
     for revision in revisions:
         record = revision.record
         outcome = record.attempt.outcome
         if not isinstance(outcome, Applied):
             continue
-        producers[revision.commit_id] = record.seq
+        producers[revision.commit_id] = revision
         for artifact in outcome.effects.produced:
-            producers.setdefault(artifact.revision, record.seq)
+            producers.setdefault(artifact.revision, revision)
+    return producers
+
+
+def argument_parents(
+    attempt: ActionAttempt, revisions: Sequence[StudyRevision]
+) -> tuple[GitOid, ...]:
+    """Resolve pinned inputs to distinct successful producer commits in request order."""
+    producers = _producer_index(revisions)
+    return tuple(
+        dict.fromkeys(
+            producer.commit_id
+            for _, identity in argument_revisions(attempt)
+            if (producer := producers.get(identity)) is not None
+        )
+    )
+
+
+def record_dependencies(revisions: Sequence[StudyRevision]) -> list[RecordDependency]:
+    """Join declared input references to their first successful publication."""
+    producers = _producer_index(revisions)
     dependencies: list[RecordDependency] = []
     for revision in revisions:
         record = revision.record
         arguments: dict[tuple[int, str], None] = {}
         for name, identity in argument_revisions(record.attempt):
             source = producers.get(identity)
-            if source is not None and source < record.seq:
-                arguments[source, name] = None
+            if source is not None and source.record.seq < record.seq:
+                arguments[source.record.seq, name] = None
         dependencies.extend(
             RecordDependency(seq=record.seq, source_seq=source, argument=name)
             for source, name in arguments
@@ -372,7 +391,6 @@ def record_dependencies(revisions: Sequence[StudyRevision]) -> list[RecordDepend
 class ActionBase(Value):
     """Immutable execution base, captured before an action starts."""
 
-    commit_id: GitOid
     state: StudyState
     saved: StudyRevision | None = None
 

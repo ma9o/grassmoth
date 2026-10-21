@@ -40,7 +40,7 @@ const tick: TimelineRevision = {
     },
   },
 };
-const render = (selected: TimelineRevision | undefined, running: RunningAction | null = null) =>
+const render = (selected: TimelineRevision | undefined, running: readonly RunningAction[] = []) =>
   renderToStaticMarkup(
     createElement(ActionRecord, {
       workspaceId: "STORYBOOK",
@@ -74,25 +74,43 @@ describe("action reasoning", () => {
   });
 
   it("shows intent before a running call's messages", () => {
-    const html = render(undefined, {
-      action: "simulate",
-      call_id: `call:${"2".repeat(64)}`,
-      request,
-      messages: [
-        {
-          kind: "log",
-          timestamp: tick.record.ts,
-          severity: "info",
-          code: "SIMULATE_STARTED",
-          subject: "action",
-          detail: "",
-        },
-      ],
-    });
+    const html = render(undefined, [
+      {
+        action: "simulate",
+        call_id: `call:${"2".repeat(64)}`,
+        request,
+        messages: [
+          {
+            kind: "log",
+            timestamp: tick.record.ts,
+            severity: "info",
+            code: "SIMULATE_STARTED",
+            subject: "action",
+            detail: "",
+          },
+        ],
+      },
+    ]);
     expect(html.indexOf('aria-label="Reasoning"')).toBeLessThan(html.indexOf("SIMULATE_STARTED"));
   });
 
   it("omits the section when no reasoning was supplied", () => {
     expect(render(tick)).not.toContain('aria-label="Reasoning"');
+  });
+
+  it("shows every concurrent call with its own reasoning", () => {
+    const html = render(
+      undefined,
+      [1, 2].map((index) => ({
+        action: "simulate",
+        call_id: `call:${String(index).repeat(64)}`,
+        request: { ...request, reasoning: `Arm ${index}` },
+        messages: [],
+      })),
+    );
+    expect(html.match(/aria-label="simulate · running"/g)).toHaveLength(2);
+    expect(html).toContain("Arm 1");
+    expect(html).toContain("Arm 2");
+    expect(html).not.toContain("No actions yet.");
   });
 });

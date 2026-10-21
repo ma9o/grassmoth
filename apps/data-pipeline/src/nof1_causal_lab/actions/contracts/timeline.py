@@ -33,8 +33,8 @@ class TimelineRevision(Value):
 
 
 class TimelineResponse(Value):
-    """Journal attempts, declared input dependencies, and the currently running action."""
+    """Journal attempts, declared input dependencies, and all currently running actions."""
 
     attempts: tuple[TimelineRevision, ...]
     dependencies: tuple[RecordDependency, ...]
-    running: RunningAction | None
+    running: tuple[RunningAction, ...]

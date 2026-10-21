@@ -3264,6 +3264,27 @@
   "selected_seq": 7,
   "state": {
     "current": {
+      "question": {
+        "artifact_id": "question",
+        "revision": "96c5db3928236599a333bb61db0a56b9ea50138c",
+        "derived_from": {},
+        "produced_by": "edit_question",
+        "created_at": "2026-07-08T12:00:00Z",
+        "source": {
+          "kind": "result",
+          "result": "ccb8b3ee5a5de27b12901cd0b26daf3ea454b9d7"
+        }
+      },
+      "raw_data": {
+        "artifact_id": "raw_data",
+        "revision": "1aa1c3d2b8184263133ce58b3e0ed710111551ee",
+        "derived_from": {},
+        "produced_by": "prepare_data",
+        "created_at": "2026-07-08T12:00:00Z",
+        "source": {
+          "kind": "files"
+        }
+      },
       "model": {
         "artifact_id": "model",
         "revision": "bc66ed1d9dd8ac49e5fe29efe5e994a9adc9d83f",
@@ -3290,27 +3311,6 @@
         "source": {
           "kind": "result",
           "result": "11538444e19a2d1dbf5668a8351630f50d96937c"
-        }
-      },
-      "question": {
-        "artifact_id": "question",
-        "revision": "96c5db3928236599a333bb61db0a56b9ea50138c",
-        "derived_from": {},
-        "produced_by": "edit_question",
-        "created_at": "2026-07-08T12:00:00Z",
-        "source": {
-          "kind": "result",
-          "result": "ccb8b3ee5a5de27b12901cd0b26daf3ea454b9d7"
-        }
-      },
-      "raw_data": {
-        "artifact_id": "raw_data",
-        "revision": "1aa1c3d2b8184263133ce58b3e0ed710111551ee",
-        "derived_from": {},
-        "produced_by": "prepare_data",
-        "created_at": "2026-07-08T12:00:00Z",
-        "source": {
-          "kind": "files"
         }
       }
     },

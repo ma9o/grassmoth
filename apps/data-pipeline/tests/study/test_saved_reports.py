@@ -102,7 +102,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
                 evaluate_model_checks_activity(
                     EvaluateChecksInput(
                         workspace_id=workspace,
-                        state=repository.state(repository.head()),
+                        state=repository.state(),
                         applied=applied,
                         request=request,
                     )
@@ -117,7 +117,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
                 evaluate_data_checks_activity(
                     EvaluateChecksInput(
                         workspace_id=workspace,
-                        state=repository.state(repository.head()),
+                        state=repository.state(),
                         applied=applied,
                         request=request,
                     )
@@ -140,7 +140,6 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         )
         publication = AttemptPublication(
             workspace_id=workspace,
-            parent_id=repository.head(),
             record=record,
         )
         assert len(publication.model_dump_json().encode()) < 20_000

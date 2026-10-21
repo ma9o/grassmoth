@@ -25,14 +25,6 @@ def open_repository(workspace_id: str, path: Path | None = None) -> pygit2.Repos
     repository.config["nof1.format"] = 28
     repository.config["user.name"] = "nof1-causal-lab"
     repository.config["user.email"] = "study@local"
-    signature = pygit2.Signature("nof1-causal-lab", "study@local", 0, 0)
-    root = repository.create_commit(
-        None, signature, signature, "Study root", repository.TreeBuilder().write(), []
-    )
-    with repository.transaction() as transaction:
-        transaction.lock_ref("refs/heads/main")
-        if "refs/heads/main" not in repository.references:
-            transaction.set_target("refs/heads/main", root)
     return repository
 
 

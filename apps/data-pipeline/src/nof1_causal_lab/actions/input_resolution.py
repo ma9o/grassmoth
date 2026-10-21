@@ -1,4 +1,4 @@
-"""Resolve HTTP revision selectors to immutable scientific inputs at one journal head."""
+"""Resolve HTTP revision selectors to immutable scientific inputs in submission order."""
 
 from __future__ import annotations
 
@@ -54,26 +54,26 @@ def resolve_action_inputs(
 ]:
     """Pin selectors before call identity, keeping unpublished and failed outputs ineligible.
 
-    Question, model and panel selectors use the current artifact tree, honoring retractions
-    and input freshness. Simulation selectors use the newest applied simulation
-    commit in that same head's ancestry. Explicit hashes retain their meaning.
+    Question, model and panel selectors use derived current selections, honoring retractions
+    and input freshness. Simulation and fit selectors use submission order.
+    Explicit hashes retain their meaning.
     """
-    head = repository.head()
+    records = repository.records()
+    state = repository.state(records[-1].commit_id) if records else StudyState()
     contents: Mapping[str, bytes] = dict[str, bytes]()
 
     @cache
     def latest(kind: RevisionInputKind) -> GitOid:
         if kind == "model_parent":
-            return latest("model" if repository.state(head).has("model") else "question")
+            return latest("model" if state.has("model") else "question")
         if kind == "simulation" or kind == "fit":
-            for revision in reversed(repository.records(head)):
+            for revision in reversed(records):
                 attempt = revision.record.attempt
                 if attempt.action == ("simulate" if kind == "simulation" else "fit") and isinstance(
                     attempt.outcome, Applied
                 ):
                     return revision.commit_id
         else:
-            state = repository.state(head)
             artifact = state.get(kind)
             if artifact is not None and not is_stale(state, kind):
                 return artifact.revision

@@ -32,7 +32,7 @@ export interface CausalModelAssetViewProps {
   attempts: readonly TimelineRevision[];
   dependencies: StudyJournal["dependencies"];
   useActionTrace: UseActionTrace;
-  running: RunningAction | null;
+  running: readonly RunningAction[];
 }
 
 /**
@@ -341,7 +341,7 @@ function ModelRevision({
               tick={tick}
               running={
                 // Work still running has no completed timeline node yet.
-                running && focusSeq === latest ? running : null
+                focusSeq === latest ? running : []
               }
               useActionTrace={useActionTrace}
             />

@@ -241,10 +241,7 @@ class TestDerivedCurrentState:
 
         # Persisting a revision is not the commit boundary. Until an applied
         # transition records it, readers continue to see the prior state.
-        assert (
-            StudyRepository(workspace).state(StudyRepository(workspace).head()).get("model")
-            == first
-        )
+        assert StudyRepository(workspace).state().get("model") == first
 
         self._append(
             workspace,
@@ -253,10 +250,7 @@ class TestDerivedCurrentState:
             produced=[second],
         )
 
-        assert (
-            StudyRepository(workspace).state(StudyRepository(workspace).head()).get("model")
-            == second
-        )
+        assert StudyRepository(workspace).state().get("model") == second
 
     def test_rejected_and_raised_effects_are_not_current(self, workspace):
         store = ArtifactStore(workspace)
@@ -286,7 +280,7 @@ class TestDerivedCurrentState:
             status="raised",
         )
 
-        assert StudyRepository(workspace).state(StudyRepository(workspace).head()).current == {}
+        assert StudyRepository(workspace).state().current == {}
 
     def test_applied_retraction_removes_optional_output(self, workspace):
         store = ArtifactStore(workspace)
@@ -303,7 +297,7 @@ class TestDerivedCurrentState:
             produced=[panel_v1],
         )
 
-        state_with_panel = StudyRepository(workspace).state(StudyRepository(workspace).head())
+        state_with_panel = StudyRepository(workspace).state()
         assert state_with_panel.get("panel") == panel_v1
 
         self._append(
@@ -319,5 +313,5 @@ class TestDerivedCurrentState:
             ],
         )
 
-        state_without_panel = StudyRepository(workspace).state(StudyRepository(workspace).head())
+        state_without_panel = StudyRepository(workspace).state()
         assert state_without_panel.get("panel") is None

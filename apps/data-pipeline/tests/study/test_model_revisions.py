@@ -165,7 +165,6 @@ def test_model_diff_addresses_question_and_model_without_checkpoint_traversal(wo
                 outcome=Raised(error_type="RuntimeError", error_message="Failed"),
             ),
         ),
-        parent_id=edited.commit_id,
     )
     assert failed.parent_ids == (edited.commit_id,)
     panel = ArtifactStore(workspace).write_artifact(

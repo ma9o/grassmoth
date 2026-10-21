@@ -13,10 +13,10 @@ export function journalPollIntervalMs(active: boolean): number {
   return active ? 500 : 10_000;
 }
 
-/** The slim call log and the call currently executing; scientific results are read by replay. */
+/** The slim call log and all executing calls; scientific results are read by replay. */
 export interface StudyJournal {
   seq: number;
-  running: RunningAction | null;
+  running: readonly RunningAction[];
   attempts: readonly TimelineRevision[];
   dependencies: readonly RecordDependency[];
 }
@@ -40,7 +40,10 @@ export async function readStudyJournal(
   return {
     seq,
     running: data.running,
-    attempts: held?.seq === seq ? held.attempts : data.attempts,
+    attempts:
+      held?.seq === seq && held.attempts.length === data.attempts.length
+        ? held.attempts
+        : data.attempts,
     dependencies: data.dependencies,
   };
 }
@@ -56,7 +59,7 @@ export function useStudyJournal(workspaceId: string) {
         signal,
       ),
     refetchInterval: (query) =>
-      journalPollIntervalMs(!query.state.data || query.state.data.running !== null),
+      journalPollIntervalMs(!query.state.data || query.state.data.running.length > 0),
     staleTime: 0,
     gcTime: 0,
     retry: false,

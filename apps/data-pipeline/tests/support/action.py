@@ -105,7 +105,7 @@ def applied_record(
             case _:
                 raise TypeError("A publication fixture needs an owned action result")
     repository, store = StudyRepository(workspace_id), ArtifactStore(workspace_id)
-    state = staged_state(repository.state(repository.head()), result.effects)
+    state = staged_state(repository.state(), result.effects)
     if not state.has("question"):
         from tests.support.helpers import write_question
 

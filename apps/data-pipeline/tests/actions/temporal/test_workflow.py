@@ -199,9 +199,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
 
                 def state(record=None):
                     repository = StudyRepository(workspace_id)
-                    return repository.state(
-                        record.commit_id if record is not None else repository.head()
-                    )
+                    return repository.state(record.commit_id if record is not None else None)
 
                 rejected = await execute(
                     EditModelRequest[GitOid](
@@ -488,7 +486,7 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                         result_type=cast("type[CallProgress]", CallProgress),
                     )
                     await handle.get_update_handle(str(progress.attempt_id)).result()
-                assert (await _timeline(workspace_id, clients)).running is None
+                assert (await _timeline(workspace_id, clients)).running == ()
                 model = await _submit(
                     workspace_id,
                     EditModelRequest[RevisionSelector](
@@ -514,10 +512,11 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                     PrepareDataRequest[RevisionSelector, SourceFolder](input=_PREPARATION),
                     clients,
                 )
-                while (
-                    running := await study_interface._running_action(workspace_id, clients)
-                ) is None:
+                while not (
+                    running_calls := await study_interface._running_actions(workspace_id, clients)
+                ):
                     await asyncio.sleep(0.05)
+                (running,) = running_calls
                 assert isinstance(preparing, RunningPoll)
                 assert running.call_id == preparing.call_id
                 assert running.action == "prepare_data"
@@ -530,10 +529,10 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                 # A terminated workflow can never finish the attempt its memo still names.
                 await handle.terminate()
                 memo = await (await handle.describe()).memo_value(
-                    RUNNING_ACTION_MEMO, type_hint=RunningCall
+                    RUNNING_ACTION_MEMO, type_hint=tuple[RunningCall, ...]
                 )
-                assert memo.request == running.request
-                assert (await _timeline(workspace_id, clients)).running is None
+                assert memo[0].request == running.request
+                assert (await _timeline(workspace_id, clients)).running == ()
         finally:
             release.set()
             await env.shutdown()

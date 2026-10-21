@@ -27,7 +27,7 @@ def test_read_facade_serves_reads_and_rejects_actions(monkeypatch, tmp_path):
     assert client.get("/api/workspaces").headers["X-Actions-Enabled"] == "false"
     status = client.get("/api/studies/WS-READONLY/timeline")
     assert status.status_code == 200
-    assert status.json() == {"attempts": [], "dependencies": [], "running": None}
+    assert status.json() == {"attempts": [], "dependencies": [], "running": []}
 
     action = client.post(
         "/api/studies/WS-READONLY/fit",

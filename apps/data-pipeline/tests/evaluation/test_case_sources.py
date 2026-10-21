@@ -110,7 +110,7 @@ def test_action_artifact_revision_is_not_its_journal_commit(tmp_path, monkeypatc
                 }
             ],
             "dependencies": [],
-            "running": None,
+            "running": [],
         }
     ).encode()
     monkeypatch.setattr(

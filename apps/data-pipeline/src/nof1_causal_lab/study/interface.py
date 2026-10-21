@@ -151,9 +151,9 @@ async def _study_handle(
     )
 
 
-async def _running_action(
+async def _running_actions(
     workspace_id: str, clients: TemporalClientProvider
-) -> RunningAction | None:
+) -> tuple[RunningAction, ...]:
     from temporalio.client import WorkflowExecutionStatus
     from temporalio.service import RPCError, RPCStatusCode
 
@@ -167,26 +167,34 @@ async def _running_action(
         )
     except RPCError as exc:
         if exc.status == RPCStatusCode.NOT_FOUND:
-            return None
+            return ()
         raise
     if description.status != WorkflowExecutionStatus.RUNNING:
-        return None
-    running = await description.memo_value(RUNNING_ACTION_MEMO, None, type_hint=RunningCall)
-    if running is None:
-        return None
-    log = await asyncio.to_thread(
-        collect_call_log,
-        workspace_id,
-        seq=running.seq,
-        attempt_id=running.attempt_id,
-        messages=running.messages,
-        at=datetime.now(UTC),
+        return ()
+    running = await description.memo_value(
+        RUNNING_ACTION_MEMO, (), type_hint=tuple[RunningCall, ...]
     )
-    return RunningAction(
-        call_id=call_identity(running.request),
-        action=running.request.action,
-        request=running.request,
-        messages=log.messages,
+    logs = await asyncio.gather(
+        *(
+            asyncio.to_thread(
+                collect_call_log,
+                workspace_id,
+                seq=call.seq,
+                attempt_id=call.attempt_id,
+                messages=call.messages,
+                at=datetime.now(UTC),
+            )
+            for call in running
+        )
+    )
+    return tuple(
+        RunningAction(
+            call_id=call_identity(call.request),
+            action=call.request.action,
+            request=call.request,
+            messages=log.messages,
+        )
+        for call, log in zip(running, logs, strict=True)
     )
 
 
@@ -411,5 +419,5 @@ async def get_timeline(
     return TimelineResponse(
         attempts=tuple(attempts),
         dependencies=tuple(record_dependencies(records)),
-        running=await _running_action(workspace_id, clients) if actions_enabled() else None,
+        running=await _running_actions(workspace_id, clients) if actions_enabled() else (),
     )

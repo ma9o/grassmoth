@@ -1,7 +1,9 @@
 """Tests for replay-safe study workflow helpers."""
 
+from __future__ import annotations
+
 import asyncio
-from typing import Any
+from typing import TYPE_CHECKING, Any, cast
 from unittest.mock import AsyncMock, MagicMock, Mock
 from uuid import uuid4
 
@@ -15,8 +17,19 @@ from nof1_causal_lab.actions.temporal.activity_policy import (
     emit_progress,
     temporal_failure,
 )
+from nof1_causal_lab.actions.temporal.study.messages import ActionRequest
+from nof1_causal_lab.actions.temporal.study.workflow import StudyWorkflow
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
+    from nof1_causal_lab.actions.contracts.call_state import CallProgress
 
 pytestmark = pytest.mark.contract
+
+
+async def _execute_action(machine: StudyWorkflow, request: ActionRequest) -> CallProgress:
+    return await cast("Awaitable[CallProgress]", StudyWorkflow.execute_action(machine, request))
 
 
 @pytest.mark.parametrize("fails", [False, True])
@@ -148,7 +161,7 @@ def test_failed_fit_has_one_compute_attempt_and_only_journals_the_failure(
     from temporalio.exceptions import ActivityError, RetryState
 
     from nof1_causal_lab.actions.temporal.study import workflow as study_workflow
-    from nof1_causal_lab.actions.temporal.study.messages import ActionRequest, StudyInit
+    from nof1_causal_lab.actions.temporal.study.messages import StudyInit
     from nof1_causal_lab.study.records import ActionBase
     from nof1_causal_lab.study.state import StudyState
     from tests.support.git import git_oid
@@ -162,7 +175,7 @@ def test_failed_fit_has_one_compute_attempt_and_only_journals_the_failure(
         }
     )
     request = ActionRequest.model_validate({"request": {"action": kind, "input": payload}})
-    base = ActionBase(commit_id=git_oid(1), state=StudyState())
+    base = ActionBase(state=StudyState())
     error = ActivityError(
         "provider timeout",
         scheduled_event_id=1,
@@ -175,15 +188,119 @@ def test_failed_fit_has_one_compute_attempt_and_only_journals_the_failure(
     execute = AsyncMock(side_effect=[base, error])
     monkeypatch.setattr(study_workflow.workflow, "execute_activity", execute)
     monkeypatch.setattr(study_workflow.workflow, "now", lambda: datetime(2026, 1, 1, tzinfo=UTC))
+    monkeypatch.setattr(study_workflow.workflow, "upsert_memo", Mock())
     monkeypatch.setattr(study_workflow, "validate_lineage", lambda *_: None)
     runner = study_workflow.StudyWorkflow(StudyInit(workspace_id="test"))
     journal = AsyncMock()
     monkeypatch.setattr(runner, "_journal", journal)
-    monkeypatch.setattr(runner, "_report_progress", Mock())
-    asyncio.run(runner._execute_action(request))
+    asyncio.run(_execute_action(runner, request))
     assert (
         execute.call_count == 2
     )  # Read inputs, then compute; no checks or scientific publication.
     assert execute.call_args.kwargs["retry_policy"].maximum_attempts == attempts
     assert journal.await_args is not None
     assert journal.await_args.args[-1].outcome.status == "raised"
+
+
+def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monkeypatch):
+    from datetime import UTC, datetime
+
+    from nof1_causal_lab.actions.contracts.call_state import CompletedCall, RunningCall
+    from nof1_causal_lab.actions.temporal.client import RUNNING_ACTION_MEMO
+    from nof1_causal_lab.actions.temporal.study import workflow as study_workflow
+    from nof1_causal_lab.actions.temporal.study.messages import StudyInit
+    from nof1_causal_lab.study.records import (
+        ActionBase,
+        Raised,
+        StagedFitAttempt,
+        StudyRevision,
+        failed_attempt,
+    )
+    from nof1_causal_lab.study.state import ArtifactRecord, StudyState
+    from tests.support.git import git_oid
+
+    async def scenario():
+        started = [asyncio.Event(), asyncio.Event()]
+        release = [asyncio.Event(), asyncio.Event()]
+        executions = []
+        publications = []
+        memos = []
+        state = StudyState(
+            current={
+                "question": ArtifactRecord(
+                    artifact_id="question",
+                    revision=git_oid(1),
+                )
+            }
+        )
+
+        async def execute(name, payload, **_kwargs):
+            name = name if isinstance(name, str) else name.__name__
+            if name == "read_inputs_activity":
+                await asyncio.sleep(0)
+                return ActionBase(state=state)
+            if name == "run_action_activity":
+                index = payload.request.input.repeat
+                executions.append(index)
+                started[index].set()
+                await release[index].wait()
+                return StagedFitAttempt(
+                    action="fit",
+                    request=payload.request,
+                    outcome=Raised(error_type=f"Arm{index}", error_message=f"arm {index}"),
+                )
+            if name == "complete_result_activity":
+                return failed_attempt(payload.attempt.request, payload.attempt.outcome)
+            if name == "journal_activity":
+                publications.append(payload.record)
+                return StudyRevision(
+                    record=payload.record,
+                    parent_ids=(),
+                    commit_id=git_oid(100 + payload.record.seq),
+                )
+            assert name == "collect_completed_runs_activity"
+            return None
+
+        monkeypatch.setattr(study_workflow.workflow, "execute_activity", execute)
+        monkeypatch.setattr(
+            study_workflow.workflow, "now", lambda: datetime(2026, 1, 1, tzinfo=UTC)
+        )
+        monkeypatch.setattr(study_workflow.workflow, "upsert_memo", memos.append)
+        worker = study_workflow.StudyWorkflow(StudyInit(workspace_id="test"))
+        requests = [
+            ActionRequest.model_validate(
+                {
+                    "request": {
+                        "action": "fit",
+                        "input": {
+                            "target": {"kind": "continue", "fit_ref": git_oid(7)},
+                            "repeat": index,
+                        },
+                    }
+                }
+            )
+            for index in range(2)
+        ]
+        async with asyncio.timeout(3):
+            tasks = [asyncio.create_task(_execute_action(worker, request)) for request in requests]
+            await asyncio.gather(*(event.wait() for event in started))
+            assert len(memos[-1][RUNNING_ACTION_MEMO]) == 2
+            duplicate = await _execute_action(worker, ActionRequest(request=requests[0].request))
+            assert isinstance(duplicate, RunningCall)
+            assert duplicate.seq == 1
+            release[1].set()
+            second = await tasks[1]
+            assert isinstance(second, CompletedCall)
+            assert second.seq == 2
+            assert tuple(call.seq for call in memos[-1][RUNNING_ACTION_MEMO]) == (1,)
+            release[0].set()
+            first = await tasks[0]
+            assert isinstance(first, CompletedCall)
+            assert first.seq == 1
+        assert executions == [0, 1]
+        assert [record.seq for record in publications] == [2, 1]
+        assert first.messages[-1].detail == "arm 0"
+        assert second.messages[-1].detail == "arm 1"
+        assert memos[-1][RUNNING_ACTION_MEMO] == ()
+
+    asyncio.run(scenario())
