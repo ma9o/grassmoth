@@ -45,6 +45,10 @@
 
 # Data Pipeline
 
+- Experiments and comparisons use the public study actions through the maintained evaluation runner. Develop missing capabilities as the smallest coherent patch to their framework owners, applied in an isolated checkout; retain the patch and experiment declaration in `scratchpad/`. Exercise the patched framework through the same actions. Do not recreate model preparation, initialization, sampling orchestration, diagnostics or convergence gates in experiment harnesses.
+
+- External callers use the [public study library](docs/guides/public_study_library.md). Check each scratchpad experiment or notebook with `bun run --cwd apps/data-pipeline lint:public <caller-path>`; paths are relative to `apps/data-pipeline`.
+
 - Budget GPU benchmarks carefully: a B200 on Modal costs $6/hour.
 - Run independent GPU benchmark scenarios concurrently on separate GPUs. Do not serialize them on one L40S; isolate each scenario's GPU so timing comparisons remain meaningful, and preserve shared initialization dependencies.
 
