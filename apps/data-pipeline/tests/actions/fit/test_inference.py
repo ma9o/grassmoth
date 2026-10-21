@@ -132,6 +132,12 @@ if TYPE_CHECKING:
 def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_evidence(monkeypatch):
     from nof1_causal_lab.actions.contracts.bodies import FitOutput
     from nof1_causal_lab.actions.fit.action import fit
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ChainDiagnostics
+
+    segment_diagnostics = ChainDiagnostics(num_chains=2, num_samples_per_chain=1, per_parameter=())
+    monkeypatch.setattr(
+        "nof1_causal_lab.actions.fit.action.segment_diagnostics", lambda *_args: segment_diagnostics
+    )
     from nof1_causal_lab.artifacts.arrays import NumericalArray
     from nof1_causal_lab.artifacts.continuation import JointTuning, SamplerCheckpoint
     from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms
@@ -266,6 +272,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     )
     np.testing.assert_array_equal(atoms, np.concatenate((old, new), axis=1))
     assert combined["metadata"].num_samples_total == 6
+    assert combined["metadata"].segments[-1].diagnostics == segment_diagnostics
     assert [(segment.start, segment.stop) for segment in combined["metadata"].segments] == [
         (0, 2),
         (2, 3),
@@ -317,6 +324,8 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     assert zero["_dynamical_model_spec"] is None
     assert zero["metadata"].num_samples_total == 6
     assert zero["metadata"].segments[-1].start == zero["metadata"].segments[-1].stop == 3
+    assert zero["metadata"].segments[-1].diagnostics is None
+    assert zero["metadata"].segments[-1].convergence.status != "passed"
     assert zero["evidence"].checkpoint == combined["evidence"].checkpoint
     np.testing.assert_array_equal(
         zero["evidence"].observation_log_probs.values,

@@ -16115,6 +16115,21 @@
             "title": "Phases",
             "type": "array"
           },
+          "diagnostics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChainDiagnostics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Production diagnostics for this execution's retained draws alone."
+          },
+          "convergence": {
+            "$ref": "#/components/schemas/ConvergenceReport",
+            "description": "Production convergence assessment for this segment, before combining chains."
+          },
           "parameterization": {
             "anyOf": [
               {
@@ -16133,6 +16148,8 @@
           "settings",
           "runtime",
           "phases",
+          "diagnostics",
+          "convergence",
           "parameterization"
         ],
         "title": "FitSegment",
@@ -26186,7 +26203,7 @@
         ],
         "title": "TimelineRecord",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.api.studies",
+        "x-python-module": "nof1_causal_lab.actions.contracts.timeline",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26226,7 +26243,7 @@
         ],
         "title": "TimelineResponse",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.api.studies",
+        "x-python-module": "nof1_causal_lab.actions.contracts.timeline",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26266,7 +26283,7 @@
         ],
         "title": "TimelineRevision",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.api.studies",
+        "x-python-module": "nof1_causal_lab.actions.contracts.timeline",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },

@@ -61,6 +61,12 @@ class FitSegment(Value):
     settings: SamplerSpec
     runtime: FitRuntime
     phases: tuple[InferencePhase, ...]
+    diagnostics: ChainDiagnostics | None = Field(
+        description="Production diagnostics for this execution's retained draws alone."
+    )
+    convergence: ConvergenceReport = Field(
+        description="Production convergence assessment for this segment, before combining chains."
+    )
     parameterization: JointParameterizationRecord | None = None
 
 

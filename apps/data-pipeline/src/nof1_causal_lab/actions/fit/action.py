@@ -9,6 +9,7 @@ import numpy as np
 
 from nof1_causal_lab.actions.errors import ModelFitError
 from nof1_causal_lab.actions.fit.conditioning import condition_model
+from nof1_causal_lab.actions.fit.diagnostics import segment_diagnostics
 from nof1_causal_lab.actions.fit.runtime import fit_runtime
 from nof1_causal_lab.artifacts.arrays import ArrayVector, NumericalArray
 from nof1_causal_lab.artifacts.identity import ConstructRef, ParameterRef
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.identity import GitOid
     from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
     from nof1_causal_lab.artifacts.probability.serialization import ArrayLoader
+    from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ChainDiagnostics
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.models.structure import StructuralSelection
     from nof1_causal_lab.study.persistence.store import ArtifactStore
@@ -94,16 +96,21 @@ def fit(
         if previous is None
         else previous.inference.core.inference_metadata.num_samples_total // sampler.num_chains
     )
-    segment = FitSegment(
-        start=old_count,
-        stop=old_count + sampler.num_samples_per_chain,
-        settings=sampler,
-        runtime=runtime,
-        phases=tuple(phases),
-        parameterization=result.parameterization
-        if isinstance(result, UnretainedRun)
-        else result.diagnostics.parameterization,
-    )
+
+    def segment(diagnostics: ChainDiagnostics | None) -> FitSegment:
+        return FitSegment(
+            diagnostics=diagnostics,
+            convergence=chain_convergence(diagnostics),
+            start=old_count,
+            stop=old_count + sampler.num_samples_per_chain,
+            settings=sampler,
+            runtime=runtime,
+            phases=tuple(phases),
+            parameterization=result.parameterization
+            if isinstance(result, UnretainedRun)
+            else result.diagnostics.parameterization,
+        )
+
     if isinstance(result, UnretainedRun):
         phase_fields = {
             phase: {
@@ -117,7 +124,7 @@ def fit(
                 "_dynamical_model_spec": None,
                 "metadata": prior.core.inference_metadata.revised(
                     duration_seconds=fitted["duration_seconds"],
-                    segments=(*prior.core.inference_metadata.segments, segment),
+                    segments=(*prior.core.inference_metadata.segments, segment(None)),
                 ),
                 "evidence": append_phase_evidence(
                     prior.evidence, prior.evidence.revised(phase_extra_fields=phase_fields)
@@ -132,7 +139,7 @@ def fit(
                 duration_seconds=fitted["duration_seconds"],
                 engine=result.evidence,
                 sampler_diagnostics=None,
-                segments=(segment,),
+                segments=(segment(None),),
             ),
             "evidence": InferenceEvidence(phase_extra_fields=phase_fields),
         }
@@ -149,18 +156,6 @@ def fit(
         time_origin=time_origin,
         array_writer=array_writer,
         array_loader=array_loader,
-    )
-    metadata = InferenceMetadata(
-        distribution=identity,
-        segments=(
-            *(previous.inference.core.inference_metadata.segments if previous is not None else ()),
-            segment,
-        ),
-        engine=result.evidence,
-        duration_seconds=fitted["duration_seconds"],
-        num_chains=native.mcmc.num_chains,
-        num_samples_total=native.mcmc.num_chains * (old_count + native.mcmc.num_samples),
-        sampler_diagnostics=native.sampler_diagnostics,
     )
     layout = conditioned.law_layouts[identity]
     latent_indices = (
@@ -200,6 +195,22 @@ def fit(
         all_complete_log_posterior_history=retain(native.all_complete_log_posterior_history),
         initial_latent_delta=retain(result.initial_latent_delta),
         final_latent_delta=retain(result.final_latent_delta),
+    )
+    metadata = InferenceMetadata(
+        distribution=identity,
+        segments=(
+            *(previous.inference.core.inference_metadata.segments if previous is not None else ()),
+            segment(
+                segment_diagnostics(
+                    conditioned, identity, evidence, sampler.num_chains, result.evidence
+                )
+            ),
+        ),
+        engine=result.evidence,
+        duration_seconds=fitted["duration_seconds"],
+        num_chains=native.mcmc.num_chains,
+        num_samples_total=native.mcmc.num_chains * (old_count + native.mcmc.num_samples),
+        sampler_diagnostics=native.sampler_diagnostics,
     )
     if previous is not None:
         from nof1_causal_lab.artifacts.probability.serialization import (
@@ -369,7 +380,11 @@ def read_inference_report(
                 ),
                 evidence=metadata.engine,
             )
-            diagnostics = posterior.get_inference_diagnostics(references)
+            diagnostics = (
+                metadata.segments[0].diagnostics
+                if len(metadata.segments) == 1
+                else posterior.get_inference_diagnostics(references)
+            )
             traces, ranks = posterior.get_chain_detail(references)
             if evidence.observation_log_probs is not None:
                 assert evidence.observed_rows is not None

@@ -16,15 +16,17 @@ from evaluation.client import ActionClient
 from evaluation.declarations import CaseRecipe, RecordedData
 from evaluation.recipes import require_findings
 from evaluation.sources import read_source
-from nof1_causal_lab.actions.contracts.requests import ActionInput
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.model.question import QuestionSpec
-from nof1_causal_lab.artifacts.observations.time import ModelTime, ObservationInstant
-from nof1_causal_lab.artifacts.simulation import SimulationSpec
-from nof1_causal_lab.study.projections.observations import resolve_vector
+from nof1_causal_lab.public.contracts import (
+    ActionInput,
+    ModelTime,
+    ObservationInstant,
+    QuestionSpec,
+    SimulationSpec,
+    Value,
+)
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.actions.contracts.bodies import SimulateOutput
+    from nof1_causal_lab.public.contracts import SimulateOutput
 
 _REQUEST = TypeAdapter(ActionInput)
 
@@ -82,13 +84,7 @@ def export_csv(result: SimulateOutput, destination: Path) -> None:
     for variable in evidence.observation_layout.variables:
         history = result.data[0][variable.id]
         fields.extend((variable.name, variable.name + "_start", variable.name + "_end"))
-        for day, value, start, end in zip(
-            history.times,
-            resolve_vector(history.values),
-            resolve_vector(history.support_start),
-            resolve_vector(history.support_end),
-            strict=True,
-        ):
+        for day, value, start, end in history.readings():
             reading: str | float | int | None = value
             if value is not None and variable.categorical_levels is not None:
                 reading = variable.categorical_levels[int(value)]

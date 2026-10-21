@@ -10,10 +10,7 @@ from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock
 
-import msgpack
 import pytest
-from fastapi import Response
-from pydantic import TypeAdapter
 
 from nof1_causal_lab.actions.contracts.bodies import (
     EditModelInput,
@@ -42,6 +39,9 @@ from nof1_causal_lab.artifacts.observations.preparation import SourceFolder
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.simulation import SimulationSpec
 from nof1_causal_lab.llm.openrouter import create_openrouter_client
+from nof1_causal_lab.public import studies as library
+from nof1_causal_lab.public.contracts import TimelineResponse
+from nof1_causal_lab.study import interface as study_interface
 from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model
 from nof1_causal_lab.study.records import ActionMessage, Rejected
@@ -60,6 +60,18 @@ _PREPARATION: dict[str, Any] = {
         }
     },
 }
+
+
+async def _submit(workspace, request, clients) -> ActionPoll:
+    response = await study_interface.submit_action(workspace, request, clients)
+    assert isinstance(response, library.ActionResult), response
+    return response.decode()
+
+
+async def _timeline(workspace, clients) -> TimelineResponse:
+    response = await study_interface.get_timeline(workspace, clients)
+    assert isinstance(response, TimelineResponse), response
+    return response
 
 
 def _proposed_model() -> dict[str, Any]:
@@ -136,7 +148,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
             build_openrouter_worker,
             build_worker,
         )
-        from nof1_causal_lab.api import studies as study_api
+        from nof1_causal_lab.study import interface as study_api
 
         env = await WorkflowEnvironment.start_local(data_converter=pydantic_data_converter)
         try:
@@ -148,12 +160,12 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 asyncio.timeout(30),
             ):
                 monkeypatch.setenv("READ_ONLY_FACADE", "0")
-                clients = study_api.TemporalClientProvider()
+                clients = study_interface.TemporalClientProvider()
                 monkeypatch.setattr(clients, "get", AsyncMock(return_value=env.client))
-                handle = await study_api._study_handle(workspace_id, clients)
+                handle = await study_interface._study_handle(workspace_id, clients)
 
                 async def execute(request):
-                    response = await study_api._dispatch_action(workspace_id, request, clients)
+                    response = await _submit(workspace_id, request, clients)
                     if isinstance(response, RunningPoll):
                         progress = await handle.query(
                             "call_progress",
@@ -165,12 +177,11 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                             workspace_id, response.action, response.call_id, clients
                         )
                     polled = (
-                        TypeAdapter(ActionPoll).validate_python(
-                            msgpack.unpackb(bytes(response.body), raw=False)
-                        )
-                        if isinstance(response, Response)
+                        response.decode()
+                        if isinstance(response, library.ActionResult)
                         else response
                     )
+                    assert not isinstance(polled, library.StudyError)
                     assert polled.status != "running"
                     assert polled.commit_id is not None
                     record = StudyRepository(workspace_id).record(polled.commit_id)
@@ -280,13 +291,13 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                     assert raised.record.attempt.outcome.code == "model_execution"
                     assert state().current == before
 
-                status = await study_api.get_timeline(workspace_id, clients)
+                status = await _timeline(workspace_id, clients)
                 previous_state = state()
                 previous_run_id = handle.first_execution_run_id
                 await handle.terminate()
-                handle = await study_api._study_handle(workspace_id, clients)
+                handle = await study_interface._study_handle(workspace_id, clients)
                 assert handle.first_execution_run_id != previous_run_id
-                recovered = await study_api.get_timeline(workspace_id, clients)
+                recovered = await _timeline(workspace_id, clients)
                 assert state() == previous_state
                 assert recovered.attempts == status.attempts
 
@@ -362,7 +373,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 assert compared.record.attempt.action == "model_diff"
                 assert compared.record.attempt.outcome.status == "applied"
                 assert StudyRepository(workspace_id).head() == head
-                saved = await study_api.model_diff(
+                saved = await _submit(
                     workspace_id,
                     ModelDiffRequest[RevisionSelector](
                         input=ModelDiffInput[RevisionSelector](
@@ -372,10 +383,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                     ),
                     clients,
                 )
-                assert isinstance(saved, Response)
-                completion = TypeAdapter(ActionPoll).validate_python(
-                    msgpack.unpackb(bytes(saved.body), raw=False)
-                )
+                completion = saved
                 assert completion.status == "success"
                 assert completion.action == "model_diff"
                 assert completion.body.changes == revised.changes_from(measured)
@@ -391,7 +399,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 assert reverse.record.attempt.outcome.status == "applied"
                 assert reverse.record.attempt.request.reasoning is None
                 assert StudyRepository(workspace_id).head() == head
-                timeline = await study_api.get_timeline(workspace_id, clients)
+                timeline = await _timeline(workspace_id, clients)
                 assert {
                     (link.source_seq, link.argument)
                     for link in timeline.dependencies
@@ -423,7 +431,6 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
             build_openrouter_worker,
             build_worker,
         )
-        from nof1_causal_lab.api import studies as study_api
 
         # Source reading waits here, so preparation stays in flight until released.
         release = asyncio.Event()
@@ -460,10 +467,10 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                 asyncio.timeout(30),
             ):
                 monkeypatch.setenv("READ_ONLY_FACADE", "0")
-                clients = study_api.TemporalClientProvider()
+                clients = study_interface.TemporalClientProvider()
                 monkeypatch.setattr(clients, "get", AsyncMock(return_value=env.client))
-                handle = await study_api._study_handle(workspace_id, clients)
-                created = await study_api._dispatch_action(
+                handle = await study_interface._study_handle(workspace_id, clients)
+                created = await _submit(
                     workspace_id,
                     EditQuestionRequest(
                         input=EditQuestionInput(
@@ -481,8 +488,8 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                         result_type=cast("type[CallProgress]", CallProgress),
                     )
                     await handle.get_update_handle(str(progress.attempt_id)).result()
-                assert (await study_api.get_timeline(workspace_id, clients)).running is None
-                model = await study_api._dispatch_action(
+                assert (await _timeline(workspace_id, clients)).running is None
+                model = await _submit(
                     workspace_id,
                     EditModelRequest[RevisionSelector](
                         input=EditModelInput[RevisionSelector](
@@ -502,12 +509,14 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                     )
                     await handle.get_update_handle(str(progress.attempt_id)).result()
 
-                preparing = await study_api._dispatch_action(
+                preparing = await _submit(
                     workspace_id,
                     PrepareDataRequest[RevisionSelector, SourceFolder](input=_PREPARATION),
                     clients,
                 )
-                while (running := await study_api._running_action(workspace_id, clients)) is None:
+                while (
+                    running := await study_interface._running_action(workspace_id, clients)
+                ) is None:
                     await asyncio.sleep(0.05)
                 assert isinstance(preparing, RunningPoll)
                 assert running.call_id == preparing.call_id
@@ -524,7 +533,7 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                     RUNNING_ACTION_MEMO, type_hint=RunningCall
                 )
                 assert memo.request == running.request
-                assert (await study_api.get_timeline(workspace_id, clients)).running is None
+                assert (await _timeline(workspace_id, clients)).running is None
         finally:
             release.set()
             await env.shutdown()

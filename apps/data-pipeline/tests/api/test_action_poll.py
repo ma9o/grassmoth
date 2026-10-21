@@ -42,7 +42,6 @@ from nof1_causal_lab.actions.temporal.study.activities import (
 )
 from nof1_causal_lab.actions.temporal.study.messages import ActionRequest, StudyInit
 from nof1_causal_lab.api import app as tool_server
-from nof1_causal_lab.api import studies as study_api
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
@@ -50,6 +49,7 @@ from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef, Se
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.simulation import SimulationSpec
 from nof1_causal_lab.storage import paths as data
+from nof1_causal_lab.study import interface as study_api
 from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.records import Applied, Rejected
 from tests.support.git import git_oid
@@ -241,6 +241,14 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     )
     assert first.status_code == second.status_code == 200
     assert first.content == second.content
+    from nof1_causal_lab.public import studies as library
+
+    native_post = asyncio.run(library.submit_action("CALLS", request))
+    native_poll = asyncio.run(library.poll_action("CALLS", request.action, call_identity(request)))
+    assert isinstance(native_post, library.ActionResult)
+    assert isinstance(native_poll, library.ActionResult)
+    assert native_post.payload == native_poll.payload == first.content
+    assert native_post.decode().status == "success"
     result = msgpack.unpackb(first.content)
     assert set(result) == {"call_id", "action", "status", "commit_id", "body", "messages"}
     assert result["status"] == "success"
@@ -267,6 +275,9 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     assert client.get(f"/api/studies/CALLS/fit/{result['call_id']}").status_code == 404
     assert client.get(f"/api/studies/MISSING/edit_question/{result['call_id']}").status_code == 404
     timeline = client.get("/api/studies/CALLS/timeline").json()
+    native_timeline = asyncio.run(library.get_timeline("CALLS"))
+    assert not isinstance(native_timeline, library.StudyError)
+    assert native_timeline.model_dump(mode="json") == timeline
     assert timeline["attempts"][0]["record"]["attempt"]["request"]["reasoning"] == request.reasoning
     assert len(repository.attempts()) == 2
     assert (

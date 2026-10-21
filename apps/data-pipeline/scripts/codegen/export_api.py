@@ -23,7 +23,6 @@ from nof1_causal_lab.actions.contracts.bodies import DataDiffOutput, ModelDiffOu
 from nof1_causal_lab.actions.contracts.polling import ActionPoll
 from nof1_causal_lab.actions.contracts.progress import ProgressEvent
 from nof1_causal_lab.actions.contracts.requests import DataDiffRequest, ModelDiffRequest
-from nof1_causal_lab.api.studies import TimelineResponse, TimelineRevision
 from nof1_causal_lab.artifacts.identity import ARTIFACT_IDS, GitOid
 from nof1_causal_lab.artifacts.model.construct import CausalEdgeSpec, ConstructSpec
 from nof1_causal_lab.artifacts.model.expressions import COEFFICIENT_MEANINGS
@@ -34,6 +33,7 @@ from nof1_causal_lab.artifacts.observations.history import ObservationHistory
 from nof1_causal_lab.artifacts.reports.effects import EffectSummary
 from nof1_causal_lab.artifacts.scenarios import CausalEffectResult
 from nof1_causal_lab.llm.traces import LLMTrace
+from nof1_causal_lab.public.contracts import TimelineResponse, TimelineRevision
 from nof1_causal_lab.study.records import StudyRevision
 from nof1_causal_lab.study.snapshot import ModelSnapshot
 from scripts.artifact_contracts import ARTIFACT_CONTRACTS

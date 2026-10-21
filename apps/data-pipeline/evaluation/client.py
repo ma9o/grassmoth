@@ -4,30 +4,31 @@ from __future__ import annotations
 
 import time
 from typing import TYPE_CHECKING
-from urllib.error import HTTPError
-from urllib.request import Request, urlopen
-from uuid import uuid4
 
-from pydantic import TypeAdapter
-
-from nof1_causal_lab.actions.contracts.bodies import ContinueFitTarget, NewFitTarget
-from nof1_causal_lab.actions.contracts.polling import (
+from nof1_causal_lab.public.client import StudyClient
+from nof1_causal_lab.public.contracts import (
+    ActionInput,
     ActionPoll,
     ActionSuccess,
+    ContinueFitTarget,
     FailedPoll,
+    FitRequest,
+    NewFitTarget,
     RunningPoll,
 )
-from nof1_causal_lab.actions.contracts.requests import ActionInput, FitRequest, call_identity
-from nof1_causal_lab.study.persistence.codec import unpack_result
+from nof1_causal_lab.public.studies import ActionResult, StudyError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from evaluation.budget import BudgetLedger
-    from nof1_causal_lab.api.studies import TimelineResponse
-    from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
-
-_POLL = TypeAdapter(ActionPoll)
+    from nof1_causal_lab.public.contracts import (
+        ActionId,
+        ArtifactId,
+        CallId,
+        GitOid,
+        TimelineResponse,
+    )
 
 
 class ActionClient:
@@ -36,41 +37,39 @@ class ActionClient:
     def __init__(
         self, endpoint: str, workspace: str, output: Path, *, budget: BudgetLedger | None = None
     ):
-        self.endpoint = endpoint.rstrip("/")
+        self.transport = StudyClient(endpoint, workspace)
+        self.endpoint = self.transport.endpoint
         self.workspace = workspace
         self.output = output
         self.reused: dict[str, bool] = {}
         self.budget = budget
         output.mkdir(parents=True, exist_ok=True)
 
-    def _read(self, request: Request) -> ActionPoll:
-        with urlopen(request, timeout=60) as response:
-            payload = response.read()
-        poll = _POLL.validate_python(unpack_result(payload))
-        (self.output / (poll.call_id + ".msgpack")).write_bytes(payload)
+    def _retain(self, result: ActionResult | StudyError) -> ActionPoll:
+        if isinstance(result, StudyError):
+            raise ValueError(result.detail)
+        poll = result.decode()
+        (self.output / (poll.call_id + ".msgpack")).write_bytes(result.payload)
         return poll
 
-    def saved(self, action: str, call_id: str) -> ActionSuccess:
+    def saved(self, action: ActionId, call_id: CallId) -> ActionSuccess:
         """Read a saved call without executing or retrying it."""
-        poll = self._read(
-            Request(f"{self.endpoint}/api/studies/{self.workspace}/{action}/{call_id}")
-        )
+        poll = self._retain(self.transport.poll(action, call_id))
         if isinstance(poll, (RunningPoll, FailedPoll)):
             raise ValueError(f"Call {call_id} is {poll.status}; inspect its retained envelope")
         return poll
 
     def call(self, request: ActionInput) -> ActionSuccess:
         """Submit one typed action and poll its pinned identity until publication."""
-        url = f"{self.endpoint}/api/studies/{self.workspace}/{request.action}"
         reused = False
         if isinstance(request, FitRequest):
-            identity = call_identity(request)
-            try:
-                self._read(Request(url + "/" + identity))
-            except HTTPError as exc:
-                if exc.code != 404:
-                    raise
+            identity = request.call_id
+            existing = self.transport.poll(request.action, identity)
+            if isinstance(existing, StudyError):
+                if existing.code != "unknown_call":
+                    raise ValueError(existing.detail)
             else:
+                self._retain(existing)
                 reused = True
             # A POST may be accepted even if its response is lost. Retain the
             # pinned identity before submission so recovery polls this call
@@ -85,18 +84,11 @@ class ActionClient:
                 and request.input.settings.hardware != "local"
             ):
                 self.budget.reserve(self.endpoint, self.workspace, identity, request.input.settings)
-        poll = self._read(
-            Request(
-                url,
-                data=request.model_dump_json(round_trip=True).encode(),
-                headers={"Content-Type": "application/json"},
-                method="POST",
-            )
-        )
+        poll = self._retain(self.transport.submit(request))
         self.reused[poll.call_id] = reused
         while isinstance(poll, RunningPoll):
             time.sleep(1)
-            poll = self._read(Request(url + "/" + poll.call_id))
+            poll = self._retain(self.transport.poll(poll.action, poll.call_id))
         if isinstance(request, FitRequest) and self.budget is not None:
             self.budget.finish(self.endpoint, self.workspace, poll.call_id, poll.status)
         if isinstance(poll, FailedPoll):
@@ -104,24 +96,15 @@ class ActionClient:
         return poll
 
     def _timeline(self) -> TimelineResponse:
-        from nof1_causal_lab.api.studies import TimelineResponse
-
-        with urlopen(
-            f"{self.endpoint}/api/studies/{self.workspace}/timeline", timeout=60
-        ) as response:
-            payload = response.read()
-        timeline = TimelineResponse.model_validate_json(payload)
-        (self.output / "timeline.json").write_bytes(payload)
+        timeline = self.transport.timeline()
+        if isinstance(timeline, StudyError):
+            raise ValueError(timeline.detail)
+        (self.output / "timeline.json").write_text(timeline.model_dump_json())
         return timeline
-
-    def require_idle(self) -> None:
-        """A live study must never be copied as a benchmark preparation snapshot."""
-        if self._timeline().running is not None:
-            raise ValueError("Anchor workspace still has a running action")
 
     def artifact_revision(self, call_id: str, artifact: ArtifactId) -> GitOid:
         """Select a produced artifact tree; an action commit is a different revision."""
-        from nof1_causal_lab.study.records import Applied
+        from nof1_causal_lab.public.contracts import Applied
 
         item = next(item for item in self._timeline().attempts if item.call_id == call_id)
         outcome = item.record.attempt.outcome
@@ -146,24 +129,7 @@ class ActionClient:
             item = by_revision[target.fit_ref]
 
     def upload(self, filename: str, payload: bytes) -> None:
-        """Stage source bytes through the same public upload endpoint as study clients."""
-        boundary = "nof1-benchmark-" + uuid4().hex
-        body = (
-            (
-                f'--{boundary}\r\nContent-Disposition: form-data; name="workspaceId"\r\n\r\n{self.workspace}\r\n'
-                f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
-                "Content-Type: application/octet-stream\r\n\r\n"
-            ).encode()
-            + payload
-            + f"\r\n--{boundary}--\r\n".encode()
-        )
-        with urlopen(
-            Request(
-                self.endpoint + "/api/upload",
-                data=body,
-                headers={"Content-Type": f"multipart/form-data; boundary={boundary}"},
-                method="POST",
-            ),
-            timeout=60,
-        ) as response:
-            response.read()
+        """Stage source bytes through the framework's public client."""
+        error = self.transport.upload(filename, payload)
+        if error is not None:
+            raise ValueError(error.detail)

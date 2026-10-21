@@ -6,14 +6,14 @@ import hashlib
 import html
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.artifacts.base import Value
+from nof1_causal_lab.public.contracts import Value
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from evaluation.budget import BudgetLedger
     from evaluation.declarations import Experiment
-    from nof1_causal_lab.json_types import JsonObject
+    from nof1_causal_lab.public.contracts import JsonObject
 
 
 class BillingReport(Value):

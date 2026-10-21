@@ -14,6 +14,7 @@ from evaluation.client import ActionClient
 from nof1_causal_lab.actions.contracts.bodies import ContinueFitTarget, FitInput
 from nof1_causal_lab.actions.contracts.requests import FitRequest, call_identity
 from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, InferenceHardware
+from nof1_causal_lab.public.studies import ActionResult, StudyError
 from tests.support.git import git_oid
 
 pytestmark = pytest.mark.contract
@@ -84,16 +85,18 @@ def test_client_reserves_after_cache_lookup_before_post_and_keeps_ambiguous_resp
     client = ActionClient("http://isolated.invalid", "arm", tmp_path / "attempt", budget=ledger)
     methods = []
 
-    def read(request):
-        method = request.get_method()
-        methods.append(method)
-        if method == "GET":
-            assert ledger.records() == ()
-            raise HTTPError("lookup", 404, "not saved", Message(), None)
+    def poll(_action, _call_id):
+        methods.append("GET")
+        assert ledger.records() == ()
+        return StudyError(code="unknown_call", detail="not saved")
+
+    def submit(_request):
+        methods.append("POST")
         assert len(ledger.records()) == 1
         raise HTTPError("submission", 500, "response lost", Message(), None)
 
-    monkeypatch.setattr(client, "_read", read)
+    monkeypatch.setattr(client.transport, "poll", poll)
+    monkeypatch.setattr(client.transport, "submit", submit)
     with pytest.raises(HTTPError, match="response lost"):
         client.call(request)
     (record,) = ledger.records()
@@ -107,7 +110,12 @@ def test_client_reserves_after_cache_lookup_before_post_and_keeps_ambiguous_resp
     recovered = FailedPoll(
         call_id=call_identity(request), action="fit", commit_id=git_oid(2), messages=()
     )
-    monkeypatch.setattr(client, "_read", Mock(return_value=recovered))
+    monkeypatch.setattr(
+        client.transport, "poll", Mock(return_value=ActionResult.from_poll(recovered))
+    )
+    monkeypatch.setattr(
+        client.transport, "submit", Mock(return_value=ActionResult.from_poll(recovered))
+    )
     with pytest.raises(ValueError, match="fit failed"):
         client.call(request)
     (record,) = ledger.records()
@@ -124,8 +132,8 @@ def test_held_or_unbudgeted_fits_stop_before_paid_submission(tmp_path, monkeypat
     request = FitRequest(
         input=FitInput(target=ContinueFitTarget(fit_ref=git_oid(1)), settings=_settings())
     )
-    read = Mock(side_effect=HTTPError("lookup", 404, "not saved", Message(), None))
-    monkeypatch.setattr(client, "_read", read)
+    read = Mock(return_value=StudyError(code="unknown_call", detail="not saved"))
+    monkeypatch.setattr(client.transport, "poll", read)
     with pytest.raises(RuntimeError, match="reviewer"):
         client.call(request)
     assert read.call_count == 1
@@ -153,13 +161,20 @@ def test_terminal_failure_keeps_its_debit_and_cache_reuse_needs_no_reservation(
         call_id=call_identity(request), action="fit", commit_id=git_oid(2), messages=()
     )
     client = ActionClient("http://isolated.invalid", "arm", tmp_path / "attempt", budget=ledger)
-    reads = Mock(
-        side_effect=[
-            result if reused else HTTPError("lookup", 404, "not saved", Message(), None),
-            result,
-        ]
+    monkeypatch.setattr(
+        client.transport,
+        "poll",
+        Mock(
+            return_value=(
+                ActionResult.from_poll(result)
+                if reused
+                else StudyError(code="unknown_call", detail="not saved")
+            )
+        ),
     )
-    monkeypatch.setattr(client, "_read", reads)
+    monkeypatch.setattr(
+        client.transport, "submit", Mock(return_value=ActionResult.from_poll(result))
+    )
     with pytest.raises(ValueError, match="fit failed"):
         client.call(request)
     assert client.reused[result.call_id] is reused

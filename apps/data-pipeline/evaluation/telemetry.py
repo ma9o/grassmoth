@@ -4,8 +4,7 @@ from typing import cast
 
 import numpy as np
 
-from nof1_causal_lab.actions.contracts.bodies import FitOutput
-from nof1_causal_lab.json_types import JsonObject, JsonValue
+from nof1_causal_lab.public.contracts import FitOutput, JsonObject, JsonValue
 
 
 def sampler_outcomes(result: FitOutput) -> JsonObject:

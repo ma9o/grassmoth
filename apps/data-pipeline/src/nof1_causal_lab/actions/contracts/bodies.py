@@ -8,8 +8,10 @@ Request envelopes live in ``actions.contracts.requests``. Each output becomes th
 ``body`` of the polling envelope in ``actions.contracts.polling``.
 """
 
+from __future__ import annotations
+
 from collections.abc import Mapping
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import ConfigDict, Field
 
@@ -31,6 +33,12 @@ from nof1_causal_lab.artifacts.reports.inference import FitCheckReport, Inferenc
 from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport
 from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
 from nof1_causal_lab.artifacts.simulation import SimulationReport, SimulationSpec
+
+if TYPE_CHECKING:
+    import numpy as np
+
+    from nof1_causal_lab.artifacts.probability.joint_layout import JointLawLayout
+    from nof1_causal_lab.artifacts.reports.inference import FitSegment
 
 # edit_question
 
@@ -188,6 +196,24 @@ class FitOutput(Value):
     inference: InferenceReport = Field(
         description="Run provenance, native sampler evidence, diagnostics and parameter summaries."
     )
+
+    def posterior_draws(
+        self, segment: FitSegment | None = None
+    ) -> tuple[JointLawLayout, np.ndarray] | None:
+        """Read aligned scientific coordinates, optionally selecting one interval per chain."""
+        from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms
+
+        metadata = self.inference.core.inference_metadata
+        model = self.dynamical_model_spec
+        if model is None or metadata.distribution is None:
+            return None
+        layout = model.law_layouts[metadata.distribution]
+        atoms = empirical_atoms(model.distributions[metadata.distribution])
+        if segment is not None:
+            atoms = atoms.reshape(metadata.num_chains, -1, atoms.shape[-1])[
+                :, segment.start : segment.stop
+            ].reshape(-1, atoms.shape[-1])
+        return layout, atoms
 
 
 # simulate

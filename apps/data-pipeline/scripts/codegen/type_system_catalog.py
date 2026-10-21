@@ -223,7 +223,7 @@ CONCERNS = {
     "api_tools": (
         "API & tool contracts",
         (
-            "api.studies",
+            "actions.contracts.timeline",
             "actions.contracts.requests",
             "actions.contracts.polling",
             "actions.contracts.bodies",

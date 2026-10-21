@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
 import polars as pl
 
-from nof1_causal_lab.artifacts.arrays import ArrayVector, ScalarValues
+from nof1_causal_lab.artifacts.arrays import resolve_vector
 from nof1_causal_lab.artifacts.observations.comparison import DataSeries, Dataset
 from nof1_causal_lab.artifacts.observations.rows import observation_row_schema
 from nof1_causal_lab.artifacts.observations.time import ModelTime, ObservationInstant
@@ -20,17 +19,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.identity import GitOid
     from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
     from nof1_causal_lab.artifacts.observations.reference import DataRef
-
-
-def resolve_vector(value: ScalarValues) -> tuple[float | None, ...]:
-    """Select stored scalar values, applying the recorded observation mask."""
-    if not isinstance(value, ArrayVector):
-        return value
-    indices = tuple(slice(None) if index is None else index for index in value.indices)
-    values = value.array.values[indices][value.start : value.stop]
-    if value.mask is not None:
-        values = np.where(np.asarray(resolve_vector(value.mask), dtype=bool), values, np.nan)
-    return tuple(float(item) if np.isfinite(item) else None for item in values)
 
 
 def prepared_frame(result: PrepareDataOutput) -> pl.DataFrame:

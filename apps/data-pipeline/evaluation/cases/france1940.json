@@ -112,9 +112,10 @@
   },
   "fit_model": {
     "kind": "study_model",
-    "repository": "../../../../data/FRANCE1940/study/history.git",
-    "revision": "5cb773f5f78eb5cf7b6b2fda4d59cf40e3012067",
-    "sha256": "d9f377b994de75f28469620701c57ae4d931eb22166fafd996e037e6b937314c"
+    "endpoint": "http://localhost:8100",
+    "workspace": "FRANCE1940",
+    "call_id": "call:90e645f0cf496d2df9c5515b735bdee8eb0b03e4580fb3a8075ea12f5e43f52c",
+    "sha256": "10c0f652d4b5b337741f6a2084e4e358a77d0f8836c250592b34a8dff531a0d1"
   },
   "data": {
     "kind": "prepare_data",

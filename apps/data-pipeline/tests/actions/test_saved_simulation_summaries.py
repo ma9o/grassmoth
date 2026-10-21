@@ -199,7 +199,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
     assert evidence.draws == 3
     assert evidence.times == (5, 7)
     assert evidence.arms.kind == "paired"
-    from nof1_causal_lab.study.projections.observations import resolve_vector
+    from nof1_causal_lab.artifacts.arrays import resolve_vector
 
     np.testing.assert_array_equal(evidence.arms.action.latent_paths.values, states)
     np.testing.assert_array_equal(evidence.arms.reference.latent_paths.values, states - 1)

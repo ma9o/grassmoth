@@ -7,14 +7,17 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import GitOid, IndicatorId
-from nof1_causal_lab.artifacts.model.question import QuestionSpec
-from nof1_causal_lab.artifacts.observations.preparation import ExtractionSpec
-from nof1_causal_lab.artifacts.reports.checks import NotEvaluatedReason
-from nof1_causal_lab.artifacts.sampling import SamplerSpec
-from nof1_causal_lab.artifacts.simulation import SimulationSpec
-from nof1_causal_lab.json_types import JsonValue
+from nof1_causal_lab.public.contracts import (
+    CallId,
+    ExtractionSpec,
+    IndicatorId,
+    JsonValue,
+    NotEvaluatedReason,
+    QuestionSpec,
+    SamplerSpec,
+    SimulationSpec,
+    Value,
+)
 
 
 class CaseFile(Value):
@@ -26,11 +29,12 @@ class CaseFile(Value):
 
 
 class StudyModel(Value):
-    """A read-only model result in a local study, selected by immutable tree and hash."""
+    """A saved edit_model call read through its study facade and pinned by content."""
 
     kind: Literal["study_model"] = "study_model"
-    repository: str
-    revision: GitOid
+    endpoint: str
+    workspace: str
+    call_id: CallId
     sha256: str = Field(pattern=r"^[a-f0-9]{64}$")
 
 
@@ -90,7 +94,7 @@ class Reference(Value):
 
     workspace: str
     case_manifest: str
-    call_id: str
+    call_id: CallId
     endpoint: str | None = None
     max_r_hat: float = Field(default=1.01, gt=1, le=1.05)
     max_mcse_sd: float = Field(default=0.05, gt=0)
@@ -115,7 +119,7 @@ class SavedAnchor(Value):
     """A completed fit whose durable workspace can seed isolated continuation arms."""
 
     workspace: str
-    call_id: str
+    call_id: CallId
     case_manifest: str
 
 
@@ -172,7 +176,7 @@ class Experiment(Value):
         if self.probe_anchor is not None and len(self.seeds) != 1:
             raise ValueError("A saved anchor owns one sampler random stream")
         if self.probe_samples is not None and any(arm.endpoint for arm in self.arms):
-            raise ValueError("Shared workspace probes require one local facade endpoint")
+            raise ValueError("Shared workspace probes require one facade endpoint")
         if self.probe_samples is not None and set(self.factors) & {
             "num_warmup",
             "num_samples_per_chain",

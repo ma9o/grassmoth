@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "uv run uvicorn nof1_causal_lab.api.app:app --reload --port 8100",
     "notebooks": "uv run marimo edit notebooks/",
-    "lint": "bun run --parallel --no-exit-on-error lint:ruff format:check lint:deptry lint:config lint:type-boundaries lint:type-boundaries:tests lint:architecture lint:imports lint:vulture lint:fields lint:ty lint:basedpyright lint:annotations lint:source-rules lint:duplicates",
+    "lint": "bun run --parallel --no-exit-on-error lint:ruff format:check lint:deptry lint:config lint:type-boundaries lint:type-boundaries:tests lint:architecture lint:public lint:imports lint:vulture lint:fields lint:ty lint:basedpyright lint:annotations lint:source-rules lint:duplicates",
     "lint:ty": "uv run ty check",
     "lint:basedpyright": "uv run basedpyright --threads 4",
     "lint:fix": "uv run ruff check --fix src/ tests/ evaluation/ notebooks/ && bun run format && uv run python scripts/checks/validate_config.py --fix",
@@ -15,6 +15,7 @@
     "lint:type-boundaries": "uv run python -m scripts.checks.check_type_boundaries",
     "lint:type-boundaries:tests": "uv run python -m scripts.checks.check_type_boundaries --select CORE001 --select CORE002 tests",
     "lint:architecture": "uv run python -m scripts.checks.check_architecture_boundaries",
+    "lint:public": "uv run python -m scripts.checks.check_public_imports",
     "lint:imports": "uv run lint-imports --no-cache",
     "lint:vulture": "uv run python scripts/checks/run_vulture.py",
     "lint:fields": "uv run python -m scripts.checks.check_fields",

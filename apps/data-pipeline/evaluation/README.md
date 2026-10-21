@@ -9,8 +9,8 @@ executes nothing. Run a declaration only after its compute budget and case are a
 - `cases/` contains immutable model documents and action recipes. `tiny.json` is a small
   nonlinear CPU debugging case; `nonlinear.json` replaces the former Python fixture.
   `t512.json` and `t512_unknown_diffusion.json` share a saved synthetic history.
-  `france1940.json` reads its pinned model and source CSV from local `data/FRANCE1940`
-  at run time; those assets are not copied into this package.
+  `france1940.json` reads its pinned model through the study API and its source CSV
+  from local `data/FRANCE1940`; those assets are not copied into this package.
 - `declarations.py` owns experiment inputs: case, resolved base controls, declared factor
   or interaction, paired generation/sampler seeds, repeats, optional frozen-checkpoint
   probes, and predeclared reference tolerances.
@@ -19,11 +19,12 @@ executes nothing. Run a declaration only after its compute budget and case are a
   failed finding needs a case-specific reason. Unavailable checks require an explicit
   unavailable-reason declaration; accepting an unavailable check never accepts a failed
   one with the same code. Neither bypasses production fit preflight.
-- `sources.py` verifies every declared source hash before submitting any action. A local
-  study model is read from its pinned result tree without opening the study for writes
-  or changing its storage format. Missing inputs and hash mismatches stop the recipe.
-- `run.py` schedules one workspace per arm and seed pair, verifies model/data content,
-  rejects undeclared control differences, and retains complete action envelopes.
+- `sources.py` verifies every declared source hash before submitting any action. Saved
+  models come from successful `edit_model` calls through the public client. Missing
+  inputs and hash mismatches stop the recipe.
+- `run.py` verifies model/data content, rejects undeclared control differences and
+  retains complete action envelopes. Fresh fits use a workspace per arm and seed pair;
+  probes share their anchor's workspace.
 - `comparison.py` qualifies references using production convergence plus the declared
   R-hat/MCSE limits, compares marginal means and standard deviations with an MCSE
   uncertainty band, and compares each delivered parameter start and state path with
@@ -51,12 +52,13 @@ uv run python -m evaluation.run evaluation/experiments/cpu_compile.json \
 
 The examples are declarations, not evidence that a case has run. `cpu_compile.json`
 compares fixed trajectory lengths with zero warmup and zero retained draws.
-`drift_probe.json` obtains one retained base checkpoint, copies its completed durable
-workspace into new arm workspaces, then continues it with explicit `probe_warmup`
-and the declared drift. Supply `--workspace-root` with the isolated facade's local
-data root. An optional `probe_anchor` selects an already saved fit by workspace,
-call ID and case manifest; its seed and chain count must match. Copying a live
-workspace or replacing an existing destination is rejected. `initializer_score.json` records
+`drift_probe.json` obtains one retained base checkpoint through an ordinary fit,
+then submits each arm in that workspace with `ContinueFitTarget` pinned to the
+anchor's revision, explicit `probe_warmup` and the declared drift. An optional
+`probe_anchor` selects an already saved fit by workspace, call ID and case manifest;
+its seed and chain count must match. The workspace lock serializes these arms,
+so their wall-clock durations add up even though every fit gets its own GPU.
+The runner never copies study storage. `initializer_score.json` records
 starting values and preparation cost with no posterior draws. Add a qualified
 `posterior.references` entry to score those starts; without one the report says
 "not scored". Zero-draw arms skip posterior equivalence. These small counts are
@@ -68,8 +70,9 @@ single treatment, or several paths require `interaction: true`. Code changes use
 need separate endpoints. The runtime must match the declared value. Undeclared
 source, version, compiler, hardware, seed or sampler-control differences invalidate
 a pair. Adapted scales, acceptance and movement are outcomes, not assigned controls.
-Local arms run serially to avoid contention; concurrent remote arms each allocate
-their own fit device. A reused call is visibly marked and is not a new timing sample.
+Local arms run serially to avoid contention; remote arms in separate workspaces each
+allocate their own fit device concurrently. Shared-workspace probes serialize.
+A reused call is visibly marked and is not a new timing sample.
 
 `repeats` advances fit's `repeat` identity without changing its random seed. For more
 fresh timings of an already executed declaration, increase `repeats`; changing the
@@ -79,9 +82,10 @@ to its scientific input revisions. The client reads produced question, model and
 artifact revisions from the public timeline; simulation and fit references select their
 action commits. The output preserves case and attempt manifests and raw
 MessagePack envelopes, including failures. Continued fits report the earlier and
-new draws as one chain. The experiment applies production diagnostics, convergence,
-truth errors and reference comparison only to the latest segment. Its native phase
-buffers retain diagnostics introduced by an algorithm switch. A failed equivalence
+new draws as one chain. The experiment reads the latest segment's saved diagnostics
+and convergence from the fit output, and applies truth errors and reference comparison
+to that segment. The [fit chart](../../../docs/assets/action-flows/fit.svg) owns when
+segment and combined-chain diagnostics are produced. A failed equivalence
 test is labelled inconclusive unless the mean uncertainty band is outside the
 declared tolerance or a fixed coordinate disagrees; a standard-deviation tolerance
 failure alone does not establish a precise discrepancy.
@@ -97,7 +101,7 @@ no benchmark-local prediction engine is supplied.
 
 Paid experiment runs require `--budget POLICY.json`. The [evaluation ledger](budget.py)
 checks the review hold file and reserves each fresh fit before its public POST. It
-also covers newly prepared anchors; copied saved anchors and reused calls do not
+also covers newly prepared anchors; saved anchors and reused calls do not
 allocate again. A failed call retains its debit, and a lost response retains both
 its debit and scheduling slot until recovered or reconciled. The policy directory
 can be shared across stages and scheduler processes; admission uses a file lock.

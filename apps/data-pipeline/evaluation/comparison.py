@@ -8,15 +8,11 @@ import arviz_base as az
 import numpy as np
 from arviz_stats.sampling_diagnostics import mcse
 
-from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms
-
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from evaluation.declarations import Reference, Tolerances
-    from nof1_causal_lab.actions.contracts.bodies import FitOutput
-    from nof1_causal_lab.artifacts.reports.inference import FitSegment
-    from nof1_causal_lab.json_types import JsonValue
+    from nof1_causal_lab.public.contracts import FitOutput, FitSegment, JsonValue
 
 
 def flattened(value: Mapping[str, JsonValue], prefix: str = "") -> dict[str, JsonValue]:
@@ -48,17 +44,10 @@ def differing_controls(
 
 def _posterior_draws(result: FitOutput, segment: FitSegment | None = None):
     """Read the core's aligned empirical law and chain axes without reconstructing a model."""
-    metadata = result.inference.core.inference_metadata
-    model = result.dynamical_model_spec
-    if model is None or metadata.distribution is None:
+    draws = result.posterior_draws(segment)
+    if draws is None:
         raise ValueError("Posterior comparisons require retained draws")
-    layout = model.law_layouts[metadata.distribution]
-    atoms = empirical_atoms(model.distributions[metadata.distribution])
-    if segment is not None:
-        atoms = atoms.reshape(metadata.num_chains, -1, atoms.shape[-1])[
-            :, segment.start : segment.stop
-        ].reshape(-1, atoms.shape[-1])
-    return layout, atoms
+    return draws
 
 
 def _empirical_moments(atoms: np.ndarray):

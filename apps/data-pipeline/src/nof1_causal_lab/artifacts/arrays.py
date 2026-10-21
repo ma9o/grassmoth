@@ -142,3 +142,14 @@ class ArrayVector(Value):
 
 
 type ScalarValues = tuple[FiniteFloat | None, ...] | ArrayVector
+
+
+def resolve_vector(value: ScalarValues) -> tuple[float | None, ...]:
+    """Select stored scalar values, applying the recorded observation mask."""
+    if not isinstance(value, ArrayVector):
+        return value
+    indices = tuple(slice(None) if index is None else index for index in value.indices)
+    values = value.array.values[indices][value.start : value.stop]
+    if value.mask is not None:
+        values = np.where(np.asarray(resolve_vector(value.mask), dtype=bool), values, np.nan)
+    return tuple(float(item) if np.isfinite(item) else None for item in values)

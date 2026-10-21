@@ -2,13 +2,14 @@
 
 vulture only scans .py files. This wrapper extracts code cells from every
 notebook under ``notebooks/`` into a temporary cache of ``.py`` shadows. The
-authoritative source pass scans only ``[tool.vulture].paths``. Evaluation code,
+authoritative source pass scans ``[tool.vulture].paths`` and the maintained
+evaluation application that consumes its public library. Evaluation code,
 scripts, notebooks, and tests each run in a separate Vulture process that may
 analyze source code to understand the protocols it consumes but reports only
 definitions owned by that seam. The five passes run concurrently with separate
-reference caches; their output retains ownership order. Therefore no non-source
-reference can make a source definition live, and references cannot leak between
-non-source seams.
+reference caches; their output retains ownership order. Tests, scripts and
+notebooks cannot make source definitions live; the library's maintained callers
+can. References cannot leak between non-source seams.
 
 Two kinds of phantom usage are emitted into the cache so vulture stops
 flagging legitimate-but-statically-invisible references:
@@ -160,7 +161,9 @@ def _collect_exported_field_locations(paths: list[Path]) -> frozenset[tuple[Path
                         alias.name if alias.asname else alias.name.split(".")[0]
                     )
 
-        def resolve(node: ast.AST) -> str:
+        def resolve(
+            node: ast.AST, bindings: dict[str, str] = bindings, module: str = module
+        ) -> str:
             if isinstance(node, ast.Subscript):
                 return resolve(node.value)
             if isinstance(node, ast.Name):
@@ -269,21 +272,24 @@ def _collect_subscript_reads(paths: list[str]) -> set[str]:
     for tree in trees:
         parents = {child: node for node in ast.walk(tree) for child in ast.iter_child_nodes(node)}
 
-        def scope(node: ast.AST) -> ast.AST:
+        def scope(
+            node: ast.AST, parents: dict[ast.AST, ast.AST] = parents, tree: ast.AST = tree
+        ) -> ast.AST:
             while node in parents:
                 node = parents[node]
                 if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
                     return node
             return tree
 
-        def in_annotation(node: ast.AST) -> bool:
+        def in_annotation(node: ast.AST, parents: dict[ast.AST, ast.AST] = parents) -> bool:
             while node in parents:
                 parent = parents[node]
                 if (
-                    isinstance(parent, ast.AnnAssign | ast.arg)
-                    and parent.annotation is node
-                    or isinstance(parent, ast.FunctionDef | ast.AsyncFunctionDef)
-                    and parent.returns is node
+                    (isinstance(parent, ast.AnnAssign | ast.arg) and parent.annotation is node)
+                    or (
+                        isinstance(parent, ast.FunctionDef | ast.AsyncFunctionDef)
+                        and parent.returns is node
+                    )
                     or isinstance(parent, ast.TypeAlias)
                 ):
                     return True
@@ -488,7 +494,7 @@ def _run_vulture(
     2. After the normal report, warn about referenced names defined in more than
        one file (see ``_warn_name_collisions``).
     3. A seam pass may analyze source code while reporting only definitions owned
-       by that seam. Source dead code comes exclusively from the source-only pass.
+       by that seam. Source liveness includes the maintained library callers.
 
     Replicates ``vulture.core.main`` rather than calling it, so we hold the
     ``Vulture`` instance for the collision pass; config discovery, exit codes, and
@@ -567,7 +573,9 @@ def _run_pass(
 ) -> VulturePassResult:
     stdout, stderr = StringIO(), StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
-        analysis_paths = [*source_paths, seam_path] if seam_path is not None else source_paths
+        analysis_paths = (
+            [*source_paths, seam_path] if seam_path is not None else [*source_paths, "evaluation"]
+        )
         pass_cache_dir = cache_dir / (seam_path if seam_path is not None else "src")
         _build_phantom_refs(pass_cache_dir, analysis_paths)
         report_roots = [seam_path] if seam_path is not None else source_paths

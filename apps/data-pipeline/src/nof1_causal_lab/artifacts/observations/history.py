@@ -6,7 +6,7 @@ from collections.abc import Mapping
 
 from pydantic import FiniteFloat
 
-from nof1_causal_lab.artifacts.arrays import ScalarValues
+from nof1_causal_lab.artifacts.arrays import ScalarValues, resolve_vector
 from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.identity import IndicatorId
 from nof1_causal_lab.artifacts.reports.empirical import EmpiricalPoint
@@ -20,6 +20,18 @@ class ObservationHistory(Value):
     support_start: ScalarValues
     support_end: ScalarValues
     empirical: tuple[EmpiricalPoint, ...]
+
+    def readings(self) -> tuple[tuple[float, float | None, float | None, float | None], ...]:
+        """Read each saved anchor, value and support interval with native masks applied."""
+        return tuple(
+            zip(
+                self.times,
+                resolve_vector(self.values),
+                resolve_vector(self.support_start),
+                resolve_vector(self.support_end),
+                strict=True,
+            )
+        )
 
 
 type ObservationData = Mapping[IndicatorId, ObservationHistory]

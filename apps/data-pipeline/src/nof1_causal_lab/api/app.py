@@ -11,10 +11,10 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from nof1_causal_lab.api.clients import TemporalClientProvider
 from nof1_causal_lab.api.studies import router as study_router
 from nof1_causal_lab.api.uploads import uploads_router
 from nof1_causal_lab.api.workspaces import workspaces_router
+from nof1_causal_lab.study.interface import TemporalClientProvider
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

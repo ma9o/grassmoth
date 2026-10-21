@@ -72,7 +72,7 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
         raise AssertionError("A saved call must never construct another result")
 
     monkeypatch.setattr(output_builder, "build_output", cannot_build)
-    monkeypatch.setattr(study_api, "actions_enabled", lambda: True)
+    monkeypatch.setenv("READ_ONLY_FACADE", "0")
     app = FastAPI()
 
     class UnusedClients:
@@ -96,8 +96,7 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
 
 
 def test_numerical_result_preserves_dtype_shape_missingness_and_vector_selection():
-    from nof1_causal_lab.artifacts.arrays import ArrayVector
-    from nof1_causal_lab.study.projections.observations import resolve_vector
+    from nof1_causal_lab.artifacts.arrays import ArrayVector, resolve_vector
 
     values = np.asarray([[1, np.nan, np.inf], [2, -np.inf, 4]], dtype=np.float64)
     saved = _array_value(values)
@@ -107,6 +106,11 @@ def test_numerical_result_preserves_dtype_shape_missingness_and_vector_selection
     np.testing.assert_array_equal(loaded.values, values)
     assert loaded.values.shape == (2, 3)
     assert loaded.values.dtype == "float64"
+    assert saved.content_digest() == loaded.content_digest()
+    assert (
+        saved.content_digest()
+        != NumericalArray.from_numpy(values.astype(np.float32)).content_digest()
+    )
     selected = ArrayVector(
         array=loaded,
         indices=(None, 0),
@@ -333,9 +337,8 @@ def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
 
 
 def test_domain_views_share_one_wire_buffer_and_decode_without_a_store():
-    from nof1_causal_lab.artifacts.arrays import ArrayVector
+    from nof1_causal_lab.artifacts.arrays import ArrayVector, resolve_vector
     from nof1_causal_lab.artifacts.base import Value
-    from nof1_causal_lab.study.projections.observations import resolve_vector
 
     class NumericalViews(Value):
         owner: NumericalArray
@@ -351,6 +354,7 @@ def test_domain_views_share_one_wire_buffer_and_decode_without_a_store():
     assert np.shares_memory(restored.owner.values, restored.view.array.values)
     assert not restored.owner.values.flags.writeable
     assert resolve_vector(restored.view) == (2.0, 6.0, 10.0)
+    assert result.content_digest() == restored.content_digest()
     with pytest.raises(ValueError, match="earlier"):
         unpack_result(msgpack.packb({"npy": msgpack.ExtType(42, (0).to_bytes(8, "big"))}))
 
@@ -383,3 +387,4 @@ def test_restored_distribution_keeps_its_owned_buffer_when_published_again(monke
     published = result_payload(restored)
     assert owned_arrays(published)[array.identity].npy is owned[array.identity].npy
     assert unpack_result(pack_result(restored)) == published
+    assert restored.content_digest() == law.content_digest()

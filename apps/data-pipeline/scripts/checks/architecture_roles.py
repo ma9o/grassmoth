@@ -33,6 +33,7 @@ DIRECTORY_ROLES: dict[str, ModuleRole] = {
     "models/ssm/preparation": "compiler",
     "models/ssm/structure": "compiler",
     "observations": "compiler",
+    "public": "edge",
     "storage": "edge",
     "study": "edge",
     "study/projections": "projection",
@@ -104,6 +105,8 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "models/ssm/priors": "compiler",
     "models/ssm/shapes": "domain",
     "models/ssm/transition_kinds": "domain",
+    "public/contracts": "domain",
+
     "storage/cache": "shell",
     "study/artifact_files": "domain",
     "study/errors": "domain",

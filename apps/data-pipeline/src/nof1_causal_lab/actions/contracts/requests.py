@@ -64,6 +64,11 @@ class FitRequest[RevisionT](Value):
     input: FitInput[RevisionT] = Field(description="Typed arguments of the scientific action.")
     reasoning: str | None = Field(default=None, description=ACTION_REASONING_DESCRIPTION)
 
+    @property
+    def call_id(self) -> CallId:
+        """Name a fit whose input revisions are already pinned, before submitting it."""
+        return call_identity(self)
+
 
 class SimulateRequest[RevisionT](Value):
     """Generate observation histories and their complete report; return ``SimulateOutput``."""

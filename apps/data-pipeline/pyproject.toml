@@ -166,6 +166,7 @@ runtime-evaluated-base-classes = [
     "typing.TypedDict",
     "typing_extensions.TypedDict",
     "nof1_causal_lab.artifacts.base.Value",
+    "nof1_causal_lab.public.contracts.Value",
     "nof1_causal_lab.actions.contracts.effects.ActionEffects",
     "nof1_causal_lab.study.records.ExtractionWorkerResult",
     "nof1_causal_lab.study.records.AttemptMetadata",

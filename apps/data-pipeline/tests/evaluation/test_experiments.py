@@ -53,11 +53,11 @@ def test_action_recipe_models_are_complete_authored_documents():
     for path in root.glob("*.json"):
         recipe = CaseRecipe.model_validate_json(path.read_text())
         if isinstance(recipe.fit_model, StudyModel):
-            assert recipe.fit_model.repository.startswith("../../../../data/")
+            assert recipe.fit_model.workspace == "FRANCE1940"
             assert recipe.data.kind == "prepare_data"
             assert all(file.path.startswith("../../../../data/") for file in recipe.data.files)
             continue
-        model = model_document(recipe.fit_model, read_source(recipe.fit_model, root)).materialized()
+        model = model_document(read_source(recipe.fit_model, root)).materialized()
         assert model.get_construct(recipe.question.outcome)
         assert model.measurement_clock is not None
         if recipe.data.kind == "simulate":
@@ -106,8 +106,7 @@ def test_t512_variants_share_data_and_compile_the_accumulator_for_replay():
     )
     assert recipes[0].data == recipes[1].data
     models = tuple(
-        model_document(recipe.fit_model, read_source(recipe.fit_model, root)).materialized()
-        for recipe in recipes
+        model_document(read_source(recipe.fit_model, root)).materialized() for recipe in recipes
     )
     for model, recipe in zip(models, recipes, strict=True):
         compiled = compile_executable_model(StructuralSelection(model, recipe.question.outcome))

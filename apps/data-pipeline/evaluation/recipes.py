@@ -3,18 +3,22 @@
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import TYPE_CHECKING
 
 from pydantic import TypeAdapter
 
 from evaluation.declarations import CaseRecipe, GeneratedData
 from evaluation.sources import model_document, read_source
-from nof1_causal_lab.actions.contracts.requests import ActionInput
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.observations.reference import DataRef
-from nof1_causal_lab.artifacts.reports.checks import Assessment, Evaluated, NotEvaluatedReason
-from nof1_causal_lab.study.persistence.codec import pack_payload, result_payload
+from nof1_causal_lab.public.contracts import (
+    ActionInput,
+    Assessment,
+    DataRef,
+    Evaluated,
+    GitOid,
+    NotEvaluatedReason,
+    Value,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -59,8 +63,10 @@ def require_findings[Subject, Evidence](
 
 
 def fingerprint(value: object) -> str:
-    """Hash content including native array bytes, independently of workspace and Git IDs."""
-    return hashlib.sha256(pack_payload(value)).hexdigest()
+    """Hash an evaluation declaration or mapping of verified content digests."""
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 def prepare_case(recipe: CaseRecipe, root: Path, client: ActionClient, seed: int) -> PreparedCase:
@@ -71,7 +77,7 @@ def prepare_case(recipe: CaseRecipe, root: Path, client: ActionClient, seed: int
         else (recipe.fit_model, *recipe.data.files, *recipe.data.provenance_files)
     )
     content = {source.sha256: read_source(source, root) for source in sources}
-    recipe_digest = fingerprint({"recipe": recipe.model_dump(mode="json"), "files": content})
+    recipe_digest = fingerprint(recipe.model_dump(mode="json"))
     question = client.call(
         _REQUEST.validate_python(
             {
@@ -89,9 +95,9 @@ def prepare_case(recipe: CaseRecipe, root: Path, client: ActionClient, seed: int
                     "action": "edit_model",
                     "input": {
                         "parent_ref": parent,
-                        "dynamical_model_spec": model_document(
-                            source, content[source.sha256]
-                        ).model_dump(mode="json"),
+                        "dynamical_model_spec": model_document(content[source.sha256]).model_dump(
+                            mode="json"
+                        ),
                     },
                 }
             )
@@ -173,8 +179,8 @@ def prepare_case(recipe: CaseRecipe, root: Path, client: ActionClient, seed: int
     return PreparedCase(
         model_ref=client.artifact_revision(fitted.call_id, "model"),
         data_ref=DataRef(revision=data_revision, replicate_index=0),
-        model_digest=fingerprint(result_payload(fitted.body.dynamical_model_spec)),
-        data_digest=fingerprint({key: result_payload(value) for key, value in data.items()}),
+        model_digest=fitted.body.dynamical_model_spec.content_digest(),
+        data_digest=fingerprint({key: value.content_digest() for key, value in data.items()}),
         recipe_digest=recipe_digest,
         provenance=recipe.provenance,
         findings=findings,

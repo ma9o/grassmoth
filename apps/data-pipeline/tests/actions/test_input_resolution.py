@@ -7,7 +7,6 @@ from types import SimpleNamespace
 import msgpack
 import numpy as np
 import pytest
-from fastapi import Response
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
@@ -24,7 +23,6 @@ from nof1_causal_lab.actions.contracts.requests import (
 )
 from nof1_causal_lab.actions.input_resolution import input_state
 from nof1_causal_lab.api import app as tool_server
-from nof1_causal_lab.api import studies as study_api
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
@@ -40,6 +38,7 @@ from nof1_causal_lab.artifacts.simulation import (
     SingleArmSimulation,
 )
 from nof1_causal_lab.storage import paths as data
+from nof1_causal_lab.study import interface as study_api
 from nof1_causal_lab.study.persistence.history import StudyRepository
 from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.records import (
@@ -412,7 +411,7 @@ def test_latest_reuses_explicit_saved_call_and_pinned_poll_survives_newer_model(
     monkeypatch.setattr(
         study_api,
         "_saved_response",
-        lambda _workspace, revision: Response(content=revision.commit_id),
+        lambda _workspace, revision: study_api.ActionResult(payload=revision.commit_id.encode()),
     )
     path = "/api/studies/LATEST/fit"
     arguments = {

@@ -4340,6 +4340,10 @@ export interface components {
             readonly runtime: components["schemas"]["FitRuntime"];
             /** Phases */
             readonly phases: readonly components["schemas"]["InferencePhase"][];
+            /** @description Production diagnostics for this execution's retained draws alone. */
+            readonly diagnostics: components["schemas"]["ChainDiagnostics"] | null;
+            /** @description Production convergence assessment for this segment, before combining chains. */
+            readonly convergence: components["schemas"]["ConvergenceReport"];
             /** @default null */
             readonly parameterization: components["schemas"]["JointParameterizationRecord"] | null;
         };

@@ -21,27 +21,24 @@ from evaluation.comparison import (
     qualify_reference,
 )
 from evaluation.declarations import Arm, CaseRecipe, Experiment
-from evaluation.recipes import PreparedCase, fingerprint, prepare_case, require_findings
+from evaluation.recipes import PreparedCase, prepare_case, require_findings
 from evaluation.report import BillingReport, write_report
 from evaluation.segments import segment_summary
 from evaluation.telemetry import sampler_outcomes
-from evaluation.workspaces import copy_anchor_workspace
-from nof1_causal_lab.actions.contracts.bodies import (
+from nof1_causal_lab.public.contracts import (
     ContinueFitTarget,
     FitInput,
     FitOutput,
+    FitRequest,
+    FitSettingsSpec,
     NewFitTarget,
+    SamplerSpec,
 )
-from nof1_causal_lab.actions.contracts.requests import FitRequest
-from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, SamplerSpec
-from nof1_causal_lab.study.persistence.codec import result_payload
 
 if TYPE_CHECKING:
     from typing import Literal
 
-    from nof1_causal_lab.actions.contracts.polling import SuccessfulPoll
-    from nof1_causal_lab.artifacts.identity import GitOid
-    from nof1_causal_lab.json_types import JsonObject
+    from nof1_causal_lab.public.contracts import GitOid, JsonObject, SuccessfulPoll
 
 
 def assigned_settings(experiment: Experiment, arm: Arm, seed: int) -> FitSettingsSpec:
@@ -114,12 +111,9 @@ def run(
     endpoint: str,
     output: Path,
     billing: BillingReport | None,
-    workspace_root: Path | None = None,
     budget: BudgetLedger | None = None,
 ) -> None:
-    """Prepare equal cases, schedule isolated arms, compare only valid pairs and retain failures."""
-    if experiment.probe_samples is not None and workspace_root is None:
-        raise ValueError("Shared probes require --workspace-root for the isolated local facade")
+    """Prepare equal cases, schedule action calls, compare valid pairs and retain failures."""
     case_path = (declaration_root / experiment.case).resolve()
     recipe = CaseRecipe.model_validate_json(case_path.read_text())
     output.mkdir(parents=True, exist_ok=False)
@@ -134,7 +128,11 @@ def run(
                 clients = tuple(
                     ActionClient(
                         arm.endpoint or endpoint,
-                        f"bench-{identity}-g{seed.generation}-s{seed.sampler}-{i}-r{repeat}",
+                        experiment.probe_anchor.workspace
+                        if experiment.probe_anchor is not None
+                        else f"bench-{identity}-g{seed.generation}-s{seed.sampler}-r{repeat}"
+                        if experiment.probe_samples is not None
+                        else f"bench-{identity}-g{seed.generation}-s{seed.sampler}-{i}-r{repeat}",
                         output / f"g{seed.generation}-s{seed.sampler}" / arm.name / f"r{repeat}",
                         budget=budget,
                     )
@@ -143,13 +141,10 @@ def run(
                 with ThreadPoolExecutor(max_workers=experiment.concurrent_arms) as pool:
                     previous: tuple[GitOid | None, ...] = tuple(None for _ in clients)
                     if experiment.probe_samples is not None:
-                        assert workspace_root is not None
                         source = experiment.probe_anchor
                         anchor_client = ActionClient(
                             endpoint,
-                            source.workspace
-                            if source is not None
-                            else clients[0].workspace + "-anchor",
+                            clients[0].workspace,
                             output / f"anchor-s{seed.sampler}-r{repeat}",
                             budget=budget,
                         )
@@ -208,22 +203,8 @@ def run(
                             raise ValueError(
                                 "Anchor must retain the requested chains and random stream"
                             )
-                        digest = fingerprint(result_payload(checkpoint))
+                        digest = checkpoint.content_digest()
                         for client in clients:
-                            hashes = copy_anchor_workspace(
-                                workspace_root, anchor_client, client.workspace
-                            )
-                            copied = client.saved("fit", anchor.call_id)
-                            copied_checkpoint = (
-                                copied.body.inference.evidence.checkpoint
-                                if copied.action == "fit"
-                                else None
-                            )
-                            if (
-                                copied_checkpoint is None
-                                or fingerprint(result_payload(copied_checkpoint)) != digest
-                            ):
-                                raise ValueError("Copied anchor checkpoint differs")
                             (client.output / "anchor.json").write_text(
                                 json.dumps(
                                     {
@@ -231,7 +212,6 @@ def run(
                                         "call_id": anchor.call_id,
                                         "revision": anchor.commit_id,
                                         "checkpoint_sha256": digest,
-                                        "ledger_files": hashes,
                                     },
                                     indent=2,
                                 )
@@ -395,9 +375,6 @@ def main() -> None:
         "--budget", type=Path, help="Evaluation admission and billing ledger policy"
     )
     parser.add_argument(
-        "--workspace-root", type=Path, help="Local isolated facade data root for shared probes"
-    )
-    parser.add_argument(
         "--billing-report",
         type=Path,
         help="Saved output of modal billing report; preserved verbatim",
@@ -410,7 +387,6 @@ def main() -> None:
         args.endpoint,
         args.output,
         billing,
-        args.workspace_root,
         BudgetLedger.read(args.budget) if args.budget else None,
     )
 

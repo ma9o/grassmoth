@@ -400,7 +400,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     prepared_history = prepared_response.body.data[panel_metadata().variables[0].id]
     assert isinstance(response.body.data, tuple)
     assert len(response.body.data) == 2
-    from nof1_causal_lab.study.projections.observations import resolve_vector
+    from nof1_causal_lab.artifacts.arrays import resolve_vector
 
     def values(value):
         return resolve_vector(value)

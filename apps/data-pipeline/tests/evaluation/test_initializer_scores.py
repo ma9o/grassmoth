@@ -126,6 +126,8 @@ def scored_starts():
                     source_digest="test", versions={}, compiler={}, devices=("cpu",)
                 ),
                 phases=phases,
+                diagnostics=diagnostics,
+                convergence=chain_convergence(diagnostics),
             ),
         ),
     )
@@ -150,7 +152,9 @@ def scored_starts():
     )
     qualify_reference(
         reference,
-        Reference(workspace="test", case_manifest="test.json", call_id="test", max_mcse_sd=0.1),
+        Reference(
+            workspace="test", case_manifest="test.json", call_id="call:" + "1" * 64, max_mcse_sd=0.1
+        ),
     )
     coordinates = {
         str(element): np.asarray(samples[coordinate.site_name][(slice(None), *coordinate.indices)])
@@ -187,6 +191,8 @@ def scored_starts():
                         segments=(
                             metadata.segments[0].revised(
                                 stop=0,
+                                diagnostics=None,
+                                convergence=chain_convergence(None),
                                 settings=SamplerSpec(
                                     num_chains=2,
                                     num_warmup=0,
@@ -240,6 +246,7 @@ def test_segment_scoring_cannot_borrow_healthy_anchor_draws(scored_starts):
     from evaluation.declarations import Tolerances
     from evaluation.segments import segment_summary
 
+    from nof1_causal_lab.actions.fit.diagnostics import segment_diagnostics
     from nof1_causal_lab.artifacts.probability.serialization import (
         empirical_atoms,
         empirical_distribution,
@@ -292,6 +299,25 @@ def test_segment_scoring_cannot_borrow_healthy_anchor_draws(scored_starts):
         ),
     )
     assert result.inference.core.convergence.status == "passed"
+    current_model = model.with_entities(
+        distributions={
+            **model.distributions,
+            identity: empirical_distribution(atoms.reshape(4, 256, -1)[:, 224:].reshape(128, -1)),
+        }
+    )
+    diagnostics = segment_diagnostics(
+        current_model, identity, result.inference.evidence, 4, metadata.engine
+    )
+    segment = segment.revised(diagnostics=diagnostics, convergence=chain_convergence(diagnostics))
+    result = result.revised(
+        inference=result.inference.revised(
+            core=result.inference.core.revised(
+                inference_metadata=result.inference.core.inference_metadata.revised(
+                    segments=(*result.inference.core.inference_metadata.segments[:-1], segment)
+                )
+            )
+        )
+    )
     summary = segment_summary(result)
     assert summary["gate"] == "failed"
     assert summary["min_ess_per_sampling_second"] == 0
