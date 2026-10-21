@@ -49,13 +49,16 @@ def validate_sampler_support(
         )
     if isinstance(sampler.algorithm, NutsDASpec):
         return None
-    recurrence = compiled.state_space.recurrence
-    if isinstance(recurrence, SequentialRecurrences):
-        names = tuple(compiled.states[index].name for index in recurrence.indices)
+    unsupported = tuple(
+        ", ".join(compiled.states[index].name for index in stage.indices)
+        for stage in compiled.state_space.recurrence
+        if isinstance(stage, SequentialRecurrences)
+    )
+    if unsupported:
         return ObservationPreflightFailure.rejected(
-            "DSMC requires deterministic recurrences that are affine in their deterministic "
-            "coordinates to preserve O(log T) parallel depth; unsupported states: "
-            + ", ".join(names)
+            "DSMC requires each deterministic dependency stage to be affine in its own "
+            "coordinates to preserve O(log T) parallel depth; unsupported components: "
+            + "; ".join(unsupported)
         )
     return None
 

@@ -23,7 +23,10 @@ from nof1_causal_lab.models.ssm.compile.state_space import (
     AdditiveRecurrences,
     ParallelRecurrences,
     SequentialRecurrences,
+    _compile_recurrence,
 )
+from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponentSpec
+from nof1_causal_lab.models.ssm.dynamics.spec import DynamicsSpec
 from nof1_causal_lab.models.ssm.execution.supported_normal import SupportedNormal
 from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.ssm.inference.problem import build_particle_problem
@@ -359,7 +362,7 @@ def test_static_promotion_keeps_correlated_initial_density_and_shared_coordinate
 
 def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_subsystem():
     model = _model()
-    assert isinstance(_problem(model)[0].state_space.recurrence, AdditiveRecurrences)
+    assert isinstance(_problem(model)[0].state_space.recurrence[0], AdditiveRecurrences)
     driver = next(c for c in model.constructs if c.name == "driver")
     driver = driver.revised(
         dynamics=(
@@ -369,7 +372,7 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
         )
     )
     model = model.with_entities(edges=replace_constructs(model.edges, (driver,)))
-    assert isinstance(_problem(model)[0].state_space.recurrence, AdditiveRecurrences)
+    assert isinstance(_problem(model)[0].state_space.recurrence[0], AdditiveRecurrences)
     total = next(c for c in model.constructs if c.name == "total")
     potential = total.revised(
         dynamics=(
@@ -381,7 +384,7 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
     compiled, problem = _problem(
         model.with_entities(edges=replace_constructs(model.edges, (potential,)))
     )
-    assert isinstance(compiled.state_space.recurrence, ParallelRecurrences)
+    assert isinstance(compiled.state_space.recurrence[0], ParallelRecurrences)
     indices = {item.name: i for i, item in enumerate(compiled.states)}
     coordinates = (
         jnp.zeros((4, len(compiled.states)))
@@ -402,7 +405,7 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
         model.with_entities(edges=replace_constructs(model.edges, (total,)))
     )
     compiled = prepared.compiled_dynamical_model
-    assert isinstance(compiled.state_space.recurrence, SequentialRecurrences)
+    assert isinstance(compiled.state_space.recurrence[0], SequentialRecurrences)
     panel = bind_panel_fixture(
         compiled, jnp.full((4, len(compiled.observations)), jnp.nan), jnp.arange(4.0)
     )
@@ -416,6 +419,122 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
     assert isinstance(failure, ObservationPreflightFailure)
     assert "O(log T)" in failure.message
     assert "total" in failure.message
+
+    state_ids = (driver.id, total.id)
+    coupled = DynamicsSpec(
+        2,
+        (
+            ExpressionComponentSpec(state(total.id), 0, state_ids, None),
+            ExpressionComponentSpec(state(driver.id), 1, state_ids, None),
+        ),
+    )
+    assert _compile_recurrence(coupled, (0, 1)) == (ParallelRecurrences((0, 1)),)
+    nonlinear = replace(
+        coupled,
+        components=(
+            replace(coupled.components[0], expression=state(total.id) ** 2),
+            coupled.components[1],
+        ),
+    )
+    assert _compile_recurrence(nonlinear, (0, 1)) == (SequentialRecurrences((0, 1)),)
+
+
+def test_staged_replay_matches_sequential_path_density_and_gradients():
+    from nof1_causal_lab.artifacts.identity import DistributionId, ParameterId
+    from nof1_causal_lab.artifacts.model.expressions import CallExpression
+    from nof1_causal_lab.artifacts.model.parameter_spec import ParameterSpec
+
+    model = _model()
+    rate = ParameterId("parameter:" + "4" * 64)
+    law = DistributionId("distribution:" + "4" * 64)
+    driver = next(c for c in model.constructs if c.name == "driver")
+    driver = driver.revised(
+        coefficients=tuple(
+            coefficient(0.0, "diffusion_scale") if c.role == "diffusion_scale" else c
+            for c in driver.coefficients
+        ),
+        dynamics=(
+            DriftMechanismSpec(
+                id=MechanismId("mechanism:affine_driver"),
+                expression=coefficient(rate, "weight") * state(driver.id),
+            ),
+        ),
+    )
+    edges = tuple(
+        e.revised(
+            mechanisms=(
+                DriftMechanismSpec(
+                    id=MechanismId("mechanism:exp_driver"),
+                    expression=CallExpression(function="exp", arguments=(state(driver.id),)),
+                ),
+            )
+        )
+        if e.cause.id == driver.id
+        else e
+        for e in replace_constructs(model.edges, (driver,))
+    )
+    prepared = compile_fit_fixture(
+        model.with_entities(
+            edges=edges,
+            parameters=(
+                ParameterSpec(
+                    id=rate, name="rate", description="Affine flow rate", distribution=law
+                ),
+            ),
+            distributions={law: dist.Normal(-0.25, 0.1)},
+        )
+    )
+    compiled = prepared.compiled_dynamical_model
+    indices = {s.name: i for i, s in enumerate(compiled.states)}
+    b, x, a, y = (indices[n] for n in ("baseline", "driver", "total", "outcome"))
+    assert compiled.state_space.recurrence == (ParallelRecurrences((x,)), AdditiveRecurrences((a,)))
+    times = jnp.array([0.0, 0.25, 1.0, 2.0])
+    observations = jnp.arange(16.0).reshape(4, 4) / 20
+    target = build_particle_problem(
+        prepared.prior_runtime_bundle,
+        bind_panel_fixture(compiled, observations, times),
+        scheme="euler_maruyama",
+        trace_key=jax.random.key(2),
+        reparam=None,
+    ).runtime
+    free = np.nonzero(np.asarray(target.independent_mask))
+    observed_states = jnp.array([o.state_index for o in compiled.observations])
+    position = jnp.array([-0.3, 0.15])
+    values = jnp.linspace(-0.2, 0.3, len(free[0]))
+
+    def coordinates(q):
+        return jnp.full((4, 4), 7.0).at[free].set(q)
+
+    def actual(z, q):
+        context = target.context(z, times)
+        path = target.replay_path(context, coordinates(q))
+        score = target.log_prior(z) + target.path_log_prob(context, coordinates(q), observations)
+        return score, path
+
+    def reference(z, q):
+        path = coordinates(q).at[:, b].set(z[1]).at[0, a].set(0.0)
+        for t in range(1, len(times)):
+            previous = path[t - 1]
+            dt = times[t] - times[t - 1]
+            path = path.at[t, x].set(previous[x] + dt * (z[0] * previous[x] + z[1]))
+            path = path.at[t, a].set(previous[a] + dt * jnp.exp(previous[x]))
+        score = dist.Normal(-0.25, 0.1).log_prob(z[0])
+        score += dist.Normal(0.0, 1.0).log_prob(path[0, jnp.array([b, x, y])]).sum()
+        dt = jnp.diff(times)
+        score += (
+            dist.Normal(path[:-1, y] + dt * path[:-1, a], 0.4 * jnp.sqrt(dt))
+            .log_prob(path[1:, y])
+            .sum()
+        )
+        score += dist.Normal(path[:, observed_states], 0.3).log_prob(observations).sum()
+        return score, path
+
+    measured = jax.jit(jax.value_and_grad(actual, argnums=(0, 1), has_aux=True))(position, values)
+    expected = jax.value_and_grad(reference, argnums=(0, 1), has_aux=True)(position, values)
+    for actual_value, reference_value in zip(
+        jax.tree.leaves(measured), jax.tree.leaves(expected), strict=True
+    ):
+        np.testing.assert_allclose(actual_value, reference_value, rtol=2e-5, atol=2e-5)
 
 
 @pytest.mark.inference(concern="recovery")
@@ -613,7 +732,7 @@ def test_observation_partition_keeps_free_loadings_and_joint_gaussian_blocks(
 ):
     compiled = compile_fit_fixture(_model()).compiled_dynamical_model
     state_space = compiled.state_space
-    recurrence = state_space.recurrence.indices[0]
+    recurrence = state_space.recurrence[0].indices[0]
     # A free loading with a zero template still depends on the recurrence.
     template = jnp.zeros_like(compiled.loading_block.template)
     support = np.zeros_like(compiled.loading_block.free_support)

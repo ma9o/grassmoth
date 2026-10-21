@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 from nof1_causal_lab.models.ssm.compile.observation_partition import CompiledObservationPartition
-from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
+from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
 from nof1_causal_lab.models.ssm.inference.extraction import (
     extract_grouped_public_samples,
 )
@@ -79,7 +79,7 @@ def test_library_parameter_output_preserves_public_vector_sites_and_chain_order(
         dynamical_model=_no_numerical_execution,
         observations=jnp.zeros((4, 1)),
         times=jnp.arange(4.0),
-        state_space=StateSpace(1, (), (0,), (0,), (), ParallelRecurrences(())),
+        state_space=StateSpace(1, (), (0,), (0,), (), ()),
         observation_partition=CompiledObservationPartition((0,), ()),
         point_reading_mask=jnp.ones((4, 1), dtype=bool),
     )

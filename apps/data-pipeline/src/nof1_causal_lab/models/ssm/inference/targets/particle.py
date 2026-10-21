@@ -11,7 +11,10 @@ import jax.numpy as jnp
 import numpyro.distributions as dist
 from jax.scipy.linalg import solve_triangular
 
-from nof1_causal_lab.models.ssm.compile.state_space import AdditiveRecurrences, ParallelRecurrences
+from nof1_causal_lab.models.ssm.compile.state_space import (
+    AdditiveRecurrences,
+    SequentialRecurrences,
+)
 from nof1_causal_lab.models.ssm.execution.affine import compose_affine_maps
 from nof1_causal_lab.models.ssm.execution.innovations import GaussianPathMap
 from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import (
@@ -128,7 +131,10 @@ class ParticleTarget:
 
     def fixed_recurrences(self, context: ParticleContext, state: jax.Array) -> jax.Array:
         """A parameter-only local reference; the root pays its exact density correction."""
-        indices = jnp.asarray(self.state_space.recurrence.indices, dtype=jnp.int32)
+        indices = jnp.asarray(
+            tuple(index for stage in self.state_space.recurrence for index in stage.indices),
+            dtype=jnp.int32,
+        )
         initial = self.initial_moments(context)[0]
         if self.exact_constraints is not None:
             initial = jnp.where(
@@ -170,66 +176,68 @@ class ParticleTarget:
         inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
         initial = initial.at[inputs].set(coordinates[0, inputs])
         initial = initial.at[static].set(context[2][static])
-        if isinstance(self.state_space.recurrence, AdditiveRecurrences):
-            coordinates = coordinates.at[0].set(initial)
-            deterministic = jnp.asarray(self.state_space.recurrence.indices, dtype=jnp.int32)
-            if not self.state_space.recurrence.indices or self.times.size == 1:
-                return coordinates
-            evolution = cast(
-                "SupportedEulerMaruyama", self.dynamical_model(context).state_evolution
-            )
+        if any(isinstance(stage, SequentialRecurrences) for stage in self.state_space.recurrence):
 
-            def increment(previous: jax.Array, index: jax.Array) -> jax.Array:
-                state = self.project_state(context, previous)
-                start, stop = context[1][index - 1], context[1][index]
-                drift = evolution.continuous.total_drift(x=state, u=None, t=start)
-                return (stop - start) * drift[deterministic]
+            def advance(previous: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
+                mean = self._transition_distribution(context, previous, index).mean
+                current = jnp.where(independent[index], coordinates[index], mean)
+                # Inputs have no density and can change at every model grid point.
+                current = current.at[inputs].set(coordinates[index, inputs])
+                return current, current
 
-            increments = jax.vmap(increment)(coordinates[:-1], jnp.arange(1, self.times.size))
-            values = initial[deterministic] + jnp.cumsum(increments, axis=0)
-            return coordinates.at[1:, deterministic].set(values)
+            _, tail = jax.lax.scan(advance, initial, jnp.arange(1, self.times.size))
+            return jnp.concatenate((initial[None], tail))
 
-        if isinstance(self.state_space.recurrence, ParallelRecurrences):
-            coordinates = coordinates.at[0].set(initial)
-            deterministic = jnp.asarray(self.state_space.recurrence.indices, dtype=jnp.int32)
-            if not self.state_space.recurrence.indices or self.times.size == 1:
-                return coordinates
+        coordinates = coordinates.at[0].set(initial)
+        if self.times.size == 1:
+            return coordinates
+        evolution = cast("SupportedEulerMaruyama", self.dynamical_model(context).state_evolution)
+        for stage in self.state_space.recurrence:
+            deterministic = jnp.asarray(stage.indices, dtype=jnp.int32)
+            if isinstance(stage, AdditiveRecurrences):
 
-            def affine(previous: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
-                zero = previous.at[deterministic].set(0)
-                offset = jnp.asarray(self._transition_distribution(context, zero, index).mean)[
-                    deterministic
-                ]
-                # The compiler proved affine dependence. Basis evaluations recover
-                # its exact coefficients, not a local approximation of nonlinear drift.
-                basis = jnp.eye(deterministic.size, dtype=coordinates.dtype)
-                columns = jax.vmap(
-                    lambda unit: (
-                        self._transition_distribution(
-                            context, zero.at[deterministic].set(unit), index
-                        ).mean[deterministic]
-                        - offset
-                    )
-                )(basis)
-                return jnp.asarray(columns).T, offset
+                def increment(
+                    previous: jax.Array, index: jax.Array, deterministic: jax.Array = deterministic
+                ) -> jax.Array:
+                    state = self.project_state(context, previous)
+                    start, stop = context[1][index - 1], context[1][index]
+                    drift = evolution.continuous.total_drift(x=state, u=None, t=start)
+                    return (stop - start) * drift[deterministic]
 
-            matrices, offsets = jax.vmap(affine)(coordinates[:-1], jnp.arange(1, self.times.size))
-            matrices = jnp.concatenate((jnp.zeros_like(matrices[:1]), matrices))
-            offsets = jnp.concatenate((initial[deterministic][None], offsets))
+                increments = jax.vmap(increment)(coordinates[:-1], jnp.arange(1, self.times.size))
+                values = initial[deterministic] + jnp.cumsum(increments, axis=0)
+                coordinates = coordinates.at[1:, deterministic].set(values)
+            else:
 
-            _, values = jax.lax.associative_scan(compose_affine_maps, (matrices, offsets))
-            return coordinates.at[:, deterministic].set(values)
+                def affine(
+                    previous: jax.Array, index: jax.Array, deterministic: jax.Array = deterministic
+                ) -> tuple[jax.Array, jax.Array]:
+                    zero = previous.at[deterministic].set(0)
+                    offset = jnp.asarray(self._transition_distribution(context, zero, index).mean)[
+                        deterministic
+                    ]
+                    # The compiler proved affine dependence. Basis evaluations recover
+                    # its exact coefficients, not a local approximation of nonlinear drift.
+                    basis = jnp.eye(deterministic.size, dtype=previous.dtype)
+                    columns = jax.vmap(
+                        lambda unit: (
+                            self._transition_distribution(
+                                context, zero.at[deterministic].set(unit), index
+                            ).mean[deterministic]
+                            - offset
+                        )
+                    )(basis)
+                    return jnp.asarray(columns).T, offset
 
-        def advance(previous: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
-            mean = self._transition_distribution(context, previous, index).mean
-            current = jnp.where(independent[index], coordinates[index], mean)
-            # Inputs have no density and can change at every model grid point.
-            inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
-            current = current.at[inputs].set(coordinates[index, inputs])
-            return current, current
+                matrices, offsets = jax.vmap(affine)(
+                    coordinates[:-1], jnp.arange(1, self.times.size)
+                )
+                matrices = jnp.concatenate((jnp.zeros_like(matrices[:1]), matrices))
+                offsets = jnp.concatenate((initial[deterministic][None], offsets))
 
-        _, tail = jax.lax.scan(advance, initial, jnp.arange(1, self.times.size))
-        return jnp.concatenate((initial[None], tail))
+                _, values = jax.lax.associative_scan(compose_affine_maps, (matrices, offsets))
+                coordinates = coordinates.at[:, deterministic].set(values)
+        return coordinates
 
     def innovation_map(
         self, context: ParticleContext, innovation_mask: jax.Array

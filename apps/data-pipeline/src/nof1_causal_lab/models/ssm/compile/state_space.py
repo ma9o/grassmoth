@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+import networkx as nx
 import numpy as np
 from sympy import Float, Integer, Poly
 
@@ -17,20 +18,22 @@ from nof1_causal_lab.artifacts.model.expressions import (
 if TYPE_CHECKING:
     import jax
 
+    from nof1_causal_lab.artifacts.model.expressions import SymbolicExpression
+    from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponentSpec
     from nof1_causal_lab.models.ssm.dynamics.spec import DynamicsSpec
     from nof1_causal_lab.models.ssm.structure.blocks import DiffusionBlockSpec, T0CholBlockSpec
 
 
 @dataclass(frozen=True)
 class AdditiveRecurrences:
-    """Coordinates with exact additive increments independent of replayed states."""
+    """Coordinates with exact additive increments independent of their own stage."""
 
     indices: tuple[int, ...]
 
 
 @dataclass(frozen=True)
 class ParallelRecurrences:
-    """Coordinates whose exact recurrence is affine in the deterministic subsystem."""
+    """Coordinates whose exact recurrence is affine in their own stage."""
 
     indices: tuple[int, ...]
 
@@ -51,7 +54,7 @@ class StateSpace:
     initial: tuple[int, ...]
     transition: tuple[int, ...]
     static: tuple[int, ...]
-    recurrence: AdditiveRecurrences | ParallelRecurrences | SequentialRecurrences
+    recurrence: tuple[AdditiveRecurrences | ParallelRecurrences | SequentialRecurrences, ...]
 
     @property
     def initial_path_coordinates(self) -> tuple[int, ...]:
@@ -108,54 +111,83 @@ def compile_state_space(
 
 def _compile_recurrence(
     dynamics: DynamicsSpec, indices: tuple[int, ...]
-) -> AdditiveRecurrences | ParallelRecurrences | SequentialRecurrences:
-    """Prove affine closure symbolically; numerical execution never linearizes a recurrence."""
-    additive = True
-    for component in dynamics.components:
-        if component.target not in indices:
-            continue
-        symbolic = symbolic_expression(component.expression)
-        expression = symbolic.root.subs(
-            {
-                symbol: operand.value
-                for symbol, operand in symbolic.operands.items()
-                if isinstance(operand, CoefficientExpression)
-                and isinstance(operand.value, (int, float))
-            }
-        )
-        # Authored scalar literals are floats. An exact integral exponent such
-        # as 2.0 must remain a polynomial for the symbolic affine-closure proof.
-        expression = expression.subs(
-            {
-                number: Integer(int(number))
-                for number in expression.atoms(Float)
-                if float(number).is_integer()
-            }
-        )
-        variables = tuple(
-            symbol
-            for symbol, operand in symbolic.operands.items()
-            if isinstance(operand, StateExpression)
-            and component.state_index[operand.construct_id] in indices
-        )
-        if component.kind == "potential":
-            own = next(
-                (
-                    symbol
-                    for symbol, operand in symbolic.operands.items()
-                    if isinstance(operand, StateExpression)
-                    and component.state_index[operand.construct_id] == component.target
-                ),
-                None,
-            )
-            if own is None:
+) -> tuple[AdditiveRecurrences | ParallelRecurrences | SequentialRecurrences, ...]:
+    """Prove affine closure within each dependency stage without numerical linearization."""
+    drifts = tuple(
+        (component, _effective_drift(component))
+        for component in dynamics.components
+        if component.target in indices
+    )
+    dependencies = nx.DiGraph()
+    dependencies.add_nodes_from(indices)
+    dependencies.add_edges_from(
+        (component.state_index[operand.construct_id], component.target)
+        for component, symbolic in drifts
+        for symbol, operand in symbolic.operands.items()
+        if isinstance(operand, StateExpression)
+        and symbol in symbolic.root.free_symbols
+        and component.state_index[operand.construct_id] in indices
+    )
+    stages = nx.condensation(dependencies)
+    ordered = nx.lexicographical_topological_sort(
+        stages, key=lambda stage: tuple(sorted(stages.nodes[stage]["members"]))
+    )
+
+    def classify(
+        stage: tuple[int, ...],
+    ) -> AdditiveRecurrences | ParallelRecurrences | SequentialRecurrences:
+        additive = True
+        for component, symbolic in drifts:
+            if component.target not in stage:
                 continue
-            expression = -expression.diff(own)
-        if variables and (
-            not expression.is_polynomial(*variables)
-            or Poly(expression, *variables).total_degree() > 1
-        ):
-            return SequentialRecurrences(indices)
-        if variables and Poly(expression, *variables).total_degree() > 0:
-            additive = False
-    return AdditiveRecurrences(indices) if additive else ParallelRecurrences(indices)
+            variables = tuple(
+                symbol
+                for symbol, operand in symbolic.operands.items()
+                if isinstance(operand, StateExpression)
+                and component.state_index[operand.construct_id] in stage
+            )
+            expression = symbolic.root
+            if variables and (
+                not expression.is_polynomial(*variables)
+                or Poly(expression, *variables).total_degree() > 1
+            ):
+                return SequentialRecurrences(stage)
+            if variables and Poly(expression, *variables).total_degree() > 0:
+                additive = False
+        return AdditiveRecurrences(stage) if additive else ParallelRecurrences(stage)
+
+    return tuple(classify(tuple(sorted(stages.nodes[stage]["members"]))) for stage in ordered)
+
+
+def _effective_drift(component: ExpressionComponentSpec) -> SymbolicExpression:
+    """Share fixed-coefficient substitution and potential differentiation with the proof."""
+    symbolic = symbolic_expression(component.expression)
+    expression = symbolic.root.subs(
+        {
+            symbol: operand.value
+            for symbol, operand in symbolic.operands.items()
+            if isinstance(operand, CoefficientExpression)
+            and isinstance(operand.value, (int, float))
+        }
+    )
+    # Authored scalar literals are floats. An exact integral exponent such
+    # as 2.0 must remain a polynomial for the symbolic affine-closure proof.
+    expression = expression.subs(
+        {
+            number: Integer(int(number))
+            for number in expression.atoms(Float)
+            if float(number).is_integer()
+        }
+    )
+    if component.kind == "potential":
+        own = next(
+            (
+                symbol
+                for symbol, operand in symbolic.operands.items()
+                if isinstance(operand, StateExpression)
+                and component.state_index[operand.construct_id] == component.target
+            ),
+            None,
+        )
+        expression = Integer(0) if own is None else -expression.diff(own)
+    return symbolic.revised(root=expression)

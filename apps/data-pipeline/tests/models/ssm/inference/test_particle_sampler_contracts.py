@@ -16,7 +16,7 @@ from nof1_causal_lab.artifacts.sampling import (
     SamplerSpec,
 )
 from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
-from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
+from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
 from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs import runner
 from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
@@ -165,7 +165,7 @@ def test_laps_failure_stops_production_before_sampling(monkeypatch):
                     initial=(0,),
                     transition=(0,),
                     static=(),
-                    recurrence=ParallelRecurrences(()),
+                    recurrence=(),
                 ),
             ),
         ),

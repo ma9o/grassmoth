@@ -30,7 +30,7 @@ from nof1_causal_lab.artifacts.sampling import (
 )
 from nof1_causal_lab.compute.budget import ComputeBudget, SharedMemoryBudget
 from nof1_causal_lab.models.ssm.compile.observation_partition import CompiledObservationPartition
-from nof1_causal_lab.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
+from nof1_causal_lab.models.ssm.compile.state_space import StateSpace
 from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
 from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -409,7 +409,7 @@ def production_target(world: World) -> ParticleTarget:
         dynamical_model=_declared,
         observations=jnp.asarray([[world.y]]),
         times=jnp.asarray([0.0]),
-        state_space=StateSpace(1, (), (0,), (0,), (), ParallelRecurrences(())),
+        state_space=StateSpace(1, (), (0,), (0,), (), ()),
         observation_partition=CompiledObservationPartition((0,), ()),
         point_reading_mask=jnp.ones((1, 1), dtype=bool),
     )

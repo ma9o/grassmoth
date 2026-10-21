@@ -151,9 +151,10 @@ def build_marginal_particle_gibbs_kernel(
     if target_accept is None:
         target_accept = _DEFAULT_OPTIONS.param_target_accept
 
-    assert isinstance(target.state_space.recurrence, (AdditiveRecurrences, ParallelRecurrences)), (
-        "The fitting preflight must establish an associative deterministic recurrence"
-    )
+    assert all(
+        isinstance(stage, (AdditiveRecurrences, ParallelRecurrences))
+        for stage in target.state_space.recurrence
+    ), "The fitting preflight must establish an associative deterministic recurrence"
 
     runtime_observations = target.observations
     runtime_times = target.times
