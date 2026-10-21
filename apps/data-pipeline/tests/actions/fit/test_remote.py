@@ -71,6 +71,8 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     assert app.function.call_args.kwargs["cpu"] == (8, 8)
     assert app.function.call_args.kwargs["memory"] == (32768, 32768)
     assert app.function.call_args.kwargs["env"][FIT_CACHE_VOLUME_ENV] == "test-fit-cache"
+    assert app.function.call_args.kwargs["env"]["XLA_PYTHON_CLIENT_PREALLOCATE"] == "true"
+    assert app.function.call_args.kwargs["env"]["XLA_PYTHON_CLIENT_MEM_FRACTION"] == "0.90"
     assert app.function.call_args.kwargs["env"]["JAX_COMPILATION_CACHE_DIR"].startswith("/tmp/")
     assert (
         app.function.call_args.kwargs["env"]["JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS"] == "0.0"

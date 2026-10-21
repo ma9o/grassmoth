@@ -120,7 +120,10 @@ def compile_shared_drift(spec: DynamicsSpec) -> DriftProgram:
             dummify=True,
             docstring_limit=0,
         )
-    target_indices = tuple(targets)
+    contributions_by_state = tuple(
+        tuple(index for index, target in enumerate(targets) if target == state)
+        for state in range(spec.n_latent)
+    )
 
     def drift(
         _t: jax.Array,
@@ -128,12 +131,15 @@ def compile_shared_drift(spec: DynamicsSpec) -> DriftProgram:
         eta_per_edge: jax.Array,
         params: tuple[Mapping[str, jax.Array], ...],
     ) -> jax.Array:
-        if not target_indices:
-            return jnp.zeros_like(eta)
         values = tuple(_read_operand(operand, eta, eta_per_edge, params) for operand in entries)
-        contributions = jnp.stack(tuple(jnp.asarray(value) for value in numerical(*values)))
-        return (
-            jnp.zeros_like(eta).at[jnp.asarray(target_indices, dtype=jnp.int32)].add(contributions)
+        contributions = tuple(jnp.asarray(value, dtype=eta.dtype) for value in numerical(*values))
+        # Ownership is static. Sum scalar terms before stacking state outputs so
+        # particle/time batching never materializes a contribution bank to scatter.
+        return jnp.stack(
+            tuple(
+                sum((contributions[index] for index in indices), jnp.zeros((), dtype=eta.dtype))
+                for indices in contributions_by_state
+            )
         )
 
     return drift

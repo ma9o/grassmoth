@@ -508,7 +508,9 @@ def test_parallel_accumulator_preserves_an_exact_random_initial_value():
     )
 
 
-@pytest.mark.parametrize("accumulator_observation", ["gaussian", "delta", "delta_fixed_initial"])
+@pytest.mark.parametrize(
+    "accumulator_observation", ["gaussian", "gaussian_correlated", "delta", "delta_fixed_initial"]
+)
 def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients(
     accumulator_observation,
 ):
@@ -537,7 +539,21 @@ def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients
             )
         )
     model = model.with_entities(edges=replace_constructs(model.edges, (total,)))
-    compiled = compile_fit_fixture(model).compiled_dynamical_model
+    fit = compile_fit_fixture(model)
+    compiled = fit.compiled_dynamical_model
+    if accumulator_observation == "gaussian_correlated":
+        columns = {
+            compiled.states[observation.state_index].name: index
+            for index, observation in enumerate(compiled.observations)
+        }
+        row, column = sorted((columns["total"], columns["driver"]), reverse=True)
+        noise = compiled.observation_noise_block
+        compiled = replace(
+            compiled,
+            observation_noise_block=replace(
+                noise, template=noise.template.at[row, column].set(0.12)
+            ),
+        )
     observations = jnp.full((4, len(compiled.observations)), 0.15)
     if accumulator_observation.startswith("delta"):
         column = next(
@@ -546,10 +562,22 @@ def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients
             if compiled.states[observation.state_index].name == "total"
         )
         observations = observations.at[:, column].set(jnp.nan).at[0, column].set(0.0)
-    _, problem = _problem(model, observations)
+    panel = bind_panel_fixture(compiled, observations, jnp.arange(4.0))
+    problem = build_particle_problem(
+        fit.prior_runtime_bundle,
+        panel,
+        scheme="euler_maruyama",
+        trace_key=jax.random.key(2),
+        reparam=None,
+    )
     target = problem.runtime
     local = target.tree_target()
-    expected_local = {"gaussian": 0, "delta": 3, "delta_fixed_initial": 0}[accumulator_observation]
+    expected_local = {
+        "gaussian": 3,
+        "gaussian_correlated": 2,
+        "delta": 3,
+        "delta_fixed_initial": 2,
+    }[accumulator_observation]
     assert len(target.observation_partition.local) == expected_local
     position = target.initial_position.at[-1].set(0.2)
     path = jnp.arange(16.0).reshape(4, 4) / 25
@@ -557,7 +585,7 @@ def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients
     def split_score(z, x):
         context = target.context(z, target.times)
         return local.factor_log_prob(context, x, local.observations) + target.replay_correction(
-            local, context, x
+            context, x, local.prior_path_log_prob(context, x)
         )
 
     actual = jax.jit(jax.value_and_grad(split_score, argnums=(0, 1)))(position, path)
@@ -570,8 +598,20 @@ def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients
         np.testing.assert_allclose(measured, reference, rtol=2e-5, atol=2e-5)
 
 
-def test_observation_partition_keeps_free_loadings_and_joint_gaussian_blocks():
-    compiled, _ = _problem(_model())
+@pytest.mark.parametrize(
+    ("links", "free_scales", "expected_replayed"),
+    [
+        ((), False, (0,)),
+        (((1, 0),), False, (0, 1)),
+        (((1, 0), (2, 1)), False, (0, 1, 2)),
+        (((1, 0), (2, 1)), True, (0, 1, 2)),
+    ],
+    ids=("independent", "correlated", "transitive", "free_scales"),
+)
+def test_observation_partition_keeps_free_loadings_and_joint_gaussian_blocks(
+    links, free_scales, expected_replayed
+):
+    compiled = compile_fit_fixture(_model()).compiled_dynamical_model
     state_space = compiled.state_space
     recurrence = state_space.recurrence.indices[0]
     # A free loading with a zero template still depends on the recurrence.
@@ -584,11 +624,22 @@ def test_observation_partition_keeps_free_loadings_and_joint_gaussian_blocks():
         free_support=support,
         free_positions=((0, recurrence),),
     )
-    partition = compile_observation_partition(
-        loading, tuple(observation.law for observation in compiled.observations), state_space
+    noise_template = jnp.zeros((4, 4)) if free_scales else jnp.eye(4) * 0.3
+    for row, column in links:
+        noise_template = noise_template.at[row, column].set(0.1)
+    noise = replace(
+        compiled.observation_noise_block,
+        template=noise_template,
+        diag_support=np.full(4, free_scales),
     )
-    assert partition.local == ()
-    assert partition.replayed == tuple(range(len(compiled.observations)))
+    partition = compile_observation_partition(
+        loading,
+        noise,
+        tuple(observation.law for observation in compiled.observations),
+        state_space,
+    )
+    assert partition.local == tuple(index for index in range(4) if index not in expected_replayed)
+    assert partition.replayed == expected_replayed
 
 
 def test_exact_static_readings_share_one_value_and_inconsistent_constraints_are_rejected():

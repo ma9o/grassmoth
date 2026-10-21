@@ -79,7 +79,6 @@ def build_particle_gibbs_kernel[State](
     free_mask = target.independent_mask
     if target.exact_constraints is not None:
         free_mask = free_mask & target.exact_constraints.free_mask
-    local_target = target.tree_target()
     setup = build_smoother_setup(
         target,
         spec,
@@ -124,8 +123,8 @@ def build_particle_gibbs_kernel[State](
             trajectory_dtype=state.log_posterior.dtype,
         )
 
-        def correction(path: jax.Array) -> jax.Array:
-            return target.replay_correction(local_target, context, path)[None]
+        def correction(path: jax.Array, local_prior: jax.Array) -> jax.Array:
+            return target.replay_correction(context, path, local_prior[0])[None]
 
         smooth = dsmc_step(
             smoother_context,

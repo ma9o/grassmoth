@@ -10,10 +10,18 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from nof1_causal_lab.artifacts.model.likelihood import LinkFunction, NegativeBinomial2LawSpec
+from nof1_causal_lab.artifacts.model.likelihood import (
+    GammaLawSpec,
+    LinkFunction,
+    NegativeBinomial2LawSpec,
+)
 from nof1_causal_lab.artifacts.probability.families import DistributionFamily
 from nof1_causal_lab.models.ssm.execution.observation_dispatch import _sample_native
-from nof1_causal_lab.models.ssm.execution.observation_distributions import evaluate_law, to_native
+from nof1_causal_lab.models.ssm.execution.observation_distributions import (
+    evaluate_law,
+    prepare_response_log_prob,
+    to_native,
+)
 from nof1_causal_lab.models.ssm.execution.observation_model import compile_observation_model
 from tests.support.observation import (
     mean_density,
@@ -24,6 +32,44 @@ from tests.support.observation import (
 
 if TYPE_CHECKING:
     from tests.support.observation import ObservationParameters
+
+
+@pytest.mark.inference(concern="sampling")
+@pytest.mark.parametrize("family", ["gamma", "negative_binomial"])
+def test_prepared_interval_density_preserves_parameter_and_response_derivatives(family):
+    """One bound factor scores many candidates without freezing parameter dependence."""
+    values = jnp.array([0.2, jnp.nan]) if family == "gamma" else jnp.array([4.0, jnp.nan])
+    mask = jnp.array([1.0, 0.0])
+    offsets = jnp.array([-1.5, 0.0, 1.8])
+
+    def score(parameters, prepared):
+        concentration = jnp.exp(parameters[0]) * jnp.ones(2)
+        responses = jnp.exp(parameters[1] + offsets)
+        if prepared:
+            law = (
+                GammaLawSpec(concentration=concentration, rate=concentration)
+                if family == "gamma"
+                else NegativeBinomial2LawSpec(mean=jnp.ones(2), concentration=concentration)
+            )
+            bound = prepare_response_log_prob(law, values, mask)
+            return jax.vmap(lambda response: bound(jnp.array([response, jnp.nan])))(responses).sum()
+        if family == "gamma":
+            return (
+                dist.Gamma(concentration[0], concentration[0] / responses).log_prob(values[0]).sum()
+            )
+        return dist.NegativeBinomial2(responses, concentration[0]).log_prob(values[0]).sum()
+
+    for parameters in (jnp.array([-2.0, -0.3]), jnp.array([1.1, 0.4])):
+        actual = jax.jit(jax.value_and_grad(lambda p: score(p, True)))(parameters)
+        expected = jax.value_and_grad(lambda p: score(p, False))(parameters)
+        for left, right in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+            np.testing.assert_allclose(left, right, rtol=2e-5, atol=2e-5)
+        np.testing.assert_allclose(
+            jax.hessian(lambda p: score(p, True))(parameters),
+            jax.hessian(lambda p: score(p, False))(parameters),
+            rtol=3e-5,
+            atol=3e-5,
+        )
 
 
 @pytest.mark.inference(concern="predictive")

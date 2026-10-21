@@ -144,6 +144,7 @@ def build_particle_problem(
         state_space,
         compile_observation_partition(
             compiled_dynamical_model.loading_block,
+            compiled_dynamical_model.observation_noise_block,
             tuple(observation.law for observation in compiled_dynamical_model.observations),
             state_space,
         ),

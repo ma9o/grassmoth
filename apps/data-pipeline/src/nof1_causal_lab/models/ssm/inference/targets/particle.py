@@ -90,15 +90,13 @@ class ParticleTarget:
         )
 
     def replay_correction(
-        self, local_target: ParticleTarget, context: ParticleContext, path: jax.Array
+        self, context: ParticleContext, path: jax.Array, local_prior_log_prob: jax.Array
     ) -> jax.Array:
-        """Pay only the exact recurrence correction and deferred observation factors."""
+        """Replace the carried local prior and pay deferred observation factors."""
         if not self.state_space.requires_replay:
             return jnp.zeros((), dtype=path.dtype)
         replayed = self.replay_path(context, path)
-        correction = self.prior_path_log_prob(context, replayed) - local_target.prior_path_log_prob(
-            context, path
-        )
+        correction = self.prior_path_log_prob(context, replayed) - local_prior_log_prob
         if self.observation_partition.replayed:
             deferred = self._select_observations(self.observation_partition.replayed)
             if deferred.intervals is None:
@@ -369,6 +367,10 @@ class ParticleTarget:
             centered = values - anchor
             dimension = len(self.state_space.transition)
 
+            outer = jnp.einsum("ni,nj->nij", centered, centered).reshape(
+                current.shape[0], dimension**2
+            )
+
             def row(ancestor):
                 distribution = cast(
                     "dist.MultivariateNormal",
@@ -385,14 +387,14 @@ class ParticleTarget:
                     - jnp.sum(jnp.log(jnp.diag(chol)))
                     - 0.5 * dimension * jnp.log(2 * jnp.pi)
                 )
-                return precision, linear, constant
+                # Keep covariance-only work inside the mapped row. JAX can then
+                # share its quadratic across ancestors when covariance is shared,
+                # without broadcasting precision into an N-by-D-by-D array first.
+                # State-dependent covariance retains one exact quadratic per row.
+                quadratic = outer @ precision.reshape(dimension**2)
+                return constant + centered @ linear - 0.5 * quadratic
 
-            precision, linear, constant = jax.vmap(row)(previous)
-            outer = jnp.einsum("ni,nj->nij", centered, centered).reshape(
-                current.shape[0], dimension**2
-            )
-            quadratic = precision.reshape(previous.shape[0], dimension**2) @ outer.T
-            return constant[:, None] + linear @ centered.T - 0.5 * quadratic
+            return jax.vmap(row)(previous)
 
         bridge = self.bridge
         if bridge is None:

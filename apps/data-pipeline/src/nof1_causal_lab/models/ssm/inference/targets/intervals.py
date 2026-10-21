@@ -9,7 +9,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from nof1_causal_lab.models.ssm.execution.observation_model import compile_observation_model
+from nof1_causal_lab.models.ssm.execution.observation_groups import compile_law_groups
+from nof1_causal_lab.models.ssm.execution.observation_model import (
+    compile_observation_model,
+    prepare_mean_density,
+)
 from nof1_causal_lab.models.ssm.execution.observation_operator import (
     ObservationOperator,
     expected_observation_mean,
@@ -39,10 +43,15 @@ class IntervalTreeLevelRuntime(NamedTuple):
     observations: jax.Array
     masks: jax.Array
     weights: jax.Array
+    emitting_nodes: jax.Array
+    emission_counts: jax.Array
 
 
 def stack_interval_tree_levels(
-    levels: tuple[CompiledIntervalTreeLevel, ...], node_count: int, slot_count: int
+    levels: tuple[CompiledIntervalTreeLevel, ...],
+    node_count: int,
+    slot_count: int,
+    batch_size: int,
 ) -> IntervalTreeLevelRuntime:
     """Pad inactive nodes and slots, retaining the exact emitted-factor masks."""
     emission_count = max(level.emission_slots.shape[1] for level in levels)
@@ -58,6 +67,29 @@ def stack_interval_tree_levels(
     def field(values: tuple[np.ndarray, ...], width: int, fill: int) -> jax.Array:
         return jnp.asarray(np.stack(tuple(pad(value, width, fill) for value in values)))
 
+    # Pack complete observed rows, retaining their joint channel factors. The
+    # execution loop visits only emitting nodes in its current merge batch.
+    def emitting_batches(level: CompiledIntervalTreeLevel) -> tuple[np.ndarray, ...]:
+        nodes = np.flatnonzero(level.masks.any(axis=(1, 2)))
+        return tuple(
+            nodes[(nodes >= start) & (nodes < start + batch_size)]
+            for start in range(0, node_count, batch_size)
+        )
+
+    batches = tuple(emitting_batches(level) for level in levels)
+    capacity = max(len(nodes) for level in batches for nodes in level)
+    emitting_nodes = jnp.asarray(
+        np.stack(
+            tuple(
+                np.stack(tuple(np.pad(nodes, (0, capacity - len(nodes))) for nodes in level))
+                for level in batches
+            )
+        ),
+        dtype=jnp.int32,
+    )
+    emission_counts = jnp.asarray(
+        tuple(tuple(len(nodes) for nodes in level) for level in batches), dtype=jnp.int32
+    )
     return IntervalTreeLevelRuntime(
         field(tuple(level.left_slots for level in levels), slot_count, -1),
         field(tuple(level.right_slots for level in levels), slot_count, -1),
@@ -65,6 +97,8 @@ def stack_interval_tree_levels(
         field(tuple(level.observations for level in levels), emission_count, 0),
         field(tuple(level.masks for level in levels), emission_count, 0),
         field(tuple(level.weights for level in levels), emission_count, 1),
+        emitting_nodes,
+        emission_counts,
     )
 
 
@@ -177,11 +211,9 @@ class ParticleIntervalObservations:
         right_emitted = gather_interval_statistics(
             right, jnp.asarray(level.right_slots)[node][slots]
         )
-        return jax.vmap(
-            lambda stats: self._emission_log_probs(
-                contexts, stats[None] + right_emitted, level, node
-            )
-        )(left_emitted)
+        return self._emission_log_probs(
+            contexts, left_emitted[:, None] + right_emitted[None], level, node
+        )
 
     def _emission_log_probs(
         self,
@@ -199,31 +231,38 @@ class ParticleIntervalObservations:
             observation = cast(
                 "HeterogeneousObservation", self.dynamical_model(context).observation_model
             )
-            compiled = compile_observation_model(
-                observation.laws,
-                manifest_cov=observation.measurement.manifest_cov,
-                observation_support=self.operator.observation_support,
-            )
-            mean_density = compiled.mean_log_prob_fn
-            assert mean_density is not None  # This target owns interval support.
-            means = expected_observation_mean(
-                jnp.zeros_like(stats[..., 0]),
-                stats[..., 0],
-                stats[..., 1] if self.tree.statistic_count == 2 else jnp.zeros_like(stats[..., 0]),
-                weights,
-                self.operator.summary_operator_codes,
-            )
-            return jnp.sum(
-                jax.vmap(
-                    lambda y, mean, mask: mean_density(
-                        y, mean, observation.measurement.manifest_cov, mask
-                    )
-                )(values, means, masks)
+            groups = compile_law_groups(
+                observation.laws, self.operator.interval_summary_indices, interval=True
             )
 
-        densities = jax.vmap(jax.vmap(density, in_axes=(0, 0)), in_axes=(None, 0))(
-            contexts, statistics
-        )
+            def row_density(
+                y: jax.Array, mask: jax.Array, weight: jax.Array, candidates: jax.Array
+            ) -> jax.Array:
+                score = prepare_mean_density(groups, y, observation.measurement.manifest_cov, mask)
+
+                def candidate_density(moments: jax.Array) -> jax.Array:
+                    means = expected_observation_mean(
+                        jnp.zeros_like(moments[..., 0]),
+                        moments[..., 0],
+                        moments[..., 1]
+                        if self.tree.statistic_count == 2
+                        else jnp.zeros_like(moments[..., 0]),
+                        weight,
+                        self.operator.summary_operator_codes,
+                    )
+                    return score(means)
+
+                return jax.vmap(candidate_density)(candidates)
+
+            return jax.vmap(row_density, in_axes=(0, 0, 0, 1))(values, masks, weights, stats).sum(
+                axis=0
+            )
+
+        # Both aligned particles and the full child-pair grid share the same
+        # response-independent law terms for each parameter label and row.
+        flat_statistics = statistics.reshape((-1, *statistics.shape[-4:]))
+        densities = jax.vmap(density, in_axes=(0, 1), out_axes=1)(contexts, flat_statistics)
+        densities = densities.reshape((*statistics.shape[:-4], statistics.shape[-4]))
         return (
             densities
             if self.power is None

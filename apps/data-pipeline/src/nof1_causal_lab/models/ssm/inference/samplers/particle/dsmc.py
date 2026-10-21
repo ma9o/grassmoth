@@ -61,10 +61,16 @@ if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.compile.interval_tree import CompiledIntervalTreeLevel
 
 
+# Bound each label-specific pair-score array to 4 GiB per chain in float32.
+# This controls merge workspace independently of full-path replay batching.
+_PAIRWISE_BATCH_ELEMENTS = 1 << 30
+
+
 class _Segment(NamedTuple):
     first: jax.Array
     last: jax.Array
     evidence: jax.Array
+    prior_log_prob: jax.Array
     boundary: jax.Array
     weights: jax.Array
     statistics: jax.Array
@@ -106,7 +112,7 @@ def _step(
     ctx: SmootherContext,
     key: jax.Array,
     x_ref: jax.Array,
-    root_correction: Callable[[jax.Array], jax.Array] | None,
+    root_correction: Callable[[jax.Array, jax.Array], jax.Array] | None,
     *,
     record_trace: bool = False,
     batch_size: int | None = None,
@@ -163,6 +169,13 @@ def _step(
     evidence = (
         observations.at[0].add(initial) - proposal_log_prob[..., None] + paid_auxiliary[..., None]
     )
+    # Carry only selected scientific prior factors; observations and auxiliary
+    # densities remain in evidence. Targets without replay need no score storage.
+    prior = jnp.zeros(
+        (steps, count, labels if root_correction is not None else 0), dtype=ctx.traj_dtype
+    )
+    if root_correction is not None:
+        prior = prior.at[0].set(initial)
     statistics = (
         jnp.zeros((padded, count, labels, 0, 0, 1), dtype=ctx.latent_dtype)
         if intervals is None
@@ -237,17 +250,17 @@ def _step(
         left: _Segment,
         right: _Segment,
         seam: jax.Array,
-        plan: CompiledIntervalTreeLevel | IntervalTreeLevelRuntime | None,
-        node: jax.Array,
         width: jax.Array,
-    ) -> tuple[jax.Array, jax.Array]:
+        emission: jax.Array,
+    ) -> tuple[jax.Array, jax.Array, jax.Array]:
         transition = ctx.pairwise_transition_log_probs(left.last, right.first, seam)
         paid = seam_auxiliary(left, right, seam, width)
-        if intervals is not None and plan is not None and plan.emission_slots.shape[1]:
-            transition = transition + intervals.pairwise_emission_log_probs(
-                ctx.contexts, left.statistics, right.statistics, plan, node
-            )
-        joint = left.evidence[:, None] + right.evidence[None] + transition + paid[..., None]
+        joint = (
+            left.evidence[:, None]
+            + right.evidence[None]
+            + (transition + emission)
+            + paid[..., None]
+        )
         numerator = jax.scipy.special.logsumexp(logpi + joint, axis=-1)
         left_density = jax.scipy.special.logsumexp(logpi + left.evidence, axis=-1)
         right_density = jax.scipy.special.logsumexp(logpi + right.evidence, axis=-1)
@@ -258,7 +271,7 @@ def _step(
             - left_density[:, None]
             - right_density[None]
         )
-        return logits.astype(ctx.traj_dtype), joint.astype(ctx.traj_dtype)
+        return logits.astype(ctx.traj_dtype), joint.astype(ctx.traj_dtype), transition
 
     def combine(
         left: _Segment,
@@ -268,8 +281,9 @@ def _step(
         plan: CompiledIntervalTreeLevel | IntervalTreeLevelRuntime | None,
         node: jax.Array,
         width: jax.Array,
+        emission: jax.Array,
     ) -> _CombinedSegment:
-        logits, joint = join(left, right, seam, plan, node, width)
+        logits, joint, transition = join(left, right, seam, width, emission)
         selected = jnp.concatenate(
             (jnp.zeros(1, dtype=jnp.int32), _multinomial(draw_key, logits.reshape(-1), count - 1))
         )
@@ -285,6 +299,9 @@ def _step(
             left.first[li],
             right.last[ri],
             joint[li, ri],
+            left.prior_log_prob[li] + right.prior_log_prob[ri] + transition[li, ri]
+            if root_correction is not None
+            else left.prior_log_prob,
             jnp.stack(
                 (
                     left.boundary[li, 0],
@@ -303,12 +320,14 @@ def _step(
     def path_from_origins(origins: jax.Array) -> jax.Array:
         return particles[jnp.arange(steps), origins[:steps]]
 
-    def terminal_correction(origins: jax.Array, local: jax.Array) -> jax.Array:
+    def terminal_correction(
+        origins: jax.Array, local: jax.Array, local_prior: jax.Array
+    ) -> jax.Array:
         if root_correction is None:
             # Every auxiliary pair/triple is already paid at its owning tree node.
             return jnp.asarray(0.0, dtype=ctx.traj_dtype)
         path = path_from_origins(origins)
-        replay = root_correction(path)
+        replay = root_correction(path, local_prior)
         ratio = jax.scipy.special.logsumexp(logpi + local + replay) - jax.scipy.special.logsumexp(
             logpi + local
         )
@@ -321,7 +340,7 @@ def _step(
     node_statistics = (leaf_metrics,) if ctx.diagnostic_weights else ()
     if steps == 1:
         root_logits = leaf_logits[0]
-        root_logits = root_logits + jax.vmap(terminal_correction)(origins[0], evidence[0])
+        root_logits = root_logits + jax.vmap(terminal_correction)(origins[0], evidence[0], prior[0])
         chosen = _forced_move(select_key, root_logits)
         selected_origins = origins[0, chosen]
     else:
@@ -331,12 +350,16 @@ def _step(
             banks,
             banks,
             jnp.pad(evidence, ((0, pad), (0, 0), (0, 0))),
+            jnp.pad(prior, ((0, pad), (0, 0), (0, 0))),
             origins,
             jnp.pad(weights, ((0, pad), (0, 0)), constant_values=-math.log(count)),
             statistics,
         )
         max_nodes = padded // 2
-        block = max(1, padded // 16)
+        block = min(
+            max(1, padded // 2),
+            max(1, _PAIRWISE_BATCH_ELEMENTS // (count * count * labels)),
+        )
         if batch_size is not None:
             block = min(block, batch_size)
         block = 1 << (block.bit_length() - 1)
@@ -347,7 +370,7 @@ def _step(
             slots = max(
                 segments.statistics.shape[-3], *(plan.left_slots.shape[1] for plan in levels)
             )
-            plans = stack_interval_tree_levels(levels, max_nodes, slots)
+            plans = stack_interval_tree_levels(levels, max_nodes, slots, block)
             statistics = jnp.pad(
                 segments.statistics,
                 (
@@ -380,12 +403,13 @@ def _step(
         )
 
         def level_step(
-            current: _Segment, level: jax.Array
+            current: _Segment, level: jax.Array, node_batch: int
         ) -> tuple[
             _Segment, tuple[tuple[jax.Array, jax.Array], dict[ParticleWeightMetric, jax.Array]]
         ]:
-            pairs = padded >> (level + 1)
             width = 1 << level
+            active_children = (steps + width - 1) // width
+            pairs = (active_children + 1) // 2
             plan = None if plans is None else jax.tree.map(lambda value: value[level], plans)
             children = (jnp.zeros((max_nodes, count), jnp.int32),) * 2
             metrics = {
@@ -395,16 +419,51 @@ def _step(
 
             def merge_block(index: jax.Array, carry: _CombinedSegment) -> _CombinedSegment:
                 next_segments, metrics, children = carry
-                offset = index * block
-                nodes = offset + jnp.arange(block)
-                left = jax.tree.map(lambda value: value[2 * nodes], current)
-                right = jax.tree.map(lambda value: value[2 * nodes + 1], current)
-                seams = (2 * nodes + 1) * width
-                moved, measured, parents = jax.vmap(
-                    lambda first, second, seam, key, node: combine(
-                        first, second, seam, key, plan, node, width
+                offset = index * node_batch
+                nodes = offset + jnp.arange(node_batch)
+
+                def child(indices: jax.Array) -> _Segment:
+                    selected: _Segment = jax.tree.map(lambda value: value[indices], current)
+                    empty = jax.tree.map(jnp.zeros_like, selected)._replace(
+                        weights=jnp.full_like(selected.weights, -math.log(count))
                     )
-                )(left, right, seams, keys[level, nodes], nodes)
+                    present = indices < active_children
+                    segment: _Segment = jax.tree.map(
+                        lambda value, neutral: jnp.where(
+                            present.reshape((*present.shape, *((1,) * (value.ndim - 1)))),
+                            value,
+                            neutral,
+                        ),
+                        selected,
+                        empty,
+                    )
+                    return segment
+
+                left = child(2 * nodes)
+                right = child(2 * nodes + 1)
+                seams = (2 * nodes + 1) * width
+                emissions = jnp.zeros((node_batch, count, count, labels), dtype=ctx.traj_dtype)
+                if intervals is not None and plan is not None and plan.emitting_nodes.shape[1]:
+                    emission_plan = plan
+                    score_interval = intervals.pairwise_emission_log_probs
+
+                    def emit(slot: jax.Array, values: jax.Array) -> jax.Array:
+                        node = emission_plan.emitting_nodes[index, slot]
+                        density = score_interval(
+                            ctx.contexts,
+                            current.statistics[2 * node],
+                            current.statistics[2 * node + 1],
+                            emission_plan,
+                            node,
+                        )
+                        return values.at[node - offset].set(density)
+
+                    emissions = jax.lax.fori_loop(0, plan.emission_counts[index], emit, emissions)
+                moved, measured, parents = jax.vmap(
+                    lambda first, second, seam, key, node, emission: combine(
+                        first, second, seam, key, plan, node, width, emission
+                    )
+                )(left, right, seams, keys[level, nodes], nodes, emissions)
 
                 def update(bank: jax.Array, values: jax.Array) -> jax.Array:
                     return jax.lax.dynamic_update_slice_in_dim(bank, values, offset, axis=0)
@@ -417,16 +476,27 @@ def _step(
                 return updated
 
             combined: _CombinedSegment = jax.lax.fori_loop(
-                0, (pairs + block - 1) // block, merge_block, (current, metrics, children)
+                0, (pairs + node_batch - 1) // node_batch, merge_block, (current, metrics, children)
             )
             moved, metrics, children = combined
             return moved, (children, metrics)
 
-        # At the default block width there are at most eight blocks at any level,
-        # independent of T. Both the forward tree and reverse ancestry have O(log T) depth.
+        # Share the full-width body across lower levels, then specialize the
+        # smaller upper levels. Their node IDs and random keys stay unchanged.
         with jax.named_scope("dsmc_tree"):
-            segments, ((left_history, right_history), history_metrics) = jax.lax.scan(
-                level_step, segments, jnp.arange(depth)
+            shared_depth = depth - (block.bit_length() - 1)
+            segments, history = jax.lax.scan(
+                lambda current, level: level_step(current, level, min(block, (steps + 1) // 2)),
+                segments,
+                jnp.arange(shared_depth),
+            )
+            histories = (history,)
+            for level in range(shared_depth, depth):
+                nodes = (steps + (1 << (level + 1)) - 1) >> (level + 1)
+                segments, history = level_step(segments, jnp.asarray(level), nodes)
+                histories = (*histories, jax.tree.map(lambda value: value[None], history))
+            (left_history, right_history), history_metrics = jax.tree.map(
+                lambda *parts: jnp.concatenate(parts), *histories
             )
         indices = jnp.broadcast_to(jnp.arange(count)[:, None], (count, padded))
         base_nodes = jnp.arange(padded)
@@ -460,7 +530,7 @@ def _step(
         with jax.named_scope("dsmc_root_correction"):
             root_logits = jax.lax.map(
                 lambda inputs: terminal_correction(*inputs),
-                (root_origins, root.evidence),
+                (root_origins, root.evidence, root.prior_log_prob),
                 batch_size=batch,
             )
         chosen = _forced_move(select_key, root_logits)
@@ -507,7 +577,7 @@ def step(
     ctx: SmootherContext,
     key: jax.Array,
     x_ref: jax.Array,
-    root_correction: Callable[[jax.Array], jax.Array] | None,
+    root_correction: Callable[[jax.Array, jax.Array], jax.Array] | None,
     *,
     batch_size: int | None = None,
 ) -> ParticleSmootherResult:
@@ -521,7 +591,7 @@ def trace_step(
     ctx: SmootherContext,
     key: jax.Array,
     x_ref: jax.Array,
-    root_correction: Callable[[jax.Array], jax.Array] | None,
+    root_correction: Callable[[jax.Array, jax.Array], jax.Array] | None,
     *,
     batch_size: int | None = None,
 ) -> TracedResult[ParticleSmootherResult, SmootherTraceRecord]:

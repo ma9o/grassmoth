@@ -18,6 +18,7 @@ from nof1_causal_lab.models.ssm.execution import emissions
 from nof1_causal_lab.models.ssm.execution.observation_distributions import (
     law_response,
     masked_law_log_prob,
+    prepare_response_log_prob,
 )
 from nof1_causal_lab.models.ssm.execution.observation_groups import LawGroup, compile_law_groups
 from nof1_causal_lab.models.ssm.execution.observation_operator import compile_observation_operator
@@ -109,6 +110,23 @@ def grouped_response(
     return values
 
 
+def prepare_mean_density(
+    groups: tuple[LawGroup, ...], y: jax.Array, R: jax.Array, mask: jax.Array
+) -> ResponseFn:
+    """Bind each interval law before mapping across candidate response means."""
+
+    def bind(group: LawGroup) -> ResponseFn:
+        if isinstance(group.laws[0], NormalLawSpec):
+            return lambda means: _group_density(group, y, jnp.zeros_like(means), R, mask, means)
+        indices = jnp.asarray(group.indices)
+        law = group.evaluate(jnp.zeros_like(y), jnp.sqrt(jnp.diag(R)), jnp.ones_like(y), mask)
+        score = prepare_response_log_prob(law, y[indices], mask[indices])
+        return lambda means: score(means[indices])
+
+    scores = tuple(bind(group) for group in groups)
+    return lambda means: sum((score(means) for score in scores), jnp.zeros((), dtype=y.dtype))
+
+
 def compile_observation_model(
     laws: ObservationLaws,
     *,
@@ -150,13 +168,7 @@ def compile_observation_model(
         raise ValueError("Category laws have no scalar interval-summary response")
 
     def mean_density(y: jax.Array, means: jax.Array, R: jax.Array, mask: jax.Array) -> jax.Array:
-        return sum(
-            (
-                _group_density(group, y, jnp.zeros_like(means), R, mask, means)
-                for group in interval_groups
-            ),
-            jnp.zeros((), dtype=y.dtype),
-        )
+        return prepare_mean_density(interval_groups, y, R, mask)(means)
 
     return CompiledObservationModel(
         kernel,

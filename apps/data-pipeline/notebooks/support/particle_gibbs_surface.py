@@ -618,9 +618,7 @@ def dsmc_sweep(
         delta=initial.latent_delta,
         trajectory_dtype=initial.trajectory_log_prob.dtype,
     )
-    traced = dsmc_trace_step(
-        ctx, jax.random.key(seed), initial.latent_trajectory, lambda _: jnp.zeros(1)
-    )
+    traced = dsmc_trace_step(ctx, jax.random.key(seed), initial.latent_trajectory, None)
     return _project_sweep(
         traced.trace,
         candidates,
@@ -664,9 +662,7 @@ def _conditional_kernel(world: World, particles: int, kappa: float):
             delta=bound.latent_delta,
             trajectory_dtype=bound.trajectory_log_prob.dtype,
         )
-        result = dsmc_step(
-            smoother_context, path_key, state.latent_trajectory, lambda _: jnp.zeros(1)
-        )
+        result = dsmc_step(smoother_context, path_key, state.latent_trajectory, None)
         path = result.latent_path
         return bound._replace(
             latent_trajectory=path,

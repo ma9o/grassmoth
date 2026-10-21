@@ -31,7 +31,7 @@ from nof1_causal_lab.models.ssm.covariance import symmetrize_with_jitter
 from nof1_causal_lab.models.ssm.execution.contracts import NUMERICAL_EPSILON
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
 
     from jax.typing import ArrayLike
 
@@ -59,6 +59,29 @@ def _positive_log_jvp(
     # Reuse the log rule under nested differentiation. Unlike d(1 / value),
     # this keeps derivatives of log(exp(eta)) finite in float32's tails.
     return logarithm, tangent * jnp.exp(-logarithm)
+
+
+def _negative_binomial_normalizer(concentration: jax.Array, value: jax.Array) -> jax.Array:
+    return (
+        jax.scipy.special.gammaln(1 + value)
+        + jax.scipy.special.gammaln(concentration)
+        - jax.scipy.special.gammaln(value + concentration)
+    )
+
+
+def _negative_binomial_log_prob(
+    mean: jax.Array, concentration: jax.Array, value: jax.Array, normalizer: jax.Array
+) -> jax.Array:
+    zero_mean = mean == 0.0
+    logits = _positive_log(jnp.where(zero_mean, 1.0, mean)) - _positive_log(concentration)
+    positive_count = -(
+        concentration * jax.nn.softplus(logits) + value * jax.nn.softplus(-logits) + normalizer
+    )
+    positive_count = jnp.where(zero_mean, -jnp.inf, positive_count)
+    # Preserve the exact right derivative at mean zero without reciprocal rates.
+    boundary = -concentration * jnp.log1p(jnp.where(zero_mean, mean, 0.0) / concentration)
+    zero_count = jnp.where(zero_mean, boundary, -concentration * jax.nn.softplus(logits))
+    return jnp.where(value == 0, zero_count, positive_count)
 
 
 class BinaryProbabilityDistribution(dist.CategoricalLogits):
@@ -123,19 +146,13 @@ class ZeroMeanNegativeBinomial(dist.MixtureGeneral):
     @override
     def log_prob(self, value: ArrayLike, intermediates: list[jax.Array] | None = None) -> jax.Array:
         del intermediates
-        zero_mean = self.response_mean == 0.0
-        logits = _positive_log(jnp.where(zero_mean, 1.0, self.response_mean)) - _positive_log(
-            self.concentration
+        values = jnp.asarray(value)
+        return _negative_binomial_log_prob(
+            self.response_mean,
+            self.concentration,
+            values,
+            _negative_binomial_normalizer(self.concentration, values),
         )
-        positive_count = dist.NegativeBinomialLogits(self.concentration, logits).log_prob(value)
-        positive_count = jnp.where(zero_mean, -jnp.inf, positive_count)
-        # The boundary expression preserves the exact right derivative -1 at
-        # mean zero; positive means use log space without reciprocal-rate terms.
-        boundary = -self.concentration * jnp.log1p(
-            jnp.where(zero_mean, self.response_mean, 0.0) / self.concentration
-        )
-        zero_count = jnp.where(zero_mean, boundary, -self.concentration * jax.nn.softplus(logits))
-        return jnp.where(jnp.asarray(value) == 0, zero_count, positive_count)
 
     @property
     @override
@@ -225,12 +242,14 @@ def safe_native(law: Law[jax.Array]) -> tuple[dist.Distribution, jax.Array]:
     return to_native(feasible), valid
 
 
-def masked_law_log_prob(law: Law[jax.Array], values: jax.Array, mask: jax.Array) -> jax.Array:
-    """Missing factors/derivatives are zero; invalid observed events have zero mass."""
-    native, valid = safe_native(law)
+def _masked_law_inputs(
+    law: Law[jax.Array], values: jax.Array, mask: jax.Array
+) -> tuple[Law[jax.Array], jax.Array, jax.Array, jax.Array]:
+    feasible, valid = feasible_law(law)
+    native = to_native(feasible)
     support = native.support
     assert support is not None
-    valid = valid & jnp.isfinite(values) & support(values)
+    valid = valid & jnp.isfinite(values) & jnp.asarray(support(values))
     if isinstance(law, GammaLawSpec):
         valid = valid & (values > 0.0)
     elif isinstance(law, BetaLawSpec):
@@ -239,9 +258,57 @@ def masked_law_log_prob(law: Law[jax.Array], values: jax.Array, mask: jax.Array)
     safe_values = jnp.where(valid & observed, values, support.feasible_like(values))
     if support.is_discrete:
         safe_values = safe_values.astype(jnp.int32)
-    log_probs = native.log_prob(safe_values)
+    return feasible, valid, observed, safe_values
+
+
+def masked_law_log_prob(law: Law[jax.Array], values: jax.Array, mask: jax.Array) -> jax.Array:
+    """Missing factors/derivatives are zero; invalid observed events have zero mass."""
+    feasible, valid, observed, safe_values = _masked_law_inputs(law, values, mask)
+    log_probs = to_native(feasible).log_prob(safe_values)
     total = jnp.sum(jnp.where(valid & observed, log_probs, 0.0))
     return jnp.where(jnp.any(observed & ~valid), -jnp.inf, total)
+
+
+def prepare_response_log_prob(
+    law: Law[jax.Array], values: jax.Array, mask: jax.Array
+) -> Callable[[jax.Array], jax.Array]:
+    """Bind observed values and response-independent operands before particle mapping."""
+    if not isinstance(law, (GammaLawSpec, NegativeBinomial2LawSpec)):
+        return lambda response: masked_law_log_prob(with_response(law, response), values, mask)
+    feasible, valid, observed, safe_values = _masked_law_inputs(law, values, mask)
+    assert isinstance(feasible, (GammaLawSpec, NegativeBinomial2LawSpec))
+    concentration = jnp.asarray(feasible.concentration)
+    if isinstance(feasible, GammaLawSpec):
+        normalizer = jax.scipy.special.gammaln(concentration)
+        event_term = jax.scipy.special.xlogy(concentration - 1, safe_values)
+
+        def factors(response: jax.Array) -> tuple[jax.Array, jax.Array]:
+            response_valid = jnp.isfinite(response) & (response > 0)
+            rate = concentration / jnp.where(response_valid, response, 1.0)
+            rate_valid = jnp.isfinite(rate) & (rate > 0)
+            rate = jnp.where(rate_valid, rate, 1.0)
+            density = event_term - rate * safe_values - (normalizer - concentration * jnp.log(rate))
+            return density, response_valid & rate_valid
+    else:
+        normalizer = _negative_binomial_normalizer(concentration, safe_values)
+
+        def factors(response: jax.Array) -> tuple[jax.Array, jax.Array]:
+            response_valid = jnp.isfinite(response) & (response >= 0)
+            density = _negative_binomial_log_prob(
+                jnp.where(response_valid, response, 1.0),
+                concentration,
+                safe_values,
+                normalizer,
+            )
+            return density, response_valid
+
+    def density(response: jax.Array) -> jax.Array:
+        log_probs, response_valid = factors(jnp.where(observed, response, 1.0))
+        feasible = valid & response_valid
+        total = jnp.sum(jnp.where(feasible & observed, log_probs, 0.0))
+        return jnp.where(jnp.any(observed & ~feasible), -jnp.inf, total)
+
+    return density
 
 
 def evaluate_law(

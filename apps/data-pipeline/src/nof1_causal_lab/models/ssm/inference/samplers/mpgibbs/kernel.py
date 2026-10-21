@@ -154,7 +154,6 @@ def build_marginal_particle_gibbs_kernel(
     assert isinstance(target.state_space.recurrence, (AdditiveRecurrences, ParallelRecurrences)), (
         "The fitting preflight must establish an associative deterministic recurrence"
     )
-    local_target = target.tree_target()
 
     runtime_observations = target.observations
     runtime_times = target.times
@@ -307,10 +306,10 @@ def build_marginal_particle_gibbs_kernel(
             )
         contexts = ctx.contexts
 
-        def root_correction(path: jax.Array) -> jax.Array:
+        def root_correction(path: jax.Array, local_prior: jax.Array) -> jax.Array:
             return jnp.asarray(
-                jax.vmap(lambda context: target.replay_correction(local_target, context, path))(
-                    contexts
+                jax.vmap(lambda context, prior: target.replay_correction(context, path, prior))(
+                    contexts, local_prior
                 )
             )
 

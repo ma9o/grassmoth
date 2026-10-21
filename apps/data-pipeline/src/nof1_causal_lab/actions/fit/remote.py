@@ -180,6 +180,10 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
             "PYTHONHASHSEED": "0",
             "DEPLOYMENT_ENV": "development",
             "JAX_PLATFORMS": "cuda,cpu",
+            # Reserve a contiguous pool before backend initialization so large
+            # compiled sweep workspaces do not depend on allocator growth.
+            "XLA_PYTHON_CLIENT_PREALLOCATE": "true",
+            "XLA_PYTHON_CLIENT_MEM_FRACTION": "0.90",
             FIT_CACHE_VOLUME_ENV: cache_volume,
             "JAX_COMPILATION_CACHE_DIR": "/tmp/nof1-jax",
             "JAX_ENABLE_COMPILATION_CACHE": "true",

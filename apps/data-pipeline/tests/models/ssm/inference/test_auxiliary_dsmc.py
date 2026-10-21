@@ -278,21 +278,33 @@ def test_conditional_tree_preserves_analytic_posterior(interval, parameter_count
     np.testing.assert_allclose(log_probs, expected, atol=5e-5, rtol=1e-5)
 
 
-@pytest.mark.parametrize("count", [4, 8])
-def test_root_replay_evaluates_only_linear_number_of_complete_paths(count):
-    times = np.arange(3.0)
-    target = interval_target(times, np.full((3, 1), 0.2), times[:, None], ("last",))
-    ctx = _context(target, "amala_plus", count=count)
+@pytest.mark.parametrize(
+    ("count", "steps", "drift"), [(4, 1, "none"), (4, 5, "amala"), (8, 33, "amala_plus")]
+)
+def test_root_replay_evaluates_only_linear_number_of_complete_paths(count, steps, drift):
+    times = np.arange(float(steps))
+    target = interval_target(times, np.full((steps, 1), 0.2), times[:, None], ("last",))
+    ctx = _context(target, drift, count=count, mixture=True)
     calls = []
 
-    def correction(path):
-        jax.debug.callback(lambda x: calls.append(x.shape), path)
+    def correction(path, local_prior):
+        expected = jax.vmap(lambda bound: target.prior_path_log_prob(bound, path))(ctx.contexts)
+        jax.debug.callback(
+            lambda x, carried, direct: calls.append((x.shape, carried, direct)),
+            path,
+            local_prior,
+            expected,
+        )
         return jnp.zeros(2)
 
-    result = jax.jit(lambda key: step(ctx, key, jnp.zeros((3, 1)), correction))(jax.random.key(43))
+    result = jax.jit(lambda key: step(ctx, key, jnp.zeros((steps, 1)), correction, batch_size=2))(
+        jax.random.key(43)
+    )
     jax.block_until_ready(result.latent_path)
     jax.effects_barrier()
-    assert calls == [(3, 1)] * count
+    assert [shape for shape, _, _ in calls] == [(steps, 1)] * count
+    for _, carried, direct in calls:
+        np.testing.assert_allclose(carried, direct, rtol=2e-5, atol=2e-5)
 
 
 def test_zero_drift_uses_leaf_factors_without_path_or_transition_gradients():
@@ -425,15 +437,37 @@ def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, s
 
 
 @pytest.mark.parametrize(
-    ("method", "kappa", "steps"),
-    [("amala", 1.0, 33), ("amala_plus", 1.0, 33), ("amala_plus", 0.0, 33)],
+    ("method", "kappa", "steps", "interval"),
+    [
+        ("amala", 1.0, 33, False),
+        ("amala_plus", 1.0, 33, False),
+        ("amala_plus", 0.0, 33, False),
+        ("amala_plus", 0.0, 33, True),
+    ],
 )
-def test_dsmc_batching_preserves_nonlocal_mixture_transition(method, kappa, steps, monkeypatch):
+def test_dsmc_batching_preserves_nonlocal_mixture_transition(
+    method, kappa, steps, interval, monkeypatch
+):
+    from nof1_causal_lab.artifacts.probability.families import DistributionFamily
     from nof1_causal_lab.models.ssm.inference.samplers.particle import dsmc
     from nof1_causal_lab.models.ssm.inference.samplers.particle.dsmc import trace_step
 
     times = np.arange(float(steps))
-    target = interval_target(times, np.full((steps, 1), 0.2), times[:, None], ("last",))
+    if interval:
+        observations = np.full((steps, 2), np.nan)
+        starts = observations.copy()
+        observations[:, 0], starts[:, 0] = 0.2, times
+        for row, start, value in ((7, 1, 2), (15, 9, 3), (31, 17, 4), (32, 28, 2)):
+            observations[row, 1], starts[row, 1] = value, start
+        target = interval_target(
+            times,
+            observations,
+            starts,
+            ("last", "sum"),
+            families=(DistributionFamily.GAUSSIAN, DistributionFamily.NEGATIVE_BINOMIAL),
+        )
+    else:
+        target = interval_target(times, np.full((steps, 1), 0.2), times[:, None], ("last",))
     ctx = _context(target, method, count=5, mixture=True)._replace(
         drift=method if kappa else "none", diagnostic_weights=True
     )
