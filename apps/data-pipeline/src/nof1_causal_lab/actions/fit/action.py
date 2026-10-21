@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-import time
-from typing import TYPE_CHECKING, TypedDict
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import numpy as np
 
-from nof1_causal_lab.actions.errors import ModelFitError
+from nof1_causal_lab.actions.contracts.bodies import FitOutput
 from nof1_causal_lab.actions.fit.conditioning import condition_model
 from nof1_causal_lab.actions.fit.diagnostics import segment_diagnostics
-from nof1_causal_lab.actions.fit.runtime import fit_runtime
+from nof1_causal_lab.actions.fit.execution import ModelFitFailure
 from nof1_causal_lab.artifacts.arrays import ArrayVector, NumericalArray
 from nof1_causal_lab.artifacts.identity import ConstructRef, ParameterRef
-from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.parameter import ParameterCoordinate
 from nof1_causal_lab.artifacts.reports.inference import (
     FitSegment,
@@ -28,24 +27,28 @@ from nof1_causal_lab.models.ssm.inference.samplers.progress import capture_phase
 from nof1_causal_lab.models.ssm.inference.types import UnretainedRun
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable
     from datetime import datetime
 
-    from nof1_causal_lab.actions.contracts.bodies import FitOutput
     from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
-    from nof1_causal_lab.artifacts.identity import GitOid
+    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.artifacts.model.question import QuestionSpec
     from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
-    from nof1_causal_lab.artifacts.probability.serialization import ArrayLoader
+    from nof1_causal_lab.artifacts.reports.checks import SpecificationAssessment
+    from nof1_causal_lab.artifacts.reports.inference import FitRuntime
     from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ChainDiagnostics
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
+    from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.compute.programs import ProgramCompiler, ProgramPreparer
     from nof1_causal_lab.models.structure import StructuralSelection
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
 
 
-class FitResult(TypedDict):
+@dataclass(frozen=True)
+class FitResult:
     """The fitted model definition paired with its retained numerical inference evidence."""
 
-    _dynamical_model_spec: DynamicalModelSpec | None
+    dynamical_model_spec: DynamicalModelSpec | None
     evidence: InferenceEvidence
     metadata: InferenceMetadata
 
@@ -62,35 +65,43 @@ def append_phase_evidence(
     )
 
 
-def fit(
+def _fit(
     *,
     selection: StructuralSelection,
     data_for_model: ObservationDataset,
     time_origin: datetime,
     sampler: SamplerSpec,
-    array_writer: Callable[[np.ndarray], str],
-    array_loader: ArrayLoader,
+    budget: ComputeBudget,
+    runtime: FitRuntime,
+    clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
+    compiler: ProgramCompiler,
+    prepare_program: ProgramPreparer,
     compute_loo_diagnostics: bool,
     continuation: SamplerCheckpoint | None = None,
     previous: FitOutput | None = None,
-) -> FitResult:
+) -> FitResult | ModelFitFailure:
     """The exact producer's buffers cross the compute boundary without report reductions."""
     from nof1_causal_lab.actions.fit.execution import fit_model
 
-    with capture_phases(time.monotonic) as phases:
+    with capture_phases(clock) as phases:
         fitted = fit_model(
             selection,
             data_for_model,
             time_origin=time_origin,
             sampler=sampler,
             continuation=continuation,
+            budget=budget,
+            clock=clock,
+            wall_clock=wall_clock,
+            logger=logger,
+            compiler=compiler,
+            prepare_program=prepare_program,
         )
-    if "error" in fitted:
-        raise ModelFitError(
-            fitted["error"], diagnostics={"duration_seconds": fitted["duration_seconds"]}
-        )
-    result = fitted["result"]
-    runtime = fit_runtime(sampler)
+    if isinstance(fitted, ModelFitFailure):
+        return fitted
+    result = fitted.result
     old_count = (
         0
         if previous is None
@@ -120,29 +131,29 @@ def fit(
         }
         if previous is not None:
             prior = previous.inference
-            return {
-                "_dynamical_model_spec": None,
-                "metadata": prior.core.inference_metadata.revised(
-                    duration_seconds=fitted["duration_seconds"],
+            return FitResult(
+                dynamical_model_spec=None,
+                metadata=prior.core.inference_metadata.revised(
+                    duration_seconds=fitted.duration_seconds,
                     segments=(*prior.core.inference_metadata.segments, segment(None)),
                 ),
-                "evidence": append_phase_evidence(
+                evidence=append_phase_evidence(
                     prior.evidence, prior.evidence.revised(phase_extra_fields=phase_fields)
                 ),
-            }
-        return {
-            "_dynamical_model_spec": None,
-            "metadata": InferenceMetadata(
+            )
+        return FitResult(
+            dynamical_model_spec=None,
+            metadata=InferenceMetadata(
                 distribution=None,
                 num_samples_total=0,
                 num_chains=sampler.num_chains,
-                duration_seconds=fitted["duration_seconds"],
+                duration_seconds=fitted.duration_seconds,
                 engine=result.evidence,
                 sampler_diagnostics=None,
                 segments=(segment(None),),
             ),
-            "evidence": InferenceEvidence(phase_extra_fields=phase_fields),
-        }
+            evidence=InferenceEvidence(phase_extra_fields=phase_fields),
+        )
     native = result.diagnostics
 
     def retain(values: object | None) -> NumericalArray | None:
@@ -150,12 +161,10 @@ def fit(
 
     conditioned, identity = condition_model(
         selection.dynamical_model_spec,
-        fitted["panel"].compiled_dynamical_model,
+        fitted.panel.compiled_dynamical_model,
         result,
-        times=fitted["panel"].times,
+        times=fitted.panel.times,
         time_origin=time_origin,
-        array_writer=array_writer,
-        array_loader=array_loader,
     )
     layout = conditioned.law_layouts[identity]
     latent_indices = (
@@ -180,7 +189,7 @@ def fit(
         observation_log_probs=retain(native.observation_log_probs)
         if compute_loo_diagnostics
         else None,
-        observed_rows=retain(np.any(np.isfinite(fitted["panel"].observations), axis=1))
+        observed_rows=retain(np.any(np.isfinite(fitted.panel.observations), axis=1))
         if compute_loo_diagnostics
         else None,
         exact_observation_rows=retain(native.exact_observation_rows),
@@ -207,7 +216,7 @@ def fit(
             ),
         ),
         engine=result.evidence,
-        duration_seconds=fitted["duration_seconds"],
+        duration_seconds=fitted.duration_seconds,
         num_chains=native.mcmc.num_chains,
         num_samples_total=native.mcmc.num_chains * (old_count + native.mcmc.num_samples),
         sampler_diagnostics=native.sampler_diagnostics,
@@ -231,8 +240,6 @@ def fit(
         )
         law = empirical_distribution(
             combined.reshape(-1, combined.shape[-1]),
-            array_writer=array_writer,
-            array_loader=array_loader,
         )
         conditioned = conditioned.with_entities(
             distributions={**conditioned.distributions, identity: law}
@@ -266,18 +273,16 @@ def fit(
             else None,
         )
         evidence = append_phase_evidence(prior_evidence, evidence)
-    return {"_dynamical_model_spec": conditioned, "evidence": evidence, "metadata": metadata}
+    return FitResult(dynamical_model_spec=conditioned, evidence=evidence, metadata=metadata)
 
 
-def read_inference_report(
-    store: ArtifactStore,
-    revision: GitOid,
+def inference_report(
+    dynamical_model_spec: DynamicalModelSpec,
+    input_model: DynamicalModelSpec,
     evidence: InferenceEvidence,
     metadata: InferenceMetadata,
 ) -> InferenceReport:
     """Compute exact-chain diagnostics from this fit's atoms and native telemetry."""
-    from nof1_causal_lab.study.persistence.store import read_model
-
     if metadata.distribution is None:
         return InferenceReport(
             evidence=evidence,
@@ -307,7 +312,6 @@ def read_inference_report(
         )
 
         assert metadata.distribution is not None
-        dynamical_model_spec = read_model(store, revision)
         layouts = {metadata.distribution: dynamical_model_spec.law_layouts[metadata.distribution]}
         atoms = {
             identity: empirical_atoms(dynamical_model_spec.distributions[identity])
@@ -394,7 +398,6 @@ def read_inference_report(
 
         from nof1_causal_lab.study.projections.priors import quantity_prior_densities
 
-        input_model = read_model(store, store.read_meta("model", revision).derived_from["model"])
         fitted_parameters = frozenset(value.subject.parameter_id for value in marginals)
         priors = quantity_prior_densities(input_model, fitted_parameters)
         layout = layouts[metadata.distribution]
@@ -431,3 +434,68 @@ def read_inference_report(
         )
 
     return render()
+
+
+def fit(
+    *,
+    question: QuestionSpec,
+    selection: StructuralSelection,
+    data_for_model: ObservationDataset,
+    time_origin: datetime,
+    sampler: SamplerSpec,
+    budget: ComputeBudget,
+    runtime: FitRuntime,
+    clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
+    compiler: ProgramCompiler,
+    prepare_program: ProgramPreparer,
+    preflight: tuple[SpecificationAssessment, ...],
+    compute_loo_diagnostics: bool,
+    continuation: SamplerCheckpoint | None = None,
+    previous: FitOutput | None = None,
+) -> FitOutput | ModelFitFailure:
+    """Compute a complete fit from owned inputs and explicit execution dependencies."""
+    from nof1_causal_lab.actions.checks import fit_check_report
+
+    result = _fit(
+        selection=selection,
+        data_for_model=data_for_model,
+        time_origin=time_origin,
+        sampler=sampler,
+        budget=budget,
+        runtime=runtime,
+        clock=clock,
+        wall_clock=wall_clock,
+        logger=logger,
+        compiler=compiler,
+        prepare_program=prepare_program,
+        compute_loo_diagnostics=compute_loo_diagnostics,
+        continuation=continuation,
+        previous=previous,
+    )
+    if isinstance(result, ModelFitFailure):
+        return result
+    conditioned = result.dynamical_model_spec
+    report = (
+        previous.inference.revised(
+            evidence=result.evidence,
+            core=previous.inference.core.revised(inference_metadata=result.metadata),
+        )
+        if conditioned is None and previous is not None
+        else inference_report(
+            conditioned or selection.dynamical_model_spec,
+            selection.dynamical_model_spec,
+            result.evidence,
+            result.metadata,
+        )
+    )
+    return FitOutput(
+        dynamical_model_spec=conditioned
+        if conditioned is not None
+        else previous.dynamical_model_spec
+        if previous is not None
+        else None,
+        checks=fit_check_report(selection, question, data_for_model, preflight=preflight),
+        inference=report,
+    )

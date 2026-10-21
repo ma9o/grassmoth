@@ -1,33 +1,20 @@
 """Execute model staging and action-owned checks in local contract tests."""
 
-from nof1_causal_lab.actions.contracts.bodies import EditQuestionInput
-from nof1_causal_lab.actions.edit_model import edit_model
-from nof1_causal_lab.actions.model_checks import evaluate_model_checks
+from nof1_causal_service.actions.contracts.inputs import EditQuestionInput
+from nof1_causal_service.actions.edit_model import edit_model
 from tests.support.helpers import fixture_entity_id
 
 
 def edit_and_check(workspace_id, request, state):
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
-    from nof1_causal_lab.study.records import Applied
-
-    staged = edit_model(workspace_id, request)
-    assert isinstance(staged, Applied)
-    checks, identification = evaluate_model_checks(workspace_id, state, staged, action="edit_model")
-    store = ArtifactStore(workspace_id)
-    reports = {"checks": checks, "identification": identification}
-    return staged.revised(
-        effects=staged.effects.revised(
-            reports={name: store.write_report(report) for name, report in reports.items()}
-        )
-    )
+    return edit_model(workspace_id, request)
 
 
 def question_root(workspace_id, question=None):
     """Publish the study question as the lineage root, as edit_question does."""
-    from nof1_causal_lab.actions.contracts.requests import EditQuestionRequest
-    from nof1_causal_lab.actions.edit_question import edit_question
     from nof1_causal_lab.artifacts.model.question import QuestionSpec
-    from nof1_causal_lab.study.persistence.history import StudyRepository
+    from nof1_causal_service.actions.contracts.requests import EditQuestionRequest
+    from nof1_causal_service.actions.edit_question import edit_question
+    from nof1_causal_service.study.persistence.history import StudyRepository
 
     request = EditQuestionRequest(
         input=EditQuestionInput(
@@ -56,148 +43,131 @@ def applied_record(
     """A successful test publication composes the actual owned action payload."""
     from pydantic import TypeAdapter
 
-    from nof1_causal_lab.actions.output_builder import build_output, staged_state
+    from nof1_causal_lab.actions.checks import model_check_report
+    from nof1_causal_lab.actions.contracts.bodies import (
+        EditModelOutput,
+        EditQuestionOutput,
+        FitOutput,
+        SimulateOutput,
+    )
+    from nof1_causal_lab.actions.prepare_data.action import prepare_data
     from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
     from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
-    from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
-    from nof1_causal_lab.artifacts.simulation import ModelSimulationResult
-    from nof1_causal_lab.study.persistence.history import StudyRepository
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
-    from nof1_causal_lab.study.records import (
-        ActionAttempt,
-        Applied,
-        AttemptRecord,
-        StagedEditAttempt,
-        StagedEditQuestionAttempt,
-        StagedFitAttempt,
-        StagedPrepareAttempt,
-        StagedSimulateAttempt,
-        applied_attempt,
+    from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
+    from nof1_causal_lab.artifacts.reports.inference import (
+        FitCheckReport,
+        InferenceEvidence,
+        InferenceReport,
     )
+    from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport
+    from nof1_causal_lab.artifacts.simulation import SimulationEvidence, SimulationReport
+    from nof1_causal_lab.models.structure import StructuralSelection
+    from nof1_causal_lab.study.projections.visuals import simulation_observation_histories
+    from nof1_causal_service.study.persistence.history import StudyRepository
+    from nof1_causal_service.study.persistence.store import ArtifactStore, read_model, read_question
+    from nof1_causal_service.study.records import ActionAttempt, Applied, AttemptRecord
+    from nof1_causal_service.study.state import apply_effects
 
-    if result.result is None and (
-        getattr(request, "action", None) == "edit_model"
-        or any(artifact.artifact_id == "model" for artifact in result.effects.produced)
-    ):
-        result = result.revised(result=ModelEditResult())
-    if request is not None:
-        attempt = applied_attempt(request, result)
+    store = ArtifactStore(workspace_id)
+    state = apply_effects(
+        StudyRepository(workspace_id).state(), result.effects.produced, result.effects.retracted
+    )
+    reports = result.effects.reports
+    if isinstance(result.result, str):
+        identity = result.result
+        action = (
+            request.action
+            if request is not None
+            else next(item.produced_by for item in result.effects.produced)
+        )
     else:
+        if not state.has("question"):
+            from tests.support.helpers import write_question
+
+            state = state.with_artifacts((write_question(store),))
+        question = read_question(store, state.current["question"].revision)
         match result.result:
-            case None:
-                attempt = StagedEditQuestionAttempt(
-                    action="edit_question", request=None, outcome=result
-                )
-            case ModelEditResult():
-                attempt = StagedEditAttempt(action="edit_model", request=None, outcome=result)
             case DataPreparationResult():
-                attempt = StagedPrepareAttempt(action="prepare_data", request=None, outcome=result)
+                from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
+                from nof1_causal_service.study.queries.lineage import read_data_metadata
+
+                revision = state.current["panel"].revision
+                data = read_data_metadata(store, revision)
+                frame = store.read_parquet_file("panel", revision, "panel.parquet")
+                output = prepare_data(
+                    ObservationDataset.from_frame(
+                        frame, data.variables, time_origin=data.time_origin
+                    ),
+                    data,
+                    result.result,
+                )
+                if "data-profile" in reports:
+                    from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
+
+                    output = output.revised(
+                        profile=store.read_result(reports["data-profile"], DataProfileReport)
+                    )
+                action = "prepare_data"
             case InferenceEvidence():
-                attempt = StagedFitAttempt(
-                    action="fit", request=None, outcome=Applied(result=None, effects=result.effects)
+                from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
+                from nof1_causal_lab.artifacts.reports.model_checks import QuestionCheckReport
+                from tests.support.inference import _report
+
+                model = read_model(store, state.current["model"].revision)
+                output = FitOutput(
+                    dynamical_model_spec=model,
+                    checks=store.read_result(reports["checks"], FitCheckReport)
+                    if "checks" in reports
+                    else FitCheckReport(
+                        data=DataProfileReport(indicators={}, findings=()),
+                        preflight=(),
+                        question=QuestionCheckReport(findings=()),
+                    ),
+                    inference=store.read_result(reports["inference"], InferenceReport)
+                    if "inference" in reports
+                    else _report(model).revised(evidence=result.result),
                 )
-            case ModelSimulationResult():
-                attempt = StagedSimulateAttempt(
-                    action="simulate",
-                    request=None,
-                    outcome=Applied(result=None, effects=result.effects),
+                action = "fit"
+            case SimulationEvidence():
+                report = store.read_result(reports["simulation"], SimulationReport)
+                evidence = report.evidence
+                output = SimulateOutput(
+                    report=report,
+                    data=simulation_observation_histories(
+                        evidence,
+                        evidence.arms.action.observations.values,
+                        evidence.observation_layout.mask.values,
+                    ),
                 )
+                action = "simulate"
             case _:
-                raise TypeError("A publication fixture needs an owned action result")
-    repository, store = StudyRepository(workspace_id), ArtifactStore(workspace_id)
-    state = staged_state(repository.state(), result.effects)
-    if not state.has("question"):
-        from tests.support.helpers import write_question
-
-        state = state.with_artifacts((write_question(store),))
-    if isinstance(result.result, InferenceEvidence):
-        assert request is not None
-        assert request.action == "fit"
-        state = state.revised(data=repository.fit_source(request.input.target).data_ref)
-    if isinstance(result.result, DataPreparationResult):
-        from nof1_causal_lab.actions.data_checks import evaluate_data_checks
-
-        profile = evaluate_data_checks(workspace_id, state, result)
-        attempt = attempt.revised(
-            outcome=result.revised(
-                effects=result.effects.revised(
-                    reports={**result.effects.reports, "data-profile": store.write_report(profile)}
-                )
-            )
-        )
-    if (
-        isinstance(result.result, ModelSimulationResult)
-        and "simulation" not in result.effects.reports
-    ):
-        from nof1_causal_lab.actions.simulate.action import read_simulation_report
-
-        assert request is not None
-        report = read_simulation_report(
-            store, result.result.evidence, request.input, state.current["question"].revision
-        )
-        attempt = attempt.revised(
-            outcome=attempt.outcome.revised(
-                effects=result.effects.revised(
-                    reports={**result.effects.reports, "simulation": store.write_report(report)}
-                )
-            )
-        )
-    if isinstance(result.result, InferenceEvidence):
-        from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
-        from nof1_causal_lab.artifacts.reports.inference import FitCheckReport
-        from nof1_causal_lab.artifacts.reports.model_checks import QuestionCheckReport
-        from nof1_causal_lab.study.persistence.store import read_model
-        from tests.support.inference import _report
-
-        assert isinstance(attempt.outcome, Applied)
-        reports = dict(attempt.outcome.effects.reports)
-        if "inference" not in reports:
-            report = _report(read_model(store, state.current["model"].revision)).revised(
-                evidence=result.result
-            )
-            reports["inference"] = store.write_report(report)
-        if "checks" not in reports:
-            reports["checks"] = store.write_report(
-                FitCheckReport(
-                    data=DataProfileReport(indicators={}, findings=()),
-                    preflight=(),
-                    question=QuestionCheckReport(findings=()),
-                )
-            )
-        attempt = attempt.revised(
-            outcome=attempt.outcome.revised(
-                effects=attempt.outcome.effects.revised(reports=reports),
-            )
-        )
-    assert isinstance(attempt.outcome, Applied)
-    if (
-        isinstance(result.result, ModelEditResult)
-        and "checks" not in attempt.outcome.effects.reports
-    ):
-        checks, identification = evaluate_model_checks(
-            workspace_id, state, result, action="edit_model"
-        )
-        attempt = attempt.revised(
-            outcome=attempt.outcome.revised(
-                effects=attempt.outcome.effects.revised(
-                    reports={
-                        **attempt.outcome.effects.reports,
-                        "checks": store.write_report(checks),
-                        "identification": store.write_report(identification),
-                    }
-                )
-            )
-        )
-    output = build_output(workspace_id, attempt, state)
-    # Storage-focused fixtures may retain physical input artifacts. The result itself
-    # is always the same complete body used by production publication.
+                if state.has("model"):
+                    model = read_model(store, state.current["model"].revision)
+                    selection = StructuralSelection.for_question(model, question)
+                    output = EditModelOutput(
+                        dynamical_model_spec=model,
+                        checks=store.read_result(reports["checks"], ModelCheckReport)
+                        if "checks" in reports
+                        else model_check_report(selection, question),
+                        identification=store.read_result(
+                            reports["identification"], IdentificationReport
+                        )
+                        if "identification" in reports
+                        else selection.identification,
+                        pruning=result.result
+                        if isinstance(result.result, ModelEditResult)
+                        else ModelEditResult(),
+                    )
+                    action = "edit_model"
+                else:
+                    output = EditQuestionOutput(question=question)
+                    action = "edit_question"
+        identity = store.write_result(output)
     saved = TypeAdapter(ActionAttempt).validate_python(
         {
-            "action": attempt.action,
+            "action": action,
             "request": request,
-            "outcome": Applied(
-                result=store.write_result(output), effects=result.effects.revised(reports={})
-            ),
+            "outcome": Applied(result=identity, effects=result.effects.revised(reports={})),
         }
     )
     return AttemptRecord(seq=seq, ts=ts, attempt=saved, **metadata)
@@ -212,4 +182,56 @@ def empty_simulation_summary():
         indicator_frames={},
         action_category_probabilities={},
         reference_category_probabilities={},
+    )
+
+
+def model_findings(workspace_id, state, *, action):
+    """Evaluate the selected scientific values in a storage-backed fixture."""
+    from nof1_causal_lab.actions.checks import (
+        check_model_data,
+        fit_check_report,
+        model_check_report,
+    )
+    from nof1_causal_lab.models.ssm.compile.inputs import compile_ssm_inputs_from_model
+    from nof1_causal_lab.models.structure import StructuralSelection
+    from nof1_causal_service.study.persistence.store import ArtifactStore, read_model, read_question
+    from nof1_causal_service.study.queries.data import read_data_history
+
+    store = ArtifactStore(workspace_id)
+    model = read_model(store, state.current["model"].revision)
+    question = read_question(store, state.current["question"].revision)
+    selection = StructuralSelection.for_question(model, question)
+    if action == "fit":
+        history = read_data_history(store, state.data)
+        findings = check_model_data(
+            compile_ssm_inputs_from_model(selection),
+            history.observations,
+            time_origin=history.time_origin,
+        )
+        return fit_check_report(selection, question, history.observations, preflight=findings)
+    return model_check_report(selection, question), selection.identification
+
+
+def prepared_profile(workspace_id, state, applied):
+    """Read a fixture's produced panel and exercise the pure profiler."""
+    from nof1_causal_lab.artifacts.observations.reference import DataRef
+    from nof1_causal_service.study.persistence.store import ArtifactStore
+    from nof1_causal_service.study.state import apply_effects
+
+    selected = apply_effects(state, applied.effects.produced, applied.effects.retracted)
+    return data_profile(
+        ArtifactStore(workspace_id),
+        DataRef(revision=selected.current["panel"].revision, replicate_index=0),
+    )
+
+
+def data_profile(store, source):
+    from nof1_causal_lab.observations.quality.profile import profile_data
+    from nof1_causal_service.study.queries.data import read_data_history
+
+    history = read_data_history(store, source)
+    return profile_data(
+        history.observations.recorded.frame,
+        definitions=history.variables,
+        metadata=history.metadata,
     )

@@ -20,7 +20,9 @@ from nof1_causal_lab.models.ssm.inference.samplers.sweeps import (
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable, Mapping
+    from datetime import datetime
 
     from jax.stages import Compiled
 
@@ -28,6 +30,7 @@ if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.compute.programs import ProgramPreparer
     from nof1_causal_lab.models.ssm.inference.samplers.pgibbs.kernel import (
         ParticleGibbsKernel,
         ParticleGibbsState,
@@ -63,17 +66,22 @@ def run_particle_gibbs[State](
     target: ParticleTarget,
     kernel: ParticleGibbsKernel[State],
     *,
+    prepare_program: ProgramPreparer,
     sampler: SamplerSpec,
     initialization: ParticleInitialization,
     compute_budget: ComputeBudget,
     key: jax.Array,
     clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleGibbsRun | InitializationFailure:
     """Advance chains together, retaining aligned draws only after warmup."""
     num_chains = sampler.num_chains
     initial_key, key = jax.random.split(key)
-    with inference_phase("pgibbs", "initializing_chains", clock=clock):
+    with inference_phase(
+        "pgibbs", "initializing_chains", clock=clock, logger=logger, wall_clock=wall_clock
+    ):
         states = jax.jit(jax.vmap(kernel.initialize))(
             initialization.positions,
             initialization.paths,
@@ -137,7 +145,9 @@ def run_particle_gibbs[State](
         return sweep
 
     initial = (states, key)
-    with inference_phase("pgibbs", "compiling_sweeps", clock=clock):
+    with inference_phase(
+        "pgibbs", "compiling_sweeps", clock=clock, logger=logger, wall_clock=wall_clock
+    ):
         plan = compile_projected_sweeps(
             step_factory,
             initial,
@@ -151,9 +161,14 @@ def run_particle_gibbs[State](
             path_dtype=states.path.dtype,
             num_chains=sampler.num_chains,
             clock=clock,
+            logger=logger,
+            wall_clock=wall_clock,
             label="pgibbs",
+            prepare_program=prepare_program,
         )
-    run = run_sweeps(plan, initial, clock=clock, label="pgibbs")
+    run = run_sweeps(
+        plan, initial, clock=clock, logger=logger, wall_clock=wall_clock, label="pgibbs"
+    )
     states, next_key = run.state
     draw_fields = frozenset(("positions", "paths", "observation_log_probs", "log_posterior"))
     warmup = {name: value for name, value in run.history.warmup.items() if name not in draw_fields}

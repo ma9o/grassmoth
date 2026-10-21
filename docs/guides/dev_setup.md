@@ -59,7 +59,7 @@ Or individually:
 |-----|---------|------|
 | Web viewer | `cd apps/web && bun run dev` | 3000 |
 | Temporal dev server | `cd apps/data-pipeline && uv run python scripts/dev/temporal_dev_server.py` | 7233 |
-| Study worker | `cd apps/data-pipeline && PYTHONHASHSEED=0 uv run python -m nof1_causal_lab.actions.temporal.worker` | — |
+| Study worker | `cd apps/data-pipeline && PYTHONHASHSEED=0 uv run python -m nof1_causal_service.actions.temporal.worker` | — |
 | Tool server / study facade | `cd apps/data-pipeline && bun run dev` | 8100 |
 
 The web viewer works standalone with mock data. Live studies also need the Temporal dev server, the study worker, and the tool server — `bun run integration:start` brings up the whole stack (see the [integration testing guide](agentic_integration_testing.md)).

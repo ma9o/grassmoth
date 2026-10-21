@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.study.state import (
+from nof1_causal_service.study.state import (
     ArtifactRecord,
     RetractedArtifact,
     StudyState,

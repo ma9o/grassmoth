@@ -54,10 +54,10 @@ def simulation_layout(model, times, mask, write_array):
 
 def preparation_input(store, preparation):
     """Publish the model owning a test recipe before submitting extraction instructions."""
-    from nof1_causal_lab.actions.contracts.bodies import PrepareDataInput
     from nof1_causal_lab.artifacts.identity import GitOid
     from nof1_causal_lab.artifacts.model.construct import replace_constructs
     from nof1_causal_lab.artifacts.model.indicator import IndicatorSpec
+    from nof1_causal_service.actions.contracts.inputs import PrepareDataInput
     from tests.support.helpers import make_model
 
     variables = preparation.definition.variables

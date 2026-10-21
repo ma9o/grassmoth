@@ -106,7 +106,7 @@ def test_model_input_paths_hold_and_interventions_override_later_points(monkeypa
     from nof1_causal_lab.artifacts.probability.joint_layout import JointLawLayout
     from nof1_causal_lab.models.ssm.counterfactual import orchestration
     from nof1_causal_lab.models.ssm.inference.conditioning import compile_exact_state_constraints
-    from nof1_causal_lab.models.ssm.preparation.panel import (
+    from nof1_causal_lab.models.ssm.preparation.binding import (
         input_trajectory_events,
         input_trajectory_values,
     )

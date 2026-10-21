@@ -4,15 +4,15 @@ import msgpack
 import pytest
 from fastapi.testclient import TestClient
 
-from nof1_causal_lab.actions.contracts.bodies import EditModelInput
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import EditModelRequest
-from nof1_causal_lab.api.read_only import create_read_facade_app
 from nof1_causal_lab.artifacts.identity import ConstructId, GitOid
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
-from nof1_causal_lab.storage import paths as data_module
-from nof1_causal_lab.study.records import Applied
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.inputs import EditModelInput
+from nof1_causal_service.actions.contracts.requests import EditModelRequest
+from nof1_causal_service.api.read_only import create_read_facade_app
+from nof1_causal_service.storage import paths as data_module
+from nof1_causal_service.study.records import Applied
 from tests.support.action import applied_record, question_root
 from tests.support.git import git_oid
 
@@ -52,8 +52,8 @@ def test_read_facade_serves_reads_and_rejects_actions(monkeypatch, tmp_path):
 
 
 def test_saved_call_serves_pinned_artifacts_without_starting_new_actions(monkeypatch, tmp_path):
-    from nof1_causal_lab.study.persistence.history import StudyRepository
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
+    from nof1_causal_service.study.persistence.history import StudyRepository
+    from nof1_causal_service.study.persistence.store import ArtifactStore
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     monkeypatch.setenv("READ_ONLY_FACADE", "1")
@@ -104,10 +104,10 @@ def test_saved_call_serves_pinned_artifacts_without_starting_new_actions(monkeyp
 
 def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
     from nof1_causal_lab.llm.traces import LLMTrace, TraceMessage
-    from nof1_causal_lab.storage import backend as storage
-    from nof1_causal_lab.storage.traces import collect_run_traces
-    from nof1_causal_lab.study.persistence.history import StudyRepository
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
+    from nof1_causal_service.storage import backend as storage
+    from nof1_causal_service.storage.traces import collect_run_traces
+    from nof1_causal_service.study.persistence.history import StudyRepository
+    from nof1_causal_service.study.persistence.store import ArtifactStore
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     monkeypatch.setenv("READ_ONLY_FACADE", "1")
@@ -177,7 +177,7 @@ def test_workspaces_endpoint_lists_study_questions(monkeypatch, tmp_path):
 
 
 def test_upload_endpoint_stages_input_file(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import backend as storage
+    from nof1_causal_service.storage import backend as storage
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     monkeypatch.delenv("READ_ONLY_FACADE", raising=False)
@@ -199,7 +199,7 @@ def test_upload_endpoint_stages_input_file(monkeypatch, tmp_path):
 def test_full_facade_advertises_actions(monkeypatch, tmp_path):
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     monkeypatch.delenv("READ_ONLY_FACADE", raising=False)
-    from nof1_causal_lab.api import app as tool_server
+    from nof1_causal_service.api import app as tool_server
 
     client = TestClient(tool_server.app)
     assert client.get("/api/workspaces").headers["X-Actions-Enabled"] == "true"

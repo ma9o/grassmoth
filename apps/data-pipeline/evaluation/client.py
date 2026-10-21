@@ -5,8 +5,8 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.public.client import StudyClient
-from nof1_causal_lab.public.contracts import (
+from nof1_causal_service.public.client import StudyClient
+from nof1_causal_service.public.contracts import (
     ActionInput,
     ActionPoll,
     ActionSuccess,
@@ -16,13 +16,13 @@ from nof1_causal_lab.public.contracts import (
     NewFitTarget,
     RunningPoll,
 )
-from nof1_causal_lab.public.studies import ActionResult, StudyError
+from nof1_causal_service.public.studies import ActionResult, StudyError
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from evaluation.budget import BudgetLedger
-    from nof1_causal_lab.public.contracts import (
+    from nof1_causal_service.public.contracts import (
         ActionId,
         ArtifactId,
         CallId,
@@ -104,7 +104,7 @@ class ActionClient:
 
     def artifact_revision(self, call_id: str, artifact: ArtifactId) -> GitOid:
         """Select a produced artifact tree; an action commit is a different revision."""
-        from nof1_causal_lab.public.contracts import Applied
+        from nof1_causal_service.public.contracts import Applied
 
         item = next(item for item in self._timeline().attempts if item.call_id == call_id)
         outcome = item.record.attempt.outcome

@@ -20,9 +20,6 @@ from pydantic import TypeAdapter
 
 # Import all artifact contracts — this pulls in every nested domain model
 from nof1_causal_lab.actions.contracts.bodies import DataDiffOutput, ModelDiffOutput
-from nof1_causal_lab.actions.contracts.polling import ActionPoll
-from nof1_causal_lab.actions.contracts.progress import ProgressEvent
-from nof1_causal_lab.actions.contracts.requests import DataDiffRequest, ModelDiffRequest
 from nof1_causal_lab.artifacts.identity import ARTIFACT_IDS, GitOid
 from nof1_causal_lab.artifacts.model.construct import CausalEdgeSpec, ConstructSpec
 from nof1_causal_lab.artifacts.model.expressions import COEFFICIENT_MEANINGS
@@ -33,9 +30,12 @@ from nof1_causal_lab.artifacts.observations.history import ObservationHistory
 from nof1_causal_lab.artifacts.reports.effects import EffectSummary
 from nof1_causal_lab.artifacts.scenarios import CausalEffectResult
 from nof1_causal_lab.llm.traces import LLMTrace
-from nof1_causal_lab.public.contracts import TimelineResponse, TimelineRevision
-from nof1_causal_lab.study.records import StudyRevision
-from nof1_causal_lab.study.snapshot import ModelSnapshot
+from nof1_causal_service.actions.contracts.polling import ActionPoll
+from nof1_causal_service.actions.contracts.progress import ProgressEvent
+from nof1_causal_service.actions.contracts.requests import DataDiffRequest, ModelDiffRequest
+from nof1_causal_service.public.contracts import TimelineResponse, TimelineRevision
+from nof1_causal_service.study.records import StudyRevision
+from nof1_causal_service.study.snapshot import ModelSnapshot
 from scripts.artifact_contracts import ARTIFACT_CONTRACTS
 from scripts.codegen.type_system_catalog import (
     ContractJsonSchema,
@@ -81,7 +81,7 @@ EXPORTED_RESULT_MODELS: tuple[type[BaseModel], ...] = (
 
 def export_openapi() -> JsonSchemaValue:
     """Generate HTTP fields, stored roots and generic bodies together, once."""
-    from nof1_causal_lab.api.app import app
+    from nof1_causal_service.api.app import app
 
     fields = get_fields_from_routes(app.routes)
     roots = (*ARTIFACT_CONTRACTS.values(), *EXPORTED_API_MODELS, *EXPORTED_RESULT_MODELS)

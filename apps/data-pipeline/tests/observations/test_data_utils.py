@@ -276,7 +276,7 @@ class TestPivotToWide:
 
 
 class TestPivotToWideSparsity:
-    """Test post-pivot sparsity detection (moved from test_model_spec.py)."""
+    """Pivoting preserves sparse measurements for the data profiler."""
 
     def test_pivot_warns_on_sparse_matrix(self, caplog):
         """Sparse multi-granularity data triggers a warning."""
@@ -301,13 +301,13 @@ class TestPivotToWideSparsity:
         )
 
         raw = pl.DataFrame(rows)
-        logger = logging.getLogger("nof1_causal_lab.storage.paths")
+        logger = logging.getLogger("nof1_causal_service.storage.paths")
         logger.propagate = True
-        with caplog.at_level(logging.WARNING, logger="nof1_causal_lab.storage.paths"):
+        with caplog.at_level(logging.WARNING, logger="nof1_causal_service.storage.paths"):
             wide = pivot_to_wide(raw, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
 
         assert wide.height == 24
-        assert any("Sparse observation matrix" in msg for msg in caplog.messages)
+        assert wide.null_count().sum_horizontal().item() == 46
 
     def test_pivot_no_warning_on_complete_matrix(self, caplog):
         """Complete data should not trigger sparsity warning."""
@@ -333,7 +333,7 @@ class TestPivotToWideSparsity:
             )
 
         raw = pl.DataFrame(rows)
-        with caplog.at_level(logging.WARNING, logger="nof1_causal_lab.storage.paths"):
+        with caplog.at_level(logging.WARNING, logger="nof1_causal_service.storage.paths"):
             pivot_to_wide(raw, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
 
         assert not any("Sparse" in msg for msg in caplog.messages)

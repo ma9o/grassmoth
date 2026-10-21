@@ -12,7 +12,7 @@ from nof1_causal_lab.artifacts.observations.dataset import (
     SelectedObservations,
 )
 from nof1_causal_lab.artifacts.observations.spec import ResolvedObservationSpec
-from nof1_causal_lab.models.ssm.preparation.panel import PanelPreparationFailure, bind_panel
+from nof1_causal_lab.models.ssm.preparation.binding import PanelPreparationFailure, bind_panel
 from tests.support.inference import compile_model_fixture
 from tests.support.model import one_state_gaussian_model
 
@@ -61,7 +61,7 @@ def test_selection_accepts_renames_and_equivalent_windows_but_requires_identity(
     [{"aggregation": "mean"}, {"observation_window": "2d"}, {"measurement_dtype": "count"}],
 )
 def test_fit_rejects_changed_definitions_before_projecting_observations(changes, monkeypatch):
-    from nof1_causal_lab.models.ssm.preparation import panel as runtime
+    from nof1_causal_lab.models.ssm.preparation import binding as runtime
 
     compiled_dynamical_model = compile_model_fixture(one_state_gaussian_model())
     required = compiled_dynamical_model.observations[0].observation

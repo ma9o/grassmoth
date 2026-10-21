@@ -1,7 +1,7 @@
 import pytest
 
 from nof1_causal_lab.actions.errors import ActionExecutionError
-from nof1_causal_lab.actions.temporal.errors import as_non_retryable_application_error
+from nof1_causal_service.actions.temporal.errors import as_non_retryable_application_error
 
 pytestmark = pytest.mark.contract
 

@@ -42,16 +42,19 @@ from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationF
 from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable, Mapping
+    from datetime import datetime
 
     from jax.stages import Compiled
 
     from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.compute.programs import ProgramPreparer
     from nof1_causal_lab.models.ssm.inference.joint_coordinates import JointChart
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
-    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
+    from nof1_causal_lab.models.ssm.preparation.binding import BoundPanel
 
 
 @dataclass(frozen=True)
@@ -101,10 +104,13 @@ def _extra_fields(
 def run_nuts_da(
     target: ParticleTarget,
     *,
+    prepare_program: ProgramPreparer,
     sampler: SamplerSpec,
     compute_budget: ComputeBudget,
     key: jax.Array,
     clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
     continuation: SamplerCheckpoint | None = None,
 ) -> NutsDARun | InitializationFailure:
     """Advance independent chains together, then retain only post-adaptation joint draws.
@@ -185,7 +191,9 @@ def run_nuts_da(
             model_args=(runtime_chart,),
         )
 
-    with inference_phase("nuts_da", "initializing_chains", clock=clock):
+    with inference_phase(
+        "nuts_da", "initializing_chains", clock=clock, logger=logger, wall_clock=wall_clock
+    ):
         starts = (
             jnp.broadcast_to(initial, (sampler.num_chains, initial.size))
             if continuation is None
@@ -255,7 +263,9 @@ def run_nuts_da(
 
         return sweep
 
-    with inference_phase("nuts_da", "compiling_sweeps", clock=clock):
+    with inference_phase(
+        "nuts_da", "compiling_sweeps", clock=clock, logger=logger, wall_clock=wall_clock
+    ):
         plan = compile_projected_sweeps(
             step_factory,
             (states, key, chart),
@@ -267,9 +277,19 @@ def run_nuts_da(
             path_dtype=states.z.dtype,
             num_chains=sampler.num_chains,
             clock=clock,
+            logger=logger,
+            wall_clock=wall_clock,
             label="nuts_da",
+            prepare_program=prepare_program,
         )
-    run = run_sweeps(plan, (states, key, chart), clock=clock, label="nuts_da")
+    run = run_sweeps(
+        plan,
+        (states, key, chart),
+        clock=clock,
+        logger=logger,
+        wall_clock=wall_clock,
+        label="nuts_da",
+    )
     states, next_key, _ = run.state
     last_parameters, last_paths = jax.vmap(coordinates.decode)(states.z)
     draw_fields = frozenset(("positions", "paths", "observation_log_probs"))
@@ -306,15 +326,20 @@ def fit_nuts_da(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
+    prepare_program: ProgramPreparer,
     compute_budget: ComputeBudget,
     sampler: SamplerSpec,
     reparam: Strategy | None,
     clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Fit the production exact target and expose the shared posterior/report contract."""
     trace_key, sampling_key = jax.random.split(jax.random.key(sampler.seed))
-    with inference_phase("nuts_da", "building_target", clock=clock):
+    with inference_phase(
+        "nuts_da", "building_target", clock=clock, logger=logger, wall_clock=wall_clock
+    ):
         bundle = build_particle_problem(
             priors,
             panel,
@@ -329,14 +354,17 @@ def fit_nuts_da(
         compute_budget=compute_budget,
         key=sampling_key,
         clock=clock,
+        logger=logger,
+        wall_clock=wall_clock,
         continuation=continuation,
+        prepare_program=prepare_program,
     )
     if isinstance(run, InitializationFailure):
         return run
     assert isinstance(run.checkpoint.tuning, JointTuning)
     parameterization_record = run.checkpoint.tuning.parameterization
     if sampler.num_samples_per_chain == 0:
-        return UnretainedRun(
+        return UnretainedRun.completed(
             sampler,
             MCMCEvidence(method="nuts_da"),
             run.compiled_step,

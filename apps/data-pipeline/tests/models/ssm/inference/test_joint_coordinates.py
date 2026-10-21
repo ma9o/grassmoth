@@ -1,6 +1,6 @@
-"""Exact parameterization identities and decoded analytic posteriors, without fitting a study."""
-
+import logging
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import dynestyx as dsx
 import equinox as eqx
@@ -22,9 +22,13 @@ from nof1_causal_lab.models.ssm.inference.conditioning import compile_exact_stat
 from nof1_causal_lab.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from nof1_causal_lab.models.ssm.inference.parameter_transform import ParameterTransform
 from nof1_causal_lab.models.ssm.inference.targets.gaussian_reference import GaussianReference
+from nof1_causal_service.compute.compilation_cache import prepare_program
 from tests.models.ssm.compile.test_exact_state_space import _model, _problem
 from tests.support.interval_particle import gaussian_interval_case, interval_target
 from tests.support.observation import observation_laws
+
+"""Exact parameterization identities and decoded analytic posteriors, without fitting a study."""
+
 
 pytestmark = pytest.mark.inference(concern="sampling")
 PARAMETERIZATIONS = ("centred", "non_centred", "mixed")
@@ -606,5 +610,8 @@ def test_zero_warmup_rejects_changed_parameterization_or_mask_before_kernel_exec
             key=jax.random.key(0),
             clock=time.monotonic,
             continuation=checkpoint,
+            prepare_program=prepare_program,
+            logger=logging.getLogger(__name__),
+            wall_clock=lambda: datetime.now(UTC),
         )
         assert isinstance(result, InitializationFailure)

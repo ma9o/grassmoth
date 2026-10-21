@@ -10,10 +10,6 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts.bodies import FitInput, NewFitTarget
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import FitRequest, PrepareDataRequest
-from nof1_causal_lab.actions.runners import run_action
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
@@ -22,7 +18,6 @@ from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.observations.semantics import SummaryOperator
 from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
-    ModelSimulationResult,
     SimulationArm,
     SimulationEvidence,
     SimulationObservationLayout,
@@ -31,14 +26,18 @@ from nof1_causal_lab.artifacts.simulation import (
     SingleArmSimulation,
 )
 from nof1_causal_lab.models.ssm import compiled_access as numeric
-from nof1_causal_lab.models.ssm.preparation.panel import project_observation_data
+from nof1_causal_lab.models.ssm.preparation.binding import project_observation_data
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
-from nof1_causal_lab.study.errors import StudyLookupError
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.queries.data import read_data_history, read_simulation_observations
-from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.state import StudyState
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
+from nof1_causal_service.actions.contracts.requests import FitRequest, PrepareDataRequest
+from nof1_causal_service.actions.runners import run_action
+from nof1_causal_service.study.errors import StudyLookupError
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.queries.data import read_data_history, read_simulation_observations
+from nof1_causal_service.study.records import Applied
+from nof1_causal_service.study.state import StudyState
 from tests.support.action import applied_record, empty_simulation_summary
 from tests.support.data import metadata_for_model, simulation_layout
 from tests.support.git import git_oid
@@ -100,7 +99,7 @@ def _model(**observation_changes):
 
 
 def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypatch):
-    from nof1_causal_lab.storage import paths as data_module
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, history = ArtifactStore("TEST"), StudyRepository("TEST")
@@ -163,8 +162,8 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     simulation_record = applied_record(
         store.workspace_id,
         Applied(
-            result=ModelSimulationResult(evidence=report.evidence),
-            effects=ActionEffects(reports={"simulation": store.write_report(report)}),
+            result=report.evidence,
+            effects=ActionEffects(reports={"simulation": store.write_result(report)}),
         ),
         seq=2,
         ts="2026-09-25T12:01:00Z",
@@ -185,8 +184,8 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
         applied_record(
             store.workspace_id,
             Applied(
-                result=ModelSimulationResult(evidence=later.evidence),
-                effects=ActionEffects(reports={"simulation": store.write_report(later)}),
+                result=later.evidence,
+                effects=ActionEffects(reports={"simulation": store.write_result(later)}),
             ),
             seq=3,
         )
@@ -222,23 +221,27 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     assert panel["anchor_time"].min() == datetime(2026, 1, 6)
     assert set(panel["support_kind"]) == {"point"}
 
-    from nof1_causal_lab.actions.fit import action as fit_module
-    from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
+    from nof1_causal_service.actions.fit import action as fit_module
     from tests.support.inference import _report
 
     def fit(**kwargs):
         assert kwargs["data_for_model"].recorded.frame.equals(panel)
         assert kwargs["time_origin"] == selected.time_origin
-        return {
-            "_dynamical_model_spec": dynamical_model_spec,
-            "evidence": InferenceEvidence(),
-            "metadata": _report(dynamical_model_spec).core.inference_metadata,
-        }
+        from nof1_causal_lab.actions.checks import fit_check_report
+        from nof1_causal_lab.actions.contracts.bodies import FitOutput
 
-    monkeypatch.setattr(fit_module, "fit", fit)
-    monkeypatch.setattr(
-        fit_module, "read_inference_report", lambda *_: _report(dynamical_model_spec)
-    )
+        return FitOutput(
+            dynamical_model_spec=dynamical_model_spec,
+            checks=fit_check_report(
+                kwargs["selection"],
+                kwargs["question"],
+                kwargs["data_for_model"],
+                preflight=kwargs["preflight"],
+            ),
+            inference=_report(dynamical_model_spec),
+        )
+
+    monkeypatch.setattr(fit_module, "run_fit", fit)
     request = FitRequest[GitOid](
         input=FitInput[GitOid](
             target=NewFitTarget(
@@ -330,7 +333,7 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
         assert panel.filter(pl.col("value").is_null())["support_start"].null_count() == 2
     else:
         assert panel["support_start"].to_list() == panel["anchor_time"].to_list()
-    from nof1_causal_lab.study.errors import StudyLookupError
+    from nof1_causal_service.study.errors import StudyLookupError
 
     with pytest.raises(StudyLookupError, match="replicate"):
         read_simulation_observations(

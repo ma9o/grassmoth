@@ -1,6 +1,6 @@
-"""Joint NUTS recovery and production posterior contracts."""
-
+import logging
 import time
+from datetime import UTC, datetime
 
 import jax
 import jax.numpy as jnp
@@ -17,9 +17,13 @@ from nof1_causal_lab.artifacts.sampling import (
 from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.ssm.inference.samplers.nuts import NutsDARun, run_nuts_da
 from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
 from tests.models.ssm.inference.test_laps_initialization import _nonlinear_fixture
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.interval_particle import gaussian_interval_case
+
+"""Joint NUTS recovery and production posterior contracts."""
+
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -45,6 +49,9 @@ def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(
         compute_budget=COMPUTE_BUDGET,
         key=jax.random.key(904),
         clock=time.monotonic,
+        prepare_program=prepare_program,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     assert isinstance(run, NutsDARun)
     assert run.paths is not None
@@ -90,6 +97,10 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
         compute_budget=COMPUTE_BUDGET,
         reparam=None,
         clock=time.monotonic,
+        compiler=compile_staged,
+        prepare_program=prepare_program,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     assert isinstance(result, MCMCPosterior)
     assert result.evidence.method == "nuts_da"
@@ -133,6 +144,9 @@ def test_continuation_matches_uninterrupted_random_stream_and_tuning(
             key=jax.random.key(17),
             clock=time.monotonic,
             continuation=continuation,
+            prepare_program=prepare_program,
+            logger=logging.getLogger(__name__),
+            wall_clock=lambda: datetime.now(UTC),
         )
 
     full = run(settings)
@@ -213,6 +227,9 @@ def test_compile_only_executes_neither_sweep(monkeypatch, parameterization):
         compute_budget=COMPUTE_BUDGET,
         key=jax.random.key(18),
         clock=time.monotonic,
+        prepare_program=prepare_program,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     assert isinstance(run, NutsDARun)
     assert run.positions.shape[:2] == (2, 0)

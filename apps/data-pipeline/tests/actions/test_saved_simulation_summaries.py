@@ -5,9 +5,7 @@ from datetime import UTC, date, datetime
 import numpy as np
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import SimulateInput, SimulateOutput
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import SimulateRequest
+from nof1_causal_lab.actions.contracts.bodies import SimulateOutput
 from nof1_causal_lab.actions.simulate.summaries import simulation_summary
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
@@ -15,7 +13,6 @@ from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelS
 from nof1_causal_lab.artifacts.reports.checks import NotEvaluated
 from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
-    ModelSimulationResult,
     PairedArmSimulation,
     SimulationArm,
     SimulationEvidence,
@@ -25,9 +22,12 @@ from nof1_causal_lab.artifacts.simulation import (
 )
 from nof1_causal_lab.models.ssm.predictive.simulation import generate_simulation_batch
 from nof1_causal_lab.models.structure import StructuralSelection, selected_state_ids
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.records import Applied
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.inputs import SimulateInput
+from nof1_causal_service.actions.contracts.requests import SimulateRequest
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.records import Applied
 from tests.support.action import applied_record, empty_simulation_summary
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.data import metadata_for_model
@@ -39,7 +39,7 @@ pytestmark = pytest.mark.inference(concern="simulation")
 
 
 def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
-    from nof1_causal_lab.storage import paths as data
+    from nof1_causal_service.storage import paths as data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     dynamical_model_spec = make_model(
@@ -170,8 +170,8 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
         applied_record(
             store.workspace_id,
             Applied(
-                result=ModelSimulationResult(evidence=report.evidence),
-                effects=ActionEffects(reports={"simulation": store.write_report(report)}),
+                result=report.evidence,
+                effects=ActionEffects(reports={"simulation": store.write_result(report)}),
             ),
             request=SimulateRequest(
                 input=SimulateInput(
@@ -235,7 +235,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
         "nof1_causal_lab.models.ssm.predictive.simulation.generate_simulation_batch", no_generation
     )
     assert ArtifactStore("SUMMARY").read_result(result_ref, SimulateOutput).report == first
-    monkeypatch.setattr("nof1_causal_lab.actions.output_builder.build_output", no_generation)
+    monkeypatch.setattr("nof1_causal_service.actions.output_builder.build_output", no_generation)
     assert ArtifactStore("SUMMARY").read_result(result_ref, SimulateOutput).report == first
 
 

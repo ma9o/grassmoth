@@ -3,11 +3,11 @@
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
 from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.records import (
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.records import (
     Applied,
     AttemptRecord,
     EditAttempt,
@@ -16,7 +16,7 @@ from nof1_causal_lab.study.records import (
     Raised,
     Rejected,
 )
-from nof1_causal_lab.study.state import RetractedArtifact
+from nof1_causal_service.study.state import RetractedArtifact
 from tests.support.git import artifact_revisions, git_oid
 from tests.support.helpers import make_model
 
@@ -25,7 +25,7 @@ pytestmark = pytest.mark.contract
 
 @pytest.fixture
 def workspace(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import paths as data_module
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     return "test_workspace"

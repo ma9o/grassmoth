@@ -1,6 +1,6 @@
-"""Exact joint LAPS initialization and its paired handoff to production sampling."""
-
+import logging
 import time
+from datetime import UTC, datetime
 
 import jax
 import jax.numpy as jnp
@@ -28,11 +28,15 @@ from nof1_causal_lab.models.ssm.inference.warmup.initialization import (
 )
 from nof1_causal_lab.models.ssm.inference.warmup.laps_ensemble import run_laps_ensemble
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
 from tests.models.ssm.compile.test_exact_state_space import _model, _problem
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.inference import bind_panel_fixture, compile_fit_fixture
 from tests.support.interval_particle import gaussian_interval_case
 from tests.support.model import load_model_fixture
+
+"""Exact joint LAPS initialization and its paired handoff to production sampling."""
+
 
 pytestmark = pytest.mark.inference(concern="warmup")
 
@@ -221,6 +225,10 @@ def test_production_fit_consumes_laps_package(leaf):
         ),
         reparam=None,
         clock=time.monotonic,
+        compiler=compile_staged,
+        prepare_program=prepare_program,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     assert isinstance(result, MCMCPosterior)
     evidence = result.diagnostics.sampler_diagnostics

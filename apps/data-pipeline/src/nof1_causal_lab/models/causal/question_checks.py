@@ -18,7 +18,7 @@ from nof1_causal_lab.artifacts.reports.checks import (
     QueryWindowSubject,
 )
 from nof1_causal_lab.models.causal.graphs import get_all_treatments
-from nof1_causal_lab.models.ssm.preparation.panel import reading_level
+from nof1_causal_lab.models.ssm.preparation.binding import reading_level
 from nof1_causal_lab.models.structure import (
     StructuralSelection,
     StructuralSelectionError,

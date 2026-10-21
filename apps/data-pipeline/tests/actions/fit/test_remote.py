@@ -7,7 +7,9 @@ from unittest.mock import Mock
 import modal
 import pytest
 
-from nof1_causal_lab.actions.fit.remote import (
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.artifacts.sampling import InferenceHardware, NutsDASpec, SamplerSpec
+from nof1_causal_service.actions.fit.remote import (
     FIT_CACHE_VOLUME_ENV,
     FitComputeInput,
     FitComputeResult,
@@ -15,7 +17,7 @@ from nof1_causal_lab.actions.fit.remote import (
     decode_fit_result,
     encode_fit_result,
 )
-from nof1_causal_lab.artifacts.sampling import InferenceHardware, NutsDASpec, SamplerSpec
+from tests.support.helpers import fixture_entity_id
 
 pytestmark = pytest.mark.contract
 
@@ -29,7 +31,7 @@ def isolated_cache_volume(monkeypatch):
 
 
 def test_pytest_fits_locally_and_rejects_live_modal_apps():
-    from nof1_causal_lab.config import get_config
+    from nof1_causal_service.config import get_config
 
     assert get_config().inference.sampler.hardware is InferenceHardware.LOCAL
     with pytest.raises(pytest.fail.Exception, match="Live Modal execution is disabled"):
@@ -48,14 +50,15 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     )
     payload = FitComputeInput(
         dynamical_model_spec_bytes=b"pinned-model",
-        outcome=None,
+        question=QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
+        preflight=(),
         panel_parquet=b"pinned-history",
         variables=(),
         time_origin=datetime(2024, 1, 1, tzinfo=UTC),
         sampler=SamplerSpec(algorithm=NutsDASpec(), num_chains=4, time_limit_seconds=time_limit),
         compute_loo_diagnostics=False,
     )
-    expected = FitComputeResult(b"fitted-model", b"evidence", "{}")
+    expected = FitComputeResult(b"complete-fit")
     remote = Mock()
     remote.remote.return_value = encode_fit_result(expected)
     app = Mock()
@@ -87,7 +90,14 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
 
 def test_modal_timeout_propagates_without_another_call(monkeypatch):
     payload = FitComputeInput(
-        b"model", None, b"history", (), datetime.now(UTC), SamplerSpec(), False
+        b"model",
+        QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
+        (),
+        b"history",
+        (),
+        datetime.now(UTC),
+        SamplerSpec(),
+        False,
     )
     function = Mock(remote=Mock(side_effect=modal.exception.FunctionTimeoutError("expired")))
     app = Mock()
@@ -101,7 +111,7 @@ def test_modal_timeout_propagates_without_another_call(monkeypatch):
 
 
 def test_runtime_records_the_enforced_modal_limit():
-    from nof1_causal_lab.actions.fit.runtime import fit_runtime
+    from nof1_causal_service.actions.fit.runtime import fit_runtime
 
     sampler = SamplerSpec(hardware="L40S", time_limit_seconds=90)
     assert fit_runtime(sampler).time_limit_seconds == 90
@@ -112,18 +122,18 @@ def test_runtime_records_the_enforced_modal_limit():
 def test_fit_return_compression_preserves_all_bytes(model):
     import pickle
 
-    expected = FitComputeResult(model, bytes(range(256)) * 2000, '{"message":"é"}')
+    expected = FitComputeResult((model or b"") + bytes(range(256)) * 2000)
     frame = encode_fit_result(expected)
     restored = decode_fit_result(frame)
     assert restored == expected
     assert pickle.dumps(restored, protocol=5) == pickle.dumps(expected, protocol=5)
-    assert len(frame) < len(expected.evidence) // 10
+    assert len(frame) < len(expected.output) // 10
 
 
 def test_fit_return_rejects_corruption_and_truncation_before_unpickling(monkeypatch):
-    from nof1_causal_lab.actions.fit import remote
+    from nof1_causal_service.actions.fit import remote
 
-    frame = encode_fit_result(FitComputeResult(b"model", b"evidence", "{}"))
+    frame = encode_fit_result(FitComputeResult(b"complete-fit"))
     unpickle = Mock(side_effect=AssertionError("Must verify before unpickling"))
     monkeypatch.setattr(remote.pickle, "loads", unpickle)
     corrupted = frame[:8] + bytes([frame[8] ^ 1]) + frame[9:]
@@ -135,9 +145,9 @@ def test_fit_return_rejects_corruption_and_truncation_before_unpickling(monkeypa
 
 
 def test_fit_return_rejects_inflated_declared_length_without_allocating_it(monkeypatch):
-    from nof1_causal_lab.actions.fit import remote
+    from nof1_causal_service.actions.fit import remote
 
-    frame = encode_fit_result(FitComputeResult(b"model", b"evidence", "{}"))
+    frame = encode_fit_result(FitComputeResult(b"complete-fit"))
     unpickle = Mock(side_effect=AssertionError("Must verify before unpickling"))
     monkeypatch.setattr(remote.pickle, "loads", unpickle)
     with pytest.raises(ValueError, match="length"):

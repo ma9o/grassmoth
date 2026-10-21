@@ -1,51 +1,39 @@
-"""Stage one explicit model edit before action-owned checks and atomic publication."""
-
-from functools import cache
+"""Apply a model edit to supplied scientific values and retain its findings."""
 
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import EditModelRequest
-from nof1_causal_lab.actions.input_resolution import model_edit_state
-from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.actions.checks import model_check_report
+from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
+from nof1_causal_lab.artifacts.base import Value
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import (
     DynamicalModelSpec,
-    ModelEditResult,
     apply_model_edit,
 )
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
 from nof1_causal_lab.models.causal.question_checks import question_edit_reason
-from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model, read_question
-from nof1_causal_lab.study.persistence.writes import write_model_revision
-from nof1_causal_lab.study.records import Applied, Rejected
+from nof1_causal_lab.models.structure import StructuralSelection
+
+
+class ModelEditFailure(Value):
+    """An authored edit cannot supply a valid model for the question."""
+
+    detail: str
 
 
 def edit_model(
-    workspace_id: str, request: EditModelRequest[GitOid]
-) -> Applied[ModelEditResult] | Rejected:
-    """Merge into the selected parent, prune unrelated structure, and validate before writing."""
-    store = ArtifactStore(workspace_id)
-    state = model_edit_state(store, request.input.parent_ref)
-    question = read_question(store, state.current["question"].revision)
-    parent = state.get("model")
-    base = read_model(store, parent.revision) if parent is not None else DynamicalModelSpec()
+    question: QuestionSpec, parent: DynamicalModelSpec, edit: DynamicalModelSpec
+) -> EditModelOutput | ModelEditFailure:
+    """Merge, prune, validate and evaluate an edit without reading or writing study state."""
     try:
-        edited = apply_model_edit(
-            base,
-            request.input.dynamical_model_spec,
-            question.outcome,
-            context={"distribution_array_loader": cache(store.read_array)},
-        )
+        edited = apply_model_edit(parent, edit, question.outcome)
     except ValidationError as exc:
-        return Rejected(code="MODEL_SPEC_INVALID", subject="model", detail=str(exc))
+        return ModelEditFailure(detail=str(exc))
     if (reason := question_edit_reason(edited.dynamical_model_spec, question)) is not None:
-        return Rejected(code="MODEL_SPEC_INVALID", subject="model", detail=reason)
-    info = write_model_revision(
-        store,
-        edited.dynamical_model_spec,
-        derived_from={kind: record.revision for kind, record in state.current.items()},
-        produced_by="edit_model",
-    )
-    return Applied(
-        result=edited.pruning,
-        effects=ActionEffects(produced=(info,)),
+        return ModelEditFailure(detail=reason)
+    selection = StructuralSelection.for_question(edited.dynamical_model_spec, question)
+    return EditModelOutput(
+        dynamical_model_spec=edited.dynamical_model_spec,
+        checks=model_check_report(selection, question),
+        identification=selection.identification,
+        pruning=edited.pruning,
     )

@@ -1,6 +1,6 @@
-"""Particle configuration and initialization contracts without compiling a sampler."""
-
+import logging
 import time
+from datetime import UTC, datetime
 from unittest.mock import Mock
 
 import jax.numpy as jnp
@@ -25,8 +25,12 @@ from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 from nof1_causal_lab.models.ssm.inference.warmup.initialization import ParticleInitialization
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
 from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
-from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
+from nof1_causal_lab.models.ssm.preparation.binding import BoundPanel
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
 from tests.support.compute import COMPUTE_BUDGET
+
+"""Particle configuration and initialization contracts without compiling a sampler."""
+
 
 pytestmark = pytest.mark.contract
 
@@ -113,10 +117,11 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
     )
     step = Mock(side_effect=AssertionError("Invalid initial states must fail before sampling"))
     monkeypatch.setattr(runner, "compile_projected_sweeps", step)
+
     # Execute the synthetic initializer without serializing its mocks into a cached program.
-    monkeypatch.setattr(
-        runner, "compile_staged", lambda function, *_args, **_kwargs: Mock(call=function)
-    )
+    def compiler(function, *_args, **_kwargs):
+        return Mock(call=function)
+
     with pytest.raises(ValueError, match=error):
         runner.run_marginal_particle_gibbs(
             target,
@@ -134,6 +139,10 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
                 paths=jnp.asarray(paths),
             ),
             clock=time.monotonic,
+            compiler=compiler,
+            prepare_program=prepare_program,
+            logger=logging.getLogger(__name__),
+            wall_clock=lambda: datetime.now(UTC),
         )
     step.assert_not_called()
     target.initial_path.assert_not_called()
@@ -170,8 +179,12 @@ def test_laps_failure_stops_production_before_sampling(monkeypatch):
             ),
         ),
         compute_budget=COMPUTE_BUDGET,
+        compiler=compile_staged,
+        prepare_program=prepare_program,
         sampler=SamplerSpec(),
         clock=time.monotonic,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     assert result is failure
     initialize.assert_called_once()

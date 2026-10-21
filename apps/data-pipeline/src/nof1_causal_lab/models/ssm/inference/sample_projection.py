@@ -11,15 +11,12 @@ if TYPE_CHECKING:
     from numpyro.primitives import Message
 
 
-import logging
 from typing import TYPE_CHECKING
 
 import jax
 from numpyro import handlers
 
 from nof1_causal_lab.models.ssm.constants import INTERNAL_DIAGNOSTIC_SITES
-
-logger = logging.getLogger(__name__)
 
 
 def _trace_public_sites(

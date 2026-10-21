@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import logging
 import threading
 from collections import OrderedDict
 from typing import TYPE_CHECKING, NamedTuple, Protocol, cast
@@ -47,8 +46,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.compute.budget import ComputeBudget, MemoryDemand
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.dynamics.spec import CompiledDynamics, DynamicsSpec
-
-logger = logging.getLogger(__name__)
 
 
 class PredictiveKeys(NamedTuple):
@@ -316,13 +313,9 @@ def _simulate_vector_field_predictive_latents(
             return executable, compiled_memory(executable.compiled)
 
         batch = compile_batched(compile_batch, max_batch_size=n_draws, budget=compute_budget)
-        logger.info("Predictive execution: draws=%d microbatch=%d", n_draws, batch.batch_size)
         sorted_latents = batch.executable(*args, batch_size=batch.batch_size)
         latents = sorted_latents[inverse_order]
         _cache_latents(cache_key, latents)
-        logger.info("Prior-predictive latent cache miss %s", cache_key[:12])
-    else:
-        logger.info("Prior-predictive latent cache hit %s", cache_key[:12])
     predict: Callable[[dsx.DynamicalModel, jnp.ndarray], jnp.ndarray] = eqx.filter_vmap(
         lambda dynamical_model, path: jax.vmap(dynamical_model.observation_model.linear_predictor)(
             path

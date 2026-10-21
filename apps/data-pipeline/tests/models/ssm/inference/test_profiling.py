@@ -6,7 +6,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from nof1_causal_lab.actions.fit.execution import dump_compiled_analysis
+from nof1_causal_service.actions.fit.execution import dump_compiled_analysis
 
 pytestmark = pytest.mark.contract
 
@@ -32,49 +32,65 @@ def test_compiled_analysis_writes_readable_hlo_and_numeric_costs(tmp_path):
 
 @pytest.mark.parametrize("failed", [False, True])
 def test_fit_shell_closes_trace_and_owns_artifact_writes(monkeypatch, tmp_path, failed):
+    from datetime import UTC, datetime
     from importlib import import_module
-    from types import SimpleNamespace
     from unittest.mock import Mock
 
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
-    from nof1_causal_lab.models.ssm.compile.inputs import CompiledFitInputs
-    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel, PreparedFit
+    from nof1_causal_lab.compute.programs import PreparedProgram
 
-    shell = import_module("nof1_causal_lab.actions.fit.execution")
-    inference = import_module("nof1_causal_lab.models.ssm.inference.fit")
+    shell = import_module("nof1_causal_service.actions.fit.action")
     calls = []
-    compiled = object()
-    result = SimpleNamespace(diagnostics=SimpleNamespace(compiled_step=compiled))
+    from jax.stages import Compiled
+
+    compiled = Mock(spec=Compiled)
+    result = object()
 
     class ExecutionFailed(Exception):
         pass
 
-    def run(*_args, **_kwargs):
+    def run(**kwargs):
         calls.append("fit")
+        assert callable(kwargs["clock"])
+        assert callable(kwargs["wall_clock"])
+        assert kwargs["logger"].name == shell.__name__
         if failed:
             raise ExecutionFailed()
+        kwargs["compiler"](lambda: None)
         return result
 
-    def dump(executable, *, profile_dir, label):
+    def dump(executable, profile_dir, label):
         assert executable is compiled
         assert profile_dir == tmp_path
         assert label == "run_batched_step"
         calls.append("dump")
 
     monkeypatch.setenv("NOF1_PROFILE_DIR", str(tmp_path))
-    monkeypatch.setattr(inference, "fit", run)
+    monkeypatch.setattr(shell, "fit", run)
+    monkeypatch.setattr(
+        shell, "compile_staged", lambda *_args, **_kwargs: PreparedProgram(compiled, lambda: None)
+    )
     monkeypatch.setattr(
         jax.profiler, "start_trace", lambda *_args, **_kwargs: calls.append("start")
     )
     monkeypatch.setattr(jax.profiler, "stop_trace", lambda: calls.append("stop"))
     monkeypatch.setattr(shell, "dump_compiled_analysis", dump)
-    inputs = Mock(spec=CompiledFitInputs, prior_runtime_bundle=object())
-    panel = Mock(spec=BoundPanel)
-    prepared = Mock(spec=PreparedFit, inputs=inputs, panel=panel)
+
+    def execute():
+        return shell.run_fit(
+            question=Mock(),
+            selection=Mock(),
+            data_for_model=Mock(),
+            time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+            sampler=SamplerSpec(),
+            preflight=(),
+            compute_loo_diagnostics=False,
+        )
+
     if failed:
         with pytest.raises(ExecutionFailed):
-            shell.fit_prepared_model(prepared, sampler=SamplerSpec())
+            execute()
         assert calls == ["start", "fit", "stop"]
     else:
-        assert shell.fit_prepared_model(prepared, sampler=SamplerSpec()) is result
-        assert calls == ["start", "fit", "stop", "dump"]
+        assert execute() is result
+        assert calls == ["start", "fit", "dump", "stop"]

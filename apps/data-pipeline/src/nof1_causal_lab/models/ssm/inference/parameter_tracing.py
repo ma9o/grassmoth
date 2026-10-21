@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
-    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
+    from nof1_causal_lab.models.ssm.preparation.binding import BoundPanel
 
 import functools
 

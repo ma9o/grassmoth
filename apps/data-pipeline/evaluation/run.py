@@ -25,7 +25,7 @@ from evaluation.recipes import PreparedCase, prepare_case, require_findings
 from evaluation.report import BillingReport, write_report
 from evaluation.segments import segment_summary
 from evaluation.telemetry import sampler_outcomes
-from nof1_causal_lab.public.contracts import (
+from nof1_causal_service.public.contracts import (
     ContinueFitTarget,
     FitInput,
     FitOutput,
@@ -38,7 +38,7 @@ from nof1_causal_lab.public.contracts import (
 if TYPE_CHECKING:
     from typing import Literal
 
-    from nof1_causal_lab.public.contracts import GitOid, JsonObject, SuccessfulPoll
+    from nof1_causal_service.public.contracts import GitOid, JsonObject, SuccessfulPoll
 
 
 def assigned_settings(experiment: Experiment, arm: Arm, seed: int) -> FitSettingsSpec:

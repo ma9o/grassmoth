@@ -16,7 +16,7 @@ from evaluation.client import ActionClient
 from evaluation.declarations import CaseRecipe, RecordedData
 from evaluation.recipes import require_findings
 from evaluation.sources import read_source
-from nof1_causal_lab.public.contracts import (
+from nof1_causal_service.public.contracts import (
     ActionInput,
     ModelTime,
     ObservationInstant,
@@ -26,7 +26,7 @@ from nof1_causal_lab.public.contracts import (
 )
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.public.contracts import SimulateOutput
+    from nof1_causal_service.public.contracts import SimulateOutput
 
 _REQUEST = TypeAdapter(ActionInput)
 

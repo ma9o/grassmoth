@@ -42,6 +42,7 @@ import networkx as nx
 from scripts.checks.architecture_roles import (
     PACKAGE,
     PURE_ROLES,
+    SOURCE_ROOTS,
     fix_owner,
     role_for_module,
     role_inventory,
@@ -383,8 +384,8 @@ class Violation:
         )
 
 
-def find_violations(source_root: Path) -> tuple[Violation, ...]:
-    """Return every forbidden runtime dependency below ``source_root``."""
+def find_violations(source_roots: tuple[Path, ...] = SOURCE_ROOTS) -> tuple[Violation, ...]:
+    """Return every forbidden runtime dependency across the supplied package roots."""
     violations: list[Violation] = []
 
     # Resolve signatures by type ownership, including aliases and renamed arguments.
@@ -392,10 +393,11 @@ def find_violations(source_root: Path) -> tuple[Violation, ...]:
     from scripts.checks.architecture_roles import role_for_path
     from scripts.checks.check_type_boundaries import TypeIndex
 
-    inventory = role_inventory(source_root)
+    roots = source_roots
+    inventory = {path: role for root in roots for path, role in role_inventory(root).items()}
     sources = [
         (
-            "src/" + _PACKAGE + "/" + path.relative_to(source_root).as_posix(),
+            "src/" + path.relative_to(roots[0].parent).as_posix(),
             ast.parse(path.read_text(encoding="utf-8")),
         )
         for path in inventory
@@ -511,33 +513,29 @@ def find_violations(source_root: Path) -> tuple[Violation, ...]:
 
     # grimp owns runtime import discovery, local imports and transitive traversal.
     # A caller-supplied source root is also used by isolated checker regressions.
-    previous_package = sys.modules.pop(_PACKAGE, None)
-    sys.path.insert(0, str(source_root.parent.resolve()))
+    packages = tuple(root.name for root in roots)
+    previous_packages = {name: sys.modules.pop(name, None) for name in packages}
+    sys.path.insert(0, str(roots[0].parent.resolve()))
     importlib.invalidate_caches()
     try:
         graph = grimp.build_graph(
-            _PACKAGE,
+            *packages,
             include_external_packages=True,
             exclude_type_checking_imports=True,
             cache_dir=None,
         )
     finally:
         sys.path.pop(0)
-        if previous_package is not None:
-            sys.modules[_PACKAGE] = previous_package
+        for name, previous in previous_packages.items():
+            if previous is not None:
+                sys.modules[name] = previous
 
     modules = {
-        _PACKAGE
-        + (
-            "."
-            + path.relative_to(source_root)
-            .with_suffix("")
-            .as_posix()
-            .removesuffix("/__init__")
-            .replace("/", ".")
-            if path != source_root / "__init__.py"
-            else ""
-        ): path
+        path.relative_to(roots[0].parent)
+        .with_suffix("")
+        .as_posix()
+        .removesuffix("/__init__")
+        .replace("/", "."): path
         for path in inventory
     }
     dependencies = nx.DiGraph()
@@ -612,17 +610,16 @@ def find_violations(source_root: Path) -> tuple[Violation, ...]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "source_root",
-        nargs="?",
+        "source_roots",
+        nargs="*",
         type=Path,
-        default=Path("src/nof1_causal_lab"),
+        default=list(SOURCE_ROOTS),
     )
     args = parser.parse_args()
 
-    role_inventory(args.source_root)
-    violations = find_violations(args.source_root)
+    violations = find_violations(tuple(args.source_roots))
     for violation in violations:
-        print(violation.diagnostic(args.source_root), file=sys.stderr)
+        print(violation.diagnostic(args.source_roots[0]), file=sys.stderr)
     if violations:
         print(f"{len(violations)} architecture boundary violation(s)", file=sys.stderr)
         return 1

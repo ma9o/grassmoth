@@ -61,18 +61,18 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
                 from temporalio.worker.workflow_sandbox._importer import Importer
                 from temporalio.worker.workflow_sandbox._restrictions import RestrictionContext
 
-                from nof1_causal_lab.actions.contracts.requests import FitRequest, SimulateRequest
-                from nof1_causal_lab.actions.contracts.bodies import NewFitTarget, FitInput, SimulateInput
+                from nof1_causal_service.actions.contracts.requests import FitRequest, SimulateRequest
+                from nof1_causal_service.actions.contracts.inputs import NewFitTarget, FitInput, SimulateInput
                 from nof1_causal_lab.artifacts.identity import GitOid
                 from nof1_causal_lab.artifacts.simulation import SimulationSpec
                 from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
-                from nof1_causal_lab.study.records import AttemptRecord, Applied, EditAttempt
-                from nof1_causal_lab.actions.temporal.study.messages import (
+                from nof1_causal_service.study.records import AttemptRecord, Applied, EditAttempt
+                from nof1_causal_service.actions.temporal.study.messages import (
                     ActionInput, ActionRequest, EditModelActivityInput, EvaluateChecksInput, AttemptPublication,
                 )
-                from nof1_causal_lab.study.state import ArtifactRecord, StudyState
-                from nof1_causal_lab.actions.contracts.effects import ActionEffects
-                from nof1_causal_lab.actions.temporal.worker import study_workflow_runner
+                from nof1_causal_service.study.state import ArtifactRecord, StudyState
+                from nof1_causal_service.actions.contracts.effects import ActionEffects
+                from nof1_causal_service.actions.temporal.worker import study_workflow_runner
 
                 payload = Payload(metadata={"encoding": b"json/plain"}, data=sys.stdin.buffer.read())
                 converter = pydantic_data_converter.payload_converter
@@ -99,9 +99,9 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
                                 simulation=SimulationSpec(start="2026-01-01", horizon="2d"),
                             )),
                         ),
-                        EvaluateChecksInput[ModelEditResult](
+                        EvaluateChecksInput(
                             workspace_id="test", state=state, request=restored.request,
-                            applied=Applied(result=ModelEditResult(), effects=ActionEffects(produced=[model_record])),
+                            applied=Applied(result=GitOid("3" * 40), effects=ActionEffects(produced=[model_record])),
                         ),
                     ]
                     activity_payloads = converter.to_payloads(inputs)
@@ -156,12 +156,12 @@ def test_numerical_results_cross_workflows_only_as_saved_report_references(actio
     import numpy as np
     from pydantic import TypeAdapter
 
-    from nof1_causal_lab.actions.contracts.effects import ActionEffects
-    from nof1_causal_lab.actions.contracts.requests import FitRequest, SimulateRequest
     from nof1_causal_lab.artifacts.arrays import NumericalArray
     from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
-    from nof1_causal_lab.artifacts.simulation import ModelSimulationResult, SimulationEvidence
-    from nof1_causal_lab.study.records import Applied, StagedActionAttempt, applied_attempt
+    from nof1_causal_lab.artifacts.simulation import SimulationEvidence
+    from nof1_causal_service.actions.contracts.effects import ActionEffects
+    from nof1_causal_service.actions.contracts.requests import FitRequest, SimulateRequest
+    from nof1_causal_service.study.records import ActionAttempt, Applied, applied_attempt
 
     ref = {"workspace_id": "TEST", "revision": "1" * 40, "path": "model.json"}
     data = {"revision": "2" * 40, "replicate_index": 0}
@@ -178,45 +178,41 @@ def test_numerical_results_cross_workflows_only_as_saved_report_references(actio
                 }
             }
         )
-        result = InferenceEvidence(chain_extra_fields={"energy": values})
+        InferenceEvidence(chain_extra_fields={"energy": values})
     else:
         design = {"start": "2026-01-01", "horizon": "1d"}
         request = SimulateRequest.model_validate(
             {"input": {"dynamical_model_spec_ref": ref["revision"], "simulation": design}}
         )
-        result = ModelSimulationResult(
-            evidence=SimulationEvidence.model_validate(
-                {
-                    "assignments": [],
-                    "time_origin": "2026-01-01T00:00:00Z",
-                    "times": [0, 1],
-                    "draws": 1,
-                    "seed": 0,
-                    "state_ids": [],
-                    "parameter_draws": {},
-                    "arms": {
-                        "kind": "single",
-                        "action": {"latent_paths": values, "observations": values},
-                    },
-                    "observation_layout": {
-                        "variables": [],
-                        "support_start_times": values,
-                        "support_end_times": values,
-                        "mask": values,
-                    },
-                }
-            )
+        SimulationEvidence.model_validate(
+            {
+                "assignments": [],
+                "time_origin": "2026-01-01T00:00:00Z",
+                "times": [0, 1],
+                "draws": 1,
+                "seed": 0,
+                "state_ids": [],
+                "parameter_draws": {},
+                "arms": {
+                    "kind": "single",
+                    "action": {"latent_paths": values, "observations": values},
+                },
+                "observation_layout": {
+                    "variables": [],
+                    "support_start_times": values,
+                    "support_end_times": values,
+                    "mask": values,
+                },
+            }
         )
     staged = applied_attempt(
         request,
         Applied(
-            result=result,
-            effects=ActionEffects(
-                reports={"inference" if action == "fit" else "simulation": "3" * 40}
-            ),
+            result="3" * 40,
+            effects=ActionEffects(),
         ),
     )
     payload = staged.model_dump_json()
-    assert '"result":null' in payload
+    assert '"result":"' + "3" * 40 + '"' in payload
     assert '"npy"' not in payload
-    assert TypeAdapter(StagedActionAttempt).validate_json(payload) == staged
+    assert TypeAdapter(ActionAttempt).validate_json(payload) == staged

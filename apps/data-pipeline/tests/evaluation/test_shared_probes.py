@@ -28,7 +28,7 @@ def test_probe_arms_continue_one_anchor_in_its_workspace(tmp_path, monkeypatch):
     from evaluation.recipes import PreparedCase
 
     from evaluation import run as runner
-    from nof1_causal_lab.public.contracts import ContinueFitTarget, DataRef, NewFitTarget
+    from nof1_causal_service.public.contracts import ContinueFitTarget, DataRef, NewFitTarget
     from tests.support.git import git_oid
 
     experiment = Experiment.model_validate({**declaration(), "probe_samples": 16})
@@ -85,10 +85,10 @@ def test_probe_arms_continue_one_anchor_in_its_workspace(tmp_path, monkeypatch):
 def test_lost_fit_acknowledgement_retains_identity_without_resubmission(tmp_path, monkeypatch):
     from evaluation.client import ActionClient
 
-    from nof1_causal_lab.actions.contracts.bodies import FitInput, NewFitTarget
-    from nof1_causal_lab.actions.contracts.requests import FitRequest, call_identity
     from nof1_causal_lab.artifacts.observations.reference import DataRef
-    from nof1_causal_lab.public.studies import StudyError
+    from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
+    from nof1_causal_service.actions.contracts.requests import FitRequest, call_identity
+    from nof1_causal_service.public.studies import StudyError
     from tests.support.git import git_oid
 
     request = FitRequest(

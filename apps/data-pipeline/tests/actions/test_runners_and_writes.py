@@ -8,8 +8,6 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import EditModelRequest, EditQuestionRequest
 from nof1_causal_lab.artifacts.identity import ConstructId, GitOid
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
@@ -19,10 +17,12 @@ from nof1_causal_lab.artifacts.observations.preparation import FailedExtractionC
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.models.causal.analysis import identify_model
 from nof1_causal_lab.models.structure import StructuralSelection, selected_state_ids
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.state import StudyState, apply_effects
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.requests import EditModelRequest, EditQuestionRequest
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.records import Applied
+from nof1_causal_service.study.state import StudyState, apply_effects
 from tests.support.action import applied_record, edit_and_check, question_root
 from tests.support.data import metadata_for_model
 from tests.support.git import artifact_revision, artifact_revisions
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def workspace(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import paths as data_module
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     return "test_workspace"
@@ -81,7 +81,7 @@ def _exact_measurement(model):
 
 
 def _write(store, artifact_id, payload, pins=None):
-    from nof1_causal_lab.study.artifact_files import artifact_file_spec
+    from nof1_causal_service.study.artifact_files import artifact_file_spec
 
     return store.write_artifact(
         artifact_id,
@@ -135,10 +135,10 @@ def test_identification_preserves_negative_findings(monkeypatch):
 
 @pytest.mark.parametrize("nonempty", [False, True])
 def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
-    from nof1_causal_lab.actions.temporal.extraction.activities import (
+    from nof1_causal_service.actions.temporal.extraction.activities import (
         finalize_measurements_activity,
     )
-    from nof1_causal_lab.actions.temporal.extraction.messages import MeasurementsFinalizeInput
+    from nof1_causal_service.actions.temporal.extraction.messages import MeasurementsFinalizeInput
 
     store = ArtifactStore(workspace)
     dynamical_model_spec = _model()
@@ -208,8 +208,11 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
 
     assert ("panel" in {info.artifact_id for info in effects.effects.produced}) == nonempty
     assert "measurements" not in {info.artifact_id for info in effects.effects.produced}
-    assert len(effects.result.workers) == 1
-    worker = effects.result.workers[0]
+    from nof1_causal_lab.actions.contracts.bodies import PrepareDataOutput
+
+    prepared_result = store.read_result(effects.result, PrepareDataOutput)
+    assert len(prepared_result.extraction.workers) == 1
+    worker = prepared_result.extraction.workers[0]
     assert (worker.worker_id, worker.status, worker.n_extractions, worker.n_windows) == (
         7,
         "failed",
@@ -218,7 +221,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
     )
     assert worker.status == "failed"
     assert worker.error == "No usable extraction"
-    from nof1_causal_lab.study.persistence.history import StudyRepository
+    from nof1_causal_service.study.persistence.history import StudyRepository
 
     journal = StudyRepository(workspace)
     record = applied_record(workspace, effects, seq=1, ts="2026-01-01T00:00:00Z", trace_ids=[])
@@ -339,10 +342,10 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
         },
         parquet_files={"panel.parquet": frame},
     )
-    from nof1_causal_lab.actions.data_checks import evaluate_data_checks
     from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
+    from tests.support.action import prepared_profile
 
-    evaluate_data_checks(
+    prepared_profile(
         workspace,
         state,
         Applied(result=DataPreparationResult(), effects=ActionEffects(produced=[panel])),
@@ -363,9 +366,9 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
         ),
         state,
     )
-    from nof1_causal_lab.actions.model_checks import read_model_checks
+    from tests.support.action import model_findings
 
-    checks, _ = read_model_checks(
+    checks, _ = model_findings(
         workspace, state.with_artifacts(effects.effects.produced), action="edit_model"
     )
     assert all(finding.code not in {"window", "range"} for finding in checks.question.findings)
@@ -414,7 +417,7 @@ def test_invalid_model_rejected_before_any_write(workspace):
 
 
 def test_failed_tree_write_publishes_no_artifact(workspace, monkeypatch):
-    from nof1_causal_lab.study.persistence import store as store_module
+    from nof1_causal_service.study.persistence import store as store_module
 
     def fail_tree(*_args, **_kwargs):
         raise OSError("cannot write metadata")

@@ -25,8 +25,8 @@ import sys
 import tomllib
 from pathlib import Path
 
-from nof1_causal_lab import config as config_mod
-from nof1_causal_lab.config import load_config
+from nof1_causal_service import config as config_mod
+from nof1_causal_service.config import load_config
 
 # jaxtyping array/dtype annotation types whose per-call shape checks the
 # ``--jaxtyping-packages`` import hook installs. ``shapes.py`` re-exports these and

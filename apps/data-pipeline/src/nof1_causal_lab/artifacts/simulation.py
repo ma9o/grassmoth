@@ -167,12 +167,6 @@ class SimulationEvidence(Value):
         return self
 
 
-class ModelSimulationResult(Value):
-    """The exact generated histories and provenance retained by one simulation."""
-
-    evidence: SimulationEvidence
-
-
 class SimulationReport(Value):
     """Findings evaluated during simulation and retained with its exact evidence."""
 

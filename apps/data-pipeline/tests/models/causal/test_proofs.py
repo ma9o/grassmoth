@@ -157,30 +157,15 @@ def test_conditioning_rejects_warmup_statically(tmp_path):
 
 def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engine_evidence():
     from nof1_causal_lab.models.causal.proofs import certify_conditioned_model
-    from tests.support.inference import inference_log
 
     dynamical_model_spec = _conditioned_treatment_outcome()
-    revision = GitRef(workspace_id="workspace", revision=git_oid(2), path="model.json")
     from tests.support.inference import _report
 
-    record = inference_log(dynamical_model_spec)
     report = _report(dynamical_model_spec)
-    certify_conditioned_model(
-        dynamical_model_spec, revision, record, dynamical_model_spec, report.core
-    )
-    with pytest.raises(CausalCertificationError, match="committed fit"):
-        certify_conditioned_model(
-            dynamical_model_spec,
-            revision.revised(revision=git_oid(3)),
-            record,
-            dynamical_model_spec,
-            report.core,
-        )
+    certify_conditioned_model(dynamical_model_spec, dynamical_model_spec, report.core)
     with pytest.raises(CausalCertificationError, match="differs from"):
         certify_conditioned_model(
             _treatment_outcome(),
-            revision,
-            record,
             dynamical_model_spec,
             report.core,
         )
@@ -190,7 +175,7 @@ def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engi
         report.core.inference_metadata.revised(engine=None)
     prior = _treatment_outcome()
     with pytest.raises(CausalCertificationError, match="retained joint uncertainty"):
-        certify_conditioned_model(prior, revision, inference_log(prior), prior, _report(prior).core)
+        certify_conditioned_model(prior, prior, _report(prior).core)
     from nof1_causal_lab.models.ssm.inference.diagnostics.convergence import chain_convergence
 
     diagnostics = report.core.inference_diagnostics
@@ -205,8 +190,6 @@ def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engi
     assert not warning_gate.messages
     certify_conditioned_model(
         dynamical_model_spec,
-        revision,
-        record,
         dynamical_model_spec,
         report.core.revised(inference_diagnostics=warning_chains, convergence=warning_gate),
     )
@@ -225,13 +208,11 @@ def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engi
         )
     )
     with pytest.raises(CausalCertificationError, match=r"r_hat fails.*ess_tail fails"):
-        certify_conditioned_model(
-            dynamical_model_spec, revision, record, dynamical_model_spec, mixed_poorly.core
-        )
+        certify_conditioned_model(dynamical_model_spec, dynamical_model_spec, mixed_poorly.core)
 
 
 def test_causal_analysis_joins_matching_proofs():
-    from tests.support.inference import _report, inference_log
+    from tests.support.inference import _report
 
     design = _conditioned_treatment_outcome()
     design_ref = GitRef(workspace_id="workspace", revision=git_oid(2), path="model.json")
@@ -248,7 +229,6 @@ def test_causal_analysis_joins_matching_proofs():
                 outcome="outcome",
             ),
         ),
-        inference=inference_log(design),
         fitted_dynamical_model_spec=design,
         report=_report(design).core,
     )

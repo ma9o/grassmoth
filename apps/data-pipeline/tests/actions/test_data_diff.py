@@ -7,10 +7,6 @@ import polars as pl
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts.bodies import DataDiffInput, SimulateInput
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import DataDiffRequest, SimulateRequest
-from nof1_causal_lab.actions.data_diff import read_data_diff
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
@@ -26,7 +22,6 @@ from nof1_causal_lab.artifacts.reports.data_comparison import (
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import PosteriorPredictiveChecks
 from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
-    ModelSimulationResult,
     SimulationArm,
     SimulationEvidence,
     SimulationObservationLayout,
@@ -35,11 +30,15 @@ from nof1_causal_lab.artifacts.simulation import (
     SingleArmSimulation,
 )
 from nof1_causal_lab.models.diagnostics.history_comparison import compare_data_variables
-from nof1_causal_lab.study.errors import StudyLookupError
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
 from nof1_causal_lab.study.projections.observations import read_dataset
-from nof1_causal_lab.study.records import Applied
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.inputs import DataDiffInput, SimulateInput
+from nof1_causal_service.actions.contracts.requests import DataDiffRequest, SimulateRequest
+from nof1_causal_service.actions.data_diff import read_data_diff
+from nof1_causal_service.study.errors import StudyLookupError
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.records import Applied
 from tests.support.action import applied_record, empty_simulation_summary
 from tests.support.git import artifact_revisions, git_oid
 
@@ -269,7 +268,7 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
         DataVariableSpec,
         SemanticExtractionSpec,
     )
-    from nof1_causal_lab.storage import paths as data_module
+    from nof1_causal_service.storage import paths as data_module
     from tests.support.helpers import make_model
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
@@ -314,8 +313,8 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
         applied_record(
             store.workspace_id,
             Applied(
-                result=ModelSimulationResult(evidence=report.evidence),
-                effects=ActionEffects(reports={"simulation": store.write_report(report)}),
+                result=report.evidence,
+                effects=ActionEffects(reports={"simulation": store.write_result(report)}),
             ),
             request=SimulateRequest(
                 input=SimulateInput(
@@ -402,7 +401,7 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
         read_data_diff("DIFF", bad)
 
     # Saved histories keep absolute model days, and materialization keeps their dates.
-    from nof1_causal_lab.study.queries.data import read_simulation_observations
+    from nof1_causal_service.study.queries.data import read_simulation_observations
 
     origin = datetime(2026, 1, 1, tzinfo=UTC)
     commits = []
@@ -421,10 +420,10 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
                 applied_record(
                     store.workspace_id,
                     Applied(
-                        result=ModelSimulationResult(evidence=saved),
+                        result=saved,
                         effects=ActionEffects(
                             reports={
-                                "simulation": store.write_report(report.revised(evidence=saved))
+                                "simulation": store.write_result(report.revised(evidence=saved))
                             }
                         ),
                     ),

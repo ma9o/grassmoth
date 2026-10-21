@@ -19,7 +19,6 @@ authoring and causal reporting do not permit the linear-IV argument.
 
 from __future__ import annotations
 
-import logging
 import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -67,9 +66,6 @@ class IdentificationResult:
     def __post_init__(self) -> None:
         """Own immutable collections of causal identification findings after construction."""
         freeze_fields(self)
-
-
-logger = logging.getLogger(__name__)
 
 
 def check_identifiability(

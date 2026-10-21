@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 import jax
@@ -18,7 +17,6 @@ from nof1_causal_lab.artifacts.continuation import (
 from nof1_causal_lab.artifacts.identity import ConstructRef
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
 from nof1_causal_lab.artifacts.sampling import MarginalParticleGibbsSpec
-from nof1_causal_lab.compute.compilation_cache import compile_staged
 from nof1_causal_lab.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
@@ -61,27 +59,32 @@ from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationF
 from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable
+    from datetime import datetime
 
     from nof1_causal_lab.artifacts.reports.posterior_diagnostics import DiagnosticPhase
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.compute.programs import ProgramCompiler, ProgramPreparer
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
-    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
-
-logger = logging.getLogger(__name__)
+    from nof1_causal_lab.models.ssm.preparation.binding import BoundPanel
 
 
 def fit_marginal_particle_gibbs(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
+    compiler: ProgramCompiler,
+    prepare_program: ProgramPreparer,
     compute_budget: ComputeBudget,
     sampler: SamplerSpec,
     reparam: Strategy | None = None,
     clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Run exact particle inference with resolved choices and owned warmup outputs."""
@@ -109,14 +112,16 @@ def fit_marginal_particle_gibbs(
     # The model is a continuous-time nonlinear SDE; the particle smoother always
     # discretizes it with the nonlinearity-preserving Euler-Maruyama scheme.
     scheme = LATENT_TRANSITION_EULER_MARUYAMA
-    with inference_phase("mpgibbs", "building_target", clock=clock):
+    with inference_phase(
+        "mpgibbs", "building_target", clock=clock, logger=logger, wall_clock=wall_clock
+    ):
         bundle = build_particle_problem(
             priors,
             panel,
             scheme=scheme,
             trace_key=trace_key,
             reparam=reparam,
-            compiler=compile_staged,
+            compiler=compiler,
         )
     logger.info(
         "phase 1/4: bundle ready in %.1fs (dim=%d, public_sites=%d)",
@@ -130,14 +135,16 @@ def fit_marginal_particle_gibbs(
     if continuation is not None:
         initialization = continued_particle_initialization(continuation)
     else:
-        with inference_phase("mpgibbs", "preparing_initialization", clock=clock):
+        with inference_phase(
+            "mpgibbs", "preparing_initialization", clock=clock, logger=logger, wall_clock=wall_clock
+        ):
             initialization = prepare_particle_initialization(
                 bundle.runtime,
                 compute_budget=compute_budget,
                 spec=options.initialization,
                 key=laps_key,
                 num_chains=sampler.num_chains,
-                compiler=compile_staged,
+                compiler=compiler,
             )
     if isinstance(initialization, InitializationFailure):
         return initialization
@@ -213,7 +220,11 @@ def fit_marginal_particle_gibbs(
         adaptation_scheme=options.adaptation_scheme,
         tempering=tempering,
         clock=clock,
+        logger=logger,
+        wall_clock=wall_clock,
         continuation=continuation,
+        compiler=compiler,
+        prepare_program=prepare_program,
     )
     tuning = (
         continuation.tuning
@@ -236,7 +247,7 @@ def fit_marginal_particle_gibbs(
         compiled_dynamical_model=panel.compiled_dynamical_model,
     )
     if sampler.num_samples_per_chain == 0:
-        return UnretainedRun(
+        return UnretainedRun.completed(
             sampler,
             MCMCEvidence(),
             run_result.compiled_step,

@@ -5,7 +5,7 @@ import hashlib
 import pygit2
 import pytest
 
-from nof1_causal_lab.study.persistence.git_objects import read_blob, write_blob
+from nof1_causal_service.study.persistence.git_objects import read_blob, write_blob
 
 pytestmark = pytest.mark.contract
 

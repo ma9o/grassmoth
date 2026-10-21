@@ -5,7 +5,6 @@ from datetime import UTC, datetime, timedelta
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import EditModelInput
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.model.expressions import state
@@ -14,6 +13,7 @@ from nof1_causal_lab.artifacts.model.question import QuestionSpec
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
 from nof1_causal_lab.models.causal.question_checks import question_edit_reason, question_findings
 from nof1_causal_lab.models.structure import StructuralSelection
+from nof1_causal_service.actions.contracts.inputs import EditModelInput
 from tests.support.helpers import make_model
 
 pytestmark = pytest.mark.contract
@@ -199,11 +199,11 @@ def test_an_edit_allows_upstream_causes_confounders_and_feedback_that_reaches_th
 
 
 def test_an_off_path_model_edit_retains_its_pruning_evidence(tmp_path, monkeypatch):
-    from nof1_causal_lab.actions.contracts.requests import EditModelRequest
-    from nof1_causal_lab.actions.edit_model import edit_model
-    from nof1_causal_lab.storage import paths as data
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
-    from nof1_causal_lab.study.state import StudyState
+    from nof1_causal_service.actions.contracts.requests import EditModelRequest
+    from nof1_causal_service.actions.edit_model import edit_model
+    from nof1_causal_service.storage import paths as data
+    from nof1_causal_service.study.persistence.store import ArtifactStore
+    from nof1_causal_service.study.state import StudyState
     from tests.support.helpers import write_question
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
@@ -221,8 +221,12 @@ def test_an_off_path_model_edit_retains_its_pruning_evidence(tmp_path, monkeypat
             )
         ),
     )
-    from nof1_causal_lab.study.records import Applied
+    from nof1_causal_service.study.records import Applied
 
     assert isinstance(result, Applied)
-    assert result.result.constructs == (dynamical_model_spec.constructs[2].id,)
+    from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
+
+    assert store.read_result(result.result, EditModelOutput).pruning.constructs == (
+        dynamical_model_spec.constructs[2].id,
+    )
     assert len(result.effects.produced) == 1

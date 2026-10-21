@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, override
 import jax.numpy as jnp
 import numpy as np
 
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
 from nof1_causal_lab.artifacts.probability.serialization import empirical_atoms
 from nof1_causal_lab.artifacts.reports.inference import InferenceReportCore
 from nof1_causal_lab.models.ssm import compiled_access as numeric
@@ -16,8 +15,9 @@ from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy, _m
 from nof1_causal_lab.models.ssm.parameter_draws import assemble_parameter_draws
 from nof1_causal_lab.models.ssm.preparation.observations import ObservationSupportRuntime
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
-from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.state import ArtifactRecord
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.study.records import Applied
+from nof1_causal_service.study.state import ArtifactRecord
 from tests.support.git import git_oid
 
 if TYPE_CHECKING:
@@ -42,7 +42,7 @@ def inference_log(
     workspace_id="workspace",
 ):
     pins: dict[ArtifactId, GitOid] = {"model": prior_revision, "panel": git_oid(1)}
-    from nof1_causal_lab.study.records import AttemptRecord, FitAttempt, StudyRevision
+    from nof1_causal_service.study.records import AttemptRecord, FitAttempt, StudyRevision
 
     record = AttemptRecord(
         seq=seq,
@@ -274,8 +274,8 @@ def bind_panel_fixture(
     import polars as pl
 
     from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
+    from nof1_causal_lab.models.ssm.preparation.binding import BoundPanel, bind_panel
     from nof1_causal_lab.models.ssm.preparation.observations import simulation_observation_support
-    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel, bind_panel
 
     observations, times = jnp.asarray(observations), jnp.asarray(times)
     origin = datetime(1970, 1, 1, tzinfo=UTC)

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -12,14 +14,18 @@ import polars as pl
 import pytest
 
 from nof1_causal_lab.actions.fit import execution as stage5_inference
+from nof1_causal_lab.actions.fit.execution import FittedModelResult
 from nof1_causal_lab.artifacts.joint_parameterization import CentredParameterizationRecord
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
 from nof1_causal_lab.artifacts.sampling import SamplerSpec
+from nof1_causal_lab.compute.budget import ComputeBudget, SharedMemoryBudget
 from nof1_causal_lab.models.ssm.compile import inputs as compilation
 from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
 from nof1_causal_lab.models.ssm.preparation import panel as runtime_module
 from nof1_causal_lab.models.structure import StructuralSelection
+from nof1_causal_service.actions.fit.runtime import fit_runtime
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
 from tests.support.inference import (
     bind_panel_fixture,
     compile_fit_fixture,
@@ -105,38 +111,45 @@ def test_fit_model_logs_runtime_summary_and_diagnostic_boundaries(monkeypatch, c
         time_origin=runtime.time_origin,
     )
 
-    with caplog.at_level(logging.INFO, logger=stage5_inference.logger.name):
+    with caplog.at_level(logging.INFO, logger=__name__):
         result = stage5_inference.fit_model(
             StructuralSelection(dynamical_model_spec, None),
             data_for_model,
             time_origin=datetime(2024, 1, 1, tzinfo=UTC),
             sampler=SamplerSpec(),
+            budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
+            clock=time.monotonic,
+            logger=logging.getLogger(__name__),
+            wall_clock=lambda: datetime.now(UTC),
+            compiler=compile_staged,
+            prepare_program=prepare_program,
         )
 
-    assert result["fitted"]
-    assert result["result"] is fake_result
-    assert result["panel"] is runtime
+    assert isinstance(result, FittedModelResult)
+    assert result.result is fake_result
+    assert result.panel is runtime
     assert "Prepared runtime in" in caplog.text
     assert "support=interval(1: manifest_0) max_active_windows=1" in caplog.text
     assert "Manifest order: manifest_0, manifest_1" in caplog.text
     assert "Starting inference kernel..." in caplog.text
     assert "Retaining native posterior and sampler telemetry" in caplog.text
-    assert "inference_diagnostics" not in result
+    assert not hasattr(result, "inference_diagnostics")
 
 
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledFitInputs
-    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
+    from nof1_causal_lab.models.ssm.preparation.binding import BoundPanel
 
 
 def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_evidence(monkeypatch):
     from nof1_causal_lab.actions.contracts.bodies import FitOutput
-    from nof1_causal_lab.actions.fit.action import fit
+    from nof1_causal_lab.actions.fit.action import _fit as fit
     from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ChainDiagnostics
 
     segment_diagnostics = ChainDiagnostics(num_chains=2, num_samples_per_chain=1, per_parameter=())
     monkeypatch.setattr(
-        "nof1_causal_lab.actions.fit.action.segment_diagnostics", lambda *_args: segment_diagnostics
+        "nof1_causal_lab.actions.fit.action.segment_diagnostics",
+        lambda *_args: segment_diagnostics,
     )
     from nof1_causal_lab.artifacts.arrays import NumericalArray
     from nof1_causal_lab.artifacts.continuation import JointTuning, SamplerCheckpoint
@@ -159,6 +172,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     )
     from tests.support.inference import parameter_draws
 
+    monkeypatch.setattr(MCMCPosterior, "get_loo_diagnostics", lambda *_args, **_kwargs: None)
     model = _sleep_state_model()
     panel = _make_panel(compile_fit_fixture(model))
     dataset = ObservationDataset.from_frame(
@@ -167,14 +181,6 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         time_origin=panel.time_origin,
     )
     settings = SamplerSpec(num_chains=2, num_warmup=0, num_samples_per_chain=2, hardware="local")
-    arrays = {}
-
-    def write(values):
-        from nof1_causal_lab.storage.arrays import encode_array
-
-        identity, _ = encode_array(np.asarray(values))
-        arrays[identity] = values
-        return identity
 
     def posterior(count, offset):
         parameters = {
@@ -215,36 +221,38 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         monkeypatch.setattr(
             stage5_inference,
             "fit_model",
-            lambda *_args, **_kwargs: {
-                "fitted": True,
-                "duration_seconds": 1.0,
-                "result": result,
-                "panel": panel,
-            },
+            lambda *_args, **_kwargs: FittedModelResult.from_run(
+                duration_seconds=1.0, result=result, panel=panel
+            ),
         )
         return fit(
             selection=StructuralSelection(model, None),
             data_for_model=dataset,
             time_origin=panel.time_origin,
             sampler=settings.revised(num_samples_per_chain=count),
-            array_writer=write,
-            array_loader=arrays.__getitem__,
+            budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
+            runtime=fit_runtime(settings),
+            clock=time.monotonic,
+            logger=logging.getLogger(__name__),
+            wall_clock=lambda: datetime.now(UTC),
+            compiler=compile_staged,
+            prepare_program=prepare_program,
             compute_loo_diagnostics=True,
             previous=previous,
         )
 
     def output(result):
         return FitOutput(
-            dynamical_model_spec=result["_dynamical_model_spec"],
+            dynamical_model_spec=result.dynamical_model_spec,
             checks=FitCheckReport(
                 data=DataProfileReport(indicators={}, findings=()),
                 preflight=(),
                 question=QuestionCheckReport(findings=()),
             ),
             inference=InferenceReport(
-                evidence=result["evidence"],
+                evidence=result.evidence,
                 core=InferenceReportCore(
-                    inference_metadata=result["metadata"],
+                    inference_metadata=result.metadata,
                     inference_diagnostics=None,
                     convergence=chain_convergence(None),
                     posterior_marginals=(),
@@ -255,34 +263,33 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         )
 
     first = execute(posterior(2, 1), 2)
-    first["evidence"] = first["evidence"].revised(
-        phase_extra_fields={
-            "initialization": {"position": NumericalArray.from_numpy(np.array([1.0, 2.0]))}
-        }
+    first = replace(
+        first,
+        evidence=first.evidence.revised(
+            phase_extra_fields={
+                "initialization": {"position": NumericalArray.from_numpy(np.array([1.0, 2.0]))}
+            }
+        ),
     )
     standalone = execute(posterior(1, 5), 1)
     combined = execute(posterior(1, 5), 1, output(first))
-    identity = first["metadata"].distribution
-    old = empirical_atoms(first["_dynamical_model_spec"].distributions[identity]).reshape(2, 2, -1)
-    new = empirical_atoms(standalone["_dynamical_model_spec"].distributions[identity]).reshape(
-        2, 1, -1
-    )
-    atoms = empirical_atoms(combined["_dynamical_model_spec"].distributions[identity]).reshape(
-        2, 3, -1
-    )
+    identity = first.metadata.distribution
+    old = empirical_atoms(first.dynamical_model_spec.distributions[identity]).reshape(2, 2, -1)
+    new = empirical_atoms(standalone.dynamical_model_spec.distributions[identity]).reshape(2, 1, -1)
+    atoms = empirical_atoms(combined.dynamical_model_spec.distributions[identity]).reshape(2, 3, -1)
     np.testing.assert_array_equal(atoms, np.concatenate((old, new), axis=1))
-    assert combined["metadata"].num_samples_total == 6
-    assert combined["metadata"].segments[-1].diagnostics == segment_diagnostics
-    assert [(segment.start, segment.stop) for segment in combined["metadata"].segments] == [
+    assert combined.metadata.num_samples_total == 6
+    assert combined.metadata.segments[-1].diagnostics == segment_diagnostics
+    assert [(segment.start, segment.stop) for segment in combined.metadata.segments] == [
         (0, 2),
         (2, 3),
     ]
     np.testing.assert_array_equal(
-        combined["evidence"].observation_log_probs.values[0, :, 0], [1, 1, 5]
+        combined.evidence.observation_log_probs.values[0, :, 0], [1, 1, 5]
     )
-    from nof1_causal_lab.actions.fit import remote
     from nof1_causal_lab.artifacts.sampling import InferenceHardware
-    from nof1_causal_lab.study.persistence.codec import unpack_result
+    from nof1_causal_service.actions.fit import remote
+    from nof1_causal_service.study.persistence.codec import unpack_result
 
     def dispatch_without_history_buffers(payload, *, hardware):
         assert hardware is InferenceHardware.L40S
@@ -292,6 +299,8 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
 
     monkeypatch.setattr(remote, "_dispatch_fit", dispatch_without_history_buffers)
 
+    from nof1_causal_lab.artifacts.model.question import QuestionSpec
+
     def remotely(count, previous):
         return remote.fit_on_modal(
             InferenceHardware.L40S,
@@ -299,19 +308,21 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             data_for_model=dataset,
             time_origin=panel.time_origin,
             sampler=settings.revised(num_samples_per_chain=count),
-            array_writer=write,
-            array_loader=arrays.__getitem__,
+            question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
+            preflight=(),
             compute_loo_diagnostics=True,
             previous=previous,
         )
 
     transported = remotely(1, output(first))
     np.testing.assert_array_equal(
-        empirical_atoms(transported["_dynamical_model_spec"].distributions[identity]),
-        empirical_atoms(combined["_dynamical_model_spec"].distributions[identity]),
+        empirical_atoms(transported.dynamical_model_spec.distributions[identity]),
+        empirical_atoms(combined.dynamical_model_spec.distributions[identity]),
     )
     np.testing.assert_array_equal(
-        transported["evidence"].phase_extra_fields["previous/initialization"]["position"].values,
+        transported.inference.evidence.phase_extra_fields["previous/initialization"][
+            "position"
+        ].values,
         [1.0, 2.0],
     )
     from unittest.mock import Mock
@@ -319,24 +330,28 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     from jax.stages import Compiled
 
     zero = execute(
-        UnretainedRun(settings, MCMCEvidence(), Mock(spec=Compiled), {}), 0, output(combined)
+        UnretainedRun.completed(
+            settings.revised(num_samples_per_chain=0), MCMCEvidence(), Mock(spec=Compiled), {}
+        ),
+        0,
+        output(combined),
     )
-    assert zero["_dynamical_model_spec"] is None
-    assert zero["metadata"].num_samples_total == 6
-    assert zero["metadata"].segments[-1].start == zero["metadata"].segments[-1].stop == 3
-    assert zero["metadata"].segments[-1].diagnostics is None
-    assert zero["metadata"].segments[-1].convergence.status != "passed"
-    assert zero["evidence"].checkpoint == combined["evidence"].checkpoint
+    assert zero.dynamical_model_spec is None
+    assert zero.metadata.num_samples_total == 6
+    assert zero.metadata.segments[-1].start == zero.metadata.segments[-1].stop == 3
+    assert zero.metadata.segments[-1].diagnostics is None
+    assert zero.metadata.segments[-1].convergence.status != "passed"
+    assert zero.evidence.checkpoint == combined.evidence.checkpoint
     np.testing.assert_array_equal(
-        zero["evidence"].observation_log_probs.values,
-        combined["evidence"].observation_log_probs.values,
+        zero.evidence.observation_log_probs.values,
+        combined.evidence.observation_log_probs.values,
     )
     remote_zero = remotely(0, output(combined))
-    assert remote_zero["_dynamical_model_spec"] is None
-    assert remote_zero["metadata"].num_samples_total == 6
+    assert remote_zero.dynamical_model_spec is not None
+    assert remote_zero.inference.core.inference_metadata.num_samples_total == 6
     np.testing.assert_array_equal(
-        remote_zero["evidence"]
-        .phase_extra_fields["previous/previous/initialization"]["position"]
-        .values,
+        remote_zero.inference.evidence.phase_extra_fields["previous/previous/initialization"][
+            "position"
+        ].values,
         [1.0, 2.0],
     )

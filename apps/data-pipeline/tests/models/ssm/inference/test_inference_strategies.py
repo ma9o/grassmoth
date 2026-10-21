@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import time
+from datetime import UTC, datetime
 
 import jax.numpy as jnp
 import jax.random as random
@@ -21,6 +23,7 @@ from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.ssm.inference.parameter_tracing import _discover_sites
 from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws, MCMCPosterior
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.inference import (
     bind_panel_fixture,
@@ -303,6 +306,10 @@ class TestDefaultMethodRouting:
             sampler=SamplerSpec(),
             clock=time.monotonic,
             compute_budget=COMPUTE_BUDGET,
+            compiler=compile_staged,
+            prepare_program=prepare_program,
+            logger=logging.getLogger(__name__),
+            wall_clock=lambda: datetime.now(UTC),
         )
         assert not isinstance(result, ObservationPreflightFailure)
 

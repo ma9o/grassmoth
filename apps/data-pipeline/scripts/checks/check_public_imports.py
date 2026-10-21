@@ -1,6 +1,6 @@
 """Enforce the framework's public library boundary for its callers.
 
-ARCH011: callers import nof1_causal_lab.public, never implementation modules or
+ARCH011: callers import nof1_causal_service.public, never implementation modules or
 private names. Local helper imports are followed, including imports under
 TYPE_CHECKING, so a helper cannot
 hide a dependency on execution internals. Dynamic imports must have a literal
@@ -20,9 +20,9 @@ import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts.checks.architecture_roles import PACKAGE, PROJECT_ROOT, SOURCE_ROOT
+from scripts.checks.architecture_roles import PACKAGES, PROJECT_ROOT, SERVICE_PACKAGE, SOURCE_ROOT
 
-_PUBLIC = PACKAGE + ".public"
+_PUBLIC = SERVICE_PACKAGE + ".public"
 _REPO = PROJECT_ROOT.parents[1]
 _DEFAULT_CALLERS = (PROJECT_ROOT / "evaluation",)
 
@@ -39,7 +39,7 @@ class PublicImportViolation:
         """Identify the caller responsible for crossing the boundary."""
         return (
             f"{self.path}:{self.line}: ARCH011 {self.target}; "
-            "fix at the caller: use nof1_causal_lab.public or patch the framework owner"
+            "fix at the caller: use nof1_causal_service.public or patch the framework owner"
         )
 
 
@@ -76,7 +76,7 @@ def _local_dependencies(name: str, roots: tuple[Path, ...]) -> tuple[Path, ...]:
 
 def _implementation(path: Path) -> bool:
     """Package location identifies implementation, also inside isolated checkouts."""
-    return any(parent.name == PACKAGE and parent.parent.name == "src" for parent in path.parents)
+    return any(parent.name in PACKAGES and parent.parent.name == "src" for parent in path.parents)
 
 
 def _origin(node: ast.expr, bindings: dict[str, str]) -> str:
@@ -165,7 +165,7 @@ def find_public_import_violations(
                     )
 
         for line, target in targets:
-            if _member(target, PACKAGE):
+            if any(_member(target, package) for package in PACKAGES):
                 public = _member(target, _PUBLIC) and not any(
                     part.startswith("_") or part == "*"
                     for part in target.removeprefix(_PUBLIC).split(".")

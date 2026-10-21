@@ -263,7 +263,7 @@ def test_core_initialization_is_local_to_constructor_scope() -> None:
 
 def test_core_owner_file_only_exempts_evidence_construction() -> None:
     checker = _load_checker()
-    owner = checker.SOURCE_ROOT / "models/ssm/compile/inputs.py"
+    owner = Path(__file__).resolve().parents[3] / "src/nof1_causal_lab/models/ssm/compile/inputs.py"
     violations = checker.scan_text(
         owner.read_text()
         + """\nCompiledFitInputs()
@@ -446,6 +446,7 @@ def test_suppress_obeys_the_same_builtin_error_rule(prefix: str, call: str) -> N
 
 @pytest.mark.parametrize("role", ["models/ssm/compile", "models/ssm/execution", "study"])
 def test_constructor_parsing_stays_with_the_target_owner_or_edge(role: str) -> None:
+    package = "nof1_causal_service" if role == "study" else "nof1_causal_lab"
     violations = _load_checker().scan_text(
         """from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec as Authored
 from pydantic import TypeAdapter
@@ -454,7 +455,7 @@ def read(payload):
     value = Authored.model_validate(payload)
     return TypeAdapter(Authored).validate_python(payload)
 """,
-        path=f"src/nof1_causal_lab/{role}/new_parser.py",
+        path=f"src/{package}/{role}/new_parser.py",
         rules=frozenset({"PARSE001"}),
     )
     assert [item.code for item in violations] == (
@@ -526,7 +527,7 @@ def test_json_decoding_obeys_whole_role_parse_rules(directory: str) -> None:
 @pytest.mark.parametrize(
     "path",
     [
-        "src/nof1_causal_lab/study/new_reader.py",
+        "src/nof1_causal_service/study/new_reader.py",
         "scripts/fixtures/example.py",
         "evaluation/fixtures/example.py",
         "notebooks/example.py",
@@ -558,7 +559,7 @@ def execute():
 """
     checker = _load_checker()
     violations = checker.scan_text(
-        source, path="src/nof1_causal_lab/actions/new_runner.py", rules=frozenset({"ERR001"})
+        source, path="src/nof1_causal_service/actions/new_runner.py", rules=frozenset({"ERR001"})
     )
     assert len(violations) == 1
     assert "scientific_decision" in violations[0].scope

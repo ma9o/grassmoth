@@ -158,7 +158,7 @@ never releases money. The report shows the ledger alongside measured phase times
 Importing the package or generating a report executes no scientific or paid job.
 
 Exploratory declarations and outputs belong in gitignored `scratchpad/`. The
-[storage configuration](../src/nof1_causal_lab/storage/backend.py) owns
+[storage configuration](../src/nof1_causal_service/storage/backend.py) owns
 `NOF1_DATA_ROOT`, the general local-storage deployment override for an isolated stack.
 
 ## Saved T=512 data

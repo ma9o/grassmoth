@@ -3,17 +3,18 @@
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts.bodies import EditModelInput
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import EditModelRequest
-from nof1_causal_lab.actions.edit_model import edit_model
-from nof1_causal_lab.actions.model_checks import evaluate_model_checks
+from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
 from nof1_causal_lab.artifacts.observations.reference import DataRef
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.state import ArtifactRecord, StudyState, apply_effects
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.inputs import EditModelInput
+from nof1_causal_service.actions.contracts.requests import EditModelRequest
+from nof1_causal_service.actions.edit_model import edit_model
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.records import Applied
+from nof1_causal_service.study.state import StudyState, apply_effects
 from tests.support.action import question_root
 from tests.support.git import git_oid
 from tests.support.model import construct_named, stress_sleep_causal_model
@@ -22,9 +23,9 @@ pytestmark = pytest.mark.contract
 
 
 def test_edit_checks_depend_only_on_model_and_question_inputs(tmp_path, monkeypatch):
-    from nof1_causal_lab.actions import model_checks
     from nof1_causal_lab.models.ssm.predictive import simulation
-    from nof1_causal_lab.storage import paths as data
+    from nof1_causal_service.storage import paths as data
+    from nof1_causal_service.study.queries import data as model_data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     dynamical_model_spec = stress_sleep_causal_model()
@@ -40,7 +41,7 @@ def test_edit_checks_depend_only_on_model_and_question_inputs(tmp_path, monkeypa
     def unexpected(*_args, **_kwargs):
         pytest.fail("Model edits must not access observations or generate predictions")
 
-    monkeypatch.setattr(model_checks, "read_data_history", unexpected)
+    monkeypatch.setattr(model_data, "read_data_history", unexpected)
     monkeypatch.setattr(simulation, "generate_simulation_batch", unexpected)
 
     def edit(state):
@@ -56,7 +57,8 @@ def test_edit_checks_depend_only_on_model_and_question_inputs(tmp_path, monkeypa
             ),
         )
         assert isinstance(staged, Applied)
-        reports = evaluate_model_checks("checks", state, staged, action="edit_model")
+        output = ArtifactStore("checks").read_result(staged.result, EditModelOutput)
+        reports = output.checks, output.identification
         return apply_effects(state, staged.effects.produced, staged.effects.retracted), reports
 
     # Even a selected, unreadable panel has no bearing on a model edit.
@@ -85,12 +87,11 @@ def test_edit_model_contract_rejects_panel_selection():
 
 
 def test_fit_checks_reuse_the_retained_input_report_without_rebuilding(tmp_path, monkeypatch):
-    from nof1_causal_lab.actions import model_checks
     from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
     from nof1_causal_lab.artifacts.reports.inference import FitCheckReport
     from nof1_causal_lab.artifacts.reports.model_checks import QuestionCheckReport
-    from nof1_causal_lab.storage import paths as data
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
+    from nof1_causal_service.storage import paths as data
+    from nof1_causal_service.study.persistence.store import ArtifactStore
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     report = FitCheckReport(
@@ -98,21 +99,38 @@ def test_fit_checks_reuse_the_retained_input_report_without_rebuilding(tmp_path,
         preflight=(),
         question=QuestionCheckReport(findings=()),
     )
-    reference = ArtifactStore("checks").write_report(report)
+    from nof1_causal_lab.actions import checks as library_checks
+    from nof1_causal_lab.actions.contracts.bodies import FitOutput
+    from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
+    from nof1_causal_service.actions.contracts.requests import FitRequest
+    from nof1_causal_service.actions.temporal.study.activities import evaluate_model_checks_activity
+    from nof1_causal_service.actions.temporal.study.messages import EvaluateChecksInput
+    from tests.support.helpers import run_async
+    from tests.support.inference import _report
 
-    original = ArtifactRecord(artifact_id="model", revision=git_oid(1))
-    posterior = original.revised(revision=git_oid(2), derived_from={"model": original.revision})
-    inputs = StudyState(
-        current={"model": original},
-        data=DataRef[GitOid, int](revision=git_oid(3), replicate_index=0),
-    )
-    applied = Applied(
-        result=None,
-        effects=ActionEffects(produced=(posterior,), reports={"checks": reference}),
-    )
+    model = stress_sleep_causal_model()
+    output = FitOutput(dynamical_model_spec=model, checks=report, inference=_report(model))
+    reference = ArtifactStore("checks").write_result(output)
 
     def unexpected(*_args, **_kwargs):
         pytest.fail("A completed fit must reuse its selected-input findings")
 
-    monkeypatch.setattr(model_checks, "read_model_checks", unexpected)
-    assert evaluate_model_checks("checks", inputs, applied, action="fit") == report
+    monkeypatch.setattr(library_checks, "fit_check_report", unexpected)
+    result = run_async(
+        evaluate_model_checks_activity(
+            EvaluateChecksInput(
+                workspace_id="checks",
+                state=StudyState(),
+                applied=Applied(result=reference, effects=ActionEffects()),
+                request=FitRequest(
+                    input=FitInput(
+                        target=NewFitTarget(
+                            dynamical_model_spec_ref=git_oid(1),
+                            data_ref=DataRef(revision=git_oid(2), replicate_index=0),
+                        )
+                    )
+                ),
+            )
+        )
+    )
+    assert result.reports == {}

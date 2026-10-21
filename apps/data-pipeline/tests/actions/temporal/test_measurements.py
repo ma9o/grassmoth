@@ -6,18 +6,19 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from nof1_causal_lab.actions.prepare_data.worker_output import ExtractionRow, WorkerOutput
-from nof1_causal_lab.actions.temporal.extraction.activities import OpenRouterActivities
-from nof1_causal_lab.actions.temporal.extraction.messages import (
+from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
+from nof1_causal_service.actions.temporal.extraction.activities import OpenRouterActivities
+from nof1_causal_service.actions.temporal.extraction.messages import (
     ExtractionChunkWorkflowInput,
     MeasurementChunkRef,
     ProgressEventInput,
 )
-from nof1_causal_lab.actions.temporal.extraction.workflow import ExtractionChunkWorkflow
-from nof1_causal_lab.actions.temporal.llm.activities import (
+from nof1_causal_service.actions.temporal.extraction.workflow import ExtractionChunkWorkflow
+from nof1_causal_service.actions.temporal.llm.activities import (
     append_llm_repair_message_activity,
     execute_llm_tool_calls_activity,
 )
-from nof1_causal_lab.actions.temporal.llm.messages import (
+from nof1_causal_service.actions.temporal.llm.messages import (
     AppendLLMRepairMessageInput,
     LLMSubroutineRef,
     LLMToolExecutionInput,
@@ -25,10 +26,9 @@ from nof1_causal_lab.actions.temporal.llm.messages import (
     OpenRouterCallInput,
     StoredConversation,
 )
-from nof1_causal_lab.actions.temporal.llm.storage import read_subroutine_json
-from nof1_causal_lab.llm.openrouter import create_openrouter_client
-from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
-from nof1_causal_lab.storage import backend as storage
+from nof1_causal_service.actions.temporal.llm.storage import read_subroutine_json
+from nof1_causal_service.llm.openrouter import create_openrouter_client
+from nof1_causal_service.storage import backend as storage
 from tests.support.helpers import run_async
 
 pytestmark = pytest.mark.timeout(240)
@@ -36,7 +36,7 @@ pytestmark = pytest.mark.timeout(240)
 
 @pytest.fixture(autouse=True)
 def isolated_measurement_store(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import paths as data
+    from nof1_causal_service.storage import paths as data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path / "data"))
 
@@ -100,7 +100,7 @@ def test_progress_event_variants_round_trip_through_temporal(payload, required_f
 
 @pytest.mark.contract
 def test_call_openrouter_activity_reuses_persisted_call_result(monkeypatch, tmp_path):
-    import nof1_causal_lab.llm.openrouter as openrouter_client
+    import nof1_causal_service.llm.openrouter as openrouter_client
 
     calls: list[list[dict[str, Any]]] = []
     conversation_ref = str(tmp_path / "conversation.json")
@@ -405,7 +405,7 @@ def test_append_llm_repair_message_activity_persists_repair_turn(tmp_path):
 
 @pytest.mark.contract
 def test_execute_llm_tool_calls_activity_requires_terminal_acknowledgement(tmp_path, monkeypatch):
-    from nof1_causal_lab.actions.temporal.llm import activities as llm_subroutine_activities
+    from nof1_causal_service.actions.temporal.llm import activities as llm_subroutine_activities
 
     async def incomplete_validation(**_kwargs):
         return "Validation still pending", None
@@ -491,10 +491,10 @@ def test_execute_llm_tool_calls_activity_requires_terminal_acknowledgement(tmp_p
 def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_path, reused):
     from temporalio.testing import WorkflowEnvironment
 
-    import nof1_causal_lab.llm.openrouter as openrouter_client
-    from nof1_causal_lab.actions.temporal.client import pydantic_data_converter
-    from nof1_causal_lab.actions.temporal.worker import build_openrouter_worker, build_worker
-    from nof1_causal_lab.storage import paths as data_module
+    import nof1_causal_service.llm.openrouter as openrouter_client
+    from nof1_causal_service.actions.temporal.client import pydantic_data_converter
+    from nof1_causal_service.actions.temporal.worker import build_openrouter_worker, build_worker
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     output_json = json.dumps(

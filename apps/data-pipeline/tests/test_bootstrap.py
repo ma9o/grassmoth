@@ -19,7 +19,7 @@ def test_numerical_policy_requires_explicit_initialization() -> None:
             """
 import sys
 import nof1_causal_lab
-from nof1_causal_lab.bootstrap import initialize_numerical_runtime
+from nof1_causal_service.bootstrap import initialize_numerical_runtime
 
 assert "numpyro" not in sys.modules
 assert "jax" not in sys.modules
@@ -51,7 +51,7 @@ def test_numerical_startup_uses_float32_with_explicit_float64_reference_scope():
                 import jax.numpy as jnp
                 import numpy as np
 
-                from nof1_causal_lab.bootstrap import initialize_numerical_runtime
+                from nof1_causal_service.bootstrap import initialize_numerical_runtime
 
                 initialize_numerical_runtime()
 

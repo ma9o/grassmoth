@@ -17,18 +17,17 @@ from nof1_causal_lab.models.causal.proofs import (
 )
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.actions.contracts.bodies import SimulateInput
-    from nof1_causal_lab.artifacts.identity import ConstructId, GitOid, IndicatorId
-    from nof1_causal_lab.artifacts.simulation import SimulationArm
+    from nof1_causal_lab.artifacts.identity import ConstructId, GitRef, IndicatorId
+    from nof1_causal_lab.artifacts.reports.inference import InferenceReportCore
+    from nof1_causal_lab.artifacts.simulation import SimulationArm, SimulationSpec
     from nof1_causal_lab.models.structure import StructuralSelection
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
 
 
 def summarize_causal_simulation(
     selection: StructuralSelection,
-    request: SimulateInput[GitOid],
+    design: SimulationSpec,
     *,
-    store: ArtifactStore,
+    fitted: tuple[GitRef, InferenceReportCore] | None,
     action: SimulationArm,
     reference: SimulationArm,
     state_ids: tuple[ConstructId, ...],
@@ -38,10 +37,6 @@ def summarize_causal_simulation(
     import jax.numpy as jnp
 
     from nof1_causal_lab.models.ssm.counterfactual.estimands import summarize_draws
-    from nof1_causal_lab.study.persistence.history import StudyRepository
-    from nof1_causal_lab.study.persistence.store import read_model
-    from nof1_causal_lab.study.queries.lineage import fitted_law_report
-    from nof1_causal_lab.study.records import inference_record
 
     def unavailable(detail: str) -> NotEvaluated[Literal["causal_effect"]]:
         return NotEvaluated(
@@ -52,13 +47,11 @@ def summarize_causal_simulation(
         )
 
     dynamical_model_spec, outcome = selection.dynamical_model_spec, selection.outcome
-    revision = request.dynamical_model_spec_ref
-    inference = inference_record(StudyRepository(store.workspace_id).attempts(), revision)
-    if inference is None or outcome is None or outcome not in state_ids:
+    if fitted is None or outcome is None or outcome not in state_ids:
         return unavailable(
             "Causal effects require the question's outcome as a model state and a committed production fit for this model revision."
         )
-    model_ref = store.dynamical_model_spec_ref(revision)
+    model_ref, fit_report = fitted
     try:
         identification = selection.identification
         CertifiedCausalAnalysis(
@@ -73,11 +66,10 @@ def summarize_causal_simulation(
                     treatment=dynamical_model_spec.get_construct(target).name,
                     outcome=dynamical_model_spec.get_construct(outcome).name,
                 )
-                for target in sorted({event.target for event in request.simulation.interventions})
+                for target in sorted({event.target for event in design.interventions})
             ),
-            inference=inference,
-            fitted_dynamical_model_spec=read_model(store, revision),
-            report=fitted_law_report(store, [inference], revision),
+            fitted_dynamical_model_spec=dynamical_model_spec,
+            report=fit_report,
         )
     except CausalCertificationError as exc:
         return unavailable(str(exc))

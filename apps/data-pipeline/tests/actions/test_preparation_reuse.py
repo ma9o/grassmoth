@@ -12,16 +12,6 @@ from pydantic import TypeAdapter
 
 from nof1_causal_lab.actions.prepare_data.context import extraction_context
 from nof1_causal_lab.actions.prepare_data.worker_output import ExtractionRow
-from nof1_causal_lab.actions.temporal.extraction.activities import (
-    finalize_extraction_chunk_activity,
-    plan_measurements_activity,
-)
-from nof1_causal_lab.actions.temporal.extraction.messages import (
-    ExtractionChunkFinalizeInput,
-    MeasurementChunkContext,
-    MeasurementsWorkflowInput,
-)
-from nof1_causal_lab.actions.temporal.llm.storage import read_subroutine_json
 from nof1_causal_lab.artifacts.observations.preparation import (
     ComputedExtractionSpec,
     DataPreparationSpec,
@@ -32,9 +22,19 @@ from nof1_causal_lab.artifacts.observations.preparation import (
 )
 from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
 from nof1_causal_lab.observations.aggregations import compute_indicators
-from nof1_causal_lab.storage import backend as storage
-from nof1_causal_lab.storage import paths as data
-from nof1_causal_lab.study.persistence.store import ArtifactStore
+from nof1_causal_service.actions.temporal.extraction.activities import (
+    finalize_extraction_chunk_activity,
+    plan_measurements_activity,
+)
+from nof1_causal_service.actions.temporal.extraction.messages import (
+    ExtractionChunkFinalizeInput,
+    MeasurementChunkContext,
+    MeasurementsWorkflowInput,
+)
+from nof1_causal_service.actions.temporal.llm.storage import read_subroutine_json
+from nof1_causal_service.storage import backend as storage
+from nof1_causal_service.storage import paths as data
+from nof1_causal_service.study.persistence.store import ArtifactStore
 from tests.support.data import preparation_input
 from tests.support.helpers import run_async
 
@@ -45,7 +45,7 @@ pytestmark = pytest.mark.contract
 def test_remote_cache_uses_the_conditional_write_winner_only(code, monkeypatch):
     from botocore.exceptions import ClientError
 
-    from nof1_causal_lab.storage.cache import publish
+    from nof1_causal_service.storage.cache import publish
 
     def conflict(path, value, *, mode):
         assert (path, value, mode) == ("s3://cache/key", b"loser", "create")
@@ -170,7 +170,7 @@ def test_extraction_cache_is_shared_and_only_changed_effective_requests_miss(tmp
     )
     assert all(chunk.cached_result_ref is None for chunk in changed.chunks)
 
-    from nof1_causal_lab.actions.temporal.extraction import cache as preparation_cache
+    from nof1_causal_service.actions.temporal.extraction import cache as preparation_cache
 
     with monkeypatch.context() as policy:
         policy.setattr(preparation_cache, "EXTRACTION_POLICY_VERSION", "changed-extraction")
@@ -213,7 +213,7 @@ def test_span_keeps_complete_windows_and_never_fills_from_excluded_history():
     bounded = compute_indicators(raw, context, "timestamp")
     assert bounded["timestamp"].to_list() == ["2026-01-02T00:00:00", "2026-01-03T00:00:00"]
     assert bounded["value"].to_list() == [None, "2"]
-    from nof1_causal_lab.actions.prepare_data.planning import prepare_semantic_chunks
+    from nof1_causal_service.actions.prepare_data.planning import prepare_semantic_chunks
 
     semantic_context = extraction_context(
         FilePreparationSpec(
@@ -243,11 +243,11 @@ def test_span_keeps_complete_windows_and_never_fills_from_excluded_history():
 def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
     tmp_path, monkeypatch, aggregation, offset
 ):
-    from nof1_causal_lab.actions.temporal.extraction.activities import (
+    from nof1_causal_service.actions.temporal.extraction.activities import (
         finalize_measurements_activity,
     )
-    from nof1_causal_lab.actions.temporal.extraction.messages import MeasurementsFinalizeInput
-    from nof1_causal_lab.study.queries.lineage import read_data_metadata
+    from nof1_causal_service.actions.temporal.extraction.messages import MeasurementsFinalizeInput
+    from nof1_causal_service.study.queries.lineage import read_data_metadata
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     raw = pl.DataFrame(

@@ -1,5 +1,4 @@
-"""Model-panel limitations are checked when fitting, independently of model edits."""
-
+import logging
 import time
 from datetime import UTC, datetime
 from unittest.mock import Mock
@@ -8,11 +7,6 @@ import polars as pl
 import pytest
 
 from nof1_causal_lab.actions.checks import check_model_data, check_specification
-from nof1_causal_lab.actions.contracts.bodies import EditModelInput
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import EditModelRequest
-from nof1_causal_lab.actions.data_checks import evaluate_data_checks
-from nof1_causal_lab.actions.messages import edit_messages
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
@@ -21,15 +15,23 @@ from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.sampling import SamplerSpec
 from nof1_causal_lab.models.ssm.inference.fit import fit
 from nof1_causal_lab.models.structure import StructuralSelection
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.state import StudyState
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.inputs import EditModelInput
+from nof1_causal_service.actions.contracts.requests import EditModelRequest
+from nof1_causal_service.actions.messages import edit_messages
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.records import Applied
+from nof1_causal_service.study.state import StudyState
 from tests.integration.runner_fixtures import panel_frame, panel_metadata
-from tests.support.action import edit_and_check
+from tests.support.action import edit_and_check, prepared_profile
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.helpers import write_question
 from tests.support.inference import compile_fit_fixture
 from tests.support.model import construct_named, stress_sleep_causal_model
+
+"""Model-panel limitations are checked when fitting, independently of model edits."""
+
 
 pytestmark = pytest.mark.contract
 
@@ -91,6 +93,10 @@ def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypat
         reparam=None,
         clock=time.monotonic,
         compute_budget=COMPUTE_BUDGET,
+        compiler=compile_staged,
+        prepare_program=prepare_program,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     assert result is dispatch.return_value
     dispatch.assert_called_once_with(
@@ -100,12 +106,16 @@ def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypat
         sampler=sampler,
         reparam=None,
         clock=time.monotonic,
+        logger=logging.getLogger(__name__),
+        wall_clock=dispatch.call_args.kwargs["wall_clock"],
         continuation=None,
+        compiler=compile_staged,
+        prepare_program=prepare_program,
     )
 
 
 def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeypatch):
-    from nof1_causal_lab.storage import paths as data_module
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("TEST")
@@ -122,7 +132,7 @@ def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeyp
         json_files={"metadata.json": metadata.model_dump(mode="json")},
         parquet_files={"panel.parquet": panel},
     )
-    evaluate_data_checks(
+    prepared_profile(
         "TEST",
         StudyState(),
         Applied(result=DataPreparationResult(), effects=ActionEffects(produced=[record])),
@@ -152,12 +162,19 @@ def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeyp
         state,
     )
     assert "model" in {item.artifact_id for item in edited.effects.produced}
-    from nof1_causal_lab.actions.model_checks import read_model_checks
+    from tests.support.action import model_findings
 
-    checks, identification = read_model_checks(
+    checks, identification = model_findings(
         "TEST", state.with_artifacts(edited.effects.produced), action="edit_model"
     )
     assert checks.question is not None
     assert all(finding.code not in {"window", "range"} for finding in checks.question.findings)
-    messages = edit_messages(checks, identification, edited.result, datetime.now(UTC))
+    from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
+
+    messages = edit_messages(
+        checks,
+        identification,
+        store.read_result(edited.result, EditModelOutput).pruning,
+        datetime.now(UTC),
+    )
     assert "MODEL_DATA_INCOMPATIBLE" not in {message.code for message in messages}

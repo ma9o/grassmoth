@@ -1,6 +1,6 @@
-"""Blocked Particle Gibbs stationarity and its production posterior contract."""
-
+import logging
 import time
+from datetime import UTC, datetime
 
 import jax
 import jax.numpy as jnp
@@ -35,11 +35,15 @@ from nof1_causal_lab.models.ssm.inference.samplers.pgibbs.parameters import (
     nuts_kernel,
 )
 from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
-from nof1_causal_lab.study.persistence.codec import pack_result, unpack_result
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
+from nof1_causal_service.study.persistence.codec import pack_result, unpack_result
 from tests.models.ssm.compile.test_exact_state_space import _model, _problem
 from tests.models.ssm.inference.test_laps_initialization import _nonlinear_fixture
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.interval_particle import gaussian_interval_case
+
+"""Blocked Particle Gibbs stationarity and its production posterior contract."""
+
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -170,6 +174,10 @@ def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method, retain_p
         compute_budget=COMPUTE_BUDGET,
         reparam=None,
         clock=time.monotonic,
+        compiler=compile_staged,
+        prepare_program=prepare_program,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     assert isinstance(result, MCMCPosterior)
     assert result.evidence.method == "pgibbs"
@@ -251,6 +259,10 @@ def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundt
             compute_budget=COMPUTE_BUDGET,
             reparam=None,
             clock=time.monotonic,
+            compiler=compile_staged,
+            prepare_program=prepare_program,
+            logger=logging.getLogger(__name__),
+            wall_clock=lambda: datetime.now(UTC),
         )
         assert isinstance(result, MCMCPosterior)
         assert result.diagnostics.checkpoint is not None

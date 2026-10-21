@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import time
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
@@ -27,6 +29,7 @@ from nof1_causal_lab.models.ssm.preparation.preflight import (
     ObservationPreflightFailure,
     validate_observations_for_fit,
 )
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.inference import bind_panel_fixture, compile_fit_fixture
 from tests.support.model import (
@@ -322,6 +325,10 @@ def test_fit_runs_preflight_before_dispatch():
         sampler=SamplerSpec(),
         clock=time.monotonic,
         compute_budget=COMPUTE_BUDGET,
+        compiler=compile_staged,
+        prepare_program=prepare_program,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     assert isinstance(failure, ObservationPreflightFailure)
     assert "raw_channel" in failure.message

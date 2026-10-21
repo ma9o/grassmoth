@@ -17,7 +17,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, Field, TypeAdapter
 
 from evaluation.report import BillingReport
-from nof1_causal_lab.public.contracts import FitSettingsSpec, InferenceHardware, Value
+from nof1_causal_service.public.contracts import FitSettingsSpec, InferenceHardware, Value
 
 type Usd = Annotated[Decimal, Field(ge=0, allow_inf_nan=False)]
 type Rate = Annotated[Decimal, Field(gt=0, allow_inf_nan=False)]

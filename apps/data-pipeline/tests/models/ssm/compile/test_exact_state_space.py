@@ -1,6 +1,6 @@
-"""Declared deterministic state semantics survive compilation and posterior sampling."""
-
+import logging
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import jax
 import jax.numpy as jnp
@@ -37,9 +37,13 @@ from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
 )
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.helpers import make_model
 from tests.support.inference import bind_panel_fixture, compile_fit_fixture
+
+"""Declared deterministic state semantics survive compilation and posterior sampling."""
+
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -415,6 +419,10 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
         compute_budget=COMPUTE_BUDGET,
         sampler=SamplerSpec(),
         clock=lambda: 0.0,
+        compiler=compile_staged,
+        prepare_program=prepare_program,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     assert isinstance(failure, ObservationPreflightFailure)
     assert "O(log T)" in failure.message

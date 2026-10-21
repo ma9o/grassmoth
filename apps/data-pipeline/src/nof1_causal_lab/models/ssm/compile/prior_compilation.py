@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 import math
 from typing import TYPE_CHECKING
 
@@ -57,7 +56,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.structure.sites import SiteDescriptor
     from nof1_causal_lab.models.structure import StructuralSelection
 
-logger = logging.getLogger("nof1_causal_lab.models.ssm.compile.inputs")
 CompileDiagnostic = PriorValidationResult
 _LOGM_IMAG_TOL = 1e-8
 _LOGM_RELATIVE_DEVIATION_WARNING_THRESHOLD = 0.2
@@ -159,11 +157,6 @@ def collect_compile_diagnostics(
             )
         )
     return diagnostics
-
-
-def _log_compile_diagnostics(diagnostics: list[CompileDiagnostic]) -> None:
-    for issue in diagnostics:
-        logger.warning("%s: %s", issue.parameter, issue.issue)
 
 
 def collect_first_order_approximation_warnings(
@@ -523,7 +516,6 @@ def compile_priors(
         prior_registry=prior_registry,
         offdiag_interval_days=offdiag_interval_days,
     )
-    _log_compile_diagnostics(diagnostics)
 
     return prior_registry, bindings, diagnostics
 

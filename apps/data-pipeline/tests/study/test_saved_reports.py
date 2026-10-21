@@ -12,26 +12,6 @@ import polars as pl
 import pygit2
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import (
-    EditModelInput,
-    FitInput,
-    NewFitTarget,
-    PrepareDataInput,
-    SimulateInput,
-)
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import (
-    EditModelRequest,
-    FitRequest,
-    PrepareDataRequest,
-    SimulateRequest,
-)
-from nof1_causal_lab.actions.temporal.study.activities import (
-    evaluate_data_checks_activity,
-    evaluate_model_checks_activity,
-    journal_activity,
-)
-from nof1_causal_lab.actions.temporal.study.messages import AttemptPublication, EvaluateChecksInput
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import DistributionId, GitOid
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
@@ -51,18 +31,40 @@ from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport, Que
 from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ConvergenceReport
 from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
-    ModelSimulationResult,
     SimulationArm,
     SimulationEvidence,
     SimulationReport,
     SimulationSpec,
     SingleArmSimulation,
 )
-from nof1_causal_lab.storage import paths as data
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.queries.lineage import fitted_law_report
-from nof1_causal_lab.study.records import Applied
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.inputs import (
+    EditModelInput,
+    FitInput,
+    NewFitTarget,
+    PrepareDataInput,
+    SimulateInput,
+)
+from nof1_causal_service.actions.contracts.requests import (
+    EditModelRequest,
+    FitRequest,
+    PrepareDataRequest,
+    SimulateRequest,
+)
+from nof1_causal_service.actions.temporal.study.activities import (
+    evaluate_data_checks_activity,
+    evaluate_model_checks_activity,
+    journal_activity,
+)
+from nof1_causal_service.actions.temporal.study.messages import (
+    AttemptPublication,
+    EvaluateChecksInput,
+)
+from nof1_causal_service.storage import paths as data
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.queries.lineage import fitted_law_report
+from nof1_causal_service.study.records import Applied
 from tests.integration.runner_fixtures import panel_frame, panel_metadata, seed_model
 from tests.support.action import applied_record, empty_simulation_summary, question_root
 from tests.support.model import x_y_model
@@ -92,58 +94,45 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
 
     def publish(applied, *, request=None, model_checks=None, data_profile=None):
         assert request is not None
-        evaluated = None
+        reports = dict(applied.effects.reports)
         if model_checks is not None:
-            monkeypatch.setattr(
-                "nof1_causal_lab.actions.model_checks.evaluate_model_checks",
-                lambda *_args, **_kwargs: model_checks,
-            )
-            evaluated = asyncio.run(
-                evaluate_model_checks_activity(
-                    EvaluateChecksInput(
-                        workspace_id=workspace,
-                        state=repository.state(),
-                        applied=applied,
-                        request=request,
-                    )
+            if isinstance(model_checks, tuple):
+                reports.update(
+                    checks=store.write_result(model_checks[0]),
+                    identification=store.write_result(model_checks[1]),
                 )
-            )
+            else:
+                reports["checks"] = store.write_result(model_checks)
         if data_profile is not None:
-            monkeypatch.setattr(
-                "nof1_causal_lab.actions.data_checks.evaluate_data_checks",
-                lambda *_args: data_profile,
-            )
-            evaluated = asyncio.run(
-                evaluate_data_checks_activity(
-                    EvaluateChecksInput(
-                        workspace_id=workspace,
-                        state=repository.state(),
-                        applied=applied,
-                        request=request,
-                    )
-                )
-            )
-        if evaluated is not None:
-            # Even a multi-megabyte report crosses Temporal only by immutable reference.
-            assert len(evaluated.model_dump_json().encode()) < 10_000
-            applied = applied.revised(
-                effects=applied.effects.revised(
-                    reports={**applied.effects.reports, **evaluated.reports}
-                )
-            )
+            reports["data-profile"] = store.write_result(data_profile)
         record = applied_record(
             workspace,
-            applied,
+            applied.revised(effects=applied.effects.revised(reports=reports)),
             seq=repository.latest_seq() + 1,
             request=request,
-            messages=evaluated.messages if evaluated is not None else (),
         )
+        evaluated = None
+        assert isinstance(record.attempt.outcome, Applied)
+        if model_checks is not None or data_profile is not None:
+            activity_input = EvaluateChecksInput(
+                workspace_id=workspace,
+                state=repository.state(),
+                applied=record.attempt.outcome,
+                request=request,
+            )
+            evaluated = asyncio.run(
+                evaluate_data_checks_activity(activity_input)
+                if data_profile is not None
+                else evaluate_model_checks_activity(activity_input)
+            )
+            assert len(evaluated.model_dump_json().encode()) < 10_000
+            record = record.revised(messages=evaluated.messages)
         publication = AttemptPublication(
             workspace_id=workspace,
             record=record,
         )
         assert len(publication.model_dump_json().encode()) < 20_000
-        from nof1_causal_lab.study.queries import results
+        from nof1_causal_service.study.queries import results
 
         read_result = results.read_result
         event_loop_thread = get_ident()
@@ -255,7 +244,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         pytest.fail("Saved result reads and publication must not run checks")
 
     monkeypatch.setattr(
-        "nof1_causal_lab.actions.fit.action.read_inference_report", unexpected_evaluation
+        "nof1_causal_lab.actions.fit.action.inference_report", unexpected_evaluation
     )
     fit_publication, fit_revision = publish(
         Applied(
@@ -263,8 +252,8 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
             effects=ActionEffects(
                 produced=(fitted,),
                 reports={
-                    "inference": store.write_report(inference),
-                    "checks": store.write_report(validation),
+                    "inference": store.write_result(inference),
+                    "checks": store.write_result(validation),
                 },
             ),
         ),
@@ -319,12 +308,12 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         fit_reliability="not_fitted",
     )
     monkeypatch.setattr(
-        "nof1_causal_lab.actions.simulate.action.read_simulation_report", unexpected_evaluation
+        "nof1_causal_lab.actions.simulate.action.simulation_report", unexpected_evaluation
     )
     simulation_publication, simulated = publish(
         Applied(
-            result=ModelSimulationResult(evidence=evidence),
-            effects=ActionEffects(reports={"simulation": store.write_report(simulation)}),
+            result=evidence,
+            effects=ActionEffects(reports={"simulation": store.write_result(simulation)}),
         ),
         request=SimulateRequest[GitOid](
             input=SimulateInput[GitOid](
@@ -337,23 +326,23 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     cache.mkdir(parents=True, exist_ok=True)
     shutil.rmtree(cache)
     monkeypatch.setattr(
-        "nof1_causal_lab.actions.output_builder.build_output", unexpected_evaluation
+        "nof1_causal_service.actions.output_builder.complete_attempt", unexpected_evaluation
     )
 
     for owner in (
-        "model_checks.read_model_checks",
-        "data_checks.read_data_profile",
-        "fit.action.read_inference_report",
-        "simulate.action.read_simulation_report",
+        "checks.model_check_report",
+        "prepare_data.action.prepare_data",
+        "fit.action.inference_report",
+        "simulate.action.simulation_report",
     ):
         monkeypatch.setattr(f"nof1_causal_lab.actions.{owner}", unexpected_evaluation)
     assert asyncio.run(journal_activity(fit_publication)) == fit_revision
     assert asyncio.run(journal_activity(simulation_publication)) == simulated
     from pydantic import TypeAdapter, ValidationError
 
-    from nof1_causal_lab.actions.contracts.polling import ActionPoll
-    from nof1_causal_lab.study.persistence.codec import unpack_result
-    from nof1_causal_lab.study.queries.action_outputs import completed_call_msgpack
+    from nof1_causal_service.actions.contracts.polling import ActionPoll
+    from nof1_causal_service.study.persistence.codec import unpack_result
+    from nof1_causal_service.study.queries.action_outputs import completed_call_msgpack
 
     def completed_call(workspace_id, revision):
         return TypeAdapter(ActionPoll).validate_python(

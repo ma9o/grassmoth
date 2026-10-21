@@ -5,6 +5,8 @@ Covers: semantic prior binding and fit-input preparation.
 
 from __future__ import annotations
 
+import logging
+import time
 from datetime import UTC, datetime
 
 import jax.numpy as jnp
@@ -35,10 +37,11 @@ from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
 from nof1_causal_lab.artifacts.observations.semantics import SummaryOperator
 from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
 from nof1_causal_lab.artifacts.sampling import SamplerSpec
+from nof1_causal_lab.compute.budget import ComputeBudget, SharedMemoryBudget
 from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.compile.inputs import compile_priors
 from nof1_causal_lab.models.ssm.compile.observation_windows import compile_observation_scan
-from nof1_causal_lab.models.ssm.preparation.panel import (
+from nof1_causal_lab.models.ssm.preparation.binding import (
     BoundPanel,
     bind_panel,
     prepare_fit_inputs,
@@ -46,6 +49,7 @@ from nof1_causal_lab.models.ssm.preparation.panel import (
 )
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 from nof1_causal_lab.models.structure import StructuralSelection
+from nof1_causal_service.compute.compilation_cache import compile_staged, prepare_program
 from tests.support.compute import COMPUTE_BUDGET
 from tests.support.inference import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
 from tests.support.model import (
@@ -806,6 +810,12 @@ def test_fit_resolves_incomplete_model_before_panel_preparation(monkeypatch):
         ObservationDataset(series={}, time_origin=datetime(2024, 1, 1, tzinfo=UTC)),
         time_origin=datetime(2024, 1, 1, tzinfo=UTC),
         sampler=SamplerSpec(),
+        budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
+        clock=time.monotonic,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
+        compiler=compile_staged,
+        prepare_program=prepare_program,
     )
-    assert not result["fitted"]
-    assert result["error"]
+    assert not isinstance(result, fitting.FittedModelResult)
+    assert result.error

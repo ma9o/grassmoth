@@ -4,7 +4,7 @@ from typing import NoReturn
 
 import pytest
 
-from nof1_causal_lab.bootstrap import initialize_numerical_runtime
+from nof1_causal_service.bootstrap import initialize_numerical_runtime
 
 
 def pytest_configure() -> None:
@@ -25,7 +25,7 @@ def _fit_on_local_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
 
     import modal
 
-    from nof1_causal_lab import config
+    from nof1_causal_service import config
     from nof1_causal_lab.artifacts.sampling import InferenceHardware
 
     loaded = config.load_config()

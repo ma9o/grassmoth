@@ -738,7 +738,10 @@ def apply_model_edit(
 ) -> MaterializedModel:
     """Merge a document, prune outside the outcome's ancestors, and parse the result."""
     document = DynamicalModelSpec.model_validate(
-        merge_fields(parent.model_dump(mode="json"), supplied.model_dump(mode="json"))
+        merge_fields(
+            parent.model_dump(mode="python", context={"binary_arrays": True}),
+            supplied.model_dump(mode="python", context={"binary_arrays": True}),
+        )
     )
     graph = _pruning_graph(document)
     edges = graph.edges

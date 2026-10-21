@@ -650,7 +650,7 @@
             "$ref": "#/components/schemas/Attempt_Literal__model_diff___ModelDiffRequest_GitOid__GitOid_"
           }
         ],
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history",
         "description": "A closed action attempt pairs its request with only that action's successful result or failure outcome."
@@ -691,7 +691,7 @@
         ],
         "title": "ActionEffects",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.effects",
+        "x-python-module": "nof1_causal_service.actions.contracts.effects",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },
@@ -759,7 +759,7 @@
         ],
         "title": "ActionMessage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -783,7 +783,7 @@
             "$ref": "#/components/schemas/ActionSuccess"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools",
         "description": "A call returns its identity, publication status, scientific body, and accumulated execution messages."
@@ -800,7 +800,7 @@
           "model-diff"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.actions.contracts.effects",
+        "x-python-module": "nof1_causal_service.actions.contracts.effects",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },
@@ -840,7 +840,7 @@
             "$ref": "#/components/schemas/SuccessfulPoll_Literal__model_diff___ModelDiffOutput_"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools",
         "description": "A successful call pairs its action with that action's scientific result body."
@@ -980,7 +980,7 @@
         "title": "Applied[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-typescript-parameters": [
           "ResultT"
         ],
@@ -1015,7 +1015,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Applied<GitOid>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1048,7 +1048,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Applied<null>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1134,7 +1134,7 @@
         ],
         "title": "ArtifactFiles",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.state",
+        "x-python-module": "nof1_causal_service.study.state",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1202,7 +1202,7 @@
         ],
         "title": "ArtifactRecord",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.state",
+        "x-python-module": "nof1_causal_service.study.state",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1226,7 +1226,7 @@
         ],
         "title": "ArtifactResult",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.state",
+        "x-python-module": "nof1_causal_service.study.state",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1246,7 +1246,7 @@
             "$ref": "#/components/schemas/ArtifactResult"
           }
         ],
-        "x-python-module": "nof1_causal_lab.study.state",
+        "x-python-module": "nof1_causal_service.study.state",
         "x-layer": "study",
         "x-concern": "execution_history",
         "description": "An artifact owns staged input files or references its complete action result."
@@ -1380,7 +1380,7 @@
         ],
         "title": "AttemptRecord",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1440,7 +1440,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Attempt<ActionId, ScientificActionRequest | DataDiffRequest<GitOid> | ModelDiffRequest<GitOid>, null>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1496,7 +1496,7 @@
         "title": "Attempt[Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-typescript-parameters": [
           "ActionT",
           "RequestT",
@@ -1556,7 +1556,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Attempt<\"data_diff\", DataDiffRequest<GitOid>, GitOid>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1611,7 +1611,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Attempt<\"edit_model\", EditModelRequest<GitOid>, GitOid>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1666,7 +1666,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Attempt<\"edit_question\", EditQuestionRequest, GitOid>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1721,7 +1721,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Attempt<\"fit\", FitRequest<GitOid>, GitOid>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1776,7 +1776,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Attempt<\"model_diff\", ModelDiffRequest<GitOid>, GitOid>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1831,7 +1831,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Attempt<\"prepare_data\", PrepareDataRequest<GitOid, FileSourceRef>, GitOid>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -1886,7 +1886,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "Attempt<\"simulate\", SimulateRequest<GitOid>, GitOid>",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -3702,7 +3702,7 @@
         "title": "ContinueFitTarget[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -3730,7 +3730,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "ContinueFitTarget<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -3754,7 +3754,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "ContinueFitTarget<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -3940,7 +3940,7 @@
         "title": "DataDiffInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -3967,7 +3967,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataDiffInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -3991,7 +3991,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "DataDiffInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -4049,7 +4049,7 @@
         "title": "DataDiffRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -4093,7 +4093,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataDiffRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -4132,7 +4132,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "DataDiffRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14309,7 +14309,7 @@
         "title": "EditModelInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -14336,7 +14336,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "EditModelInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14360,7 +14360,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "EditModelInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14433,7 +14433,7 @@
         "title": "EditModelRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -14477,7 +14477,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "EditModelRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14516,7 +14516,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "EditModelRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14534,7 +14534,7 @@
         ],
         "title": "EditQuestionInput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14552,7 +14552,7 @@
         ],
         "title": "EditQuestionInput",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14608,7 +14608,7 @@
         ],
         "title": "EditQuestionRequest",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14648,7 +14648,7 @@
         ],
         "title": "EditQuestionRequest",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15124,7 +15124,7 @@
             "$ref": "#/components/schemas/FailureMessage"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.contracts.logs",
+        "x-python-module": "nof1_causal_service.actions.contracts.logs",
         "x-layer": "transport",
         "x-concern": "execution_history",
         "description": "An execution message retains a lifecycle entry, structured progress, an LLM trace, or failure details."
@@ -15257,7 +15257,7 @@
         ],
         "title": "ExtractionPlanEvent",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
+        "x-python-module": "nof1_causal_service.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -15319,7 +15319,7 @@
         ],
         "title": "ExtractionSnapshotEvent",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
+        "x-python-module": "nof1_causal_service.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -15463,7 +15463,7 @@
         ],
         "title": "ExtractionWorkerEvent",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
+        "x-python-module": "nof1_causal_service.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -15603,7 +15603,7 @@
         ],
         "title": "FailedPoll",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15648,7 +15648,7 @@
         ],
         "title": "FailureMessage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.logs",
+        "x-python-module": "nof1_causal_service.actions.contracts.logs",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },
@@ -15796,7 +15796,7 @@
         "title": "FitInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -15829,7 +15829,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "FitInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15857,7 +15857,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "FitInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15944,7 +15944,7 @@
         "title": "FitRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -15988,7 +15988,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "FitRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -16027,7 +16027,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "FitRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -16407,7 +16407,7 @@
           }
         ],
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -16432,7 +16432,7 @@
         ],
         "x-typescript-mode": "serialization",
         "x-typescript-type": "FitTarget<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -16454,7 +16454,7 @@
         ],
         "x-typescript-mode": "validation",
         "x-typescript-type": "FitTarget<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -19491,7 +19491,7 @@
         "title": "ModelDiffInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -19518,7 +19518,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "ModelDiffInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -19542,7 +19542,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "ModelDiffInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -19600,7 +19600,7 @@
         "title": "ModelDiffRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -19644,7 +19644,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "ModelDiffRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -19683,7 +19683,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "ModelDiffRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -19889,7 +19889,7 @@
         ],
         "title": "ModelSnapshot",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.snapshot",
+        "x-python-module": "nof1_causal_service.study.snapshot",
         "x-layer": "read_models",
         "x-concern": "read_models"
       },
@@ -20011,7 +20011,7 @@
         "title": "NewFitTarget[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -20043,7 +20043,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "NewFitTarget<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -20071,7 +20071,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "NewFitTarget<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23317,7 +23317,7 @@
         "title": "PrepareDataInput[Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT",
           "SourceT"
@@ -23365,7 +23365,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "PrepareDataInput<GitOid, FileSourceRef>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23408,7 +23408,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "PrepareDataInput<RevisionSelector, SourceFolder>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23481,7 +23481,7 @@
         "title": "PrepareDataRequest[Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT",
           "SourceT"
@@ -23526,7 +23526,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "PrepareDataRequest<GitOid, FileSourceRef>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23565,7 +23565,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "PrepareDataRequest<RevisionSelector, SourceFolder>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -23627,7 +23627,7 @@
             "$ref": "#/components/schemas/ExtractionSnapshotEvent"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
+        "x-python-module": "nof1_causal_service.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history",
         "description": "A progress event records one running attempt's step status or extraction telemetry."
@@ -23658,7 +23658,7 @@
         ],
         "title": "ProgressMessage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.logs",
+        "x-python-module": "nof1_causal_service.actions.contracts.logs",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },
@@ -23936,7 +23936,7 @@
         ],
         "title": "Raised",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -24000,7 +24000,7 @@
         ],
         "title": "RecordDependency",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -24135,7 +24135,7 @@
         ],
         "title": "Rejected",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -24234,7 +24234,7 @@
         ],
         "title": "RetractedArtifact",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.state",
+        "x-python-module": "nof1_causal_service.study.state",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -24369,7 +24369,7 @@
         ],
         "title": "RunningAction",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24420,7 +24420,7 @@
         ],
         "title": "RunningPoll",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24658,7 +24658,7 @@
             "$ref": "#/components/schemas/SimulateRequest_GitOid_"
           }
         ],
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24771,7 +24771,7 @@
         "title": "SimulateInput[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -24814,7 +24814,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SimulateInput<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24852,7 +24852,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "SimulateInput<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.bodies",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24920,7 +24920,7 @@
         "title": "SimulateRequest[Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-typescript-parameters": [
           "RevisionT"
         ],
@@ -24964,7 +24964,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SimulateRequest<GitOid>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -25003,7 +25003,7 @@
         "type": "object",
         "x-typescript-mode": "validation",
         "x-typescript-type": "SimulateRequest<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.requests",
+        "x-python-module": "nof1_causal_service.actions.contracts.requests",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -25484,7 +25484,7 @@
         ],
         "title": "StepError",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
+        "x-python-module": "nof1_causal_service.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -25532,7 +25532,7 @@
         ],
         "title": "StepEvent",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
+        "x-python-module": "nof1_causal_service.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -25543,7 +25543,7 @@
           "failed"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.actions.contracts.progress",
+        "x-python-module": "nof1_causal_service.actions.contracts.progress",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -25678,7 +25678,7 @@
         ],
         "title": "StudyRevision",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.records",
+        "x-python-module": "nof1_causal_service.study.records",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -25714,7 +25714,7 @@
         ],
         "title": "StudyState",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.study.state",
+        "x-python-module": "nof1_causal_service.study.state",
         "x-layer": "study",
         "x-concern": "execution_history"
       },
@@ -25762,7 +25762,7 @@
         "title": "SuccessfulPoll[Annotated[Any, WithJsonSchema], Annotated[Any, WithJsonSchema]]",
         "type": "object",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-typescript-parameters": [
           "ActionT",
           "BodyT"
@@ -25813,7 +25813,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"data_diff\", DataDiffOutput>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -25860,7 +25860,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"edit_model\", EditModelOutput>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -25907,7 +25907,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"edit_question\", EditQuestionOutput>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -25954,7 +25954,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"fit\", FitOutput>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26001,7 +26001,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"model_diff\", ModelDiffOutput>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26048,7 +26048,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"prepare_data\", PrepareDataOutput>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26095,7 +26095,7 @@
         "type": "object",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "SuccessfulPoll<\"simulate\", SimulateOutput>",
-        "x-python-module": "nof1_causal_lab.actions.contracts.polling",
+        "x-python-module": "nof1_causal_service.actions.contracts.polling",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26203,7 +26203,7 @@
         ],
         "title": "TimelineRecord",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.timeline",
+        "x-python-module": "nof1_causal_service.actions.contracts.timeline",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26240,7 +26240,7 @@
         ],
         "title": "TimelineResponse",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.timeline",
+        "x-python-module": "nof1_causal_service.actions.contracts.timeline",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26280,7 +26280,7 @@
         ],
         "title": "TimelineRevision",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.timeline",
+        "x-python-module": "nof1_causal_service.actions.contracts.timeline",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26315,7 +26315,7 @@
         ],
         "title": "TraceLogMessage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.actions.contracts.logs",
+        "x-python-module": "nof1_causal_service.actions.contracts.logs",
         "x-layer": "transport",
         "x-concern": "execution_history"
       },

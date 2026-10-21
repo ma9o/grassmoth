@@ -10,7 +10,7 @@ from pydantic import TypeAdapter
 
 from evaluation.declarations import CaseRecipe, GeneratedData
 from evaluation.sources import model_document, read_source
-from nof1_causal_lab.public.contracts import (
+from nof1_causal_service.public.contracts import (
     ActionInput,
     Assessment,
     DataRef,

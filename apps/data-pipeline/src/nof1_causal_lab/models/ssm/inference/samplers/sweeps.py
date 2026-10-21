@@ -14,7 +14,6 @@ import numpy as np
 from nof1_causal_lab.artifacts.immutability import freeze_fields
 from nof1_causal_lab.compute.batching import compiled_memory
 from nof1_causal_lab.compute.budget import NO_MEMORY_DEMAND, MemoryDemand
-from nof1_causal_lab.compute.compilation_cache import prepare_program
 from nof1_causal_lab.models.ssm.inference.samplers.progress import (
     inference_phase,
     log_inference_event,
@@ -27,13 +26,16 @@ from nof1_causal_lab.models.ssm.inference.samplers.sweep_plan import (
 )
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable, Mapping
     from concurrent.futures import Future
+    from datetime import datetime
 
     from jax.stages import Compiled
     from jax.typing import DTypeLike
 
     from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.compute.programs import ProgramPreparer
     from nof1_causal_lab.models.ssm.inference.targets.particle import ParticleTarget
 
 
@@ -63,6 +65,7 @@ def compile_sweeps[Carry](
     step_factory: Callable[[int], Callable[[Carry, jax.Array], tuple[Carry, dict[str, jax.Array]]]],
     initial: Carry,
     *,
+    prepare_program: ProgramPreparer,
     num_warmup: int,
     num_samples: int,
     max_batch_size: int,
@@ -158,6 +161,7 @@ def compile_projected_sweeps[Carry](
     step_factory: Callable[[int], Callable[[Carry, jax.Array], tuple[Carry, dict[str, jax.Array]]]],
     initial: Carry,
     *,
+    prepare_program: ProgramPreparer,
     target: ParticleTarget,
     path_dtype: DTypeLike,
     num_chains: int,
@@ -166,6 +170,8 @@ def compile_projected_sweeps[Carry](
     max_batch_size: int,
     budget: ComputeBudget,
     clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
     label: str,
 ) -> SweepPlan:
     """Compile independent exact observation projection while the sampler compiles."""
@@ -195,7 +201,13 @@ def compile_projected_sweeps[Carry](
     )
 
     def compile_projection() -> Compiled:
-        with inference_phase(label, "compiling_observation_projection", clock=clock):
+        with inference_phase(
+            label,
+            "compiling_observation_projection",
+            clock=clock,
+            logger=logger,
+            wall_clock=wall_clock,
+        ):
             return compile_program()
 
     with ThreadPoolExecutor(max_workers=1) as executor:
@@ -209,6 +221,7 @@ def compile_projected_sweeps[Carry](
             max_batch_size=max_batch_size,
             budget=budget,
             additional_overhead=overhead,
+            prepare_program=prepare_program,
         )
         projection = future.result()
     actual = compiled_memory(projection)
@@ -230,6 +243,8 @@ def run_sweeps[Carry](
     initial: Carry,
     *,
     clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
     label: str,
 ) -> SweepRun[Carry]:
     """Keep only requested phase outputs; padded block slots execute no transition."""
@@ -257,6 +272,8 @@ def run_sweeps[Carry](
                 label,
                 stage,
                 clock=clock,
+                logger=logger,
+                wall_clock=wall_clock,
                 total=phase.steps,
                 block_size=plan.block_size,
                 particle_batch_size=plan.batch_size,
@@ -290,12 +307,16 @@ def run_sweeps[Carry](
                         label,
                         stage,
                         "progress",
+                        logger=logger,
+                        wall_clock=wall_clock,
                         completed=phase.steps - remaining,
                         total=phase.steps,
                         elapsed_seconds=clock() - phase_started,
                     )
         else:
-            log_inference_event(label, stage, "skipped", total=0)
+            log_inference_event(
+                label, stage, "skipped", logger=logger, wall_clock=wall_clock, total=0
+            )
         history = {name: jnp.asarray(value) for name, value in buffers.items()}
         histories.append(history)
         del buffers

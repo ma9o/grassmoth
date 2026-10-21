@@ -4,10 +4,7 @@ import polars as pl
 import pytest
 
 from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
-from nof1_causal_lab.actions.prepare_data.materialization import (
-    materialize_panel,
-    recorded_observations,
-)
+from nof1_causal_lab.actions.prepare_data.materialization import materialize_panel
 from nof1_causal_lab.artifacts.observations.preparation import (
     DataVariableSpec,
     FileSourceRef,
@@ -15,6 +12,7 @@ from nof1_causal_lab.artifacts.observations.preparation import (
 )
 from nof1_causal_lab.artifacts.observations.rows import validate_observation_rows
 from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
+from nof1_causal_service.actions.prepare_data.materialization import recorded_observations
 
 pytestmark = pytest.mark.contract
 

@@ -5,7 +5,6 @@ import textwrap
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.fit.execution import resolve_sampler_spec
 from nof1_causal_lab.artifacts.sampling import (
     AdaptedLatentStepSpec,
     DsmcSpec,
@@ -16,7 +15,9 @@ from nof1_causal_lab.artifacts.sampling import (
     NutsDASpec,
     SamplerSpec,
 )
-from nof1_causal_lab.config import (
+from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
+from nof1_causal_service.actions.fit.execution import resolve_sampler_spec
+from nof1_causal_service.config import (
     EmbeddedLLMDefaults,
     ExtractionWorkersConfig,
     InferenceConfig,
@@ -26,7 +27,6 @@ from nof1_causal_lab.config import (
     load_config,
     validate_config,
 )
-from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
 
 pytestmark = pytest.mark.contract
 
@@ -58,7 +58,7 @@ class TestSamplerSpec:
         assert result.retain_latent_paths is True
 
     def test_public_overrides_resolve_without_mutating_defaults(self, monkeypatch):
-        from nof1_causal_lab import config as config_module
+        from nof1_causal_service import config as config_module
 
         configured = SamplerSpec(
             num_warmup=10,
@@ -207,7 +207,7 @@ class TestLoadConfig:
 
         load_config.cache_clear()
 
-        import nof1_causal_lab.config as config_mod
+        import nof1_causal_service.config as config_mod
 
         monkeypatch.setattr(config_mod, "_find_config_path", lambda: config_file)
 
@@ -225,7 +225,7 @@ class TestLoadConfig:
 
         load_config.cache_clear()
 
-        import nof1_causal_lab.config as config_mod
+        import nof1_causal_service.config as config_mod
 
         monkeypatch.setattr(config_mod, "_find_config_path", lambda: config_file)
 
@@ -262,7 +262,7 @@ class TestLoadConfig:
 
         load_config.cache_clear()
 
-        import nof1_causal_lab.config as config_mod
+        import nof1_causal_service.config as config_mod
 
         monkeypatch.setattr(config_mod, "_find_config_path", lambda: config_file)
 

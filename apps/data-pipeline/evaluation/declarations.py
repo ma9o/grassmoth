@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
-from nof1_causal_lab.public.contracts import (
+from nof1_causal_service.public.contracts import (
     CallId,
     ExtractionSpec,
     IndicatorId,

@@ -6,9 +6,9 @@ import hashlib
 from typing import TYPE_CHECKING
 
 from evaluation.declarations import CaseFile
-from nof1_causal_lab.public.client import StudyClient
-from nof1_causal_lab.public.contracts import DynamicalModelSpec
-from nof1_causal_lab.public.studies import StudyError
+from nof1_causal_service.public.client import StudyClient
+from nof1_causal_service.public.contracts import DynamicalModelSpec
+from nof1_causal_service.public.studies import StudyError
 
 if TYPE_CHECKING:
     from pathlib import Path

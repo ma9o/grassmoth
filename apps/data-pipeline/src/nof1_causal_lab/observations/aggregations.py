@@ -6,7 +6,6 @@ and Polars aggregation expression builders used by the pipeline's stage 2 logic.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, assert_never
 
 import polars as pl
@@ -22,9 +21,6 @@ if TYPE_CHECKING:
     from polars._typing import FillNullStrategy
 
     from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
-
-
-logger = logging.getLogger(__name__)
 
 
 def _compile_computed_rule_expr(window_expr: WindowExpression) -> pl.Expr:
@@ -194,7 +190,6 @@ def compute_indicators(
 
     frames: list[pl.DataFrame] = []
     for ind, extraction in computed:
-        name = ind.observation.id
         agg_name = ind.observation.aggregation
         measurement_dtype = ind.observation.measurement_dtype
         observation_window = measurement_structure.window(ind).polars_interval
@@ -212,11 +207,6 @@ def compute_indicators(
 
         missing_source_cols = [column for column in source_columns if column not in df.columns]
         if missing_source_cols:
-            logger.warning(
-                "Computed indicator '%s': source columns %s not in DataFrame, skipping",
-                name,
-                missing_source_cols,
-            )
             continue
 
         if computed_rule:
@@ -434,14 +424,6 @@ def _encode_non_continuous(
                 )
                 .alias("value")
             )
-            n_null = subset["value"].null_count()
-            if n_null > 0:
-                logger.warning(
-                    "Binary indicator '%s': %d/%d values could not be encoded",
-                    name,
-                    n_null,
-                    len(subset),
-                )
         else:
             levels = (ordinal_levels_lookup if dtype == "ordinal" else categorical_levels_lookup)[
                 name

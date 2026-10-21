@@ -16,7 +16,7 @@ import jax
 import jax.numpy as jnp
 import pytest
 
-from nof1_causal_lab.compute.compilation_cache import (
+from nof1_causal_service.compute.compilation_cache import (
     FIT_CACHE_POLICY,
     CacheLimit,
     CachePolicy,
@@ -31,7 +31,7 @@ KERNELS = "xla_gpu_kernel_cache_file"
 
 
 def test_staging_preserves_public_and_user_created_jax_callables():
-    from nof1_causal_lab.compute import compilation_cache as cache
+    from nof1_causal_service.compute import compilation_cache as cache
 
     public = (jnp.log, jnp.add)
     restored = pickle.loads(cache._program_bytes(public))
@@ -59,7 +59,7 @@ def test_staging_preserves_public_and_user_created_jax_callables():
 
 @pytest.mark.parametrize("dependency", ["cuthbert", "cuthbertlib", "cd-dynamax"])
 def test_staged_program_key_tracks_all_installed_dependency_versions(monkeypatch, dependency):
-    from nof1_causal_lab.compute import compilation_cache as cache
+    from nof1_causal_service.compute import compilation_cache as cache
 
     monkeypatch.setattr(cache, "numerical_source_digest", lambda: "source")
     monkeypatch.setattr(cache, "cache_namespace", lambda _policy: "namespace")
@@ -83,7 +83,7 @@ def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp
         import json, os
         import jax
         import jax.numpy as jnp
-        from nof1_causal_lab.compute.compilation_cache import prepare_program
+        from nof1_causal_service.compute.compilation_cache import prepare_program
         from nof1_causal_lab.artifacts.model.expressions import StateExpression
         from nof1_causal_lab.models.ssm.dynamics.expression import ExpressionComponent
 
@@ -146,7 +146,7 @@ def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp
 
 
 def test_staged_key_keeps_input_tree_identity_with_identical_leaf_layouts(tmp_path):
-    from nof1_causal_lab.compute.compilation_cache import prepare_program
+    from nof1_causal_service.compute.compilation_cache import prepare_program
 
     def identity(value):
         return value
@@ -159,7 +159,7 @@ def test_staged_key_keeps_input_tree_identity_with_identical_leaf_layouts(tmp_pa
 
 
 def test_restored_staged_outputs_preserve_weak_scalar_types(tmp_path):
-    from nof1_causal_lab.compute.compilation_cache import compile_staged
+    from nof1_causal_service.compute.compilation_cache import compile_staged
 
     def increment(value):
         return value + 1
@@ -268,7 +268,7 @@ def test_invalid_bundles_fail_before_use_without_fallback(tmp_path, defect):
 def test_local_lifecycle_isolated_namespaces_failure_cleanup_and_accounting(tmp_path, monkeypatch):
     # Backend discovery is separate from this I/O contract.
     monkeypatch.setattr(
-        "nof1_causal_lab.compute.compilation_cache.cache_namespace", lambda _policy: "a" * 64
+        "nof1_causal_service.compute.compilation_cache.cache_namespace", lambda _policy: "a" * 64
     )
     persistent = tmp_path / "volume"
     persistent.mkdir()
@@ -314,7 +314,7 @@ def test_local_lifecycle_isolated_namespaces_failure_cleanup_and_accounting(tmp_
 
 def test_commit_failure_propagates_and_restores_configuration(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "nof1_causal_lab.compute.compilation_cache.cache_namespace", lambda _policy: "a" * 64
+        "nof1_causal_service.compute.compilation_cache.cache_namespace", lambda _policy: "a" * 64
     )
     original = jax.config.jax_compilation_cache_dir
     with (
@@ -352,7 +352,7 @@ def test_kernel_cache_path_does_not_change_executable_keys_between_contexts(tmp_
 
 
 def test_topology_writers_keep_separate_binaries_and_share_staged_artifacts(tmp_path, monkeypatch):
-    from nof1_causal_lab.compute import compilation_cache as cache
+    from nof1_causal_service.compute import compilation_cache as cache
 
     monkeypatch.setattr(cache, "cache_namespace", lambda _policy: "namespace")
     commit = Mock()
@@ -401,7 +401,7 @@ def test_bundle_rejects_entries_owned_by_other_partition(tmp_path, partition, na
 
 
 def test_accelerator_partition_matches_jax_fingerprint_component(monkeypatch):
-    from nof1_causal_lab.compute import compilation_cache as cache
+    from nof1_causal_service.compute import compilation_cache as cache
 
     devices = [object()]
     monkeypatch.setattr(cache.jax, "local_devices", lambda: devices)

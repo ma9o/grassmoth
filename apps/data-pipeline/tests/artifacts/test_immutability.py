@@ -7,7 +7,7 @@ import pytest
 from pydantic import ValidationError
 
 from nof1_causal_lab.artifacts.immutability import freeze
-from nof1_causal_lab.study.artifact_files import ArtifactFileSpec
+from nof1_causal_service.study.artifact_files import ArtifactFileSpec
 
 pytestmark = pytest.mark.contract
 

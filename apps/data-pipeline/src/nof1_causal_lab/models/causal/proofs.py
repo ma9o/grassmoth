@@ -5,8 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.study.records import Applied
-
 
 class CausalCertificationError(Exception):
     """Owned causal inputs do not supply the evidence required for a numeric claim."""
@@ -17,7 +15,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from nof1_causal_lab.artifacts.reports.identification import IdentificationReport
     from nof1_causal_lab.artifacts.reports.inference import InferenceReportCore
-    from nof1_causal_lab.study.records import StudyRevision
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,7 +35,6 @@ class CertifiedCausalAnalysis:
     dynamical_model_spec_ref: GitRef
     identification: IdentificationReport
     estimands: tuple[IdentifiedEstimand, ...]
-    inference: StudyRevision
     fitted_dynamical_model_spec: DynamicalModelSpec
     report: InferenceReportCore
 
@@ -48,8 +44,6 @@ class CertifiedCausalAnalysis:
             raise CausalCertificationError("at least one identified estimand is required")
         certify_conditioned_model(
             self.dynamical_model_spec,
-            self.dynamical_model_spec_ref,
-            self.inference,
             self.fitted_dynamical_model_spec,
             self.report,
         )
@@ -128,23 +122,13 @@ def certify_identified_estimand(
 
 def certify_conditioned_model(
     dynamical_model_spec: DynamicalModelSpec,
-    revision: GitRef,
-    record: StudyRevision,
     fitted_dynamical_model_spec: DynamicalModelSpec,
     report: InferenceReportCore,
 ) -> None:
-    """Join the current scientific value to committed, converged exact-engine evidence."""
+    """Check resolved fitted values against retained uncertainty and convergence evidence."""
     from nof1_causal_lab.models.inputs import input_fingerprints
     from nof1_causal_lab.models.ssm.inference.diagnostics.convergence import convergence_failures
-    from nof1_causal_lab.study.records import inference_record
 
-    if inference_record([record], revision.revision) is None:
-        raise CausalCertificationError(
-            "Causal reporting requires the committed fit for this model revision"
-        )
-
-    assert record.record.attempt.action == "fit"
-    assert isinstance(record.record.attempt.outcome, Applied)
     if (
         input_fingerprints(fitted_dynamical_model_spec)["belief"]
         != input_fingerprints(dynamical_model_spec)["belief"]

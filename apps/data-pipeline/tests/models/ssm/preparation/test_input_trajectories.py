@@ -25,7 +25,7 @@ from nof1_causal_lab.models.ssm.predictive.simulation import (
     SimulationBatch,
     generate_simulation_batch,
 )
-from nof1_causal_lab.models.ssm.preparation.panel import (
+from nof1_causal_lab.models.ssm.preparation.binding import (
     BoundPanel,
     PanelPreparationFailure,
     bind_panel,
@@ -94,9 +94,9 @@ def _model(*, measured=False, time_origin="relative"):
 @pytest.mark.contract
 def test_inputs_require_deterministic_laws_and_keep_independent_coordinates(tmp_path, monkeypatch):
     dynamical_model_spec = _model()
-    from nof1_causal_lab.storage import paths as data
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
-    from nof1_causal_lab.study.queries.lineage import law_provenance
+    from nof1_causal_service.storage import paths as data
+    from nof1_causal_service.study.persistence.store import ArtifactStore
+    from nof1_causal_service.study.queries.lineage import law_provenance
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("INPUTLAW")

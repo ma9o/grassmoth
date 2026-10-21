@@ -13,12 +13,12 @@ pytestmark = pytest.mark.contract
 
 
 def test_dependent_alternatives_reject_impossible_fields_at_the_schema_boundary():
-    from nof1_causal_lab.actions.temporal.extraction.messages import ExtractionChunkResult
     from nof1_causal_lab.artifacts.model.likelihood import ObservationLawSpec
     from nof1_causal_lab.artifacts.model.parameter_spec import ParameterTransformSpec
     from nof1_causal_lab.artifacts.observations.preparation import ExtractionSpec
     from nof1_causal_lab.artifacts.observations.reference import DataRef
     from nof1_causal_lab.artifacts.reports.predictive_provenance import PredictiveLawProvenance
+    from nof1_causal_service.actions.temporal.extraction.messages import ExtractionChunkResult
 
     expression = {"kind": "state", "construct_id": "construct:x"}
     for tag, argument, excluded in (

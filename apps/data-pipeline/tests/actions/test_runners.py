@@ -4,14 +4,14 @@ from datetime import date
 
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import FitInput, NewFitTarget, SimulateInput
-from nof1_causal_lab.actions.contracts.requests import FitRequest, SimulateRequest
-from nof1_causal_lab.actions.temporal.client import pydantic_data_converter
-from nof1_causal_lab.actions.temporal.study.messages import ActionInput
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.simulation import SimulationSpec
-from nof1_causal_lab.study.state import StudyState
+from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget, SimulateInput
+from nof1_causal_service.actions.contracts.requests import FitRequest, SimulateRequest
+from nof1_causal_service.actions.temporal.client import pydantic_data_converter
+from nof1_causal_service.actions.temporal.study.messages import ActionInput
+from nof1_causal_service.study.state import StudyState
 from tests.support.git import git_oid
 from tests.support.helpers import run_async
 

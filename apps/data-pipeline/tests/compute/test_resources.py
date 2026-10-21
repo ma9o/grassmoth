@@ -4,8 +4,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from nof1_causal_lab.compute import resources
 from nof1_causal_lab.compute.budget import AcceleratorMemoryBudget, MemoryDemand, SharedMemoryBudget
+from nof1_causal_service.compute import resources
 
 pytestmark = pytest.mark.contract
 

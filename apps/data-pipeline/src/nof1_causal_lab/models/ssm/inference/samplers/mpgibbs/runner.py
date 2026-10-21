@@ -18,7 +18,6 @@ from nof1_causal_lab.artifacts.reports.posterior_diagnostics import (
     TemperingDiagnostics,
 )
 from nof1_causal_lab.artifacts.sampling import FixedLatentStepSpec
-from nof1_causal_lab.compute.compilation_cache import compile_staged
 from nof1_causal_lab.models.ssm.inference.continuation import restore_state, retain_state
 from nof1_causal_lab.models.ssm.inference.mcmc_state import (
     TrajectoryMCMCState,
@@ -49,13 +48,16 @@ from nof1_causal_lab.models.ssm.inference.samplers.sweeps import (
 )
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable, Mapping
+    from datetime import datetime
 
     from jax.stages import Compiled
 
     from nof1_causal_lab.artifacts.arrays import NumericalArray
     from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
     from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.compute.programs import ProgramCompiler, ProgramPreparer
     from nof1_causal_lab.models.ssm.inference.conditioning import ExactStateConstraints
     from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs.kernel import (
         MarginalParticleGibbsKernel,
@@ -184,6 +186,8 @@ class _Population(NamedTuple):
 def run_marginal_particle_gibbs(
     target: ParticleTarget,
     *,
+    compiler: ProgramCompiler,
+    prepare_program: ProgramPreparer,
     kernel: MarginalParticleGibbsKernel,
     num_warmup: int,
     num_samples: int,
@@ -198,6 +202,8 @@ def run_marginal_particle_gibbs(
     adaptation_scheme: Literal["simple", "dual_averaging"] = "simple",
     tempering: ReplicaExchangeKernel | None = None,
     clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleChainResult:
     """Run marginalized Particle Gibbs chains from paired LAPS starts."""
@@ -231,8 +237,10 @@ def run_marginal_particle_gibbs(
         (num_steps,),
         jnp.asarray(initial_latent_delta_value, dtype=observations.dtype),
     )
-    with inference_phase("mpgibbs", "initializing_chains", clock=clock):
-        initialize = compile_staged(
+    with inference_phase(
+        "mpgibbs", "initializing_chains", clock=clock, logger=logger, wall_clock=wall_clock
+    ):
+        initialize = compiler(
             jax.vmap(
                 lambda position, path: _initialize_chain_state(
                     position,
@@ -483,7 +491,9 @@ def run_marginal_particle_gibbs(
 
         return sweep
 
-    with inference_phase("mpgibbs", "compiling_sweeps", clock=clock):
+    with inference_phase(
+        "mpgibbs", "compiling_sweeps", clock=clock, logger=logger, wall_clock=wall_clock
+    ):
         plan = compile_projected_sweeps(
             step_factory,
             initial,
@@ -495,9 +505,14 @@ def run_marginal_particle_gibbs(
             path_dtype=states.latent_trajectory.dtype,
             num_chains=num_chains,
             clock=clock,
+            logger=logger,
+            wall_clock=wall_clock,
             label="mpgibbs",
+            prepare_program=prepare_program,
         )
-    run = run_sweeps(plan, initial, clock=clock, label="mpgibbs")
+    run = run_sweeps(
+        plan, initial, clock=clock, logger=logger, wall_clock=wall_clock, label="mpgibbs"
+    )
     final = run.state
     draw_fields = frozenset(("positions", "paths", "observation_log_probs", "log_posterior"))
     warmup_extra = {

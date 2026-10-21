@@ -9,7 +9,7 @@ from nof1_causal_lab.artifacts.observations.preparation import (
     SemanticExtractionSpec,
 )
 from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
-from nof1_causal_lab.study.state import StudyState
+from nof1_causal_service.study.state import StudyState
 from tests.support.helpers import fixture_entity_id
 from tests.support.model import stress_sleep_model
 

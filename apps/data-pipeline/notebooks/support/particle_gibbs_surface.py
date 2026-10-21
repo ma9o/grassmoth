@@ -8,8 +8,10 @@ Analytic Gibbs and grid quadrature are explicitly separate mathematical referenc
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from functools import lru_cache, partial
 from typing import TYPE_CHECKING, Literal
 
@@ -54,6 +56,7 @@ from nof1_causal_lab.models.ssm.inference.warmup.initialization import (
     prepare_laps_initialization,
 )
 from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationFailure
+from nof1_causal_service.compute.compilation_cache import prepare_program
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -852,6 +855,9 @@ def run_nuts(
         compute_budget=_BUDGET,
         key=jax.random.key(seed),
         clock=time.monotonic,
+        prepare_program=prepare_program,
+        logger=logging.getLogger(__name__),
+        wall_clock=lambda: datetime.now(UTC),
     )
     if isinstance(result, InitializationFailure):
         return result

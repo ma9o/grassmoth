@@ -20,10 +20,8 @@ PACKAGE = "nof1_causal_lab"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_ROOT = PROJECT_ROOT / "src" / PACKAGE
 DIRECTORY_ROLES: dict[str, ModuleRole] = {
-    "actions": "shell",
+    "actions": "compiler",
     "actions/contracts": "domain",
-    "actions/temporal": "shell",
-    "api": "edge",
     "artifacts": "domain",
     "compute": "domain",
     "llm": "domain",
@@ -33,55 +31,30 @@ DIRECTORY_ROLES: dict[str, ModuleRole] = {
     "models/ssm/preparation": "compiler",
     "models/ssm/structure": "compiler",
     "observations": "compiler",
-    "public": "edge",
-    "storage": "edge",
-    "study": "edge",
+    "study": "domain",
     "study/projections": "projection",
 }
 MODULE_ROLES: dict[str, ModuleRole] = {
+    "study/__init__": "domain",
     "__init__": "domain",
-    "actions/call_logs": "edge",
     "actions/errors": "domain",
-    "actions/fit/conditioning": "edge",
-    "actions/fit/remote": "edge",
-    "actions/messages": "projection",
+    "actions/fit/conditioning": "compiler",
     "actions/prepare_data/context": "domain",
-    "actions/prepare_data/materialization": "edge",
+    "actions/prepare_data/materialization": "compiler",
     "actions/prepare_data/messages": "domain",
-    "actions/prepare_data/planning": "compiler",
     "actions/prepare_data/prompts": "projection",
     "actions/prepare_data/tool_contracts": "domain",
     "actions/prepare_data/window_text": "compiler",
     "actions/prepare_data/worker_output": "domain",
-    "actions/progress": "edge",
     "actions/simulate/summaries": "projection",
-    "actions/temporal/client": "edge",
-    "actions/temporal/errors": "edge",
-    "actions/temporal/extraction/activities": "edge",
-    "actions/temporal/extraction/cache": "edge",
-    "actions/temporal/extraction/messages": "edge",
-    "actions/temporal/extraction/settings": "edge",
-    "actions/temporal/extraction/source_data": "edge",
-    "actions/temporal/llm/activities": "edge",
-    "actions/temporal/llm/context": "edge",
-    "actions/temporal/llm/messages": "edge",
-    "actions/temporal/llm/storage": "edge",
-    "actions/temporal/llm/tools": "edge",
-    "actions/temporal/study/messages": "edge",
     "artifacts/model/coefficient_redundancy": "compiler",
     "artifacts/model/semantics": "compiler",
     "artifacts/probability/membership": "compiler",
     "artifacts/reports/histograms": "execution",
-    "bootstrap": "edge",
     "compilation_errors": "domain",
     "compute/batching": "compiler",
-    "compute/compilation_cache": "edge",
     "compute/traced_memory": "compiler",
-    "compute/modal_images": "edge",
-    "compute/resources": "edge",
-    "config": "edge",
     "json_types": "domain",
-    "llm/openrouter": "edge",
     "models/diagnostics/history_comparison": "execution",
     "models/ssm/compiled_access": "compiler",
     "models/ssm/constants": "domain",
@@ -90,14 +63,14 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "models/ssm/dynamics/cache_identity": "domain",
     "models/ssm/dynamics/spec": "domain",
     "models/ssm/inference/samplers/sweep_plan": "compiler",
-    "models/ssm/inference/fit": "shell",
-    "models/ssm/inference/samplers/nuts": "shell",
-    "models/ssm/inference/samplers/mpgibbs/fit": "shell",
-    "models/ssm/inference/samplers/mpgibbs/runner": "shell",
-    "models/ssm/inference/samplers/pgibbs/fit": "shell",
-    "models/ssm/inference/samplers/pgibbs/runner": "shell",
-    "models/ssm/inference/samplers/progress": "shell",
-    "models/ssm/inference/samplers/sweeps": "shell",
+    "models/ssm/inference/fit": "execution",
+    "models/ssm/inference/samplers/nuts": "execution",
+    "models/ssm/inference/samplers/mpgibbs/fit": "execution",
+    "models/ssm/inference/samplers/mpgibbs/runner": "execution",
+    "models/ssm/inference/samplers/pgibbs/fit": "execution",
+    "models/ssm/inference/samplers/pgibbs/runner": "execution",
+    "models/ssm/inference/samplers/progress": "execution",
+    "models/ssm/inference/samplers/sweeps": "execution",
     "models/ssm/inference/samplers/particle/context": "compiler",
     "models/ssm/inference/samplers/particle/setup": "compiler",
     "models/ssm/parameterization": "compiler",
@@ -105,14 +78,54 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "models/ssm/priors": "compiler",
     "models/ssm/shapes": "domain",
     "models/ssm/transition_kinds": "domain",
-    "public/contracts": "domain",
+}
 
-    "storage/cache": "shell",
-    "study/artifact_files": "domain",
-    "study/errors": "domain",
+SERVICE_PACKAGE = "nof1_causal_service"
+PACKAGES = (PACKAGE, SERVICE_PACKAGE)
+SOURCE_ROOTS = tuple(PROJECT_ROOT / "src" / package for package in PACKAGES)
+
+SERVICE_DIRECTORY_ROLES: dict[str, ModuleRole] = {
+    "actions": "shell",
+    "actions/contracts": "domain",
+    "api": "edge",
+    "public": "edge",
+    "storage": "edge",
+    "study": "edge",
+    "compute": "edge",
+    "llm": "edge",
+}
+SERVICE_MODULE_ROLES: dict[str, ModuleRole] = {
+    "__init__": "edge",
+    "bootstrap": "edge",
+    "config": "edge",
+    "compute/__init__": "domain",
+    "llm/__init__": "domain",
     "study/records": "domain",
+    "study/errors": "domain",
+    "study/artifact_files": "domain",
     "study/snapshot": "domain",
     "study/state": "domain",
+    "storage/cache": "shell",
+    "public/contracts": "domain",
+    "actions/call_logs": "edge",
+    "actions/messages": "projection",
+    "actions/progress": "edge",
+    "actions/temporal/client": "edge",
+    "actions/temporal/errors": "edge",
+    "actions/fit/remote": "edge",
+    "actions/prepare_data/materialization": "edge",
+    "actions/prepare_data/planning": "shell",
+    "actions/temporal/study/messages": "edge",
+    "actions/temporal/llm/activities": "edge",
+    "actions/temporal/llm/tools": "edge",
+    "actions/temporal/llm/context": "edge",
+    "actions/temporal/llm/storage": "edge",
+    "actions/temporal/llm/messages": "edge",
+    "actions/temporal/extraction/activities": "edge",
+    "actions/temporal/extraction/cache": "edge",
+    "actions/temporal/extraction/messages": "edge",
+    "actions/temporal/extraction/settings": "edge",
+    "actions/temporal/extraction/source_data": "edge",
 }
 
 # Annotations cover every non-numerical role and the published numerical seams.
@@ -140,46 +153,53 @@ ANNOTATION_MODULES = frozenset(
 )
 
 
-def module_role(relative_module: str) -> ModuleRole:
+def module_role(relative_module: str, package: str = PACKAGE) -> ModuleRole:
     """Classify one extensionless package-relative path, including initializers."""
-    if relative_module in MODULE_ROLES:
-        return MODULE_ROLES[relative_module]
+    modules = MODULE_ROLES if package == PACKAGE else SERVICE_MODULE_ROLES
+    directories = DIRECTORY_ROLES if package == PACKAGE else SERVICE_DIRECTORY_ROLES
+    if relative_module in modules:
+        return modules[relative_module]
     choices = [
         prefix
-        for prefix in DIRECTORY_ROLES
+        for prefix in directories
         if relative_module == prefix or relative_module.startswith(prefix + "/")
     ]
     if not choices:
         raise ValueError(f"Unclassified production module {relative_module}; assign its role here")
-    return DIRECTORY_ROLES[max(choices, key=len)]
+    return directories[max(choices, key=len)]
 
 
 def role_for_path(path: str) -> ModuleRole | None:
     """Resolve checker paths; auxiliary Python trees have no production role."""
-    marker = f"src/{PACKAGE}/"
-    if marker not in path:
-        return None
-    relative = path.split(marker, 1)[1].removesuffix(".py")
-    return module_role(relative)
+    for package in PACKAGES:
+        marker = f"src/{package}/"
+        if marker in path:
+            relative = path.split(marker, 1)[1].removesuffix(".py")
+            return module_role(relative, package)
+    return None
 
 
 def role_for_module(module: str) -> ModuleRole:
     """Classify an import-graph module name using the same assignments."""
-    relative = module.removeprefix(PACKAGE).lstrip(".").replace(".", "/")
-    return module_role(relative or "__init__")
+    package, _, relative = module.partition(".")
+    return module_role(relative.replace(".", "/") or "__init__", package)
 
 
-def role_inventory(source_root: Path = SOURCE_ROOT) -> dict[Path, ModuleRole]:
+def role_inventory(source_root: Path | None = None) -> dict[Path, ModuleRole]:
     """Fail on missing/stale assignments when scanning the complete package."""
+    if source_root is None:
+        return {path: role for root in SOURCE_ROOTS for path, role in role_inventory(root).items()}
+    package = source_root.name
     modules = {
         path.relative_to(source_root).with_suffix("").as_posix(): path
         for path in source_root.rglob("*.py")
     }
-    if source_root.resolve() == SOURCE_ROOT.resolve():
-        stale = MODULE_ROLES.keys() - modules.keys()
+    if source_root.resolve() in SOURCE_ROOTS:
+        assignments = MODULE_ROLES if package == PACKAGE else SERVICE_MODULE_ROLES
+        stale = assignments.keys() - modules.keys()
         if stale:
             raise ValueError(f"Delete stale role assignments: {sorted(stale)}")
-    return {path: module_role(name) for name, path in modules.items()}
+    return {path: module_role(name, package) for name, path in modules.items()}
 
 
 def fix_owner(path: str) -> str:
@@ -208,7 +228,10 @@ def run_annotation_checks() -> int:
         str(path)
         for path, role in role_inventory().items()
         if role in ANNOTATION_ROLES
-        or path.relative_to(SOURCE_ROOT).with_suffix("").as_posix() in ANNOTATION_MODULES
+        or (
+            path.is_relative_to(SOURCE_ROOT)
+            and path.relative_to(SOURCE_ROOT).with_suffix("").as_posix() in ANNOTATION_MODULES
+        )
     )
     return subprocess.call(
         ["ruff", "check", "--no-fix", "--select", "ANN", *paths], cwd=PROJECT_ROOT

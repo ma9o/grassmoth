@@ -5,8 +5,8 @@ import json
 import fsspec
 import pytest
 
-from nof1_causal_lab.storage import paths as data_module
-from nof1_causal_lab.study import publish
+from nof1_causal_service.storage import paths as data_module
+from nof1_causal_service.study import publish
 
 pytestmark = pytest.mark.contract
 

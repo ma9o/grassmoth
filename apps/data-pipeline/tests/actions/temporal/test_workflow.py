@@ -12,39 +12,38 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import (
-    EditModelInput,
-    EditModelOutput,
-    EditQuestionInput,
-    FitInput,
-    ModelDiffInput,
-    NewFitTarget,
-    PrepareDataOutput,
-    SimulateInput,
-)
-from nof1_causal_lab.actions.contracts.call_state import CallProgress, RunningCall
-from nof1_causal_lab.actions.contracts.polling import ActionPoll, RunningPoll
-from nof1_causal_lab.actions.contracts.requests import (
-    EditModelRequest,
-    EditQuestionRequest,
-    FitRequest,
-    PrepareDataRequest,
-    SimulateRequest,
-)
-from nof1_causal_lab.actions.temporal.study.workflow import StudyWorkflow
+from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, PrepareDataOutput
 from nof1_causal_lab.artifacts.identity import GitOid, RevisionSelector
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
 from nof1_causal_lab.artifacts.observations.preparation import SourceFolder
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.simulation import SimulationSpec
-from nof1_causal_lab.llm.openrouter import create_openrouter_client
-from nof1_causal_lab.public import studies as library
-from nof1_causal_lab.public.contracts import TimelineResponse
-from nof1_causal_lab.study import interface as study_interface
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model
-from nof1_causal_lab.study.records import ActionMessage, Rejected
+from nof1_causal_service.actions.contracts.call_state import CallProgress, RunningCall
+from nof1_causal_service.actions.contracts.inputs import (
+    EditModelInput,
+    EditQuestionInput,
+    FitInput,
+    ModelDiffInput,
+    NewFitTarget,
+    SimulateInput,
+)
+from nof1_causal_service.actions.contracts.polling import ActionPoll, RunningPoll
+from nof1_causal_service.actions.contracts.requests import (
+    EditModelRequest,
+    EditQuestionRequest,
+    FitRequest,
+    PrepareDataRequest,
+    SimulateRequest,
+)
+from nof1_causal_service.actions.temporal.study.workflow import StudyWorkflow
+from nof1_causal_service.llm.openrouter import create_openrouter_client
+from nof1_causal_service.public import studies as library
+from nof1_causal_service.public.contracts import TimelineResponse
+from nof1_causal_service.study import interface as study_interface
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore, read_model
+from nof1_causal_service.study.records import ActionMessage, Rejected
 from tests.support.helpers import graph_constructs
 
 pytestmark = [pytest.mark.workflow, pytest.mark.timeout(60, method="thread")]
@@ -118,8 +117,8 @@ def _measured_model() -> dict[str, Any]:
 
 @pytest.fixture
 def machine_env(monkeypatch, tmp_path):
-    import nof1_causal_lab.llm.openrouter as openrouter_client
-    from nof1_causal_lab.storage import paths as data_module
+    import nof1_causal_service.llm.openrouter as openrouter_client
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     workspace_id = f"ws-{uuid.uuid4().hex[:8]}"
@@ -142,13 +141,13 @@ def test_study_workflow_journey(machine_env, monkeypatch):
     async def scenario():
         from temporalio.testing import WorkflowEnvironment
 
-        from nof1_causal_lab.actions.temporal.client import pydantic_data_converter
-        from nof1_causal_lab.actions.temporal.worker import (
+        from nof1_causal_service.actions.temporal.client import pydantic_data_converter
+        from nof1_causal_service.actions.temporal.worker import (
             build_model_checks_worker,
             build_openrouter_worker,
             build_worker,
         )
-        from nof1_causal_lab.study import interface as study_api
+        from nof1_causal_service.study import interface as study_api
 
         env = await WorkflowEnvironment.start_local(data_converter=pydantic_data_converter)
         try:
@@ -357,7 +356,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                     store.read_result(edited.record.attempt.outcome.result, EditModelOutput)
                     == saved_model
                 )
-                from nof1_causal_lab.actions.contracts.requests import ModelDiffRequest
+                from nof1_causal_service.actions.contracts.requests import ModelDiffRequest
 
                 head = StudyRepository(workspace_id).head()
                 comparison_request = ModelDiffRequest[GitOid](
@@ -412,7 +411,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
 
 
 def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, monkeypatch):
-    from nof1_causal_lab.actions.temporal.extraction import source_data as source_data_activity
+    from nof1_causal_service.actions.temporal.extraction import source_data as source_data_activity
 
     workspace_id = machine_env
     read_sources = source_data_activity.read_source_data_activity
@@ -420,11 +419,11 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
     async def scenario():
         from temporalio.testing import WorkflowEnvironment
 
-        from nof1_causal_lab.actions.temporal.client import (
+        from nof1_causal_service.actions.temporal.client import (
             RUNNING_ACTION_MEMO,
             pydantic_data_converter,
         )
-        from nof1_causal_lab.actions.temporal.worker import (
+        from nof1_causal_service.actions.temporal.worker import (
             build_model_checks_worker,
             build_openrouter_worker,
             build_worker,
@@ -435,9 +434,9 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
 
         from temporalio import activity
 
-        from nof1_causal_lab.actions.temporal.extraction.messages import ReadSourceDataInput
-        from nof1_causal_lab.actions.temporal.study import activities
-        from nof1_causal_lab.study.state import ArtifactRecord
+        from nof1_causal_service.actions.temporal.extraction.messages import ReadSourceDataInput
+        from nof1_causal_service.actions.temporal.study import activities
+        from nof1_causal_service.study.state import ArtifactRecord
 
         @activity.defn(name="read_source_data_activity")
         async def held_read_sources(payload: ReadSourceDataInput) -> ArtifactRecord | Rejected:
@@ -452,7 +451,7 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                 for item in activities.ALL_ACTIVITIES
             ],
         )
-        from nof1_causal_lab.actions.temporal import worker
+        from nof1_causal_service.actions.temporal import worker
 
         monkeypatch.setattr(worker, "ALL_ACTIVITIES", activities.ALL_ACTIVITIES)
         env = await WorkflowEnvironment.start_local(data_converter=pydantic_data_converter)

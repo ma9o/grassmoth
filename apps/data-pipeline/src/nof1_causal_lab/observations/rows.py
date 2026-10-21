@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
@@ -36,9 +35,6 @@ def prepared_time_origin(data: pl.DataFrame, start: date | None) -> datetime:
     if not isinstance(origin, datetime):
         raise ValueError("Prepared observations must have a temporal origin")
     return origin.replace(tzinfo=UTC)
-
-
-logger = logging.getLogger(__name__)
 
 
 def ensure_datetime_column(df: pl.DataFrame, time_col: str) -> pl.DataFrame:
@@ -354,40 +350,5 @@ def pivot_to_wide(df: pl.DataFrame, *, time_origin: datetime) -> pl.DataFrame:
 
     if time_col in wide_data.columns:
         wide_data = wide_data.rename({time_col: "time"})
-
-    # --- Sparsity validation ---
-    indicator_cols = [c for c in wide_data.columns if c != "time"]
-    if indicator_cols:
-        n_rows = wide_data.height
-        per_indicator: list[str] = []
-        total_null = 0
-        total_cells = 0
-        for col in indicator_cols:
-            n_null = wide_data[col].null_count()
-            n_obs = n_rows - n_null
-            total_null += n_null
-            total_cells += n_rows
-            if n_null > 0:
-                pct = n_null / n_rows * 100
-                per_indicator.append(f"{col}: {n_obs}/{n_rows} observed ({pct:.0f}% missing)")
-
-        if total_cells > 0:
-            overall_pct = total_null / total_cells * 100
-            if overall_pct > 50:
-                logger.warning(
-                    "Sparse observation matrix: %.0f%% missing (%d/%d cells). "
-                    "Multi-granularity indicators may cause excessive sparsity. "
-                    "Per-indicator: %s",
-                    overall_pct,
-                    total_null,
-                    total_cells,
-                    "; ".join(per_indicator) if per_indicator else "all complete",
-                )
-            elif per_indicator:
-                logger.info(
-                    "Observation matrix sparsity: %.0f%% missing. %s",
-                    overall_pct,
-                    "; ".join(per_indicator),
-                )
 
     return wide_data

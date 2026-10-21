@@ -1,7 +1,6 @@
-"""Compiled blocks preserve transitions, phase outputs and explicit memory limits."""
-
 import json
 import logging
+from datetime import UTC, datetime
 from functools import partial
 from time import monotonic
 from typing import NamedTuple
@@ -26,7 +25,11 @@ from nof1_causal_lab.models.ssm.inference.samplers.particle.adaptation import (
     initialize_adaptation,
 )
 from nof1_causal_lab.models.ssm.inference.samplers.sweeps import run_sweeps
+from nof1_causal_service.compute.compilation_cache import prepare_program
 from tests.support.compute import COMPUTE_BUDGET
+
+"""Compiled blocks preserve transitions, phase outputs and explicit memory limits."""
+
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -60,9 +63,17 @@ def test_block_boundaries_and_padding_preserve_key_stream_and_phase_outputs(
         num_samples=samples,
         max_batch_size=8,
         budget=COMPUTE_BUDGET,
+        prepare_program=prepare_program,
     )
     assert plan.batch_size == 8
-    run = run_sweeps(plan, initial, clock=monotonic, label="test")
+    run = run_sweeps(
+        plan,
+        initial,
+        clock=monotonic,
+        label="test",
+        logger=logging.getLogger("nof1_causal_lab.models.ssm.inference.samplers.progress"),
+        wall_clock=lambda: datetime.now(UTC),
+    )
     events = [
         json.loads(record.message)
         for record in caplog.records
@@ -150,7 +161,13 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     )
     initial = jnp.zeros((4, 3))
     plan = sweeps.compile_sweeps(
-        factory, initial, num_warmup=3, num_samples=5, max_batch_size=8, budget=budget
+        factory,
+        initial,
+        num_warmup=3,
+        num_samples=5,
+        max_batch_size=8,
+        budget=budget,
+        prepare_program=prepare_program,
     )
     assert compiled_batches == [8, 4, 2]
     assert len(compiled_phases) == 3
@@ -159,7 +176,14 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     assert isinstance(plan.posterior, sweep_plan.CompiledSweepPhase)
     assert plan.warmup.executable is plan.posterior.executable
     assert not executed
-    run = run_sweeps(plan, initial, clock=monotonic, label="test")
+    run = run_sweeps(
+        plan,
+        initial,
+        clock=monotonic,
+        label="test",
+        logger=logging.getLogger("nof1_causal_lab.models.ssm.inference.samplers.progress"),
+        wall_clock=lambda: datetime.now(UTC),
+    )
     np.testing.assert_array_equal(run.state, np.full((4, 3), 8))
     assert run.history.posterior["value"].shape == (4, 5, 3)
     assert len(executed) == 3  # First-step timing, remaining warmup, posterior.
@@ -171,6 +195,7 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
             num_samples=5,
             max_batch_size=2,
             budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=100)),
+            prepare_program=prepare_program,
         )
 
 
@@ -236,6 +261,7 @@ def test_runtime_inputs_rebind_nested_observations_priors_geometry_and_tuning():
             num_samples=1,
             max_batch_size=1,
             budget=COMPUTE_BUDGET,
+            prepare_program=prepare_program,
         )
         for values in (first, second)
     )

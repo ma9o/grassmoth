@@ -8,13 +8,13 @@ from unittest.mock import Mock
 import numpy as np
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import FitInput, NewFitTarget
-from nof1_causal_lab.actions.contracts.requests import FitRequest
-from nof1_causal_lab.actions.runners import run_action_locally
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.reference import DataRef
-from nof1_causal_lab.study.persistence.store import read_model
-from nof1_causal_lab.study.state import apply_effects
+from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
+from nof1_causal_service.actions.contracts.requests import FitRequest
+from nof1_causal_service.actions.runners import run_action_locally
+from nof1_causal_service.study.persistence.store import read_model
+from nof1_causal_service.study.state import apply_effects
 from tests.integration import runner_fixtures as fx
 from tests.support.git import artifact_revisions
 from tests.support.helpers import run_async, write_question
@@ -30,7 +30,7 @@ pytestmark = pytest.mark.contract
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.identity import ArtifactId
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
+    from nof1_causal_service.study.persistence.store import ArtifactStore
 
 
 def test_inference_advances_model_and_uses_the_selected_input(
@@ -40,9 +40,9 @@ def test_inference_advances_model_and_uses_the_selected_input(
 ) -> None:
     import jax.numpy as jnp
 
-    from nof1_causal_lab.actions.fit import execution as stage5_fit
     from nof1_causal_lab.models.ssm import compiled_access as numerics
     from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
+    from nof1_causal_service.actions.fit import execution as stage5_fit
 
     original = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=original.revision)
@@ -98,12 +98,12 @@ def test_inference_advances_model_and_uses_the_selected_input(
         "question": question.revision,
     }
     from nof1_causal_lab.actions import checks
-    from nof1_causal_lab.actions.model_checks import read_model_checks
-    from nof1_causal_lab.artifacts.reports.inference import FitCheckReport
-    from nof1_causal_lab.study.queries import data
+    from nof1_causal_lab.actions.contracts.bodies import FitOutput
+    from nof1_causal_service.study.queries import data
+    from tests.support.action import model_findings
 
     assert isinstance(request.input.target, NewFitTarget)
-    expected_checks = read_model_checks(
+    expected_checks = model_findings(
         integration_workspace,
         state.with_artifacts([question]).revised(data=request.input.target.data_ref),
         action="fit",
@@ -116,10 +116,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
         assert isinstance(request.input.target, NewFitTarget)
         applied = run_async(run_action_locally(integration_workspace, request, pins))
         assert history_reader.call_count == preflight.call_count == index + 1
-        assert (
-            artifact_store.read_report(applied.effects.reports["checks"], FitCheckReport)
-            == expected_checks
-        )
+        assert artifact_store.read_result(applied.result, FitOutput).checks == expected_checks
         info = next(info for info in applied.effects.produced if info.artifact_id == "model")
         assert info.revision not in revisions
         revisions.append(info.revision)
@@ -130,9 +127,8 @@ def test_inference_advances_model_and_uses_the_selected_input(
             "panel": request.input.target.data_ref.revision,
             "question": question.revision,
         } == info.derived_from
-        from nof1_causal_lab.artifacts.reports.inference import InferenceReport
 
-        report = artifact_store.read_report(applied.effects.reports["inference"], InferenceReport)
+        report = artifact_store.read_result(applied.result, FitOutput).inference
         assert report.core.inference_diagnostics is not None
         assert report.core.inference_diagnostics.num_chains == 1
         assert report.core.inference_diagnostics.num_samples_per_chain == 4
@@ -163,8 +159,8 @@ def test_failed_preflight_still_stops_before_compute_or_reports(
 ):
     from nof1_causal_lab.actions import checks
     from nof1_causal_lab.actions.errors import ModelFitError
-    from nof1_causal_lab.actions.fit import action as flow
     from nof1_causal_lab.artifacts.reports.checks import Evaluated, NotEvaluated
+    from nof1_causal_service.actions.fit import action as flow
 
     model = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=model.revision)

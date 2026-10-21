@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.public.contracts import FitOutput, JsonObject
+    from nof1_causal_service.public.contracts import FitOutput, JsonObject
 
 
 def segment_summary(result: FitOutput) -> JsonObject:

@@ -17,8 +17,8 @@ from nof1_causal_lab.artifacts.simulation import (
     SimulationReport,
 )
 from nof1_causal_lab.models.ssm.counterfactual.estimands import summarize_draws
-from nof1_causal_lab.study.persistence.codec import result_payload
 from nof1_causal_lab.study.projections.visuals import simulation_observation_histories
+from nof1_causal_service.study.persistence.codec import result_payload
 
 if TYPE_CHECKING:
     from scripts.fixtures.reader import ModelReader

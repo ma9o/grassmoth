@@ -11,10 +11,10 @@ import pytest
 from evaluation.budget import BudgetLedger, BudgetSpec, ProviderBinding
 from evaluation.client import ActionClient
 
-from nof1_causal_lab.actions.contracts.bodies import ContinueFitTarget, FitInput
-from nof1_causal_lab.actions.contracts.requests import FitRequest, call_identity
 from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, InferenceHardware
-from nof1_causal_lab.public.studies import ActionResult, StudyError
+from nof1_causal_service.actions.contracts.inputs import ContinueFitTarget, FitInput
+from nof1_causal_service.actions.contracts.requests import FitRequest, call_identity
+from nof1_causal_service.public.studies import ActionResult, StudyError
 from tests.support.git import git_oid
 
 pytestmark = pytest.mark.contract
@@ -105,7 +105,7 @@ def test_client_reserves_after_cache_lookup_before_post_and_keeps_ambiguous_resp
     assert methods == ["GET", "POST"]
     with pytest.raises(RuntimeError, match="already reserved"):
         ledger.reserve(client.endpoint, client.workspace, record.call_id, _settings())
-    from nof1_causal_lab.actions.contracts.polling import FailedPoll
+    from nof1_causal_service.actions.contracts.polling import FailedPoll
 
     recovered = FailedPoll(
         call_id=call_identity(request), action="fit", commit_id=git_oid(2), messages=()
@@ -151,7 +151,7 @@ def test_held_or_unbudgeted_fits_stop_before_paid_submission(tmp_path, monkeypat
 def test_terminal_failure_keeps_its_debit_and_cache_reuse_needs_no_reservation(
     tmp_path, monkeypatch, reused
 ):
-    from nof1_causal_lab.actions.contracts.polling import FailedPoll
+    from nof1_causal_service.actions.contracts.polling import FailedPoll
 
     ledger = _ledger(tmp_path)
     request = FitRequest(

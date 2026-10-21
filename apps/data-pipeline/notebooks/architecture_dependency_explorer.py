@@ -60,7 +60,7 @@ def imports():
 
 @app.cell
 def source_location(Path):
-    source_root = Path(__file__).resolve().parents[1] / "src" / "nof1_causal_lab"
+    source_root = Path(__file__).resolve().parents[1] / "src"
     return (source_root,)
 
 
@@ -90,13 +90,12 @@ def dependency_model(ast, importlib):
         is_package = parts[-1] == "__init__"
         if is_package:
             parts = parts[:-1]
-        suffix = ".".join(parts)
-        name = "nof1_causal_lab" if not suffix else f"nof1_causal_lab.{suffix}"
+        name = ".".join(parts)
         return name, is_package
 
     def _nearest_internal_module(target, module_names):
         candidate = target
-        while candidate.startswith("nof1_causal_lab"):
+        while candidate.startswith(("nof1_causal_lab", "nof1_causal_service")):
             if candidate in module_names:
                 return candidate
             if "." not in candidate:
@@ -215,6 +214,7 @@ def cluster_model():
         )
     )
     current_colors = {
+        "service": "#E45756",
         "actions": "#54A24B",
         "api": "#E45756",
         "artifacts": "#4C78A8",
@@ -232,7 +232,9 @@ def cluster_model():
     }
 
     def current_cluster(module):
-        relative = module.removeprefix("nof1_causal_lab.")
+        package, _, relative = module.partition(".")
+        if package == "nof1_causal_service":
+            return "service"
         first = relative.split(".", maxsplit=1)[0]
         if first == "models":
             return "models.ssm" if relative.startswith("models.ssm") else "models.other"

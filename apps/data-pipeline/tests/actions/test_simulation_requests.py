@@ -6,14 +6,14 @@ import numpy as np
 import pytest
 from pydantic import ValidationError
 
-from nof1_causal_lab.actions.contracts.bodies import SimulateInput
-from nof1_causal_lab.actions.contracts.requests import SimulateRequest
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.scenarios import InterventionSpec
 from nof1_causal_lab.artifacts.simulation import SimulationReport, SimulationSpec
-from nof1_causal_lab.study.persistence.codec import pack_result, unpack_result
+from nof1_causal_service.actions.contracts.inputs import SimulateInput
+from nof1_causal_service.actions.contracts.requests import SimulateRequest
+from nof1_causal_service.study.persistence.codec import pack_result, unpack_result
 from tests.support.action import empty_simulation_summary
 from tests.support.inference import compile_model_fixture, particle_posterior
 from tests.support.model import x_y_model
@@ -180,13 +180,13 @@ def test_runner_uses_model_time_binding_without_reading_panels(
 
     from nof1_causal_lab.actions.errors import ActionExecutionError
     from nof1_causal_lab.actions.fit.conditioning import condition_model
-    from nof1_causal_lab.actions.runners import run_action
     from nof1_causal_lab.artifacts.model.question import QuestionSpec
     from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
     from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
-    from nof1_causal_lab.storage import paths as data
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
-    from nof1_causal_lab.study.state import StudyState
+    from nof1_causal_service.actions.runners import run_action
+    from nof1_causal_service.storage import paths as data
+    from nof1_causal_service.study.persistence.store import ArtifactStore
+    from nof1_causal_service.study.state import StudyState
     from tests.integration.runner_fixtures import panel_frame, panel_metadata
     from tests.support.helpers import run_async, write_question
     from tests.support.inference import parameter_draws
@@ -206,12 +206,12 @@ def test_runner_uses_model_time_binding_without_reading_panels(
             time_origin=fit_origin,
         )
     # An imported conditioned model must be executable without its original fit history.
-    record = store.write_artifact(
-        "model",
-        derived_from={},
-        produced_by="edit_model",
-        json_files={"model.json": dynamical_model_spec.model_dump(mode="json")},
+    from nof1_causal_service.study.persistence.writes import write_model_revision
+
+    record = write_model_revision(
+        store, dynamical_model_spec, derived_from={}, produced_by="edit_model"
     )
+
     panel = store.write_artifact(
         "panel",
         derived_from={},
@@ -249,7 +249,7 @@ def test_runner_uses_model_time_binding_without_reading_panels(
         "generate_simulation_batch",
         generate,
     )
-    monkeypatch.setattr("nof1_causal_lab.study.queries.data.read_data_history", unexpected_read)
+    monkeypatch.setattr("nof1_causal_service.study.queries.data.read_data_history", unexpected_read)
     with pytest.raises(ActionExecutionError, match="checked model-owned coordinates"):
         run_async(
             run_action(

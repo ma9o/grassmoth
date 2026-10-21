@@ -21,17 +21,17 @@ from nof1_causal_lab.artifacts.model.expressions import coefficient
 from nof1_causal_lab.artifacts.model.expressions import state as expr_state
 from nof1_causal_lab.llm.traces import LLMTrace
 from nof1_causal_lab.models.inputs import input_fingerprints
-from nof1_causal_lab.storage import paths as data_module
-from nof1_causal_lab.storage.traces import trace_log_path
-from nof1_causal_lab.study.artifact_files import artifact_file_spec
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.state import is_stale
+from nof1_causal_service.storage import paths as data_module
+from nof1_causal_service.storage.traces import trace_log_path
+from nof1_causal_service.study.artifact_files import artifact_file_spec
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.state import is_stale
 from scripts.fixtures.reader import ModelReader
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.identity import ArtifactId
-    from nof1_causal_lab.study.state import StudyState
+    from nof1_causal_service.study.state import StudyState
 
 ROOT = Path(__file__).resolve().parents[4]
 HEALTHDEMO_ROOT = ROOT / "data" / "HEALTHDEMO"
@@ -86,7 +86,7 @@ def read_fixture_files(repository: StudyRepository, state: StudyState) -> dict[s
     )
     files["predictive_checks.json"] = b"null\n"
     # Published artifacts select their canonical result; only uploaded inputs own files.
-    from nof1_causal_lab.study.state import ArtifactFiles
+    from nof1_causal_service.study.state import ArtifactFiles
 
     for aid, info in state.current.items():
         if isinstance(info.source, ArtifactFiles):
@@ -253,7 +253,7 @@ def build_outputs():
             outputs[HEALTHDEMO_ROOT / "fixture/model_snapshot.json"],
             outputs[HEALTHDEMO_ROOT / "fixture/model_history.json"],
         )
-        from nof1_causal_lab.study.persistence.codec import result_payload
+        from nof1_causal_service.study.persistence.codec import result_payload
         from scripts.fixtures.visuals import restore_fixture, workbench_visuals
 
         outputs[WORKBENCH_OUTPUT.with_name("workbench-visuals.json")] = workbench_visuals(

@@ -46,8 +46,11 @@ dependencies = [
 ]
 
 [project.scripts]
-nof1-publish = "nof1_causal_lab.study.publish:main"
-nof1-sweep = "nof1_causal_lab.study.sweep:sweep_cli"
+nof1-publish = "nof1_causal_service.study.publish:main"
+nof1-sweep = "nof1_causal_service.study.sweep:sweep_cli"
+
+[tool.uv.build-backend]
+module-name = ["nof1_causal_lab", "nof1_causal_service"]
 
 [build-system]
 requires = ["uv_build>=0.12.21,<0.13.0"]
@@ -166,10 +169,10 @@ runtime-evaluated-base-classes = [
     "typing.TypedDict",
     "typing_extensions.TypedDict",
     "nof1_causal_lab.artifacts.base.Value",
-    "nof1_causal_lab.public.contracts.Value",
-    "nof1_causal_lab.actions.contracts.effects.ActionEffects",
-    "nof1_causal_lab.study.records.ExtractionWorkerResult",
-    "nof1_causal_lab.study.records.AttemptMetadata",
+    "nof1_causal_service.public.contracts.Value",
+    "nof1_causal_service.actions.contracts.effects.ActionEffects",
+    "nof1_causal_service.study.records.ExtractionWorkerResult",
+    "nof1_causal_service.study.records.AttemptMetadata",
     "nof1_causal_lab.artifacts.observations.spec.ObservationSpec",
 ]
 runtime-evaluated-decorators = [
@@ -221,7 +224,7 @@ treat-property-methods-as-class-attributes = false
 ban-relative-imports = "parents"
 
 [tool.ruff.lint.isort]
-known-first-party = ["nof1_causal_lab"]
+known-first-party = ["nof1_causal_lab", "nof1_causal_service"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -314,8 +317,8 @@ reportExplicitAny = "error"
 # Static package seams. Role-derived rules (ARCH007, ARCH008) live in
 # scripts/checks/check_architecture_boundaries.py.
 [tool.importlinter]
-root_package = "nof1_causal_lab"
-exclude_type_checking_imports = true
+root_packages = ["nof1_causal_lab", "nof1_causal_service"]
+exclude_type_checking_imports = false
 
 [[tool.importlinter.contracts]]
 name = "ARCH001 The SSM compiler uses DynamicalModelSpec accessors, not identification internals"
@@ -364,8 +367,14 @@ type = "forbidden"
 source_modules = ["nof1_causal_lab.models.ssm.inference"]
 forbidden_modules = ["nof1_causal_lab.models.ssm.preparation.panel"]
 
+[[tool.importlinter.contracts]]
+name = "ARCH012 The library never imports the service"
+type = "forbidden"
+source_modules = ["nof1_causal_lab"]
+forbidden_modules = ["nof1_causal_service"]
+
 [tool.deptry]
-known_first_party = ["nof1_causal_lab"]
+known_first_party = ["nof1_causal_lab", "nof1_causal_service"]
 non_dev_dependency_groups = ["cloud", "gpu"]
 
 [tool.deptry.per_rule_ignores]

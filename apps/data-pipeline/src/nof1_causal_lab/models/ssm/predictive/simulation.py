@@ -32,7 +32,7 @@ from nof1_causal_lab.models.ssm.predictive.registry_runtime import (
     simulate_latent_histories,
     simulate_predictive_draws,
 )
-from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel, input_trajectory_events
+from nof1_causal_lab.models.ssm.preparation.binding import BoundPanel, input_trajectory_events
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 from nof1_causal_lab.observations.rows import observation_window_boundaries
 

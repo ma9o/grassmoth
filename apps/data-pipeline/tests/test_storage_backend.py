@@ -2,7 +2,7 @@
 
 import pytest
 
-from nof1_causal_lab.storage.backend import get_base_uri
+from nof1_causal_service.storage.backend import get_base_uri
 
 pytestmark = pytest.mark.contract
 

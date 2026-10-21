@@ -2,10 +2,10 @@
 
 import pytest
 
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model
-from nof1_causal_lab.study.records import Applied, inference_record
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore, read_model
+from nof1_causal_service.study.records import Applied, inference_record
 from tests.support.action import applied_record
 from tests.support.git import artifact_revision
 from tests.support.helpers import write_question
@@ -14,7 +14,7 @@ from tests.support.model import x_y_model
 
 @pytest.mark.contract
 def test_authored_model_has_no_inference_report(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import paths as data
+    from nof1_causal_service.storage import paths as data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store, journal = ArtifactStore("ABSENT"), StudyRepository("ABSENT")
@@ -36,12 +36,14 @@ def test_authored_model_has_no_inference_report(monkeypatch, tmp_path):
 
 @pytest.mark.inference(concern="sampling")
 def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(monkeypatch, tmp_path):
-    from nof1_causal_lab.actions.contracts.bodies import FitInput, FitOutput, NewFitTarget
-    from nof1_causal_lab.actions.contracts.requests import FitRequest
-    from nof1_causal_lab.actions.fit.action import read_inference_report
+    from nof1_causal_lab.actions.contracts.bodies import FitOutput
+    from nof1_causal_lab.actions.fit.action import inference_report
     from nof1_causal_lab.artifacts.observations.reference import DataRef
     from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
-    from nof1_causal_lab.storage import paths as data
+    from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
+    from nof1_causal_service.actions.contracts.requests import FitRequest
+    from nof1_causal_service.storage import paths as data
+    from nof1_causal_service.study.persistence.store import read_model
     from tests.support.inference import inference_metadata
     from tests.support.model import load_model_fixture
 
@@ -81,10 +83,13 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
                 effects=ActionEffects(
                     produced=(write_question(store), panel, info),
                     reports={
-                        "inference": store.write_report(
-                            read_inference_report(
-                                store,
-                                info.revision,
+                        "inference": store.write_result(
+                            inference_report(
+                                read_model(store, info.revision),
+                                read_model(
+                                    store,
+                                    store.read_meta("model", info.revision).derived_from["model"],
+                                ),
                                 result,
                                 inference_metadata(dynamical_model_spec),
                             )
@@ -130,7 +135,7 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.inference(concern="predictive")
 def test_model_view_reads_canonical_science_without_a_compiled_plan(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import paths as data_module
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("DEFINITION")

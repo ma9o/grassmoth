@@ -63,7 +63,7 @@ def test_type_only_dependencies_do_not_initialize_forbidden_layers(tmp_path: Pat
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.storage.backend import read_text
+    from nof1_causal_service.storage.backend import read_text
 """,
     )
     _write_module(
@@ -76,9 +76,10 @@ if typing.TYPE_CHECKING:
     import time
 """,
     )
-    _write_module(source_root, "storage/backend.py", "")
+    service_root = tmp_path / "nof1_causal_service"
+    _write_module(service_root, "storage/backend.py", "")
 
-    assert checker.find_violations(source_root) == ()
+    assert checker.find_violations((source_root, service_root)) == ()
 
 
 @pytest.mark.parametrize(
@@ -116,7 +117,7 @@ def run(*, request_values: {annotation}) -> None:
     pass
 """,
     )
-    assert [violation.code for violation in checker.find_violations(source_root)] == ["ARCH007"]
+    assert [violation.code for violation in checker.find_violations((source_root,))] == ["ARCH007"]
 
 
 def test_execution_accepts_resolved_sampler_alias(tmp_path: Path) -> None:
@@ -132,7 +133,7 @@ def run(*, sampler: Resolved) -> None:
     pass
 """,
     )
-    assert checker.find_violations(source_root) == ()
+    assert checker.find_violations((source_root,)) == ()
 
 
 def test_pure_roles_reject_transitive_function_local_acquisition(tmp_path: Path) -> None:
@@ -149,16 +150,17 @@ def test_pure_roles_reject_transitive_function_local_acquisition(tmp_path: Path)
     _write_module(
         source_root,
         "models/shared.py",
-        "def read():\n    from nof1_causal_lab.storage.backend import read_text\n",
+        "def read():\n    from nof1_causal_service.storage.backend import read_text\n",
     )
-    _write_module(source_root, "storage/backend.py", "import time\n")
+    service_root = tmp_path / "nof1_causal_service"
+    _write_module(service_root, "storage/backend.py", "import time\n")
 
-    violations = checker.find_violations(source_root)
+    violations = checker.find_violations((source_root, service_root))
 
     for relative in producers:
         findings = [item for item in violations if item.ref.path == source_root / relative]
         assert {item.ref.imported for item in findings} == {
-            "nof1_causal_lab.storage.backend",
+            "nof1_causal_service.storage.backend",
             "time",
         }
         assert all(item.code == "ARCH008" for item in findings)
@@ -206,7 +208,7 @@ def derive(path: File):
 """,
     )
 
-    violations = checker.find_violations(source_root)
+    violations = checker.find_violations((source_root,))
 
     assert {item.ref.imported for item in violations} == {
         "builtins.open",
@@ -248,7 +250,7 @@ def derive():
 """,
     )
 
-    violations = checker.find_violations(source_root)
+    violations = checker.find_violations((source_root,))
 
     assert [item.ref.imported for item in violations] == [
         "random.random",
@@ -296,7 +298,7 @@ def shadowed_clock():
 """,
     )
 
-    assert checker.find_violations(source_root) == ()
+    assert checker.find_violations((source_root,)) == ()
 
 
 def test_local_imports_assigned_paths_and_type_only_effects(tmp_path: Path) -> None:
@@ -335,7 +337,7 @@ else:
 """,
     )
 
-    violations = checker.find_violations(source_root)
+    violations = checker.find_violations((source_root,))
 
     assert [item.ref.imported for item in violations] == [
         "datetime.datetime.now",
@@ -383,7 +385,7 @@ def separate_scope(ask):
 """,
     )
 
-    violations = checker.find_violations(source_root)
+    violations = checker.find_violations((source_root,))
 
     assert [item.ref.imported for item in violations] == [
         "datetime.datetime.now",
@@ -395,7 +397,7 @@ def separate_scope(ask):
 @pytest.mark.parametrize("relative", ["study/new_reader.py", "actions/new_action.py"])
 def test_edges_and_shells_own_primitive_effects(tmp_path: Path, relative: str) -> None:
     checker = _load_checker()
-    source_root = tmp_path / "nof1_causal_lab"
+    source_root = tmp_path / "nof1_causal_service"
     _write_module(
         source_root,
         relative,
@@ -413,7 +415,7 @@ def acquire():
 """,
     )
 
-    assert checker.find_violations(source_root) == ()
+    assert checker.find_violations((source_root,)) == ()
 
 
 @pytest.mark.parametrize("type_only", [False, True])
@@ -435,6 +437,6 @@ def test_runtime_cycles_are_rejected_but_type_only_edges_are_excluded(
         "artifacts/second.py",
         prefix + "    from nof1_causal_lab.artifacts import first\n",
     )
-    violations = checker.find_violations(source_root)
+    violations = checker.find_violations((source_root,))
     cycles = [violation for violation in violations if violation.code == "ARCH010"]
     assert len(cycles) == (0 if type_only else 1)

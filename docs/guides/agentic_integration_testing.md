@@ -138,7 +138,7 @@ git --git-dir=data/HEALTHDEMO/study/history.git config nof1.format 28
 
 #### Storage format
 
-The [storage owner](../../apps/data-pipeline/src/nof1_causal_lab/study/persistence/git_objects.py)
+The [storage owner](../../apps/data-pipeline/src/nof1_causal_service/study/persistence/git_objects.py)
 requires format 28. Start a new study or restore a format-28 bundle. The application
 reads only this format and does not perform automatic migrations.
 
@@ -186,7 +186,7 @@ joint parameter/state NUTS. The particle samplers are `method: mpgibbs` and
 `method: pgibbs`; the latter selects conditional MH or NUTS through
 `parameter_kernel: {method: mh}` or `{method: nuts_da}`. Both use the shared
 `dsmc` settings in the [sampler contract](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/sampling.py).
-The [Modal compute adapter](../../apps/data-pipeline/src/nof1_causal_lab/actions/fit/remote.py)
+The [Modal compute adapter](../../apps/data-pipeline/src/nof1_causal_service/actions/fit/remote.py)
 uses the installed Modal credentials, creates an ephemeral
 `nof1-causal-lab-pipeline` app with the current source, and reuses
 `nof1-cached-fit-cache:/jax`. The study remains local; the
@@ -215,7 +215,7 @@ data/
 └── HEALTHDEMO/                  # Tracked mock fixture workspace (evals + manual sampling)
 ```
 
-Back up the whole workspace directory: Git retains complete action results and their numerical buffers; `store/` retains uploaded input tables. See the [storage owner](../../apps/data-pipeline/src/nof1_causal_lab/study/persistence/store.py). Temporary cache entries are safe to delete at any time. `uv run nof1-sweep WORKSPACE_ID` expires telemetry and caches, and offline maintenance can add `--collect-runs` to remove finished run scratch.
+Back up the whole workspace directory: Git retains complete action results and their numerical buffers; `store/` retains uploaded input tables. See the [storage owner](../../apps/data-pipeline/src/nof1_causal_service/study/persistence/store.py). Temporary cache entries are safe to delete at any time. `uv run nof1-sweep WORKSPACE_ID` expires telemetry and caches, and offline maintenance can add `--collect-runs` to remove finished run scratch.
 
 ### Promoting a workspace to the HEALTHDEMO fixture
 
@@ -292,7 +292,7 @@ curl -s "http://localhost:8100/api/studies/$WORKSPACE_ID/$ACTION/$CALL_ID" \
 uv run --directory apps/data-pipeline python - <<'PY'
 from pathlib import Path
 from pprint import pprint
-from nof1_causal_lab.study.persistence.codec import unpack_result
+from nof1_causal_service.study.persistence.codec import unpack_result
 result = unpack_result(Path('/tmp/action.msgpack').read_bytes())
 pprint({key: value for key, value in result.items() if key != 'body'})
 PY

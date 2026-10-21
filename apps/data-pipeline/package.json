@@ -3,7 +3,7 @@
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
-    "dev": "uv run uvicorn nof1_causal_lab.api.app:app --reload --port 8100",
+    "dev": "uv run uvicorn nof1_causal_service.api.app:app --reload --port 8100",
     "notebooks": "uv run marimo edit notebooks/",
     "lint": "bun run --parallel --no-exit-on-error lint:ruff format:check lint:deptry lint:config lint:type-boundaries lint:type-boundaries:tests lint:architecture lint:public lint:imports lint:vulture lint:fields lint:ty lint:basedpyright lint:annotations lint:source-rules lint:duplicates",
     "lint:ty": "uv run ty check",

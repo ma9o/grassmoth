@@ -7,16 +7,17 @@ from unittest.mock import Mock
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, FitInput, NewFitTarget
-from nof1_causal_lab.actions.contracts.requests import EditModelRequest, FitRequest
-from nof1_causal_lab.actions.runners import run_action
+from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, InferenceHardware
 from nof1_causal_lab.compilation_errors import IncompleteModelError
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.state import StudyState
+from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
+from nof1_causal_service.actions.contracts.requests import EditModelRequest, FitRequest
+from nof1_causal_service.actions.runners import run_action
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.state import StudyState
 from tests.support.action import applied_record, edit_and_check, question_root
 from tests.support.data import metadata_for_model
 from tests.support.git import artifact_revision, artifact_revisions
@@ -31,8 +32,8 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 def workspace(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import backend as storage
-    from nof1_causal_lab.storage import paths as data_module
+    from nof1_causal_service.storage import backend as storage
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setenv("DEPLOYMENT_ENV", "development")
     monkeypatch.setattr(storage, "is_remote", lambda: False)
@@ -96,8 +97,8 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
 def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monkeypatch):
     from threading import get_ident
 
-    from nof1_causal_lab.actions.fit import action as flow
-    from nof1_causal_lab.study.persistence import store as store_module
+    from nof1_causal_service.actions.fit import action as flow
+    from nof1_causal_service.study.persistence import store as store_module
 
     event_loop_thread = get_ident()
     read_model = store_module.read_model
@@ -150,12 +151,12 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     from dataclasses import replace
     from threading import get_ident
 
-    from nof1_causal_lab import config
-    from nof1_causal_lab.actions.fit import action as flow
-    from nof1_causal_lab.actions.fit import remote
-    from nof1_causal_lab.actions.runners import _run_fit
-    from nof1_causal_lab.study.persistence.store import read_model
-    from nof1_causal_lab.study.queries import data
+    from nof1_causal_service import config
+    from nof1_causal_service.actions.fit import action as flow
+    from nof1_causal_service.actions.fit import remote
+    from nof1_causal_service.actions.runners import _run_fit
+    from nof1_causal_service.study.persistence.store import read_model
+    from nof1_causal_service.study.queries import data
 
     event_loop_thread = get_ident()
     read_history = data.read_data_history
@@ -211,11 +212,9 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     import jax.numpy as jnp
 
     from nof1_causal_lab.actions.fit.conditioning import condition_model
-    from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
     from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
     from tests.support.inference import (
         compile_model_fixture,
-        inference_metadata,
         parameter_draws,
         particle_posterior,
     )
@@ -231,14 +230,21 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
             ),
             times=jnp.array([0.0, 1.0]),
             time_origin=datetime(2024, 1, 1, tzinfo=UTC),
-            array_writer=store.write_array,
-            array_loader=store.read_array,
         )
-        return {
-            "_dynamical_model_spec": conditioned,
-            "evidence": InferenceEvidence(),
-            "metadata": inference_metadata(conditioned),
-        }
+        from nof1_causal_lab.actions.checks import fit_check_report
+        from nof1_causal_lab.actions.contracts.bodies import FitOutput
+        from tests.support.inference import _report
+
+        return FitOutput(
+            dynamical_model_spec=conditioned,
+            checks=fit_check_report(
+                kwargs["selection"],
+                kwargs["question"],
+                kwargs["data_for_model"],
+                preflight=kwargs["preflight"],
+            ),
+            inference=_report(conditioned),
+        )
 
     configured = config.get_config()
     monkeypatch.setattr(
@@ -254,7 +260,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     )
     local_fit = Mock(side_effect=fit)
     modal_fit = Mock(side_effect=lambda _hardware, **kwargs: fit(**kwargs))
-    monkeypatch.setattr(flow, "fit", local_fit)
+    monkeypatch.setattr(flow, "run_fit", local_fit)
     monkeypatch.setattr(remote, "fit_on_modal", modal_fit)
     pins: dict[ArtifactId, GitOid] = {
         "model": artifact_revision(workspace, "model", 3),

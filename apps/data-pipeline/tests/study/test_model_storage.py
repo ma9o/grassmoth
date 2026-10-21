@@ -8,7 +8,6 @@ import numpy as np
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
 from nof1_causal_lab.artifacts.identity import ConstructId, IndicatorId
 from nof1_causal_lab.artifacts.model.construct import (
     CausalEdgeSpec,
@@ -28,11 +27,12 @@ from nof1_causal_lab.artifacts.reports.identification import IdentificationRepor
 from nof1_causal_lab.artifacts.reports.model_checks import QuestionCheckReport
 from nof1_causal_lab.models.ssm.compile.bindings import joint_law_layout, parameter_bindings
 from nof1_causal_lab.models.structure import StructuralSelection, selected_state_ids
-from nof1_causal_lab.study.artifact_files import json_filename
-from nof1_causal_lab.study.errors import StudyLookupError
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model, read_question
-from nof1_causal_lab.study.records import Applied, AttemptRecord, EditAttempt, Raised
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.study.artifact_files import json_filename
+from nof1_causal_service.study.errors import StudyLookupError
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore, read_model, read_question
+from nof1_causal_service.study.records import Applied, AttemptRecord, EditAttempt, Raised
 from tests.support.action import applied_record, question_root
 from tests.support.git import artifact_revision, commit_id
 from tests.support.helpers import graph_constructs, write_question
@@ -53,7 +53,7 @@ pytestmark = pytest.mark.contract
 
 @pytest.fixture
 def workspace(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import paths as data_module
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     return "MODELS"
@@ -220,7 +220,7 @@ def _identity_owners(model):
 
 def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monkeypatch):
     from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
-    from nof1_causal_lab.study.records import AttemptRecord, EditAttempt
+    from nof1_causal_service.study.records import AttemptRecord, EditAttempt
 
     dynamical_model_spec = (
         _fitted_snapshot_keeps_joint_arrays_lazy_and_workspace_bound_complete_test_model()
@@ -234,7 +234,9 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
     )
     store = ArtifactStore(workspace)
     atoms = np.ones((2, layout.width))
-    law = empirical_distribution(atoms, array_writer=store.write_array)
+    law = empirical_distribution(
+        atoms,
+    )
     conditioned = dynamical_model_spec.with_entities(
         parameters=tuple(
             p.revised(distribution=layout.distribution_id, transform={"kind": "identity"})
@@ -530,10 +532,10 @@ def test_identification_keeps_entity_ids_after_rename(workspace):
 
     store, repository = ArtifactStore(workspace), StudyRepository(workspace)
     reports = {
-        "checks": store.write_report(
+        "checks": store.write_result(
             ModelCheckReport(specification=(), question=QuestionCheckReport(findings=()))
         ),
-        "identification": store.write_report(
+        "identification": store.write_result(
             IdentificationReport.model_validate(_identification())
         ),
     }

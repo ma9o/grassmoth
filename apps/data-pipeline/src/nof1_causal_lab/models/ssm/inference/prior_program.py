@@ -33,7 +33,7 @@ from nof1_causal_lab.models.ssm.execution.parameters import assemble_model_matri
 if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.execution.contracts import InitializationLikelihoodBackend
-    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
+    from nof1_causal_lab.models.ssm.preparation.binding import BoundPanel
 
 from nof1_causal_lab.models.ssm.compile.observations import materialize_observation_laws
 from nof1_causal_lab.models.ssm.constants import MIN_DT

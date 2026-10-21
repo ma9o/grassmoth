@@ -11,11 +11,11 @@ from nof1_causal_lab.actions.contracts.bodies import (
     PrepareDataOutput,
     SimulateOutput,
 )
-from nof1_causal_lab.actions.input_resolution import input_state
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model
-from nof1_causal_lab.study.records import Applied, StudyRevision, inference_record
-from nof1_causal_lab.study.snapshot import ModelSnapshot
+from nof1_causal_service.actions.input_resolution import input_state
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore, read_model
+from nof1_causal_service.study.records import Applied, StudyRevision, inference_record
+from nof1_causal_service.study.snapshot import ModelSnapshot
 
 if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.identity import ArtifactId, EntityRef, GitOid, IndicatorId
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
         InferenceReportCore,
     )
     from nof1_causal_lab.artifacts.simulation import SimulationReport
-    from nof1_causal_lab.study.state import StudyState
+    from nof1_causal_service.study.state import StudyState
 
 
 class ModelReader:
@@ -52,7 +52,7 @@ class ModelReader:
     @cached_property
     def state(self) -> StudyState:
         """Artifact and data selections reconstructed for the pinned action, including its input context."""
-        from nof1_causal_lab.study.state import apply_effects
+        from nof1_causal_service.study.state import apply_effects
 
         if self._state is not None:
             return self._state
@@ -85,7 +85,7 @@ class ModelReader:
     def _selected(self, artifact_id: ArtifactId) -> object:
         from pydantic import TypeAdapter
 
-        from nof1_causal_lab.study.artifact_files import artifact_file_spec
+        from nof1_causal_service.study.artifact_files import artifact_file_spec
         from scripts.artifact_contracts import ARTIFACT_CONTRACTS
 
         revision = self.state.current[artifact_id].revision
@@ -156,7 +156,7 @@ class ModelReader:
         attempt = record.record.attempt
         assert attempt.action == "fit"
         assert attempt.request is not None
-        from nof1_causal_lab.actions.fit.selection import fit_source
+        from nof1_causal_service.actions.fit.selection import fit_source
 
         selected = fit_source(self.store, attempt.request.input.target).data_ref
         return self.fit_result if selected == self.state.data else None
@@ -191,7 +191,7 @@ class ModelReader:
         if self.state.data is None:
             return None
         from nof1_causal_lab.artifacts.observations.preparation import PreparedDataMetadata
-        from nof1_causal_lab.study.queries.data import panel_revision, read_data_source
+        from nof1_causal_service.study.queries.data import panel_revision, read_data_source
 
         if not isinstance(
             read_data_source(self.store, self.state.data.revision), PreparedDataMetadata

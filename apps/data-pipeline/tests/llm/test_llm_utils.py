@@ -43,7 +43,7 @@ class TestOpenRouterClient:
     def test_sdk_response_preserves_reasoning_extensions_and_usage(self):
         from openai.types.chat import ChatCompletion
 
-        from nof1_causal_lab.llm import openrouter as openrouter_client
+        from nof1_causal_service.llm import openrouter as openrouter_client
 
         response = ChatCompletion.model_validate(
             {
@@ -84,7 +84,7 @@ class TestOpenRouterClient:
         }
 
     def test_call_model_enforces_local_timeout(self, monkeypatch):
-        from nof1_causal_lab.llm import openrouter as openrouter_client
+        from nof1_causal_service.llm import openrouter as openrouter_client
 
         seen: dict[str, object] = {}
 
@@ -122,7 +122,7 @@ class TestOpenRouterClient:
         assert _require_mapping(seen["kwargs"])["timeout"] == 0.01
 
     def test_call_model_logs_completion_tool_calls_and_reasoning(self, monkeypatch, caplog):
-        from nof1_causal_lab.llm import openrouter as openrouter_client
+        from nof1_causal_service.llm import openrouter as openrouter_client
 
         seen: dict[str, object] = {}
         response = {
@@ -167,7 +167,7 @@ class TestOpenRouterClient:
         assert "call_model reasoning:\nthought process" in caplog.text
 
     def test_call_model_logs_completion_without_label(self, monkeypatch, caplog):
-        from nof1_causal_lab.llm import openrouter as openrouter_client
+        from nof1_causal_service.llm import openrouter as openrouter_client
 
         seen: dict[str, object] = {}
         response = {
@@ -201,7 +201,7 @@ class TestOpenRouterClient:
         assert "call_model completion:\nunlabeled completion" in caplog.text
 
     def test_call_model_strips_repo_openrouter_prefix(self, monkeypatch):
-        from nof1_causal_lab.llm import openrouter as openrouter_client
+        from nof1_causal_service.llm import openrouter as openrouter_client
 
         seen: dict[str, object] = {}
         response = {
@@ -231,7 +231,7 @@ class TestOpenRouterClient:
         assert _require_mapping(seen["kwargs"])["model"] == "anthropic/claude-sonnet-4"
 
     def test_call_model_uses_ambient_env_openrouter_key(self, monkeypatch):
-        from nof1_causal_lab.llm import openrouter as openrouter_client
+        from nof1_causal_service.llm import openrouter as openrouter_client
 
         seen: dict[str, object] = {}
         response = {
@@ -268,7 +268,7 @@ class TestOpenRouterClient:
         assert _require_mapping(seen["kwargs"])["model"] == "test-model"
 
     def test_call_model_uses_reasoning_config_in_extra_body(self, monkeypatch):
-        from nof1_causal_lab.llm import openrouter as openrouter_client
+        from nof1_causal_service.llm import openrouter as openrouter_client
 
         seen: dict[str, object] = {}
         response = {

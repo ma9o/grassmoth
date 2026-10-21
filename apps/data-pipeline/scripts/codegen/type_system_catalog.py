@@ -227,6 +227,7 @@ CONCERNS = {
             "actions.contracts.requests",
             "actions.contracts.polling",
             "actions.contracts.bodies",
+            "actions.contracts.inputs",
             "actions.model_diff",
             "actions.data_diff",
             "api.app",
@@ -283,18 +284,20 @@ ROLE_SENTENCES = {
 }
 
 ALIAS_MODULES = {
-    "NumPyroDistribution": "artifacts.probability.serialization",
-    "EntityRef": "artifacts.identity",
-    "SimulationReport": "artifacts.simulation",
-    "ProgressEvent": "actions.contracts.progress",
+    "NumPyroDistribution": "nof1_causal_lab.artifacts.probability.serialization",
+    "EntityRef": "nof1_causal_lab.artifacts.identity",
+    "SimulationReport": "nof1_causal_lab.artifacts.simulation",
+    "ProgressEvent": "nof1_causal_service.actions.contracts.progress",
 }
 
 
 def _module_for(name: str) -> str:
     if name in ALIAS_MODULES:
-        return "nof1_causal_lab." + ALIAS_MODULES[name]
+        return ALIAS_MODULES[name]
     for module_name, module in tuple(sys.modules.items()):
-        if not module_name.startswith("nof1_causal_lab.") or module is None:  # ty: ignore[redundant-condition-strict] - sys.modules can contain None import sentinels at runtime.
+        if not module_name.startswith(("nof1_causal_lab.", "nof1_causal_service.")):
+            continue
+        if module is None:  # ty: ignore[redundant-condition-strict] - sys.modules can contain None import sentinels at runtime.
             continue
         value = vars(module).get(name)
         if value is not None and getattr(value, "__module__", None) == module_name:
@@ -326,7 +329,9 @@ def _layer_for(name: str, module: str) -> str:
         return "identity"
     if module.endswith(("study.snapshot", "artifacts.observations.comparison")):
         return "read_models"
-    if module.startswith("nof1_causal_lab.study.") or module.endswith("actions.contracts.progress"):
+    if module.startswith("nof1_causal_service.study.") or module.endswith(
+        "actions.contracts.progress"
+    ):
         return "study"
     if module.endswith(
         (
@@ -377,7 +382,7 @@ def _layer_for(name: str, module: str) -> str:
         return "findings"
     if module.startswith("nof1_causal_lab.artifacts."):
         return "authored"
-    if module.startswith("nof1_causal_lab.actions."):
+    if module.startswith(("nof1_causal_lab.actions.", "nof1_causal_service.actions.")):
         return "transport"
     raise ValueError(f"Exported type {name} in {module} has no conceptual layer")
 
@@ -386,7 +391,7 @@ def _concern_for(name: str, module: str) -> str:
     if name == "ParameterCoordinate":
         return "identity"
     for concern, (_, modules) in CONCERNS.items():
-        if module.removeprefix("nof1_causal_lab.") in modules:
+        if module.partition(".")[2] in modules:
             return concern
     raise ValueError(f"Exported type {name} in {module} has no declared concern")
 

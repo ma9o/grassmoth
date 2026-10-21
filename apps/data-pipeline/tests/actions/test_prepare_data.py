@@ -7,20 +7,7 @@ from uuid import uuid4
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import PrepareDataInput
-from nof1_causal_lab.actions.contracts.requests import PrepareDataRequest
-from nof1_causal_lab.actions.data_checks import evaluate_data_checks
-from nof1_causal_lab.actions.messages import preparation_messages
 from nof1_causal_lab.actions.prepare_data.context import extraction_context
-from nof1_causal_lab.actions.temporal.extraction.activities import (
-    finalize_measurements_activity,
-    plan_measurements_activity,
-)
-from nof1_causal_lab.actions.temporal.extraction.messages import (
-    CompletedExtractionChunk,
-    MeasurementsFinalizeInput,
-    MeasurementsWorkflowInput,
-)
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.preparation import (
     ComputedExtractionSpec,
@@ -31,17 +18,30 @@ from nof1_causal_lab.artifacts.observations.preparation import (
     SemanticExtractionSpec,
 )
 from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
-from nof1_causal_lab.storage import backend as storage
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.queries.lineage import read_data_metadata
-from nof1_causal_lab.study.state import StudyState
+from nof1_causal_service.actions.contracts.inputs import PrepareDataInput
+from nof1_causal_service.actions.contracts.requests import PrepareDataRequest
+from nof1_causal_service.actions.messages import preparation_messages
+from nof1_causal_service.actions.temporal.extraction.activities import (
+    finalize_measurements_activity,
+    plan_measurements_activity,
+)
+from nof1_causal_service.actions.temporal.extraction.messages import (
+    CompletedExtractionChunk,
+    MeasurementsFinalizeInput,
+    MeasurementsWorkflowInput,
+)
+from nof1_causal_service.storage import backend as storage
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.queries.lineage import read_data_metadata
+from nof1_causal_service.study.state import StudyState
+from tests.support.action import prepared_profile
 from tests.support.helpers import run_async
 
 pytestmark = pytest.mark.contract
 
 
 def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import paths as data
+    from nof1_causal_service.storage import paths as data
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
 
@@ -156,7 +156,7 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
             )
         )
     )
-    profile = evaluate_data_checks("data-only", state, effects)
+    profile = prepared_profile("data-only", state, effects)
     assert {item.artifact_id for item in effects.effects.produced} == {"panel"}
     panel = next(item for item in effects.effects.produced if item.artifact_id == "panel")
     assert panel.derived_from == {
@@ -180,7 +180,11 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
     )
     assert metadata.variables[1].ordinal_levels == ("low", "medium", "high")
     assert set(profile.indicators) == {"indicator:steps", "indicator:stress"}
-    labels = preparation_messages(profile, effects.result, datetime.now(UTC))
+    from nof1_causal_lab.actions.contracts.bodies import PrepareDataOutput
+
+    labels = preparation_messages(
+        profile, store.read_result(effects.result, PrepareDataOutput).extraction, datetime.now(UTC)
+    )
     assert "EXTRACTION_COMPLETED" in {label.code for label in labels}
     assert all(
         set(label.model_dump()) == {"kind", "timestamp", "severity", "code", "subject", "detail"}

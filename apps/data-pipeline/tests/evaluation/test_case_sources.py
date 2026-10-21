@@ -28,9 +28,9 @@ def test_case_sources_pin_file_bytes_and_saved_action_models(tmp_path, monkeypat
         read_source(source, tmp_path)
 
     from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
-    from nof1_causal_lab.actions.contracts.polling import SuccessfulPoll
     from nof1_causal_lab.artifacts.identity import CallId
-    from nof1_causal_lab.public.studies import ActionResult
+    from nof1_causal_service.actions.contracts.polling import SuccessfulPoll
+    from nof1_causal_service.public.studies import ActionResult
 
     call_id = CallId("call:" + "1" * 64)
     stored = ActionResult.from_poll(
@@ -55,7 +55,7 @@ def test_case_sources_pin_file_bytes_and_saved_action_models(tmp_path, monkeypat
         urls.append(request.full_url)
         return io.BytesIO(stored.payload)
 
-    monkeypatch.setattr("nof1_causal_lab.public.client.urlopen", get)
+    monkeypatch.setattr("nof1_causal_service.public.client.urlopen", get)
     external = StudyModel(
         endpoint="http://example.invalid",
         workspace="SOURCE",
@@ -114,7 +114,7 @@ def test_action_artifact_revision_is_not_its_journal_commit(tmp_path, monkeypatc
         }
     ).encode()
     monkeypatch.setattr(
-        "nof1_causal_lab.public.client.urlopen", lambda *_args, **_kwargs: io.BytesIO(payload)
+        "nof1_causal_service.public.client.urlopen", lambda *_args, **_kwargs: io.BytesIO(payload)
     )
     client = ActionClient("http://example.invalid", "BENCH", tmp_path)
     assert client.artifact_revision("call:" + "1" * 64, "question") == "3" * 40

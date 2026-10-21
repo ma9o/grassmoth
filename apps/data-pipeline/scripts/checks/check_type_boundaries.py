@@ -68,7 +68,8 @@ from typing import override
 
 from scripts.checks.architecture_roles import (
     PACKAGE,
-    SOURCE_ROOT,
+    PACKAGES,
+    SOURCE_ROOTS,
     fix_owner,
     projection_checks,
     role_for_path,
@@ -680,11 +681,16 @@ class TypeIndex:
 
     @staticmethod
     def module(path: str) -> str:
-        marker = f"src/{PACKAGE}/"
-        relative = path.split(marker, 1)[1] if marker in path else path
-        return (
-            PACKAGE + "." + relative.removesuffix(".py").removesuffix("/__init__").replace("/", ".")
-        )
+        for package in PACKAGES:
+            marker = f"src/{package}/"
+            if marker in path:
+                relative = path.split(marker, 1)[1]
+                return (
+                    package
+                    + "."
+                    + relative.removesuffix(".py").removesuffix("/__init__").replace("/", ".")
+                )
+        return PACKAGE + "." + path.removesuffix(".py").removesuffix("/__init__").replace("/", ".")
 
     def resolve(self, node: ast.expr, module: str) -> str:
         if isinstance(node, ast.Name):
@@ -822,10 +828,11 @@ class TypeIndex:
 def _production_sources() -> tuple[tuple[str, ast.Module], ...]:
     return tuple(
         (
-            "src/" + PACKAGE + "/" + path.relative_to(SOURCE_ROOT).as_posix(),
+            "src/" + root.name + "/" + path.relative_to(root).as_posix(),
             ast.parse(path.read_text()),
         )
-        for path in sorted(SOURCE_ROOT.rglob("*.py"))
+        for root in SOURCE_ROOTS
+        for path in sorted(root.rglob("*.py"))
     )
 
 

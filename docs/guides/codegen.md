@@ -8,9 +8,9 @@ Generated API artifacts and generated documentation have separate ownership and 
 
 - **Contract graph**: [`artifact_contracts.py`](../../apps/data-pipeline/scripts/artifact_contracts.py), the domain owners, and typed FastAPI routes are the source of truth. [`export_api.py`](../../apps/data-pipeline/scripts/codegen/export_api.py) generates their validation and serialization schemas together in `openapi.json`, including stored roots and generic bodies.
 - **Types and client**: [`generate.ts`](../../packages/api-types/scripts/generate.ts) runs [openapi-typescript](https://openapi-ts.dev/node) once. Named contract aliases and generic declarations come from that AST; [openapi-fetch](https://openapi-ts.dev/openapi-fetch/) supplies the runtime client. Upload inputs use native `Blob` values, serialized as `FormData` by the caller.
-- **Agent skill**: The exporter generates `nof1-study-api` from the application's endpoint descriptions and [action contracts](../../apps/data-pipeline/src/nof1_causal_lab/api/studies.py).
+- **Agent skill**: The exporter generates `nof1-study-api` from the application's endpoint descriptions and [action contracts](../../apps/data-pipeline/src/nof1_causal_service/api/studies.py).
 
-Native NumPyro distributions use the shared [JSON codec](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/probability/serialization.py) on scientific parameters and compiled sites. Export derives constructor signatures from native distribution arguments and constraints. There is no separate prior-parameter class hierarchy. Numerical arguments belong to their native law; inference and simulation evidence own their numerical values directly. The [result codec](../../apps/data-pipeline/src/nof1_causal_lab/study/persistence/codec.py) shares repeated binary buffers when saving or serving a result. Its Python decoder and the [TypeScript client](../../packages/api-types/src/client.ts) restore those values before consumers read the scientific fields.
+Native NumPyro distributions use the shared [JSON codec](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/probability/serialization.py) on scientific parameters and compiled sites. Export derives constructor signatures from native distribution arguments and constraints. There is no separate prior-parameter class hierarchy. Numerical arguments belong to their native law; inference and simulation evidence own their numerical values directly. The [result codec](../../apps/data-pipeline/src/nof1_causal_service/study/persistence/codec.py) shares repeated binary buffers when saving or serving a result. Its Python decoder and the [TypeScript client](../../packages/api-types/src/client.ts) restore those values before consumers read the scientific fields.
 
 ```bash
 bun run codegen       # regenerate API artifacts
@@ -27,7 +27,7 @@ specialization. The facade client reads the same generic metadata to reference
 the canonical declarations. Generic operands come from Python types; generated
 schema names are never parsed to recover them.
 
-`openapi.json` owns the exported component graph. `x-contract-roots` identifies stored payloads and public read contracts; `x-typescript-generics` references component bodies with `x-typescript-parameters`. Components retain `x-python-module`, `x-layer` and `x-concern` for the type diagram. `panel` combines JSON metadata with a Parquet file declared by the artifact contracts. The [artifact contracts](../../apps/data-pipeline/scripts/artifact_contracts.py) name durable facts; [action outcomes](../../apps/data-pipeline/src/nof1_causal_lab/actions/contracts/effects.py) retain computed reports and checks, which [readers load from Git](../../apps/data-pipeline/src/nof1_causal_lab/study/persistence/history.py).
+`openapi.json` owns the exported component graph. `x-contract-roots` identifies stored payloads and public read contracts; `x-typescript-generics` references component bodies with `x-typescript-parameters`. Components retain `x-python-module`, `x-layer` and `x-concern` for the type diagram. `panel` combines JSON metadata with a Parquet file declared by the artifact contracts. The [artifact contracts](../../apps/data-pipeline/scripts/artifact_contracts.py) name durable facts; [action outcomes](../../apps/data-pipeline/src/nof1_causal_service/actions/contracts/effects.py) retain computed reports and checks, which [readers load from Git](../../apps/data-pipeline/src/nof1_causal_service/study/persistence/history.py).
 
 ## Documentation Artifacts
 
@@ -66,9 +66,11 @@ TypeScript exports use the same names.
 | API request and its input values | `...Request` or `...Input` | `SimulateRequest`, `SimulationSpec` |
 | Public action input and output bodies | `<Action>Input` and `<Action>Output` | `SimulateInput`, `SimulateOutput`, `ModelDiffInput`, `ModelDiffOutput` |
 
-Public action input and output types are paired in
-[`actions/contracts/bodies.py`](../../apps/data-pipeline/src/nof1_causal_lab/actions/contracts/bodies.py),
-with request and polling envelopes defined separately.
+Public action inputs live in the service
+[`actions/contracts/inputs.py`](../../apps/data-pipeline/src/nof1_causal_service/actions/contracts/inputs.py);
+scientific outputs live in the library
+[`actions/contracts/bodies.py`](../../apps/data-pipeline/src/nof1_causal_lab/actions/contracts/bodies.py).
+Request and polling envelopes belong to the service.
 
 The scientific definition types are `DynamicalModelSpec`, `ConstructSpec`, `CausalEdgeSpec`,
 `IndicatorSpec`, `DriftMechanismSpec`, `PotentialMechanismSpec`, `LikelihoodSpec`,

@@ -10,20 +10,20 @@ from uuid import uuid4
 import pytest
 from temporalio.exceptions import ApplicationError, FailureError
 
-from nof1_causal_lab.actions.contracts.progress import StepError, StepEvent
-from nof1_causal_lab.actions.temporal.activity_policy import (
+from nof1_causal_service.actions.contracts.progress import StepError, StepEvent
+from nof1_causal_service.actions.temporal.activity_policy import (
     EVENT_RETRY,
     EVENT_TIMEOUT,
     emit_progress,
     temporal_failure,
 )
-from nof1_causal_lab.actions.temporal.study.messages import ActionRequest
-from nof1_causal_lab.actions.temporal.study.workflow import StudyWorkflow
+from nof1_causal_service.actions.temporal.study.messages import ActionRequest
+from nof1_causal_service.actions.temporal.study.workflow import StudyWorkflow
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
 
-    from nof1_causal_lab.actions.contracts.call_state import CallProgress
+    from nof1_causal_service.actions.contracts.call_state import CallProgress
 
 pytestmark = pytest.mark.contract
 
@@ -34,9 +34,9 @@ async def _execute_action(machine: StudyWorkflow, request: ActionRequest) -> Cal
 
 @pytest.mark.parametrize("fails", [False, True])
 def test_openrouter_transport_is_scoped_to_the_worker_lifetime(monkeypatch, fails):
-    from nof1_causal_lab import config
-    from nof1_causal_lab.actions.temporal import worker
-    from nof1_causal_lab.llm import openrouter as openrouter_client
+    from nof1_causal_service import config
+    from nof1_causal_service.actions.temporal import worker
+    from nof1_causal_service.llm import openrouter as openrouter_client
 
     temporal_client = Mock()
     transport = Mock()
@@ -131,7 +131,7 @@ def test_emit_progress_uses_shared_activity_policy(monkeypatch) -> None:
     async def execute_activity(*args: Any, **kwargs: Any) -> None:
         calls.append((args, kwargs))
 
-    from nof1_causal_lab.actions.temporal import activity_policy as workflow_support
+    from nof1_causal_service.actions.temporal import activity_policy as workflow_support
 
     monkeypatch.setattr(workflow_support.workflow, "execute_activity", execute_activity)
     step = StepEvent(
@@ -160,10 +160,10 @@ def test_failed_fit_has_one_compute_attempt_and_only_journals_the_failure(
 
     from temporalio.exceptions import ActivityError, RetryState
 
-    from nof1_causal_lab.actions.temporal.study import workflow as study_workflow
-    from nof1_causal_lab.actions.temporal.study.messages import StudyInit
-    from nof1_causal_lab.study.records import ActionBase
-    from nof1_causal_lab.study.state import StudyState
+    from nof1_causal_service.actions.temporal.study import workflow as study_workflow
+    from nof1_causal_service.actions.temporal.study.messages import StudyInit
+    from nof1_causal_service.study.records import ActionBase
+    from nof1_causal_service.study.state import StudyState
     from tests.support.git import git_oid
 
     payload = (
@@ -205,18 +205,18 @@ def test_failed_fit_has_one_compute_attempt_and_only_journals_the_failure(
 def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monkeypatch):
     from datetime import UTC, datetime
 
-    from nof1_causal_lab.actions.contracts.call_state import CompletedCall, RunningCall
-    from nof1_causal_lab.actions.temporal.client import RUNNING_ACTION_MEMO
-    from nof1_causal_lab.actions.temporal.study import workflow as study_workflow
-    from nof1_causal_lab.actions.temporal.study.messages import StudyInit
-    from nof1_causal_lab.study.records import (
+    from nof1_causal_service.actions.contracts.call_state import CompletedCall, RunningCall
+    from nof1_causal_service.actions.temporal.client import RUNNING_ACTION_MEMO
+    from nof1_causal_service.actions.temporal.study import workflow as study_workflow
+    from nof1_causal_service.actions.temporal.study.messages import StudyInit
+    from nof1_causal_service.study.records import (
         ActionBase,
+        FitAttempt,
         Raised,
-        StagedFitAttempt,
         StudyRevision,
         failed_attempt,
     )
-    from nof1_causal_lab.study.state import ArtifactRecord, StudyState
+    from nof1_causal_service.study.state import ArtifactRecord, StudyState
     from tests.support.git import git_oid
 
     async def scenario():
@@ -244,7 +244,7 @@ def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monk
                 executions.append(index)
                 started[index].set()
                 await release[index].wait()
-                return StagedFitAttempt(
+                return FitAttempt(
                     action="fit",
                     request=payload.request,
                     outcome=Raised(error_type=f"Arm{index}", error_message=f"arm {index}"),

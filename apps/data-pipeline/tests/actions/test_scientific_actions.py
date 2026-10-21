@@ -8,9 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from nof1_causal_lab.actions.contracts.bodies import SimulateInput, SimulateOutput
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import SimulateRequest
+from nof1_causal_lab.actions.contracts.bodies import SimulateOutput
 from nof1_causal_lab.actions.fit.conditioning import condition_model
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.reference import DataRef
@@ -19,9 +17,12 @@ from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
 from nof1_causal_lab.models.ssm.predictive.parameters import sample_model_laws
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 from nof1_causal_lab.models.structure import StructuralSelection
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.records import Applied
-from nof1_causal_lab.study.state import StudyState
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.inputs import SimulateInput
+from nof1_causal_service.actions.contracts.requests import SimulateRequest
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.records import Applied
+from nof1_causal_service.study.state import StudyState
 from tests.integration.runner_fixtures import panel_metadata
 from tests.support.action import applied_record, empty_simulation_summary
 from tests.support.git import artifact_revision, commit_id, git_oid
@@ -89,11 +90,10 @@ def test_current_law_sampling_preserves_joint_parameter_atoms():
 def test_durable_replication_preserves_current_laws_without_comparison(
     tmp_path, monkeypatch, fitted_laws, scientific_model_payload
 ):
-    from nof1_causal_lab.actions.runners import run_action_locally
     from nof1_causal_lab.artifacts.reports.inference import InferenceEvidence
-    from nof1_causal_lab.storage import paths as data_module
-    from nof1_causal_lab.study.persistence.history import StudyRepository
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
+    from nof1_causal_service.actions.runners import run_action_locally
+    from nof1_causal_service.storage import paths as data_module
+    from nof1_causal_service.study.persistence.history import StudyRepository
     from tests.integration.runner_fixtures import panel_frame
     from tests.support.helpers import run_async
     from tests.support.inference import inference_metadata
@@ -107,7 +107,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
         derived_from={},
         json_files={"model.json": dynamical_model_spec.model_dump(mode="json")},
     )
-    from nof1_causal_lab.study.persistence.store import read_model
+    from nof1_causal_service.study.persistence.store import read_model
 
     dynamical_model_spec = read_model(store, definition.revision)
     from nof1_causal_lab.artifacts.model.question import QuestionSpec
@@ -147,15 +147,18 @@ def test_durable_replication_preserves_current_laws_without_comparison(
             times=jnp.arange(-1.0, 4.0),
             time_origin=panel_metadata().time_origin,
         )
-        fitted = store.write_artifact(
-            "model",
+        from nof1_causal_service.study.persistence.writes import write_model_revision
+
+        fitted = write_model_revision(
+            store,
+            dynamical_model_spec,
             produced_by="fit",
             derived_from={"model": definition.revision, "panel": produced[-1].revision},
-            json_files={"model.json": dynamical_model_spec.model_dump(mode="json")},
         )
         pins["model"] = fitted.revision
         produced.append(fitted)
-        from nof1_causal_lab.actions.fit.action import read_inference_report
+        from nof1_causal_lab.actions.fit.action import inference_report
+        from nof1_causal_service.study.persistence.store import read_model
 
         evidence = InferenceEvidence()
         retained = evidence
@@ -164,10 +167,13 @@ def test_durable_replication_preserves_current_laws_without_comparison(
             effects=ActionEffects(
                 produced=tuple(produced),
                 reports={
-                    "inference": store.write_report(
-                        read_inference_report(
-                            store,
-                            fitted.revision,
+                    "inference": store.write_result(
+                        inference_report(
+                            read_model(store, fitted.revision),
+                            read_model(
+                                store,
+                                store.read_meta("model", fitted.revision).derived_from["model"],
+                            ),
                             retained,
                             inference_metadata(dynamical_model_spec),
                         )
@@ -177,8 +183,8 @@ def test_durable_replication_preserves_current_laws_without_comparison(
         )
     else:
         prepared = Applied(result=None, effects=ActionEffects(produced=tuple(produced)))
-    from nof1_causal_lab.actions.contracts.bodies import FitInput, NewFitTarget
-    from nof1_causal_lab.actions.contracts.requests import FitRequest
+    from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
+    from nof1_causal_service.actions.contracts.requests import FitRequest
 
     request = (
         FitRequest(
@@ -209,19 +215,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
             pins,
         )
     )
-    from nof1_causal_lab.actions.simulate.action import read_simulation_report
-
-    report = read_simulation_report(
-        store,
-        applied.result.evidence,
-        SimulateInput(
-            dynamical_model_spec_ref=pins["model"],
-            simulation=SimulationSpec(
-                start=date(2023, 12, 31) if fitted_laws else date(2026, 1, 1), horizon="4d"
-            ),
-        ),
-        pins["question"],
-    )
+    report = store.read_result(applied.result, SimulateOutput).report
     evidence = report.evidence
     assert evidence.arms.action.latent_paths.values.shape == (evidence.draws, 5, 2)
     assert evidence.arms.action.observations.values.shape == (evidence.draws, 5, 2)
@@ -280,13 +274,13 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     assert retained == report
 
     # A retained generator result is read directly without running it again.
-    from nof1_causal_lab.study.queries.data import read_data_history
+    from nof1_causal_service.study.queries.data import read_data_history
 
     selected = read_data_history(
         store, DataRef[GitOid, int](revision=commit_id("TEST", 2), replicate_index=1)
     )
     panel = selected.observations.recorded.frame
-    from nof1_causal_lab.models.ssm.preparation.panel import project_observation_data
+    from nof1_causal_lab.models.ssm.preparation.binding import project_observation_data
 
     projected = project_observation_data(
         panel,
@@ -319,10 +313,10 @@ def test_durable_replication_preserves_current_laws_without_comparison(
 def test_retained_forecast_and_timed_intervention_preserve_joint_starts(
     tmp_path, monkeypatch, start_time, origin, complete_test_model_payload
 ):
-    from nof1_causal_lab.actions.simulate.action import simulate
+    from nof1_causal_lab.actions.simulate.action import _simulate as simulate
     from nof1_causal_lab.artifacts.scenarios import InterventionSpec
-    from nof1_causal_lab.storage import paths as data_module
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
+    from nof1_causal_service.compute.resources import read_compute_budget
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     dynamical_model_spec = x_model()
@@ -337,7 +331,7 @@ def test_retained_forecast_and_timed_intervention_preserve_joint_starts(
         times=jnp.array([0.0, 1.0]),
         time_origin=origin,
     )
-    store = ArtifactStore("TEST")
+    ArtifactStore("TEST")
     design = SimulationSpec(
         start=date(2026, 1, 2),
         horizon="1d",
@@ -346,8 +340,11 @@ def test_retained_forecast_and_timed_intervention_preserve_joint_starts(
     assert design.start_day(origin) == start_time
     report = simulate(
         StructuralSelection(dynamical_model_spec, None),
-        SimulateInput(dynamical_model_spec_ref=git_oid(2), simulation=design),
-        store=store,
+        design,
+        seed=0,
+        num_replicates=100,
+        budget=read_compute_budget(),
+        fitted=None,
     )
     assert not isinstance(report, ObservationPreflightFailure)
     action = report.arms.action.latent_paths.values
@@ -369,13 +366,13 @@ def test_retained_forecast_and_timed_intervention_preserve_joint_starts(
 def test_causal_action_uses_common_generator_and_requires_matching_engine_evidence(
     tmp_path, monkeypatch
 ):
-    from nof1_causal_lab.actions.simulate.action import simulate
+    from nof1_causal_lab.actions.simulate.action import _simulate as simulate
     from nof1_causal_lab.actions.simulate.effects import summarize_causal_simulation
     from nof1_causal_lab.artifacts.identity import GitRef
     from nof1_causal_lab.artifacts.scenarios import InterventionSpec
     from nof1_causal_lab.models.ssm import compiled_access as numeric
-    from nof1_causal_lab.storage import paths as data_module
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
+    from nof1_causal_service.compute.resources import read_compute_budget
+    from nof1_causal_service.storage import paths as data_module
     from tests.support.inference import inference_log
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
@@ -395,12 +392,15 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         horizon="1d",
         interventions=(InterventionSpec(target=states[0], value=1.0),),
     )
-    record = inference_log(dynamical_model_spec)
-    store = ArtifactStore("TEST")
+    inference_log(dynamical_model_spec)
+    ArtifactStore("TEST")
     evidence = simulate(
         StructuralSelection(dynamical_model_spec, states[1]),
-        SimulateInput(dynamical_model_spec_ref=git_oid(2), simulation=design),
-        store=store,
+        design,
+        seed=0,
+        num_replicates=100,
+        budget=read_compute_budget(),
+        fitted=None,
     )
     assert not isinstance(evidence, ObservationPreflightFailure)
     from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
@@ -414,18 +414,9 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         findings=(),
         fit_reliability="converged",
     )
-    monkeypatch.setattr(
-        "nof1_causal_lab.study.persistence.store.read_model", lambda *_args: dynamical_model_spec
-    )
-    monkeypatch.setattr(
-        "nof1_causal_lab.study.queries.lineage.fitted_law_report",
-        lambda *_args: _report(dynamical_model_spec).core,
-    )
-    monkeypatch.setattr("nof1_causal_lab.study.records.inference_record", lambda *_: record)
-    monkeypatch.setattr(
-        ArtifactStore,
-        "dynamical_model_spec_ref",
-        lambda *_: GitRef(workspace_id="TEST", revision=git_oid(2), path="model.json"),
+    fitted = (
+        GitRef(workspace_id="TEST", revision=git_oid(2), path="model.json"),
+        _report(dynamical_model_spec).core,
     )
     assert evidence.arms.kind == "paired"
     arms = evidence.arms
@@ -433,8 +424,8 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
     def summarize():
         return summarize_causal_simulation(
             StructuralSelection(dynamical_model_spec, states[1]),
-            SimulateInput(dynamical_model_spec_ref=git_oid(2), simulation=design),
-            store=store,
+            design,
+            fitted=fitted,
             action=arms.action,
             reference=arms.reference,
             state_ids=evidence.state_ids,
@@ -453,11 +444,11 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
     assert result.summary.mean == pytest.approx(float(expected[:, -1].mean()))
     assert result.reference_mean == pytest.approx(float(reference[:, -1, outcome_index].mean()))
     report = generated.revised(evidence=evidence.revised(arms=arms.revised(causal=result)))
-    from nof1_causal_lab.study.persistence.codec import pack_result, unpack_result
+    from nof1_causal_service.study.persistence.codec import pack_result, unpack_result
 
     assert SimulationReport.model_validate(unpack_result(pack_result(report))) == report
-    from nof1_causal_lab.models.ssm.preparation.panel import project_observation_data
-    from nof1_causal_lab.study.queries.data import read_simulation_observations
+    from nof1_causal_lab.models.ssm.preparation.binding import project_observation_data
+    from nof1_causal_service.study.queries.data import read_simulation_observations
 
     panel = read_simulation_observations(evidence, 0)
     projected = project_observation_data(
@@ -474,7 +465,7 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         evidence.arms.action.observations.values[0],
         equal_nan=True,
     )
-    monkeypatch.setattr("nof1_causal_lab.study.records.inference_record", lambda *_: None)
+    fitted = None
     unavailable = summarize()
     assert isinstance(unavailable, NotEvaluated)
     assert unavailable.reason == "CAUSAL_EVALUATION_FAILED"
@@ -482,16 +473,15 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
 
 @pytest.mark.contract
 def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
-    from nof1_causal_lab.actions.data_checks import evaluate_data_checks
     from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
-    from nof1_causal_lab.storage import paths as data_module
-    from nof1_causal_lab.study.persistence.store import ArtifactStore
+    from nof1_causal_service.storage import paths as data_module
     from tests.integration.runner_fixtures import seed_panel
+    from tests.support.action import prepared_profile
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("TEST")
     panel = seed_panel(store, model_revision=None)
-    profile = evaluate_data_checks(
+    profile = prepared_profile(
         "TEST",
         StudyState(),
         Applied(result=DataPreparationResult(), effects=ActionEffects(produced=[panel])),
@@ -513,7 +503,7 @@ def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
         json_files={"model.json": revised_model.model_dump(mode="json")},
     )
     from nof1_causal_lab.artifacts.observations.dataset import SelectedObservations
-    from nof1_causal_lab.study.queries.data import read_data_history
+    from nof1_causal_service.study.queries.data import read_data_history
     from tests.support.data import metadata_for_model
 
     history = read_data_history(
@@ -524,10 +514,10 @@ def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
         SelectedObservations,
     )
     current = state.with_artifacts([revised])
-    from nof1_causal_lab.actions.data_checks import read_data_profile
+    from tests.support.action import data_profile
 
     assert (
-        read_data_profile(
+        data_profile(
             store,
             DataRef[GitOid, int](revision=current.current["panel"].revision, replicate_index=0),
         )
@@ -566,13 +556,15 @@ def test_simulation_retains_exact_histories_without_running_measurement_reducers
 
     monkeypatch.setattr(simulation_checks, "measure_construct_dynamics", no_measurements)
     monkeypatch.setattr(simulation_checks, "measure_construct_measurement", no_measurements)
-    evidence = action.simulate(
+    from nof1_causal_service.compute.resources import read_compute_budget
+
+    evidence = action._simulate(
         StructuralSelection(dynamical_model_spec, None),
-        SimulateInput(
-            dynamical_model_spec_ref=git_oid(1),
-            simulation=SimulationSpec(start=date(2026, 1, 1), horizon="2d"),
-        ),
-        store=ArtifactStore("TEST"),
+        SimulationSpec(start=date(2026, 1, 1), horizon="2d"),
+        seed=0,
+        num_replicates=100,
+        budget=read_compute_budget(),
+        fitted=None,
     )
     assert not isinstance(evidence, ObservationPreflightFailure)
     assert called == []

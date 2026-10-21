@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from evaluation.declarations import Reference, Tolerances
-    from nof1_causal_lab.public.contracts import FitOutput, FitSegment, JsonValue
+    from nof1_causal_service.public.contracts import FitOutput, FitSegment, JsonValue
 
 
 def flattened(value: Mapping[str, JsonValue], prefix: str = "") -> dict[str, JsonValue]:

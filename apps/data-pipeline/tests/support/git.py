@@ -1,8 +1,8 @@
 """Git identities for synthetic contracts and explicitly ordered test setup artifacts."""
 
 from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
 
 
 def git_oid(label: int) -> GitOid:

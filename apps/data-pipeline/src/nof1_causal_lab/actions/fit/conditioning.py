@@ -12,14 +12,12 @@ from nof1_causal_lab.models.ssm import compiled_access as numeric
 from nof1_causal_lab.models.ssm.compile.bindings import joint_law_layout
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
     from datetime import datetime
 
     from jax.typing import ArrayLike
 
     from nof1_causal_lab.artifacts.identity import DistributionId
     from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-    from nof1_causal_lab.artifacts.probability.serialization import ArrayLoader
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior
 
@@ -31,8 +29,6 @@ def condition_model(
     *,
     times: ArrayLike,
     time_origin: datetime,
-    array_writer: Callable[[np.ndarray], str] | None = None,
-    array_loader: ArrayLoader | None = None,
 ) -> tuple[DynamicalModelSpec, DistributionId]:
     """Replace the current uncertainty with the engine's full joint empirical law.
 
@@ -81,7 +77,7 @@ def condition_model(
         },
         {identity: paths[:, :, index] for index, identity in enumerate(state_ids)},
     )
-    law = empirical_distribution(joint, array_writer=array_writer, array_loader=array_loader)
+    law = empirical_distribution(joint)
     identity = layout.distribution_id
     constructs = tuple(
         construct.with_distribution(

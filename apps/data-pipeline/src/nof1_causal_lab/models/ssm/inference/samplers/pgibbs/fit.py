@@ -60,30 +60,38 @@ from nof1_causal_lab.models.ssm.inference.warmup.outcomes import InitializationF
 from nof1_causal_lab.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
 
 if TYPE_CHECKING:
+    import logging
     from collections.abc import Callable
+    from datetime import datetime
 
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
     from nof1_causal_lab.compute.budget import ComputeBudget
+    from nof1_causal_lab.compute.programs import ProgramPreparer
     from nof1_causal_lab.models.ssm.inference.reparameterization import Strategy
     from nof1_causal_lab.models.ssm.parameterization import PriorRuntimeBundle
-    from nof1_causal_lab.models.ssm.preparation.panel import BoundPanel
+    from nof1_causal_lab.models.ssm.preparation.binding import BoundPanel
 
 
 def fit_particle_gibbs(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
+    prepare_program: ProgramPreparer,
     compute_budget: ComputeBudget,
     sampler: SamplerSpec,
     reparam: Strategy | None,
     clock: Callable[[], float],
+    wall_clock: Callable[[], datetime],
+    logger: logging.Logger,
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Initialize paired starts, then retain only exact blocked PG updates."""
     options = sampler.algorithm
     assert isinstance(options, ParticleGibbsSpec)
     trace_key, laps_key, sample_key = jax.random.split(jax.random.key(sampler.seed), 3)
-    with inference_phase("pgibbs", "building_target", clock=clock):
+    with inference_phase(
+        "pgibbs", "building_target", clock=clock, logger=logger, wall_clock=wall_clock
+    ):
         problem = build_particle_problem(
             priors,
             panel,
@@ -95,7 +103,9 @@ def fit_particle_gibbs(
     if continuation is not None:
         initialization = continued_particle_initialization(continuation)
     else:
-        with inference_phase("pgibbs", "preparing_initialization", clock=clock):
+        with inference_phase(
+            "pgibbs", "preparing_initialization", clock=clock, logger=logger, wall_clock=wall_clock
+        ):
             initialization = prepare_particle_initialization(
                 target,
                 spec=options.initialization,
@@ -134,7 +144,10 @@ def fit_particle_gibbs(
             compute_budget=compute_budget,
             key=sample_key,
             clock=clock,
+            logger=logger,
+            wall_clock=wall_clock,
             continuation=continuation,
+            prepare_program=prepare_program,
         )
 
     started = clock()
@@ -177,7 +190,7 @@ def fit_particle_gibbs(
         for name, values in run.phase_extra_fields.items()
     }
     if sampler.num_samples_per_chain == 0:
-        return UnretainedRun(
+        return UnretainedRun.completed(
             sampler, MCMCEvidence(method="pgibbs"), run.compiled_step, phase_fields
         )
     duration = clock() - started

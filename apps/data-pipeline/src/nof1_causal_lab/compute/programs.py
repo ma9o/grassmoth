@@ -7,6 +7,8 @@ from typing import Protocol, cast
 import jax
 from jax.stages import Compiled
 
+from nof1_causal_lab.compute.budget import MemoryDemand
+
 
 @dataclass(frozen=True)
 class PreparedProgram[Result]:
@@ -23,6 +25,16 @@ class ProgramCompiler(Protocol):
         self, function: Callable[..., Result], *args: object, **kwargs: object
     ) -> PreparedProgram[Result]:
         """Bind one program without executing its numerical computation."""
+        ...
+
+
+class ProgramPreparer(Protocol):
+    """Supply the existing staged compilation operation and its sizing evidence."""
+
+    def __call__[Result](
+        self, function: Callable[..., Result], *args: object, **kwargs: object
+    ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
+        """Prepare operands and shapes without executing the numerical computation."""
         ...
 
 

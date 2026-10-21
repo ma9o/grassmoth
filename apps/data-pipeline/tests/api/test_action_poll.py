@@ -11,7 +11,18 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.actions.contracts.bodies import (
+from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.artifacts.model.question import QuestionSpec
+from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef, SemanticExtractionSpec
+from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.artifacts.simulation import SimulationSpec
+from nof1_causal_service.actions.contracts.call_state import (
+    CallProgress,
+    CompletedCall,
+    RunningCall,
+)
+from nof1_causal_service.actions.contracts.inputs import (
     DataDiffInput,
     EditModelInput,
     EditQuestionInput,
@@ -21,8 +32,7 @@ from nof1_causal_lab.actions.contracts.bodies import (
     PrepareDataInput,
     SimulateInput,
 )
-from nof1_causal_lab.actions.contracts.call_state import CallProgress, CompletedCall, RunningCall
-from nof1_causal_lab.actions.contracts.requests import (
+from nof1_causal_service.actions.contracts.requests import (
     DataDiffRequest,
     EditModelRequest,
     EditQuestionRequest,
@@ -33,25 +43,19 @@ from nof1_causal_lab.actions.contracts.requests import (
     SimulateRequest,
     call_identity,
 )
-from nof1_causal_lab.actions.temporal.study import workflow as study_workflow
-from nof1_causal_lab.actions.temporal.study.activities import (
+from nof1_causal_service.actions.temporal.study import workflow as study_workflow
+from nof1_causal_service.actions.temporal.study.activities import (
     complete_result_activity,
     edit_question_activity,
     journal_activity,
     read_inputs_activity,
 )
-from nof1_causal_lab.actions.temporal.study.messages import ActionRequest, StudyInit
-from nof1_causal_lab.api import app as tool_server
-from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.model.question import QuestionSpec
-from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef, SemanticExtractionSpec
-from nof1_causal_lab.artifacts.observations.reference import DataRef
-from nof1_causal_lab.artifacts.simulation import SimulationSpec
-from nof1_causal_lab.storage import paths as data
-from nof1_causal_lab.study import interface as study_api
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.records import Applied, Rejected
+from nof1_causal_service.actions.temporal.study.messages import ActionRequest, StudyInit
+from nof1_causal_service.api import app as tool_server
+from nof1_causal_service.storage import paths as data
+from nof1_causal_service.study import interface as study_api
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.records import Applied, Rejected
 from tests.support.git import git_oid
 from tests.support.helpers import fixture_entity_id
 
@@ -241,7 +245,7 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     )
     assert first.status_code == second.status_code == 200
     assert first.content == second.content
-    from nof1_causal_lab.public import studies as library
+    from nof1_causal_service.public import studies as library
 
     native_post = asyncio.run(library.submit_action("CALLS", request))
     native_poll = asyncio.run(library.poll_action("CALLS", request.action, call_identity(request)))

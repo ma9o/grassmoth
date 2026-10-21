@@ -10,26 +10,12 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter, ValidationError
 
-from nof1_causal_lab.actions.contracts.bodies import FitInput, NewFitTarget, SimulateInput
-from nof1_causal_lab.actions.contracts.call_state import PendingCall
-from nof1_causal_lab.actions.contracts.effects import ActionEffects
-from nof1_causal_lab.actions.contracts.requests import (
-    DataDiffRequest,
-    FitRequest,
-    ModelDiffRequest,
-    ScientificActionRequest,
-    SimulateRequest,
-    call_identity,
-)
-from nof1_causal_lab.actions.input_resolution import input_state
-from nof1_causal_lab.api import app as tool_server
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
-    ModelSimulationResult,
     SimulationArm,
     SimulationEvidence,
     SimulationObservationLayout,
@@ -37,11 +23,24 @@ from nof1_causal_lab.artifacts.simulation import (
     SimulationSpec,
     SingleArmSimulation,
 )
-from nof1_causal_lab.storage import paths as data
-from nof1_causal_lab.study import interface as study_api
-from nof1_causal_lab.study.persistence.history import StudyRepository
-from nof1_causal_lab.study.persistence.store import ArtifactStore
-from nof1_causal_lab.study.records import (
+from nof1_causal_service.actions.contracts.call_state import PendingCall
+from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget, SimulateInput
+from nof1_causal_service.actions.contracts.requests import (
+    DataDiffRequest,
+    FitRequest,
+    ModelDiffRequest,
+    ScientificActionRequest,
+    SimulateRequest,
+    call_identity,
+)
+from nof1_causal_service.actions.input_resolution import input_state
+from nof1_causal_service.api import app as tool_server
+from nof1_causal_service.storage import paths as data
+from nof1_causal_service.study import interface as study_api
+from nof1_causal_service.study.persistence.history import StudyRepository
+from nof1_causal_service.study.persistence.store import ArtifactStore
+from nof1_causal_service.study.records import (
     Applied,
     AttemptRecord,
     EditAttempt,
@@ -50,7 +49,7 @@ from nof1_causal_lab.study.records import (
     Raised,
     SimulateAttempt,
 )
-from nof1_causal_lab.study.state import RetractedArtifact
+from nof1_causal_service.study.state import RetractedArtifact
 from tests.support.action import applied_record, empty_simulation_summary, question_root
 from tests.support.git import git_oid
 
@@ -145,10 +144,10 @@ def study(tmp_path, monkeypatch):
             applied_record(
                 repository.workspace_id,
                 Applied(
-                    result=ModelSimulationResult(evidence=evidence.revised(seed=seed)),
+                    result=evidence.revised(seed=seed),
                     effects=ActionEffects(
                         reports={
-                            "simulation": store.write_report(
+                            "simulation": store.write_result(
                                 SimulationReport(
                                     evidence=evidence.revised(seed=seed),
                                     summary=empty_simulation_summary(),
@@ -552,10 +551,10 @@ def test_latest_does_not_resurrect_retracted_or_stale_panel(study, client, inval
 def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     study, client, parent_kind
 ):
-    from nof1_causal_lab.actions.edit_model import edit_model
-    from nof1_causal_lab.actions.model_checks import evaluate_model_checks
+    from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
     from nof1_causal_lab.artifacts.model.question import QuestionSpec
-    from nof1_causal_lab.study.records import record_dependencies
+    from nof1_causal_service.actions.edit_model import edit_model
+    from nof1_causal_service.study.records import record_dependencies
     from tests.support.helpers import make_model, write_question
 
     repository, store, models, _, _ = study
@@ -612,7 +611,7 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
         "question": original_question.revision,
         **({"model": parent.revision} if parent_kind == "model" else {}),
     }
-    checks, _ = evaluate_model_checks(store.workspace_id, state, outcome, action="edit_model")
+    checks = store.read_result(outcome.result, EditModelOutput).checks
     assert checks.question is not None
     assert all(item.code not in {"window", "range"} for item in checks.question.findings)
     saved = repository.append(
@@ -665,9 +664,9 @@ def test_latest_model_parent_selects_question_when_no_current_model(study, clien
 
 
 def test_edit_model_parent_rejects_an_unrelated_artifact(study):
-    from nof1_causal_lab.actions.contracts.bodies import EditModelInput
-    from nof1_causal_lab.actions.contracts.requests import EditModelRequest
-    from nof1_causal_lab.study.errors import StudyLookupError
+    from nof1_causal_service.actions.contracts.inputs import EditModelInput
+    from nof1_causal_service.actions.contracts.requests import EditModelRequest
+    from nof1_causal_service.study.errors import StudyLookupError
 
     repository, _, _, panel, _ = study
     request = EditModelRequest[GitOid](

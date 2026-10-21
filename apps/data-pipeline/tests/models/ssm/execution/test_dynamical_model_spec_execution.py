@@ -46,7 +46,6 @@ def dynamical_model_spec():
 def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
     dynamical_model_spec, tmp_path, monkeypatch, categorical
 ):
-    from functools import cache
 
     from nof1_causal_lab.artifacts.model.likelihood import LikelihoodSpec
     from nof1_causal_lab.artifacts.probability.serialization import (
@@ -56,8 +55,8 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
     from nof1_causal_lab.models.inputs import input_fingerprints
     from nof1_causal_lab.models.ssm.compile.bindings import parameter_bindings
     from nof1_causal_lab.models.ssm.predictive.parameters import sample_model_laws
-    from nof1_causal_lab.storage import paths as data_module
-    from nof1_causal_lab.study.persistence.store import ArtifactStore, read_model
+    from nof1_causal_service.storage import paths as data_module
+    from nof1_causal_service.study.persistence.store import ArtifactStore, read_model
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("TEST")
@@ -110,8 +109,6 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
         result,
         times=jnp.arange(4),
         time_origin=datetime(2024, 1, 1, tzinfo=UTC),
-        array_writer=store.write_array,
-        array_loader=cache(store.read_array),
     )
     assert type(conditioned) is DynamicalModelSpec
     assert dynamical_model_spec.time_points == ()
@@ -123,12 +120,9 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
     payload = conditioned.model_dump(mode="json")
     assert not {"posterior", "prior", "provenance", "diagnostics", "result"} & payload.keys()
     assert "array_ref" in conditioned.model_dump_json()
-    info = store.write_artifact(
-        "model",
-        derived_from={},
-        produced_by="fit",
-        json_files={"model.json": payload},
-    )
+    from nof1_causal_service.study.persistence.writes import write_model_revision
+
+    info = write_model_revision(store, conditioned, derived_from={}, produced_by="fit")
     loaded = read_model(store, info.revision)
     assert loaded == conditioned
     assert (

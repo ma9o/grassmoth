@@ -4,20 +4,20 @@ from uuid import uuid4
 
 import pytest
 
-from nof1_causal_lab.actions.contracts.progress import (
+from nof1_causal_service.actions.contracts.progress import (
     ExtractionPlanEvent,
     ExtractionSnapshotEvent,
     ExtractionWorkerEvent,
     StepError,
     StepEvent,
 )
-from nof1_causal_lab.actions.progress import emit_event, read_events
+from nof1_causal_service.actions.progress import emit_event, read_events
 
 pytestmark = pytest.mark.contract
 
 
 def test_progress_events_roundtrip_per_attempt(monkeypatch, tmp_path):
-    from nof1_causal_lab.storage import paths as data_module
+    from nof1_causal_service.storage import paths as data_module
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path / "data"))
     workspace_id = "progress-event-contracts"

@@ -12,14 +12,14 @@ pytestmark = pytest.mark.contract
     "source",
     [
         "from nof1_causal_lab.models.ssm.inference.fit import fit as run",
-        "import nof1_causal_lab.actions.fit.remote as compute",
+        "import nof1_causal_service.actions.fit.remote as compute",
         "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior",
-        "from nof1_causal_lab.public.studies import _study_handle",
-        "from nof1_causal_lab.public.studies import *",
-        "from importlib import import_module as load\nload('nof1_causal_lab.actions.runners')",
+        "from nof1_causal_service.public.studies import _study_handle",
+        "from nof1_causal_service.public.studies import *",
+        "from importlib import import_module as load\nload('nof1_causal_service.actions.runners')",
         "import importlib\nimportlib.import_module(name)",
         "import sys as system\nsystem.path.insert(0, 'source')",
-        "from nof1_causal_lab.public import studies\nstudies._study_handle()",
+        "from nof1_causal_service.public import studies\nstudies._study_handle()",
     ],
 )
 def test_rejects_private_imports_and_dynamic_bypasses(tmp_path: Path, source: str) -> None:
@@ -36,7 +36,7 @@ def test_scans_ignored_files_and_follows_helpers_outside_selected_directory(tmp_
     caller.write_text("from helper import execute\n")
     helper = tmp_path / "helper.py"
     helper.write_text(
-        "from nof1_causal_lab.actions.fit.remote import execute_fit_compute as execute\n"
+        "from nof1_causal_service.actions.fit.remote import execute_fit_compute as execute\n"
     )
     violations = find_public_import_violations((campaign,), import_roots=(tmp_path,))
     assert len(violations) == 1
@@ -50,20 +50,20 @@ def test_public_imports_and_relative_local_helpers_are_allowed(tmp_path: Path) -
     (package / "run.py").write_text("from .helper import run\n")
     helper = package / "helper.py"
     helper.write_text(
-        "from nof1_causal_lab.public.client import StudyClient\n"
-        "from nof1_causal_lab.public import studies\n"
-        "import nof1_causal_lab.public.contracts as contracts\n"
+        "from nof1_causal_service.public.client import StudyClient\n"
+        "from nof1_causal_service.public import studies\n"
+        "import nof1_causal_service.public.contracts as contracts\n"
         "def run():\n return StudyClient, studies.submit_action, contracts.FitRequest\n"
     )
     assert find_public_import_violations((package / "run.py",), import_roots=(tmp_path,)) == ()
-    helper.write_text("from nof1_causal_lab.compute.modal_images import gpu_image\n")
+    helper.write_text("from nof1_causal_service.compute.modal_images import gpu_image\n")
     assert find_public_import_violations((package / "run.py",), import_roots=(tmp_path,))
 
 
 def test_helper_package_initializers_cannot_hide_internal_imports(tmp_path: Path) -> None:
     helper = tmp_path / "helper"
     helper.mkdir()
-    (helper / "__init__.py").write_text("import nof1_causal_lab.actions.fit.remote\n")
+    (helper / "__init__.py").write_text("import nof1_causal_service.actions.fit.remote\n")
     (helper / "run.py").write_text("def run(): pass\n")
     caller = tmp_path / "experiment.py"
     caller.write_text("from helper.run import run\n")

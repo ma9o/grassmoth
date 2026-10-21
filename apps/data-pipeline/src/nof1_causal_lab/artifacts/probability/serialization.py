@@ -198,9 +198,6 @@ def distribution_shape(value: dist.Distribution) -> tuple[tuple[int, ...], tuple
 
 def empirical_distribution(
     values: np.ndarray,
-    *,
-    array_writer: Callable[[np.ndarray], str] | None = None,
-    array_loader: ArrayLoader | None = None,
 ) -> dist.Distribution:
     """Express aligned finite samples as a native categorical mixture of point masses.
 
@@ -211,11 +208,13 @@ def empirical_distribution(
     if values.ndim != 2 or not all(values.shape) or not np.isfinite(values).all():
         raise ValueError("Empirical laws require finite, nonempty draw and event axes")
 
+    arrays: dict[str, NumericalArray] = {}
+
     def argument(array: np.ndarray) -> JsonValue:
-        if array_writer is None:
-            return _encode(array)
+        buffer = NumericalArray.from_numpy(array)
+        arrays[buffer.identity] = buffer
         return {
-            "array_ref": array_writer(array),
+            "array_ref": buffer.identity,
             "shape": [int(n) for n in array.shape],
             "dtype": str(array.dtype),
             "index": list[int](),
@@ -234,7 +233,9 @@ def empirical_distribution(
             },
         },
     }
-    return decode_distribution(constructor, array_loader=array_loader)
+    return decode_distribution(
+        constructor, array_loader=lambda identity: arrays[identity].values, buffers=arrays
+    )
 
 
 def empirical_atoms(value: dist.Distribution) -> np.ndarray:

@@ -17,7 +17,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 
 
-import logging
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from types import MappingProxyType
@@ -56,9 +55,6 @@ from nof1_causal_lab.models.ssm.inference.diagnostics.plots import (
 )
 from nof1_causal_lab.models.ssm.inference.sample_projection import _filter_public_samples
 
-logger = logging.getLogger(__name__)
-
-
 type ArviZArrayMapping = Mapping[str, jnp.ndarray | NDArray]
 
 
@@ -88,6 +84,20 @@ class UnretainedRun:
     compiled_step: Compiled
     phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]]
     parameterization: JointParameterizationRecord | None = None
+
+    @classmethod
+    def completed(
+        cls,
+        settings: SamplerSpec,
+        evidence: MCMCEvidence,
+        compiled_step: Compiled,
+        phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]],
+        parameterization: JointParameterizationRecord | None = None,
+    ) -> UnretainedRun:
+        """Own a completed interval whose settings retain no posterior samples."""
+        if settings.num_samples_per_chain != 0:
+            raise ValueError("Unretained runs require zero requested posterior samples")
+        return cls(settings, evidence, compiled_step, phase_extra_fields, parameterization)
 
     def __post_init__(self) -> None:
         """Freeze telemetry at the execution boundary."""
@@ -306,10 +316,6 @@ class MCMCPosterior:
         if exact_rows is not None and bool(jnp.any(exact_rows)):
             # Removing an equality increases the support dimension. Reweighting
             # draws confined to that equality cannot recover the held-out target.
-            logger.info(
-                "PSIS-LOO is unavailable for exact observations: removing a Delta constraint "
-                "requires refitting or integrating out its fixed state coordinates."
-            )
             return None
         import numpy as np
         from arviz_stats.loo import loo
