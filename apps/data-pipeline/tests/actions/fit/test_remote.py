@@ -120,24 +120,26 @@ def test_fit_return_compression_preserves_all_bytes(model):
     assert len(frame) < len(expected.evidence) // 10
 
 
-def test_fit_return_rejects_corruption_and_sizes_before_decode(monkeypatch):
-    import pyarrow as pa
-
+def test_fit_return_rejects_corruption_and_truncation_before_unpickling(monkeypatch):
     from nof1_causal_lab.actions.fit import remote
 
     frame = encode_fit_result(FitComputeResult(b"model", b"evidence", "{}"))
+    unpickle = Mock(side_effect=AssertionError("Must verify before unpickling"))
+    monkeypatch.setattr(remote.pickle, "loads", unpickle)
     corrupted = frame[:8] + bytes([frame[8] ^ 1]) + frame[9:]
     with pytest.raises(ValueError, match="checksum"):
         decode_fit_result(corrupted)
-    decompress = Mock(side_effect=AssertionError("Must reject before allocation"))
-    monkeypatch.setattr(pa, "decompress", decompress)
-    with pytest.raises(ValueError, match="decoded size bound"):
-        decode_fit_result((remote.FIT_RESULT_MAX_BYTES + 1).to_bytes(8, "big") + frame[8:])
     with pytest.raises(ValueError, match="transport size"):
         decode_fit_result(b"truncated")
-    monkeypatch.setattr(remote, "FIT_RESULT_MAX_BYTES", len(frame) - 1)
-    with pytest.raises(ValueError, match="transport size"):
-        decode_fit_result(frame)
-    with pytest.raises(ValueError, match="transport size bound"):
-        encode_fit_result(FitComputeResult(b"too large" * len(frame), b"", "{}"))
-    decompress.assert_not_called()
+    unpickle.assert_not_called()
+
+
+def test_fit_return_rejects_inflated_declared_length_without_allocating_it(monkeypatch):
+    from nof1_causal_lab.actions.fit import remote
+
+    frame = encode_fit_result(FitComputeResult(b"model", b"evidence", "{}"))
+    unpickle = Mock(side_effect=AssertionError("Must verify before unpickling"))
+    monkeypatch.setattr(remote.pickle, "loads", unpickle)
+    with pytest.raises(ValueError, match="length"):
+        decode_fit_result((2**63).to_bytes(8, "big") + frame[8:])
+    unpickle.assert_not_called()

@@ -36,7 +36,6 @@ if TYPE_CHECKING:
 _FIT_CPU_CORES = 8
 _FIT_HOST_MEMORY_MIB = 32768
 FIT_CACHE_VOLUME_ENV = "NOF1_FIT_CACHE_VOLUME"
-FIT_RESULT_MAX_BYTES = 256 * 1024**2
 _RESULT_HEADER_BYTES = 8 + hashlib.sha256().digest_size
 
 
@@ -65,30 +64,26 @@ class FitComputeResult:
 
 
 def encode_fit_result(result: FitComputeResult) -> bytes:
-    """Bound and losslessly compress the complete function return for transport."""
+    """Losslessly compress the complete function return for transport."""
     import pyarrow as pa
 
     raw = pickle.dumps(result, protocol=5)
-    if len(raw) > FIT_RESULT_MAX_BYTES:
-        raise ValueError("Fit result exceeds the transport size bound")
     compressed = bytes(pa.Codec("zstd", compression_level=1).compress(raw))
-    frame = len(raw).to_bytes(8, "big") + hashlib.sha256(raw).digest() + compressed
-    if len(frame) > FIT_RESULT_MAX_BYTES:
-        raise ValueError("Compressed fit result exceeds the transport size bound")
-    return frame
+    return len(raw).to_bytes(8, "big") + hashlib.sha256(raw).digest() + compressed
 
 
 def decode_fit_result(frame: bytes) -> FitComputeResult:
-    """Decode a bounded worker return and verify its exact bytes before unpickling."""
+    """Decode a worker return and verify its exact bytes before unpickling."""
     import pyarrow as pa
 
-    if not _RESULT_HEADER_BYTES < len(frame) <= FIT_RESULT_MAX_BYTES:
+    if len(frame) <= _RESULT_HEADER_BYTES:
         raise ValueError("Invalid fit result transport size")
     size = int.from_bytes(frame[:8], "big")
-    if not 0 < size <= FIT_RESULT_MAX_BYTES:
-        raise ValueError("Fit result exceeds the decoded size bound")
-    raw = bytes(pa.decompress(frame[_RESULT_HEADER_BYTES:], decompressed_size=size, codec="zstd"))
-    if len(raw) != size or hashlib.sha256(raw).digest() != frame[8:_RESULT_HEADER_BYTES]:
+    with pa.CompressedInputStream(pa.BufferReader(frame[_RESULT_HEADER_BYTES:]), "zstd") as stream:
+        raw = stream.read()
+    if len(raw) != size:
+        raise ValueError("Fit result transport length does not match")
+    if hashlib.sha256(raw).digest() != frame[8:_RESULT_HEADER_BYTES]:
         raise ValueError("Fit result transport checksum does not match")
     result = pickle.loads(raw)
     if not isinstance(result, FitComputeResult):
