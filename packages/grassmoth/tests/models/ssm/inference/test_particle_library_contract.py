@@ -107,6 +107,7 @@ def test_supplied_initial_path_does_not_compute_a_predictive_rollout():
         times=jnp.arange(3.0),
         target=target,
         parameter_gradient_fn=jnp.zeros_like,
+        parameter_chol=jnp.eye(1),
         initial_latent_delta=jnp.full(3, 0.1),
         param_step_size=0.01,
         param_min_scale=1e-6,

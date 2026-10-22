@@ -148,6 +148,7 @@ def _initial(target, path, *, kernel, position=None):
         times=target.times,
         target=target,
         parameter_gradient_fn=kernel.parameter_gradient_fn,
+        parameter_chol=kernel.initial_parameter_chol,
         initial_latent_delta=jnp.full(target.times.size, 0.1),
         param_step_size=0.01,
         param_min_scale=1e-6,

@@ -160,6 +160,8 @@ keeps a fit running if the caller stops, and shows the study in the viewer at
 - **Each arm is a `fit`** carrying the schedule, `hardware: "A10"` and the time
   limit. Arms of the same case run at the same time on separate GPUs; cases
   follow the ladder order and stop at the first failure.
+- **Every run must have diagnostics enabled,** including timing checks and
+  repeats.
 - **Identical requests return the saved result,** success or failure. Use
   `repeat` for a deliberate timing repeat. A call's identity ignores the code
   version, so a patched sampler runs in its own checkout with its own server and

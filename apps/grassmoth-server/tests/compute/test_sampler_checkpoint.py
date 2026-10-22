@@ -53,7 +53,7 @@ def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundt
     )
     settings = SamplerSpec(
         algorithm=algorithm,
-        num_warmup=5,
+        num_warmup=40 if method == "marginal" else 5,
         num_samples_per_chain=4,
         num_chains=2,
         num_particles=4,

@@ -178,6 +178,7 @@ def initialize_interval_chain(
         times=target.times,
         target=target,
         parameter_gradient_fn=kernel.parameter_gradient_fn,
+        parameter_chol=kernel.initial_parameter_chol,
         initial_latent_delta=jnp.full(target.times.shape, 0.6),
         param_step_size=0.3,
         param_min_scale=1e-6,

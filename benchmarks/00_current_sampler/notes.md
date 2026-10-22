@@ -188,3 +188,63 @@ an additional GPU fit.
 Decision: increasing to 256 improves both paths' bulk ESS but does not clear C0's
 production gate. C1–C3 and later stages remain blocked. No additional fits ran,
 and the ladder's declared schedule remains unchanged.
+
+## 2026-10-22 C0 with parameter self-preconditioning
+
+The user requested implementing parameter self-preconditioning before continuing
+the ladder, then rerunning C0. This comparison matches the preceding 256-particle
+run: four chains, 2,000 warmup sweeps, 4,000 retained draws per chain, seed 19 and
+the same A10 settings. The [data comparison](../../scratchpad/self-preconditioning-20261022/data-comparison.json)
+confirms all 2,049 readings in each channel are identical. The
+[request](../../scratchpad/self-preconditioning-20261022/04-fit-C0.json) ran through
+HTTP in its own checkout, server and study, `C0SELFPRECONDITION_20261022`.
+
+The [implementation](../../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/parameter_adaptation.py)
+learns a regularized dense parameter covariance from within-chain warmup moments.
+The [runner](../../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/runner.py)
+owns its use between complete sweeps and freezing before retention. Initialization,
+latent proposal policy and the exact target are unchanged. The public request and
+response schemas are unchanged. The complete patch, experiment declaration and
+submitted source manifest are retained under `scratchpad/self-preconditioning-20261022/`.
+
+The saved [comparison](../../scratchpad/self-preconditioning-20261022/comparison.json)
+uses the library's production diagnostics, without recomputing them in the caller:
+
+| Quantity | Bulk ESS, fixed → adapted | Tail ESS, fixed → adapted | Maximum R̂, adapted |
+| --- | ---: | ---: | ---: |
+| Input effect | 1,766.1 → 1,901.4 | 2,536.5 → 2,753.5 | 1.0034 |
+| Latent x, minimum across coordinates | 506.8 → 488.0 | 342.6 → 454.4 | 1.0123 |
+| Latent y, minimum across coordinates | 366.0 → 267.1 | 355.7 → 205.7 | 1.0128 |
+
+**C0 still fails production convergence:** y's bulk and tail ESS remain below 400.
+All R̂ values pass 1.05. The input-effect mean is 0.599, with 94% HDI
+[0.425, 0.760] and SD 0.0884. The checkpoint retains the learned parameter
+Cholesky factor 0.08423, replacing the initial 0.1. All 16,000 draws were retained.
+These values and the failed findings are in the [summary](../../scratchpad/self-preconditioning-20261022/summary.json).
+
+This is one seed per policy, with mixed ESS changes. C0 has only one parameter;
+the runner's scalar-step compensation preserves proposal variance when updating
+its covariance. Floating-point perturbations can change discrete selections and
+subsequent joint paths despite using the same random stream. This comparison
+does not establish that self-preconditioning systematically improves x or harms y,
+or test its ability to learn correlations between multiple parameters.
+
+Actual sweep compilation took 50.6 seconds, warmup 200.4 seconds and retained
+sampling 398.6 seconds; the preceding sampling time was 398.1 seconds. Numerical
+duration was 656.5 seconds and action wall time 793.6 seconds. The first CLI log
+stream stopped updating during compilation; a refreshed log recovered the complete
+run. Its stale output did not indicate an inference stall. The
+[billing reconciliation](../../scratchpad/self-preconditioning-20261022/billing-reconciliation.json)
+reports **$0.3701**, below the $2 cap. Modal App `ap-8aVgUYWsn9ExlXd4EmqmgV` is stopped.
+
+Fit call: `call:828e4d290d60ac3447df3d4f26deb08a96005d9de71670618a7f777117aca674`.
+Fit journal commit: `785ee0e6b124f29bd704669150bb66b7de0e8abf`.
+Runtime source digest: `bc3a1c115644f5ba2933cf84d73d47c4724c4ef105bf9e097eeba128a5933938`.
+The [validation record](../../scratchpad/self-preconditioning-20261022/validation.json)
+retains 38 focused passing checks, including analytic covariance recovery and
+continuation through the checkpoint codec, plus successful root and workspace lint.
+
+Decision: parameter self-preconditioning is implemented; this C0 run does not
+clear the latent convergence gate or establish an efficiency benefit. No C1–C3,
+C6 or additional GPU fits were launched. The ladder's 128-particle schedule remains
+unchanged.

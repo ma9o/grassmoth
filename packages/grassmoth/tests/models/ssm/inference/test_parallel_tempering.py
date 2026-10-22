@@ -331,7 +331,7 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
         target,
         kernel=_local_kernel(target),
         compute_budget=COMPUTE_BUDGET,
-        num_warmup=4,
+        num_warmup=40,
         num_samples=27,
         num_chains=2,
         key=jax.random.PRNGKey(711),
@@ -341,6 +341,7 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
             spec=ParticleInitialization,
             positions=jnp.broadcast_to(target.initial_position, (2, 1)),
             paths=jnp.broadcast_to(reference.path_mean, (2, *reference.path_mean.shape)),
+            parameter_chol=jnp.eye(1),
         ),
         retain_latent_paths=True,
         tempering=exchange if tempered else None,
@@ -357,7 +358,7 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
     assert result.final_latent_delta.shape == (2, 9)
     if tempered:
         assert result.tempering is not None
-        assert result.tempering.ladder_frozen_at_warmup_step == 2
+        assert result.tempering.ladder_frozen_at_warmup_step == 20
         assert result.tempering.inverse_temperatures[0] == 1
         assert result.tempering.inverse_temperatures[-1] == 0
         assert tuple(

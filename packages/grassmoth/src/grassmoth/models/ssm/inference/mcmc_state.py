@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, NamedTuple
 
+import jax
 import jax.numpy as jnp
 
 from grassmoth.artifacts.immutability import freeze_fields
@@ -29,6 +30,7 @@ class TrajectoryMCMCState(NamedTuple):
     complete_log_posterior: jnp.ndarray
     latent_delta: jnp.ndarray
     param_step_size: jnp.ndarray
+    parameter_chol: jax.Array
     # BlackJAX dual-averaging state. Carried but not updated when
     # adaptation_scheme == "simple"; evolves only during warmup otherwise.
     param_da: DualAveragingAdaptationState

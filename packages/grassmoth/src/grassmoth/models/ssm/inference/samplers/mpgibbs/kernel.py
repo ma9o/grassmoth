@@ -105,6 +105,7 @@ class MarginalParticleGibbsKernel(NamedTuple):
     min_scale: float
     max_scale: float
     preconditioned: bool
+    initial_parameter_chol: jax.Array
     dsmc: DsmcSpec
     diagnostic_metrics: frozenset[str]
     exact_constraints: ExactStateConstraints | None
@@ -182,28 +183,16 @@ def build_marginal_particle_gibbs_kernel(
         )
         return evaluate(z)
 
-    preconditioner = (
-        None
-        if parameter_preconditioner_chol is None
-        else jnp.asarray(
-            parameter_preconditioner_chol,
-            dtype=target.initial_position.dtype,
-        )
-    )
-
     def _propose_parameter_ensemble(
         current_position: jnp.ndarray,
         current_gradient: jnp.ndarray,
         key: jnp.ndarray,
         step_size: jnp.ndarray,
+        chol: jax.Array,
     ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
         dim = int(current_position.shape[0])
         step = jnp.asarray(step_size, dtype=current_position.dtype)
         proposal_scale = jnp.sqrt(jnp.asarray(2.0, dtype=current_position.dtype) * step)
-        if preconditioner is None:
-            chol = jnp.eye(dim, dtype=current_position.dtype)
-        else:
-            chol = jnp.asarray(preconditioner, dtype=current_position.dtype)
         aux_key, proposal_key = random.split(key)
 
         # Pseudo-Langevin (Corenflos 2025, §3.1): drift the θ→u half by 2·step·Σ·g(θ),
@@ -293,6 +282,7 @@ def build_marginal_particle_gibbs_kernel(
                         min_scale=min_scale,
                         max_scale=max_scale,
                     ),
+                    state.parameter_chol,
                 )
             )
 
@@ -449,6 +439,11 @@ def build_marginal_particle_gibbs_kernel(
         min_scale=min_scale,
         max_scale=max_scale,
         preconditioned=parameter_preconditioner_chol is not None,
+        initial_parameter_chol=jnp.eye(
+            target.initial_position.size, dtype=target.initial_position.dtype
+        )
+        if parameter_preconditioner_chol is None
+        else jnp.asarray(parameter_preconditioner_chol, dtype=target.initial_position.dtype),
         dsmc=dsmc,
         diagnostic_metrics=resolved_diagnostic_metrics,
         exact_constraints=exact_constraints,

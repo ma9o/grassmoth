@@ -46,6 +46,12 @@ from grassmoth.models.ssm.inference.samplers.sweeps import (
     compile_projected_sweeps,
     run_sweeps,
 )
+from grassmoth.models.ssm.inference.warmup.parameter_adaptation import (
+    ParameterCovariance,
+    adapt_parameter_covariance,
+    covariance_windows,
+    initialize_parameter_covariance,
+)
 
 if TYPE_CHECKING:
     import logging
@@ -83,6 +89,7 @@ class ParticleChainResult:
     latent_paths: jnp.ndarray | None
     initial_param_step_size: jnp.ndarray
     final_param_step_size: jnp.ndarray
+    final_parameter_chol: jax.Array
     initial_latent_delta: jnp.ndarray
     final_latent_delta: jnp.ndarray
     compiled_step: Compiled
@@ -130,6 +137,7 @@ def _initialize_chain_state(
     parameter_gradient_fn: Callable[[jax.Array], jax.Array],
     initial_latent_delta: jnp.ndarray,
     param_step_size: float,
+    parameter_chol: jax.Array,
     param_min_scale: float,
     param_max_scale: float,
     param_target_accept: float,
@@ -165,6 +173,7 @@ def _initialize_chain_state(
         complete_log_posterior=complete_lp,
         latent_delta=latent_delta_value,
         param_step_size=param_step_value,
+        parameter_chol=parameter_chol,
         param_da=da_init(param_step_value),
     )
 
@@ -175,6 +184,7 @@ class _Population(NamedTuple):
     iteration: jax.Array
     betas: jax.Array
     adaptation: DsmcAdaptation
+    parameter_covariance: ParameterCovariance
     swap_accepted: jax.Array
     swap_attempted: jax.Array
     warmup_attempts: jax.Array
@@ -207,6 +217,7 @@ def run_marginal_particle_gibbs(
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleChainResult:
     """Run marginalized Particle Gibbs chains from paired LAPS starts."""
+    windows = covariance_windows(num_warmup)
     use_dual_averaging = adaptation_scheme == "dual_averaging"
     da_param_update = (
         dual_averaging_adaptation(target=float(kernel.target_accept))[1]
@@ -251,6 +262,7 @@ def run_marginal_particle_gibbs(
                     initial_latent_delta=initial_latent_delta,
                     exact_constraints=kernel.exact_constraints,
                     param_step_size=kernel.initial_param_step_size,
+                    parameter_chol=kernel.initial_parameter_chol,
                     param_min_scale=kernel.min_scale,
                     param_max_scale=kernel.max_scale,
                     param_target_accept=kernel.target_accept,
@@ -297,6 +309,7 @@ def run_marginal_particle_gibbs(
         jnp.asarray(0),
         betas,
         initialize_adaptation(states.latent_delta),
+        initialize_parameter_covariance(chain_init_positions, initialization.parameter_chol),
         swap_accepted,
         swap_attempted,
         warmup_attempts,
@@ -444,11 +457,41 @@ def run_marginal_particle_gibbs(
                             max_scale=kernel.max_scale,
                         )
                     )
+                covariance, parameter_chol, changed = adapt_parameter_covariance(
+                    current.parameter_covariance,
+                    cold.position,
+                    updated.parameter_chol[0],
+                    current.iteration,
+                    windows,
+                )
+
+                def replace_geometry(chains: TrajectoryMCMCState) -> TrajectoryMCMCState:
+                    if dim == 0:
+                        return chains
+                    # param_step_size is a variance coefficient: preserve the
+                    # proposal's average variance while changing its shape.
+                    ratio = jnp.sum(chains.parameter_chol[0] ** 2) / jnp.sum(parameter_chol**2)
+                    scale = _clip_scale(
+                        chains.param_step_size * ratio,
+                        min_scale=kernel.min_scale,
+                        max_scale=kernel.max_scale,
+                    )
+                    da_init, _, _ = dual_averaging_adaptation(target=float(kernel.target_accept))
+                    return chains._replace(
+                        parameter_chol=jnp.broadcast_to(
+                            parameter_chol, chains.parameter_chol.shape
+                        ),
+                        param_step_size=scale,
+                        param_da=jax.vmap(da_init)(scale),
+                    )
+
+                updated = jax.lax.cond(changed, replace_geometry, lambda chains: chains, updated)
                 next_state: _Population = current._replace(
                     chains=updated,
                     random_key=next_key,
                     iteration=current.iteration + 1,
                     adaptation=tuning,
+                    parameter_covariance=covariance,
                 )
                 if tempering is not None:
                     exchange_kernel = tempering
@@ -553,6 +596,7 @@ def run_marginal_particle_gibbs(
         latent_paths=run.history.posterior["paths"] if retain_latent_paths else None,
         initial_param_step_size=initial_param_step_size,
         final_param_step_size=final.chains.param_step_size[cold_indices],
+        final_parameter_chol=final.chains.parameter_chol[0],
         initial_latent_delta=initial_latent_delta,
         final_latent_delta=final.chains.latent_delta[cold_indices],
         compiled_step=plan.compiled_step,

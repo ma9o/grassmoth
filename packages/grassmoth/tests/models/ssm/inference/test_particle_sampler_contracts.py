@@ -110,6 +110,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         target_accept=0.35,
         exact_constraints=None,
         initial_param_step_size=0.01,
+        initial_parameter_chol=jnp.eye(1),
         dsmc=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.1)),
         min_scale=1e-6,
         max_scale=1.0,

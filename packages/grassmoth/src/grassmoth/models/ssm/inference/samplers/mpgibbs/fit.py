@@ -232,7 +232,7 @@ def fit_marginal_particle_gibbs(
         continuation.tuning
         if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
         else frozen_particle_tuning(initialization, reference)
-    )
+    ).revised(parameter_chol=NumericalArray.from_numpy(np.asarray(run_result.final_parameter_chol)))
     checkpoint = SamplerCheckpoint(
         settings=sampler,
         native_state=run_result.final_state,
