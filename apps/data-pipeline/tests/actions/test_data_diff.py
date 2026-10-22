@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.artifacts.observations.comparison import Dataset
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
 from nof1_causal_lab.artifacts.observations.preparation import PreparedDataMetadata
 from nof1_causal_lab.artifacts.observations.reference import DataRef
@@ -30,7 +31,6 @@ from nof1_causal_lab.artifacts.simulation import (
     SingleArmSimulation,
 )
 from nof1_causal_lab.models.diagnostics.history_comparison import compare_data_variables
-from nof1_causal_lab.study.projections.observations import read_dataset
 from nof1_causal_service.actions.contracts.effects import ActionEffects
 from nof1_causal_service.actions.contracts.inputs import DataDiffInput, SimulateInput
 from nof1_causal_service.actions.contracts.requests import DataDiffRequest, SimulateRequest
@@ -69,7 +69,7 @@ def _dataset(values, *, number=1, times=None, variable=None):
         },
         schema_overrides={"value": pl.Float64},
     )
-    return read_dataset(
+    return Dataset.from_observations(
         DataRef[GitOid, int](replicate_index=0, revision=git_oid(number)),
         ObservationDataset.from_frame(frame, (variable,), time_origin=origin),
     )

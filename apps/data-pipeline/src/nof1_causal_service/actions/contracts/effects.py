@@ -7,8 +7,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.public import GitOid, Value
 from nof1_causal_service.study.state import ArtifactRecord, RetractedArtifact
 
 type ActionReportName = Literal[

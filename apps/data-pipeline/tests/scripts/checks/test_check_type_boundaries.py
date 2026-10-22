@@ -463,6 +463,34 @@ def read(payload):
     )
 
 
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize("foreign", [False, True])
+def test_type_adapter_parses_only_at_its_value_owner(cached: bool, foreign: bool) -> None:
+    target = "Foreign" if foreign else "Outcome"
+    receiver = "adapter" if cached else f"TypeAdapter({target})"
+    source = f"""from pydantic import TypeAdapter
+from nof1_causal_lab.artifacts.model.question import QuestionSpec as Foreign
+from nof1_causal_lab.artifacts.base import Value
+
+class Ready(Value):
+    value: int
+class Rejected(Value):
+    detail: str
+
+type Outcome = Ready | Rejected
+adapter: TypeAdapter[{target}] = TypeAdapter({target})
+
+def parse(payload):
+    return {receiver}.validate_python(payload)
+"""
+    violations = _load_checker().scan_text(
+        source,
+        path="src/nof1_causal_service/actions/contracts/new_owner.py",
+        rules=frozenset({"PARSE001"}),
+    )
+    assert [item.code for item in violations] == (["PARSE001"] if foreign else [])
+
+
 @pytest.mark.parametrize("directory", ["models/ssm/compile", "models/ssm/execution"])
 @pytest.mark.parametrize(
     "result",
@@ -544,7 +572,7 @@ def test_dump_spread_reconstruction_is_rejected_across_checked_python_trees(path
 
 
 def test_declared_failure_handler_does_not_authorize_nested_scientific_catches() -> None:
-    source = """from nof1_causal_lab.actions.errors import execution_failure_handler as shell_failure
+    source = """from nof1_causal_service.actions.errors import execution_failure_handler as shell_failure
 @shell_failure
 def execute():
     try:

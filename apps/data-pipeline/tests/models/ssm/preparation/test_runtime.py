@@ -550,7 +550,7 @@ class TestPrepareModelRuntime:
         from nof1_causal_lab.models.ssm.preparation.observations import (
             augment_wide_data_with_support_boundaries,
         )
-        from nof1_causal_lab.observations.rows import prepared_time_origin
+        from nof1_causal_service.actions.prepare_data.rows import prepared_time_origin
 
         early = one_state_gaussian_model()
         late = DynamicalModelSpec.model_validate_json(

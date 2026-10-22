@@ -26,7 +26,10 @@ from nof1_causal_lab.artifacts.reports.model_checks import ModelCheckReport
 from nof1_causal_lab.artifacts.simulation import SimulationReport
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     import numpy as np
+    import polars as pl
 
     from nof1_causal_lab.artifacts.probability.joint_layout import JointLawLayout
     from nof1_causal_lab.artifacts.reports.inference import FitSegment
@@ -82,6 +85,49 @@ class PrepareDataOutput(Value):
     extraction: DataPreparationResult = Field(
         description="Retained extraction workers, failed chunks and reuse counts."
     )
+
+    def observation_frame(self) -> pl.DataFrame:
+        """Reconstruct the canonical table retained by this preparation."""
+        import polars as pl
+
+        from nof1_causal_lab.artifacts.arrays import resolve_vector
+        from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
+        from nof1_causal_lab.artifacts.observations.time import ModelTime, ObservationInstant
+
+        rows = []
+        for variable in self.metadata.variables:
+            history = self.data[variable.id]
+            origin = ObservationInstant(self.metadata.time_origin)
+
+            def instant(day: float | None, origin: ObservationInstant = origin) -> datetime | None:
+                return (
+                    ModelTime(day).at(origin).value.replace(tzinfo=None)
+                    if day is not None
+                    else None
+                )
+
+            starts = resolve_vector(history.support_start)
+            ends = resolve_vector(history.support_end)
+            values = resolve_vector(history.values)
+            rows.extend(
+                {
+                    "indicator_id": variable.id,
+                    "value": value,
+                    "anchor_time": instant(day),
+                    "support_start": instant(start),
+                    "support_end": instant(end),
+                    "support_kind": variable.support_kind.value,
+                    "summary_operator": variable.summary_operator.value,
+                    "anchor_policy": variable.anchor_policy.value,
+                    "observation_window": str(variable.observation_window),
+                }
+                for day, start, end, value in zip(history.times, starts, ends, values, strict=True)
+            )
+        schema = ObservationDataset.row_schema() | {
+            "value": pl.Float64,
+            **{name: pl.Datetime("us") for name in ("anchor_time", "support_start", "support_end")},
+        }
+        return pl.DataFrame(rows, schema=schema).sort("indicator_id", "anchor_time")
 
 
 # fit

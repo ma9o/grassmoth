@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.actions.prepare_data.tool_contracts import ValidateExtractionsInput
+from nof1_causal_service.actions.prepare_data.tool_contracts import ValidateExtractionsInput
 from nof1_causal_service.actions.temporal.extraction.messages import MeasurementChunkContext
 from nof1_causal_service.actions.temporal.llm.storage import (
     read_subroutine_json,
@@ -13,7 +13,7 @@ from nof1_causal_service.actions.temporal.llm.storage import (
 )
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.json_types import JsonObject
+    from nof1_causal_lab.public import JsonObject
     from nof1_causal_service.actions.temporal.llm.messages import LLMToolExecutionInput
 
 
@@ -22,7 +22,7 @@ def _validate_measurement_payload(
     context_ref: str,
     data: object,
 ) -> tuple[JsonObject | None, str]:
-    from nof1_causal_lab.actions.prepare_data.worker_output import validate_worker_output
+    from nof1_causal_service.actions.prepare_data.worker_output import validate_worker_output
 
     spec = read_subroutine_json(context_ref, MeasurementChunkContext)
     output, errors = validate_worker_output(

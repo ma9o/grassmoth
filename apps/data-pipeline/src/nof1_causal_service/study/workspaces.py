@@ -2,9 +2,10 @@
 
 from collections.abc import Mapping
 
+from nof1_causal_service.actions.contracts.polling import StudyError
 from nof1_causal_service.storage import backend as storage
 from nof1_causal_service.storage import paths as data_module
-from nof1_causal_service.study.interface import StudyError, actions_enabled, parse_workspace_id
+from nof1_causal_service.study.interface import actions_enabled, parse_workspace_id
 from nof1_causal_service.study.persistence.history import StudyRepository
 from nof1_causal_service.study.persistence.store import ArtifactStore, read_question
 from nof1_causal_service.study.records import Applied

@@ -194,6 +194,8 @@ CONCERNS = {
             "artifacts.reports.inference",
             "artifacts.reports.posterior_diagnostics",
             "artifacts.sampling",
+            "actions.contracts.settings",
+            "actions.contracts.preparation",
             "artifacts.continuation",
             "artifacts.joint_parameterization",
             "artifacts.reports.effects",
@@ -235,7 +237,10 @@ CONCERNS = {
             "llm.traces",
         ),
     ),
-    "identity": ("Shared identities & references", ("artifacts.identity",)),
+    "identity": (
+        "Shared identities & references",
+        ("artifacts.identity", "actions.contracts.identity"),
+    ),
 }
 
 # Aliases and dataclasses need explicit role sentences: JSON Schema does not carry
@@ -325,7 +330,10 @@ def _layer_for(name: str, module: str) -> str:
         return "authored"
     if name in {"InferenceEvidence", "SimulationEvidence"}:
         return "artifacts"
-    if module.endswith("artifacts.identity") or name == "ParameterCoordinate":
+    if (
+        module.endswith(("artifacts.identity", "actions.contracts.identity"))
+        or name == "ParameterCoordinate"
+    ):
         return "identity"
     if module.endswith(("study.snapshot", "artifacts.observations.comparison")):
         return "read_models"

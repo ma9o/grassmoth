@@ -10,9 +10,9 @@ if TYPE_CHECKING:
 
     import polars as pl
 
-    from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
-    from nof1_causal_lab.actions.prepare_data.worker_output import WorkerOutput
-    from nof1_causal_lab.artifacts.observations.preparation import DataVariableSpec
+    from nof1_causal_lab.public import DataVariableSpec
+    from nof1_causal_service.actions.prepare_data.context import MeasurementContext
+    from nof1_causal_service.actions.prepare_data.worker_output import WorkerOutput
 
 logger = logging.getLogger(__name__)
 
@@ -58,9 +58,12 @@ def prepare_semantic_chunks(
     max_events_per_window: int,
 ) -> tuple[list[str], list[list[str]], list[MeasurementContext], WorkerOutput]:
     """Plan requests with source values; empty windows yield deterministic null rows."""
-    from nof1_causal_lab.actions.prepare_data.window_text import format_window_chunk
-    from nof1_causal_lab.actions.prepare_data.worker_output import WindowExtraction, WorkerOutput
-    from nof1_causal_lab.observations.rows import bucket_by_clock
+    from nof1_causal_service.actions.prepare_data.rows import bucket_by_clock
+    from nof1_causal_service.actions.prepare_data.window_text import format_window_chunk
+    from nof1_causal_service.actions.prepare_data.worker_output import (
+        WindowExtraction,
+        WorkerOutput,
+    )
 
     chunk_texts: list[str] = []
     chunk_window_starts: list[list[str]] = []

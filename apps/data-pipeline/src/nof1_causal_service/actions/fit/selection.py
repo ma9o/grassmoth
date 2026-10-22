@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-from nof1_causal_lab.actions.contracts.bodies import FitOutput
-from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.public import FitOutput, GitOid
 from nof1_causal_service.actions.contracts.inputs import FitTarget, NewFitTarget
 from nof1_causal_service.study.errors import StudyLookupError
 from nof1_causal_service.study.persistence.history import StudyRepository

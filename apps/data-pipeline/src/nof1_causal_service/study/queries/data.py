@@ -9,20 +9,21 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 
-from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
-from nof1_causal_lab.artifacts.observations.preparation import PreparedDataMetadata
-from nof1_causal_lab.artifacts.observations.reference import DataRef
-from nof1_causal_lab.artifacts.observations.rows import observation_row_schema
-from nof1_causal_lab.artifacts.observations.time import ModelTime, ObservationInstant
+from nof1_causal_lab.public import (
+    DataRef,
+    GitOid,
+    ModelTime,
+    ObservationDataset,
+    ObservationInstant,
+    PreparedDataMetadata,
+)
 from nof1_causal_service.study.errors import StudyLookupError
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from nof1_causal_lab.artifacts.observations.records import ObservationRecord
-    from nof1_causal_lab.artifacts.observations.spec import ResolvedObservationSpec
-    from nof1_causal_lab.artifacts.simulation import SimulationEvidence
+    from nof1_causal_lab.public import ResolvedObservationSpec, SimulationEvidence
+    from nof1_causal_service.actions.prepare_data.records import ObservationRecord
     from nof1_causal_service.study.persistence.store import ArtifactStore
 
 
@@ -86,7 +87,7 @@ def read_simulation_observations(
     # Emissions already use the model's numeric codes, including unobserved
     # category levels. Extraction's label encoding must not run a second time.
     return (
-        pl.DataFrame(rows, schema=observation_row_schema() | {"value": pl.Float64})
+        pl.DataFrame(rows, schema=ObservationDataset.row_schema() | {"value": pl.Float64})
         .with_columns(
             pl.col("anchor_time", "support_start", "support_end")
             .str.to_datetime(format="%+")
@@ -119,7 +120,7 @@ def read_data_source(
     store: ArtifactStore, revision: GitOid
 ) -> PreparedDataMetadata | SimulationEvidence:
     """Resolve a prepared panel tree or an applied data-producing action commit."""
-    from nof1_causal_lab.actions.contracts.bodies import SimulateOutput
+    from nof1_causal_lab.public import SimulateOutput
     from nof1_causal_service.study.persistence.git_objects import object_tree
     from nof1_causal_service.study.persistence.history import StudyRepository
     from nof1_causal_service.study.queries.lineage import read_data_metadata

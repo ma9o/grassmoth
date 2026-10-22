@@ -7,11 +7,11 @@ import numpy as np
 from nof1_causal_lab.artifacts.observations.preparation import (
     DataPreparationSpec,
     DataVariableSpec,
-    FileSourceRef,
     PreparedDataMetadata,
     SemanticExtractionSpec,
 )
 from nof1_causal_lab.artifacts.simulation import SimulationObservationLayout
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef
 from tests.support.inference import compile_model_fixture
 
 

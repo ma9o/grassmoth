@@ -8,11 +8,11 @@ from datetime import UTC, datetime
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
-from nof1_causal_lab.actions.errors import ActionExecutionError
-from nof1_causal_lab.compilation_errors import AggregatedCompileError, IncompleteModelError
+from nof1_causal_lab.public import AggregatedCompileError, IncompleteModelError
 from nof1_causal_service.actions.contracts.requests import PrepareDataRequest
 from nof1_causal_service.actions.edit_model import edit_model
 from nof1_causal_service.actions.edit_question import edit_question
+from nof1_causal_service.actions.errors import ActionExecutionError
 from nof1_causal_service.actions.input_resolution import input_state
 from nof1_causal_service.actions.messages import (
     comparison_messages,
@@ -113,7 +113,7 @@ async def edit_question_activity(
 @activity.defn
 async def evaluate_model_checks_activity(activity_input: EvaluateChecksInput) -> ChecksResult:
     """Read the action's complete checks and produce its completion messages."""
-    from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, FitOutput
+    from nof1_causal_lab.public import EditModelOutput, FitOutput
     from nof1_causal_service.actions.contracts.requests import FitRequest
 
     store = ArtifactStore(activity_input.workspace_id)
@@ -138,7 +138,7 @@ async def evaluate_model_checks_activity(activity_input: EvaluateChecksInput) ->
 @activity.defn
 async def evaluate_data_checks_activity(activity_input: EvaluateChecksInput) -> ChecksResult:
     """Read the prepared result and produce its completion messages."""
-    from nof1_causal_lab.actions.contracts.bodies import PrepareDataOutput
+    from nof1_causal_lab.public import PrepareDataOutput
 
     store = ArtifactStore(activity_input.workspace_id)
     result = await asyncio.to_thread(
@@ -188,11 +188,7 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
     record = activity_input.record
     messages = record.messages
     if isinstance(record.attempt.outcome, Applied):
-        from nof1_causal_lab.actions.contracts.bodies import (
-            DataDiffOutput,
-            FitOutput,
-            SimulateOutput,
-        )
+        from nof1_causal_lab.public import DataDiffOutput, FitOutput, SimulateOutput
         from nof1_causal_service.study.queries.results import read_result
 
         result = read_result(

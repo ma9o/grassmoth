@@ -6,8 +6,7 @@ import platform
 
 import jax
 
-from nof1_causal_lab.artifacts.reports.inference import FitRuntime
-from nof1_causal_lab.artifacts.sampling import InferenceHardware, SamplerSpec
+from nof1_causal_lab.public import FitRuntime, InferenceHardware, SamplerSpec
 from nof1_causal_service.compute.compilation_cache import numerical_source_digest
 
 

@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.checks import check_model_data, check_specification
+from nof1_causal_lab.actions.checks import check_specification
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
 from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
@@ -59,7 +59,7 @@ def test_specification_reports_each_distinct_fit_law_reason_once(monkeypatch):
     assert finding.evidence.count("Invalid scale.") == 1
 
 
-def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypatch):
+def test_noisy_interval_summary_passes_fit_admission_and_dispatches(monkeypatch):
     from nof1_causal_lab.models.ssm.inference.samplers.mpgibbs import (
         fit as marginal_particle_gibbs,
     )
@@ -74,11 +74,6 @@ def test_noisy_interval_summary_passes_shared_preflight_and_dispatches(monkeypat
         panel, panel_metadata().variables, time_origin=panel_metadata().time_origin
     )
     inputs = compile_fit_fixture(dynamical_model_spec)
-    report = check_model_data(inputs, panel, time_origin=panel_metadata().time_origin)
-    finding = report[0]
-    assert finding.code == "fit_preflight"
-    assert finding.kind == "evaluated"
-    assert finding.outcome == "passed"
     from nof1_causal_lab.models.ssm.preparation.panel import PreparedFit, prepare_fit
 
     prepared = prepare_fit(inputs, panel, time_origin=panel_metadata().time_origin)

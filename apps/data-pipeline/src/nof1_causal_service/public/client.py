@@ -1,4 +1,4 @@
-"""HTTP transport for the same public study operations used by the production adapter."""
+"""HTTP client for study actions, saved results and source uploads."""
 
 from __future__ import annotations
 
@@ -9,9 +9,8 @@ from uuid import uuid4
 
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_service.public.contracts import TimelineResponse
-from nof1_causal_service.public.studies import ActionResult, StudyError
+from nof1_causal_lab.public import Value
+from nof1_causal_service.public.contracts import ActionResult, StudyError, TimelineResponse
 
 if TYPE_CHECKING:
     from nof1_causal_service.public.contracts import ActionId, ActionInput, CallId

@@ -13,18 +13,16 @@ from typing import TYPE_CHECKING
 from pydantic import TypeAdapter
 from temporalio import activity
 
-from nof1_causal_lab.actions.errors import execution_failure_handler
-from nof1_causal_lab.actions.prepare_data.context import extraction_context
-from nof1_causal_lab.actions.prepare_data.worker_output import EXTRACTION_ROW_SCHEMA, ExtractionRow
-from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
-from nof1_causal_lab.artifacts.observations.preparation import (
-    DataPreparationResult,
-    PreparedDataMetadata,
-)
-from nof1_causal_lab.artifacts.observations.records import ObservationRecord
-from nof1_causal_lab.json_types import JsonObject
-from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
+from nof1_causal_lab.public import DataPreparationResult, GitOid, JsonObject, PreparedDataMetadata
 from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.identity import ArtifactId
+from nof1_causal_service.actions.errors import execution_failure_handler
+from nof1_causal_service.actions.prepare_data.context import extraction_context
+from nof1_causal_service.actions.prepare_data.records import ObservationRecord
+from nof1_causal_service.actions.prepare_data.worker_output import (
+    EXTRACTION_ROW_SCHEMA,
+    ExtractionRow,
+)
 from nof1_causal_service.actions.temporal.errors import as_non_retryable_application_error
 from nof1_causal_service.actions.temporal.extraction.messages import (
     CompletedExtractionChunk,
@@ -43,6 +41,7 @@ from nof1_causal_service.actions.temporal.llm.messages import (
     OpenRouterCallResult,
     ToolCallSummary,
 )
+from nof1_causal_service.llm.specs import EmbeddedLLMSpec
 from nof1_causal_service.storage import backend as storage
 from nof1_causal_service.storage import paths as data_module
 from nof1_causal_service.study.artifact_files import json_filename, parquet_filename
@@ -78,10 +77,10 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
     """Compute deterministic measurements and plan cached or LLM-backed extraction chunks."""
     import polars as pl
 
-    from nof1_causal_lab.actions.prepare_data.worker_output import WorkerOutput
-    from nof1_causal_lab.observations.aggregations import compute_indicators
+    from nof1_causal_service.actions.prepare_data.aggregations import compute_indicators
     from nof1_causal_service.actions.prepare_data.materialization import recorded_observations
     from nof1_causal_service.actions.prepare_data.planning import prepare_semantic_chunks
+    from nof1_causal_service.actions.prepare_data.worker_output import WorkerOutput
     from nof1_causal_service.config import get_config
 
     store = ArtifactStore(activity_input.workspace_id)
@@ -289,7 +288,7 @@ async def finalize_extraction_chunk_activity(
     activity_input: ExtractionChunkFinalizeInput,
 ) -> CompletedExtractionChunk:
     """Validate a chunk's worker output, publish its cache entry, and retain observation rows."""
-    from nof1_causal_lab.actions.prepare_data.worker_output import (
+    from nof1_causal_service.actions.prepare_data.worker_output import (
         WorkerOutput,
         validate_worker_output,
     )
@@ -342,11 +341,12 @@ async def finalize_measurements_activity(
     """Assemble computed and extracted rows into a validated panel with preparation metadata."""
     import polars as pl
 
-    from nof1_causal_lab.actions.prepare_data.action import prepare_data
-    from nof1_causal_lab.actions.prepare_data.materialization import materialize_panel
-    from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
-    from nof1_causal_lab.artifacts.observations.rows import validate_observation_rows
-    from nof1_causal_lab.observations.rows import annotate_observation_rows, prepared_time_origin
+    from nof1_causal_lab.public import ObservationDataset, prepare_data
+    from nof1_causal_service.actions.prepare_data.materialization import materialize_panel
+    from nof1_causal_service.actions.prepare_data.rows import (
+        annotate_observation_rows,
+        prepared_time_origin,
+    )
 
     try:
         plan = MeasurementsFile.model_validate(_read_json(activity_input.plan_ref))
@@ -381,18 +381,18 @@ async def finalize_measurements_activity(
         panel = materialize_panel(observation_rows + plan.recorded_dicts, measurement_structure)
         if len(panel) == 0:
             raise ValueError("Extraction produced no observations")
-        panel = validate_observation_rows(panel, variables)
         metadata = PreparedDataMetadata(
             preparation=preparation.definition,
             time_origin=prepared_time_origin(panel, preparation.source.start),
+        )
+        observations = ObservationDataset.from_frame(
+            panel, metadata.variables, time_origin=metadata.time_origin
         )
         store = ArtifactStore(activity_input.workspace_id)
         return Applied(
             result=store.write_result(
                 prepare_data(
-                    ObservationDataset.from_frame(
-                        panel, metadata.variables, time_origin=metadata.time_origin
-                    ),
+                    observations,
                     metadata,
                     DataPreparationResult(
                         workers=tuple(results_by_worker[spec.worker_id] for spec in chunk_specs),
@@ -408,7 +408,11 @@ async def finalize_measurements_activity(
                         "panel",
                         derived_from=activity_input.pins,
                         produced_by="prepare_data",
-                        parquet_files={parquet_filename("panel", "panel"): panel},
+                        parquet_files={
+                            parquet_filename("panel", "panel"): observations.recorded.frame.sort(
+                                "indicator_id", "anchor_time"
+                            )
+                        },
                         json_files={
                             json_filename("panel", "metadata"): metadata.model_dump(mode="json")
                         },

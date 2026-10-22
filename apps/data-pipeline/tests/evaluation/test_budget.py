@@ -11,10 +11,11 @@ import pytest
 from evaluation.budget import BudgetLedger, BudgetSpec, ProviderBinding
 from evaluation.client import ActionClient
 
-from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, InferenceHardware
+from nof1_causal_lab.artifacts.sampling import InferenceHardware
 from nof1_causal_service.actions.contracts.inputs import ContinueFitTarget, FitInput
 from nof1_causal_service.actions.contracts.requests import FitRequest, call_identity
-from nof1_causal_service.public.studies import ActionResult, StudyError
+from nof1_causal_service.actions.contracts.settings import FitSettingsSpec
+from nof1_causal_service.public.contracts import ActionResult, StudyError
 from tests.support.git import git_oid
 
 pytestmark = pytest.mark.contract

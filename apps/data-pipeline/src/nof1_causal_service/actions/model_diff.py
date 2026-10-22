@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.actions.model_diff import model_diff as compare_models
-from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.public import DynamicalModelSpec
+from nof1_causal_lab.public import model_diff as compare_models
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.actions.contracts.bodies import ModelDiffOutput
-    from nof1_causal_lab.artifacts.identity import GitOid
+    from nof1_causal_lab.public import GitOid, ModelDiffOutput
 
 
 def _model_revision(workspace_id: str, revision: GitOid) -> DynamicalModelSpec:

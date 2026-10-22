@@ -12,6 +12,7 @@ from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
 from nof1_causal_service.actions.contracts.requests import FitRequest
+from nof1_causal_service.actions.contracts.settings import FitSettingsSpec
 from nof1_causal_service.actions.runners import run_action_locally
 from nof1_causal_service.study.persistence.store import read_model
 from nof1_causal_service.study.state import apply_effects
@@ -29,7 +30,7 @@ from tests.support.inference import (
 pytestmark = pytest.mark.contract
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import ArtifactId
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
     from nof1_causal_service.study.persistence.store import ArtifactStore
 
 
@@ -40,9 +41,10 @@ def test_inference_advances_model_and_uses_the_selected_input(
 ) -> None:
     import jax.numpy as jnp
 
+    from nof1_causal_lab.actions.fit import execution as stage5_fit
+    from nof1_causal_lab.actions.fit.execution import FittedModelResult
     from nof1_causal_lab.models.ssm import compiled_access as numerics
     from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
-    from nof1_causal_service.actions.fit import execution as stage5_fit
 
     original = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=original.revision)
@@ -52,23 +54,22 @@ def test_inference_advances_model_and_uses_the_selected_input(
     paths = jnp.arange(4 * 2 * len(states), dtype=jnp.float32).reshape(4, 2, len(states))
     fitted_inputs = []
 
-    def fake_fit_model(selection, *_args: Any, **_kwargs: Any) -> dict[str, Any]:
+    def fake_fit_model(selection, *_args: Any, **_kwargs: Any) -> FittedModelResult:
         model = selection.dynamical_model_spec
         fitted_inputs.append(model.model_dump(mode="json"))
-        return {
-            "fitted": True,
-            "duration_seconds": 0.01,
-            "result": particle_posterior(
+        return FittedModelResult.from_run(
+            duration_seconds=0.01,
+            result=particle_posterior(
                 draws=JointPosteriorDraws(
                     parameters=parameters, latent_paths=paths, state_ids=states
                 )
             ),
-            "panel": bind_panel_fixture(
+            panel=bind_panel_fixture(
                 compile_model_fixture(model),
                 jnp.array([[jnp.nan, jnp.nan], [0.0, 0.0]]),
                 jnp.array([0.0, 1.0], dtype=jnp.float32),
             ),
-        }
+        )
 
     monkeypatch.setattr(stage5_fit, "fit_model", fake_fit_model)
     state = fx.state_from(original, panel)
@@ -80,6 +81,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
                 dynamical_model_spec_ref=original.revision,
                 data_ref=DataRef(revision=panel.revision, replicate_index=0),
             ),
+            settings=FitSettingsSpec(num_chains=1, num_samples_per_chain=4),
         )
     )
     from nof1_causal_lab.artifacts.model.question import QuestionSpec
@@ -97,7 +99,6 @@ def test_inference_advances_model_and_uses_the_selected_input(
         "panel": panel.revision,
         "question": question.revision,
     }
-    from nof1_causal_lab.actions import checks
     from nof1_causal_lab.actions.contracts.bodies import FitOutput
     from nof1_causal_service.study.queries import data
     from tests.support.action import model_findings
@@ -109,13 +110,11 @@ def test_inference_advances_model_and_uses_the_selected_input(
         action="fit",
     )
     history_reader = Mock(wraps=data.read_data_history)
-    preflight = Mock(wraps=checks.check_model_data)
     monkeypatch.setattr(data, "read_data_history", history_reader)
-    monkeypatch.setattr(checks, "check_model_data", preflight)
     for index in range(2):
         assert isinstance(request.input.target, NewFitTarget)
         applied = run_async(run_action_locally(integration_workspace, request, pins))
-        assert history_reader.call_count == preflight.call_count == index + 1
+        assert history_reader.call_count == index + 1
         assert artifact_store.read_result(applied.result, FitOutput).checks == expected_checks
         info = next(info for info in applied.effects.produced if info.artifact_id == "model")
         assert info.revision not in revisions
@@ -153,30 +152,26 @@ def test_inference_advances_model_and_uses_the_selected_input(
     assert artifact_revisions(artifact_store, "model") == revisions
 
 
-@pytest.mark.parametrize("evaluated", [False, True])
-def test_failed_preflight_still_stops_before_compute_or_reports(
-    integration_workspace, artifact_store, monkeypatch, evaluated
+def test_library_fit_failure_stops_before_publication(
+    integration_workspace, artifact_store, monkeypatch
 ):
-    from nof1_causal_lab.actions import checks
-    from nof1_causal_lab.actions.errors import ModelFitError
-    from nof1_causal_lab.artifacts.reports.checks import Evaluated, NotEvaluated
+    from nof1_causal_lab.actions.fit.execution import ModelFitFailure
+    from nof1_causal_service.actions.errors import ModelFitError
     from nof1_causal_service.actions.fit import action as flow
 
     model = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=model.revision)
     question = write_question(artifact_store)
-    finding = (
-        Evaluated(code="fit_preflight", subject="model", outcome="failed", evidence="unsupported")
-        if evaluated
-        else NotEvaluated(
-            code="fit_preflight", subject="model", reason="MODEL_INCOMPLETE", detail="incomplete"
+    compute = Mock(
+        return_value=ModelFitFailure.model_validate(
+            {"error": "unsupported", "duration_seconds": 0.01}
         )
     )
-    monkeypatch.setattr(checks, "check_model_data", Mock(return_value=(finding,)))
-    compute = Mock()
-    write_report = Mock()
+    write_result = Mock()
+    write_artifact = Mock()
     monkeypatch.setattr(flow, "fit", compute)
-    monkeypatch.setattr(type(artifact_store), "write_report", write_report)
+    monkeypatch.setattr(type(artifact_store), "write_result", write_result)
+    monkeypatch.setattr(type(artifact_store), "write_artifact", write_artifact)
     request = FitRequest[GitOid](
         input=FitInput[GitOid](
             target=NewFitTarget(
@@ -185,7 +180,7 @@ def test_failed_preflight_still_stops_before_compute_or_reports(
             ),
         )
     )
-    with pytest.raises(ModelFitError, match="preflight rejected") as caught:
+    with pytest.raises(ModelFitError, match="unsupported") as caught:
         run_async(
             run_action_locally(
                 integration_workspace,
@@ -193,6 +188,7 @@ def test_failed_preflight_still_stops_before_compute_or_reports(
                 {"model": model.revision, "question": question.revision},
             )
         )
-    assert caught.value.diagnostics == {"findings": [finding.model_dump(mode="json")]}
-    compute.assert_not_called()
-    write_report.assert_not_called()
+    assert caught.value.diagnostics == {"duration_seconds": 0.01}
+    compute.assert_called_once()
+    write_result.assert_not_called()
+    write_artifact.assert_not_called()

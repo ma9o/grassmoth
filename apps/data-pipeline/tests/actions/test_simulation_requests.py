@@ -178,11 +178,11 @@ def test_runner_uses_model_time_binding_without_reading_panels(
 
     import jax.numpy as jnp
 
-    from nof1_causal_lab.actions.errors import ActionExecutionError
     from nof1_causal_lab.actions.fit.conditioning import condition_model
     from nof1_causal_lab.artifacts.model.question import QuestionSpec
     from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
     from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
+    from nof1_causal_service.actions.errors import ActionExecutionError
     from nof1_causal_service.actions.runners import run_action
     from nof1_causal_service.storage import paths as data
     from nof1_causal_service.study.persistence.store import ArtifactStore

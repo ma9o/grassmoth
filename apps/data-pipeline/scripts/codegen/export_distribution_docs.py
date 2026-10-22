@@ -28,11 +28,11 @@ from nof1_causal_lab.artifacts.model.likelihood import (
 from nof1_causal_lab.artifacts.observations.dtypes import (
     VALID_LIKELIHOODS_FOR_DTYPE,
 )
+from nof1_causal_lab.artifacts.probability.families import DistributionFamily
 from scripts.codegen.distribution_guidance import (
     PRIOR_FAMILY_SPECS,
     render_prior_parameter_guidance_markdown_table,
 )
-from nof1_causal_lab.artifacts.probability.families import DistributionFamily
 
 
 @dataclass(frozen=True)

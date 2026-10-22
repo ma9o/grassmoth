@@ -19,7 +19,7 @@ def subroutine_context_messages(
         A tuple of the optional system prompt, ordered user prompts, and available
         tool specifications. The terminal tool validates the worker's extraction JSON.
     """
-    from nof1_causal_lab.actions.prepare_data.messages import WorkerMessages
+    from nof1_causal_service.actions.prepare_data.messages import WorkerMessages
 
     spec = read_subroutine_json(context_ref, MeasurementChunkContext)
     messages = WorkerMessages(

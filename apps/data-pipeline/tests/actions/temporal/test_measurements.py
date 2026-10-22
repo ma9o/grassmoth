@@ -5,8 +5,7 @@ from typing import Any, cast
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from nof1_causal_lab.actions.prepare_data.worker_output import ExtractionRow, WorkerOutput
-from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
+from nof1_causal_service.actions.prepare_data.worker_output import ExtractionRow, WorkerOutput
 from nof1_causal_service.actions.temporal.extraction.activities import OpenRouterActivities
 from nof1_causal_service.actions.temporal.extraction.messages import (
     ExtractionChunkWorkflowInput,
@@ -28,6 +27,7 @@ from nof1_causal_service.actions.temporal.llm.messages import (
 )
 from nof1_causal_service.actions.temporal.llm.storage import read_subroutine_json
 from nof1_causal_service.llm.openrouter import create_openrouter_client
+from nof1_causal_service.llm.specs import EmbeddedLLMSpec
 from nof1_causal_service.storage import backend as storage
 from tests.support.helpers import run_async
 
@@ -616,7 +616,7 @@ def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_p
         )[0]["value"]
         == "1000"
     )
-    from nof1_causal_lab.llm.traces import LLMTrace
+    from nof1_causal_service.llm.traces import LLMTrace
 
     trace_path = storage.join(
         data_module.scratch_run_dir(workspace_id, "seq-000001"),

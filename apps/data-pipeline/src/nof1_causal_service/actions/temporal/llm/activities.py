@@ -11,7 +11,7 @@ from pydantic import TypeAdapter, ValidationError
 from temporalio import activity
 from typing_extensions import TypedDict
 
-from nof1_causal_lab.json_types import JsonObject
+from nof1_causal_lab.public import JsonObject
 from nof1_causal_service.actions.temporal.llm.context import subroutine_context_messages
 from nof1_causal_service.actions.temporal.llm.messages import (
     AppendLLMRepairMessageInput,
@@ -39,11 +39,11 @@ from nof1_causal_service.actions.temporal.llm.tools import execute_subroutine_to
 from nof1_causal_service.storage import backend as storage
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.llm.traces import TraceMessage
+    from nof1_causal_service.llm.traces import TraceMessage
 
 
 def _trace_message(message: JsonObject) -> TraceMessage:
-    from nof1_causal_lab.llm.traces import TraceMessage
+    from nof1_causal_service.llm.traces import TraceMessage
 
     content = str(message.get("content", ""))
     raw_calls = message.get("tool_calls")
@@ -209,7 +209,7 @@ async def append_llm_repair_message_activity(
     if storage.exists(activity_input.next_conversation_ref):
         return AppendLLMRepairMessageResult(conversation_ref=activity_input.next_conversation_ref)
 
-    from nof1_causal_lab.llm.traces import _tool_retry_message
+    from nof1_causal_service.llm.traces import _tool_retry_message
 
     conversation = read_subroutine_json(activity_input.conversation_ref, StoredConversation)
     repair_message = _tool_retry_message(activity_input.error_text, activity_input.tools)
@@ -301,7 +301,7 @@ async def finalize_llm_subroutine_trace_activity(
     activity_input: LLMSubroutineTraceInput,
 ) -> LLMSubroutineTraceResult:
     """Combine provider calls into the subroutine's retained conversation trace."""
-    from nof1_causal_lab.llm.traces import LLMTrace, TraceUsage
+    from nof1_causal_service.llm.traces import LLMTrace, TraceUsage
 
     root = subroutine_root(
         activity_input.subroutine.workspace_id,

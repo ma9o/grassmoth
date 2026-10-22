@@ -1,5 +1,7 @@
 """Persisted posterior results and sampling metadata."""
 
+from __future__ import annotations
+
 from collections.abc import Mapping
 from typing import Literal
 
@@ -105,6 +107,18 @@ class InferenceEvidence(Value):
     all_complete_log_posterior_history: NumericalArray | None = None
     initial_latent_delta: NumericalArray | None = None
     final_latent_delta: NumericalArray | None = None
+
+    def with_previous_phases(self, previous: InferenceEvidence) -> InferenceEvidence:
+        """Retain earlier phase buffers under one additional continuation prefix."""
+        return self.revised(
+            phase_extra_fields={
+                **{
+                    f"previous/{name}": values
+                    for name, values in previous.phase_extra_fields.items()
+                },
+                **self.phase_extra_fields,
+            }
+        )
 
 
 class InferenceReportCore(Value):

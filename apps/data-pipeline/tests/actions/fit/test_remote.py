@@ -51,7 +51,6 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     payload = FitComputeInput(
         dynamical_model_spec_bytes=b"pinned-model",
         question=QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
-        preflight=(),
         panel_parquet=b"pinned-history",
         variables=(),
         time_origin=datetime(2024, 1, 1, tzinfo=UTC),
@@ -92,7 +91,6 @@ def test_modal_timeout_propagates_without_another_call(monkeypatch):
     payload = FitComputeInput(
         b"model",
         QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
-        (),
         b"history",
         (),
         datetime.now(UTC),

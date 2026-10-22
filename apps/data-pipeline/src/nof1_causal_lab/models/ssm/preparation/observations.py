@@ -16,7 +16,6 @@ from nof1_causal_lab.models.ssm.compile.observation_windows import (
     compile_window_plan,
 )
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
-from nof1_causal_lab.observations.rows import observation_window_bounds
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -368,7 +367,7 @@ def simulation_observation_support(
     for i, observation in enumerate(ordered):
         kind = observation.support.support_kind.value
         if kind == "interval":
-            start, end = observation_window_bounds(
+            start, end = ObservationInstant.support_bounds(
                 pl.col("time"),
                 observation.observation_window,
                 anchor_policy=AnchorPolicy.SUPPORT_END,

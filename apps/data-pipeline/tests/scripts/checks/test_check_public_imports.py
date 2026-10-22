@@ -14,12 +14,12 @@ pytestmark = pytest.mark.contract
         "from nof1_causal_lab.models.ssm.inference.fit import fit as run",
         "import nof1_causal_service.actions.fit.remote as compute",
         "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n from nof1_causal_lab.models.ssm.inference.types import MCMCPosterior",
-        "from nof1_causal_service.public.studies import _study_handle",
-        "from nof1_causal_service.public.studies import *",
+        "from nof1_causal_service.public.client import _ErrorBody",
+        "from nof1_causal_service.public.client import *",
         "from importlib import import_module as load\nload('nof1_causal_service.actions.runners')",
         "import importlib\nimportlib.import_module(name)",
         "import sys as system\nsystem.path.insert(0, 'source')",
-        "from nof1_causal_service.public import studies\nstudies._study_handle()",
+        "from nof1_causal_service.public import client\nclient._ErrorBody",
     ],
 )
 def test_rejects_private_imports_and_dynamic_bypasses(tmp_path: Path, source: str) -> None:
@@ -51,9 +51,9 @@ def test_public_imports_and_relative_local_helpers_are_allowed(tmp_path: Path) -
     helper = package / "helper.py"
     helper.write_text(
         "from nof1_causal_service.public.client import StudyClient\n"
-        "from nof1_causal_service.public import studies\n"
+        "from nof1_causal_service.public import client\n"
         "import nof1_causal_service.public.contracts as contracts\n"
-        "def run():\n return StudyClient, studies.submit_action, contracts.FitRequest\n"
+        "def run():\n return StudyClient, client.StudyClient, contracts.FitRequest\n"
     )
     assert find_public_import_violations((package / "run.py",), import_roots=(tmp_path,)) == ()
     helper.write_text("from nof1_causal_service.compute.modal_images import gpu_image\n")
@@ -84,3 +84,35 @@ def test_namespace_alias_cannot_turn_framework_implementation_into_a_local_helpe
     assert len(violations) == 1
     assert violations[0].path == caller
     assert find_public_import_violations((module,)) == ()
+
+
+@pytest.mark.parametrize(
+    ("source", "rejected"),
+    [
+        ("from nof1_causal_lab.public import fit, FitOutput", False),
+        ("from nof1_causal_lab import public\npublic.fit", False),
+        ("from nof1_causal_service.study.records import Applied", False),
+        ("from nof1_causal_lab.actions.fit.action import fit", True),
+        (
+            "from typing import TYPE_CHECKING\nif TYPE_CHECKING:\n from nof1_causal_lab.artifacts.base import Value",
+            True,
+        ),
+        (
+            "from importlib import import_module\nimport_module('nof1_causal_lab.actions.fit.action')",
+            True,
+        ),
+        ("import nof1_causal_lab.public as api\napi.__dict__", True),
+    ],
+)
+def test_service_uses_only_the_scientific_public_module(
+    tmp_path: Path, source: str, rejected: bool
+) -> None:
+    service = tmp_path / "src/nof1_causal_service"
+    service.mkdir(parents=True)
+    caller = service / "caller.py"
+    caller.write_text(source)
+    violations = find_public_import_violations(
+        (service,), import_roots=(tmp_path / "src",), service_callers=True
+    )
+    assert bool(violations) == rejected
+    assert all("ARCH013" in violation.diagnostic() for violation in violations)

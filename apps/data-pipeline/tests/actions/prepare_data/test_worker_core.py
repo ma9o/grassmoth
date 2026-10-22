@@ -2,9 +2,9 @@
 
 import pytest
 
-from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
-from nof1_causal_lab.actions.prepare_data.messages import WorkerMessages, _format_indicators
 from nof1_causal_lab.artifacts.identity import IndicatorId
+from nof1_causal_service.actions.prepare_data.context import MeasurementContext
+from nof1_causal_service.actions.prepare_data.messages import WorkerMessages, _format_indicators
 
 pytestmark = pytest.mark.contract
 

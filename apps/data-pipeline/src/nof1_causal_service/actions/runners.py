@@ -12,10 +12,7 @@ import asyncio
 from functools import partial
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.actions.errors import ModelFitError
-from nof1_causal_lab.artifacts.continuation import TransferredTuning, sampler_identity
-from nof1_causal_lab.artifacts.sampling import InferenceHardware
-from nof1_causal_lab.models.structure import StructuralSelection
+from nof1_causal_lab.public import InferenceHardware, StructuralSelection, TransferredTuning
 from nof1_causal_service.actions.contracts.effects import ActionEffects
 from nof1_causal_service.actions.contracts.inputs import ContinueFitTarget, FitInput
 from nof1_causal_service.actions.contracts.requests import (
@@ -24,12 +21,14 @@ from nof1_causal_service.actions.contracts.requests import (
     ModelDiffRequest,
     SimulateRequest,
 )
+from nof1_causal_service.actions.errors import ModelFitError
 from nof1_causal_service.actions.fit.selection import fit_source, prior_fit
 from nof1_causal_service.study.persistence.store import ArtifactStore
 from nof1_causal_service.study.records import Applied
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
+    from nof1_causal_lab.public import GitOid
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
     from nof1_causal_service.actions.contracts.inputs import SimulateInput
     from nof1_causal_service.study.state import StudyState
 
@@ -79,28 +78,13 @@ def _fit_selected(
                 "Continuation inherits its chain count and random stream",
                 diagnostics={"code": "INCOMPATIBLE_CONTINUATION"},
             )
-        if sampler_identity(sampler) != sampler_identity(continuation.settings):
+        if sampler.kernel_identity != continuation.settings.kernel_identity:
             if sampler.num_warmup == 0:
                 raise ModelFitError(
                     "Switching algorithm or joint parameterization requires positive warmup",
                     diagnostics={"code": "CONTINUATION_REQUIRES_WARMUP"},
                 )
             continuation = continuation.revised(tuning=TransferredTuning())
-    from nof1_causal_lab.actions.checks import check_model_data
-    from nof1_causal_lab.artifacts.reports.checks import Evaluated
-    from nof1_causal_lab.models.ssm.compile.inputs import compile_ssm_inputs_from_model
-
-    findings = check_model_data(
-        compile_ssm_inputs_from_model(selection),
-        history.observations,
-        time_origin=history.time_origin,
-        sampler=sampler,
-    )
-    if any(not isinstance(item, Evaluated) or item.outcome != "passed" for item in findings):
-        raise ModelFitError(
-            "Fit preflight rejected the inputs before compute allocation",
-            diagnostics={"findings": [item.model_dump(mode="json") for item in findings]},
-        )
 
     config = get_config().inference
     if sampler.hardware != InferenceHardware.LOCAL:
@@ -115,7 +99,6 @@ def _fit_selected(
         time_origin=history.time_origin,
         sampler=sampler,
         question=question,
-        preflight=findings,
         compute_loo_diagnostics=config.compute_loo_diagnostics,
         continuation=continuation,
         previous=previous,
@@ -138,8 +121,8 @@ async def _run_simulate(
     pins: dict[ArtifactId, GitOid],
     request: SimulateInput[GitOid],
 ) -> Applied[GitOid]:
-    from nof1_causal_lab.actions.errors import ActionExecutionError
-    from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
+    from nof1_causal_lab.public import ObservationPreflightFailure
+    from nof1_causal_service.actions.errors import ActionExecutionError
     from nof1_causal_service.actions.simulate.action import run_simulation
 
     result = await asyncio.to_thread(run_simulation, store, request, pins["question"])
@@ -197,7 +180,7 @@ def _pin_action_inputs(
     | ModelDiffRequest[GitOid],
     state: StudyState,
 ) -> dict[ArtifactId, GitOid]:
-    """Resolve and compile selected inputs on the same blocking execution boundary."""
+    """Resolve selected inputs on the blocking execution boundary."""
     store = ArtifactStore(workspace_id)
     if isinstance(request, FitRequest):
         pins = _pinned(
@@ -206,17 +189,6 @@ def _pin_action_inputs(
                 "model": fit_source(store, request.input.target).dynamical_model_spec_ref,
                 "question": state.current["question"].revision,
             },
-        )
-        from nof1_causal_lab.models.ssm.compile.inputs import compile_executable_model
-        from nof1_causal_service.study.persistence.store import (
-            read_model,
-            read_question,
-        )
-
-        compile_executable_model(
-            StructuralSelection.for_question(
-                read_model(store, pins["model"]), read_question(store, pins["question"])
-            )
         )
     elif isinstance(request, SimulateRequest):
         pins = _pinned(

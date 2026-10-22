@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.llm.traces import LLMTrace
 from nof1_causal_service.actions.contracts.logs import (
     ActionLog,
     ExecutionMessage,
@@ -16,6 +15,7 @@ from nof1_causal_service.actions.contracts.logs import (
     TraceLogMessage,
 )
 from nof1_causal_service.actions.contracts.progress import ProgressEvent
+from nof1_causal_service.llm.traces import LLMTrace
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

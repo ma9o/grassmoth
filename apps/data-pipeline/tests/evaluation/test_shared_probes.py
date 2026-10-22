@@ -88,7 +88,7 @@ def test_lost_fit_acknowledgement_retains_identity_without_resubmission(tmp_path
     from nof1_causal_lab.artifacts.observations.reference import DataRef
     from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
     from nof1_causal_service.actions.contracts.requests import FitRequest, call_identity
-    from nof1_causal_service.public.studies import StudyError
+    from nof1_causal_service.public.contracts import StudyError
     from tests.support.git import git_oid
 
     request = FitRequest(

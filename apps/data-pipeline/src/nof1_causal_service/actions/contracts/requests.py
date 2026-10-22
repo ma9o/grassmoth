@@ -6,9 +6,8 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import CallId, GitOid, RevisionSelector, scientific_id
-from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef, SourceFolder
+from nof1_causal_lab.public import GitOid, Value
+from nof1_causal_service.actions.contracts.identity import CallId, RevisionSelector
 from nof1_causal_service.actions.contracts.inputs import (
     DataDiffInput,
     EditModelInput,
@@ -18,6 +17,7 @@ from nof1_causal_service.actions.contracts.inputs import (
     PrepareDataInput,
     SimulateInput,
 )
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef, SourceFolder
 from nof1_causal_service.actions.contracts.reasoning import ACTION_REASONING_DESCRIPTION
 
 
@@ -125,6 +125,6 @@ type ActionInput = Annotated[
 
 def call_identity(request: Value) -> CallId:
     """Canonical scientific arguments name a call independently of authored reasoning."""
-    return scientific_id(
-        "call", request.model_dump(mode="json", round_trip=True, exclude={"reasoning"})
+    return CallId.from_content(
+        request.model_dump(mode="json", round_trip=True, exclude={"reasoning"})
     )

@@ -4,8 +4,8 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
-from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
-from nof1_causal_lab.actions.prepare_data.worker_output import (
+from nof1_causal_service.actions.prepare_data.context import MeasurementContext
+from nof1_causal_service.actions.prepare_data.worker_output import (
     _check_dtype_match,
     validate_worker_output,
 )

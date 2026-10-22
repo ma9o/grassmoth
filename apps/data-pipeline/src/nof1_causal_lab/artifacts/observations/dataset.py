@@ -72,7 +72,7 @@ class SelectedObservations(Value):
         return (
             pl.concat(tuple(pl.DataFrame(series.rows) for series in self.series))
             if self.series
-            else pl.DataFrame(schema=observation_row_schema()).with_columns(
+            else pl.DataFrame(schema=ObservationDataset.row_schema()).with_columns(
                 pl.col("value").cast(pl.Float64)
             )
         )
@@ -135,3 +135,8 @@ class ObservationDataset(Value):
         return SelectedObservations(
             series=tuple(self.series.values()), time_origin=self.time_origin
         )
+
+    @staticmethod
+    def row_schema() -> dict[str, pl.DataType | type[pl.DataType]]:
+        """Schema of the canonical rows accepted by from_frame."""
+        return observation_row_schema()

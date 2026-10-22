@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import TYPE_CHECKING, Annotated, ClassVar, Literal, Self, get_args, overload
+from typing import TYPE_CHECKING, Annotated, ClassVar, Literal, Self, overload
 
 from pydantic import Field, GetCoreSchemaHandler, GetJsonSchemaHandler
 from pydantic_core import core_schema
@@ -52,21 +52,6 @@ class GitOid(_IdentityString):
     """A full Git object identity spelled as forty lowercase hexadecimal characters."""
 
     _pattern = r"^[0-9a-f]{40}$"
-
-
-class CallId(_IdentityString):
-    """Content-derived identity of a pinned action request, prefixed with ``call:``."""
-
-    _prefix = "call"
-    _pattern = r"^call:[0-9a-f]{64}$"
-
-
-type RevisionSelector = Annotated[
-    GitOid | Literal["latest"],
-    Field(
-        description="An exact Git hash, or 'latest': the current non-stale model/panel or most recent applied simulation, according to the input type. Resolved once before cache lookup and execution; repeat the returned hashes to poll the same call."
-    ),
-]
 
 
 class ConstructId(_IdentityString):
@@ -116,15 +101,6 @@ class ParameterElementId(_IdentityString):
 
     _prefix = "element"
     _pattern = r"^element:[0-9a-f]{64}$"
-
-
-type ArtifactId = Literal["question", "raw_data", "model", "panel"]
-
-# Actions name work; several actions can enrich the same model artifact.
-type ScientificActionId = Literal["edit_question", "edit_model", "prepare_data", "fit", "simulate"]
-type ActionId = ScientificActionId | Literal["data_diff", "model_diff"]
-
-ARTIFACT_IDS: tuple[ArtifactId, ...] = get_args(ArtifactId.__value__)
 
 
 class GitRef(Value):
@@ -204,10 +180,6 @@ def scientific_id(prefix: Literal["element"], payload: object) -> ParameterEleme
 
 
 @overload
-def scientific_id(prefix: Literal["call"], payload: object) -> CallId: ...
-
-
-@overload
 def scientific_id(prefix: str, payload: object) -> str: ...
 
 
@@ -216,8 +188,6 @@ def scientific_id(prefix: str, payload: object) -> str:
     encoded = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
     value = f"{prefix}:{hashlib.sha256(encoded.encode()).hexdigest()}"
     match prefix:
-        case "call":
-            return CallId(value)
         case "construct":
             return ConstructId(value)
         case "edge":

@@ -13,12 +13,12 @@ from uuid import uuid4
 
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.json_types import JsonObject
+from nof1_causal_lab.public import JsonObject
 from nof1_causal_service.storage import backend as storage
 from nof1_causal_service.storage import paths as data_module
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.llm.traces import LLMTrace
+    from nof1_causal_service.llm.traces import LLMTrace
 
 
 def write_subroutine_trace(path: str, trace: LLMTrace) -> None:

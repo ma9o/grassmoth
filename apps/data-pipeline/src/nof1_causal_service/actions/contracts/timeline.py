@@ -1,7 +1,7 @@
 """Transport-independent timeline records for the public study interface."""
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import ActionId, CallId, GitOid
+from nof1_causal_lab.public import GitOid, Value
+from nof1_causal_service.actions.contracts.identity import ActionId, CallId
 from nof1_causal_service.actions.contracts.polling import RunningAction
 from nof1_causal_service.actions.contracts.requests import (
     DataDiffRequest,

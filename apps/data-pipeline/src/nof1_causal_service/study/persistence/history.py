@@ -9,13 +9,13 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from nof1_causal_service.actions.contracts.identity import CallId
     from nof1_causal_service.actions.contracts.requests import DataDiffRequest, ModelDiffRequest
     from nof1_causal_service.study.records import AttemptRecord
 
 import pygit2
 
-from nof1_causal_lab.artifacts.identity import CallId, GitOid
-from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.public import DataRef, GitOid
 from nof1_causal_service.actions.contracts.inputs import FitTarget, NewFitTarget
 from nof1_causal_service.actions.contracts.requests import (
     FitRequest,

@@ -28,7 +28,7 @@ def execution_failure_handler[HandlerT: Callable[..., object]](handler: HandlerT
 
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.json_types import JsonObject
+    from nof1_causal_lab.public import JsonObject
 
 
 class ActionExecutionError(Exception):

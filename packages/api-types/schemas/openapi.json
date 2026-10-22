@@ -708,7 +708,7 @@
             "type": "string"
           }
         ],
-        "x-python-module": "nof1_causal_lab.artifacts.identity",
+        "x-python-module": "nof1_causal_service.actions.contracts.identity",
         "x-layer": "identity",
         "x-concern": "identity"
       },
@@ -1146,7 +1146,7 @@
           "panel"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.identity",
+        "x-python-module": "nof1_causal_service.actions.contracts.identity",
         "x-layer": "identity",
         "x-concern": "identity",
         "description": "An artifact identity selects one node in the study's artifact graph."
@@ -2341,14 +2341,14 @@
         "pattern": "^call:[0-9a-f]{64}$",
         "tsType": "`call:${string}`",
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.identity",
+        "x-python-module": "nof1_causal_service.actions.contracts.identity",
         "x-layer": "identity",
         "x-concern": "identity"
       },
       "CallId-Output": {
         "tsType": "`call:${string}`",
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.identity",
+        "x-python-module": "nof1_causal_service.actions.contracts.identity",
         "x-layer": "identity",
         "x-concern": "identity"
       },
@@ -4522,12 +4522,12 @@
         "minItems": 1,
         "type": "array",
         "x-typescript-mode": "serialization",
-        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
         "x-typescript-parameters": [
           "RevisionT"
         ],
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
+        "x-layer": "transport",
+        "x-concern": "api_tools"
       },
       "DataSelection_GitOid_": {
         "description": "One or more saved observation-history references.",
@@ -4538,9 +4538,9 @@
         "type": "array",
         "x-typescript-mode": "serialization",
         "x-typescript-type": "DataSelection<GitOid>",
-        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
       },
       "DataSelection_RevisionSelector_": {
         "description": "One or more saved observation-history references.",
@@ -4551,9 +4551,9 @@
         "type": "array",
         "x-typescript-mode": "validation",
         "x-typescript-type": "DataSelection<RevisionSelector>",
-        "x-python-module": "nof1_causal_lab.artifacts.observations.reference",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
+        "x-python-module": "nof1_causal_service.actions.contracts.inputs",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
       },
       "DataStatisticComparison": {
         "discriminator": {
@@ -15710,8 +15710,8 @@
         ],
         "title": "FileSourceRef",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
-        "x-layer": "authored",
+        "x-python-module": "nof1_causal_service.actions.contracts.preparation",
+        "x-layer": "transport",
         "x-concern": "scientific_model"
       },
       "FindingSubject": {
@@ -16265,7 +16265,7 @@
         },
         "title": "FitSettingsSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-python-module": "nof1_causal_service.actions.contracts.settings",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16386,7 +16386,7 @@
         ],
         "title": "FitSettingsSpec",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.artifacts.sampling",
+        "x-python-module": "nof1_causal_service.actions.contracts.settings",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -18377,7 +18377,7 @@
         ],
         "title": "LLMTrace",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.llm.traces",
+        "x-python-module": "nof1_causal_service.llm.traces",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24313,7 +24313,7 @@
           }
         ],
         "description": "An exact Git hash, or 'latest': the current non-stale model/panel or most recent applied simulation, according to the input type. Resolved once before cache lookup and execution; repeat the returned hashes to poll the same call.",
-        "x-python-module": "nof1_causal_lab.artifacts.identity",
+        "x-python-module": "nof1_causal_service.actions.contracts.identity",
         "x-layer": "identity",
         "x-concern": "identity"
       },
@@ -24625,7 +24625,7 @@
           "simulate"
         ],
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.identity",
+        "x-python-module": "nof1_causal_service.actions.contracts.identity",
         "x-layer": "identity",
         "x-concern": "identity",
         "description": "A scientific action identity selects setting the question, model editing, data preparation, fitting, or simulation."
@@ -25366,8 +25366,8 @@
         "description": "Folder of ready-to-use CSV or Parquet tables under data/{workspace_id}/, such as input. Every table must have a date or datetime timestamp column.",
         "minLength": 1,
         "type": "string",
-        "x-python-module": "nof1_causal_lab.artifacts.observations.preparation",
-        "x-layer": "authored",
+        "x-python-module": "nof1_causal_service.actions.contracts.preparation",
+        "x-layer": "transport",
         "x-concern": "scientific_model"
       },
       "SpecificationAssessment": {
@@ -26412,7 +26412,7 @@
         ],
         "title": "TraceMessage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.llm.traces",
+        "x-python-module": "nof1_causal_service.llm.traces",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26465,7 +26465,7 @@
         ],
         "title": "TraceToolCall",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.llm.traces",
+        "x-python-module": "nof1_causal_service.llm.traces",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -26503,7 +26503,7 @@
         ],
         "title": "TraceUsage",
         "type": "object",
-        "x-python-module": "nof1_causal_lab.llm.traces",
+        "x-python-module": "nof1_causal_service.llm.traces",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },

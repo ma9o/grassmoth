@@ -9,7 +9,7 @@ from pathlib import Path
 import jax
 import psutil
 
-from nof1_causal_lab.compute.budget import (
+from nof1_causal_lab.public import (
     AcceleratorMemoryBudget,
     ComputeBudget,
     MemoryDemand,

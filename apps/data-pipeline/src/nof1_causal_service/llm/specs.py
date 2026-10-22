@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from nof1_causal_lab.artifacts.base import Value
+from nof1_causal_lab.public import Value
 
 type EmbeddedReasoningEffort = Literal["none", "minimal", "low", "medium", "high", "xhigh"]
 

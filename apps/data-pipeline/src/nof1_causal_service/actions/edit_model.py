@@ -1,9 +1,7 @@
 """Resolve an edit's pinned values, execute it, and stage its complete result."""
 
-from nof1_causal_lab.actions.edit_model import ModelEditFailure
-from nof1_causal_lab.actions.edit_model import edit_model as edit_model_values
-from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from nof1_causal_lab.public import DynamicalModelSpec, GitOid, ModelEditFailure
+from nof1_causal_lab.public import edit_model as edit_model_values
 from nof1_causal_service.actions.contracts.effects import ActionEffects
 from nof1_causal_service.actions.contracts.requests import EditModelRequest
 from nof1_causal_service.actions.input_resolution import model_edit_state

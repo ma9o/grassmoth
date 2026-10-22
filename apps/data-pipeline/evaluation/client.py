@@ -9,14 +9,15 @@ from nof1_causal_service.public.client import StudyClient
 from nof1_causal_service.public.contracts import (
     ActionInput,
     ActionPoll,
+    ActionResult,
     ActionSuccess,
     ContinueFitTarget,
     FailedPoll,
     FitRequest,
     NewFitTarget,
     RunningPoll,
+    StudyError,
 )
-from nof1_causal_service.public.studies import ActionResult, StudyError
 
 if TYPE_CHECKING:
     from pathlib import Path

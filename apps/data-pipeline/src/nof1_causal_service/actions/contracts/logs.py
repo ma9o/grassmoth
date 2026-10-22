@@ -4,9 +4,9 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.llm.traces import LLMTrace
+from nof1_causal_lab.public import Value
 from nof1_causal_service.actions.contracts.progress import ProgressEvent
+from nof1_causal_service.llm.traces import LLMTrace
 from nof1_causal_service.study.records import ActionMessage, FailedOutcome
 
 

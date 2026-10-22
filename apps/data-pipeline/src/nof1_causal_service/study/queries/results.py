@@ -1,15 +1,16 @@
 """The complete result of a successful action is its durable cache entry."""
 
-from nof1_causal_lab.actions.contracts.bodies import (
+from nof1_causal_lab.public import (
     DataDiffOutput,
     EditModelOutput,
     EditQuestionOutput,
     FitOutput,
+    GitOid,
     ModelDiffOutput,
     PrepareDataOutput,
     SimulateOutput,
 )
-from nof1_causal_lab.artifacts.identity import ActionId, GitOid
+from nof1_causal_service.actions.contracts.identity import ActionId
 from nof1_causal_service.study.persistence.store import ArtifactStore
 
 type ActionOutput = (

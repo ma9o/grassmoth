@@ -309,7 +309,6 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             time_origin=panel.time_origin,
             sampler=settings.revised(num_samples_per_chain=count),
             question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
-            preflight=(),
             compute_loo_diagnostics=True,
             previous=previous,
         )

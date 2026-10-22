@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import GitOid, GitRef
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult, FileSourceRef
+from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from nof1_causal_lab.artifacts.simulation import (
@@ -28,6 +28,7 @@ from nof1_causal_service.actions.contracts.inputs import (
     ModelDiffInput,
     SimulateInput,
 )
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef
 from nof1_causal_service.actions.contracts.requests import EditModelRequest, PrepareDataRequest
 from nof1_causal_service.storage import paths as data_module
 from nof1_causal_service.study.errors import StudyLookupError

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Protocol
 from pydantic import Field
 from typing_extensions import TypedDict
 
-from nof1_causal_lab.artifacts.base import Value
+from nof1_causal_lab.public import Value
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

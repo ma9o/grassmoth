@@ -5,21 +5,18 @@ from __future__ import annotations
 from functools import cache
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.actions.data_diff import data_diff
-from nof1_causal_lab.artifacts.simulation import SimulationEvidence
+from nof1_causal_lab.public import SimulationEvidence, data_diff
 from nof1_causal_service.actions.contracts.requests import SimulateRequest
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.actions.contracts.bodies import DataDiffOutput
-    from nof1_causal_lab.artifacts.identity import GitOid, IndicatorId
-    from nof1_causal_lab.artifacts.observations.comparison import Dataset
-    from nof1_causal_lab.artifacts.observations.reference import DataRef, DataSelection
+    from nof1_causal_lab.public import DataDiffOutput, DataRef, Dataset, GitOid, IndicatorId
+    from nof1_causal_service.actions.contracts.inputs import DataSelection
     from nof1_causal_service.actions.contracts.requests import DataDiffRequest
 
 
 def read_data_diff(workspace_id: str, request: DataDiffRequest[GitOid]) -> DataDiffOutput:
     """Load existing data only; never read a model for generation, fit, or write artifacts."""
-    from nof1_causal_lab.study.projections.observations import read_dataset
+    from nof1_causal_lab.public import Dataset
     from nof1_causal_service.study.persistence.history import StudyRepository
     from nof1_causal_service.study.persistence.store import ArtifactStore, read_model
     from nof1_causal_service.study.queries.data import read_data_histories, read_data_source
@@ -41,7 +38,7 @@ def read_data_diff(workspace_id: str, request: DataDiffRequest[GitOid]) -> DataD
                 for indicator in construct.indicators
             )
         return tuple(
-            read_dataset(history.source, history.observations)
+            Dataset.from_observations(history.source, history.observations)
             for history in read_data_histories(store, source)
         )
 

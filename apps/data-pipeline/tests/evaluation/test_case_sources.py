@@ -28,9 +28,9 @@ def test_case_sources_pin_file_bytes_and_saved_action_models(tmp_path, monkeypat
         read_source(source, tmp_path)
 
     from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
-    from nof1_causal_lab.artifacts.identity import CallId
+    from nof1_causal_service.actions.contracts.identity import CallId
     from nof1_causal_service.actions.contracts.polling import SuccessfulPoll
-    from nof1_causal_service.public.studies import ActionResult
+    from nof1_causal_service.public.contracts import ActionResult
 
     call_id = CallId("call:" + "1" * 64)
     stored = ActionResult.from_poll(

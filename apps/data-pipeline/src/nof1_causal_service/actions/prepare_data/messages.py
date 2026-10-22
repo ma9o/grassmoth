@@ -5,10 +5,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.actions.prepare_data.prompts import SYSTEM, USER
+from nof1_causal_service.actions.prepare_data.prompts import SYSTEM, USER
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
+    from nof1_causal_service.actions.prepare_data.context import MeasurementContext
 
 
 def _format_indicators(measurement_structure: MeasurementContext) -> str:

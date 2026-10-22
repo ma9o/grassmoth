@@ -7,11 +7,9 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, Field
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef
-from nof1_causal_lab.artifacts.reports.checks import FindingSubject
+from nof1_causal_lab.public import FindingSubject, GitOid, Value
 from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef
 from nof1_causal_service.actions.contracts.requests import (
     DataDiffRequest,
     EditModelRequest,
@@ -27,7 +25,7 @@ from nof1_causal_service.study.state import StudyState
 if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
-    from nof1_causal_lab.artifacts.observations.reference import DataRef
+    from nof1_causal_lab.public import DataRef
 
 
 class ActionMessage(Value):

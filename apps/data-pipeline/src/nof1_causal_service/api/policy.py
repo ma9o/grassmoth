@@ -4,7 +4,7 @@ from typing import NoReturn
 
 from fastapi import HTTPException
 
-from nof1_causal_service.study.interface import StudyError
+from nof1_causal_service.actions.contracts.polling import StudyError
 
 
 def raise_study_error(error: StudyError) -> NoReturn:

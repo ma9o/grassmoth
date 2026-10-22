@@ -105,7 +105,7 @@ def test_execution_rejects_partial_sampler_inputs(tmp_path: Path, annotation: st
         f"""
 from typing import TypedDict
 import polars as pl
-from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
+from nof1_causal_service.actions.contracts.settings import FitSettingsSpec
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.likelihood import ObservationLawSpec, LikelihoodSpec
 from nof1_causal_lab.artifacts.sampling import SamplerSpec

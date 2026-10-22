@@ -35,7 +35,6 @@ if TYPE_CHECKING:
     from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from nof1_causal_lab.artifacts.model.question import QuestionSpec
     from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
-    from nof1_causal_lab.artifacts.reports.checks import SpecificationAssessment
     from nof1_causal_lab.artifacts.reports.inference import FitRuntime
     from nof1_causal_lab.artifacts.reports.posterior_diagnostics import ChainDiagnostics
     from nof1_causal_lab.artifacts.sampling import SamplerSpec
@@ -51,18 +50,6 @@ class FitResult:
     dynamical_model_spec: DynamicalModelSpec | None
     evidence: InferenceEvidence
     metadata: InferenceMetadata
-
-
-def append_phase_evidence(
-    previous: InferenceEvidence, current: InferenceEvidence
-) -> InferenceEvidence:
-    """Retain earlier phase buffers under one additional continuation prefix."""
-    return current.revised(
-        phase_extra_fields={
-            **{f"previous/{name}": values for name, values in previous.phase_extra_fields.items()},
-            **current.phase_extra_fields,
-        }
-    )
 
 
 def _fit(
@@ -137,9 +124,9 @@ def _fit(
                     duration_seconds=fitted.duration_seconds,
                     segments=(*prior.core.inference_metadata.segments, segment(None)),
                 ),
-                evidence=append_phase_evidence(
-                    prior.evidence, prior.evidence.revised(phase_extra_fields=phase_fields)
-                ),
+                evidence=(
+                    prior.evidence.revised(phase_extra_fields=phase_fields)
+                ).with_previous_phases(prior.evidence),
             )
         return FitResult(
             dynamical_model_spec=None,
@@ -272,7 +259,7 @@ def _fit(
             and evidence.observation_log_probs is not None
             else None,
         )
-        evidence = append_phase_evidence(prior_evidence, evidence)
+        evidence = evidence.with_previous_phases(prior_evidence)
     return FitResult(dynamical_model_spec=conditioned, evidence=evidence, metadata=metadata)
 
 
@@ -450,7 +437,6 @@ def fit(
     logger: logging.Logger,
     compiler: ProgramCompiler,
     prepare_program: ProgramPreparer,
-    preflight: tuple[SpecificationAssessment, ...],
     compute_loo_diagnostics: bool,
     continuation: SamplerCheckpoint | None = None,
     previous: FitOutput | None = None,
@@ -496,6 +482,6 @@ def fit(
         else previous.dynamical_model_spec
         if previous is not None
         else None,
-        checks=fit_check_report(selection, question, data_for_model, preflight=preflight),
+        checks=fit_check_report(selection, question, data_for_model),
         inference=report,
     )

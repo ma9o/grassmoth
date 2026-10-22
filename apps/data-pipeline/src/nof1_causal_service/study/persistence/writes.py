@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 from nof1_causal_service.study.artifact_files import json_filename
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid
-    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.public import DynamicalModelSpec, GitOid
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
     from nof1_causal_service.study.persistence.store import ArtifactStore
     from nof1_causal_service.study.state import ArtifactRecord
 

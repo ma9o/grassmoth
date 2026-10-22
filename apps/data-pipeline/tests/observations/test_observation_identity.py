@@ -5,15 +5,15 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
-from nof1_causal_lab.actions.prepare_data.worker_output import validate_worker_output
 from nof1_causal_lab.artifacts.observations.spec import (
     AuthoredObservationSpec,
     ResolvedObservationSpec,
 )
-from nof1_causal_lab.observations.aggregations import compute_indicators
 from nof1_causal_lab.observations.quality.profile import validate_extraction
-from nof1_causal_lab.observations.rows import annotate_observation_rows
+from nof1_causal_service.actions.prepare_data.aggregations import compute_indicators
+from nof1_causal_service.actions.prepare_data.context import MeasurementContext
+from nof1_causal_service.actions.prepare_data.rows import annotate_observation_rows
+from nof1_causal_service.actions.prepare_data.worker_output import validate_worker_output
 from tests.support.helpers import make_model
 
 pytestmark = pytest.mark.contract

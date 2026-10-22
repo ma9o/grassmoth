@@ -8,18 +8,19 @@ from datetime import UTC, datetime
 import jax
 from jax.stages import Compiled
 
-from nof1_causal_lab.actions.contracts.bodies import FitOutput
-from nof1_causal_lab.actions.errors import ModelFitError
-from nof1_causal_lab.actions.fit.action import fit
-from nof1_causal_lab.actions.fit.execution import ModelFitFailure
-from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
-from nof1_causal_lab.artifacts.model.question import QuestionSpec
-from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
-from nof1_causal_lab.artifacts.reports.checks import SpecificationAssessment
-from nof1_causal_lab.artifacts.sampling import SamplerSpec
-from nof1_causal_lab.compute.budget import MemoryDemand
-from nof1_causal_lab.compute.programs import PreparedProgram
-from nof1_causal_lab.models.structure import StructuralSelection
+from nof1_causal_lab.public import (
+    FitOutput,
+    MemoryDemand,
+    ModelFitFailure,
+    ObservationDataset,
+    PreparedProgram,
+    QuestionSpec,
+    SamplerCheckpoint,
+    SamplerSpec,
+    StructuralSelection,
+    fit,
+)
+from nof1_causal_service.actions.errors import ModelFitError
 from nof1_causal_service.actions.fit.execution import (
     dump_compiled_analysis,
     resolve_profile_dir,
@@ -39,7 +40,6 @@ def run_fit(
     data_for_model: ObservationDataset,
     time_origin: datetime,
     sampler: SamplerSpec,
-    preflight: tuple[SpecificationAssessment, ...],
     compute_loo_diagnostics: bool,
     continuation: SamplerCheckpoint | None = None,
     previous: FitOutput | None = None,
@@ -84,7 +84,6 @@ def run_fit(
             logger=logging.getLogger(__name__),
             compiler=compile_profiled,
             prepare_program=prepare_profiled,
-            preflight=preflight,
             compute_loo_diagnostics=compute_loo_diagnostics,
             continuation=continuation,
             previous=previous,

@@ -4,8 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import polars as pl
+
+from nof1_causal_lab.artifacts.observations.duration import CalendarDuration
+from nof1_causal_lab.artifacts.observations.semantics import AnchorPolicy
+
+if TYPE_CHECKING:
+    from nof1_causal_lab.artifacts.observations.spec import ObservationWindow
 
 
 @dataclass(frozen=True)
@@ -26,6 +33,30 @@ class ObservationInstant:
     def relative_to(self, origin: ObservationInstant) -> ModelTime:
         """Express this observation instant as fractional model days after the supplied origin."""
         return ModelTime((self.value - origin.value).total_seconds() / 86400)
+
+    @staticmethod
+    def normalize_column(df: pl.DataFrame, time_col: str) -> pl.DataFrame:
+        """Normalize the raw temporal axis to UTC-naive datetimes."""
+        dtype = df.schema[time_col]
+        value = pl.col(time_col)
+        if dtype == pl.String:
+            value = value.str.to_datetime(time_zone="UTC").dt.replace_time_zone(None)
+        elif dtype == pl.Date:
+            value = value.cast(pl.Datetime)
+        elif isinstance(dtype, pl.Datetime) and dtype.time_zone is not None:
+            value = value.dt.convert_time_zone("UTC").dt.replace_time_zone(None)
+        return df.with_columns(value.alias(time_col))
+
+    @staticmethod
+    def support_bounds(
+        anchor: pl.Expr, window: ObservationWindow, *, anchor_policy: AnchorPolicy
+    ) -> tuple[pl.Expr, pl.Expr]:
+        """Resolve UTC support bounds; calendar windows exist only at calendar boundaries."""
+        if isinstance(window, CalendarDuration):
+            anchor = pl.when(anchor == anchor.dt.truncate(window.polars_interval)).then(anchor)
+        if anchor_policy == AnchorPolicy.SUPPORT_END:
+            return anchor.dt.offset_by("-" + window.polars_interval), anchor
+        return anchor, anchor.dt.offset_by(window.polars_interval)
 
 
 @dataclass(frozen=True)

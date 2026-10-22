@@ -11,21 +11,25 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.actions.contracts.bodies import FitOutput
-from nof1_causal_lab.artifacts.continuation import SamplerCheckpoint
-from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
+from nof1_causal_lab.public import (
+    DynamicalModelSpec,
+    FitOutput,
+    ObservationDataset,
+    SamplerCheckpoint,
+)
 from nof1_causal_service.compute.resources import HOST_MEMORY_ALLOCATION_ENV
 from nof1_causal_service.study.persistence.codec import pack_result, unpack_result
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from nof1_causal_lab.artifacts.model.question import QuestionSpec
-    from nof1_causal_lab.artifacts.observations.spec import ResolvedObservationSpec
-    from nof1_causal_lab.artifacts.reports.checks import SpecificationAssessment
-    from nof1_causal_lab.artifacts.sampling import InferenceHardware, SamplerSpec
-    from nof1_causal_lab.models.structure import StructuralSelection
+    from nof1_causal_lab.public import (
+        InferenceHardware,
+        QuestionSpec,
+        ResolvedObservationSpec,
+        SamplerSpec,
+        StructuralSelection,
+    )
 
 _FIT_CPU_CORES = 8
 _FIT_HOST_MEMORY_MIB = 32768
@@ -39,7 +43,6 @@ class FitComputeInput:
 
     dynamical_model_spec_bytes: bytes
     question: QuestionSpec
-    preflight: tuple[SpecificationAssessment, ...]
     panel_parquet: bytes
     variables: tuple[ResolvedObservationSpec, ...]
     time_origin: datetime
@@ -91,7 +94,7 @@ def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
     initialize_numerical_runtime()
     import polars as pl
 
-    from nof1_causal_lab.models.structure import StructuralSelection
+    from nof1_causal_lab.public import StructuralSelection
     from nof1_causal_service.actions.fit.action import run_fit
 
     dynamical_model_spec = DynamicalModelSpec.model_validate(
@@ -100,7 +103,6 @@ def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
     result = run_fit(
         selection=StructuralSelection.for_question(dynamical_model_spec, payload.question),
         question=payload.question,
-        preflight=payload.preflight,
         data_for_model=ObservationDataset.from_frame(
             pl.read_parquet(io.BytesIO(payload.panel_parquet)),
             payload.variables,
@@ -190,14 +192,11 @@ def fit_on_modal(
     time_origin: datetime,
     sampler: SamplerSpec,
     question: QuestionSpec,
-    preflight: tuple[SpecificationAssessment, ...],
     compute_loo_diagnostics: bool,
     continuation: SamplerCheckpoint | None = None,
     previous: FitOutput | None = None,
 ) -> FitOutput:
     """Transfer pinned values, compute once on Modal, then retain returned arrays locally."""
-    from nof1_causal_lab.actions.fit.action import append_phase_evidence
-
     # Prior phase traces are publication history, never transition inputs. Keep
     # them at the caller instead of uploading and downloading them unchanged.
     compute_previous = (
@@ -215,7 +214,6 @@ def fit_on_modal(
         FitComputeInput(
             dynamical_model_spec_bytes=pack_result(selection.dynamical_model_spec),
             question=question,
-            preflight=preflight,
             panel_parquet=panel.getvalue(),
             variables=data_for_model.variables,
             time_origin=time_origin,
@@ -232,9 +230,7 @@ def fit_on_modal(
     if previous is not None:
         output = output.revised(
             inference=output.inference.revised(
-                evidence=append_phase_evidence(
-                    previous.inference.evidence, output.inference.evidence
-                )
+                evidence=output.inference.evidence.with_previous_phases(previous.inference.evidence)
             )
         )
     return output

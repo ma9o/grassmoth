@@ -6,9 +6,7 @@ import polars as pl
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from nof1_causal_lab.actions.prepare_data.context import extraction_context
 from nof1_causal_lab.artifacts.observations.duration import CalendarDuration
-from nof1_causal_lab.artifacts.observations.preparation import FilePreparationSpec
 from nof1_causal_lab.artifacts.observations.rows import validate_observation_rows
 from nof1_causal_lab.artifacts.observations.semantics import AnchorPolicy
 from nof1_causal_lab.artifacts.observations.spec import (
@@ -16,11 +14,13 @@ from nof1_causal_lab.artifacts.observations.spec import (
     ResolvedObservationSpec,
     canonical_observation_window,
 )
-from nof1_causal_lab.observations.aggregations import compute_indicators
-from nof1_causal_lab.observations.rows import (
+from nof1_causal_lab.artifacts.observations.time import ObservationInstant
+from nof1_causal_lab.observations.rows import observation_window_boundaries
+from nof1_causal_service.actions.contracts.preparation import FilePreparationSpec
+from nof1_causal_service.actions.prepare_data.aggregations import compute_indicators
+from nof1_causal_service.actions.prepare_data.context import extraction_context
+from nof1_causal_service.actions.prepare_data.rows import (
     annotate_observation_rows,
-    observation_window_boundaries,
-    observation_window_bounds,
 )
 
 pytestmark = pytest.mark.contract
@@ -79,7 +79,7 @@ def test_period_counts_keep_exact_bounds_and_missing_windows(window, start, miss
     assert rows["support_start"][0] == datetime.fromisoformat(start)
 
     # Simulation resolves these same windows from their end anchors.
-    lower, upper = observation_window_bounds(
+    lower, upper = ObservationInstant.support_bounds(
         pl.col("anchor_time"), variable.observation_window, anchor_policy=AnchorPolicy.SUPPORT_END
     )
     simulated = rows.select(lower.alias("support_start"), upper.alias("support_end"))

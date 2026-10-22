@@ -42,6 +42,7 @@ import networkx as nx
 from scripts.checks.architecture_roles import (
     PACKAGE,
     PURE_ROLES,
+    SERVICE_PACKAGE,
     SOURCE_ROOTS,
     fix_owner,
     role_for_module,
@@ -407,7 +408,7 @@ def find_violations(source_roots: tuple[Path, ...] = SOURCE_ROOTS) -> tuple[Viol
         f"{_PACKAGE}.artifacts.model.dynamical_model_spec.DynamicalModelSpec",
         f"{_PACKAGE}.artifacts.model.likelihood.ObservationLawSpec",
         f"{_PACKAGE}.artifacts.model.likelihood.LikelihoodSpec",
-        f"{_PACKAGE}.artifacts.sampling.FitSettingsSpec",
+        f"{SERVICE_PACKAGE}.actions.contracts.settings.FitSettingsSpec",
         "polars.DataFrame",
         "pandas.DataFrame",
         "pyarrow.Table",

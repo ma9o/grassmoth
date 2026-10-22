@@ -29,7 +29,7 @@ from typing import IO, TYPE_CHECKING, Literal, TypedDict, overload
 
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.json_types import JsonObject
+from nof1_causal_lab.public import JsonObject
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

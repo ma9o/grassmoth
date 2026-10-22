@@ -8,12 +8,17 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.prepare_data.context import extraction_context
 from nof1_causal_lab.artifacts.identity import IndicatorId
-from nof1_causal_lab.artifacts.observations.preparation import FilePreparationSpec
 from nof1_causal_lab.artifacts.observations.semantics import SummaryOperator
-from nof1_causal_lab.observations.aggregations import _build_agg_expr, _encode_non_continuous
-from nof1_causal_lab.observations.aggregations import compute_indicators as _compute_indicators
+from nof1_causal_service.actions.contracts.preparation import FilePreparationSpec
+from nof1_causal_service.actions.prepare_data.aggregations import (
+    _build_agg_expr,
+    _encode_non_continuous,
+)
+from nof1_causal_service.actions.prepare_data.aggregations import (
+    compute_indicators as _compute_indicators,
+)
+from nof1_causal_service.actions.prepare_data.context import extraction_context
 
 pytestmark = pytest.mark.contract
 

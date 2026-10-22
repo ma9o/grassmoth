@@ -2,7 +2,7 @@
 
 from typing_extensions import TypedDict
 
-from nof1_causal_lab.artifacts.identity import IndicatorId
+from nof1_causal_lab.public import IndicatorId
 
 
 class ObservationRecord(TypedDict):

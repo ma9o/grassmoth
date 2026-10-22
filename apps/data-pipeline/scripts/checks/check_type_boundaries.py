@@ -537,6 +537,7 @@ class TypeIndex:
     def __init__(self, sources: list[tuple[str, ast.Module]]) -> None:
         self.classes: dict[str, tuple[str, ast.ClassDef]] = {}
         self.aliases: dict[str, ast.expr] = {}
+        self.adapters: dict[str, ast.expr] = {}
         self.imports: dict[str, dict[str, str]] = {}
         self.functions: dict[str, tuple[str, ast.FunctionDef | ast.AsyncFunctionDef]] = {}
         for path, tree in sources:
@@ -559,6 +560,16 @@ class TypeIndex:
                         imports[alias.asname or alias.name] = target + "." + alias.name
             self.imports[module] = imports
             for node in tree.body:
+                if isinstance(node, (ast.Assign, ast.AnnAssign)):
+                    target = node.target if isinstance(node, ast.AnnAssign) else node.targets[0]
+                    value = node.value
+                    if (
+                        isinstance(target, ast.Name)
+                        and isinstance(value, ast.Call)
+                        and self.resolve(value.func, module) == "pydantic.TypeAdapter"
+                        and value.args
+                    ):
+                        self.adapters[module + "." + target.id] = value.args[0]
                 if isinstance(node, ast.ClassDef):
                     self.classes[module + "." + node.name] = (path, node)
                 elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -1027,7 +1038,7 @@ class _CoreVisitor(ast.NodeVisitor):
         previous_failure_handler = self.failure_handler
         self.failure_handler = any(
             self.index.resolve(decorator, self.module)
-            == "nof1_causal_lab.actions.errors.execution_failure_handler"
+            == "nof1_causal_service.actions.errors.execution_failure_handler"
             for decorator in node.decorator_list
         )
         self.scope.append(node.name)
@@ -1170,7 +1181,24 @@ class _CoreVisitor(ast.NodeVisitor):
                 and self.class_name is not None
             ):
                 receiver = self.module + "." + self.class_name
-            if receiver not in self.index.classes or not self._owned_here(receiver):
+            target = self.index.adapters.get(receiver)
+            target_module = receiver.rpartition(".")[0]
+            if (
+                isinstance(node.func, ast.Attribute)
+                and isinstance(node.func.value, ast.Call)
+                and self.index.resolve(node.func.value.func, self.module) == "pydantic.TypeAdapter"
+                and node.func.value.args
+            ):
+                target = node.func.value.args[0]
+                target_module = self.module
+            variants = (
+                self.index.return_variants(target, target_module)
+                if target is not None
+                else {receiver}
+            )
+            if not variants or not all(
+                variant in self.index.classes and self._owned_here(variant) for variant in variants
+            ):
                 self._add(
                     node,
                     _OWNER_PARSE,

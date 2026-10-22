@@ -6,8 +6,8 @@ from typing import Literal, TypedDict
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from nof1_causal_lab.json_types import JsonObject
-from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
+from nof1_causal_lab.public import JsonObject
+from nof1_causal_service.llm.specs import EmbeddedLLMSpec
 
 
 class LLMToolSpec(BaseModel):

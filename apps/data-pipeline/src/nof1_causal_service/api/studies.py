@@ -11,6 +11,7 @@ from nof1_causal_service.api.responses import MessagePackResponse
 from nof1_causal_service.public.contracts import (
     ActionId,
     ActionPoll,
+    ActionResult,
     CallId,
     DataDiffRequest,
     EditModelRequest,
@@ -21,10 +22,11 @@ from nof1_causal_service.public.contracts import (
     RevisionSelector,
     SimulateRequest,
     SourceFolder,
+    StudyError,
     TimelineResponse,
 )
 from nof1_causal_service.study import interface as studies
-from nof1_causal_service.study.interface import ActionResult, StudyError, TemporalClientProvider
+from nof1_causal_service.study.interface import TemporalClientProvider
 
 router = APIRouter(prefix="/api/studies", default_response_class=MessagePackResponse)
 

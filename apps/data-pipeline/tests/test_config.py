@@ -8,14 +8,13 @@ from pydantic import ValidationError
 from nof1_causal_lab.artifacts.sampling import (
     AdaptedLatentStepSpec,
     DsmcSpec,
-    FitSettingsSpec,
     FixedLatentStepSpec,
     LapsInitializationSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     SamplerSpec,
 )
-from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
+from nof1_causal_service.actions.contracts.settings import FitSettingsSpec
 from nof1_causal_service.actions.fit.execution import resolve_sampler_spec
 from nof1_causal_service.config import (
     EmbeddedLLMDefaults,
@@ -27,6 +26,7 @@ from nof1_causal_service.config import (
     load_config,
     validate_config,
 )
+from nof1_causal_service.llm.specs import EmbeddedLLMSpec
 
 pytestmark = pytest.mark.contract
 

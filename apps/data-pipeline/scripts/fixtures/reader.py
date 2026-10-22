@@ -18,7 +18,7 @@ from nof1_causal_service.study.records import Applied, StudyRevision, inference_
 from nof1_causal_service.study.snapshot import ModelSnapshot
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import ArtifactId, EntityRef, GitOid, IndicatorId
+    from nof1_causal_lab.artifacts.identity import EntityRef, GitOid, IndicatorId
     from nof1_causal_lab.artifacts.model.construct import CausalEdgeSpec, ConstructSpec
     from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from nof1_causal_lab.artifacts.model.indicator import IndicatorSpec
@@ -34,6 +34,7 @@ if TYPE_CHECKING:
         InferenceReportCore,
     )
     from nof1_causal_lab.artifacts.simulation import SimulationReport
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
     from nof1_causal_service.study.state import StudyState
 
 

@@ -3,12 +3,13 @@
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from nof1_causal_lab.artifacts.continuation import JointTuning, sampler_identity
+from nof1_causal_lab.artifacts.continuation import JointTuning
 from nof1_causal_lab.artifacts.joint_parameterization import (
     JointParameterizationRecord,
     MixedParameterizationRecord,
 )
-from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, NutsDASpec, SamplerSpec
+from nof1_causal_lab.artifacts.sampling import NutsDASpec, SamplerSpec
+from nof1_causal_service.actions.contracts.settings import FitSettingsSpec
 
 pytestmark = pytest.mark.contract
 
@@ -22,7 +23,7 @@ def test_parameterization_is_a_joint_only_setting_and_part_of_continuation_ident
         )
         assert isinstance(settings.algorithm, NutsDASpec)
         assert settings.algorithm.parameterization == name
-        identities.append(sampler_identity(SamplerSpec(algorithm=settings.algorithm)))
+        identities.append(SamplerSpec(algorithm=settings.algorithm).kernel_identity)
     assert len(set(identities)) == 3
     for method in ("pgibbs", "mpgibbs"):
         with pytest.raises(ValidationError, match="Extra inputs"):

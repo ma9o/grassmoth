@@ -13,11 +13,12 @@ from nof1_causal_lab.artifacts.model.construct import replace_constructs
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.likelihood import DeltaLawSpec
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
-from nof1_causal_lab.artifacts.observations.preparation import FailedExtractionChunk, FileSourceRef
+from nof1_causal_lab.artifacts.observations.preparation import FailedExtractionChunk
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.models.causal.analysis import identify_model
 from nof1_causal_lab.models.structure import StructuralSelection, selected_state_ids
 from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef
 from nof1_causal_service.actions.contracts.requests import EditModelRequest, EditQuestionRequest
 from nof1_causal_service.study.persistence.history import StudyRepository
 from nof1_causal_service.study.persistence.store import ArtifactStore
@@ -31,7 +32,7 @@ from tests.support.helpers import make_model
 pytestmark = pytest.mark.contract
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import ArtifactId
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
 
 
 @pytest.fixture
@@ -147,7 +148,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
         [raw, _write(store, "model", dynamical_model_spec.model_dump(mode="json"))]
     )
     pins: dict[ArtifactId, GitOid] = {"raw_data": raw.revision}
-    from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
+    from nof1_causal_service.actions.prepare_data.context import MeasurementContext
 
     metadata = metadata_for_model(dynamical_model_spec)
     context = MeasurementContext(

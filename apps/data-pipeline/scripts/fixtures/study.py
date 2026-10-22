@@ -19,8 +19,8 @@ from unittest.mock import patch
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.expressions import coefficient
 from nof1_causal_lab.artifacts.model.expressions import state as expr_state
-from nof1_causal_lab.llm.traces import LLMTrace
 from nof1_causal_lab.models.inputs import input_fingerprints
+from nof1_causal_service.llm.traces import LLMTrace
 from nof1_causal_service.storage import paths as data_module
 from nof1_causal_service.storage.traces import trace_log_path
 from nof1_causal_service.study.artifact_files import artifact_file_spec
@@ -30,7 +30,7 @@ from nof1_causal_service.study.state import is_stale
 from scripts.fixtures.reader import ModelReader
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import ArtifactId
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
     from nof1_causal_service.study.state import StudyState
 
 ROOT = Path(__file__).resolve().parents[4]

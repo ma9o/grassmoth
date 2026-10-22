@@ -9,7 +9,7 @@ from contextlib import suppress
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from nof1_causal_lab.actions.errors import execution_failure_handler
+from nof1_causal_service.actions.errors import execution_failure_handler
 from nof1_causal_service.storage import backend as storage
 from nof1_causal_service.storage.paths import data_root
 

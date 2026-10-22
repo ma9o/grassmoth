@@ -11,12 +11,12 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ActivityError, ChildWorkflowError
 
-from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.public import GitOid
 from nof1_causal_service.actions.contracts.effects import ActionEffects
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef
     from nof1_causal_service.actions.contracts.inputs import PrepareDataInput
+    from nof1_causal_service.actions.contracts.preparation import FileSourceRef
 
 with workflow.unsafe.imports_passed_through():
     from nof1_causal_service.actions.contracts.call_state import (

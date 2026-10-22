@@ -6,16 +6,11 @@ from typing import TYPE_CHECKING
 
 from pydantic import Field
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.observations.duration import Duration
-from nof1_causal_lab.artifacts.observations.preparation import (
-    DataVariableSpec,
-    FilePreparationSpec,
-    FileSourceRef,
-)
+from nof1_causal_lab.public import DataVariableSpec, Duration, Value
+from nof1_causal_service.actions.contracts.preparation import FilePreparationSpec, FileSourceRef
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.observations.spec import ObservationWindow
+    from nof1_causal_lab.public import ObservationWindow
 
 
 class MeasurementContext(Value):

@@ -10,12 +10,12 @@ from typing import TYPE_CHECKING
 
 import jax
 
-from nof1_causal_lab.artifacts.sampling import SamplerSpec
+from nof1_causal_lab.public import SamplerSpec
 
 if TYPE_CHECKING:
     from jax.stages import Compiled
 
-    from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
+    from nof1_causal_service.actions.contracts.settings import FitSettingsSpec
 
 
 def resolve_sampler_spec(

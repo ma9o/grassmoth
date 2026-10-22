@@ -8,12 +8,9 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import GitOid
-from nof1_causal_lab.artifacts.observations.preparation import (
-    FileSourceRef,
-)
+from nof1_causal_lab.public import GitOid, Value
 from nof1_causal_service.actions.contracts.effects import ActionReportName
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef
 from nof1_causal_service.actions.contracts.requests import (
     DataDiffRequest,
     EditModelRequest,

@@ -15,7 +15,7 @@ import pytest
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import DistributionId, GitOid
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
-from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult, FileSourceRef
+from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.reports.checks import Evaluated
 from nof1_causal_lab.artifacts.reports.data_quality import DataProfileReport
@@ -45,6 +45,7 @@ from nof1_causal_service.actions.contracts.inputs import (
     PrepareDataInput,
     SimulateInput,
 )
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef
 from nof1_causal_service.actions.contracts.requests import (
     EditModelRequest,
     FitRequest,

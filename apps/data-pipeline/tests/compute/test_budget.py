@@ -145,7 +145,7 @@ def test_traced_memory_scales_parallel_arrays_and_reuses_sequential_workspace():
     import jax
     import jax.numpy as jnp
 
-    from nof1_causal_lab.compute.traced_memory import traced_memory
+    from nof1_causal_service.compute.traced_memory import traced_memory
 
     def dense_markers(values):
         return jnp.sin(values[:, None] * values[None, :]).sum(axis=1)

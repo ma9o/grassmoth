@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING
 
 from pydantic import Field
 
-from nof1_causal_lab.artifacts.base import Value
+from nof1_causal_lab.public import Value
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import ArtifactId
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
 
 
 class ArtifactFileSpec(Value):

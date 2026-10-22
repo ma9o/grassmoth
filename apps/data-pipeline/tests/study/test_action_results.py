@@ -142,13 +142,11 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
     from polars.testing import assert_frame_equal
 
     from nof1_causal_lab.artifacts.identity import GitOid
-    from nof1_causal_lab.artifacts.observations.preparation import (
-        DataPreparationResult,
-        FileSourceRef,
-    )
+    from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
     from nof1_causal_lab.artifacts.observations.reference import DataRef
     from nof1_causal_lab.observations.quality.profile import profile_data
     from nof1_causal_service.actions.contracts.inputs import PrepareDataInput
+    from nof1_causal_service.actions.contracts.preparation import FileSourceRef
     from nof1_causal_service.actions.contracts.requests import PrepareDataRequest
     from nof1_causal_service.actions.output_builder import complete_attempt
     from nof1_causal_service.study.queries.data import read_data_history

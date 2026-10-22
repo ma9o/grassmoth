@@ -687,6 +687,14 @@ class DynamicalModelSpec(Value):
             diff_fields(before.model_dump(mode="json"), self.model_dump(mode="json"))
         )
 
+    def distribution_shape(
+        self, identity: DistributionId
+    ) -> tuple[tuple[int, ...], tuple[int, ...]]:
+        """Return the native batch and event shapes of one owned probability law."""
+        from nof1_causal_lab.artifacts.probability.serialization import distribution_shape
+
+        return distribution_shape(self.distributions[identity])
+
 
 class ModelEditResult(Value):
     """Scientific entities pruned while materializing an accepted model edit."""

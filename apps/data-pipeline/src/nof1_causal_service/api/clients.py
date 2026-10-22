@@ -1,4 +1,4 @@
-"""HTTP dependency injection for the public library's connection owner."""
+"""HTTP dependency injection for the study service's connection owner."""
 
 from typing import cast
 

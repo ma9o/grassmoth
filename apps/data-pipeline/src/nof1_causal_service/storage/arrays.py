@@ -6,7 +6,7 @@ from tempfile import NamedTemporaryFile
 
 import numpy as np
 
-from nof1_causal_lab.artifacts.arrays import NumericalArray
+from nof1_causal_lab.public import NumericalArray
 from nof1_causal_service.storage import backend as storage
 
 

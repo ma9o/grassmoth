@@ -10,10 +10,11 @@ import pytest
 from nof1_causal_lab.actions.contracts.bodies import EditModelOutput
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.reference import DataRef
-from nof1_causal_lab.artifacts.sampling import FitSettingsSpec, InferenceHardware
-from nof1_causal_lab.compilation_errors import IncompleteModelError
+from nof1_causal_lab.artifacts.sampling import InferenceHardware
 from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
 from nof1_causal_service.actions.contracts.requests import EditModelRequest, FitRequest
+from nof1_causal_service.actions.contracts.settings import FitSettingsSpec
+from nof1_causal_service.actions.errors import ModelFitError
 from nof1_causal_service.actions.runners import run_action
 from nof1_causal_service.study.persistence.history import StudyRepository
 from nof1_causal_service.study.persistence.store import ArtifactStore
@@ -27,7 +28,7 @@ from tests.support.model import x_y_model
 pytestmark = pytest.mark.contract
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import ArtifactId
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
 
 
 @pytest.fixture
@@ -97,8 +98,9 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
 def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monkeypatch):
     from threading import get_ident
 
-    from nof1_causal_service.actions.fit import action as flow
+    from nof1_causal_lab.actions.fit import execution
     from nof1_causal_service.study.persistence import store as store_module
+    from tests.integration.runner_fixtures import panel_frame, panel_metadata
 
     event_loop_thread = get_ident()
     read_model = store_module.read_model
@@ -110,7 +112,7 @@ def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monke
     monkeypatch.setattr(store_module, "read_model", read_model_off_loop)
 
     local = Mock()
-    monkeypatch.setattr(flow, "fit", local)
+    monkeypatch.setattr(execution, "fit_prepared_model", local)
     store = ArtifactStore(workspace)
     model = store.write_artifact(
         "model",
@@ -122,10 +124,11 @@ def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monke
         "panel",
         derived_from={},
         produced_by="prepare_data",
-        parquet_files={"panel.parquet": pl.DataFrame({"value": [1.0]})},
+        json_files={"metadata.json": panel_metadata().model_dump(mode="json")},
+        parquet_files={"panel.parquet": panel_frame(n_days=2)},
     )
     state = StudyState().with_artifacts([write_question(store), model, panel])
-    with pytest.raises(IncompleteModelError):
+    with pytest.raises(ModelFitError):
         run_async(
             run_action(
                 workspace,
@@ -241,7 +244,6 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
                 kwargs["selection"],
                 kwargs["question"],
                 kwargs["data_for_model"],
-                preflight=kwargs["preflight"],
             ),
             inference=_report(conditioned),
         )

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-
 from pydantic import Field
 
 from nof1_causal_lab.artifacts.base import Value
@@ -19,9 +17,3 @@ class DataRef[RevisionT, IndexT: int | None](Value):
 
     revision: RevisionT
     replicate_index: IndexT = Field(ge=0)
-
-
-type DataSelection[RevisionT] = Annotated[
-    tuple[DataRef[RevisionT, Annotated[int | None, Field(default=None)]], ...],
-    Field(min_length=1, description="One or more saved observation-history references."),
-]

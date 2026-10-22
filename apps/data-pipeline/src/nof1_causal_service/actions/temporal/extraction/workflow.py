@@ -9,13 +9,10 @@ from temporalio import workflow
 from temporalio.common import RetryPolicy
 from temporalio.exceptions import ChildWorkflowError
 
-from nof1_causal_lab.actions.errors import execution_failure_handler
+from nof1_causal_service.actions.errors import execution_failure_handler
 
 with workflow.unsafe.imports_passed_through():
-    from nof1_causal_lab.artifacts.identity import GitOid
-    from nof1_causal_lab.artifacts.observations.preparation import (
-        FailedExtractionChunk,
-    )
+    from nof1_causal_lab.public import FailedExtractionChunk, GitOid
     from nof1_causal_service.actions.contracts.progress import (
         ExtractionPlanEvent,
         ExtractionSnapshotEvent,

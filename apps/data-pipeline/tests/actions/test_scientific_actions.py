@@ -31,7 +31,7 @@ from tests.support.inference import compile_model_fixture, parameter_draws, part
 from tests.support.model import stress_sleep_causal_model, stress_sleep_model, x_model, x_y_model
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import ArtifactId
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
 
 
 @pytest.mark.inference(concern="predictive")

@@ -10,6 +10,22 @@ import pytest
 pytestmark = pytest.mark.contract
 
 
+def test_library_exposes_only_the_seven_action_functions() -> None:
+    from inspect import getmembers, isfunction
+
+    from nof1_causal_lab import public
+
+    assert {name for name, _ in getmembers(public, isfunction)} == {
+        "edit_question",
+        "edit_model",
+        "prepare_data",
+        "fit",
+        "simulate",
+        "model_diff",
+        "data_diff",
+    }
+
+
 @pytest.mark.parametrize("direction", ["runtime", "type_only", "service_to_library"])
 def test_library_service_import_contract(tmp_path: Path, direction: str) -> None:
     settings = tomllib.loads((Path(__file__).resolve().parents[3] / "pyproject.toml").read_text())[

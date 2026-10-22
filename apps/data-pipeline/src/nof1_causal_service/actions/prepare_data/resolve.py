@@ -4,17 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from nof1_causal_lab.artifacts.observations.preparation import (
-    DataPreparationSpec,
-    DataVariableSpec,
-    FilePreparationSpec,
-    FileSourceRef,
-)
+from nof1_causal_lab.public import DataPreparationSpec, DataVariableSpec
+from nof1_causal_service.actions.contracts.preparation import FilePreparationSpec, FileSourceRef
 from nof1_causal_service.study.errors import StudyLookupError
 from nof1_causal_service.study.persistence.store import ArtifactStore, read_model
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.artifacts.identity import GitOid
+    from nof1_causal_lab.public import GitOid
     from nof1_causal_service.actions.contracts.inputs import PrepareDataInput
 
 

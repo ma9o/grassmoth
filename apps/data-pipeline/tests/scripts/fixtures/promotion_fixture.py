@@ -8,8 +8,8 @@ import polars as pl
 
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import ModelEditResult
 from nof1_causal_lab.artifacts.observations.preparation import DataPreparationResult
-from nof1_causal_lab.llm.traces import LLMTrace, TraceMessage
 from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.llm.traces import LLMTrace, TraceMessage
 from nof1_causal_service.storage import paths as data_module
 from nof1_causal_service.study.persistence.history import StudyRepository
 from nof1_causal_service.study.persistence.store import ArtifactStore

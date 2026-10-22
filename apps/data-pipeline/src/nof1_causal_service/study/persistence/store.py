@@ -20,8 +20,8 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 import pygit2
 
-from nof1_causal_lab.actions.errors import execution_failure_handler
-from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid, GitRef
+from nof1_causal_lab.public import GitOid, GitRef
+from nof1_causal_service.actions.errors import execution_failure_handler
 from nof1_causal_service.storage import backend as storage
 from nof1_causal_service.storage import paths as data_module
 from nof1_causal_service.study.errors import StudyLookupError
@@ -40,9 +40,8 @@ if TYPE_CHECKING:
     from jax.typing import ArrayLike
     from pydantic import BaseModel
 
-    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-    from nof1_causal_lab.artifacts.model.question import QuestionSpec
-    from nof1_causal_lab.json_types import JsonObject
+    from nof1_causal_lab.public import DynamicalModelSpec, JsonObject, QuestionSpec
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
 
 
 def utc_now_iso() -> str:
@@ -54,7 +53,7 @@ def read_model(store: ArtifactStore, revision: GitOid) -> DynamicalModelSpec:
     """Decode a pinned model, keeping its numerical arrays lazy."""
     from functools import cache
 
-    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.public import DynamicalModelSpec
 
     return DynamicalModelSpec.model_validate(
         store.read_json_file("model", revision, "model.json"),
@@ -65,7 +64,7 @@ def model_values(store: ArtifactStore, model: DynamicalModelSpec) -> DynamicalMo
     """Read every referenced law buffer before handing a document to a library action."""
     from functools import cache
 
-    from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from nof1_causal_lab.public import DynamicalModelSpec
 
     return DynamicalModelSpec.model_validate(
         model.model_dump(
@@ -78,7 +77,7 @@ def model_values(store: ArtifactStore, model: DynamicalModelSpec) -> DynamicalMo
 
 def read_question(store: ArtifactStore, revision: GitOid) -> QuestionSpec:
     """Decode the study question pinned at one revision."""
-    from nof1_causal_lab.artifacts.model.question import QuestionSpec
+    from nof1_causal_lab.public import QuestionSpec
 
     return store.read_value("question", revision, "question.json", QuestionSpec)
 
@@ -99,7 +98,7 @@ class ArtifactStore:
 
     def write_array(self, values: ArrayLike) -> str:
         """Persist numerical values in the workspace array store and return their content identity."""
-        from nof1_causal_lab.artifacts.arrays import NumericalArray
+        from nof1_causal_lab.public import NumericalArray
         from nof1_causal_service.storage.arrays import write_owned_array
 
         array = NumericalArray.from_numpy(np.asarray(values))
@@ -285,11 +284,10 @@ class ArtifactStore:
 
         info = self.read_meta(artifact_id, revision)
         if isinstance(info.source, ArtifactResult):
-            from nof1_causal_lab.actions.contracts.bodies import PrepareDataOutput
-            from nof1_causal_lab.study.projections.observations import prepared_frame
+            from nof1_causal_lab.public import PrepareDataOutput
 
             assert artifact_id == "panel"
-            return prepared_frame(self.read_result(info.source.result, PrepareDataOutput))
+            return self.read_result(info.source.result, PrepareDataOutput).observation_frame()
         return pl.read_parquet(self.file_path(artifact_id, revision, name))
 
     def read_parquet_table(self, artifact_id: ArtifactId, revision: str, name: str) -> pa.Table:

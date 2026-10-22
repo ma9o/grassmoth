@@ -7,17 +7,17 @@ integer. Decoding restores shared bytes before scientific owners parse the resul
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, cast
 
 import msgpack
 from pydantic_core import to_jsonable_python
 
 if TYPE_CHECKING:
+    import numpy as np
     from pydantic import BaseModel
 
-    from nof1_causal_lab.artifacts.probability.serialization import ArrayLoader
-    from nof1_causal_lab.json_types import JsonObject
+    from nof1_causal_lab.public import JsonObject
 
 _BUFFER_REFERENCE = 42
 
@@ -52,7 +52,7 @@ def pack_payload(value: object) -> bytes:
 
 
 def result_payload(
-    result: BaseModel, *, array_loader: ArrayLoader | None = None
+    result: BaseModel, *, array_loader: Callable[[str], np.ndarray] | None = None
 ) -> Mapping[str, object]:
     """Serialize each numerical field at its owner, without a result-wide buffer map."""
     values = result.model_dump(
@@ -65,7 +65,9 @@ def result_payload(
     return {key: _metadata(value) for key, value in values.items()}
 
 
-def pack_result(result: BaseModel, *, array_loader: ArrayLoader | None = None) -> bytes:
+def pack_result(
+    result: BaseModel, *, array_loader: Callable[[str], np.ndarray] | None = None
+) -> bytes:
     """Retain the complete action body, sharing equal buffers across domain views."""
     return pack_payload(result_payload(result, array_loader=array_loader))
 

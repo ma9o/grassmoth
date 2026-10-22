@@ -9,8 +9,8 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.prepare_data.window_text import format_window_chunk
-from nof1_causal_lab.observations.rows import bucket_by_clock
+from nof1_causal_service.actions.prepare_data.rows import bucket_by_clock
+from nof1_causal_service.actions.prepare_data.window_text import format_window_chunk
 
 pytestmark = pytest.mark.contract
 

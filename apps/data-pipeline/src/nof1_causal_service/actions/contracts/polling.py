@@ -1,26 +1,30 @@
 """The shared polling envelope and action-specific scientific result bodies."""
 
+from __future__ import annotations
+
 from typing import Annotated, Literal
 
-from pydantic import Field, computed_field
+from pydantic import Field, TypeAdapter, computed_field
 
-from nof1_causal_lab.actions.contracts.bodies import (
+from nof1_causal_lab.public import (
     DataDiffOutput,
     EditModelOutput,
     EditQuestionOutput,
     FitOutput,
+    GitOid,
     ModelDiffOutput,
     PrepareDataOutput,
     SimulateOutput,
+    Value,
 )
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import ActionId, CallId, GitOid
+from nof1_causal_service.actions.contracts.identity import ActionId, CallId
 from nof1_causal_service.actions.contracts.logs import ExecutionMessage
 from nof1_causal_service.actions.contracts.requests import (
     DataDiffRequest,
     ModelDiffRequest,
     ScientificActionRequest,
 )
+from nof1_causal_service.study.persistence.codec import pack_result, unpack_result
 
 
 class RunningPoll(Value):
@@ -92,3 +96,28 @@ class RunningAction(Value):
     action: ActionId
     request: ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid]
     messages: tuple[ExecutionMessage, ...]
+
+
+class StudyError(Value):
+    """An expected rejection at the public study boundary."""
+
+    code: Literal["invalid_request", "read_only", "invalid_inputs", "unknown_call"]
+    detail: str
+
+
+_POLL: TypeAdapter[ActionPoll] = TypeAdapter(ActionPoll)
+
+
+class ActionResult(Value):
+    """An intact action envelope; decoding is optional for callers forwarding saved bytes."""
+
+    payload: bytes
+
+    @classmethod
+    def from_poll(cls, poll: ActionPoll) -> ActionResult:
+        """Encode a live status using the same numerical codec as saved results."""
+        return cls(payload=pack_result(poll))
+
+    def decode(self) -> ActionPoll:
+        """Read the typed result without executing or rebuilding scientific outputs."""
+        return _POLL.validate_python(unpack_result(self.payload))

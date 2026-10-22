@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Final, Literal
+
 from nof1_causal_lab.artifacts.probability.families import PriorDistributionFamily
 
 

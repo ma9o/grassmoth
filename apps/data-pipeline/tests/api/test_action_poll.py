@@ -14,7 +14,7 @@ from pydantic import TypeAdapter
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
-from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef, SemanticExtractionSpec
+from nof1_causal_lab.artifacts.observations.preparation import SemanticExtractionSpec
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.simulation import SimulationSpec
 from nof1_causal_service.actions.contracts.call_state import (
@@ -32,6 +32,7 @@ from nof1_causal_service.actions.contracts.inputs import (
     PrepareDataInput,
     SimulateInput,
 )
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef
 from nof1_causal_service.actions.contracts.requests import (
     DataDiffRequest,
     EditModelRequest,
@@ -245,14 +246,9 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     )
     assert first.status_code == second.status_code == 200
     assert first.content == second.content
-    from nof1_causal_service.public import studies as library
+    from nof1_causal_service.public.contracts import ActionResult
 
-    native_post = asyncio.run(library.submit_action("CALLS", request))
-    native_poll = asyncio.run(library.poll_action("CALLS", request.action, call_identity(request)))
-    assert isinstance(native_post, library.ActionResult)
-    assert isinstance(native_poll, library.ActionResult)
-    assert native_post.payload == native_poll.payload == first.content
-    assert native_post.decode().status == "success"
+    assert ActionResult.model_validate({"payload": first.content}).decode().status == "success"
     result = msgpack.unpackb(first.content)
     assert set(result) == {"call_id", "action", "status", "commit_id", "body", "messages"}
     assert result["status"] == "success"
@@ -279,9 +275,6 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     assert client.get(f"/api/studies/CALLS/fit/{result['call_id']}").status_code == 404
     assert client.get(f"/api/studies/MISSING/edit_question/{result['call_id']}").status_code == 404
     timeline = client.get("/api/studies/CALLS/timeline").json()
-    native_timeline = asyncio.run(library.get_timeline("CALLS"))
-    assert not isinstance(native_timeline, library.StudyError)
-    assert native_timeline.model_dump(mode="json") == timeline
     assert timeline["attempts"][0]["record"]["attempt"]["request"]["reasoning"] == request.reasoning
     assert len(repository.attempts()) == 2
     assert (

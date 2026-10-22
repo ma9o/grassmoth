@@ -7,20 +7,19 @@ from uuid import uuid4
 import polars as pl
 import pytest
 
-from nof1_causal_lab.actions.prepare_data.context import extraction_context
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.observations.preparation import (
     ComputedExtractionSpec,
     DataPreparationSpec,
     DataVariableSpec,
-    FilePreparationSpec,
-    FileSourceRef,
     SemanticExtractionSpec,
 )
 from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
 from nof1_causal_service.actions.contracts.inputs import PrepareDataInput
+from nof1_causal_service.actions.contracts.preparation import FilePreparationSpec, FileSourceRef
 from nof1_causal_service.actions.contracts.requests import PrepareDataRequest
 from nof1_causal_service.actions.messages import preparation_messages
+from nof1_causal_service.actions.prepare_data.context import extraction_context
 from nof1_causal_service.actions.temporal.extraction.activities import (
     finalize_measurements_activity,
     plan_measurements_activity,
@@ -199,9 +198,9 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
 def test_declared_categorical_codebook_validates_and_encodes_normalized_labels(
     value, expected_code
 ):
-    from nof1_causal_lab.actions.prepare_data.materialization import materialize_panel
-    from nof1_causal_lab.actions.prepare_data.worker_output import validate_worker_output
-    from nof1_causal_lab.observations.rows import annotate_observation_rows
+    from nof1_causal_service.actions.prepare_data.materialization import materialize_panel
+    from nof1_causal_service.actions.prepare_data.rows import annotate_observation_rows
+    from nof1_causal_service.actions.prepare_data.worker_output import validate_worker_output
 
     preparation = DataPreparationSpec(
         default_window="1d",
@@ -221,7 +220,7 @@ def test_declared_categorical_codebook_validates_and_encodes_normalized_labels(
     )
     from pydantic import TypeAdapter
 
-    from nof1_causal_lab.artifacts.observations.records import ObservationRecord
+    from nof1_causal_service.actions.prepare_data.records import ObservationRecord
 
     context = extraction_context(
         FilePreparationSpec(source=FileSourceRef(files=("source.csv",)), definition=preparation)

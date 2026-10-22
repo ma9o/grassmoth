@@ -32,9 +32,8 @@ from jax.experimental.compilation_cache import compilation_cache
 from jaxlib import xla_client
 from pydantic import Field, TypeAdapter, field_validator
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.compute.programs import PreparedProgram
-from nof1_causal_lab.compute.traced_memory import traced_memory
+from nof1_causal_lab.public import PreparedProgram, Value
+from nof1_causal_service.compute.traced_memory import traced_memory
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -43,7 +42,7 @@ if TYPE_CHECKING:
     from jax.stages import Compiled
     from jax.tree_util import PyTreeDef
 
-    from nof1_causal_lab.compute.budget import MemoryDemand
+    from nof1_causal_lab.public import MemoryDemand
 
 
 def numerical_source_digest() -> str:

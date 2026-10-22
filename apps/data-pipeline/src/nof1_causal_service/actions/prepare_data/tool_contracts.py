@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from nof1_causal_lab.artifacts.base import Value
+from nof1_causal_lab.public import Value
 
 
 class ValidateExtractionsInput(Value):

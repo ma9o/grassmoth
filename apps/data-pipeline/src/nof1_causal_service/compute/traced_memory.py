@@ -10,7 +10,7 @@ import jax
 import jax.numpy as jnp
 from jax.extend.core import AbstractToken, Var, jaxprs_in_params
 
-from nof1_causal_lab.compute.budget import MemoryDemand
+from nof1_causal_lab.public import MemoryDemand
 
 if TYPE_CHECKING:
     from jax.core import AbstractValue, ShapedArray

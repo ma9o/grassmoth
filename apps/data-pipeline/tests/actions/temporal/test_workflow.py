@@ -13,13 +13,13 @@ from unittest.mock import AsyncMock
 import pytest
 
 from nof1_causal_lab.actions.contracts.bodies import EditModelOutput, PrepareDataOutput
-from nof1_causal_lab.artifacts.identity import GitOid, RevisionSelector
+from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from nof1_causal_lab.artifacts.model.question import QuestionSpec
-from nof1_causal_lab.artifacts.observations.preparation import SourceFolder
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.simulation import SimulationSpec
 from nof1_causal_service.actions.contracts.call_state import CallProgress, RunningCall
+from nof1_causal_service.actions.contracts.identity import RevisionSelector
 from nof1_causal_service.actions.contracts.inputs import (
     EditModelInput,
     EditQuestionInput,
@@ -29,6 +29,7 @@ from nof1_causal_service.actions.contracts.inputs import (
     SimulateInput,
 )
 from nof1_causal_service.actions.contracts.polling import ActionPoll, RunningPoll
+from nof1_causal_service.actions.contracts.preparation import SourceFolder
 from nof1_causal_service.actions.contracts.requests import (
     EditModelRequest,
     EditQuestionRequest,
@@ -38,12 +39,11 @@ from nof1_causal_service.actions.contracts.requests import (
 )
 from nof1_causal_service.actions.temporal.study.workflow import StudyWorkflow
 from nof1_causal_service.llm.openrouter import create_openrouter_client
-from nof1_causal_service.public import studies as library
-from nof1_causal_service.public.contracts import TimelineResponse
+from nof1_causal_service.public.contracts import ActionResult, StudyError, TimelineResponse
 from nof1_causal_service.study import interface as study_interface
 from nof1_causal_service.study.persistence.history import StudyRepository
 from nof1_causal_service.study.persistence.store import ArtifactStore, read_model
-from nof1_causal_service.study.records import ActionMessage, Rejected
+from nof1_causal_service.study.records import ActionMessage, Raised, Rejected
 from tests.support.helpers import graph_constructs
 
 pytestmark = [pytest.mark.workflow, pytest.mark.timeout(60, method="thread")]
@@ -63,7 +63,7 @@ _PREPARATION: dict[str, Any] = {
 
 async def _submit(workspace, request, clients) -> ActionPoll:
     response = await study_interface.submit_action(workspace, request, clients)
-    assert isinstance(response, library.ActionResult), response
+    assert isinstance(response, ActionResult), response
     return response.decode()
 
 
@@ -175,12 +175,8 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                         response = await study_api.poll_action(
                             workspace_id, response.action, response.call_id, clients
                         )
-                    polled = (
-                        response.decode()
-                        if isinstance(response, library.ActionResult)
-                        else response
-                    )
-                    assert not isinstance(polled, library.StudyError)
+                    polled = response.decode() if isinstance(response, ActionResult) else response
+                    assert not isinstance(polled, StudyError)
                     assert polled.status != "running"
                     assert polled.commit_id is not None
                     record = StudyRepository(workspace_id).record(polled.commit_id)
@@ -284,8 +280,13 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                     ),
                 ):
                     raised = await execute(request)
-                    assert isinstance(raised.record.attempt.outcome, Rejected), raised
-                    assert raised.record.attempt.outcome.code == "model_execution"
+                    outcome = raised.record.attempt.outcome
+                    if isinstance(request, FitRequest):
+                        assert isinstance(outcome, Raised), raised
+                        assert outcome.error_type == "ModelFitError"
+                    else:
+                        assert isinstance(outcome, Rejected), raised
+                        assert outcome.code == "model_execution"
                     assert state().current == before
 
                 status = await _timeline(workspace_id, clients)
@@ -322,7 +323,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                     "rejected",
                     "applied",
                     "applied",
-                    "rejected",
+                    "raised",
                     "rejected",
                     "applied",
                 ]

@@ -188,11 +188,9 @@ def empty_simulation_summary():
 def model_findings(workspace_id, state, *, action):
     """Evaluate the selected scientific values in a storage-backed fixture."""
     from nof1_causal_lab.actions.checks import (
-        check_model_data,
         fit_check_report,
         model_check_report,
     )
-    from nof1_causal_lab.models.ssm.compile.inputs import compile_ssm_inputs_from_model
     from nof1_causal_lab.models.structure import StructuralSelection
     from nof1_causal_service.study.persistence.store import ArtifactStore, read_model, read_question
     from nof1_causal_service.study.queries.data import read_data_history
@@ -203,12 +201,7 @@ def model_findings(workspace_id, state, *, action):
     selection = StructuralSelection.for_question(model, question)
     if action == "fit":
         history = read_data_history(store, state.data)
-        findings = check_model_data(
-            compile_ssm_inputs_from_model(selection),
-            history.observations,
-            time_origin=history.time_origin,
-        )
-        return fit_check_report(selection, question, history.observations, preflight=findings)
+        return fit_check_report(selection, question, history.observations)
     return model_check_report(selection, question), selection.identification
 
 

@@ -83,7 +83,6 @@ def test_fit_shell_closes_trace_and_owns_artifact_writes(monkeypatch, tmp_path, 
             data_for_model=Mock(),
             time_origin=datetime(2024, 1, 1, tzinfo=UTC),
             sampler=SamplerSpec(),
-            preflight=(),
             compute_loo_diagnostics=False,
         )
 

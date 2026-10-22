@@ -11,8 +11,8 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import ConfigDict, TypeAdapter, with_config
 
-from nof1_causal_lab.artifacts.sampling import SamplerSpec
-from nof1_causal_lab.llm.specs import EmbeddedLLMSpec, EmbeddedReasoningEffort
+from nof1_causal_lab.public import SamplerSpec
+from nof1_causal_service.llm.specs import EmbeddedLLMSpec, EmbeddedReasoningEffort
 
 # Centralized .env loading — all modules that need env vars import from config.py
 # (or from modules that import config.py), so this runs once at import time.

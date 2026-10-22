@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from nof1_causal_lab.artifacts.arrays import NumericalArray
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.construct import replace_constructs
-from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef
 from nof1_causal_lab.artifacts.observations.reference import DataRef
 from nof1_causal_lab.artifacts.observations.semantics import SummaryOperator
 from nof1_causal_lab.artifacts.reports.predictive_provenance import AuthoredLawProvenance
@@ -30,6 +29,7 @@ from nof1_causal_lab.models.ssm.preparation.binding import project_observation_d
 from nof1_causal_lab.models.ssm.preparation.preflight import ObservationPreflightFailure
 from nof1_causal_service.actions.contracts.effects import ActionEffects
 from nof1_causal_service.actions.contracts.inputs import FitInput, NewFitTarget
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef
 from nof1_causal_service.actions.contracts.requests import FitRequest, PrepareDataRequest
 from nof1_causal_service.actions.runners import run_action
 from nof1_causal_service.study.errors import StudyLookupError
@@ -236,7 +236,6 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
                 kwargs["selection"],
                 kwargs["question"],
                 kwargs["data_for_model"],
-                preflight=kwargs["preflight"],
             ),
             inference=_report(dynamical_model_spec),
         )

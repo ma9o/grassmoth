@@ -208,15 +208,17 @@ class SamplerSpec(Value):
     retain_latent_paths: bool = True
     algorithm: InferenceAlgorithmSpec = Field(default_factory=MarginalParticleGibbsSpec)
 
-
-class FitSettingsSpec(Value):
-    """Optional numerical controls applied to the configured joint sampler."""
-
-    hardware: InferenceHardware | None = None
-    time_limit_seconds: int | None = Field(default=None, ge=1)
-    algorithm: InferenceAlgorithmSpec | None = None
-    num_samples_per_chain: int | None = Field(default=None, ge=0)
-    num_warmup: int | None = Field(default=None, ge=0)
-    num_chains: int | None = Field(default=None, ge=1)
-    num_particles: int | None = Field(default=None, ge=2)
-    seed: int | None = Field(default=None, ge=0)
+    @property
+    def kernel_identity(self) -> tuple[str | int, ...]:
+        """Identify kernels whose private state has the same scientific interpretation."""
+        algorithm = self.algorithm
+        if isinstance(algorithm, NutsDASpec):
+            return (algorithm.method, algorithm.trajectory.kind, algorithm.parameterization)
+        if isinstance(algorithm, ParticleGibbsSpec):
+            return (algorithm.method, algorithm.parameter_kernel.method)
+        assert isinstance(algorithm, MarginalParticleGibbsSpec)
+        return (
+            algorithm.method,
+            algorithm.parameter_proposal,
+            1 if algorithm.tempering is None else algorithm.tempering.num_temperatures,
+        )

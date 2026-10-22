@@ -1,1 +1,1 @@
-"""Public study library; callers use these modules instead of framework internals."""
+"""Public HTTP client and study contracts."""

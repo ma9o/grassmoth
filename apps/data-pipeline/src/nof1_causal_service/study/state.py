@@ -16,9 +16,12 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import ARTIFACT_IDS, ArtifactId, GitOid, ScientificActionId
-from nof1_causal_lab.artifacts.observations.reference import DataRef
+from nof1_causal_lab.public import DataRef, GitOid, Value
+from nof1_causal_service.actions.contracts.identity import (
+    ARTIFACT_IDS,
+    ArtifactId,
+    ScientificActionId,
+)
 
 
 class ArtifactFiles(Value):

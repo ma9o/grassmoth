@@ -8,7 +8,7 @@ from nof1_causal_service.actions.temporal.llm.context import subroutine_context_
 from nof1_causal_service.storage.cache import cache_path, content_key
 
 if TYPE_CHECKING:
-    from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
+    from nof1_causal_service.llm.specs import EmbeddedLLMSpec
 
 # Bump the version when extraction prompts, tools, schemas, or validation change.
 EXTRACTION_POLICY_VERSION = "extraction-v4"

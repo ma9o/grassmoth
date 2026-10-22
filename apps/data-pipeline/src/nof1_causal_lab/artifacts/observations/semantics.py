@@ -48,11 +48,6 @@ class IndicatorObservationSemantics:
     anchor_policy: AnchorPolicy
 
 
-def normalize_level_label(label: str) -> str:
-    """Match declared level labels independently of case and surrounding whitespace."""
-    return label.strip().lower()
-
-
 def supported_summary_operators_text() -> str:
     """Return a stable human-readable list of supported operators."""
     return ", ".join(SummaryOperator)

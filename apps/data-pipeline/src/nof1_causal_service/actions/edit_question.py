@@ -1,7 +1,7 @@
 """Record the study question as the first artifact of its lineage."""
 
-from nof1_causal_lab.actions.edit_question import edit_question as question_result
-from nof1_causal_lab.artifacts.identity import GitOid
+from nof1_causal_lab.public import GitOid
+from nof1_causal_lab.public import edit_question as question_result
 from nof1_causal_service.actions.contracts.effects import ActionEffects
 from nof1_causal_service.actions.contracts.requests import EditQuestionRequest
 from nof1_causal_service.study.artifact_files import json_filename

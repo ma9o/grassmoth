@@ -10,18 +10,17 @@ import polars as pl
 import pytest
 from pydantic import TypeAdapter
 
-from nof1_causal_lab.actions.prepare_data.context import extraction_context
-from nof1_causal_lab.actions.prepare_data.worker_output import ExtractionRow
 from nof1_causal_lab.artifacts.observations.preparation import (
     ComputedExtractionSpec,
     DataPreparationSpec,
     DataVariableSpec,
-    FilePreparationSpec,
-    FileSourceRef,
     SemanticExtractionSpec,
 )
 from nof1_causal_lab.artifacts.observations.spec import AuthoredObservationSpec
-from nof1_causal_lab.observations.aggregations import compute_indicators
+from nof1_causal_service.actions.contracts.preparation import FilePreparationSpec, FileSourceRef
+from nof1_causal_service.actions.prepare_data.aggregations import compute_indicators
+from nof1_causal_service.actions.prepare_data.context import extraction_context
+from nof1_causal_service.actions.prepare_data.worker_output import ExtractionRow
 from nof1_causal_service.actions.temporal.extraction.activities import (
     finalize_extraction_chunk_activity,
     plan_measurements_activity,
@@ -232,7 +231,7 @@ def test_span_keeps_complete_windows_and_never_fills_from_excluded_history():
     assert empty_output.to_dataframe().to_dicts() == [
         {"indicator_id": "indicator:x", "timestamp": "2026-01-02T00:00:00", "value": None}
     ]
-    from nof1_causal_lab.observations.rows import prepared_time_origin
+    from nof1_causal_service.actions.prepare_data.rows import prepared_time_origin
 
     assert prepared_time_origin(pl.DataFrame(), date(2026, 1, 2)) == datetime(
         2026, 1, 2, tzinfo=UTC
@@ -347,7 +346,7 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
         )
     )
     computed = compute_indicators(raw, computed_context, "timestamp")
-    from nof1_causal_lab.observations.rows import annotate_observation_rows
+    from nof1_causal_service.actions.prepare_data.rows import annotate_observation_rows
 
     rows = annotate_observation_rows(computed, preparation.definition.observation_schema())
     assert rows["anchor_time"].to_list() == [value.isoformat() for value in panel["anchor_time"]]

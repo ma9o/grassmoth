@@ -2,7 +2,7 @@
 
 from collections.abc import Mapping
 
-from nof1_causal_lab.artifacts.arrays import NumericalArray
+from nof1_causal_lab.public import NumericalArray
 
 
 def owned_arrays(value: object) -> Mapping[str, NumericalArray]:

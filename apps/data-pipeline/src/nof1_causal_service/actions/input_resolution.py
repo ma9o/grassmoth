@@ -7,12 +7,11 @@ from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from nof1_causal_lab.artifacts.identity import ArtifactId, GitOid, RevisionSelector
-from nof1_causal_lab.artifacts.observations.preparation import FileSourceRef, SourceFolder
-from nof1_causal_lab.artifacts.observations.reference import DataRef, DataSelection
+from nof1_causal_lab.public import DataRef, GitOid
 from nof1_causal_service.actions.contracts.inputs import (
     ContinueFitTarget,
     DataDiffInput,
+    DataSelection,
     EditModelInput,
     FitInput,
     ModelDiffInput,
@@ -20,6 +19,7 @@ from nof1_causal_service.actions.contracts.inputs import (
     PrepareDataInput,
     SimulateInput,
 )
+from nof1_causal_service.actions.contracts.preparation import FileSourceRef, SourceFolder
 from nof1_causal_service.actions.contracts.requests import (
     ActionInput,
     DataDiffRequest,
@@ -40,6 +40,7 @@ from nof1_causal_service.study.state import ArtifactRecord, StudyState, is_stale
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from nof1_causal_service.actions.contracts.identity import ArtifactId, RevisionSelector
     from nof1_causal_service.study.persistence.history import StudyRepository
     from nof1_causal_service.study.persistence.store import ArtifactStore
 
@@ -238,7 +239,7 @@ def input_state(
     )
     panel: GitOid | None = None
     if source is not None:
-        from nof1_causal_lab.artifacts.observations.preparation import PreparedDataMetadata
+        from nof1_causal_lab.public import PreparedDataMetadata
         from nof1_causal_service.study.queries.data import panel_revision, read_data_source
 
         if isinstance(read_data_source(store, source.data_ref.revision), PreparedDataMetadata):

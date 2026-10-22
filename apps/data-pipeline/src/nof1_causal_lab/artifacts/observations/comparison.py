@@ -16,6 +16,8 @@ from nof1_causal_lab.artifacts.reports.data_comparison import DataPoint
 if TYPE_CHECKING:
     from datetime import datetime
 
+    from nof1_causal_lab.artifacts.observations.dataset import ObservationDataset
+
 
 class DataSeries(Value):
     """One variable's recorded measurements in one history; no pooling across replicas."""
@@ -36,3 +38,30 @@ class Dataset(Value):
     source: DataRef[GitOid, int]
     time_origin: AwareDatetime = Field(description="Calendar instant of model day zero.")
     series: Mapping[IndicatorId, DataSeries]
+
+    @classmethod
+    def from_observations(
+        cls, source: DataRef[GitOid, int], observations: ObservationDataset
+    ) -> Dataset:
+        """Project one parsed history with its exact source reference."""
+        import polars as pl
+
+        frame = observations.recorded.frame.with_columns(
+            pl.col("anchor_time", "support_start", "support_end").dt.replace_time_zone("UTC")
+        )
+        series = {
+            variable.id: DataSeries(
+                variable=variable,
+                points=tuple(
+                    DataPoint(anchor_time=anchor, support_start=start, support_end=end, value=value)
+                    for anchor, start, end, value in frame.filter(
+                        pl.col("indicator_id") == variable.id
+                    )
+                    .select("anchor_time", "support_start", "support_end", "value")
+                    .iter_rows()
+                ),
+            )
+            for variable in observations.variables
+        }
+
+        return cls(source=source, time_origin=observations.time_origin, series=series)

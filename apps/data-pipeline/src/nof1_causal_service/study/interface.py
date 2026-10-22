@@ -1,4 +1,4 @@
-"""Public study operations using the production Temporal lifecycle and retained results."""
+"""Internal study operations using the production Temporal lifecycle and retained results."""
 
 from __future__ import annotations
 
@@ -7,13 +7,10 @@ import os
 import pathlib
 import re
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, cast
 from uuid import uuid4
 
-from pydantic import TypeAdapter
-
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import ActionId, CallId, GitOid
+from nof1_causal_lab.public import GitOid
 from nof1_causal_service.actions.call_logs import collect_call_log
 from nof1_causal_service.actions.contracts.call_state import (
     CallProgress,
@@ -22,11 +19,13 @@ from nof1_causal_service.actions.contracts.call_state import (
     RunningCall,
 )
 from nof1_causal_service.actions.contracts.effects import ActionEffects
+from nof1_causal_service.actions.contracts.identity import ActionId, CallId
 from nof1_causal_service.actions.contracts.polling import (
-    ActionPoll,
+    ActionResult,
     FailedPoll,
     RunningAction,
     RunningPoll,
+    StudyError,
 )
 from nof1_causal_service.actions.contracts.requests import (
     ActionInput,
@@ -45,7 +44,6 @@ from nof1_causal_service.actions.input_resolution import resolve_action_inputs
 from nof1_causal_service.storage import backend as storage
 from nof1_causal_service.storage import paths as data_module
 from nof1_causal_service.study.errors import StudyLookupError
-from nof1_causal_service.study.persistence.codec import pack_result, unpack_result
 from nof1_causal_service.study.persistence.history import StudyRepository
 from nof1_causal_service.study.queries.action_outputs import completed_call_msgpack
 from nof1_causal_service.study.records import Applied, Attempt, StudyRevision, record_dependencies
@@ -56,31 +54,6 @@ if TYPE_CHECKING:
     from temporalio.client import Client, WorkflowHandle
 
     from nof1_causal_service.actions.temporal.study.workflow import StudyWorkflow
-
-
-class StudyError(Value):
-    """An expected rejection at the public study boundary."""
-
-    code: Literal["invalid_request", "read_only", "invalid_inputs", "unknown_call"]
-    detail: str
-
-
-_POLL: TypeAdapter[ActionPoll] = TypeAdapter(ActionPoll)
-
-
-class ActionResult(Value):
-    """An intact action envelope; decoding is optional for callers forwarding saved bytes."""
-
-    payload: bytes
-
-    @classmethod
-    def from_poll(cls, poll: ActionPoll) -> ActionResult:
-        """Encode a live status using the same numerical codec as saved results."""
-        return cls(payload=pack_result(poll))
-
-    def decode(self) -> ActionPoll:
-        """Read the typed result without executing or rebuilding scientific outputs."""
-        return _POLL.validate_python(unpack_result(self.payload))
 
 
 def actions_enabled() -> bool:

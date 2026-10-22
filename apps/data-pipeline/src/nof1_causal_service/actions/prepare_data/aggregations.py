@@ -10,17 +10,21 @@ from typing import TYPE_CHECKING, assert_never
 
 import polars as pl
 
-from nof1_causal_lab.artifacts.observations.expressions import WindowExpression, WindowOperator
-from nof1_causal_lab.artifacts.observations.preparation import ComputedExtractionSpec
-from nof1_causal_lab.artifacts.observations.semantics import SummaryOperator, normalize_level_label
-from nof1_causal_lab.observations.rows import ensure_datetime_column, support_window_tick_frame
+from nof1_causal_lab.public import (
+    ComputedExtractionSpec,
+    ObservationInstant,
+    SummaryOperator,
+    WindowExpression,
+    WindowOperator,
+)
+from nof1_causal_service.actions.prepare_data.rows import support_window_tick_frame
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
     from polars._typing import FillNullStrategy
 
-    from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
+    from nof1_causal_service.actions.prepare_data.context import MeasurementContext
 
 
 def _compile_computed_rule_expr(window_expr: WindowExpression) -> pl.Expr:
@@ -186,7 +190,7 @@ def compute_indicators(
     if not computed:
         return pl.DataFrame(schema=output_schema)
 
-    df = ensure_datetime_column(raw_df, time_col).sort(time_col)
+    df = ObservationInstant.normalize_column(raw_df, time_col).sort(time_col)
 
     frames: list[pl.DataFrame] = []
     for ind, extraction in computed:
@@ -450,3 +454,8 @@ def _encode_non_continuous(
 
     remaining = df.filter(remaining_mask)
     return pl.concat([remaining, *frames], how="vertical")
+
+
+def normalize_level_label(label: str) -> str:
+    """Match declared level labels independently of case and surrounding whitespace."""
+    return label.strip().lower()

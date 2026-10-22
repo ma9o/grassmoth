@@ -7,7 +7,7 @@ from uuid import UUID
 
 from pydantic import Field
 
-from nof1_causal_lab.artifacts.base import Value
+from nof1_causal_lab.public import Value
 
 type StepStatus = Literal["running", "completed", "failed"]
 

@@ -7,11 +7,9 @@ import polars as pl
 from pydantic import Field, ValidationError
 from typing_extensions import TypedDict
 
-from nof1_causal_lab.actions.prepare_data.context import MeasurementContext
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import IndicatorId
-from nof1_causal_lab.artifacts.observations.dtypes import MeasurementDtype
-from nof1_causal_lab.artifacts.observations.semantics import normalize_level_label
+from nof1_causal_lab.public import IndicatorId, MeasurementDtype, Value
+from nof1_causal_service.actions.prepare_data.aggregations import normalize_level_label
+from nof1_causal_service.actions.prepare_data.context import MeasurementContext
 
 
 class ExtractionRow(TypedDict):

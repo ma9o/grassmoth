@@ -6,7 +6,10 @@ TYPE_CHECKING, so a helper cannot
 hide a dependency on execution internals. Dynamic imports must have a literal
 module name; runtime code loading and import-path modification are forbidden.
 
-The default selection is evaluation/. Explicit files/directories select other
+ARCH013: service callers import the scientific library only through
+nof1_causal_lab.public. The same traversal checks runtime and type-only imports.
+
+The default selection is evaluation/ plus the service package. Explicit files/directories select other
 callers, including notebooks and gitignored scratchpad experiments. Directories
 are read from disk, not Git's tracked-file list. The framework package itself,
 including its HTTP adapter and isolated patched copies, is implementation.
@@ -20,9 +23,16 @@ import importlib.util
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts.checks.architecture_roles import PACKAGES, PROJECT_ROOT, SERVICE_PACKAGE, SOURCE_ROOT
+from scripts.checks.architecture_roles import (
+    PACKAGE,
+    PACKAGES,
+    PROJECT_ROOT,
+    SERVICE_PACKAGE,
+    SOURCE_ROOT,
+)
 
 _PUBLIC = SERVICE_PACKAGE + ".public"
+_LIBRARY_PUBLIC = PACKAGE + ".public"
 _REPO = PROJECT_ROOT.parents[1]
 _DEFAULT_CALLERS = (PROJECT_ROOT / "evaluation",)
 
@@ -34,12 +44,13 @@ class PublicImportViolation:
     path: Path
     line: int
     target: str
+    boundary: str = _PUBLIC
 
     def diagnostic(self) -> str:
         """Identify the caller responsible for crossing the boundary."""
         return (
-            f"{self.path}:{self.line}: ARCH011 {self.target}; "
-            "fix at the caller: use nof1_causal_service.public or patch the framework owner"
+            f"{self.path}:{self.line}: {'ARCH013' if self.boundary == _LIBRARY_PUBLIC else 'ARCH011'} {self.target}; "
+            f"fix at the caller: use {self.boundary} or patch the framework owner"
         )
 
 
@@ -88,9 +99,11 @@ def _origin(node: ast.expr, bindings: dict[str, str]) -> str:
 
 
 def find_public_import_violations(
-    paths: tuple[Path, ...], *, import_roots: tuple[Path, ...] = ()
+    paths: tuple[Path, ...], *, import_roots: tuple[Path, ...] = (), service_callers: bool = False
 ) -> tuple[PublicImportViolation, ...]:
     """Inspect selected callers and their local dependencies without importing code."""
+    public_boundary = _LIBRARY_PUBLIC if service_callers else _PUBLIC
+    protected = (PACKAGE,) if service_callers else PACKAGES
     roots = tuple(
         root.resolve() for root in (*import_roots, SOURCE_ROOT.parent, PROJECT_ROOT, _REPO)
     )
@@ -103,7 +116,10 @@ def find_public_import_violations(
     violations: list[PublicImportViolation] = []
     while pending:
         path = pending.pop()
-        if path in visited or _implementation(path):
+        if path in visited or (
+            _implementation(path)
+            and not (service_callers and _member(_module(path, roots), SERVICE_PACKAGE))
+        ):
             continue
         visited.add(path)
         tree = ast.parse(path.read_text(), filename=str(path))
@@ -139,7 +155,9 @@ def find_public_import_violations(
                         targets.append((node.lineno, node.args[0].value))
                     else:
                         violations.append(
-                            PublicImportViolation(path, node.lineno, "unresolved dynamic import")
+                            PublicImportViolation(
+                                path, node.lineno, "unresolved dynamic import", public_boundary
+                            )
                         )
                 elif target in {
                     "exec",
@@ -152,34 +170,47 @@ def find_public_import_violations(
                 } or target.startswith("sys.path."):
                     violations.append(
                         PublicImportViolation(
-                            path, node.lineno, "runtime code loading or import-path modification"
+                            path,
+                            node.lineno,
+                            "runtime code loading or import-path modification",
+                            public_boundary,
                         )
                     )
-            elif isinstance(node, ast.Attribute) and _member(_origin(node, bindings), _PUBLIC):
+            elif isinstance(node, ast.Attribute) and _member(
+                _origin(node, bindings), public_boundary
+            ):
                 targets.append((node.lineno, _origin(node, bindings)))
             elif isinstance(node, ast.Assign | ast.AnnAssign | ast.AugAssign):
                 assigned = node.targets if isinstance(node, ast.Assign) else (node.target,)
                 if any(_origin(target, bindings) == "sys.path" for target in assigned):
                     violations.append(
-                        PublicImportViolation(path, node.lineno, "import-path modification")
+                        PublicImportViolation(
+                            path, node.lineno, "import-path modification", public_boundary
+                        )
                     )
 
         for line, target in targets:
-            if any(_member(target, package) for package in PACKAGES):
-                public = _member(target, _PUBLIC) and not any(
+            if any(_member(target, package) for package in protected):
+                public = _member(target, public_boundary) and not any(
                     part.startswith("_") or part == "*"
-                    for part in target.removeprefix(_PUBLIC).split(".")
+                    for part in target.removeprefix(public_boundary).split(".")
                     if part
                 )
                 if not public:
                     violations.append(
-                        PublicImportViolation(path, line, f"forbidden import {target}")
+                        PublicImportViolation(
+                            path, line, f"forbidden import {target}", public_boundary
+                        )
                     )
+                continue
+            if service_callers and _member(target, SERVICE_PACKAGE):
                 continue
             local_roots = (path.parent, *roots)
             dependencies = _local_dependencies(target, local_roots)
             if any(_implementation(dependency) for dependency in dependencies):
-                violations.append(PublicImportViolation(path, line, f"forbidden import {target}"))
+                violations.append(
+                    PublicImportViolation(path, line, f"forbidden import {target}", public_boundary)
+                )
             else:
                 pending.extend(dependencies)
     return tuple(sorted(set(violations), key=lambda item: (str(item.path), item.line, item.target)))
@@ -194,7 +225,12 @@ def main() -> int:
     for path in paths:
         if not path.exists():
             parser.error(f"Caller path does not exist: {path}")
-    violations = find_public_import_violations(paths)
+    violations = (
+        *find_public_import_violations(paths),
+        *find_public_import_violations(
+            (SOURCE_ROOT.with_name(SERVICE_PACKAGE),), service_callers=True
+        ),
+    )
     for violation in violations:
         print(violation.diagnostic())
     print(f"Public library boundary: {len(violations)} violation(s)")

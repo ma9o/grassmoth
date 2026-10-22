@@ -12,7 +12,7 @@ from temporalio.exceptions import ActivityError, ApplicationError
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
+    from nof1_causal_service.llm.specs import EmbeddedLLMSpec
 
 with workflow.unsafe.imports_passed_through():
     from nof1_causal_service.actions.temporal.client import OPENROUTER_TASK_QUEUE

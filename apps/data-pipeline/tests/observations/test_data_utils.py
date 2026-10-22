@@ -17,7 +17,7 @@ pytestmark = pytest.mark.contract
 
 class TestAnnotateObservationRows:
     def test_adds_observation_metadata_from_indicator_specs(self):
-        from nof1_causal_lab.observations.rows import annotate_observation_rows
+        from nof1_causal_service.actions.prepare_data.rows import annotate_observation_rows
 
         raw = pl.DataFrame(
             {
@@ -47,7 +47,7 @@ class TestAnnotateObservationRows:
         assert annotated["support_end"][0] == "2024-01-02T00:00:00"
 
     def test_uses_indicator_specific_observation_window_when_present(self):
-        from nof1_causal_lab.observations.rows import annotate_observation_rows
+        from nof1_causal_service.actions.prepare_data.rows import annotate_observation_rows
 
         raw = pl.DataFrame(
             {
@@ -75,7 +75,7 @@ class TestAnnotateObservationRows:
         assert annotated["support_end"][0] == "2024-01-08T00:00:00"
 
     def test_point_last_observations_anchor_at_window_end(self):
-        from nof1_causal_lab.observations.rows import annotate_observation_rows
+        from nof1_causal_service.actions.prepare_data.rows import annotate_observation_rows
 
         raw = pl.DataFrame(
             {

@@ -11,16 +11,16 @@ from typing import Annotated, Literal
 
 from pydantic import ConfigDict, Field
 
-from nof1_causal_lab.artifacts.base import Value
-from nof1_causal_lab.artifacts.identity import IndicatorId
-from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.artifacts.model.question import QuestionSpec
-from nof1_causal_lab.artifacts.observations.preparation import (
+from nof1_causal_lab.public import (
+    DataRef,
+    DynamicalModelSpec,
     ExtractionSpec,
+    IndicatorId,
+    QuestionSpec,
+    SimulationSpec,
+    Value,
 )
-from nof1_causal_lab.artifacts.observations.reference import DataRef, DataSelection
-from nof1_causal_lab.artifacts.sampling import FitSettingsSpec
-from nof1_causal_lab.artifacts.simulation import SimulationSpec
+from nof1_causal_service.actions.contracts.settings import FitSettingsSpec
 
 
 class EditQuestionInput(Value):
@@ -153,3 +153,9 @@ class ModelDiffInput[RevisionT](Value):
     after_ref: RevisionT = Field(
         description="Question or model revision reconstructed by applying the patch to the base."
     )
+
+
+type DataSelection[RevisionT] = Annotated[
+    tuple[DataRef[RevisionT, Annotated[int | None, Field(default=None)]], ...],
+    Field(min_length=1, description="One or more saved observation-history references."),
+]

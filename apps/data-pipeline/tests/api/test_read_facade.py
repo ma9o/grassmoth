@@ -103,7 +103,7 @@ def test_saved_call_serves_pinned_artifacts_without_starting_new_actions(monkeyp
 
 
 def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
-    from nof1_causal_lab.llm.traces import LLMTrace, TraceMessage
+    from nof1_causal_service.llm.traces import LLMTrace, TraceMessage
     from nof1_causal_service.storage import backend as storage
     from nof1_causal_service.storage.traces import collect_run_traces
     from nof1_causal_service.study.persistence.history import StudyRepository

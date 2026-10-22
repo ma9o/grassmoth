@@ -10,7 +10,6 @@ import pytest
 
 from nof1_causal_lab.artifacts.identity import GitOid
 from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from nof1_causal_lab.llm.traces import LLMTrace, TraceMessage, TraceUsage
 from nof1_causal_service.actions.call_logs import collect_call_log, read_call_log
 from nof1_causal_service.actions.contracts.inputs import EditModelInput
 from nof1_causal_service.actions.contracts.progress import StepEvent
@@ -21,6 +20,7 @@ from nof1_causal_service.actions.temporal.study.activities import (
     read_inputs_activity,
 )
 from nof1_causal_service.actions.temporal.study.messages import AttemptPublication, ReadInputsInput
+from nof1_causal_service.llm.traces import LLMTrace, TraceMessage, TraceUsage
 from nof1_causal_service.storage import backend as storage
 from nof1_causal_service.storage import paths as data_module
 from nof1_causal_service.storage.traces import collect_run_traces, trace_log_path
@@ -152,7 +152,6 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
 
 
 def test_subroutine_retains_conversation_before_a_tool_failure(data_root, monkeypatch):
-    from nof1_causal_lab.llm.specs import EmbeddedLLMSpec
     from nof1_causal_service.actions.temporal.llm import workflow as subroutine_workflow
     from nof1_causal_service.actions.temporal.llm.activities import (
         finalize_llm_subroutine_trace_activity,
@@ -166,6 +165,7 @@ def test_subroutine_retains_conversation_before_a_tool_failure(data_root, monkey
         subroutine_root,
         write_subroutine_json,
     )
+    from nof1_causal_service.llm.specs import EmbeddedLLMSpec
 
     subroutine = LLMSubroutineRef(
         workspace_id="ws-trace",

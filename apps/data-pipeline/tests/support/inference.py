@@ -25,10 +25,11 @@ if TYPE_CHECKING:
 
     from numpyro.primitives import Message
 
-    from nof1_causal_lab.artifacts.identity import ArtifactId, ConstructId, GitOid
+    from nof1_causal_lab.artifacts.identity import ConstructId, GitOid
     from nof1_causal_lab.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from nof1_causal_lab.models.ssm.compile.inputs import CompiledDynamicalModel
     from nof1_causal_lab.models.ssm.inference.types import JointPosteriorDraws
+    from nof1_causal_service.actions.contracts.identity import ArtifactId
 
 _PRIOR_REVISION, _FITTED_REVISION = git_oid(1), git_oid(2)
 

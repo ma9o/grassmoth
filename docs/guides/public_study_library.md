@@ -9,13 +9,20 @@ The service owns reference resolution, extraction workers, runtime configuration
 compute dispatch and persistence. Fit receives its clocks, logger and compilation
 functions from the service; the on-disk compilation cache stays there.
 
-Callers outside the framework import `nof1_causal_service.public`. The
-[study operations](../../apps/data-pipeline/src/nof1_causal_service/public/studies.py)
-share the production action lifecycle. The
-[HTTP client](../../apps/data-pipeline/src/nof1_causal_service/public/client.py)
-submits requests, polls saved results and reads the timeline; it also stages files
-through the existing upload route. Request, result and referenced value types
-come from [contracts.py](../../apps/data-pipeline/src/nof1_causal_service/public/contracts.py).
+The service imports the library only through
+[`nof1_causal_lab.public`](../../apps/data-pipeline/src/nof1_causal_lab/public.py).
+This module re-exports only the seven actions and their input, output and failure
+types. The
+[ARCH013 checker](../../apps/data-pipeline/scripts/checks/check_public_imports.py)
+enforces this import boundary, including type-only and dynamic imports.
+
+Callers outside the framework use the
+[HTTP client](../../apps/data-pipeline/src/nof1_causal_service/public/client.py),
+`StudyClient`, from `nof1_causal_service.public.client`. It submits requests, polls
+saved results, reads the timeline and stages files through the upload route.
+Request, result and referenced value types, including `ActionResult` and
+`StudyError`, come from
+[contracts.py](../../apps/data-pipeline/src/nof1_causal_service/public/contracts.py).
 
 Decode an `ActionResult` with its `decode()` method. Read saved observations and
 posterior draws through the returned values' accessors. Diagnostics and convergence

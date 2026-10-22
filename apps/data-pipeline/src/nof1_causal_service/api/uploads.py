@@ -4,8 +4,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, File, Form, UploadFile
 
+from nof1_causal_service.actions.contracts.polling import StudyError
 from nof1_causal_service.api.policy import raise_study_error
-from nof1_causal_service.study.interface import StudyError
 from nof1_causal_service.study.workspaces import stage_input
 
 uploads_router = APIRouter(prefix="/api")

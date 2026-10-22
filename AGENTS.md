@@ -49,6 +49,14 @@
 
 - External callers use the [public study library](docs/guides/public_study_library.md). Check each scratchpad experiment or notebook with `bun run --cwd apps/data-pipeline lint:public <caller-path>`; paths are relative to `apps/data-pipeline`.
 
+- These are agreed contracts:
+  - the library surface: `nof1_causal_lab/public.py` and the signatures of the functions it lists;
+  - the service surface: `nof1_causal_service/public/`;
+  - HTTP request and response bodies;
+  - the boundary rules ARCH011–ARCH013 and their configuration.
+
+  Change a contract only when the user approves that specific change. If a task seems to need one, stop and ask. Never widen a surface or loosen a rule to make a check pass.
+
 - Budget GPU benchmarks carefully: a B200 on Modal costs $6/hour.
 - Run independent GPU benchmark scenarios concurrently on separate GPUs. Do not serialize them on one L40S; isolate each scenario's GPU so timing comparisons remain meaningful, and preserve shared initialization dependencies.
 

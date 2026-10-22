@@ -28,7 +28,7 @@ from openai.types.chat import (
 from openai.types.completion_usage import CompletionTokensDetails
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model
 
-from nof1_causal_lab.json_types import JsonObject, JsonValue
+from nof1_causal_lab.public import JsonObject, JsonValue
 from nof1_causal_service.config import get_secret
 
 if TYPE_CHECKING:
@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from pydantic.json_schema import JsonSchemaValue
 
-    from nof1_causal_lab.llm.specs import EmbeddedReasoningEffort
+    from nof1_causal_service.llm.specs import EmbeddedReasoningEffort
 
 
 logger = logging.getLogger(__name__)
