@@ -51,7 +51,7 @@ def build_smoother_context(
     runtime_times = static.runtime_times
     num_parameter_particles = static.num_parameter_particles
     transition_initial_log_prob_fn = static.transition_initial_log_prob_fn
-    transition_log_prob_fn = static.transition_log_prob_fn
+    transition_value_grad_fn = static.transition_value_grad_fn
     transition_pairwise_log_probs_fn = static.transition_pairwise_log_probs_fn
 
     x_ref = reference
@@ -82,30 +82,24 @@ def build_smoother_context(
         particle_t: jnp.ndarray,
         time_idx: jnp.ndarray,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        return _value_and_grad_by_param(
-            contexts,
-            particle_t,
-            lambda context, particle: transition_log_prob_fn(
-                context, prev_particle, particle, time_idx
-            ),
-            value_dtype=traj_dtype,
-            grad_dtype=latent_dtype,
-        )
+        values, gradients = jax.vmap(
+            lambda context: transition_value_grad_fn(
+                context, prev_particle, particle_t, time_idx, current_gradient=True
+            )
+        )(contexts)
+        return values.astype(traj_dtype), gradients.astype(latent_dtype)
 
     def _transition_next_value_grad_by_param(
         particle_t: jnp.ndarray,
         next_particle: jnp.ndarray,
         next_time_idx: jnp.ndarray,
     ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        return _value_and_grad_by_param(
-            contexts,
-            particle_t,
-            lambda context, particle: transition_log_prob_fn(
-                context, particle, next_particle, next_time_idx
-            ),
-            value_dtype=traj_dtype,
-            grad_dtype=latent_dtype,
-        )
+        values, gradients = jax.vmap(
+            lambda context: transition_value_grad_fn(
+                context, particle_t, next_particle, next_time_idx, current_gradient=False
+            )
+        )(contexts)
+        return values.astype(traj_dtype), gradients.astype(latent_dtype)
 
     def _pairwise_transition_log_probs(
         prev_particles: jnp.ndarray,

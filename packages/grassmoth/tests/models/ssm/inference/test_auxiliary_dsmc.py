@@ -21,6 +21,7 @@ from grassmoth.models.ssm.inference.samplers.particle.contract import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.dsmc import step
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
+from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReference
 from grassmoth_test_support.interval_particle import interval_target
 
 pytestmark = pytest.mark.inference(concern="sampling")
@@ -335,7 +336,8 @@ def test_zero_drift_uses_leaf_factors_without_path_or_transition_gradients():
 
 
 @pytest.mark.parametrize("state_dependent", [False, True])
-def test_pairwise_transition_matrix_matches_individual_declared_densities(state_dependent):
+@pytest.mark.parametrize("beta", [None, 0.0, 0.4, 1.0])
+def test_pairwise_transition_matrix_matches_individual_declared_densities(state_dependent, beta):
     times = np.arange(3.0)
     target = interval_target(times, np.full((3, 1), 0.2), times[:, None], ("last",), state_dim=3)
     if state_dependent:
@@ -350,6 +352,16 @@ def test_pairwise_transition_matrix_matches_individual_declared_densities(state_
             return eqx.tree_at(lambda m: m.state_evolution, model, evolution)
 
         target = replace(target, dynamical_model=nonlinear)
+    if beta is not None:
+        bridge_reference = GaussianReference(
+            parameter_mean=jnp.zeros(1),
+            parameter_chol=jnp.eye(1),
+            path_mean=jnp.zeros((3, 3)),
+            autoregression=jnp.broadcast_to(0.4 * jnp.eye(3), (3, 3, 3)),
+            innovation_chol=jnp.broadcast_to(0.7 * jnp.eye(3), (3, 3, 3)),
+            free_mask=target.independent_mask,
+        )
+        target = target.at_temperature(bridge_reference, jnp.asarray(beta))
     context = target.context(jnp.zeros(1), target.times)
     before = jax.random.normal(jax.random.key(5), (7, 3))
     after = jax.random.normal(jax.random.key(8), (9, 3))
@@ -367,6 +379,28 @@ def test_pairwise_transition_matrix_matches_individual_declared_densities(state_
     expected_grad = jax.grad(lambda a, b: reference(a, b).sum(), argnums=(0, 1))(before, after)
     for actual, expected in zip(actual_grad, expected_grad, strict=True):
         np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-5)
+
+    for current_gradient in (False, True):
+        actual_scores = jax.jit(
+            jax.vmap(
+                lambda x, current_gradient=current_gradient: jax.vmap(
+                    lambda y: target._transition_value_and_grad(
+                        context, x, y, 1, current_gradient=current_gradient
+                    )
+                )(after)
+            )
+        )(before)
+        expected_scores = jax.jit(
+            jax.vmap(
+                lambda x, current_gradient=current_gradient: jax.vmap(
+                    lambda y: jax.value_and_grad(
+                        target.transition_log_prob, argnums=2 if current_gradient else 1
+                    )(context, x, y, 1)
+                )(after)
+            )
+        )(before)
+        for actual, expected in zip(actual_scores, expected_scores, strict=True):
+            np.testing.assert_allclose(actual, expected, rtol=2e-5, atol=2e-5)
 
 
 @pytest.mark.parametrize(

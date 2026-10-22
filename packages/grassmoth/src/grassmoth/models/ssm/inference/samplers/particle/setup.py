@@ -52,7 +52,7 @@ def build_smoother_setup(
         latent_block_coords=spec.latent_block_coords,
         paid_mix=paid_mix,
         transition_initial_log_prob_fn=local_target.initial_log_prob,
-        transition_log_prob_fn=local_target.transition_log_prob,
+        transition_value_grad_fn=local_target._transition_value_and_grad,
         transition_pairwise_log_probs_fn=local_target.pairwise_transition_log_prob,
         diagnostic_metrics=diagnostic_metrics,
         intervals=local_target.intervals,

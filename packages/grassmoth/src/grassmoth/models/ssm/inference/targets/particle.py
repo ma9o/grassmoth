@@ -349,6 +349,70 @@ class ParticleTarget:
             )
         )
 
+    def _transition_value_and_grad(
+        self,
+        context: ParticleContext,
+        previous: jax.Array,
+        current: jax.Array,
+        index: jax.Array | int,
+        *,
+        current_gradient: bool,
+    ) -> tuple[jax.Array, jax.Array]:
+        """Differentiate per-ancestor Gaussian factors before particle-pair expansion."""
+        indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
+        dimension = len(self.state_space.transition)
+
+        def factors(state: jax.Array) -> tuple[jax.Array, jax.Array, jax.Array]:
+            distribution = cast(
+                "dist.MultivariateNormal", self._transition_distribution(context, state, index)
+            )
+            chol = jnp.asarray(distribution.scale_tril)[jnp.ix_(indices, indices)]
+            inverse = solve_triangular(chol, jnp.eye(dimension, dtype=chol.dtype), lower=True)
+            precision = inverse.T @ inverse
+            constant = -jnp.sum(jnp.log(jnp.diag(chol))) - 0.5 * dimension * jnp.log(2 * jnp.pi)
+            return jnp.asarray(distribution.mean)[indices], precision, constant
+
+        def exact() -> jax.Array:
+            if not self.state_space.transition:
+                return jnp.zeros((current.size + 1,), dtype=current.dtype)
+            if current_gradient:
+                mean, precision, constant = factors(previous)
+
+                def density(state: jax.Array) -> jax.Array:
+                    residual = self.project_state(context, state)[indices] - mean
+                    return jnp.asarray(constant - 0.5 * residual @ precision @ residual)
+
+                value, gradient = jax.value_and_grad(density)(current)
+            else:
+
+                def differentiated(state):
+                    result = factors(state)
+                    return result, result
+
+                derivatives, (mean, precision, constant) = jax.jacfwd(differentiated, has_aux=True)(
+                    previous
+                )
+                mean_jacobian, precision_jacobian, constant_gradient = derivatives
+                residual = self.project_state(context, current)[indices] - mean
+                score = precision @ residual
+                value = constant - 0.5 * residual @ score
+                gradient = (
+                    mean_jacobian.T @ score
+                    + constant_gradient
+                    - 0.5 * jnp.einsum("i,ijk,j->k", residual, precision_jacobian, residual)
+                )
+            return jnp.concatenate((value[None], gradient))
+
+        bridge = self.bridge
+        if bridge is None:
+            result = exact()
+        else:
+            value, gradient = jax.value_and_grad(
+                bridge.reference.transition_log_prob, argnums=1 if current_gradient else 0
+            )(previous, current, index)
+            result = bridge.combine(exact, jnp.concatenate((value[None], gradient)))
+        return result[0], result[1:]
+
     def transition_moments(
         self, context: ParticleContext, previous: jax.Array, index: jax.Array
     ) -> tuple[jax.Array, jax.Array]:

@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING, NamedTuple, Protocol
 
 import jax.numpy as jnp
 
@@ -27,6 +27,22 @@ type TrajectoryLogProbRuntimeFn = Callable[[ParticleContext, jnp.ndarray, jnp.nd
 type TransitionLogProbFn = Callable[
     [ParticleContext, jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray
 ]
+
+
+class TransitionValueGradFn(Protocol):
+    """Exact transition density and a score with an explicit differentiation direction."""
+
+    def __call__(
+        self,
+        context: ParticleContext,
+        previous: jnp.ndarray,
+        current: jnp.ndarray,
+        index: jnp.ndarray | int,
+        *,
+        current_gradient: bool,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Evaluate the declared transition and its requested state gradient."""
+        ...
 
 
 class PaidMixture(NamedTuple):
@@ -75,7 +91,7 @@ class SmootherSetup(NamedTuple):
     latent_block_coords: LatentBlockSize
     paid_mix: PaidMixture | None
     transition_initial_log_prob_fn: Callable[[ParticleContext, jnp.ndarray], jnp.ndarray]
-    transition_log_prob_fn: TransitionLogProbFn
+    transition_value_grad_fn: TransitionValueGradFn
     transition_pairwise_log_probs_fn: TransitionLogProbFn
     diagnostic_metrics: frozenset[str]
     intervals: ParticleIntervalObservations | None
