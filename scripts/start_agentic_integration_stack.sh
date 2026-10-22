@@ -20,7 +20,7 @@ Starts the local integration-test stack described in
 docs/guides/agentic_integration_testing.md under process-compose supervision
 (config: process-compose.yaml):
   1. Temporal dev server on port 7233 (ephemeral state)
-  2. Study worker (Temporal task queue nof1-studies)
+  2. Study worker (Temporal task queue grassmoth-studies)
   3. Tool server on port 8100 (tools + study facade)
   4. Next.js frontend on port 3000
 
@@ -77,7 +77,7 @@ require_port_free "$TEMPORAL_PORT" "Temporal dev server"
 require_port_free "$TOOL_PORT" "Tool server"
 require_port_free "$WEB_PORT" "Next.js dev server"
 require_port_free "$PC_PORT" "process-compose API"
-if pgrep -f "nof1_causal_lab\.actions\.temporal\.worker" >/dev/null 2>&1; then
+if pgrep -f "grassmoth\.actions\.temporal\.worker" >/dev/null 2>&1; then
   die "Study worker process is already running. Stop the existing process before starting a fresh integration stack."
 fi
 

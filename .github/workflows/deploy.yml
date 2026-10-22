@@ -22,7 +22,7 @@ jobs:
         with:
           filters: |
             web:
-              - 'apps/web/**'
+              - 'apps/grassmoth-client/**'
               - 'packages/**'
               - 'bun.lock'
               - 'turbo.json'
@@ -30,7 +30,13 @@ jobs:
               - 'package.json'
               - '.github/workflows/ci.yml'
             python:
-              - 'apps/data-pipeline/**'
+              - 'apps/grassmoth-server/**'
+              - 'packages/grassmoth/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'conftest.py'
+              - 'tests/**'
+              - 'scripts/check_python.py'
               - 'packages/api-types/**'
               - 'package.json'
               - '.github/workflows/ci.yml'
@@ -60,8 +66,8 @@ jobs:
           key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-install-${{ runner.os }}-
 
-      - run: uv sync --frozen --group dev
-        working-directory: apps/data-pipeline
+      - run: uv sync --frozen --all-packages --group dev
+        working-directory: apps/grassmoth-server
 
       - run: bun install --frozen-lockfile
 
@@ -97,15 +103,15 @@ jobs:
       - name: Cache Next.js build
         uses: actions/cache@v4
         with:
-          path: apps/web/.next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('apps/web/src/**') }}
+          path: apps/grassmoth-client/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('apps/grassmoth-client/src/**') }}
           restore-keys: |
             nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
             nextjs-${{ runner.os }}-
 
       - run: bun install --frozen-lockfile
 
-      - run: bun run --cwd apps/web --parallel --no-exit-on-error test build
+      - run: bun run --cwd apps/grassmoth-client --parallel --no-exit-on-error test build
 
   ci-python:
     needs: changes
@@ -123,16 +129,16 @@ jobs:
       - name: Cache JAX compilations
         uses: actions/cache@v4
         with:
-          path: ~/.cache/nof1-causal-lab/jax
-          key: jax-${{ runner.os }}-${{ hashFiles('apps/data-pipeline/uv.lock') }}-${{ hashFiles('apps/data-pipeline/src/**/*.py') }}
+          path: ~/.cache/grassmoth/jax
+          key: jax-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ hashFiles('apps/grassmoth-server/src/**/*.py', 'packages/grassmoth/src/**/*.py') }}
           restore-keys: |
-            jax-${{ runner.os }}-${{ hashFiles('apps/data-pipeline/uv.lock') }}-
+            jax-${{ runner.os }}-${{ hashFiles('uv.lock') }}-
             jax-${{ runner.os }}-
 
-      - run: uv sync --frozen --group dev
-        working-directory: apps/data-pipeline
+      - run: uv sync --frozen --all-packages --group dev
+        working-directory: apps/grassmoth-server
 
-      - run: bun run --cwd apps/data-pipeline test
+      - run: bun run test:python
 
   # ---------------------------------------------------------------------------
   # Deploy Modal functions (stages 2, 4, 5b)
@@ -144,7 +150,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: apps/data-pipeline
+        working-directory: apps/grassmoth-server
     env:
       MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
       MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
@@ -153,10 +159,10 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - run: uv sync --frozen --group dev --group cloud
+      - run: uv sync --frozen --all-packages --group dev --group cloud
       - name: Sync runtime secrets to Modal
         run: |
-          uv run modal secret create --force nof1-causal-lab-pipeline-secrets \
+          uv run modal secret create --force grassmoth-server-secrets \
             DEPLOYMENT_ENV=production \
             OPENROUTER_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
             GOOGLE_CLOUD_PROJECT="${{ secrets.GOOGLE_CLOUD_PROJECT }}" \
@@ -167,7 +173,7 @@ jobs:
             R2_SECRET_ACCESS_KEY="${{ secrets.R2_SECRET_ACCESS_KEY }}" \
             R2_BUCKET="${{ secrets.R2_BUCKET }}" \
             R2_PREFIX=data
-      - run: uv run modal deploy src/nof1_causal_service/api/deployment.py
+      - run: uv run modal deploy src/grassmoth_server/api/deployment.py
 
   # ---------------------------------------------------------------------------
   # Deploy web app to Vercel (production)

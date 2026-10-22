@@ -14,10 +14,10 @@ version: "0.5"
 
 processes:
   temporal:
-    working_dir: apps/data-pipeline
+    working_dir: apps/grassmoth-server
     # --db-filename persists event history so restarting this process (e.g. to
     # serve the UI or after a crash) resumes in-flight studies instead of
-    # orphaning them. The path is relative to working_dir (apps/data-pipeline),
+    # orphaning them. The path is relative to working_dir (apps/grassmoth-server),
     # so ../../ lands it in the repo-root .local/ next to the logs (gitignored).
     command: uv run python scripts/dev/temporal_dev_server.py --port 7233 --db-filename ../../.local/agentic-integration-stack/temporal.db
     readiness_probe:
@@ -33,8 +33,8 @@ processes:
     log_location: .local/agentic-integration-stack/logs/temporal.log
 
   worker:
-    working_dir: apps/data-pipeline
-    command: uv run python -m nof1_causal_service.actions.temporal.worker
+    working_dir: apps/grassmoth-server
+    command: uv run python -m grassmoth_server.actions.temporal.worker
     environment:
       - PYTHONHASHSEED=0
       - TEMPORAL_ADDRESS=localhost:7233
@@ -50,9 +50,9 @@ processes:
       flush_each_line: true
 
   tool-server:
-    working_dir: apps/data-pipeline
+    working_dir: apps/grassmoth-server
     # One process per CPU: reads are CPU-bound Python, so workers run them in parallel.
-    command: uv run uvicorn nof1_causal_service.api.app:app --port 8100 --workers $(getconf _NPROCESSORS_ONLN)
+    command: uv run uvicorn grassmoth_server.api.app:app --port 8100 --workers $(getconf _NPROCESSORS_ONLN)
     environment:
       - TEMPORAL_ADDRESS=localhost:7233
     depends_on:
@@ -74,7 +74,7 @@ processes:
     log_location: .local/agentic-integration-stack/logs/tool-server.log
 
   web:
-    working_dir: apps/web
+    working_dir: apps/grassmoth-client
     command: bun run dev --port 3000
     depends_on:
       tool-server:

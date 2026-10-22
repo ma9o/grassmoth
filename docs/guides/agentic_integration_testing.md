@@ -12,7 +12,7 @@
 
 ### Test concerns
 
-Every Python test declares at least one [pytest concern marker](../../apps/data-pipeline/pyproject.toml),
+Every Python test declares at least one [pytest concern marker](../../pyproject.toml),
 including standalone notebook support tests. The top-level groups are `contract`,
 `inference`, and `workflow`. Numerical tests declare a specific child of `inference`:
 
@@ -48,34 +48,34 @@ Use function or class markers in mixed files;
 a module's `pytestmark` applies only when every test shares the concern. A test can
 have multiple owners: an initialization recovery test carries both
 `pytest.mark.inference(concern="warmup")` and `pytest.mark.inference(concern="recovery")`.
-The [collection check](../../apps/data-pipeline/conftest.py) rejects unowned cases
+The [collection check](../../conftest.py) rejects unowned cases
 and missing or invalid inference concerns before `-m` or `-k` can deselect them.
 Parameterization and timeout markers do not count as owners, and missing ownership
 is never assigned automatically.
 
-`bun run --cwd apps/data-pipeline test` and direct `uv run pytest tests/` runs
+`bun run --cwd <python-workspace> test` and direct `uv run pytest` runs
 use all available CPU workers (`-n auto`) and run the default contracts. Select specialized suites explicitly
 when requested or directly affected by the change:
 
 ```bash
-bun run --cwd apps/data-pipeline test -m contract
-bun run --cwd apps/data-pipeline test -m inference
-bun run --cwd apps/data-pipeline test -m "inference(concern='sampling')"
-bun run --cwd apps/data-pipeline test -m "inference(concern='predictive')"
-bun run --cwd apps/data-pipeline test -m "inference(concern='warmup') and not inference(concern='recovery')"
-bun run --cwd apps/data-pipeline test -m "inference and not inference(concern='recovery')"
+bun run --cwd apps/grassmoth-server test -m contract
+bun run --cwd apps/grassmoth-server test -m inference
+bun run --cwd apps/grassmoth-server test -m "inference(concern='sampling')"
+bun run --cwd apps/grassmoth-server test -m "inference(concern='predictive')"
+bun run --cwd apps/grassmoth-server test -m "inference(concern='warmup') and not inference(concern='recovery')"
+bun run --cwd apps/grassmoth-server test -m "inference and not inference(concern='recovery')"
 ```
 
 Add `--collect-only` to inspect a selection without executing it. `test:all`
 includes every concern and requires an explicit request. Use `-n 0` for a serial
 run or `-n N` to limit the worker count. Pytest reports durations separately and rejects
-unregistered markers. Keep test files beside their subject under `tests/`.
+unregistered markers. Keep test files under their owning workspace’s `tests/` directory.
 The default selection is `not (inference or workflow)`, which excludes every
 numerical child, including tests that also carry `contract`. Web unit tests belong to the named `contract` Vitest project;
 the separate `visual` project owns screenshot stories. The root
 `test:fixture-promotion` command owns fixture-promotion checks.
 
-The [shared pytest fixtures](../../apps/data-pipeline/conftest.py) force fitting onto
+The [shared pytest fixtures](../../conftest.py) force fitting onto
 `local` and reject live Modal app runs. Hardware routing contracts exercise the
 production selector with a mocked Modal boundary.
 
@@ -106,11 +106,13 @@ group when shared numerical changes affect all its children, or when explicitly
 requested. Run recovery tests when the change can affect fitted accuracy or
 uncertainty, rather than merely because it touches a fitting-related file.
 
-For a file-scoped Python run, invoke pytest directly from `apps/data-pipeline`:
+For a file-scoped Python run, invoke pytest directly from the repository root.
+Library tests belong to `packages/grassmoth/tests`, service tests to
+`apps/grassmoth-server/tests`, and shared test-selection checks to `tests/`:
 
 ```bash
-uv run pytest tests/models/ssm/inference/test_laps_initialization.py -m "contract or inference(concern='warmup')" -n 0
-uv run pytest tests/models/ssm/execution/test_emissions.py tests/models/ssm/execution/test_observation_sampling.py -m "contract or inference(concern='sampling') or inference(concern='predictive')"
+uv run pytest packages/grassmoth/tests/models/ssm/inference/test_laps_initialization.py -m "contract or inference(concern='warmup')" -n 0
+uv run pytest packages/grassmoth/tests/models/ssm/execution/test_emissions.py packages/grassmoth/tests/models/ssm/execution/test_observation_sampling.py -m "contract or inference(concern='sampling') or inference(concern='predictive')"
 uv run pytest tests/test_concerns.py -m contract -n 0
 ```
 
@@ -133,12 +135,12 @@ New studies initialize their local bare repository on first use. On a fresh chec
 
 ```bash
 git clone --mirror data/HEALTHDEMO/study/history.bundle data/HEALTHDEMO/study/history.git
-git --git-dir=data/HEALTHDEMO/study/history.git config nof1.format 28
+git --git-dir=data/HEALTHDEMO/study/history.git config grassmoth.format 28
 ```
 
 #### Storage format
 
-The [storage owner](../../apps/data-pipeline/src/nof1_causal_service/study/persistence/git_objects.py)
+The [storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/git_objects.py)
 requires format 28. Start a new study or restore a format-28 bundle. The application
 reads only this format and does not perform automatic migrations.
 
@@ -152,7 +154,7 @@ Starts the stack under [process-compose](https://github.com/F1bonacc1/process-co
 supervision (`brew install f1bonacc1/tap/process-compose`; config:
 [`process-compose.yaml`](../../process-compose.yaml)): the Temporal dev
 server on port `7233` (ephemeral state, binary auto-downloaded on first
-use), the study worker (task queue `nof1-studies`), the tool server
+use), the study worker (task queue `grassmoth-studies`), the tool server
 with the study facade on port `8100`, and the web app on port `3000`.
 Startup order is health-gated (`depends_on` + readiness probes) and
 crashed processes restart automatically. The script **stays in the
@@ -171,25 +173,25 @@ process-compose --port 8181 process list
 process-compose --port 8181 process restart worker
 ```
 
-The worker caches `apps/data-pipeline/config.yaml` at first read
+The worker caches `apps/grassmoth-server/config.yaml` at first read
 (`lru_cache`), so after editing pipeline config, restart the `worker`
 process — no need to bounce the whole stack. If the supervisor was started with
 `up --no-deps web`, `process-compose project update` can disable its dependency
 processes; check that Temporal is still running afterward.
 
 For local-study GPU fits, select `inference.sampler.hardware: L40S` (the default) in
-[`config.yaml`](../../apps/data-pipeline/config.yaml) and restart the worker.
+[`config.yaml`](../../apps/grassmoth-server/config.yaml) and restart the worker.
 Use `local` to fit on this machine; the other
-[hardware enum values](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/sampling.py)
+[hardware enum values](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py)
 select Modal GPUs. Select `inference.sampler.algorithm: {method: nuts_da}` for
 joint parameter/state NUTS. The particle samplers are `method: mpgibbs` and
 `method: pgibbs`; the latter selects conditional MH or NUTS through
 `parameter_kernel: {method: mh}` or `{method: nuts_da}`. Both use the shared
-`dsmc` settings in the [sampler contract](../../apps/data-pipeline/src/nof1_causal_lab/artifacts/sampling.py).
-The [Modal compute adapter](../../apps/data-pipeline/src/nof1_causal_service/actions/fit/remote.py)
+`dsmc` settings in the [sampler contract](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
+The [Modal compute adapter](../../apps/grassmoth-server/src/grassmoth_server/actions/fit/remote.py)
 uses the installed Modal credentials, creates an ephemeral
-`nof1-causal-lab-pipeline` app with the current source, and reuses
-`nof1-cached-fit-cache:/jax`. The study remains local; the
+`grassmoth-server` app with the current source, and reuses
+`grassmoth-fit-cache:/jax`. The study remains local; the
 [fit chart](../assets/action-flows/fit.svg) owns its failure and publication flow.
 
 The Temporal dev server
@@ -215,7 +217,7 @@ data/
 └── HEALTHDEMO/                  # Tracked mock fixture workspace (evals + manual sampling)
 ```
 
-Back up the whole workspace directory: Git retains complete action results and their numerical buffers; `store/` retains uploaded input tables. See the [storage owner](../../apps/data-pipeline/src/nof1_causal_service/study/persistence/store.py). Temporary cache entries are safe to delete at any time. `uv run nof1-sweep WORKSPACE_ID` expires telemetry and caches, and offline maintenance can add `--collect-runs` to remove finished run scratch.
+Back up the whole workspace directory: Git retains complete action results and their numerical buffers; `store/` retains uploaded input tables. See the [storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/store.py). Temporary cache entries are safe to delete at any time. `uv run grassmoth-sweep WORKSPACE_ID` expires telemetry and caches, and offline maintenance can add `--collect-runs` to remove finished run scratch.
 
 ### Promoting a workspace to the HEALTHDEMO fixture
 
@@ -242,14 +244,14 @@ bun run fixture:build
 
 The command restores the bundle into an isolated temporary repository and uses the production readers to project artifacts, logs, traces, historical snapshots and workbench comparisons in one pass. It does not read the local `history.git` or the generated projections as inputs. HEALTHDEMO has no numbered artifact directories or separate journal and trace directories.
 
-The bundle preserves the authored and extracted facts through the last model edit. HEALTHDEMO retained no posterior samples or inference report, so it contains no successful fit. Reports and checks load the findings retained with [complete action results](../../apps/data-pipeline/src/nof1_causal_lab/actions/contracts/bodies.py). Regeneration does not fit, simulate, or invent missing scientific artifacts. The [frontend renderer](../../apps/web/src/lib/model-asset/authored-prior-plot.ts) derives authored prior plots from the retained laws.
+The bundle preserves the authored and extracted facts through the last model edit. HEALTHDEMO retained no posterior samples or inference report, so it contains no successful fit. Reports and checks load the findings retained with [complete action results](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py). Regeneration does not fit, simulate, or invent missing scientific artifacts. The [frontend renderer](../../apps/grassmoth-client/src/lib/model-asset/authored-prior-plot.ts) derives authored prior plots from the retained laws.
 
 ### Publishing a workspace
 
 Use the current copier only for a stopped synthetic workspace and a destination with no previous copy. The hosted viewer serves the copied payloads:
 
 ```bash
-uv run --project apps/data-pipeline nof1-publish SYNTHETIC_WORKSPACE --exclude input
+uv run --project apps/grassmoth-server grassmoth-publish SYNTHETIC_WORKSPACE --exclude input
 ```
 
 `--exclude input` withholds uploaded source files only. `--exclude raw_data` matches `store/raw_data/`; it does not remove current raw-table blobs under `store/blobs/` or their Git history. Existing remote files, including mutable Git refs, are skipped, so repeated uploads do not synchronize study history.
@@ -272,7 +274,7 @@ curl -s -X POST http://localhost:8100/api/studies/$WORKSPACE_ID/edit_question \
   -d "{\"action\":\"edit_question\",\"input\":{\"question\":{\"text\":\"$QUESTION\"}}}"
 ```
 
-`GET /api/workspaces` includes the `X-Actions-Enabled` capability header. Poll the returned `call_id` using the [action API contract](../../.agents/skills/nof1-study-api/SKILL.md). A read-only facade serves saved calls, including failures and comparisons; unsaved POST calls return 403. The [action charts](../../README.md#documentation) show what each action does.
+`GET /api/workspaces` includes the `X-Actions-Enabled` capability header. Poll the returned `call_id` using the [action API contract](../../.agents/skills/grassmoth-study-api/SKILL.md). A read-only facade serves saved calls, including failures and comparisons; unsaved POST calls return 403. The [action charts](../../README.md#documentation) show what each action does.
 
 ### 2. Observe the study
 
@@ -289,10 +291,10 @@ ACTION=$(jq -r '.running[0].action' /tmp/study-timeline.json)
 CALL_ID=$(jq -r '.running[0].call_id' /tmp/study-timeline.json)
 curl -s "http://localhost:8100/api/studies/$WORKSPACE_ID/$ACTION/$CALL_ID" \
   -o /tmp/action.msgpack
-uv run --directory apps/data-pipeline python - <<'PY'
+uv run --directory apps/grassmoth-server python - <<'PY'
 from pathlib import Path
 from pprint import pprint
-from nof1_causal_service.study.persistence.codec import unpack_result
+from grassmoth_server.study.persistence.codec import unpack_result
 result = unpack_result(Path('/tmp/action.msgpack').read_bytes())
 pprint({key: value for key, value in result.items() if key != 'body'})
 PY
@@ -317,4 +319,4 @@ curl -s http://localhost:8100/api/studies/$WORKSPACE_ID/timeline \
   | jq '.attempts[] | select(.record.attempt.outcome.status=="raised") | {seq: .record.seq, attempt: .record.attempt}'
 ```
 
-Correct the scientific inputs and submit the changed call through its named action route. An identical resolved call returns its saved failure; changing only `reasoning` does not create another call. See the [action API contract](../../.agents/skills/nof1-study-api/SKILL.md).
+Correct the scientific inputs and submit the changed call through its named action route. An identical resolved call returns its saved failure; changing only `reasoning` does not create another call. See the [action API contract](../../.agents/skills/grassmoth-study-api/SKILL.md).

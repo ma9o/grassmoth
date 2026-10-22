@@ -1,14 +1,14 @@
-apps/data-pipeline/notebooks/
-apps/data-pipeline/tests/
+apps/grassmoth-server/notebooks/
+apps/grassmoth-server/tests/
 data/
-apps/web
+apps/grassmoth-client
 
 # Lock files
 bun.lock
 uv.lock
 
 # Evals
-apps/data-pipeline/evals/
+apps/grassmoth-server/evals/
 
 # Build artifacts
 tsconfig.tsbuildinfo
@@ -19,5 +19,5 @@ next-env.d.ts
 biome.json
 
 packages/
-apps/data-pipeline/benchmarks/
-apps/data-pipeline/tools/
+apps/grassmoth-server/benchmarks/
+apps/grassmoth-server/tools/

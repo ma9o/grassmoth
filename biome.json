@@ -22,11 +22,11 @@
       "!**/storybook-static",
       "!**/generated",
       "!packages/api-types/schemas",
-      "!apps/web/public/perspective",
-      "!apps/web/public/mockServiceWorker.js",
-      "!apps/web/src/components/__fixtures__/demo-run/*.json",
-      "!apps/web/src/components/__fixtures__/workbench-comparisons.json",
-      "!apps/web/src/app/globals.css"
+      "!apps/grassmoth-client/public/perspective",
+      "!apps/grassmoth-client/public/mockServiceWorker.js",
+      "!apps/grassmoth-client/src/components/__fixtures__/demo-run/*.json",
+      "!apps/grassmoth-client/src/components/__fixtures__/workbench-comparisons.json",
+      "!apps/grassmoth-client/src/app/globals.css"
     ]
   }
 }

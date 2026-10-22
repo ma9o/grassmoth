@@ -8,7 +8,7 @@ updates:
 
   # Python (uv/pip)
   - package-ecosystem: pip
-    directory: /apps/data-pipeline
+    directory: /
     schedule:
       interval: weekly
     groups:

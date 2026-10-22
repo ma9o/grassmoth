@@ -31,11 +31,10 @@ async function seedCompleteWorkspace(
     [
       "uv",
       "run",
-      "--directory",
-      "apps/data-pipeline",
+      "--all-packages",
       "python",
       "-m",
-      "tests.scripts.fixtures.promotion_fixture",
+      "tests.support.promotion",
       dataRoot,
       workspaceId,
       JSON.stringify(options),
@@ -54,7 +53,7 @@ afterEach(async () => {
 
 describe("promoteDataWorkspace", () => {
   it("replaces HEALTHDEMO with one durable workspace and copy-only fixture projections", async () => {
-    const root = await mkdtemp(join(tmpdir(), "nof1-fixture-promotion-"));
+    const root = await mkdtemp(join(tmpdir(), "grassmoth-fixture-promotion-"));
     temporaryRoots.push(root);
     const dataRoot = join(root, "data");
     await seedCompleteWorkspace(dataRoot, "CANDIDATE");
@@ -120,7 +119,7 @@ describe("promoteDataWorkspace", () => {
   });
 
   it("leaves the existing fixture untouched when the source run is incomplete", async () => {
-    const root = await mkdtemp(join(tmpdir(), "nof1-fixture-promotion-"));
+    const root = await mkdtemp(join(tmpdir(), "grassmoth-fixture-promotion-"));
     temporaryRoots.push(root);
     const dataRoot = join(root, "data");
     await seedCompleteWorkspace(dataRoot, "CANDIDATE", { omit: "panel" });
@@ -138,7 +137,7 @@ describe("promoteDataWorkspace", () => {
   });
 
   it("rejects a complete-looking source whose current provenance chain is stale", async () => {
-    const root = await mkdtemp(join(tmpdir(), "nof1-fixture-promotion-"));
+    const root = await mkdtemp(join(tmpdir(), "grassmoth-fixture-promotion-"));
     temporaryRoots.push(root);
     const dataRoot = join(root, "data");
     await seedCompleteWorkspace(dataRoot, "CANDIDATE", { stalePanel: true });

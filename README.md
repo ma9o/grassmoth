@@ -1,12 +1,12 @@
-# nof1-causal-lab
+# grassmoth
 
-[![CI](https://github.com/ma9o/nof1-causal-lab/actions/workflows/ci.yml/badge.svg)](https://github.com/ma9o/nof1-causal-lab/actions/workflows/ci.yml)
+[![CI](https://github.com/ma9o/grassmoth/actions/workflows/ci.yml/badge.svg)](https://github.com/ma9o/grassmoth/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12+-3776ab?logo=python&logoColor=white)
 ![Next.js 16](https://img.shields.io/badge/Next.js-16-000?logo=next.js)
 ![NumPyro + JAX](https://img.shields.io/badge/NumPyro-JAX-9b59b6)
 
-**nof1-causal-lab** is an opinionated LLM harness for end-to-end Bayesian causal inference on N-of-1 time series data.
+**grassmoth** is an opinionated LLM harness for end-to-end Bayesian causal inference on longitudinal data.
 
 The ultimate goal of the project is to facilitate epistemically optimal decision-making at the individual level, using dense digital trace datasets (medical records, chatbot conversation logs, browsing history, etc.) while transparently incorporating existing scientific knowledge, where available, in the form of prior distributions and modeling assumptions.
 
@@ -55,7 +55,7 @@ See [assumptions and limits](docs/assumptions.md) for the structural assumptions
 
 ```bash
 bun install --frozen-lockfile
-cd apps/data-pipeline && uv sync --frozen --group dev && cd ../..
+uv sync --frozen --all-packages --group dev
 
 # Environment — set OPENROUTER_API_KEY at minimum
 cp .env.example.dev .env
@@ -73,5 +73,5 @@ See the [dev setup guide](docs/guides/dev_setup.md) for full details including e
 - **[Bayesian workflow](docs/assets/bayesian-workflow.svg):** the book's workflow mapped onto the seven actions, including what is still missing.
 - **[Assumptions and limits](docs/assumptions.md):** the modeling commitments behind every result.
 - **Supported laws:** [likelihoods](docs/reference/statistical-model-spec/likelihoods.md) and [priors](docs/reference/statistical-model-spec/parameters.md), generated from the code.
-- **API:** one POST per action returns running progress or the complete saved result; the remaining routes serve the slim timeline, workspaces and uploads. See the Swagger UI at `http://localhost:8100/api/docs` while the tool server runs, and the generated [agent skill](.agents/skills/nof1-study-api/SKILL.md).
+- **API:** one POST per action returns running progress or the complete saved result; the remaining routes serve the slim timeline, workspaces and uploads. See the Swagger UI at `http://localhost:8100/api/docs` while the tool server runs, and the generated [agent skill](.agents/skills/grassmoth-study-api/SKILL.md).
 - **Guides:** [dev setup](docs/guides/dev_setup.md), [integration testing](docs/guides/agentic_integration_testing.md), [code generation](docs/guides/codegen.md) and [benchmarks](docs/guides/running_evals.md).

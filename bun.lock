@@ -3,7 +3,7 @@
   "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "nof1-causal-lab",
+      "name": "grassmoth",
       "devDependencies": {
         "@ast-grep/cli": "^0.44.1",
         "cspell": "^10.0.0",
@@ -14,15 +14,12 @@
         "turbo": "^2",
       },
     },
-    "apps/data-pipeline": {
-      "name": "@nof1-causal-lab/data-pipeline",
-    },
-    "apps/web": {
-      "name": "@nof1-causal-lab/web",
+    "apps/grassmoth-client": {
+      "name": "@grassmoth/grassmoth-client",
       "version": "0.1.0",
       "dependencies": {
         "@base-ui/react": "^1.3.0",
-        "@nof1-causal-lab/api-types": "workspace:*",
+        "@grassmoth/api-types": "workspace:*",
         "@tailwindcss/typography": "^0.5.19",
         "@tanstack/react-query": "^5.90.21",
         "@tanstack/react-table": "^8.21.3",
@@ -47,8 +44,8 @@
       },
       "devDependencies": {
         "@biomejs/biome": "^2",
+        "@grassmoth/typescript-config": "workspace:*",
         "@msgpack/msgpack": "3.1.3",
-        "@nof1-causal-lab/typescript-config": "workspace:*",
         "@storybook/addon-docs": "^10.2.17",
         "@storybook/addon-vitest": "10.2.17",
         "@storybook/nextjs-vite": "^10.2.17",
@@ -72,8 +69,14 @@
         "vitest": "^4.0.18",
       },
     },
+    "apps/grassmoth-server": {
+      "name": "@grassmoth/grassmoth-server",
+      "dependencies": {
+        "@grassmoth/grassmoth": "workspace:*",
+      },
+    },
     "packages/api-types": {
-      "name": "@nof1-causal-lab/api-types",
+      "name": "@grassmoth/api-types",
       "version": "0.1.0",
       "dependencies": {
         "@msgpack/msgpack": "3.1.3",
@@ -81,13 +84,16 @@
         "openapi-fetch": "0.16.0",
       },
       "devDependencies": {
-        "@nof1-causal-lab/typescript-config": "workspace:*",
+        "@grassmoth/typescript-config": "workspace:*",
         "openapi-typescript": "^7.13.0",
         "typescript": "^5",
       },
     },
+    "packages/grassmoth": {
+      "name": "@grassmoth/grassmoth",
+    },
     "packages/typescript-config": {
-      "name": "@nof1-causal-lab/typescript-config",
+      "name": "@grassmoth/typescript-config",
     },
   },
   "trustedDependencies": [
@@ -436,6 +442,16 @@
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg=="],
 
+    "@grassmoth/api-types": ["@grassmoth/api-types@workspace:packages/api-types"],
+
+    "@grassmoth/grassmoth": ["@grassmoth/grassmoth@workspace:packages/grassmoth"],
+
+    "@grassmoth/grassmoth-client": ["@grassmoth/grassmoth-client@workspace:apps/grassmoth-client"],
+
+    "@grassmoth/grassmoth-server": ["@grassmoth/grassmoth-server@workspace:apps/grassmoth-server"],
+
+    "@grassmoth/typescript-config": ["@grassmoth/typescript-config@workspace:packages/typescript-config"],
+
     "@hono/node-server": ["@hono/node-server@1.19.11", "", { "peerDependencies": { "hono": "^4" } }, "sha512-dr8/3zEaB+p0D2n/IUrlPF1HZm586qgJNXK1a9fhg/PzdtkK7Ksd5l312tJX2yBuALqDYBlG20QEbayqPyxn+g=="],
 
     "@humanfs/core": ["@humanfs/core@0.19.1", "", {}, "sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA=="],
@@ -559,14 +575,6 @@
     "@nodelib/fs.stat": ["@nodelib/fs.stat@2.0.5", "", {}, "sha512-RkhPPp2zrqDAQA/2jNhnztcPAlv64XdhIp7a7454A5ovI7Bukxgt7MX7udwAu3zg1DcpPU0rz3VV1SeaqvY4+A=="],
 
     "@nodelib/fs.walk": ["@nodelib/fs.walk@1.2.8", "", { "dependencies": { "@nodelib/fs.scandir": "2.1.5", "fastq": "^1.6.0" } }, "sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg=="],
-
-    "@nof1-causal-lab/api-types": ["@nof1-causal-lab/api-types@workspace:packages/api-types"],
-
-    "@nof1-causal-lab/data-pipeline": ["@nof1-causal-lab/data-pipeline@workspace:apps/data-pipeline"],
-
-    "@nof1-causal-lab/typescript-config": ["@nof1-causal-lab/typescript-config@workspace:packages/typescript-config"],
-
-    "@nof1-causal-lab/web": ["@nof1-causal-lab/web@workspace:apps/web"],
 
     "@nolyfill/is-core-module": ["@nolyfill/is-core-module@1.0.39", "", {}, "sha512-nn5ozdjYQpUCZlWGuxcJY/KpxkWQs4DcbMCmKojjyrYDEAGy4Ce19NN4v5MduafTwJlbKc99UA8YhSVqq9yPZA=="],
 

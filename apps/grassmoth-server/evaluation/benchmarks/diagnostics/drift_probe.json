@@ -1,0 +1,55 @@
+{
+  "case": "../../cases/tiny.json",
+  "seeds": [
+    {
+      "generation": 721,
+      "sampler": 19
+    }
+  ],
+  "repeats": 2,
+  "concurrent_arms": 1,
+  "name": "Local drift movement probe",
+  "base": {
+    "hardware": "local",
+    "num_chains": 2,
+    "num_warmup": 32,
+    "num_samples_per_chain": 2,
+    "num_particles": 8,
+    "seed": 19,
+    "algorithm": {
+      "method": "mpgibbs",
+      "initialization": {
+        "kind": "laps",
+        "ensemble_size": 8,
+        "num_unadjusted_steps": 10,
+        "num_adjusted_steps": 1,
+        "steps_per_sample": 1
+      },
+      "dsmc": {
+        "latent_step": {
+          "kind": "fixed",
+          "delta": 0.01
+        }
+      }
+    }
+  },
+  "probe_samples": 8,
+  "probe_warmup": 32,
+  "factors": [
+    "algorithm.dsmc.drift"
+  ],
+  "arms": [
+    {
+      "name": "none",
+      "settings": {
+        "algorithm.dsmc.drift": "none"
+      }
+    },
+    {
+      "name": "amala",
+      "settings": {
+        "algorithm.dsmc.drift": "amala"
+      }
+    }
+  ]
+}

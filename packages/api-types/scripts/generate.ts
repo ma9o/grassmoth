@@ -30,10 +30,10 @@ function generateMetadata(): void {
     " * AUTO-GENERATED — DO NOT EDIT",
     " *",
     " * Generated from Python contract owners via:",
-    " *   cd apps/data-pipeline && uv run python -m scripts.codegen.export_api",
+    " *   cd apps/grassmoth-server && uv run python -m scripts.codegen.export_api",
     " *   cd packages/api-types && bun run scripts/generate.ts",
     " *",
-    " * Metadata exporter: apps/data-pipeline/scripts/codegen/export_api.py",
+    " * Metadata exporter: apps/grassmoth-server/scripts/codegen/export_api.py",
     " */",
     "",
     'import type { ArtifactId } from "./models";',
@@ -284,10 +284,9 @@ function schemaBody(name: string): ts.TypeNode {
 const transportAliases = new Map(
   Object.entries(definitions)
     .filter(([, value]) =>
-      [
-        "nof1_causal_lab.json_types",
-        "nof1_causal_lab.artifacts.probability.serialization",
-      ].includes(value["x-python-module"]),
+      ["grassmoth.json_types", "grassmoth.artifacts.probability.serialization"].includes(
+        value["x-python-module"],
+      ),
     )
     .map(([name]) => [name, name.replace(/-(Input|Output)$/, "")]),
 );

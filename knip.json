@@ -2,12 +2,13 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "ignoreWorkspaces": [
     ".",
-    "apps/data-pipeline",
+    "apps/grassmoth-server",
     "packages/api-types",
-    "packages/typescript-config"
+    "packages/typescript-config",
+    "packages/grassmoth"
   ],
   "workspaces": {
-    "apps/web": {
+    "apps/grassmoth-client": {
       "ignoreExportsUsedInFile": true,
       "project": [
         "src/**/*.{ts,tsx}!",
@@ -19,7 +20,12 @@
         "!src/**/stage-story-*.{ts,tsx}",
         "!src/integration/**"
       ],
-      "ignoreDependencies": ["@tailwindcss/typography", "shadcn", "tailwindcss", "tw-animate-css"]
+      "ignoreDependencies": [
+        "@tailwindcss/typography",
+        "shadcn",
+        "tailwindcss",
+        "tw-animate-css"
+      ]
     }
   }
 }

@@ -1,6 +1,9 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalDependencies": [".env", ".env.local"],
+  "globalDependencies": [
+    ".env",
+    ".env.local"
+  ],
   "tasks": {
     "//#docs:check": {
       "cache": false
@@ -10,10 +13,10 @@
         "knip.json",
         "package.json",
         "bun.lock",
-        "apps/web/package.json",
-        "apps/web/*.config.*",
-        "apps/web/tsconfig.json",
-        "apps/web/src/**/*.{ts,tsx,css}"
+        "apps/grassmoth-client/package.json",
+        "apps/grassmoth-client/*.config.*",
+        "apps/grassmoth-client/tsconfig.json",
+        "apps/grassmoth-client/src/**/*.{ts,tsx,css}"
       ],
       "outputs": []
     },
@@ -22,9 +25,16 @@
       "cache": false
     },
     "build": {
-      "dependsOn": ["^build"],
-      "outputs": [".next/**", "!.next/cache/**"],
-      "env": ["NEXT_PUBLIC_*"]
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        ".next/**",
+        "!.next/cache/**"
+      ],
+      "env": [
+        "NEXT_PUBLIC_*"
+      ]
     },
     "lint": {
       "cache": false
@@ -34,18 +44,46 @@
     },
     "test": {
       "cache": false,
-      "env": ["OPENROUTER_API_KEY", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION"]
+      "env": [
+        "OPENROUTER_API_KEY",
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_CLOUD_LOCATION"
+      ]
     },
     "test:all": {
       "cache": false,
-      "env": ["OPENROUTER_API_KEY", "GOOGLE_CLOUD_PROJECT", "GOOGLE_CLOUD_LOCATION"]
+      "env": [
+        "OPENROUTER_API_KEY",
+        "GOOGLE_CLOUD_PROJECT",
+        "GOOGLE_CLOUD_LOCATION"
+      ]
     },
     "codegen": {
-      "dependsOn": ["^codegen"],
+      "dependsOn": [
+        "^codegen"
+      ],
       "cache": false
     },
     "storybook": {
       "persistent": true,
+      "cache": false
+    },
+    "//#lint:python": {
+      "cache": false
+    },
+    "lint:workspace": {
+      "cache": false
+    },
+    "@grassmoth/grassmoth#lint:workspace": {
+      "dependsOn": [
+        "//#lint:python"
+      ],
+      "cache": false
+    },
+    "@grassmoth/grassmoth-server#lint:workspace": {
+      "dependsOn": [
+        "//#lint:python"
+      ],
       "cache": false
     }
   }

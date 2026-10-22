@@ -1,0 +1,29 @@
+{
+  "name": "@grassmoth/grassmoth",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "lint": "turbo run lint:workspace --filter=@grassmoth/grassmoth --continue=always",
+    "lint:fix": "uv run --all-packages python ../../scripts/check_python.py library lint:fix",
+    "format": "uv run --all-packages python ../../scripts/check_python.py library format",
+    "format:check": "uv run --all-packages python ../../scripts/check_python.py library format:check",
+    "lint:ruff": "uv run --all-packages python ../../scripts/check_python.py library lint:ruff",
+    "lint:deptry": "uv run --all-packages python ../../scripts/check_python.py library lint:deptry",
+    "lint:source-rules": "uv run --all-packages python ../../scripts/check_python.py library lint:source-rules",
+    "test": "uv run --all-packages python ../../scripts/check_python.py library test",
+    "test:all": "uv run --all-packages python ../../scripts/check_python.py library test:all",
+    "lint:ty": "uv run --all-packages python ../../scripts/check_python.py library lint:ty",
+    "lint:basedpyright": "uv run --all-packages python ../../scripts/check_python.py library lint:basedpyright",
+    "lint:config": "uv run --all-packages python ../../scripts/check_python.py library lint:config",
+    "lint:type-boundaries": "uv run --all-packages python ../../scripts/check_python.py library lint:type-boundaries",
+    "lint:type-boundaries:tests": "uv run --all-packages python ../../scripts/check_python.py library lint:type-boundaries:tests",
+    "lint:architecture": "uv run --all-packages python ../../scripts/check_python.py library lint:architecture",
+    "lint:public": "uv run --all-packages python ../../scripts/check_python.py library lint:public",
+    "lint:imports": "uv run --all-packages python ../../scripts/check_python.py library lint:imports",
+    "lint:vulture": "uv run --all-packages python ../../scripts/check_python.py library lint:vulture",
+    "lint:fields": "uv run --all-packages python ../../scripts/check_python.py library lint:fields",
+    "lint:annotations": "uv run --all-packages python ../../scripts/check_python.py library lint:annotations",
+    "lint:duplicates": "uv run --all-packages python ../../scripts/check_python.py library lint:duplicates",
+    "lint:workspace": "uv run --all-packages python ../../scripts/check_python.py library lint"
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "extends": "@nof1-causal-lab/typescript-config/base.json",
+  "extends": "@grassmoth/typescript-config/base.json",
   "compilerOptions": {
     "noUncheckedIndexedAccess": true,
     "exactOptionalPropertyTypes": true,

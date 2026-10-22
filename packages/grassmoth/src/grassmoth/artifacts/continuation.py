@@ -1,0 +1,54 @@
+"""Persisted last-draw state and frozen tuning for production fit continuation."""
+
+from typing import Annotated, Literal
+
+from pydantic import Field
+
+from grassmoth.artifacts.arrays import NumericalArray
+from grassmoth.artifacts.base import Value
+from grassmoth.artifacts.joint_parameterization import JointParameterizationRecord
+from grassmoth.artifacts.reports.posterior_diagnostics import InitializationDiagnostics
+from grassmoth.artifacts.sampling import (
+    SamplerSpec,
+)
+
+
+class JointTuning(Value):
+    """Joint coordinates are reconstructed from the original model and trace seed."""
+
+    kind: Literal["joint"] = "joint"
+    parameterization: JointParameterizationRecord
+
+
+class TransferredTuning(Value):
+    """Only scientific values transfer across kernels; warmup must prepare new tuning."""
+
+    kind: Literal["transferred"] = "transferred"
+
+
+class ParticleTuning(Value):
+    """Frozen proposal geometry; these values are not posterior draws."""
+
+    kind: Literal["particle"] = "particle"
+    parameter_chol: NumericalArray
+    pilot_mean: NumericalArray
+    pilot_variance: NumericalArray
+    parameter_reference_path: NumericalArray
+    gaussian_reference: tuple[NumericalArray, ...] = ()
+    initialization: InitializationDiagnostics
+
+
+type FrozenSamplerTuning = Annotated[
+    JointTuning | ParticleTuning | TransferredTuning, Field(discriminator="kind")
+]
+
+
+class SamplerCheckpoint(Value):
+    """An exact native state at the last retained draw, with its next random key."""
+
+    settings: SamplerSpec
+    parameters: NumericalArray
+    paths: NumericalArray
+    random_key: NumericalArray
+    native_state: tuple[NumericalArray, ...]
+    tuning: FrozenSamplerTuning

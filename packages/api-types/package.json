@@ -1,5 +1,5 @@
 {
-  "name": "@nof1-causal-lab/api-types",
+  "name": "@grassmoth/api-types",
   "version": "0.1.0",
   "license": "Apache-2.0",
   "private": true,
@@ -15,13 +15,14 @@
     "lint:tsc": "tsc --noEmit",
     "codegen": "bun run codegen:schemas && bun run codegen:types",
     "codegen:check": "bun run --parallel --no-exit-on-error codegen:schemas:check codegen:types:check",
-    "codegen:schemas": "uv run --directory ../../apps/data-pipeline python -m scripts.codegen.export_api",
+    "codegen:schemas": "uv run --all-packages --directory ../../apps/grassmoth-server python -m scripts.codegen.export_api",
     "codegen:schemas:check": "bun run codegen:schemas --check",
     "codegen:types": "bun run scripts/generate.ts",
-    "codegen:types:check": "bun run codegen:types --check"
+    "codegen:types:check": "bun run codegen:types --check",
+    "lint:workspace": "bun run lint"
   },
   "devDependencies": {
-    "@nof1-causal-lab/typescript-config": "workspace:*",
+    "@grassmoth/typescript-config": "workspace:*",
     "openapi-typescript": "^7.13.0",
     "typescript": "^5"
   },

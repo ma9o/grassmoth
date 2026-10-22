@@ -4,7 +4,7 @@ Defines the observation-model vocabulary for `LikelihoodSpec` entries in a `Dyna
 
 ## Conditional Expressions
 
-`LikelihoodSpec.law` is a [closed union of law specifications](../../../apps/data-pipeline/src/nof1_causal_lab/artifacts/model/likelihood.py), each with a `distribution` tag and required `Expression` fields directly on the law. Expressions use scientific state references, coefficient operands, arithmetic, and bounded functions. In the table, `p = a + Σ bᵢ state(xᵢ)` is an affine predictor; each loading refers to its actual construct. `a`, `bᵢ`, and the auxiliary operands are fixed coefficients or references to `DynamicalModelSpec.parameters`.
+`LikelihoodSpec.law` is a [closed union of law specifications](../../../packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py), each with a `distribution` tag and required `Expression` fields directly on the law. Expressions use scientific state references, coefficient operands, arithmetic, and bounded functions. In the table, `p = a + Σ bᵢ state(xᵢ)` is an affine predictor; each loading refers to its actual construct. `a`, `bᵢ`, and the auxiliary operands are fixed coefficients or references to `DynamicalModelSpec.parameters`.
 
 | Native law | Argument expressions |
 |---|---|
@@ -28,7 +28,7 @@ For endogenous constructs, particle inference supports direct point bindings `De
 
 The numerical backend derives its family and response from these expressions, and it rejects unsupported formulas before fitting.
 
-> The sections below are generated from the [law specifications](../../../apps/data-pipeline/src/nof1_causal_lab/artifacts/model/likelihood.py) and [dtype constraints](../../../apps/data-pipeline/src/nof1_causal_lab/artifacts/observations/dtypes.py).
+> The sections below are generated from the [law specifications](../../../packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py) and [dtype constraints](../../../packages/grassmoth/src/grassmoth/artifacts/observations/dtypes.py).
 > Edit those Python owners and run `bun run docs:distribution` from the repository root instead of editing them manually.
 
 ## Dtype-to-Distribution Mapping

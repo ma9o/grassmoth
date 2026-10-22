@@ -1,0 +1,38 @@
+{
+  "name": "@grassmoth/grassmoth-server",
+  "license": "Apache-2.0",
+  "private": true,
+  "scripts": {
+    "lint": "turbo run lint:workspace --filter=@grassmoth/grassmoth-server --continue=always",
+    "lint:fix": "uv run --all-packages python ../../scripts/check_python.py server lint:fix",
+    "format": "uv run --all-packages python ../../scripts/check_python.py server format",
+    "format:check": "uv run --all-packages python ../../scripts/check_python.py server format:check",
+    "lint:ruff": "uv run --all-packages python ../../scripts/check_python.py server lint:ruff",
+    "lint:deptry": "uv run --all-packages python ../../scripts/check_python.py server lint:deptry",
+    "lint:source-rules": "uv run --all-packages python ../../scripts/check_python.py server lint:source-rules",
+    "test": "uv run --all-packages python ../../scripts/check_python.py server test",
+    "test:all": "uv run --all-packages python ../../scripts/check_python.py server test:all",
+    "lint:ty": "uv run --all-packages python ../../scripts/check_python.py server lint:ty",
+    "lint:basedpyright": "uv run --all-packages python ../../scripts/check_python.py server lint:basedpyright",
+    "lint:config": "uv run --all-packages python ../../scripts/check_python.py server lint:config",
+    "lint:type-boundaries": "uv run --all-packages python ../../scripts/check_python.py server lint:type-boundaries",
+    "lint:type-boundaries:tests": "uv run --all-packages python ../../scripts/check_python.py server lint:type-boundaries:tests",
+    "lint:architecture": "uv run --all-packages python ../../scripts/check_python.py server lint:architecture",
+    "lint:public": "uv run --all-packages python ../../scripts/check_python.py server lint:public",
+    "lint:imports": "uv run --all-packages python ../../scripts/check_python.py server lint:imports",
+    "lint:vulture": "uv run --all-packages python ../../scripts/check_python.py server lint:vulture",
+    "lint:fields": "uv run --all-packages python ../../scripts/check_python.py server lint:fields",
+    "lint:annotations": "uv run --all-packages python ../../scripts/check_python.py server lint:annotations",
+    "lint:duplicates": "uv run --all-packages python ../../scripts/check_python.py server lint:duplicates",
+    "dev": "uv run --all-packages uvicorn grassmoth_server.api.app:app --reload --port 8100",
+    "notebooks": "uv run --all-packages marimo edit notebooks/",
+    "complexity": "uv run --all-packages complexipy . --failed --sort desc --plain --ignore-complexity",
+    "similarity": "uv run --all-packages python -m scripts.checks.find_ast_similarities",
+    "docs:distribution": "uv run --all-packages python -m scripts.codegen.export_distribution_docs",
+    "docs:distribution:check": "bun run docs:distribution --check",
+    "lint:workspace": "uv run --all-packages python ../../scripts/check_python.py server lint"
+  },
+  "dependencies": {
+    "@grassmoth/grassmoth": "workspace:*"
+  }
+}

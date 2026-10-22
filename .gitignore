@@ -28,7 +28,7 @@ data/processed/**
 .prefect-cache/
 
 # Evaluation logs
-apps/data-pipeline/logs/
+apps/grassmoth-server/logs/
 
 # Local scratchpad
 scratchpad/**
@@ -56,7 +56,7 @@ node_modules/
 .vercel
 .playwright-mcp/
 
-apps/data-pipeline/notebooks/.jax_cache/
-apps/data-pipeline/notebooks/artifacts/
+apps/grassmoth-server/notebooks/.jax_cache/
+apps/grassmoth-server/notebooks/artifacts/
 
-apps/data-pipeline/scripts/**/*.csv
+apps/grassmoth-server/scripts/**/*.csv

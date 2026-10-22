@@ -64,7 +64,7 @@ async function projectStudy(
       "uv",
       "run",
       "--directory",
-      join(repoRoot, "apps/data-pipeline"),
+      join(repoRoot, "apps/grassmoth-server"),
       "python",
       "-m",
       "scripts.fixtures.study",

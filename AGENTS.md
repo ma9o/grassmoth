@@ -10,23 +10,23 @@
 
 - There is no baselining in this repo. Never record existing lint, type or test failures in a baseline, a bulk suppression or a "known failures" list. A new check ships with all its findings fixed, and a failing check gets fixed, not recorded. The only exception is an inline suppression of a genuine false positive, with its reason on the same line.
 
-- The core follows functional programming. It is every module whose role is `domain`, `compiler`, `execution` or `projection` in `apps/data-pipeline/scripts/checks/architecture_roles.py`, which owns module roles; only `edge` and `shell` modules do I/O or read clocks and configuration.
+- The core follows functional programming. It is every module whose role is `domain`, `compiler`, `execution` or `projection` in `apps/grassmoth-server/scripts/checks/architecture_roles.py`, which owns module roles; only `edge` and `shell` modules do I/O or read clocks and configuration.
   - Values are immutable: frozen, with `tuple`, `frozenset` and `Mapping` collections. Build records whole instead of mutating them.
   - Composition over inheritance: a value type subclasses only `Value` and composes other values as fields. Alternatives are sum types, not a tag plus optional fields.
   - Parse, don't validate: each invariant has one owner, a smart constructor or an edge parser, and nothing downstream re-checks it. Pass the owner, not values derived from it. Projections are total; if one seems to need a check, fix the core type.
   - Return expected failures as typed outcomes instead of raising. Only bugs and infrastructure failures raise, and the shell handles them.
 
-- Run lint for static feedback and before committing: `bun run --cwd apps/<app> lint` when a change touches only one app, otherwise `bun run lint` at the repo root, which adds the cross-package checks (knip, API types, and docs drift).
+- Run lint for static feedback and before committing: `bun run --cwd <workspace> lint` when a change touches only one workspace, otherwise `bun run lint` at the repo root, which adds the cross-package checks (knip, API types, and docs drift).
   Fix findings at the owner named by the checker; rule details live in the checker docstrings.
 
 - Keep dependencies explicit and preserve strong typing end to end. Follow the [type naming conventions](docs/guides/codegen.md#type-naming-conventions).
 
 # Notebooks
 
-- `apps/data-pipeline/notebooks/` contains marimo Python notebooks.
+- `apps/grassmoth-server/notebooks/` contains marimo Python notebooks.
 - Name every top-level `@app.cell` function with a descriptive snake_case name. Keep inner helpers `_`-prefixed.
-- From `apps/data-pipeline`, validate edits with `uv run marimo check --strict notebooks/<name>.py`.
-- Launch the editor from the repo root with `bun run --cwd apps/data-pipeline notebooks`.
+- From `apps/grassmoth-server`, validate edits with `uv run marimo check --strict notebooks/<name>.py`.
+- Launch the editor from the repo root with `bun run --cwd apps/grassmoth-server notebooks`.
 - For `marimo-pair`, open a specific notebook in the browser first; the file browser exposes no session. Attach with `execute-code.sh --url http://localhost:2718 --token <access_token>`, using the startup banner's token. Pass it via `--token` or `MARIMO_TOKEN`, never in the `--url` query string.
 
 # Docs
@@ -47,11 +47,11 @@
 
 - Experiments and comparisons use the public study actions through the maintained evaluation runner. Develop missing capabilities as the smallest coherent patch to their framework owners, applied in an isolated checkout; retain the patch and experiment declaration in `scratchpad/`. Exercise the patched framework through the same actions. Do not recreate model preparation, initialization, sampling orchestration, diagnostics or convergence gates in experiment harnesses.
 
-- External callers use the [public study library](docs/guides/public_study_library.md). Check each scratchpad experiment or notebook with `bun run --cwd apps/data-pipeline lint:public <caller-path>`; paths are relative to `apps/data-pipeline`.
+- External callers use the [public study library](docs/guides/public_study_library.md). Check each scratchpad experiment or notebook with `bun run --cwd apps/grassmoth-server lint:public <caller-path>`; paths are relative to `apps/grassmoth-server`.
 
 - These are agreed contracts:
-  - the library surface: `nof1_causal_lab/public.py` and the signatures of the functions it lists;
-  - the service surface: `nof1_causal_service/public/`;
+  - the library surface: `grassmoth/public.py` and the signatures of the functions it lists;
+  - the service surface: `grassmoth_server/public/`;
   - HTTP request and response bodies;
   - the boundary rules ARCH011–ARCH013 and their configuration.
 
@@ -64,4 +64,4 @@
 
 - The latent SSM is continuous-time **nonlinear**. Linearization and Gaussian approximations are allowed **only for particle-sampler initialization**: parameter positions, proposal preconditioner, and cSMC reference trajectory.
 - Production posteriors, all diagnostics, posterior-predictive checks, and counterfactual/predictive outputs must use the exact engines in [docs/assumptions.md](docs/assumptions.md#model-class).
-- Before reintroducing linearization, run [test_linearization_init_only.py](apps/data-pipeline/tests/models/ssm/test_linearization_init_only.py), which restricts Laplace imports to warmup/init.
+- Before reintroducing linearization, run [test_linearization_init_only.py](packages/grassmoth/tests/models/ssm/test_linearization_init_only.py), which restricts Laplace imports to warmup/init.

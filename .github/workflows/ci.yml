@@ -26,7 +26,7 @@ jobs:
         with:
           filters: |
             web:
-              - 'apps/web/**'
+              - 'apps/grassmoth-client/**'
               - 'packages/**'
               - 'bun.lock'
               - 'turbo.json'
@@ -35,7 +35,13 @@ jobs:
               - '.github/workflows/ci.yml'
               - '.github/workflows/deploy.yml'
             python:
-              - 'apps/data-pipeline/**'
+              - 'apps/grassmoth-server/**'
+              - 'packages/grassmoth/**'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'conftest.py'
+              - 'tests/**'
+              - 'scripts/check_python.py'
               - 'packages/api-types/**'
               - 'package.json'
               - '.github/workflows/ci.yml'
@@ -65,8 +71,8 @@ jobs:
           key: bun-install-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-install-${{ runner.os }}-
 
-      - run: uv sync --frozen --group dev
-        working-directory: apps/data-pipeline
+      - run: uv sync --frozen --all-packages --group dev
+        working-directory: apps/grassmoth-server
 
       - run: bun install --frozen-lockfile
 
@@ -102,15 +108,15 @@ jobs:
       - name: Cache Next.js build
         uses: actions/cache@v4
         with:
-          path: apps/web/.next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('apps/web/src/**') }}
+          path: apps/grassmoth-client/.next/cache
+          key: nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-${{ hashFiles('apps/grassmoth-client/src/**') }}
           restore-keys: |
             nextjs-${{ runner.os }}-${{ hashFiles('bun.lock') }}-
             nextjs-${{ runner.os }}-
 
       - run: bun install --frozen-lockfile
 
-      - run: bun run --cwd apps/web --parallel --no-exit-on-error test build
+      - run: bun run --cwd apps/grassmoth-client --parallel --no-exit-on-error test build
 
   python:
     needs: changes
@@ -128,13 +134,13 @@ jobs:
       - name: Cache JAX compilations
         uses: actions/cache@v4
         with:
-          path: ~/.cache/nof1-causal-lab/jax
-          key: jax-${{ runner.os }}-${{ hashFiles('apps/data-pipeline/uv.lock') }}-${{ hashFiles('apps/data-pipeline/src/**/*.py') }}
+          path: ~/.cache/grassmoth/jax
+          key: jax-${{ runner.os }}-${{ hashFiles('uv.lock') }}-${{ hashFiles('apps/grassmoth-server/src/**/*.py', 'packages/grassmoth/src/**/*.py') }}
           restore-keys: |
-            jax-${{ runner.os }}-${{ hashFiles('apps/data-pipeline/uv.lock') }}-
+            jax-${{ runner.os }}-${{ hashFiles('uv.lock') }}-
             jax-${{ runner.os }}-
 
-      - run: uv sync --frozen --group dev
-        working-directory: apps/data-pipeline
+      - run: uv sync --frozen --all-packages --group dev
+        working-directory: apps/grassmoth-server
 
-      - run: bun run --cwd apps/data-pipeline test
+      - run: bun run test:python

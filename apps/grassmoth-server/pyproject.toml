@@ -1,0 +1,43 @@
+[project]
+name = "grassmoth-server"
+version = "0.1.0"
+description = "Study service and orchestration for Grassmoth"
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "ma9o" }]
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "grassmoth",
+    "botocore>=1.43.75",
+    "cloudpickle>=3.1.2",
+    "fastapi>=0.142.2",
+    "flatbuffers>=25.12.19",
+    "fsspec>=2026.9.0",
+    "jax>=0.11.2",
+    "jaxlib>=0.11.2",
+    "modal>=1.6.0",
+    "msgpack>=1.2.3",
+    "numpy>=2.5.3",
+    "numpyro>=0.22.0",
+    "openai>=3.22.1",
+    "polars>=1.44.2",
+    "psutil>=7.2.2",
+    "pyarrow>=25.0.1",
+    "pydantic>=2.13.5",
+    "pydantic-core>=2.46.5",
+    "pygit2>=1.20.1",
+    "python-dotenv>=1.2.3",
+    "pyyaml>=6.0.3",
+    "s3fs>=2026.9.0",
+    "temporalio>=1.33.0",
+    "typing-extensions>=4.16.0",
+    "uvicorn>=0.54.0",
+]
+
+[project.scripts]
+grassmoth-publish = "grassmoth_server.study.publish:main"
+grassmoth-sweep = "grassmoth_server.study.sweep:sweep_cli"
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"

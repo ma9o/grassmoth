@@ -6,7 +6,7 @@
 |------|---------|-------|
 | Node.js | 23 (`.node-version`) | `node --version` |
 | Bun | 1.3.14 (`package.json` `packageManager`) | `bun --version` |
-| Python | 3.12+ (`apps/data-pipeline/.python-version`) | `python3 --version` |
+| Python | 3.12+ (`.python-version`) | `python3 --version` |
 | uv | Latest | `uv --version` |
 
 ## Setup
@@ -15,13 +15,11 @@
 # 1. JS/TS deps (also sets up git hooks)
 bun install --frozen-lockfile
 
-# 2. Python deps
-cd apps/data-pipeline
-uv sync --frozen --group dev
-# Optional: --group cloud (Modal, R2/S3)
+# 2. Python workspace deps (one root lockfile and environment)
+uv sync --frozen --all-packages --group dev
+# Optional: --group gpu on Linux
 
 # 3. Environment
-cd ../..
 cp .env.example.dev .env
 # Fill in OPENROUTER_API_KEY (required)
 # Optional: EXA_API_KEY, TOOL_SERVER_URL
@@ -57,12 +55,26 @@ Or individually:
 
 | App | Command | Port |
 |-----|---------|------|
-| Web viewer | `cd apps/web && bun run dev` | 3000 |
-| Temporal dev server | `cd apps/data-pipeline && uv run python scripts/dev/temporal_dev_server.py` | 7233 |
-| Study worker | `cd apps/data-pipeline && PYTHONHASHSEED=0 uv run python -m nof1_causal_service.actions.temporal.worker` | — |
-| Tool server / study facade | `cd apps/data-pipeline && bun run dev` | 8100 |
+| Web viewer | `cd apps/grassmoth-client && bun run dev` | 3000 |
+| Temporal dev server | `cd apps/grassmoth-server && uv run python scripts/dev/temporal_dev_server.py` | 7233 |
+| Study worker | `cd apps/grassmoth-server && PYTHONHASHSEED=0 uv run python -m grassmoth_server.actions.temporal.worker` | — |
+| Tool server / study facade | `cd apps/grassmoth-server && bun run dev` | 8100 |
 
 The web viewer works standalone with mock data. Live studies also need the Temporal dev server, the study worker, and the tool server — `bun run integration:start` brings up the whole stack (see the [integration testing guide](agentic_integration_testing.md)).
+
+## Workspace layout
+
+The Python library lives in `packages/grassmoth` (`grassmoth`), the service in
+`apps/grassmoth-server` (`grassmoth_server`), and the viewer in
+`apps/grassmoth-client`. The service declares its library dependency explicitly.
+The [root Python configuration](../../pyproject.toml) owns the uv workspace,
+shared tool settings, and test selection; `uv.lock` and `.venv/` also live at the root.
+
+Library tests live in `packages/grassmoth/tests`, service tests in
+`apps/grassmoth-server/tests`, and client contracts in `apps/grassmoth-client/tests`.
+Root `tests/` owns shared fixtures and repository test-selection checks.
+The [Python check runner](../../scripts/check_python.py) runs package checks with
+the shared configuration; Turbo schedules checks across both Python packages once.
 
 ## Common Commands
 
@@ -73,7 +85,7 @@ owning package.
 ```bash
 bun run lint          # Every static check, including types and generated-artifact drift
 bun run lint:fix      # Apply lint and formatting fixes
-bun run test          # Lightweight backend tests (one worker) and Vitest
+bun run test          # Python contract suites and client contracts
 bun run codegen:check # Generated API artifact drift
 bun run docs:check    # Generated documentation drift and markdown
 ```
@@ -82,7 +94,7 @@ Python source docstrings use [Google style](https://google.github.io/styleguide/
 The standard Python lint command checks public docstring presence
 and formatting with Ruff, then checks structured docstrings against signatures,
 returns, yields, exceptions, and attributes with `pydoclint`. The
-[configuration](../../apps/data-pipeline/pyproject.toml) keeps types in annotations
+[configuration](../../pyproject.toml) keeps types in annotations
 and property descriptions beside their implementations. Summary-only docstrings
 are allowed for simple operations. Describe behavior, units, shapes, ownership,
 and meaningful absence or failure conditions where relevant; repeating a name
@@ -92,7 +104,7 @@ Each field has one documentation owner. Prefer Pydantic
 [`Field(description=...)`](https://docs.pydantic.dev/latest/concepts/fields/#customizing-json-schema)
 for model field meanings, so the same prose reaches JSON Schema, OpenAPI, and
 generated clients. The
-[pydoclint adapter](../../apps/data-pipeline/scripts/checks/run_pydoclint.py)
+[pydoclint adapter](../../apps/grassmoth-server/scripts/checks/run_pydoclint.py)
 recognizes these descriptions, including `Annotated` metadata, without duplicate
 `Attributes:` entries. Use `Attributes:` for ordinary classes and dataclasses.
 The class docstring explains the record's purpose and relationships. Add a
@@ -118,8 +130,8 @@ Use `bun run` to list root scripts, or `bun run --cwd <workspace>` to list one
 package's scripts. Run focused tasks in their workspace, for example:
 
 ```bash
-bun run --cwd apps/web storybook:build
-bun run --cwd apps/data-pipeline lint:type-boundaries:tests
+bun run --cwd apps/grassmoth-client storybook:build
+bun run --cwd apps/grassmoth-server lint:type-boundaries:tests
 bun run --cwd packages/api-types codegen:schemas:check
 ```
 

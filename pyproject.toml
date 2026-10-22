@@ -1,0 +1,364 @@
+[project]
+name = "grassmoth-workspace"
+version = "0.1.0"
+requires-python = ">=3.12,<3.14"
+dependencies = ["grassmoth-server"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/grassmoth", "apps/grassmoth-server"]
+
+[tool.uv.sources]
+grassmoth = { workspace = true }
+grassmoth-server = { workspace = true }
+
+[dependency-groups]
+cloud = [
+    "botocore>=1.43.75",
+    "modal>=1.6.0",
+    "s3fs>=2026.9.0",
+]
+dev = [
+    "httpx>=0.28.1",
+    "jsonschema>=4.26.0",
+    "beartype>=0.22.9",
+    "deptry>=0.25.1",
+    "ipykernel>=7.4.0",
+    "ipywidgets>=8.1.9",
+    "jupyter-client>=8.10.0",
+    "marimo>=0.25.0",
+    "matplotlib>=3.11.2",
+    "nbconvert>=7.17.1",
+    "plotly>=7.1.0",
+    # Marimo's OpenAI integration needs only this provider extra.
+    "pydantic-ai-slim[openai]>=2.52.0",
+    "pytest>=9.1.1",
+    "pytest-instafail>=0.5.0",
+    "pytest-timeout>=2.4.0",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.16.9",
+    "ty>=0.0.84",
+    "vulture>=2.16",
+    "basedpyright>=1.40.1",
+    "grimp>=3.17",
+    "import-linter>=2.15",
+    "xarray>=2026.9.0",
+    "complexipy>=8.0.1",
+    "pydoclint==0.11.0", # scripts/checks/run_pydoclint.py extends its Visitor
+]
+gpu = [
+    "jax[cuda12]; sys_platform == 'linux'",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["packages/grassmoth/src", "apps/grassmoth-server/src", "apps/grassmoth-server", "."]
+fix = true
+
+[tool.ruff.lint]
+preview = true
+explicit-preview-rules = true
+external = ["V", "ERR", "ANN", "FIELD"]
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # Pyflakes
+    "D",      # Google-style docstrings for the production Python API
+    "I",      # isort
+    "B",      # flake8-bugbear
+    "B909",   # mutation of the collection being iterated
+    "A001",   # builtin variable shadowing
+    "A002",   # builtin argument shadowing
+    "PLW0603",# global rebinding
+    "BLE",    # flake8-blind-except
+    "C4",     # flake8-comprehensions
+    "DTZ",    # flake8-datetimez
+    "NPY",    # NumPy-specific rules
+    "PERF",   # Perflint
+    "PT",     # flake8-pytest-style
+    "RET",    # flake8-return
+    "S324",   # insecure hash functions
+    "S608",   # string-built SQL
+    "TID",    # flake8-tidy-imports
+    "UP",     # pyupgrade
+    "ARG",    # flake8-unused-arguments
+    "SIM",    # flake8-simplify
+    "TCH",    # flake8-type-checking
+    "PTH",    # flake8-use-pathlib
+    "RUF",    # Ruff-specific rules
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "F722",   # jaxtyping shape annotations are strings ruff treats as forward refs
+    "PERF401",# list/dict comprehension nudges are too noisy for legacy code
+    "PERF403",# dict comprehension nudges are too noisy for legacy code
+    "SIM108", # use ternary operator (not always clearer)
+    "RUF001", # ambiguous unicode in strings (intentional for display)
+    "RUF002", # ambiguous unicode in docstrings (intentional for scientific notation)
+    "RUF003", # ambiguous unicode in comments (intentional for scientific notation)
+    "RUF022", # __all__ not sorted (comments prevent auto-sort)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The documentation contract belongs to src; fixtures and analysis cells are callers.
+"!**/src/**.py" = ["D"]
+"**/tests/*.py" = [
+    "ARG001",  # unused function arguments (pytest fixtures)
+    "ARG002",  # unused method arguments (pytest fixtures)
+    "DTZ001",  # tests intentionally use naive datetimes as compact fixtures
+]
+"**/tests/**/*.py" = [
+    "ARG001",  # unused function arguments (pytest fixtures)
+    "ARG002",  # unused method arguments (pytest fixtures)
+    "DTZ001",  # tests intentionally use naive datetimes as compact fixtures
+]
+"apps/grassmoth-server/notebooks/**/*.py" = [
+    "C408",  # plotly figure kwargs idiomatically use dict(...), not {} literals
+    "E731",  # one-line math lambdas (e.g. φ = a·b) read clearly in gallery cells
+]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = [
+    "pydantic.BaseModel",
+    "pydantic.RootModel",
+    "typing.TypedDict",
+    "typing_extensions.TypedDict",
+    "grassmoth.artifacts.base.Value",
+    "grassmoth.public.Value",
+    "grassmoth_server.public.contracts.Value",
+    "grassmoth_server.actions.contracts.effects.ActionEffects",
+    "grassmoth_server.study.records.ExtractionWorkerResult",
+    "grassmoth_server.study.records.AttemptMetadata",
+    "grassmoth.artifacts.observations.spec.ObservationSpec",
+]
+runtime-evaluated-decorators = [
+    "pydantic.dataclasses.dataclass",
+    "pydantic.with_config",
+    "pydantic.validate_call",
+    "temporalio.activity.defn",
+    "temporalio.workflow.run",
+    "temporalio.workflow.update",
+    "temporalio.workflow.query",
+    "temporalio.workflow.signal",
+    "fastapi.FastAPI.get",
+    "fastapi.FastAPI.post",
+    "fastapi.APIRouter.get",
+    "fastapi.APIRouter.post",
+]
+
+[tool.ruff.lint.flake8-pytest-style]
+parametrize-names-type = "tuple"
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.pydoclint]
+style = "google"
+check-style-mismatch = true
+# Annotations own types; docstrings describe semantics without duplicating them.
+arg-type-hints-in-signature = true
+arg-type-hints-in-docstring = false
+check-return-types = false
+check-yield-types = false
+check-arg-order = true
+# Google style permits a complete one-line description for simple operations.
+# Structured docstrings still receive every contract check configured below.
+skip-checking-short-docstrings = true
+skip-checking-private-functions = false
+skip-checking-raises = false
+should-declare-assert-error-if-assert-statement-exists = true
+should-document-star-arguments = true
+allow-init-docstring = true
+# The local runner counts Field descriptions without duplicating Attributes entries.
+check-class-attributes = true
+ignore-private-class-attributes = false
+ignore-special-dunder-class-attributes = false
+# Properties keep their own docstrings beside their implementations.
+treat-property-methods-as-class-attributes = false
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "parents"
+
+[tool.ruff.lint.isort]
+known-first-party = ["grassmoth", "grassmoth_server"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+skip-magic-trailing-comma = false
+
+[tool.vulture]
+# src must prove its own liveness. scripts/checks/run_vulture.py checks evaluation,
+# scripts, notebooks, and tests as independent ownership seams; none of them can
+# keep a definition in src alive.
+paths = ["packages/grassmoth/src", "apps/grassmoth-server/src"]
+min_confidence = 60
+sort_by_size = true
+ignore_decorators = [
+    "@flow",
+    "@pytest.fixture",
+    "@app.*",
+    "@router.*",
+    "@*_router.*",
+    "@register_*",
+    "@field_validator",
+    "@field_serializer",
+    "@model_validator",
+    "@validator",
+    "@root_validator",
+    "@computed_field",
+    "@property",
+    "@*.defjvp",
+    "@*.defvjp",
+    "@*.list_tools",
+    "@*.call_tool",
+    "@workflow.signal",
+    "@workflow.update",
+    "@workflow.query",
+    # MCP gateway tools are invoked by the MCP runtime, never by our code
+    "@mcp.tool",
+]
+ignore_names = [
+    "test_*",
+    "model",
+    "model_config",
+    "pytestmark",
+    "should_exit",
+    "exc_type",
+    "exc_val",
+    "exc_tb",
+    # marimo notebooks emit this module-level provenance stamp (used by marimo, not us)
+    "__generated_with",
+    # jax.profiler.ProfileOptions attributes (consumed by JAX, invisible to vulture)
+    "host_tracer_level",
+    "python_tracer_level",
+    "include_dataset_ops",
+    "enable_hlo_proto",
+]
+
+[tool.ty.environment]
+python-version = "3.12"
+extra-paths = ["apps/grassmoth-server", "apps/grassmoth-server/notebooks", "."]
+
+[tool.ty.src]
+include = ["packages/grassmoth", "apps/grassmoth-server", "tests", "conftest.py", "scripts/check_python.py"]
+exclude = ["**/.venv/**", "**/node_modules/**"]
+
+[tool.ty.rules]
+redundant-condition = "error"
+redundant-condition-strict = "error"
+missing-override-decorator = "error"
+missing-type-argument = "error"
+possibly-missing-attribute = "error"
+possibly-unresolved-reference = "error"
+unused-type-ignore-comment = "error"
+
+[[tool.ty.overrides]]
+include = ["packages/grassmoth/src/**", "apps/grassmoth-server/src/**"]
+
+[tool.ty.overrides.rules]
+unsound-return-statement = "error"
+
+[tool.basedpyright]
+include = ["packages/grassmoth/src", "apps/grassmoth-server/src"]
+pythonVersion = "3.12"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
+reportUnnecessaryComparison = "error"
+reportUnnecessaryIsInstance = "error"
+reportUnnecessaryContains = "error"
+reportMatchNotExhaustive = "error"
+reportTypedDictNotRequiredAccess = "error"
+reportExplicitAny = "error"
+
+# Static package seams. Role-derived rules (ARCH007, ARCH008) live in
+# scripts/checks/check_architecture_boundaries.py.
+[tool.importlinter]
+root_packages = ["grassmoth", "grassmoth_server"]
+exclude_type_checking_imports = false
+
+[[tool.importlinter.contracts]]
+name = "ARCH001 The SSM compiler uses DynamicalModelSpec accessors, not identification internals"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm.compile"]
+forbidden_modules = [
+    "grassmoth.models.causal.graphs",
+    "grassmoth.models.causal.identification",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "ARCH002 The SSM layer consumes typed artifacts, not worker schemas"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm"]
+forbidden_modules = ["grassmoth.actions.prepare_data"]
+
+[[tool.importlinter.contracts]]
+name = "ARCH003 The compiler derives outputs without constructing a runtime"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm.compile"]
+forbidden_modules = ["grassmoth.models.ssm.preparation.panel"]
+
+[[tool.importlinter.contracts]]
+name = "ARCH004 Runtime construction names only the pure compiler entry point"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm.preparation.panel"]
+forbidden_modules = ["grassmoth.models.ssm.compile"]
+allow_indirect_imports = true
+# The entry point necessarily reaches its own lowering implementation.
+ignore_imports = ["grassmoth.models.ssm.preparation.panel -> grassmoth.models.ssm.compile.inputs"]
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "ARCH005 The executable SSM surface and hydration do not depend on inference"
+type = "forbidden"
+source_modules = [
+    "grassmoth.models.ssm.preparation.panel",
+    "grassmoth.models.ssm.execution",
+]
+forbidden_modules = ["grassmoth.models.ssm.inference"]
+
+[[tool.importlinter.contracts]]
+name = "ARCH006 Inference consumes the executable SSM surface, not runtime adapters"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm.inference"]
+forbidden_modules = ["grassmoth.models.ssm.preparation.panel"]
+
+[[tool.importlinter.contracts]]
+name = "ARCH012 The library never imports the service"
+type = "forbidden"
+source_modules = ["grassmoth"]
+forbidden_modules = ["grassmoth_server"]
+
+[tool.deptry.per_rule_ignores]
+# fsspec discovers s3fs by protocol; production code never imports the backend directly.
+DEP002 = [
+    "s3fs",
+    "flatbuffers", # JAX export serialization imports this required optional dependency internally.
+    "uvicorn", # The tool server runs under the uvicorn CLI; production code never imports it.
+]
+
+[tool.ty.analysis]
+respect-type-ignore-comments = true
+# These dependencies do not publish PEP 561 typing metadata, so ty treats their
+# import boundary as `Any`. The ArviZ component packages, Equinox, diffrax,
+# optimistix, and y0 publish typing metadata and remain checked.
+replace-imports-with-any = [
+    # Dual-averaging annotations declare scalars, but vmap carries array states.
+    "blackjax.adaptation.step_size",
+    "numpyro.**",
+]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "apps/grassmoth-server"]
+testpaths = ["packages/grassmoth/tests", "apps/grassmoth-server/tests", "tests"]
+addopts = "--import-mode=importlib -n auto -m 'not (inference or workflow)' --strict-markers --tb=short -ra --instafail --timeout=300 --durations=10 --jaxtyping-packages=grassmoth.models.ssm.covariance,grassmoth.models.ssm.dynamics.vector_field,grassmoth.models.ssm.execution.emissions,grassmoth.models.ssm.inference.samplers.particle.math,beartype.beartype"
+markers = [
+    "contract: isolated routing, validation, schema, identity, and projection without scientific numerical execution",
+    "inference(concern): scientific numerical execution; concern must be sampling, warmup, simulation, predictive, or recovery",
+    "workflow: Temporal workflows and worker orchestration",
+]
