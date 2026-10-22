@@ -12,8 +12,8 @@ import pytest
 from grassmoth.models.ssm.inference.parameter_transform import prepare_parameter_transform
 from grassmoth.models.ssm.inference.prior_program import numpyro_model
 from grassmoth.models.ssm.inference.reparameterization import AutoReparam
-from tests.support.inference import bind_panel_fixture, compile_fit_fixture
-from tests.support.model import two_state_gaussian_model
+from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
+from grassmoth_test_support.model import two_state_gaussian_model
 
 pytestmark = pytest.mark.inference(concern="sampling")
 

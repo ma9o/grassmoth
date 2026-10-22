@@ -21,9 +21,9 @@ from grassmoth.models.structure import (
     selected_state_ids,
     validate_execution_structure,
 )
-from tests.support.helpers import make_model
-from tests.support.inference import compile_model_fixture
-from tests.support.model import additive_a_b_model
+from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import additive_a_b_model
 
 pytestmark = pytest.mark.contract
 

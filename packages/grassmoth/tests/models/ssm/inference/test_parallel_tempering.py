@@ -27,15 +27,17 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
 from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReferenceBridge
 from grassmoth.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
+from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.inference import compile_fit_fixture
+from grassmoth_test_support.interval_particle import (
+    gaussian_interval_case,
+    initialize_interval_chain,
+)
 from packages.grassmoth.tests.models.ssm.compile.test_exact_state_space import (
     _initial,
     _model,
     _problem,
 )
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.inference import compile_fit_fixture
-from tests.support.interval_particle import gaussian_interval_case, initialize_interval_chain
 
 """Replica exchange preserves exact cold laws, compiled support, and chain ownership."""
 
@@ -343,7 +345,7 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
         retain_latent_paths=True,
         tempering=exchange if tempered else None,
         clock=perf_counter,
-        compiler=compile_staged,
+        compiler=compile_program,
         prepare_program=prepare_program,
         logger=logging.getLogger(__name__),
         wall_clock=lambda: datetime.now(UTC),

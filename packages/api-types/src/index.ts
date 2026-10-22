@@ -2,9 +2,6 @@
 // Generated from Python, using the same type names in both languages
 // ---------------------------------------------------------------------------
 
-// Distribution catalog metadata (codegen'd from Python)
-export type { ObservationHyperparameter } from "./generated/metadata";
-export { ARTIFACT_IDS, OBSERVATION_HYPERPARAMETERS_BY_DISTRIBUTION } from "./generated/metadata";
 export type * from "./generated/models";
 
 export interface ArtifactData<T = unknown> {

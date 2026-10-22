@@ -9,7 +9,7 @@ from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.expressions import CallExpression, coefficient, state
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
-from tests.support.helpers import fixture_entity_id, make_model
+from grassmoth_test_support.helpers import fixture_entity_id, make_model
 
 pytestmark = pytest.mark.contract
 

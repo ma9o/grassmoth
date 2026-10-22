@@ -33,8 +33,8 @@ from grassmoth_server.storage import backend as storage
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.queries.lineage import read_data_metadata
 from grassmoth_server.study.state import StudyState
-from tests.support.action import prepared_profile
-from tests.support.helpers import run_async
+from grassmoth_server_test_support.action import prepared_profile
+from grassmoth_server_test_support.helpers import run_async
 
 pytestmark = pytest.mark.contract
 
@@ -77,7 +77,7 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
             ),
         ),
     )
-    from tests.support.data import preparation_input
+    from grassmoth_server_test_support.data import preparation_input
 
     prepared_input = preparation_input(
         store, FilePreparationSpec(source={"files": ["diary.csv"]}, definition=preparation)

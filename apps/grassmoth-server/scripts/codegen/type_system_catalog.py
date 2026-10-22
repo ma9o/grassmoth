@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import json
 import sys
 from types import UnionType
@@ -20,12 +21,12 @@ from typing import (
 from pydantic import BaseModel, TypeAdapter, WithJsonSchema
 from pydantic.json_schema import GenerateJsonSchema
 
-from grassmoth.artifacts.observations.duration import Duration
+from grassmoth.public import Duration
 
 if TYPE_CHECKING:
     from pydantic.json_schema import CoreSchemaOrField, JsonSchemaValue
 
-    from grassmoth.json_types import JsonValue
+    from grassmoth.public import JsonValue
 
 
 def _typescript_type(value: Any) -> str:
@@ -145,6 +146,10 @@ class ContractJsonSchema(GenerateJsonSchema):
             target["x-typescript-type"] = reference
             # Validation-only specializations need not receive an "-Input" suffix.
             target["x-typescript-mode"] = self.mode
+            if schema["type"] == "model":
+                generic = schema["cls"].__pydantic_generic_metadata__["origin"]
+                if generic is not None and (description := inspect.getdoc(generic)):
+                    target["description"] = description
         return result
 
 

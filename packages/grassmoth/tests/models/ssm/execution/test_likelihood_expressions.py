@@ -1,7 +1,6 @@
 """Conditional laws retain native density semantics, ownership, and explicit completion."""
 
 import operator
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -38,16 +37,17 @@ from grassmoth.artifacts.model.parameter import SiteKind
 from grassmoth.artifacts.model.parameter_context import iter_coefficient_uses
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
 from grassmoth.compilation_errors import IncompleteModelError
-from tests.support.helpers import make_model
-from tests.support.inference import compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.fixtures import model_fixture_json
+from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import (
     construct_named,
     indicator_named,
     likelihood_named,
     parameter_named,
     x_y_model,
 )
-from tests.support.observation import observation_kernel
+from grassmoth_test_support.observation import observation_kernel
 
 
 def _partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_complete_test_model() -> (
@@ -227,9 +227,7 @@ def _partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_comp
 def test_native_conditional_law_matches_exact_emission_lowering(
     family, link, observed, observation_law_payload, revise_law_payload
 ):
-    likelihood = LikelihoodSpec.model_validate_json(
-        (Path(__file__).resolve().parents[3] / "fixtures/models" / revise_law_payload).read_text()
-    )
+    likelihood = LikelihoodSpec.model_validate_json(model_fixture_json(revise_law_payload))
     values = {
         "loading": 0.8,
         "observation_intercept": 0.3,
@@ -430,11 +428,7 @@ def test_authored_laws_preserve_coefficient_identities(
     family, link, _observed, observation_law_payload, with_likelihood_coefficients_payload
 ):
     authored = LikelihoodSpec.model_validate_json(
-        (
-            Path(__file__).resolve().parents[3]
-            / "fixtures/models"
-            / with_likelihood_coefficients_payload
-        ).read_text()
+        model_fixture_json(with_likelihood_coefficients_payload)
     )
     assert authored.parsed.loadings[ConstructId("construct:x")].value == -1
     assert authored.parsed.intercept.value == scientific_id("parameter", "baseline")
@@ -449,11 +443,9 @@ def test_completion_binding_and_serialization_follow_the_same_cross_loading():
     owner, other = dynamical_model_spec.constructs
     indicator = owner.indicators[0]
     revised = LikelihoodSpec.model_validate_json(
-        (
-            Path(__file__).resolve().parents[3]
-            / "fixtures/models"
-            / "likelihood_expressions/completion_binding_equations_and_serialization_follow_the_same_cross_loading_revise_law.json"
-        ).read_text()
+        model_fixture_json(
+            "likelihood_expressions/completion_binding_equations_and_serialization_follow_the_same_cross_loading_revise_law.json"
+        )
     )
     dynamical_model_spec = dynamical_model_spec.with_entities(
         edges=replace_constructs(
@@ -488,11 +480,7 @@ def test_completion_binding_and_serialization_follow_the_same_cross_loading():
 def test_partial_law_is_explicit_and_unsupported_formulas_fail_before_execution():
     likelihood = LikelihoodSpec(
         law=TypeAdapter(ObservationLawSpec).validate_json(
-            (
-                Path(__file__).resolve().parents[3]
-                / "fixtures/models"
-                / "likelihood_expressions/gaussian_identity_law.json"
-            ).read_text()
+            model_fixture_json("likelihood_expressions/gaussian_identity_law.json")
         ),
         reasoning="Partial",
     )
@@ -515,11 +503,9 @@ def test_partial_law_is_explicit_and_unsupported_formulas_fail_before_execution(
     indicator = owner.indicators[0]
     partial = LikelihoodSpec(
         law=TypeAdapter(ObservationLawSpec).validate_json(
-            (
-                Path(__file__).resolve().parents[3]
-                / "fixtures/models"
-                / "likelihood_expressions/partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_observation_law_2.json"
-            ).read_text()
+            model_fixture_json(
+                "likelihood_expressions/partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_observation_law_2.json"
+            )
         ),
         reasoning="Partial",
     )
@@ -542,11 +528,7 @@ def test_partial_law_is_explicit_and_unsupported_formulas_fail_before_execution(
         with_law(likelihood)
     wrong_owner = LikelihoodSpec(
         law=TypeAdapter(ObservationLawSpec).validate_json(
-            (
-                Path(__file__).resolve().parents[3]
-                / "fixtures/models"
-                / "common/observed_gaussian_observation_law.json"
-            ).read_text()
+            model_fixture_json("common/observed_gaussian_observation_law.json")
         ),
         reasoning="Wrong owner",
     )

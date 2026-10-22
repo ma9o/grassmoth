@@ -21,7 +21,7 @@ from grassmoth.models.ssm.inference.samplers.particle.contract import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.dsmc import step
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
-from tests.support.interval_particle import interval_target
+from grassmoth_test_support.interval_particle import interval_target
 
 pytestmark = pytest.mark.inference(concern="sampling")
 

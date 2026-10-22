@@ -36,8 +36,8 @@ from grassmoth.models.causal.identification import (
     unroll_temporal_dag,
 )
 from grassmoth.models.structure import StructuralSelection, unsupported_construct_ids
-from tests.support.causal_graphs import make_graph
-from tests.support.helpers import fixture_entity_id, make_model
+from grassmoth_test_support.causal_graphs import make_graph
+from grassmoth_test_support.helpers import fixture_entity_id, make_model
 
 pytestmark = pytest.mark.contract
 

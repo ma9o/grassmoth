@@ -25,8 +25,8 @@ from grassmoth.artifacts.probability.native import (
 )
 from grassmoth.artifacts.probability.serialization import NumPyroDistribution
 from grassmoth.models.structure import StructuralSelection
-from tests.support.inference import compile_fit_fixture, compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.inference import compile_fit_fixture, compile_model_fixture
+from grassmoth_test_support.model import (
     construct_named,
     load_model_fixture,
     parameter_for,

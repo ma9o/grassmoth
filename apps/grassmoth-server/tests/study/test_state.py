@@ -10,7 +10,7 @@ from grassmoth_server.study.state import (
     apply_effects,
     is_stale,
 )
-from tests.support.git import git_oid
+from grassmoth_test_support.git import git_oid
 
 pytestmark = pytest.mark.contract
 

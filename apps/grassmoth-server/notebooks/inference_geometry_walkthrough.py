@@ -6,9 +6,6 @@ app = marimo.App(width="medium")
 
 @app.cell
 def imports_marimo():
-    from grassmoth_server.bootstrap import initialize_numerical_runtime as _initialize_runtime
-
-    _initialize_runtime()
     import marimo as mo
 
     return (mo,)

@@ -16,10 +16,10 @@ from grassmoth_server.actions.contracts.settings import FitSettingsSpec
 from grassmoth_server.actions.runners import run_action_locally
 from grassmoth_server.study.persistence.store import read_model
 from grassmoth_server.study.state import apply_effects
-from tests.support import runner_fixtures as fx
-from tests.support.git import artifact_revisions
-from tests.support.helpers import run_async, write_question
-from tests.support.inference import (
+from grassmoth_server_test_support import runner_fixtures as fx
+from grassmoth_server_test_support.git import artifact_revisions
+from grassmoth_server_test_support.helpers import run_async, write_question
+from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_model_fixture,
     model_draws,
@@ -85,7 +85,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
         )
     )
     from grassmoth.artifacts.model.question import QuestionSpec
-    from tests.support.model import construct_named
+    from grassmoth_test_support.model import construct_named
 
     question = write_question(
         artifact_store,
@@ -101,7 +101,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
     }
     from grassmoth.actions.contracts.bodies import FitOutput
     from grassmoth_server.study.queries import data
-    from tests.support.action import model_findings
+    from grassmoth_server_test_support.action import model_findings
 
     assert isinstance(request.input.target, NewFitTarget)
     expected_checks = model_findings(

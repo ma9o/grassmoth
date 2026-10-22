@@ -34,8 +34,12 @@ from grassmoth.models.ssm.parameterization import build_site_registry
 from grassmoth.models.ssm.priors import resolve_site_priors
 from grassmoth.models.ssm.structure.sites import SiteDescriptor
 from grassmoth.models.structure import StructuralSelection, validate_execution_structure
-from tests.support.inference import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.inference import (
+    bind_panel_fixture,
+    compile_fit_fixture,
+    compile_model_fixture,
+)
+from grassmoth_test_support.model import (
     construct_named,
     load_model_fixture,
     one_state_gaussian_model,

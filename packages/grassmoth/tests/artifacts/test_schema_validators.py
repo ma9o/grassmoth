@@ -7,7 +7,7 @@ from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.compilation_errors import IncompleteModelError
-from tests.support.helpers import graph_constructs, invalid_dict_payload, make_model
+from grassmoth_test_support.helpers import graph_constructs, invalid_dict_payload, make_model
 
 pytestmark = pytest.mark.contract
 

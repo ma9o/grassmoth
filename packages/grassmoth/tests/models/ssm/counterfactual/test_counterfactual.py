@@ -15,8 +15,8 @@ from grassmoth.models.ssm.dynamics.intervention import (
 )
 from grassmoth.models.ssm.dynamics.simulator import SimulationConfig, simulate
 from grassmoth.models.ssm.dynamics.vector_field import VectorField, VectorFieldArgs
-from tests.support.dynamics import DenseLinear, reference_vector_field
-from tests.support.steady_state_reference import compute_steady_state
+from grassmoth_test_support.dynamics import DenseLinear, reference_vector_field
+from grassmoth_test_support.steady_state_reference import compute_steady_state
 
 
 def resolve_action_value(baseline_value, *, mode, value=None, amount=None):

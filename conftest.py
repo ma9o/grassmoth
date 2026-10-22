@@ -1,49 +1,9 @@
 """Require explicit concern owners before pytest applies marker selection."""
 
-from typing import NoReturn
-
 import pytest
-
-from grassmoth_server.bootstrap import initialize_numerical_runtime
-
-
-def pytest_configure() -> None:
-    """Initialize numerical policy before collecting scientific fixtures."""
-    initialize_numerical_runtime()
-
-
-pytest_plugins = ["pytester"]
 
 INFERENCE_CONCERNS = ("sampling", "warmup", "simulation", "predictive", "recovery")
 TEST_CONCERNS = frozenset({"contract", "inference", "workflow"})
-
-
-@pytest.fixture(autouse=True)
-def _fit_on_local_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Tests fit locally; hardware routing contracts must mock the Modal boundary."""
-    from dataclasses import replace
-
-    import modal
-
-    from grassmoth.artifacts.sampling import InferenceHardware
-    from grassmoth_server import config
-
-    loaded = config.load_config()
-    local = replace(
-        loaded,
-        inference=replace(
-            loaded.inference,
-            sampler=loaded.inference.sampler.revised(hardware=InferenceHardware.LOCAL),
-        ),
-    )
-    monkeypatch.setattr(config, "get_config", lambda: local)
-
-    def reject_modal_run(*_args: object, **_kwargs: object) -> NoReturn:
-        pytest.fail(
-            "Live Modal execution is disabled in pytest; mock the Modal boundary.", pytrace=False
-        )
-
-    monkeypatch.setattr(modal.App, "run", reject_modal_run)
 
 
 @pytest.hookimpl(tryfirst=True)

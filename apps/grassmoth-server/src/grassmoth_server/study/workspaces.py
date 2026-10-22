@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from grassmoth_server.actions.contracts.polling import StudyError
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data_module
-from grassmoth_server.study.interface import actions_enabled, parse_workspace_id
+from grassmoth_server.study.calls import actions_enabled, parse_workspace_id
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_question
 from grassmoth_server.study.records import Applied

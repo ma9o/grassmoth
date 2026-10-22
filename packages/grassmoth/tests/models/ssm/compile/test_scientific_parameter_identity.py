@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
@@ -23,8 +22,9 @@ from grassmoth.artifacts.model.parameter_spec import ParameterSpec
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.compile.bindings import parameter_bindings
 from grassmoth.models.structure import StructuralSelection, selected_state_ids
-from tests.support.inference import compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.fixtures import model_fixture_json
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import (
     additive_a_b_model,
     construct_named,
     indicator_named,
@@ -507,11 +507,9 @@ def test_shared_likelihood_parameter_owns_only_active_channels():
     first, second = dynamical_model_spec.constructs
     student = LikelihoodSpec(
         law=TypeAdapter(ObservationLawSpec).validate_json(
-            (
-                Path(__file__).resolve().parents[3]
-                / "fixtures/models"
-                / "scientific_parameter_identity/shared_likelihood_parameter_owns_only_active_channels_observation_law.json"
-            ).read_text()
+            model_fixture_json(
+                "scientific_parameter_identity/shared_likelihood_parameter_owns_only_active_channels_observation_law.json"
+            )
         ),
         reasoning="Test tails",
         standardized=True,
@@ -532,11 +530,9 @@ def test_shared_likelihood_parameter_owns_only_active_channels():
             second.indicators[0].revised(
                 likelihood=LikelihoodSpec(
                     law=TypeAdapter(ObservationLawSpec).validate_json(
-                        (
-                            Path(__file__).resolve().parents[3]
-                            / "fixtures/models"
-                            / "scientific_parameter_identity/shared_likelihood_parameter_owns_only_active_channels_observation_law_2.json"
-                        ).read_text()
+                        model_fixture_json(
+                            "scientific_parameter_identity/shared_likelihood_parameter_owns_only_active_channels_observation_law_2.json"
+                        )
                     ),
                     reasoning="Test tails",
                     standardized=True,

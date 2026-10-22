@@ -20,7 +20,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.targets.intervals import gather_interval_statistics
-from tests.support.interval_particle import (
+from grassmoth_test_support.interval_particle import (
     gaussian_interval_case,
     initialize_interval_chain,
     interval_target,

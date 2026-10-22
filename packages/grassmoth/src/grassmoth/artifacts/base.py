@@ -1,7 +1,5 @@
 """Shared configuration for owned scientific and API values."""
 
-import hashlib
-import json
 from collections.abc import Mapping
 from typing import Self
 
@@ -13,7 +11,6 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_core import to_jsonable_python
 
 from grassmoth.artifacts.immutability import freeze
 
@@ -61,16 +58,6 @@ class Value(BaseModel):
         return self.model_validate(
             {**{name: getattr(self, name) for name in type(self).model_fields}, **changes}
         )
-
-    def content_digest(self) -> str:
-        """Hash owned field content, including exact numerical buffers, independently of storage."""
-        fields = self.model_dump(mode="python", round_trip=True, context={"binary_arrays": True})
-        payload = json.dumps(
-            to_jsonable_python(fields, bytes_mode="base64"),
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode()
-        return hashlib.sha256(payload).hexdigest()
 
     @model_validator(mode="before")
     @classmethod

@@ -164,7 +164,7 @@ def test_failed_fit_has_one_compute_attempt_and_only_journals_the_failure(
     from grassmoth_server.actions.temporal.study.messages import StudyInit
     from grassmoth_server.study.records import ActionBase
     from grassmoth_server.study.state import StudyState
-    from tests.support.git import git_oid
+    from grassmoth_test_support.git import git_oid
 
     payload = (
         {"target": {"kind": "continue", "fit_ref": git_oid(1)}}
@@ -217,7 +217,7 @@ def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monk
         failed_attempt,
     )
     from grassmoth_server.study.state import ArtifactRecord, StudyState
-    from tests.support.git import git_oid
+    from grassmoth_test_support.git import git_oid
 
     async def scenario():
         started = [asyncio.Event(), asyncio.Event()]

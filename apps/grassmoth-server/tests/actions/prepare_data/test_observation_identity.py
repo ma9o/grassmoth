@@ -14,7 +14,7 @@ from grassmoth_server.actions.prepare_data.aggregations import compute_indicator
 from grassmoth_server.actions.prepare_data.context import MeasurementContext
 from grassmoth_server.actions.prepare_data.rows import annotate_observation_rows
 from grassmoth_server.actions.prepare_data.worker_output import validate_worker_output
-from tests.support.helpers import make_model
+from grassmoth_test_support.helpers import make_model
 
 pytestmark = pytest.mark.contract
 

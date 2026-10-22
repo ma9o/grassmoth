@@ -1481,7 +1481,7 @@ def main(argv: list[str] | None = None) -> int:
         default=[
             *SOURCE_ROOTS,
             repo_root / "apps/grassmoth-server/scripts",
-            repo_root / "apps/grassmoth-server/evaluation",
+            repo_root / "benchmarks",
             repo_root / "apps/grassmoth-server/notebooks",
         ],
         help="Python files or directories to scan (default: production Python trees)",

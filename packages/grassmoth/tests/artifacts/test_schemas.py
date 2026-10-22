@@ -41,7 +41,7 @@ from grassmoth.artifacts.observations.semantics import (
     derive_indicator_observation_semantics,
 )
 from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
-from tests.support.helpers import graph_constructs, make_model
+from grassmoth_test_support.helpers import graph_constructs, make_model
 
 pytestmark = pytest.mark.contract
 

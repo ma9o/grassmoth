@@ -29,7 +29,7 @@ from grassmoth.models.ssm.inference.types import (
     MCMCPosterior,
     ProductionDiagnostics,
 )
-from tests.support.inference import particle_posterior
+from grassmoth_test_support.inference import particle_posterior
 
 pytestmark = pytest.mark.contract
 

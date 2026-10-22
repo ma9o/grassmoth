@@ -19,13 +19,13 @@ from fastapi import FastAPI
 from grassmoth_server.api.studies import router as study_router
 from grassmoth_server.api.uploads import uploads_router
 from grassmoth_server.api.workspaces import workspaces_router
-from grassmoth_server.study.interface import TemporalClientProvider
+from grassmoth_server.study.calls import TemporalClientProvider
 
 
 def create_read_facade_app() -> FastAPI:
     """Build the HTTP facade with study, workspace, and upload routes and a shared client provider."""
     app = FastAPI(title="Study Read Facade")
-    app.state.study_clients = TemporalClientProvider()
+    app.state.temporal_client = TemporalClientProvider()
     app.include_router(study_router)
     app.include_router(workspaces_router)
     app.include_router(uploads_router)

@@ -28,12 +28,13 @@ from grassmoth.models.ssm.inference.warmup.initialization import (
 )
 from grassmoth.models.ssm.inference.warmup.laps_ensemble import run_laps_ensemble
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
+from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.inference import (
+    compile_fit_fixture,
+    nonlinear_fit_fixture,
+)
+from grassmoth_test_support.interval_particle import gaussian_interval_case
 from packages.grassmoth.tests.models.ssm.compile.test_exact_state_space import _model, _problem
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.inference import bind_panel_fixture, compile_fit_fixture
-from tests.support.interval_particle import gaussian_interval_case
-from tests.support.model import load_model_fixture
 
 """Exact joint LAPS initialization and its paired handoff to production sampling."""
 
@@ -41,23 +42,10 @@ from tests.support.model import load_model_fixture
 pytestmark = pytest.mark.inference(concern="warmup")
 
 
-def _nonlinear_fixture():
-    model = load_model_fixture(
-        "ecosystem_consumer/nonlinear_mixed_missing_irregular_particle_fit_and_exact_diagnostics_nonlinear_model.json"
-    )
-    prepared = compile_fit_fixture(model)
-    panel = bind_panel_fixture(
-        prepared.compiled_dynamical_model,
-        jnp.array([[0.2, 1.0], [jnp.nan, 2.0], [0.3, jnp.nan], [-0.2, 0.0]]),
-        jnp.array([0.0, 0.05, 0.17, 0.9]),
-    )
-    return prepared, panel
-
-
 @pytest.mark.parametrize("nonlinear", [False, True])
 def test_laps_parameterization_preserves_exact_density_and_directional_gradients(nonlinear):
     if nonlinear:
-        prepared, panel = _nonlinear_fixture()
+        prepared, panel = nonlinear_fit_fixture()
         target = build_particle_problem(
             prepared.prior_runtime_bundle,
             panel,
@@ -203,7 +191,7 @@ def test_laps_batch_width_preserves_members_and_global_adaptation(monkeypatch):
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize("leaf", ["amala", "amala_plus"])
 def test_production_fit_consumes_laps_package(leaf):
-    prepared, panel = _nonlinear_fixture()
+    prepared, panel = nonlinear_fit_fixture()
     result = fit(
         prepared.prior_runtime_bundle,
         panel,
@@ -225,7 +213,7 @@ def test_production_fit_consumes_laps_package(leaf):
         ),
         reparam=None,
         clock=time.monotonic,
-        compiler=compile_staged,
+        compiler=compile_program,
         prepare_program=prepare_program,
         logger=logging.getLogger(__name__),
         wall_clock=lambda: datetime.now(UTC),

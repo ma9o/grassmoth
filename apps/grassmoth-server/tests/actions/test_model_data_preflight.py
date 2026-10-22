@@ -23,12 +23,13 @@ from grassmoth_server.compute.compilation_cache import compile_staged, prepare_p
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState
-from tests.support.action import edit_and_check, prepared_profile
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.helpers import write_question
-from tests.support.inference import compile_fit_fixture
-from tests.support.model import construct_named, stress_sleep_causal_model
-from tests.support.runner_fixtures import panel_frame, panel_metadata
+from grassmoth_server_test_support.action import edit_and_check, prepared_profile
+from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.model import stress_sleep_causal_model
+from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
+from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.inference import compile_fit_fixture
+from grassmoth_test_support.model import construct_named
 
 """Model-panel limitations are checked when fitting, independently of model edits."""
 
@@ -157,7 +158,7 @@ def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeyp
         state,
     )
     assert "model" in {item.artifact_id for item in edited.effects.produced}
-    from tests.support.action import model_findings
+    from grassmoth_server_test_support.action import model_findings
 
     checks, identification = model_findings(
         "TEST", state.with_artifacts(edited.effects.produced), action="edit_model"

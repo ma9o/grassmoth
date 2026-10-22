@@ -1,7 +1,5 @@
 """Independent additive terms survive revision without tying their free coefficients."""
 
-from pathlib import Path
-
 import numpy as np
 import pytest
 
@@ -10,8 +8,9 @@ from grassmoth.artifacts.model.expressions import BinaryExpression
 from grassmoth.models.ssm.compile.bindings import parameter_bindings
 from grassmoth.models.ssm.compile.prior_compilation import compile_priors
 from grassmoth.models.structure import StructuralSelection
-from tests.support.inference import compile_model_fixture
-from tests.support.model import load_model_fixture
+from grassmoth_test_support.fixtures import model_fixture_json
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import load_model_fixture
 
 
 def _two_hills_model() -> DynamicalModelSpec:
@@ -86,11 +85,9 @@ def test_term_identity_rejects_ambiguous_or_dangling_revisions(two_hills, change
             first,
             second.revised(
                 expression=BinaryExpression.model_validate_json(
-                    (
-                        Path(__file__).resolve().parents[3]
-                        / "fixtures/models"
-                        / "mechanism_identity/term_identity_rejects_ambiguous_or_dangling_revisions_map_expression.json"
-                    ).read_text()
+                    model_fixture_json(
+                        "mechanism_identity/term_identity_rejects_ambiguous_or_dangling_revisions_map_expression.json"
+                    )
                 )
             ),
         )

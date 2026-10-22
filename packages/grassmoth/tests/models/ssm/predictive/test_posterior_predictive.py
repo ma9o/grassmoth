@@ -23,11 +23,11 @@ from grassmoth.models.diagnostics.history_comparison import (
 )
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.predictive.observations import PredictiveObservationMeanOverflow
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.inference import compile_model_fixture, make_observation_support_runtime
-from tests.support.model import load_model_fixture
-from tests.support.predictive import sample_observation_fixture
-from tests.support.ssm import complex_mixed_family_config
+from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.inference import compile_model_fixture, make_observation_support_runtime
+from grassmoth_test_support.model import load_model_fixture
+from grassmoth_test_support.predictive import sample_observation_fixture
+from grassmoth_test_support.ssm import complex_mixed_family_config
 
 
 def _posterior_runtime_assembles_ordered_cutpoints_from_sample_sites_model_fixture() -> (

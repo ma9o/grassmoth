@@ -1,7 +1,5 @@
 """Exact measurement semantics across authoring, compilation, and observation execution."""
 
-from pathlib import Path
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -41,16 +39,17 @@ from grassmoth.models.structure import (
     selected_indicators,
     selected_state_ids,
 )
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.helpers import make_model
-from tests.support.inference import (
+from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.fixtures import model_fixture_json
+from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_fit_fixture,
     compile_model_fixture,
     make_observation_support_runtime,
 )
-from tests.support.model import _exact_model_model, load_model_fixture
-from tests.support.observation import observation_laws
+from grassmoth_test_support.model import _exact_model_model, load_model_fixture
+from grassmoth_test_support.observation import observation_laws
 
 
 def _authored_affine_delta_keeps_its_calibration_coefficients_complete_model() -> (
@@ -114,13 +113,7 @@ def test_authored_affine_delta_keeps_its_calibration_coefficients(exact_model):
     owner = exact_model.constructs[0]
     predictor = (
         TypeAdapter(ObservationLawSpec)
-        .validate_json(
-            (
-                Path(__file__).resolve().parents[3]
-                / "fixtures/models"
-                / "delta_observations/gaussian_observation_law.json"
-            ).read_text()
-        )
+        .validate_json(model_fixture_json("delta_observations/gaussian_observation_law.json"))
         .loc
     )
     likelihood = LikelihoodSpec(
@@ -196,9 +189,7 @@ def test_exact_measurement_is_available_but_never_selected_by_default(
     assert VALID_LIKELIHOODS_FOR_DTYPE[indicator.observation.measurement_dtype][0] == default_family
     exact = LikelihoodSpec(
         law=TypeAdapter(ObservationLawSpec).validate_json(
-            (
-                Path(__file__).resolve().parents[3] / "fixtures/models" / observation_law_payload
-            ).read_text()
+            model_fixture_json(observation_law_payload)
         ),
         reasoning="Explicit exact measurement",
     )
@@ -290,11 +281,7 @@ def test_unsupported_delta_constraints_fail_before_parameter_initialization(
                 law=DeltaLawSpec(
                     v=TypeAdapter(ObservationLawSpec)
                     .validate_json(
-                        (
-                            Path(__file__).resolve().parents[3]
-                            / "fixtures/models"
-                            / "delta_observations/gaussian_observation_law.json"
-                        ).read_text()
+                        model_fixture_json("delta_observations/gaussian_observation_law.json")
                     )
                     .loc
                 ),
@@ -550,7 +537,7 @@ def test_exact_observations_pass_through_full_construct_diagnostics(exact_model)
     )
     from grassmoth.models.ssm.parameterization import assemble_deterministics_from_registry
     from grassmoth.models.ssm.predictive.types import PredictiveDraws, PredictiveTrajectory
-    from tests.support.inference import compile_model_fixture, parameter_draws
+    from grassmoth_test_support.inference import compile_model_fixture, parameter_draws
 
     draws, ticks = 2, 6
     compiled_dynamical_model = compile_model_fixture(exact_model)

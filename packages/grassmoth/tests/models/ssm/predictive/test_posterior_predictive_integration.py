@@ -18,9 +18,9 @@ from grassmoth.models.ssm.predictive.registry_runtime import (
     predictive_keys,
     simulate_predictive_draws,
 )
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.inference import compile_model_fixture
-from tests.support.model import load_model_fixture
+from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import load_model_fixture
 
 
 def _predictive_draws_feed_mixed_family_diagnostics_model_fixture() -> DynamicalModelSpec:

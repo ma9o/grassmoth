@@ -28,8 +28,6 @@
     "notebooks": "uv run --all-packages marimo edit notebooks/",
     "complexity": "uv run --all-packages complexipy . --failed --sort desc --plain --ignore-complexity",
     "similarity": "uv run --all-packages python -m scripts.checks.find_ast_similarities",
-    "docs:distribution": "uv run --all-packages python -m scripts.codegen.export_distribution_docs",
-    "docs:distribution:check": "bun run docs:distribution --check",
     "lint:workspace": "uv run --all-packages python ../../scripts/check_python.py server lint"
   },
   "dependencies": {

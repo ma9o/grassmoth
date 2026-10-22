@@ -72,7 +72,9 @@ shared tool settings, and test selection; `uv.lock` and `.venv/` also live at th
 
 Library tests live in `packages/grassmoth/tests`, service tests in
 `apps/grassmoth-server/tests`, and client contracts in `apps/grassmoth-client/tests`.
-Root `tests/` owns shared fixtures and repository test-selection checks.
+Each Python suite owns its fixtures and a distinct test-support package inside
+its `tests/` directory. Server tests may import `grassmoth_test_support` from the
+library suite; library tests never depend on server test support or configuration.
 The [Python check runner](../../scripts/check_python.py) runs package checks with
 the shared configuration; Turbo schedules checks across both Python packages once.
 
@@ -121,10 +123,9 @@ subcommands. Related commands share a colon namespace; artifact checks end in
 | Workflow | Root commands |
 |----------|---------------|
 | Development | `dev`, `build`, `storybook`, `integration:start` |
-| Quality | `lint`, `lint:fix`, `test`, `test:all`, `test:fixture-promotion`, `knip`, `complexity` |
+| Quality | `lint`, `lint:fix`, `test`, `test:all`, `knip`, `complexity` |
 | API generation | `codegen`, `codegen:check` |
-| Documentation | `docs:codegen`, `docs:check`; individual tasks under `docs:distribution`, `docs:latex`, `docs:markdown:check`, `docs:spell:check` |
-| Fixtures | `fixture:promote`, `fixture:build` |
+| Documentation | `docs:codegen`, `docs:check`; individual tasks under `docs:latex`, `docs:markdown:check`, `docs:spell:check` |
 
 Use `bun run` to list root scripts, or `bun run --cwd <workspace>` to list one
 package's scripts. Run focused tasks in their workspace, for example:

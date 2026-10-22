@@ -13,8 +13,8 @@ from grassmoth.artifacts.observations.dataset import (
 )
 from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
 from grassmoth.models.ssm.preparation.binding import PanelPreparationFailure, bind_panel
-from tests.support.inference import compile_model_fixture
-from tests.support.model import one_state_gaussian_model
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import one_state_gaussian_model
 
 pytestmark = pytest.mark.contract
 _ORIGIN = datetime(2024, 1, 1, tzinfo=UTC)

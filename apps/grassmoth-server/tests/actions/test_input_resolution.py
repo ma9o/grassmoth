@@ -37,7 +37,7 @@ from grassmoth_server.actions.contracts.requests import (
 from grassmoth_server.actions.input_resolution import input_state
 from grassmoth_server.api import app as tool_server
 from grassmoth_server.storage import paths as data
-from grassmoth_server.study import interface as study_api
+from grassmoth_server.study import calls as study_api
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import (
@@ -50,8 +50,12 @@ from grassmoth_server.study.records import (
     SimulateAttempt,
 )
 from grassmoth_server.study.state import RetractedArtifact
-from tests.support.action import applied_record, empty_simulation_summary, question_root
-from tests.support.git import git_oid
+from grassmoth_server_test_support.action import (
+    applied_record,
+    empty_simulation_summary,
+    question_root,
+)
+from grassmoth_test_support.git import git_oid
 
 pytestmark = pytest.mark.contract
 
@@ -555,7 +559,8 @@ def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth_server.actions.edit_model import edit_model
     from grassmoth_server.study.records import record_dependencies
-    from tests.support.helpers import make_model, write_question
+    from grassmoth_server_test_support.helpers import write_question
+    from grassmoth_test_support.helpers import make_model
 
     repository, store, models, _, _ = study
     http, dispatched = client

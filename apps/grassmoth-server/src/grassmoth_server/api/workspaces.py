@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from fastapi import APIRouter, Response
 
 from grassmoth_server.study import workspaces
-from grassmoth_server.study.interface import actions_enabled
+from grassmoth_server.study.calls import actions_enabled
 
 workspaces_router = APIRouter(prefix="/api")
 

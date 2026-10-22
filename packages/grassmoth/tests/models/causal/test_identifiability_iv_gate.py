@@ -11,8 +11,8 @@ import pytest
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.models.causal.identification import check_identifiability
 from grassmoth.models.structure import StructuralSelection
-from tests.support.causal_graphs import make_graph
-from tests.support.helpers import fixture_entity_id
+from grassmoth_test_support.causal_graphs import make_graph
+from grassmoth_test_support.helpers import fixture_entity_id
 
 pytestmark = pytest.mark.contract
 
@@ -92,7 +92,7 @@ class TestIVAllowedFalse:
 def test_model_reporting_keeps_nonparametric_findings_without_linear_iv_assumptions():
     from grassmoth.artifacts.model.construct import TemporalStatus
     from grassmoth.models.causal.analysis import identify_model
-    from tests.support.helpers import make_model
+    from grassmoth_test_support.helpers import make_model
 
     dynamical_model_spec = make_model(
         ["X", "Y", "Z", "U"], [("Z", "X"), ("X", "Y"), ("U", "X"), ("U", "Y")]

@@ -14,9 +14,9 @@ from grassmoth.artifacts.simulation import SimulationReport, SimulationSpec
 from grassmoth_server.actions.contracts.inputs import SimulateInput
 from grassmoth_server.actions.contracts.requests import SimulateRequest
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
-from tests.support.action import empty_simulation_summary
-from tests.support.inference import compile_model_fixture, particle_posterior
-from tests.support.model import x_y_model
+from grassmoth_server_test_support.action import empty_simulation_summary
+from grassmoth_test_support.inference import compile_model_fixture, particle_posterior
+from grassmoth_test_support.model import x_y_model
 
 pytestmark = pytest.mark.contract
 
@@ -187,9 +187,9 @@ def test_runner_uses_model_time_binding_without_reading_panels(
     from grassmoth_server.storage import paths as data
     from grassmoth_server.study.persistence.store import ArtifactStore
     from grassmoth_server.study.state import StudyState
-    from tests.support.helpers import run_async, write_question
-    from tests.support.inference import parameter_draws
-    from tests.support.runner_fixtures import panel_frame, panel_metadata
+    from grassmoth_server_test_support.helpers import run_async, write_question
+    from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
+    from grassmoth_test_support.inference import parameter_draws
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("ORIGIN")

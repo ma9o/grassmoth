@@ -8,7 +8,7 @@ Generated API artifacts and generated documentation have separate ownership and 
 
 - **Contract graph**: [`artifact_contracts.py`](../../apps/grassmoth-server/scripts/artifact_contracts.py), the domain owners, and typed FastAPI routes are the source of truth. [`export_api.py`](../../apps/grassmoth-server/scripts/codegen/export_api.py) generates their validation and serialization schemas together in `openapi.json`, including stored roots and generic bodies.
 - **Types and client**: [`generate.ts`](../../packages/api-types/scripts/generate.ts) runs [openapi-typescript](https://openapi-ts.dev/node) once. Named contract aliases and generic declarations come from that AST; [openapi-fetch](https://openapi-ts.dev/openapi-fetch/) supplies the runtime client. Upload inputs use native `Blob` values, serialized as `FormData` by the caller.
-- **Agent skill**: The exporter generates `grassmoth-study-api` from the application's endpoint descriptions and [action contracts](../../apps/grassmoth-server/src/grassmoth_server/api/studies.py).
+- **Agent skill**: The exporter generates `grassmoth-study-api` from the application's endpoint descriptions and [action contracts](../../apps/grassmoth-server/src/grassmoth_server/api/studies.py). Input and success-body tables carry the Python owners' type and field descriptions, presence rules and defaults; nested types link to their source owners.
 
 Native NumPyro distributions use the shared [JSON codec](../../packages/grassmoth/src/grassmoth/artifacts/probability/serialization.py) on scientific parameters and compiled sites. Export derives constructor signatures from native distribution arguments and constraints. There is no separate prior-parameter class hierarchy. Numerical arguments belong to their native law; inference and simulation evidence own their numerical values directly. The [result codec](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/codec.py) shares repeated binary buffers when saving or serving a result. Its Python decoder and the [TypeScript client](../../packages/api-types/src/client.ts) restore those values before consumers read the scientific fields.
 
@@ -31,14 +31,16 @@ schema names are never parsed to recover them.
 
 ## Documentation Artifacts
 
-`bun run docs:codegen` updates the generated distribution reference sections, then rewrites math in `README.md` and `docs/` (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`) as SVG embeds under [`docs/assets/generated/latex`](../assets/generated/latex). The source is retained in nearby `docs-latex` metadata comments because GitHub math rendering is unreliable across Markdown contexts.
+The library owns the [parameter and prior definitions](../reference/statistical-model-spec/parameters.md) and [observation laws](../../packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py). Documentation links to those owners for their definitions.
+
+`bun run docs:codegen` rewrites math in `README.md` and `docs/` (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`) as SVG embeds under [`docs/assets/generated/latex`](../assets/generated/latex). The source is retained in nearby `docs-latex` metadata comments because GitHub math rendering is unreliable across Markdown contexts.
 
 ```bash
 bun run docs:codegen # regenerate documentation artifacts
 bun run docs:check   # verify documentation drift, Markdown, and spelling
 ```
 
-`bun run lint` runs both drift checks with every other static check.
+`bun run lint` checks API artifact drift, documentation math, Markdown, and spelling with every other static check.
 
 ### Action-flow charts
 
@@ -161,7 +163,6 @@ the payload or its absence reason.
 | `src/generated/models.ts` | Generated — do not edit |
 | `src/generated/model-api.ts` | Every OpenAPI operation, referencing canonical domain declarations |
 | `src/client.ts` | Runtime client factory using the generated operation signatures |
-| `src/generated/metadata.ts` | Generated artifact IDs, file layout, and distribution metadata |
 | `src/index.ts` | Hand-written re-exports |
 
 ## Client Version
@@ -176,12 +177,20 @@ Web and API consumers enable `noUncheckedIndexedAccess` and
 `exactOptionalPropertyTypes`: sparse lookups retain absence, and omitted request
 options stay absent rather than being assigned `undefined`.
 
-[Fixture generation](../../apps/grassmoth-server/scripts/fixtures/study.py) emits
-`.d.json.ts` declarations alongside canonical JSON projections. They reference
-the production domain types without copying payloads or declaring another
-schema. `fixture:build` owns both outputs. Stored results and
-trace bytes pass through their Python contract owners before export;
-the declarations preserve discriminators and scientific IDs in JSON imports.
+## Story scenarios
+
+`bun run codegen` also generates the client’s synthetic HTTP examples after the API types.
+The [scenario declarations](../../apps/grassmoth-server/scripts/codegen/story_data.py)
+choose small illustrative values; the [exporter](../../apps/grassmoth-server/scripts/codegen/export_story_scenarios.py)
+parses them with the production response models and serializes action responses with the
+production MessagePack codec. It uses the server’s call identity and dependency owners.
+It does not read a saved study or execute scientific actions.
+
+The [MSW handlers](../../apps/grassmoth-client/src/components/__fixtures__/study-scenario.ts)
+serve these examples through the ordinary API client. Stories use production hooks and
+view composition; no generated snapshots or parallel JSON buffer format are maintained.
+Pure unit tests use typed values emitted from the same validated response owners. Synthetic scientific values are
+rendering examples, never benchmark evidence. Client lint checks that generation is current.
 
 ## Troubleshooting
 

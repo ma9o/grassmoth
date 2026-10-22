@@ -66,9 +66,13 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.queries.lineage import fitted_law_report
 from grassmoth_server.study.records import Applied
-from tests.support.action import applied_record, empty_simulation_summary, question_root
-from tests.support.model import x_y_model
-from tests.support.runner_fixtures import panel_frame, panel_metadata, seed_model
+from grassmoth_server_test_support.action import (
+    applied_record,
+    empty_simulation_summary,
+    question_root,
+)
+from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata, seed_model
+from grassmoth_test_support.model import x_y_model
 
 pytestmark = pytest.mark.contract
 

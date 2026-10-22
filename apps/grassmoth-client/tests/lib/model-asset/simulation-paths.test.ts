@@ -1,13 +1,13 @@
 import type { SimulateOutput } from "@grassmoth/api-types";
 import { dump } from "npyjs";
 import { expect, it } from "vitest";
-import { decodeFixture, fixtureValue } from "@/components/__fixtures__/fixture-value";
-import rawVisuals from "@/components/__fixtures__/workbench-visuals.json";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import { scenarioResult } from "@/components/__fixtures__/study-scenario";
 import { outcome } from "@/lib/__fixtures__/model";
 import { fittedSnapshot } from "@/lib/__fixtures__/snapshot";
 import { pathsView } from "@/lib/model-asset/result-values";
 
-const visuals = decodeFixture(rawVisuals);
+const simulation = scenarioResult("simulated").body;
 
 function array(shape: number[], values: number[], dtype: "f8" | "b1" = "f8") {
   return { npy: new Uint8Array(dump(values, shape, { dtype })) };
@@ -27,9 +27,9 @@ it.each([
   const saved: SimulateOutput = {
     data: [{}],
     report: {
-      ...visuals.simulation.report,
+      ...simulation.report,
       evidence: {
-        ...visuals.simulation.report.evidence,
+        ...simulation.report.evidence,
         draws: 2,
         times: [0, 0.25, 8, 10],
         state_ids: [outcome.id],
@@ -52,11 +52,11 @@ it.each([
                 },
               },
         observation_layout: {
-          ...visuals.simulation.report.evidence.observation_layout,
+          ...simulation.report.evidence.observation_layout,
           mask,
           variables: [
             {
-              ...fixtureValue(visuals.simulation.report.evidence.observation_layout.variables[0]),
+              ...fixtureValue(simulation.report.evidence.observation_layout.variables[0]),
               id: identity,
               name: "Recorded observations",
             },

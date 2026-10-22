@@ -22,9 +22,9 @@ from grassmoth.models.ssm.counterfactual.orchestration import (
 from grassmoth.models.ssm.dynamics.draws import DynamicsDraws
 from grassmoth.models.ssm.dynamics.simulator import ProcessNoise
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
-from tests.support.dynamics import DenseLinear, reference_vector_field
-from tests.support.inference import compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.dynamics import DenseLinear, reference_vector_field
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import (
     _exact_model_model,
     construct_named,
     one_state_gaussian_model,
@@ -146,7 +146,7 @@ def test_model_input_paths_hold_and_interventions_override_later_points(monkeypa
         },
         law_layouts={layout.distribution_id: layout},
     )
-    from tests.support.inference import compile_model_fixture
+    from grassmoth_test_support.inference import compile_model_fixture
 
     compiled_dynamical_model = compile_model_fixture(dynamical_model_spec)
     origin = datetime(2026, 1, 1, tzinfo=UTC)

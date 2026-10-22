@@ -28,11 +28,7 @@ from grassmoth.artifacts.simulation import SimulationReport
 if TYPE_CHECKING:
     from datetime import datetime
 
-    import numpy as np
     import polars as pl
-
-    from grassmoth.artifacts.probability.joint_layout import JointLawLayout
-    from grassmoth.artifacts.reports.inference import FitSegment
 
 # edit_question
 
@@ -145,24 +141,6 @@ class FitOutput(Value):
     inference: InferenceReport = Field(
         description="Run provenance, native sampler evidence, diagnostics and parameter summaries."
     )
-
-    def posterior_draws(
-        self, segment: FitSegment | None = None
-    ) -> tuple[JointLawLayout, np.ndarray] | None:
-        """Read aligned scientific coordinates, optionally selecting one interval per chain."""
-        from grassmoth.artifacts.probability.serialization import empirical_atoms
-
-        metadata = self.inference.core.inference_metadata
-        model = self.dynamical_model_spec
-        if model is None or metadata.distribution is None:
-            return None
-        layout = model.law_layouts[metadata.distribution]
-        atoms = empirical_atoms(model.distributions[metadata.distribution])
-        if segment is not None:
-            atoms = atoms.reshape(metadata.num_chains, -1, atoms.shape[-1])[
-                :, segment.start : segment.stop
-            ].reshape(-1, atoms.shape[-1])
-        return layout, atoms
 
 
 # simulate

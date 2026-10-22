@@ -22,8 +22,8 @@ from grassmoth.models.causal.proofs import (
     certify_identified_estimand,
 )
 from grassmoth.models.ssm.inference.types import JointPosteriorDraws
-from tests.support.git import git_oid
-from tests.support.model import load_model_fixture
+from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.model import load_model_fixture
 
 
 def _treatment_outcome() -> DynamicalModelSpec:
@@ -159,7 +159,7 @@ def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engi
     from grassmoth.models.causal.proofs import certify_conditioned_model
 
     dynamical_model_spec = _conditioned_treatment_outcome()
-    from tests.support.inference import _report
+    from grassmoth_test_support.inference import _report
 
     report = _report(dynamical_model_spec)
     certify_conditioned_model(dynamical_model_spec, dynamical_model_spec, report.core)
@@ -212,7 +212,7 @@ def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engi
 
 
 def test_causal_analysis_joins_matching_proofs():
-    from tests.support.inference import _report
+    from grassmoth_test_support.inference import _report
 
     design = _conditioned_treatment_outcome()
     design_ref = GitRef(workspace_id="workspace", revision=git_oid(2), path="model.json")

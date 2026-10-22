@@ -30,8 +30,12 @@ from grassmoth.models.ssm.parameterization import (
     process_sites,
 )
 from grassmoth.models.ssm.priors import resolve_site_priors
-from tests.support.inference import bind_panel_fixture, compile_fit_fixture, compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.inference import (
+    bind_panel_fixture,
+    compile_fit_fixture,
+    compile_model_fixture,
+)
+from grassmoth_test_support.model import (
     _two_state_fixed_drift_model,
     construct_named,
     indicator_named,

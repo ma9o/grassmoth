@@ -27,7 +27,7 @@ from grassmoth.models.ssm.dynamics.intervention import (
 )
 from grassmoth.models.ssm.dynamics.simulator import simulate
 from grassmoth.models.ssm.dynamics.vector_field import VectorField, VectorFieldArgs
-from tests.support.dynamics import (
+from grassmoth_test_support.dynamics import (
     DenseLinear,
     DiagonalDecay,
     Intercept,
@@ -36,7 +36,7 @@ from tests.support.dynamics import (
     interaction_term,
     reference_vector_field,
 )
-from tests.support.steady_state_reference import compute_steady_state
+from grassmoth_test_support.steady_state_reference import compute_steady_state
 
 
 def _dense_matrix_vector_field(n_latent: int) -> VectorField:

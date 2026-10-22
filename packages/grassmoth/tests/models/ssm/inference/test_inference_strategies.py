@@ -23,16 +23,15 @@ from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.parameter_tracing import _discover_sites
 from grassmoth.models.ssm.inference.types import JointPosteriorDraws, MCMCPosterior
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.inference import (
+from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_fit_fixture,
     make_observation_support_runtime,
     particle_posterior,
 )
-from tests.support.model import one_state_gaussian_model
-from tests.support.observation import mean_density, observation_kernel, observation_laws
+from grassmoth_test_support.model import one_state_gaussian_model
+from grassmoth_test_support.observation import mean_density, observation_kernel, observation_laws
 
 
 @pytest.mark.contract
@@ -306,7 +305,7 @@ class TestDefaultMethodRouting:
             sampler=SamplerSpec(),
             clock=time.monotonic,
             compute_budget=COMPUTE_BUDGET,
-            compiler=compile_staged,
+            compiler=compile_program,
             prepare_program=prepare_program,
             logger=logging.getLogger(__name__),
             wall_clock=lambda: datetime.now(UTC),

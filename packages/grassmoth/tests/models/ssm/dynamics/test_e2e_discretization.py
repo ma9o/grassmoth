@@ -22,9 +22,9 @@ from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.compile.bindings import parameter_bindings
 from grassmoth.models.ssm.compile.inputs import compile_priors as compile_ssm_priors
 from grassmoth.models.structure import StructuralSelection
-from tests.support.helpers import graph_constructs
-from tests.support.inference import compile_fit_fixture, compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.helpers import graph_constructs
+from grassmoth_test_support.inference import compile_fit_fixture, compile_model_fixture
+from grassmoth_test_support.model import (
     load_model_fixture,
     parameter_laws,
     parameter_named,

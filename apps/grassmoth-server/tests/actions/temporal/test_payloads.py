@@ -9,7 +9,7 @@ from uuid import uuid4
 import pytest
 
 from grassmoth.artifacts.identity import scientific_id
-from tests.support.helpers import graph_constructs, make_model
+from grassmoth_test_support.helpers import graph_constructs, make_model
 
 pytestmark = pytest.mark.contract
 

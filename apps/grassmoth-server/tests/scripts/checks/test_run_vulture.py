@@ -118,16 +118,12 @@ def test_concurrent_passes_preserve_ownership_and_clean_caches(tmp_path, used_lo
         (tmp_path / directory).mkdir(parents=True, exist_ok=True)
     files = {
         "packages/grassmoth/src/api.py": ("production_helper", ""),
-        "apps/grassmoth-server/evaluation/check.py": ("evaluation_helper", ""),
-        "apps/grassmoth-server/scripts/usage.py": (
-            "scripts_helper",
-            "from evaluation.check import evaluation_helper\nevaluation_helper()\n",
-        ),
+        "apps/grassmoth-server/scripts/usage.py": ("scripts_helper", ""),
         "apps/grassmoth-server/notebooks/demo.py": (
             "notebook_helper",
             "from scripts.usage import scripts_helper\nscripts_helper()\n",
         ),
-        "tests/test_usage.py": (
+        "packages/grassmoth/tests/test_usage.py": (
             "fixture_helper",
             "from src.api import production_helper\n"
             "from notebooks.demo import notebook_helper\n"

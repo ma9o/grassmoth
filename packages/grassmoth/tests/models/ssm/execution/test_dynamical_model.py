@@ -17,9 +17,9 @@ from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.dynamics.intervention import Intervention
 from grassmoth.models.ssm.inference import problem as problem_module
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
-from tests.support.dynamics import potential_term
-from tests.support.inference import bind_panel_fixture, compile_fit_fixture
-from tests.support.model import load_model_fixture
+from grassmoth_test_support.dynamics import potential_term
+from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
+from grassmoth_test_support.model import load_model_fixture
 
 
 def _runtime_model_fixture() -> DynamicalModelSpec:
@@ -154,7 +154,7 @@ def test_observation_model_keeps_partial_and_complete_missingness(runtime):
 def test_selected_observation_channels_preserve_marginal_density_and_gradients():
     from grassmoth.models.ssm.execution.contracts import MeasurementParams
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
-    from tests.support.observation import observation_laws
+    from grassmoth_test_support.observation import observation_laws
 
     covariance = jnp.array(
         [[1.2, 0.2, 0.3, 0.0], [0.2, 0.9, -0.1, 0.0], [0.3, -0.1, 1.4, 0.0], [0.0, 0.0, 0.0, 1.0]]
@@ -184,7 +184,7 @@ def test_selected_observation_channels_preserve_marginal_density_and_gradients()
 def test_native_discrete_law_samples_categories_from_predictors():
     from grassmoth.models.ssm.execution.contracts import MeasurementParams
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
-    from tests.support.observation import observation_laws
+    from grassmoth_test_support.observation import observation_laws
 
     observation = HeterogeneousObservation(
         MeasurementParams(jnp.eye(2), jnp.zeros(2), jnp.eye(2)),

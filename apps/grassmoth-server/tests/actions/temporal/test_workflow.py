@@ -28,7 +28,12 @@ from grassmoth_server.actions.contracts.inputs import (
     NewFitTarget,
     SimulateInput,
 )
-from grassmoth_server.actions.contracts.polling import ActionPoll, RunningPoll
+from grassmoth_server.actions.contracts.polling import (
+    ActionPoll,
+    ActionResult,
+    RunningPoll,
+    StudyError,
+)
 from grassmoth_server.actions.contracts.preparation import SourceFolder
 from grassmoth_server.actions.contracts.requests import (
     EditModelRequest,
@@ -37,14 +42,14 @@ from grassmoth_server.actions.contracts.requests import (
     PrepareDataRequest,
     SimulateRequest,
 )
+from grassmoth_server.actions.contracts.timeline import TimelineResponse
 from grassmoth_server.actions.temporal.study.workflow import StudyWorkflow
 from grassmoth_server.llm.openrouter import create_openrouter_client
-from grassmoth_server.public.contracts import ActionResult, StudyError, TimelineResponse
-from grassmoth_server.study import interface as study_interface
+from grassmoth_server.study import calls as study_calls
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import ActionMessage, Raised, Rejected
-from tests.support.helpers import graph_constructs
+from grassmoth_test_support.helpers import graph_constructs
 
 pytestmark = [pytest.mark.workflow, pytest.mark.timeout(60, method="thread")]
 _QUESTION = "does exercise improve sleep?"
@@ -62,13 +67,13 @@ _PREPARATION: dict[str, Any] = {
 
 
 async def _submit(workspace, request, clients) -> ActionPoll:
-    response = await study_interface.submit_action(workspace, request, clients)
+    response = await study_calls.submit_action(workspace, request, clients)
     assert isinstance(response, ActionResult), response
     return response.decode()
 
 
 async def _timeline(workspace, clients) -> TimelineResponse:
-    response = await study_interface.get_timeline(workspace, clients)
+    response = await study_calls.get_timeline(workspace, clients)
     assert isinstance(response, TimelineResponse), response
     return response
 
@@ -147,7 +152,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
             build_openrouter_worker,
             build_worker,
         )
-        from grassmoth_server.study import interface as study_api
+        from grassmoth_server.study import calls as study_api
 
         env = await WorkflowEnvironment.start_local(data_converter=pydantic_data_converter)
         try:
@@ -159,9 +164,9 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 asyncio.timeout(30),
             ):
                 monkeypatch.setenv("READ_ONLY_FACADE", "0")
-                clients = study_interface.TemporalClientProvider()
+                clients = study_calls.TemporalClientProvider()
                 monkeypatch.setattr(clients, "get", AsyncMock(return_value=env.client))
-                handle = await study_interface._study_handle(workspace_id, clients)
+                handle = await study_calls._study_handle(workspace_id, clients)
 
                 async def execute(request):
                     response = await _submit(workspace_id, request, clients)
@@ -293,7 +298,7 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 previous_state = state()
                 previous_run_id = handle.first_execution_run_id
                 await handle.terminate()
-                handle = await study_interface._study_handle(workspace_id, clients)
+                handle = await study_calls._study_handle(workspace_id, clients)
                 assert handle.first_execution_run_id != previous_run_id
                 recovered = await _timeline(workspace_id, clients)
                 assert state() == previous_state
@@ -465,9 +470,9 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                 asyncio.timeout(30),
             ):
                 monkeypatch.setenv("READ_ONLY_FACADE", "0")
-                clients = study_interface.TemporalClientProvider()
+                clients = study_calls.TemporalClientProvider()
                 monkeypatch.setattr(clients, "get", AsyncMock(return_value=env.client))
-                handle = await study_interface._study_handle(workspace_id, clients)
+                handle = await study_calls._study_handle(workspace_id, clients)
                 created = await _submit(
                     workspace_id,
                     EditQuestionRequest(
@@ -513,7 +518,7 @@ def test_timeline_reports_only_attempts_a_live_workflow_executes(machine_env, mo
                     clients,
                 )
                 while not (
-                    running_calls := await study_interface._running_actions(workspace_id, clients)
+                    running_calls := await study_calls._running_actions(workspace_id, clients)
                 ):
                     await asyncio.sleep(0.05)
                 (running,) = running_calls

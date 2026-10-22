@@ -1,0 +1,12 @@
+{
+  "action": "simulate",
+  "input": {
+    "dynamical_model_spec_ref": "${TRUTH_MODEL_REVISION}",
+    "simulation": {
+      "start": "2020-01-01",
+      "horizon": "16d"
+    },
+    "seed": 721,
+    "num_replicates": 1
+  }
+}

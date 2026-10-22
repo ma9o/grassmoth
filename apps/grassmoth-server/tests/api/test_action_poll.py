@@ -54,11 +54,11 @@ from grassmoth_server.actions.temporal.study.activities import (
 from grassmoth_server.actions.temporal.study.messages import ActionRequest, StudyInit
 from grassmoth_server.api import app as tool_server
 from grassmoth_server.storage import paths as data
-from grassmoth_server.study import interface as study_api
+from grassmoth_server.study import calls as study_api
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.records import Applied, Rejected
-from tests.support.git import git_oid
-from tests.support.helpers import fixture_entity_id
+from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.helpers import fixture_entity_id
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable
@@ -246,7 +246,7 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
     )
     assert first.status_code == second.status_code == 200
     assert first.content == second.content
-    from grassmoth_server.public.contracts import ActionResult
+    from grassmoth_server.actions.contracts.polling import ActionResult
 
     assert ActionResult.model_validate({"payload": first.content}).decode().status == "success"
     result = msgpack.unpackb(first.content)

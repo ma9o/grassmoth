@@ -17,8 +17,8 @@ from grassmoth.models.ssm.inference.warmup.laps_ensemble import (
     NoLapsTrace,
     run_laps_ensemble,
 )
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.interval_particle import initialize_interval_chain, interval_target
+from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
 
 
 @pytest.mark.inference(concern="sampling")

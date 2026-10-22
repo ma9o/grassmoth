@@ -17,7 +17,7 @@ from grassmoth_server.actions.fit.remote import (
     decode_fit_result,
     encode_fit_result,
 )
-from tests.support.helpers import fixture_entity_id
+from grassmoth_test_support.helpers import fixture_entity_id
 
 pytestmark = pytest.mark.contract
 

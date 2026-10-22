@@ -6,8 +6,8 @@ import pytest
 from numpyro import handlers
 
 from grassmoth.models.ssm.inference.prior_program import sample_parameters
-from tests.support.inference import compile_fit_fixture
-from tests.support.model import two_state_gaussian_model
+from grassmoth_test_support.inference import compile_fit_fixture
+from grassmoth_test_support.model import two_state_gaussian_model
 
 
 @pytest.mark.inference(concern="sampling")

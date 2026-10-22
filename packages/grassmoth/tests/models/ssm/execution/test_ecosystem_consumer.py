@@ -15,8 +15,8 @@ from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.models.ssm.dynamics.vector_field import StructuralDrift
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from grassmoth.models.ssm.inference.problem import build_particle_problem
-from tests.support.inference import bind_panel_fixture, compile_fit_fixture
-from tests.support.model import construct_named, load_model_fixture
+from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
+from grassmoth_test_support.model import construct_named, load_model_fixture
 
 
 def _nonlinear_model() -> DynamicalModelSpec:

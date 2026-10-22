@@ -26,8 +26,7 @@ from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitial
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
 from grassmoth.models.ssm.preparation.binding import BoundPanel
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
-from tests.support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
 
 """Particle configuration and initialization contracts without compiling a sampler."""
 
@@ -179,7 +178,7 @@ def test_laps_failure_stops_production_before_sampling(monkeypatch):
             ),
         ),
         compute_budget=COMPUTE_BUDGET,
-        compiler=compile_staged,
+        compiler=compile_program,
         prepare_program=prepare_program,
         sampler=SamplerSpec(),
         clock=time.monotonic,

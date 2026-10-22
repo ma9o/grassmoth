@@ -25,11 +25,9 @@ def main() -> int:
     source = str(package / "src")
     paths = [source, str(package / "tests")]
     if args.scope == "server":
-        paths.extend(str(SERVER / name) for name in ("evaluation", "notebooks"))
+        paths.append(str(SERVER / "notebooks"))
     else:
-        paths.extend(
-            (str(ROOT / "tests"), str(ROOT / "conftest.py"), str(Path(__file__).resolve()))
-        )
+        paths.extend((str(ROOT / "conftest.py"), str(Path(__file__).resolve())))
     module = [sys.executable, "-m"]
     dependency_rules = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["deptry"]
     dependency_flags = [
@@ -71,7 +69,6 @@ def main() -> int:
                 "CORE002",
                 str(LIBRARY / "tests"),
                 str(SERVER / "tests"),
-                str(ROOT / "tests"),
             ]
         ],
         "lint:architecture": [[*module, "scripts.checks.check_architecture_boundaries"]],
@@ -103,7 +100,12 @@ def main() -> int:
         extra = [
             str(Path(value).resolve()) if not value.startswith("-") else value for value in extra
         ]
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join((str(ROOT), str(SERVER)))}
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join(
+            (str(ROOT), str(LIBRARY / "tests"), str(SERVER / "tests"), str(SERVER))
+        ),
+    }
 
     def run(task: str) -> int:
         for command in commands[task]:

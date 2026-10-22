@@ -14,8 +14,8 @@ from grassmoth.artifacts.model.expressions import (
     state,
 )
 from grassmoth.artifacts.model.likelihood import NormalLawSpec
-from tests.support.inference import compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import (
     construct_named,
     indicator_named,
     likelihood_named,

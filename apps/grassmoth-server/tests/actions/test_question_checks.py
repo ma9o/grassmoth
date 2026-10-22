@@ -14,7 +14,7 @@ from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.models.causal.question_checks import question_edit_reason, question_findings
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.actions.contracts.inputs import EditModelInput
-from tests.support.helpers import make_model
+from grassmoth_test_support.helpers import make_model
 
 pytestmark = pytest.mark.contract
 
@@ -204,7 +204,7 @@ def test_an_off_path_model_edit_retains_its_pruning_evidence(tmp_path, monkeypat
     from grassmoth_server.storage import paths as data
     from grassmoth_server.study.persistence.store import ArtifactStore
     from grassmoth_server.study.state import StudyState
-    from tests.support.helpers import write_question
+    from grassmoth_server_test_support.helpers import write_question
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("question-path")

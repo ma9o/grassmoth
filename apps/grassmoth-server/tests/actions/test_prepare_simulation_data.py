@@ -38,12 +38,13 @@ from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.queries.data import read_data_history, read_simulation_observations
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState
-from tests.support.action import applied_record, empty_simulation_summary
-from tests.support.data import metadata_for_model, simulation_layout
-from tests.support.git import git_oid
-from tests.support.helpers import make_model, run_async
-from tests.support.inference import compile_model_fixture
-from tests.support.model import construct_named, indicator_named, x_y_model
+from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
+from grassmoth_server_test_support.data import metadata_for_model, simulation_layout
+from grassmoth_server_test_support.helpers import run_async
+from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import construct_named, indicator_named, x_y_model
 
 
 def _recorded_replicate_becomes_a_compatible_panel_complete_test_model() -> DynamicalModelSpec:
@@ -110,7 +111,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
         produced_by="edit_model",
         json_files={"model.json": dynamical_model_spec.model_dump(mode="json")},
     )
-    from tests.support.helpers import write_question
+    from grassmoth_server_test_support.helpers import write_question
 
     state = StudyState().with_artifacts([write_question(store), model_info])
     model_commit = history.append(
@@ -222,7 +223,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     assert set(panel["support_kind"]) == {"point"}
 
     from grassmoth_server.actions.fit import action as fit_module
-    from tests.support.inference import _report
+    from grassmoth_test_support.inference import _report
 
     def fit(**kwargs):
         assert kwargs["data_for_model"].recorded.frame.equals(panel)

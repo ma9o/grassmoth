@@ -1,9 +1,8 @@
 import type { ArrayVector, FitOutput } from "@grassmoth/api-types";
 import { dump } from "npyjs";
 import { expect, it } from "vitest";
-import { fitResult } from "@/components/__fixtures__/action-results";
+import { scenarioResult } from "@/components/__fixtures__/study-scenario";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { fittedSnapshot } from "@/lib/__fixtures__/snapshot";
 import { drawsView, inferenceView, scalarValues } from "@/lib/model-asset/result-values";
 
 function array(shape: number[], values: number[], dtype: "f8" | "b1" = "f8") {
@@ -11,8 +10,8 @@ function array(shape: number[], values: number[], dtype: "f8" | "b1" = "f8") {
 }
 
 it("selects original joint posterior atoms and native chain evidence without reducing them", () => {
-  const base = fitResult(fittedSnapshot);
-  const identity = fixtureValue(base.inference.core.inference_metadata.distribution);
+  const base = scenarioResult("fitted").body;
+  const identity = "distribution:unit-test-joint-law";
   const model = fixtureValue(base.dynamical_model_spec);
   const atoms = array([4, 4], [-5, 1, 90, 91, 5, -1, 92, 93, -5, 0, 94, 95, 5, 1, 96, 97]);
   const divergences = array([2, 2], [0, 1, 0, 0], "b1");
@@ -86,6 +85,7 @@ it("selects original joint posterior atoms and native chain evidence without red
         ...base.inference.core,
         inference_metadata: {
           ...base.inference.core.inference_metadata,
+          distribution: identity,
           num_samples_total: 4,
           num_chains: 2,
         },

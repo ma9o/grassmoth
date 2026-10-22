@@ -12,8 +12,8 @@ from grassmoth_server.actions.contracts.requests import FitRequest, SimulateRequ
 from grassmoth_server.actions.temporal.client import pydantic_data_converter
 from grassmoth_server.actions.temporal.study.messages import ActionInput
 from grassmoth_server.study.state import StudyState
-from tests.support.git import git_oid
-from tests.support.helpers import run_async
+from grassmoth_server_test_support.helpers import run_async
+from grassmoth_test_support.git import git_oid
 
 pytestmark = pytest.mark.contract
 

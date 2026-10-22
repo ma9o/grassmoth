@@ -17,7 +17,7 @@ from grassmoth.models.ssm.dynamics.spec import (
     pack_component_params_from_samples,
 )
 from grassmoth.models.ssm.dynamics.vector_field import VectorFieldArgs
-from tests.support.dynamics import decay_term, hill_term, interaction_term, linear_term
+from grassmoth_test_support.dynamics import decay_term, hill_term, interaction_term, linear_term
 
 pytestmark = pytest.mark.contract
 

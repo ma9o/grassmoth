@@ -24,9 +24,13 @@ from grassmoth.models.structure import (
     selected_state_ids,
     validate_execution_structure,
 )
-from tests.support.helpers import make_model
-from tests.support.inference import compile_fit_fixture, compile_model_fixture, particle_posterior
-from tests.support.model import load_model_fixture, x_y_model
+from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.inference import (
+    compile_fit_fixture,
+    compile_model_fixture,
+    particle_posterior,
+)
+from grassmoth_test_support.model import load_model_fixture, x_y_model
 
 
 def _severed_components_do_not_require_priors_or_bind_numerical_parameters_complete_test_model() -> (
@@ -256,7 +260,7 @@ def test_severed_components_do_not_require_priors_or_bind_numerical_parameters()
     from grassmoth.models.ssm import compiled_access as numeric
     from grassmoth.models.ssm.inference.types import JointPosteriorDraws
     from grassmoth.models.ssm.predictive.parameters import sample_model_laws
-    from tests.support.inference import model_draws
+    from grassmoth_test_support.inference import model_draws
 
     dynamical_model_spec = make_model(
         ["A", "B", "Sink", "X", "Y"],

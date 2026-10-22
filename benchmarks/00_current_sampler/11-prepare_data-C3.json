@@ -1,0 +1,30 @@
+{
+  "action": "prepare_data",
+  "input": {
+    "dynamical_model_spec_ref": "${C3_MODEL_REVISION}",
+    "source": "input",
+    "extraction": {
+      "indicator:x": {
+        "kind": "recorded",
+        "value_column": "x",
+        "anchor_column": "x_anchor",
+        "support_start_column": "x_support_start",
+        "support_end_column": "x_support_end"
+      },
+      "indicator:y": {
+        "kind": "recorded",
+        "value_column": "y",
+        "anchor_column": "y_anchor",
+        "support_start_column": "y_support_start",
+        "support_end_column": "y_support_end"
+      },
+      "indicator:u": {
+        "kind": "recorded",
+        "value_column": "u",
+        "anchor_column": "u_anchor",
+        "support_start_column": "u_support_start",
+        "support_end_column": "u_support_end"
+      }
+    }
+  }
+}

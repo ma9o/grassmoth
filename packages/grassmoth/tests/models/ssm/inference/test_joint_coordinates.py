@@ -22,10 +22,10 @@ from grassmoth.models.ssm.inference.conditioning import compile_exact_state_cons
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReference
-from grassmoth_server.compute.compilation_cache import prepare_program
+from grassmoth_test_support.compute import prepare_program
+from grassmoth_test_support.interval_particle import gaussian_interval_case, interval_target
+from grassmoth_test_support.observation import observation_laws
 from packages.grassmoth.tests.models.ssm.compile.test_exact_state_space import _model, _problem
-from tests.support.interval_particle import gaussian_interval_case, interval_target
-from tests.support.observation import observation_laws
 
 """Exact parameterization identities and decoded analytic posteriors, without fitting a study."""
 
@@ -70,8 +70,8 @@ def _direct_constraints(value):
         NormalLawSpec,
     )
     from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
-    from tests.support.helpers import make_model
-    from tests.support.inference import compile_fit_fixture
+    from grassmoth_test_support.helpers import make_model
+    from grassmoth_test_support.inference import compile_fit_fixture
 
     model = make_model(["x", "y"], [("x", "y")])
     constructs = tuple(
@@ -529,7 +529,7 @@ def test_compiler_mask_tracks_available_direct_multi_state_readings_only():
     from grassmoth.artifacts.model.construct import replace_constructs
     from grassmoth.artifacts.model.expressions import coefficient, state
     from grassmoth.models.ssm.compile.point_readings import compile_point_reading_mask
-    from tests.support.inference import compile_fit_fixture
+    from grassmoth_test_support.inference import compile_fit_fixture
 
     model = _model()
     driver = next(c for c in model.constructs if c.name == "driver")
@@ -580,7 +580,7 @@ def test_zero_warmup_rejects_changed_parameterization_or_mask_before_kernel_exec
     from grassmoth.artifacts.sampling import NutsDASpec, SamplerSpec
     from grassmoth.models.ssm.inference.samplers.nuts import run_nuts_da
     from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
-    from tests.support.compute import COMPUTE_BUDGET
+    from grassmoth_test_support.compute import COMPUTE_BUDGET
 
     target = _correlated_target()
     coordinates = build_joint_coordinates(target, "mixed")

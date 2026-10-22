@@ -15,9 +15,10 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState, apply_effects
-from tests.support.action import question_root
-from tests.support.git import git_oid
-from tests.support.model import construct_named, stress_sleep_causal_model
+from grassmoth_server_test_support.action import question_root
+from grassmoth_server_test_support.model import stress_sleep_causal_model
+from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.model import construct_named
 
 pytestmark = pytest.mark.contract
 
@@ -105,8 +106,8 @@ def test_fit_checks_reuse_the_retained_input_report_without_rebuilding(tmp_path,
     from grassmoth_server.actions.contracts.requests import FitRequest
     from grassmoth_server.actions.temporal.study.activities import evaluate_model_checks_activity
     from grassmoth_server.actions.temporal.study.messages import EvaluateChecksInput
-    from tests.support.helpers import run_async
-    from tests.support.inference import _report
+    from grassmoth_server_test_support.helpers import run_async
+    from grassmoth_test_support.inference import _report
 
     model = stress_sleep_causal_model()
     output = FitOutput(dynamical_model_spec=model, checks=report, inference=_report(model))

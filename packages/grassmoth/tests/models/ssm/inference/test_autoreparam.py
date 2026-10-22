@@ -34,13 +34,13 @@ from grassmoth.models.ssm.inference.reparameterization import (
     _minimal_reparam,
 )
 from grassmoth.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
-from tests.support.inference import (
+from grassmoth_test_support.inference import (
     MinimalReparam,
     bind_panel_fixture,
     compile_fit_fixture,
     compile_model_fixture,
 )
-from tests.support.model import (
+from grassmoth_test_support.model import (
     construct_named,
     load_model_fixture,
     parameter_for,

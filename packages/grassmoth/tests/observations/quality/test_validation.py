@@ -24,7 +24,7 @@ from grassmoth.artifacts.reports.data_quality import DataProfileReport
 from grassmoth.observations.quality.checks import parse_timestamp_series
 from grassmoth.observations.quality.profile import profile_data
 from grassmoth.observations.quality.profile import validate_extraction as validate_model_data
-from tests.support.helpers import fixture_entity_id, make_model
+from grassmoth_test_support.helpers import fixture_entity_id, make_model
 
 pytestmark = pytest.mark.contract
 

@@ -6,10 +6,10 @@ from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import Applied, inference_record
-from tests.support.action import applied_record
-from tests.support.git import artifact_revision
-from tests.support.helpers import write_question
-from tests.support.model import x_y_model
+from grassmoth_server_test_support.action import applied_record
+from grassmoth_server_test_support.git import artifact_revision
+from grassmoth_server_test_support.helpers import write_question
+from grassmoth_test_support.model import x_y_model
 
 
 @pytest.mark.contract
@@ -44,8 +44,8 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
     from grassmoth_server.actions.contracts.requests import FitRequest
     from grassmoth_server.storage import paths as data
     from grassmoth_server.study.persistence.store import read_model
-    from tests.support.inference import inference_metadata
-    from tests.support.model import load_model_fixture
+    from grassmoth_server_test_support.inference import inference_metadata
+    from grassmoth_test_support.model import load_model_fixture
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store, journal = ArtifactStore("LABELS"), StudyRepository("LABELS")
@@ -65,7 +65,7 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
             )
         },
     )
-    from tests.support.runner_fixtures import seed_panel
+    from grassmoth_server_test_support.runner_fixtures import seed_panel
 
     panel = seed_panel(store, model_revision=prior.revision)
     info = store.write_artifact(

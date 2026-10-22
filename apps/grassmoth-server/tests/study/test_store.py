@@ -17,8 +17,9 @@ from grassmoth_server.study.records import (
     Rejected,
 )
 from grassmoth_server.study.state import RetractedArtifact
-from tests.support.git import artifact_revisions, git_oid
-from tests.support.helpers import make_model
+from grassmoth_server_test_support.git import artifact_revisions
+from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.helpers import make_model
 
 pytestmark = pytest.mark.contract
 

@@ -26,16 +26,16 @@ from grassmoth.models.ssm.preparation import panel as runtime_module
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.actions.fit.runtime import fit_runtime
 from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
-from tests.support.inference import (
+from grassmoth_server_test_support.model import load_study_model_fixture
+from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_fit_fixture,
     make_observation_support_runtime,
 )
-from tests.support.model import load_model_fixture
 
 
 def _sleep_state_model() -> DynamicalModelSpec:
-    dynamical_model_spec = load_model_fixture("inference/sleep_state_model.json")
+    dynamical_model_spec = load_study_model_fixture("inference/sleep_state_model.json")
     first = dynamical_model_spec.constructs[0]
     indicator = first.indicators[0]
     return dynamical_model_spec.with_entities(
@@ -64,7 +64,7 @@ pytestmark = pytest.mark.contract
 
 
 def _fake_result():
-    from tests.support.inference import particle_posterior
+    from grassmoth_test_support.inference import particle_posterior
 
     return particle_posterior(
         JointPosteriorDraws(parameters={"theta": jnp.zeros((4, 1), dtype=jnp.float32)})
@@ -170,7 +170,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         ProductionDiagnostics,
         UnretainedRun,
     )
-    from tests.support.inference import parameter_draws
+    from grassmoth_test_support.inference import parameter_draws
 
     monkeypatch.setattr(MCMCPosterior, "get_loo_diagnostics", lambda *_args, **_kwargs: None)
     model = _sleep_state_model()

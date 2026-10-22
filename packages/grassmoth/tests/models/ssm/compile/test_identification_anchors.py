@@ -42,9 +42,9 @@ from grassmoth.compilation_errors import AggregatedCompileError
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.compile.observations import materialize_observation_laws
 from grassmoth.models.structure import StructuralSelection, selected_state_ids
-from tests.support.helpers import fixture_entity_id, make_model
-from tests.support.inference import compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.helpers import fixture_entity_id, make_model
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import (
     construct_named,
     indicator_named,
     likelihood_named,

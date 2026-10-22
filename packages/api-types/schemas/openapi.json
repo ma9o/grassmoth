@@ -3,7 +3,7 @@
   "info": {
     "title": "grassmoth study API",
     "version": "0.1.0",
-    "description": "The public scientific interface has seven actions: `edit_question`, `edit_model`,\n`prepare_data`, `fit`, `simulate`, `data_diff`, and `model_diff`.\nStart a call with `POST /api/studies/{workspace_id}/{action}` using\n`{action, input, reasoning}`. Each action owns its typed `input`; optional top-level\n`reasoning` explains the caller's intent and is excluded from call identity.\n\nPOST and polling GET return `{call_id, action, status, commit_id, body, messages}`.\nAction responses use `application/msgpack`; requests remain JSON. Python callers\ncan decode a saved response with `msgpack.unpackb(response_bytes, raw=False)`;\nthe shared TypeScript client decodes responses automatically. `arrays` entries\ncarry binary NPY bytes, read with `numpy.load(io.BytesIO(entry[\"npy\"]), allow_pickle=False)`\nin Python or `readNumericalArray(entry)` in TypeScript. NPY retains dtype, shape,\nNaN and infinities without scalar JSON or base64 conversion. Timeline, workspace,\nupload and HTTP error responses remain JSON.\n`status` is `running`, `failed`, or `success`. `commit_id` is null before publication;\na journaled failure also has a commit. `body` is null while running or failed and\ncontains only that action's typed scientific output on success.\n`messages` is the sole execution-log accumulator: lifecycle entries, structured\nprogress, full LLM/tool traces, and failure details all remain there.\n\nPoll `GET /api/studies/{workspace_id}/{action}/{call_id}`. GET only reads an existing\ncall; it never starts a workflow, executes an action, or retries a failure. Unknown\ncall IDs return 404. Identical resolved inputs reuse running calls and both successful\nand failed completed calls, preserving the first request's reasoning.\n\nRevision selectors accept exact Git hashes or `\"latest\"`. POST resolves selectors\nonce before computing `call_id`; GET keeps that selection when newer revisions appear.\nMissing valid inputs return HTTP 422. `prepare_data` takes `input.source` as one\nfolder name under `data/{workspace_id}/`, such as `\"input\"`. Every file beneath\nthat folder, including subfolders, is captured and hashed before call identity.\nPolling saved calls does not require the original source folder.\n`edit_model` selects a question or model parent through `input.parent_ref`;\na question parent starts a new model; a model parent supplies its definition and pinned\nquestion. The same DynamicalModelSpec accepts partial definitions: omission retains fields and null\nentity entries delete their IDs. The editing boundary prunes outcome-unrelated components\nwith warnings and validates the assembled model. Every study starts with `edit_question`.\n\nEach action owns its successful `body`; input state is read from its producing calls.\nFor `model_diff` and `data_diff`, `body` is the complete saved comparison.\nFit and simulation outputs include their own retained arrays and paths without paging.\nDisplay summaries use null for missing values; numerical buffers retain native missingness.\nReports and checks are retained with their action in Git and never recomputed by GET,\nincluding after cache deletion or code changes. Comparisons and failures remain\njournal leaves without advancing scientific state.\n\n`GET /api/studies/{workspace_id}/timeline` returns call IDs, retained requests,\noutcome summaries, lifecycle messages, trace IDs, input dependencies and the running\ncall. The read-only web viewer follows recorded input dependencies and uses their call\nIDs to compose saved results and logs. For example, a simulation reads its model\nfrom the call named by its model dependency.\nAgents create studies and submit actions directly to the facade.\n`GET /api/workspaces` lists studies and questions; X-Actions-Enabled reports whether\nnew actions are enabled. `POST /api/upload` stages a named input file using\n`multipart/form-data` with `workspaceId` and `file`.\n\nWith READ_ONLY_FACADE=1, existing calls remain readable. POST for an unsaved call\nreturns 403; GET for an unknown call returns 404.\n"
+    "description": "Start a study with `edit_question`. Endpoint examples follow; `/api/docs` has\ncomplete input/output schemas, defaults and alternatives.\n\n- **Submit and poll:** POST JSON `{action, input, reasoning}` to\n  `/api/studies/{workspace_id}/{action}`; `reasoning` is optional. Poll GET\n  `/api/studies/{workspace_id}/{action}/{call_id}` until `status` is `success` or\n  `failed`. GET never starts or retries work; an unknown call returns 404.\n- **Results and errors:** `body` contains the action's scientific output only on\n  success; otherwise it is null. `messages` holds progress, traces and failure\n  details. Completed results are saved and GET never recomputes them.\n- **Binary responses:** action POST/GET return `application/msgpack`, decoded with\n  `msgpack.unpackb(response_bytes, raw=False)` in Python. Numerical `arrays` entries\n  contain NPY bytes: `numpy.load(io.BytesIO(entry[\"npy\"]), allow_pickle=False)`.\n  TypeScript uses the shared client and `readNumericalArray(entry)`. Workspace,\n  timeline, upload and HTTP error responses are JSON.\n- **Call reuse:** revision selectors accept exact Git hashes or `\"latest\"`, pinned\n  once at POST. Identical resolved inputs reuse running calls, successes **and\n  failures**. Changing `reasoning` does not create a new call; change the inputs\n  to make a new attempt.\n- **Artifact references:** response `commit_id` identifies the call's journal entry.\n  For subsequent inputs, GET `/api/studies/{workspace_id}/timeline`, find the call,\n  and select the required artifact by `artifact_id` in\n  `record.attempt.outcome.effects.produced`. Use its `revision` for model,\n  question, data and fit references.\n- **Read-only access:** `/api/workspaces` reports `X-Actions-Enabled`. With\n  `READ_ONLY_FACADE=1`, saved calls remain readable; an unsaved POST returns 403.\n"
   },
   "paths": {
     "/api/studies/{workspace_id}/{action}/{call_id}": {
@@ -899,6 +899,7 @@
       },
       "Added_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The right payload exists at an identity absent on the left.",
         "properties": {
           "kind": {
             "const": "added",
@@ -928,6 +929,7 @@
       },
       "Added_DataPoint_": {
         "additionalProperties": false,
+        "description": "The right payload exists at an identity absent on the left.",
         "properties": {
           "kind": {
             "const": "added",
@@ -953,6 +955,7 @@
       },
       "Applied_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "A successful action result and the artifact changes it proposes to publish.",
         "properties": {
           "status": {
             "const": "applied",
@@ -989,6 +992,7 @@
       },
       "Applied_GitOid_": {
         "additionalProperties": false,
+        "description": "A successful action result and the artifact changes it proposes to publish.",
         "properties": {
           "status": {
             "const": "applied",
@@ -1021,6 +1025,7 @@
       },
       "Applied_NoneType_": {
         "additionalProperties": false,
+        "description": "A successful action result and the artifact changes it proposes to publish.",
         "properties": {
           "status": {
             "const": "applied",
@@ -1386,6 +1391,7 @@
       },
       "Attempt_ActionId_Union_ScientificActionRequest__DataDiffRequest_GitOid___ModelDiffRequest_GitOid___NoneType_": {
         "additionalProperties": false,
+        "description": "One action's request and successful result share the same attempt owner.",
         "properties": {
           "action": {
             "$ref": "#/components/schemas/ActionId"
@@ -1446,6 +1452,7 @@
       },
       "Attempt_Annotated_Any__WithJsonSchema__Annotated_Any__WithJsonSchema__Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "One action's request and successful result share the same attempt owner.",
         "properties": {
           "action": {
             "title": "Action",
@@ -1507,6 +1514,7 @@
       },
       "Attempt_Literal__data_diff___DataDiffRequest_GitOid__GitOid_": {
         "additionalProperties": false,
+        "description": "One action's request and successful result share the same attempt owner.",
         "properties": {
           "action": {
             "const": "data_diff",
@@ -1562,6 +1570,7 @@
       },
       "Attempt_Literal__edit_model___EditModelRequest_GitOid__GitOid_": {
         "additionalProperties": false,
+        "description": "One action's request and successful result share the same attempt owner.",
         "properties": {
           "action": {
             "const": "edit_model",
@@ -1617,6 +1626,7 @@
       },
       "Attempt_Literal__edit_question___EditQuestionRequest_GitOid_": {
         "additionalProperties": false,
+        "description": "One action's request and successful result share the same attempt owner.",
         "properties": {
           "action": {
             "const": "edit_question",
@@ -1672,6 +1682,7 @@
       },
       "Attempt_Literal__fit___FitRequest_GitOid__GitOid_": {
         "additionalProperties": false,
+        "description": "One action's request and successful result share the same attempt owner.",
         "properties": {
           "action": {
             "const": "fit",
@@ -1727,6 +1738,7 @@
       },
       "Attempt_Literal__model_diff___ModelDiffRequest_GitOid__GitOid_": {
         "additionalProperties": false,
+        "description": "One action's request and successful result share the same attempt owner.",
         "properties": {
           "action": {
             "const": "model_diff",
@@ -1782,6 +1794,7 @@
       },
       "Attempt_Literal__prepare_data___PrepareDataRequest_GitOid__FileSourceRef__GitOid_": {
         "additionalProperties": false,
+        "description": "One action's request and successful result share the same attempt owner.",
         "properties": {
           "action": {
             "const": "prepare_data",
@@ -1837,6 +1850,7 @@
       },
       "Attempt_Literal__simulate___SimulateRequest_GitOid__GitOid_": {
         "additionalProperties": false,
+        "description": "One action's request and successful result share the same attempt owner.",
         "properties": {
           "action": {
             "const": "simulate",
@@ -1931,6 +1945,7 @@
       },
       "BernoulliLogitsLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The BernoulliLogits conditional law.",
         "properties": {
           "distribution": {
             "const": "BernoulliLogits",
@@ -1960,6 +1975,7 @@
       },
       "BernoulliLogitsLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The BernoulliLogits conditional law.",
         "properties": {
           "distribution": {
             "const": "BernoulliLogits",
@@ -1984,6 +2000,7 @@
       },
       "BernoulliLogitsLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The BernoulliLogits conditional law.",
         "properties": {
           "distribution": {
             "const": "BernoulliLogits",
@@ -2009,6 +2026,7 @@
       },
       "BernoulliProbsLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The BernoulliProbs conditional law.",
         "properties": {
           "distribution": {
             "const": "BernoulliProbs",
@@ -2038,6 +2056,7 @@
       },
       "BernoulliProbsLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The BernoulliProbs conditional law.",
         "properties": {
           "distribution": {
             "const": "BernoulliProbs",
@@ -2062,6 +2081,7 @@
       },
       "BernoulliProbsLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The BernoulliProbs conditional law.",
         "properties": {
           "distribution": {
             "const": "BernoulliProbs",
@@ -2087,6 +2107,7 @@
       },
       "BetaLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The Beta conditional law.",
         "properties": {
           "distribution": {
             "const": "Beta",
@@ -2122,6 +2143,7 @@
       },
       "BetaLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The Beta conditional law.",
         "properties": {
           "distribution": {
             "const": "Beta",
@@ -2150,6 +2172,7 @@
       },
       "BetaLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The Beta conditional law.",
         "properties": {
           "distribution": {
             "const": "Beta",
@@ -2354,6 +2377,7 @@
       },
       "CategoricalLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The Categorical conditional law.",
         "properties": {
           "distribution": {
             "const": "Categorical",
@@ -2383,6 +2407,7 @@
       },
       "CategoricalLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The Categorical conditional law.",
         "properties": {
           "distribution": {
             "const": "Categorical",
@@ -2407,6 +2432,7 @@
       },
       "CategoricalLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The Categorical conditional law.",
         "properties": {
           "distribution": {
             "const": "Categorical",
@@ -3682,6 +3708,7 @@
       },
       "ContinueFitTarget_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Continue the original target at the last retained draw of a prior fit.",
         "properties": {
           "kind": {
             "const": "continue",
@@ -3711,6 +3738,7 @@
       },
       "ContinueFitTarget_GitOid_": {
         "additionalProperties": false,
+        "description": "Continue the original target at the last retained draw of a prior fit.",
         "properties": {
           "kind": {
             "const": "continue",
@@ -3736,6 +3764,7 @@
       },
       "ContinueFitTarget_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Continue the original target at the last retained draw of a prior fit.",
         "properties": {
           "kind": {
             "const": "continue",
@@ -3923,6 +3952,7 @@
       },
       "DataDiffInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Compare saved histories statistically; left/right do not imply before/after revisions.\n\nDataComparisonReport owns selection and comparison semantics. The action reads\nretained observations without generating new draws or changing scientific state.",
         "properties": {
           "left_ref": {
             "$ref": "#/components/schemas/DataSelection_Annotated_Any__WithJsonSchema__",
@@ -3949,6 +3979,7 @@
       },
       "DataDiffInput_GitOid_": {
         "additionalProperties": false,
+        "description": "Compare saved histories statistically; left/right do not imply before/after revisions.\n\nDataComparisonReport owns selection and comparison semantics. The action reads\nretained observations without generating new draws or changing scientific state.",
         "properties": {
           "left_ref": {
             "$ref": "#/components/schemas/DataSelection_GitOid_",
@@ -3973,6 +4004,7 @@
       },
       "DataDiffInput_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Compare saved histories statistically; left/right do not imply before/after revisions.\n\nDataComparisonReport owns selection and comparison semantics. The action reads\nretained observations without generating new draws or changing scientific state.",
         "properties": {
           "left_ref": {
             "$ref": "#/components/schemas/DataSelection_RevisionSelector_",
@@ -4015,6 +4047,7 @@
       },
       "DataDiffRequest_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Compare the saved observation histories; return ``DataDiffOutput``.",
         "properties": {
           "action": {
             "const": "data_diff",
@@ -4058,6 +4091,7 @@
       },
       "DataDiffRequest_GitOid_": {
         "additionalProperties": false,
+        "description": "Compare the saved observation histories; return ``DataDiffOutput``.",
         "properties": {
           "action": {
             "const": "data_diff",
@@ -4099,6 +4133,7 @@
       },
       "DataDiffRequest_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Compare the saved observation histories; return ``DataDiffOutput``.",
         "properties": {
           "action": {
             "const": "data_diff",
@@ -4316,6 +4351,7 @@
       },
       "DataRef_Annotated_Any__WithJsonSchema__Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "A prepared-data or simulation gitref with a selection of recorded histories.\n\nAn integer selects one history by its zero-based index: zero for prepared user\ndata, or less than the saved replicate count for a simulation. None selects\nevery retained history when the consuming action permits it.",
         "properties": {
           "revision": {
             "title": "Revision",
@@ -4345,6 +4381,7 @@
       },
       "DataRef_Annotated_Any__WithJsonSchema__Annotated_Union_int__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___": {
         "additionalProperties": false,
+        "description": "A prepared-data or simulation gitref with a selection of recorded histories.\n\nAn integer selects one history by its zero-based index: zero for prepared user\ndata, or less than the saved replicate count for a simulation. None selects\nevery retained history when the consuming action permits it.",
         "properties": {
           "revision": {
             "title": "Revision",
@@ -4379,6 +4416,7 @@
       },
       "DataRef_Annotated_Any__WithJsonSchema__int_": {
         "additionalProperties": false,
+        "description": "A prepared-data or simulation gitref with a selection of recorded histories.\n\nAn integer selects one history by its zero-based index: zero for prepared user\ndata, or less than the saved replicate count for a simulation. None selects\nevery retained history when the consuming action permits it.",
         "properties": {
           "revision": {
             "title": "Revision",
@@ -4405,6 +4443,7 @@
       },
       "DataRef_GitOid_Annotated_Union_int__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___": {
         "additionalProperties": false,
+        "description": "A prepared-data or simulation gitref with a selection of recorded histories.\n\nAn integer selects one history by its zero-based index: zero for prepared user\ndata, or less than the saved replicate count for a simulation. None selects\nevery retained history when the consuming action permits it.",
         "properties": {
           "revision": {
             "$ref": "#/components/schemas/GitOid-Output"
@@ -4437,6 +4476,7 @@
       },
       "DataRef_GitOid_int_": {
         "additionalProperties": false,
+        "description": "A prepared-data or simulation gitref with a selection of recorded histories.\n\nAn integer selects one history by its zero-based index: zero for prepared user\ndata, or less than the saved replicate count for a simulation. None selects\nevery retained history when the consuming action permits it.",
         "properties": {
           "revision": {
             "$ref": "#/components/schemas/GitOid-Output"
@@ -4461,6 +4501,7 @@
       },
       "DataRef_RevisionSelector_Annotated_Union_int__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___": {
         "additionalProperties": false,
+        "description": "A prepared-data or simulation gitref with a selection of recorded histories.\n\nAn integer selects one history by its zero-based index: zero for prepared user\ndata, or less than the saved replicate count for a simulation. None selects\nevery retained history when the consuming action permits it.",
         "properties": {
           "revision": {
             "$ref": "#/components/schemas/RevisionSelector"
@@ -4492,6 +4533,7 @@
       },
       "DataRef_RevisionSelector_int_": {
         "additionalProperties": false,
+        "description": "A prepared-data or simulation gitref with a selection of recorded histories.\n\nAn integer selects one history by its zero-based index: zero for prepared user\ndata, or less than the saved replicate count for a simulation. None selects\nevery retained history when the consuming action permits it.",
         "properties": {
           "revision": {
             "$ref": "#/components/schemas/RevisionSelector"
@@ -4603,6 +4645,7 @@
       },
       "DeltaLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The Delta conditional law.",
         "properties": {
           "distribution": {
             "const": "Delta",
@@ -4632,6 +4675,7 @@
       },
       "DeltaLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The Delta conditional law.",
         "properties": {
           "distribution": {
             "const": "Delta",
@@ -4656,6 +4700,7 @@
       },
       "DeltaLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The Delta conditional law.",
         "properties": {
           "distribution": {
             "const": "Delta",
@@ -5065,6 +5110,7 @@
                                         "anyOf": [
                                           {
                                             "additionalProperties": false,
+                                            "description": "The Delta conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "Delta",
@@ -5232,6 +5278,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The Normal conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "Normal",
@@ -5554,6 +5601,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The StudentT conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "StudentT",
@@ -6031,6 +6079,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The Poisson conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "Poisson",
@@ -6198,6 +6247,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The Gamma conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "Gamma",
@@ -6520,6 +6570,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The BernoulliLogits conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "BernoulliLogits",
@@ -6687,6 +6738,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The BernoulliProbs conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "BernoulliProbs",
@@ -6854,6 +6906,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The NegativeBinomial2 conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "NegativeBinomial2",
@@ -7176,6 +7229,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The Beta conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "Beta",
@@ -7498,6 +7552,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The OrderedLogistic conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "OrderedLogistic",
@@ -7820,6 +7875,7 @@
                                           },
                                           {
                                             "additionalProperties": false,
+                                            "description": "The Categorical conditional law.",
                                             "properties": {
                                               "distribution": {
                                                 "const": "Categorical",
@@ -9179,6 +9235,7 @@
                                 "oneOf": [
                                   {
                                     "additionalProperties": false,
+                                    "description": "The Delta conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "Delta",
@@ -9390,6 +9447,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The Normal conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "Normal",
@@ -9796,6 +9854,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The StudentT conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "StudentT",
@@ -10397,6 +10456,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The Poisson conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "Poisson",
@@ -10608,6 +10668,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The Gamma conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "Gamma",
@@ -11014,6 +11075,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The BernoulliLogits conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "BernoulliLogits",
@@ -11225,6 +11287,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The BernoulliProbs conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "BernoulliProbs",
@@ -11436,6 +11499,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The NegativeBinomial2 conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "NegativeBinomial2",
@@ -11842,6 +11906,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The Beta conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "Beta",
@@ -12248,6 +12313,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The OrderedLogistic conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "OrderedLogistic",
@@ -12654,6 +12720,7 @@
                                   },
                                   {
                                     "additionalProperties": false,
+                                    "description": "The Categorical conditional law.",
                                     "properties": {
                                       "distribution": {
                                         "const": "Categorical",
@@ -14290,6 +14357,7 @@
       },
       "EditModelInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Create or revise a model from a question or model parent.",
         "properties": {
           "parent_ref": {
             "description": "Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head.",
@@ -14318,6 +14386,7 @@
       },
       "EditModelInput_GitOid_": {
         "additionalProperties": false,
+        "description": "Create or revise a model from a question or model parent.",
         "properties": {
           "parent_ref": {
             "$ref": "#/components/schemas/GitOid-Input",
@@ -14342,6 +14411,7 @@
       },
       "EditModelInput_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Create or revise a model from a question or model parent.",
         "properties": {
           "parent_ref": {
             "$ref": "#/components/schemas/RevisionSelector",
@@ -14399,6 +14469,7 @@
       },
       "EditModelRequest_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Create or revise a model from its selected parent; return ``EditModelOutput``.",
         "properties": {
           "action": {
             "const": "edit_model",
@@ -14442,6 +14513,7 @@
       },
       "EditModelRequest_GitOid_": {
         "additionalProperties": false,
+        "description": "Create or revise a model from its selected parent; return ``EditModelOutput``.",
         "properties": {
           "action": {
             "const": "edit_model",
@@ -14483,6 +14555,7 @@
       },
       "EditModelRequest_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Create or revise a model from its selected parent; return ``EditModelOutput``.",
         "properties": {
           "action": {
             "const": "edit_model",
@@ -14777,6 +14850,7 @@
       },
       "Evaluated_Annotated_Any__WithJsonSchema__Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "One producer's measured outcome and the evidence supporting it.",
         "properties": {
           "kind": {
             "const": "evaluated",
@@ -14827,6 +14901,7 @@
       },
       "Evaluated_ConvergenceAssessmentSubject_NumericCriterionEvidence_": {
         "additionalProperties": false,
+        "description": "One producer's measured outcome and the evidence supporting it.",
         "properties": {
           "kind": {
             "const": "evaluated",
@@ -14870,6 +14945,7 @@
       },
       "Evaluated_IndicatorCheckSubject_NumericCriterionEvidence_": {
         "additionalProperties": false,
+        "description": "One producer's measured outcome and the evidence supporting it.",
         "properties": {
           "kind": {
             "const": "evaluated",
@@ -14913,6 +14989,7 @@
       },
       "Evaluated_PredictiveSubject_tuple_NumericCriterionEvidence__________": {
         "additionalProperties": false,
+        "description": "One producer's measured outcome and the evidence supporting it.",
         "properties": {
           "kind": {
             "const": "evaluated",
@@ -14960,6 +15037,7 @@
       },
       "Evaluated_QuestionSubject_str_": {
         "additionalProperties": false,
+        "description": "One producer's measured outcome and the evidence supporting it.",
         "properties": {
           "kind": {
             "const": "evaluated",
@@ -15004,6 +15082,7 @@
       },
       "Evaluated_Union_IndicatorRef__Literal__dataset____str_": {
         "additionalProperties": false,
+        "description": "One producer's measured outcome and the evidence supporting it.",
         "properties": {
           "kind": {
             "const": "evaluated",
@@ -15057,6 +15136,7 @@
       },
       "Evaluated_str_str_": {
         "additionalProperties": false,
+        "description": "One producer's measured outcome and the evidence supporting it.",
         "properties": {
           "kind": {
             "const": "evaluated",
@@ -15773,6 +15853,7 @@
       },
       "FitInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Start or continue a fit; sample counts always mean additional retained draws.",
         "properties": {
           "target": {
             "$ref": "#/components/schemas/FitTarget_Annotated_Any__WithJsonSchema__"
@@ -15805,6 +15886,7 @@
       },
       "FitInput_GitOid_": {
         "additionalProperties": false,
+        "description": "Start or continue a fit; sample counts always mean additional retained draws.",
         "properties": {
           "target": {
             "$ref": "#/components/schemas/FitTarget_GitOid_"
@@ -15835,6 +15917,7 @@
       },
       "FitInput_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Start or continue a fit; sample counts always mean additional retained draws.",
         "properties": {
           "target": {
             "$ref": "#/components/schemas/FitTarget_RevisionSelector_"
@@ -15910,6 +15993,7 @@
       },
       "FitRequest_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Fit the selected model to the selected history; return ``FitOutput``.",
         "properties": {
           "action": {
             "const": "fit",
@@ -15953,6 +16037,7 @@
       },
       "FitRequest_GitOid_": {
         "additionalProperties": false,
+        "description": "Fit the selected model to the selected history; return ``FitOutput``.",
         "properties": {
           "action": {
             "const": "fit",
@@ -15994,6 +16079,7 @@
       },
       "FitRequest_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Fit the selected model to the selected history; return ``FitOutput``.",
         "properties": {
           "action": {
             "const": "fit",
@@ -16641,6 +16727,7 @@
       },
       "GammaLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The Gamma conditional law.",
         "properties": {
           "distribution": {
             "const": "Gamma",
@@ -16676,6 +16763,7 @@
       },
       "GammaLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The Gamma conditional law.",
         "properties": {
           "distribution": {
             "const": "Gamma",
@@ -16704,6 +16792,7 @@
       },
       "GammaLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The Gamma conditional law.",
         "properties": {
           "distribution": {
             "const": "Gamma",
@@ -19470,6 +19559,7 @@
       },
       "ModelDiffInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Base and target specs for a directional patch, selected by question or model revisions.\n\nThe selections need not be chronologically ordered or share an editing parent.\nBefore/after determine patch direction; ModelDiffOutput defines its contract.",
         "properties": {
           "before_ref": {
             "description": "Question or model revision used as the base; a question denotes an empty spec.",
@@ -19500,6 +19590,7 @@
       },
       "ModelDiffInput_GitOid_": {
         "additionalProperties": false,
+        "description": "Base and target specs for a directional patch, selected by question or model revisions.\n\nThe selections need not be chronologically ordered or share an editing parent.\nBefore/after determine patch direction; ModelDiffOutput defines its contract.",
         "properties": {
           "before_ref": {
             "$ref": "#/components/schemas/GitOid-Output",
@@ -19524,6 +19615,7 @@
       },
       "ModelDiffInput_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Base and target specs for a directional patch, selected by question or model revisions.\n\nThe selections need not be chronologically ordered or share an editing parent.\nBefore/after determine patch direction; ModelDiffOutput defines its contract.",
         "properties": {
           "before_ref": {
             "$ref": "#/components/schemas/RevisionSelector",
@@ -19566,6 +19658,7 @@
       },
       "ModelDiffRequest_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Compare two saved specs as an edit document; return ``ModelDiffOutput``.",
         "properties": {
           "action": {
             "const": "model_diff",
@@ -19609,6 +19702,7 @@
       },
       "ModelDiffRequest_GitOid_": {
         "additionalProperties": false,
+        "description": "Compare two saved specs as an edit document; return ``ModelDiffOutput``.",
         "properties": {
           "action": {
             "const": "model_diff",
@@ -19650,6 +19744,7 @@
       },
       "ModelDiffRequest_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Compare two saved specs as an edit document; return ``ModelDiffOutput``.",
         "properties": {
           "action": {
             "const": "model_diff",
@@ -19895,6 +19990,7 @@
       },
       "NegativeBinomial2LawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The NegativeBinomial2 conditional law.",
         "properties": {
           "distribution": {
             "const": "NegativeBinomial2",
@@ -19930,6 +20026,7 @@
       },
       "NegativeBinomial2LawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The NegativeBinomial2 conditional law.",
         "properties": {
           "distribution": {
             "const": "NegativeBinomial2",
@@ -19958,6 +20055,7 @@
       },
       "NegativeBinomial2LawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The NegativeBinomial2 conditional law.",
         "properties": {
           "distribution": {
             "const": "NegativeBinomial2",
@@ -19987,6 +20085,7 @@
       },
       "NewFitTarget_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Condition the selected model law on exactly one saved history.",
         "properties": {
           "kind": {
             "const": "new",
@@ -20020,6 +20119,7 @@
       },
       "NewFitTarget_GitOid_": {
         "additionalProperties": false,
+        "description": "Condition the selected model law on exactly one saved history.",
         "properties": {
           "kind": {
             "const": "new",
@@ -20049,6 +20149,7 @@
       },
       "NewFitTarget_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Condition the selected model law on exactly one saved history.",
         "properties": {
           "kind": {
             "const": "new",
@@ -20140,6 +20241,7 @@
       },
       "NormalLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The Normal conditional law.",
         "properties": {
           "distribution": {
             "const": "Normal",
@@ -20175,6 +20277,7 @@
       },
       "NormalLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The Normal conditional law.",
         "properties": {
           "distribution": {
             "const": "Normal",
@@ -20203,6 +20306,7 @@
       },
       "NormalLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The Normal conditional law.",
         "properties": {
           "distribution": {
             "const": "Normal",
@@ -20268,6 +20372,7 @@
       },
       "NotEvaluated_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "An explicit absence of evaluation, with a closed producer reason.",
         "properties": {
           "kind": {
             "const": "not_evaluated",
@@ -20311,6 +20416,7 @@
       },
       "NotEvaluated_ConvergenceAssessmentSubject_": {
         "additionalProperties": false,
+        "description": "An explicit absence of evaluation, with a closed producer reason.",
         "properties": {
           "kind": {
             "const": "not_evaluated",
@@ -20350,6 +20456,7 @@
       },
       "NotEvaluated_IndicatorCheckSubject_": {
         "additionalProperties": false,
+        "description": "An explicit absence of evaluation, with a closed producer reason.",
         "properties": {
           "kind": {
             "const": "not_evaluated",
@@ -20389,6 +20496,7 @@
       },
       "NotEvaluated_IndicatorRef_": {
         "additionalProperties": false,
+        "description": "An explicit absence of evaluation, with a closed producer reason.",
         "properties": {
           "kind": {
             "const": "not_evaluated",
@@ -20428,6 +20536,7 @@
       },
       "NotEvaluated_Literal__causal_effect___": {
         "additionalProperties": false,
+        "description": "An explicit absence of evaluation, with a closed producer reason.",
         "properties": {
           "kind": {
             "const": "not_evaluated",
@@ -20469,6 +20578,7 @@
       },
       "NotEvaluated_PredictiveSubject_": {
         "additionalProperties": false,
+        "description": "An explicit absence of evaluation, with a closed producer reason.",
         "properties": {
           "kind": {
             "const": "not_evaluated",
@@ -20508,6 +20618,7 @@
       },
       "NotEvaluated_QuestionSubject_": {
         "additionalProperties": false,
+        "description": "An explicit absence of evaluation, with a closed producer reason.",
         "properties": {
           "kind": {
             "const": "not_evaluated",
@@ -20547,6 +20658,7 @@
       },
       "NotEvaluated_Union_IndicatorRef__Literal__dataset____": {
         "additionalProperties": false,
+        "description": "An explicit absence of evaluation, with a closed producer reason.",
         "properties": {
           "kind": {
             "const": "not_evaluated",
@@ -20595,6 +20707,7 @@
       },
       "NotEvaluated_str_": {
         "additionalProperties": false,
+        "description": "An explicit absence of evaluation, with a closed producer reason.",
         "properties": {
           "kind": {
             "const": "not_evaluated",
@@ -21518,6 +21631,7 @@
       },
       "OrderedLogisticLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The OrderedLogistic conditional law.",
         "properties": {
           "distribution": {
             "const": "OrderedLogistic",
@@ -21553,6 +21667,7 @@
       },
       "OrderedLogisticLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The OrderedLogistic conditional law.",
         "properties": {
           "distribution": {
             "const": "OrderedLogistic",
@@ -21581,6 +21696,7 @@
       },
       "OrderedLogisticLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The OrderedLogistic conditional law.",
         "properties": {
           "distribution": {
             "const": "OrderedLogistic",
@@ -22846,6 +22962,7 @@
       },
       "PoissonLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The Poisson conditional law.",
         "properties": {
           "distribution": {
             "const": "Poisson",
@@ -22875,6 +22992,7 @@
       },
       "PoissonLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The Poisson conditional law.",
         "properties": {
           "distribution": {
             "const": "Poisson",
@@ -22899,6 +23017,7 @@
       },
       "PoissonLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The Poisson conditional law.",
         "properties": {
           "distribution": {
             "const": "Poisson",
@@ -23276,6 +23395,7 @@
       },
       "PrepareDataInput_Annotated_Any__WithJsonSchema__Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Extract observations using the definitions of the selected model.",
         "properties": {
           "dynamical_model_spec_ref": {
             "description": "Model revision owning the clock and observation definitions.",
@@ -23327,6 +23447,7 @@
       },
       "PrepareDataInput_GitOid_FileSourceRef_": {
         "additionalProperties": false,
+        "description": "Extract observations using the definitions of the selected model.",
         "properties": {
           "dynamical_model_spec_ref": {
             "$ref": "#/components/schemas/GitOid-Output",
@@ -23371,6 +23492,7 @@
       },
       "PrepareDataInput_RevisionSelector_SourceFolder_": {
         "additionalProperties": false,
+        "description": "Extract observations using the definitions of the selected model.",
         "properties": {
           "dynamical_model_spec_ref": {
             "$ref": "#/components/schemas/RevisionSelector",
@@ -23447,6 +23569,7 @@
       },
       "PrepareDataRequest_Annotated_Any__WithJsonSchema__Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Prepare the selected source data; return ``PrepareDataOutput``.",
         "properties": {
           "action": {
             "const": "prepare_data",
@@ -23491,6 +23614,7 @@
       },
       "PrepareDataRequest_GitOid_FileSourceRef_": {
         "additionalProperties": false,
+        "description": "Prepare the selected source data; return ``PrepareDataOutput``.",
         "properties": {
           "action": {
             "const": "prepare_data",
@@ -23532,6 +23656,7 @@
       },
       "PrepareDataRequest_RevisionSelector_SourceFolder_": {
         "additionalProperties": false,
+        "description": "Prepare the selected source data; return ``PrepareDataOutput``.",
         "properties": {
           "action": {
             "const": "prepare_data",
@@ -24141,6 +24266,7 @@
       },
       "Removed_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The left payload exists at an identity absent on the right.",
         "properties": {
           "kind": {
             "const": "removed",
@@ -24170,6 +24296,7 @@
       },
       "Removed_DataPoint_": {
         "additionalProperties": false,
+        "description": "The left payload exists at an identity absent on the right.",
         "properties": {
           "kind": {
             "const": "removed",
@@ -24240,6 +24367,7 @@
       },
       "Revised_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Both payloads exist at the same identity and their stored values differ.",
         "properties": {
           "kind": {
             "const": "revised",
@@ -24275,6 +24403,7 @@
       },
       "Revised_DataPoint_": {
         "additionalProperties": false,
+        "description": "Both payloads exist at the same identity and their stored values differ.",
         "properties": {
           "kind": {
             "const": "revised",
@@ -24736,6 +24865,7 @@
       },
       "SimulateInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Generate histories from a selected model and an explicit simulation design.",
         "properties": {
           "dynamical_model_spec_ref": {
             "description": "Revision supplying the authored or fitted generative law.",
@@ -24780,6 +24910,7 @@
       },
       "SimulateInput_GitOid_": {
         "additionalProperties": false,
+        "description": "Generate histories from a selected model and an explicit simulation design.",
         "properties": {
           "dynamical_model_spec_ref": {
             "$ref": "#/components/schemas/GitOid-Output",
@@ -24820,6 +24951,7 @@
       },
       "SimulateInput_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Generate histories from a selected model and an explicit simulation design.",
         "properties": {
           "dynamical_model_spec_ref": {
             "$ref": "#/components/schemas/RevisionSelector",
@@ -24886,6 +25018,7 @@
       },
       "SimulateRequest_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "Generate observation histories and their complete report; return ``SimulateOutput``.",
         "properties": {
           "action": {
             "const": "simulate",
@@ -24929,6 +25062,7 @@
       },
       "SimulateRequest_GitOid_": {
         "additionalProperties": false,
+        "description": "Generate observation histories and their complete report; return ``SimulateOutput``.",
         "properties": {
           "action": {
             "const": "simulate",
@@ -24970,6 +25104,7 @@
       },
       "SimulateRequest_RevisionSelector_": {
         "additionalProperties": false,
+        "description": "Generate observation histories and their complete report; return ``SimulateOutput``.",
         "properties": {
           "action": {
             "const": "simulate",
@@ -25549,6 +25684,7 @@
       },
       "StudentTLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "The StudentT conditional law.",
         "properties": {
           "distribution": {
             "const": "StudentT",
@@ -25590,6 +25726,7 @@
       },
       "StudentTLawSpec_Expression_-Input": {
         "additionalProperties": false,
+        "description": "The StudentT conditional law.",
         "properties": {
           "distribution": {
             "const": "StudentT",
@@ -25622,6 +25759,7 @@
       },
       "StudentTLawSpec_Expression_-Output": {
         "additionalProperties": false,
+        "description": "The StudentT conditional law.",
         "properties": {
           "distribution": {
             "const": "StudentT",
@@ -25720,6 +25858,7 @@
       },
       "SuccessfulPoll_Annotated_Any__WithJsonSchema__Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
         "properties": {
           "call_id": {
             "$ref": "#/components/schemas/CallId-Output"
@@ -25772,6 +25911,7 @@
       },
       "SuccessfulPoll_Literal__data_diff___DataDiffOutput_": {
         "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
         "properties": {
           "call_id": {
             "$ref": "#/components/schemas/CallId-Output"
@@ -25819,6 +25959,7 @@
       },
       "SuccessfulPoll_Literal__edit_model___EditModelOutput_": {
         "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
         "properties": {
           "call_id": {
             "$ref": "#/components/schemas/CallId-Output"
@@ -25866,6 +26007,7 @@
       },
       "SuccessfulPoll_Literal__edit_question___EditQuestionOutput_": {
         "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
         "properties": {
           "call_id": {
             "$ref": "#/components/schemas/CallId-Output"
@@ -25913,6 +26055,7 @@
       },
       "SuccessfulPoll_Literal__fit___FitOutput_": {
         "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
         "properties": {
           "call_id": {
             "$ref": "#/components/schemas/CallId-Output"
@@ -25960,6 +26103,7 @@
       },
       "SuccessfulPoll_Literal__model_diff___ModelDiffOutput_": {
         "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
         "properties": {
           "call_id": {
             "$ref": "#/components/schemas/CallId-Output"
@@ -26007,6 +26151,7 @@
       },
       "SuccessfulPoll_Literal__prepare_data___PrepareDataOutput_": {
         "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
         "properties": {
           "call_id": {
             "$ref": "#/components/schemas/CallId-Output"
@@ -26054,6 +26199,7 @@
       },
       "SuccessfulPoll_Literal__simulate___SimulateOutput_": {
         "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
         "properties": {
           "call_id": {
             "$ref": "#/components/schemas/CallId-Output"

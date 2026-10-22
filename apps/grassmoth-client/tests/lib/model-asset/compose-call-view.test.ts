@@ -1,10 +1,9 @@
 import type { ActionSuccess, RecordDependency, TimelineRevision } from "@grassmoth/api-types";
 import { describe, expect, it } from "vitest";
-import { decodeFixture, fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { modelResult, fitResult } from "@/components/__fixtures__/action-results";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import { scenarioResult } from "@/components/__fixtures__/study-scenario";
 import { outcome } from "@/lib/__fixtures__/model";
-import { authoredSnapshot, fittedSnapshot } from "@/lib/__fixtures__/snapshot";
-import rawReports from "@/components/dag/__fixtures__/simulation-reports.json";
+import { authoredSnapshot } from "@/lib/__fixtures__/snapshot";
 import {
   callDependencies,
   modelReference,
@@ -12,12 +11,12 @@ import {
 } from "@/lib/model-asset/call-dependencies";
 import { composeCallView } from "@/lib/model-asset/compose-call-view";
 
-const reports = decodeFixture(rawReports);
+const simulationReport = scenarioResult("simulated").body.report;
 
 const WORKSPACE = "TEST";
 const oid = (seq: number) => seq.toString(16).padStart(40, "0");
 const question = fixtureValue(authoredSnapshot.question);
-const model = () => modelResult(authoredSnapshot);
+const model = () => scenarioResult("authored").body;
 const observation = fixtureValue(outcome.indicators[0]).observation;
 const extraction = {
   kind: "semantic" as const,
@@ -195,14 +194,14 @@ function savedResult(seq: number): ActionSuccess {
         ...envelope,
         action: "fit",
         body: {
-          ...fitResult(fittedSnapshot),
+          ...scenarioResult("fitted").body,
         },
       };
     case "simulate":
       return {
         ...envelope,
         action: "simulate",
-        body: { report: fixtureValue(reports[0]), data: [{}, {}] },
+        body: { report: simulationReport, data: [{}, {}] },
       };
     case "data_diff":
       return {
@@ -249,7 +248,7 @@ describe("views composed from recorded call dependencies", () => {
     if (fitted.action !== "fit" || simulated.action !== "simulate") throw new Error("Fixture");
     const { calls, view } = compose(entry(9));
     expect(view.dynamical_model_spec).toEqual(fitted.body.dynamical_model_spec);
-    expect(view.fit).toEqual(fittedSnapshot.fit);
+    expect(view.fit).toEqual(scenarioResult("fitted").body.inference.core);
     expect(view.simulation).toEqual(simulated.body.report);
     expect(view.metadata).toBeNull();
     expect(view.state.data).toBeNull();

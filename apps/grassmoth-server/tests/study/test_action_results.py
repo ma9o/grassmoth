@@ -20,7 +20,7 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_question
 from grassmoth_server.study.queries.action_outputs import completed_call_msgpack
 from grassmoth_server.study.records import Applied, AttemptRecord, EditQuestionAttempt
-from tests.support.helpers import fixture_entity_id
+from grassmoth_test_support.helpers import fixture_entity_id
 
 pytestmark = pytest.mark.contract
 
@@ -79,7 +79,7 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
         async def get(self):
             raise AssertionError("Cached calls do not contact Temporal")
 
-    app.state.study_clients = UnusedClients()
+    app.state.temporal_client = UnusedClients()
     app.include_router(study_api.router)
     with TestClient(app) as client:
         for _ in range(2):
@@ -106,11 +106,8 @@ def test_numerical_result_preserves_dtype_shape_missingness_and_vector_selection
     np.testing.assert_array_equal(loaded.values, values)
     assert loaded.values.shape == (2, 3)
     assert loaded.values.dtype == "float64"
-    assert saved.content_digest() == loaded.content_digest()
-    assert (
-        saved.content_digest()
-        != NumericalArray.from_numpy(values.astype(np.float32)).content_digest()
-    )
+    assert saved.npy == loaded.npy
+    assert saved.npy != NumericalArray.from_numpy(values.astype(np.float32)).npy
     selected = ArrayVector(
         array=loaded,
         indices=(None, 0),
@@ -152,8 +149,12 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
     from grassmoth_server.study.queries.data import read_data_history
     from grassmoth_server.study.records import applied_attempt
     from grassmoth_server.study.state import ArtifactResult
-    from tests.support.action import question_root
-    from tests.support.runner_fixtures import panel_frame, panel_metadata, seed_model
+    from grassmoth_server_test_support.action import question_root
+    from grassmoth_server_test_support.runner_fixtures import (
+        panel_frame,
+        panel_metadata,
+        seed_model,
+    )
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     workspace = "PREPARED"
@@ -231,8 +232,8 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
     from grassmoth_server.actions.model_diff import model_diff
     from grassmoth_server.actions.output_builder import complete_attempt
     from grassmoth_server.study.records import applied_attempt
-    from tests.support.action import edit_and_check, question_root
-    from tests.support.helpers import make_model
+    from grassmoth_server_test_support.action import edit_and_check, question_root
+    from grassmoth_test_support.helpers import make_model
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     workspace = "MODEL_REFS"
@@ -283,7 +284,7 @@ def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
     from grassmoth_server.actions.contracts.inputs import EditModelInput
     from grassmoth_server.actions.contracts.requests import EditModelRequest
     from grassmoth_server.study.records import EditAttempt
-    from tests.support.git import git_oid
+    from grassmoth_test_support.git import git_oid
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, repository = ArtifactStore("BUFFERS"), StudyRepository("BUFFERS")
@@ -372,7 +373,7 @@ def test_domain_views_share_one_wire_buffer_and_decode_without_a_store():
     assert np.shares_memory(restored.owner.values, restored.view.array.values)
     assert not restored.owner.values.flags.writeable
     assert resolve_vector(restored.view) == (2.0, 6.0, 10.0)
-    assert result.content_digest() == restored.content_digest()
+    assert encoded == pack_result(restored)
     with pytest.raises(ValueError, match="earlier"):
         unpack_result(msgpack.packb({"npy": msgpack.ExtType(42, (0).to_bytes(8, "big"))}))
 
@@ -405,4 +406,4 @@ def test_restored_distribution_keeps_its_owned_buffer_when_published_again(monke
     published = result_payload(restored)
     assert owned_arrays(published)[array.identity].npy is owned[array.identity].npy
     assert unpack_result(pack_result(restored)) == published
-    assert restored.content_digest() == law.content_digest()
+    assert published == result_payload(law)

@@ -7,8 +7,6 @@ import ts from "typescript";
 // biome-ignore lint/suspicious/noExplicitAny: JSON Schema extensions contain heterogeneous nodes.
 type JsonSchema = any;
 const ROOT = resolve(import.meta.dirname, "..");
-const METADATA_PATH = resolve(ROOT, "schemas/metadata.json");
-const METADATA_OUTPUT_PATH = resolve(ROOT, "src/generated/metadata.ts");
 const checkOnly = process.argv.includes("--check");
 const changedPaths: string[] = [];
 
@@ -18,40 +16,6 @@ function writeOrCheck(path: string, content: string): void {
   } else {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, content);
-  }
-}
-
-function generateMetadata(): void {
-  const metadata = JSON.parse(readFileSync(METADATA_PATH, "utf-8"));
-  const byDist = metadata.observationHyperparametersByDistribution;
-  const lines: string[] = [
-    "/* eslint-disable */",
-    "/**",
-    " * AUTO-GENERATED — DO NOT EDIT",
-    " *",
-    " * Generated from Python contract owners via:",
-    " *   cd apps/grassmoth-server && uv run python -m scripts.codegen.export_api",
-    " *   cd packages/api-types && bun run scripts/generate.ts",
-    " *",
-    " * Metadata exporter: apps/grassmoth-server/scripts/codegen/export_api.py",
-    " */",
-    "",
-    'import type { ArtifactId } from "./models";',
-    `export const ARTIFACT_IDS = ${JSON.stringify(metadata.artifactIds)} as const satisfies readonly ArtifactId[];`,
-    "",
-    `const _OBS_HYPERS_BY_DIST = ${JSON.stringify(byDist, null, 2)} as const;`,
-    "",
-    "export type ObservationHyperparameter =",
-    "  typeof _OBS_HYPERS_BY_DIST[keyof typeof _OBS_HYPERS_BY_DIST][number];",
-    "",
-    "export const OBSERVATION_HYPERPARAMETERS_BY_DISTRIBUTION: Partial<",
-    "  Record<string, readonly ObservationHyperparameter[]>",
-    "> = _OBS_HYPERS_BY_DIST;",
-    "",
-  ];
-  writeOrCheck(METADATA_OUTPUT_PATH, lines.join("\n"));
-  if (!checkOnly) {
-    console.log(`Generated metadata → ${METADATA_OUTPUT_PATH}`);
   }
 }
 
@@ -374,7 +338,6 @@ writeOrCheck(
   resolve(ROOT, "src/generated/models.ts"),
   `${banner}import type { components } from "./model-api";\n${astToString(named)}`,
 );
-generateMetadata();
 if (changedPaths.length)
   throw new Error(`Generated API types are stale: ${changedPaths.join(", ")}`);
 console.log(checkOnly ? "API types checked." : "API types generated from one OpenAPI AST.");

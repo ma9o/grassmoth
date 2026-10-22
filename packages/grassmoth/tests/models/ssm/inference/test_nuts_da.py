@@ -17,12 +17,11 @@ from grassmoth.artifacts.sampling import (
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.samplers.nuts import NutsDARun, run_nuts_da
 from grassmoth.models.ssm.inference.types import MCMCPosterior
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
-from packages.grassmoth.tests.models.ssm.inference.test_laps_initialization import (
-    _nonlinear_fixture,
+from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.inference import (
+    nonlinear_fit_fixture,
 )
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.interval_particle import gaussian_interval_case
+from grassmoth_test_support.interval_particle import gaussian_interval_case
 
 """Joint NUTS recovery and production posterior contracts."""
 
@@ -83,7 +82,7 @@ def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(
 
 @pytest.mark.parametrize("retain_paths", [False, True])
 def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
-    prepared, panel = _nonlinear_fixture()
+    prepared, panel = nonlinear_fit_fixture()
     result = fit(
         prepared.prior_runtime_bundle,
         panel,
@@ -99,7 +98,7 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
         compute_budget=COMPUTE_BUDGET,
         reparam=None,
         clock=time.monotonic,
-        compiler=compile_staged,
+        compiler=compile_program,
         prepare_program=prepare_program,
         logger=logging.getLogger(__name__),
         wall_clock=lambda: datetime.now(UTC),

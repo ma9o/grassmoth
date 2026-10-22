@@ -11,7 +11,7 @@ from grassmoth_server.actions.temporal.extraction.source_data import read_source
 from grassmoth_server.storage import paths as data
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Rejected
-from tests.support.helpers import run_async
+from grassmoth_server_test_support.helpers import run_async
 
 pytestmark = pytest.mark.contract
 

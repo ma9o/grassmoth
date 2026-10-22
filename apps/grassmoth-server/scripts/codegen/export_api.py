@@ -1,4 +1,4 @@
-"""Export one OpenAPI contract graph, metadata, and the curl skill.
+"""Export one OpenAPI contract graph and the curl skill.
 
 Run ``bun run codegen`` or ``bun run codegen:check`` from the repository root.
 All Python exports are generated together before their TypeScript consumers.
@@ -18,26 +18,27 @@ from fastapi import routing
 from fastapi.openapi.utils import get_fields_from_routes, get_openapi_path
 from pydantic import TypeAdapter
 
-# Import all artifact contracts — this pulls in every nested domain model
-from grassmoth.actions.contracts.bodies import DataDiffOutput, ModelDiffOutput
-from grassmoth.artifacts.identity import GitOid
-from grassmoth.artifacts.model.construct import CausalEdgeSpec, ConstructSpec
-from grassmoth.artifacts.model.expressions import COEFFICIENT_MEANINGS
-from grassmoth.artifacts.model.indicator import IndicatorSpec
-from grassmoth.artifacts.model.likelihood import OBSERVATION_FAMILY_SPECS
-from grassmoth.artifacts.model.parameter_spec import ParameterSpec
-from grassmoth.artifacts.observations.history import ObservationHistory
-from grassmoth.artifacts.reports.effects import EffectSummary
-from grassmoth.artifacts.scenarios import CausalEffectResult
-from grassmoth_server.actions.contracts.identity import ARTIFACT_IDS
+from grassmoth.public import (
+    CausalEdgeSpec,
+    CausalEffectResult,
+    ConstructSpec,
+    DataDiffOutput,
+    EffectSummary,
+    GitOid,
+    IndicatorSpec,
+    ModelDiffOutput,
+    ObservationHistory,
+    ParameterSpec,
+)
 from grassmoth_server.actions.contracts.polling import ActionPoll
 from grassmoth_server.actions.contracts.progress import ProgressEvent
 from grassmoth_server.actions.contracts.requests import DataDiffRequest, ModelDiffRequest
+from grassmoth_server.actions.contracts.timeline import TimelineResponse, TimelineRevision
 from grassmoth_server.llm.traces import LLMTrace
-from grassmoth_server.public.contracts import TimelineResponse, TimelineRevision
 from grassmoth_server.study.records import StudyRevision
 from grassmoth_server.study.snapshot import ModelSnapshot
 from scripts.artifact_contracts import ARTIFACT_CONTRACTS
+from scripts.codegen.skill_types import render_action_types
 from scripts.codegen.type_system_catalog import (
     ContractJsonSchema,
     annotate_definitions,
@@ -162,20 +163,6 @@ def export_openapi() -> JsonSchemaValue:
         "components": components,
         "x-contract-roots": root_refs,
         "x-typescript-generics": generic_refs,
-    }
-
-
-def export_metadata() -> JsonSchemaValue:
-    """Export distribution catalog metadata for TypeScript type-safe rendering maps."""
-    return {
-        "artifactIds": list(ARTIFACT_IDS),
-        "observationHyperparametersByDistribution": {
-            spec.family.value: [
-                COEFFICIENT_MEANINGS[role].quantity.value for role in spec.parameter_roles
-            ]
-            for spec in OBSERVATION_FAMILY_SPECS
-            if spec.parameter_roles
-        },
     }
 
 
@@ -320,10 +307,8 @@ def _skill_frontmatter() -> str:
     cross-parser compatibility.
     """
     description = (
-        "Drive or inspect a grassmoth study over HTTP with "
-        "curl: call the seven public actions, read saved complete results, "
-        "compare models and data, and inspect the slim timeline. Use when working on a study "
-        "as an external agent instead of the web viewer."
+        "Run and inspect grassmoth studies through the HTTP API with curl. "
+        "Use for model editing, data preparation, fitting, simulation and saved results."
     )
     return f'---\nname: grassmoth-study-api\ndescription: "{description}"\n---'
 
@@ -339,7 +324,8 @@ def render_skill(openapi: JsonSchemaValue) -> str:
         (
             "> Auto-generated from `packages/api-types/schemas/openapi.json` (the FastAPI "
             "OpenAPI spec) by `apps/grassmoth-server/scripts/codegen/export_api.py`. "
-            "Edit the route docstrings, not this file."
+            "Edit Python type/field descriptions, the API description or route docstrings, "
+            "not this file."
         ),
         inspect.cleandoc(info.get("description", "")),
         "## Endpoints",
@@ -360,6 +346,8 @@ def render_skill(openapi: JsonSchemaValue) -> str:
             params = _parameters_block(operation)
             if params:
                 blocks.append(params)
+            if method == "post" and path.startswith("/api/studies/"):
+                blocks.append(render_action_types(operation, components))
             blocks.append(_curl_block(method, path, operation, components))
 
     text = "\n\n".join(block for block in blocks if block)
@@ -370,7 +358,6 @@ def render_skill(openapi: JsonSchemaValue) -> str:
 def main(*, check: bool = False) -> bool:
     openapi = export_openapi()
     outputs = {
-        OUTPUT_DIR / "metadata.json": json.dumps(export_metadata(), indent=2) + "\n",
         OUTPUT_DIR / "openapi.json": json.dumps(openapi, indent=2) + "\n",
         SKILL_PATH: render_skill(openapi),
     }

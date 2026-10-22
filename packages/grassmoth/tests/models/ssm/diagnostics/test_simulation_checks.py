@@ -21,11 +21,11 @@ from grassmoth.models.ssm.execution.observation_distributions import (
     with_response,
 )
 from grassmoth.models.ssm.predictive.types import PredictiveDraws, PredictiveTrajectory
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.helpers import fixture_entity_id
-from tests.support.inference import compile_model_fixture
-from tests.support.model import fixed_hill_model, load_model_fixture
-from tests.support.observation import observation_laws
+from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.helpers import fixture_entity_id
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import fixed_hill_model, load_model_fixture
+from grassmoth_test_support.observation import observation_laws
 
 
 def _time_invariant_construct_omits_temporal_transmission_check_model_fixture() -> (

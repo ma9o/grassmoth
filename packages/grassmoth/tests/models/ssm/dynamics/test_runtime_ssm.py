@@ -15,9 +15,9 @@ from grassmoth.models.ssm.dynamics.intervention import Intervention
 from grassmoth.models.ssm.dynamics.spec import DynamicsSpec, compile_dynamics
 from grassmoth.models.ssm.dynamics.vector_field import VectorFieldArgs
 from grassmoth.models.ssm.inference.prior_program import numpyro_model
-from tests.support.dynamics import decay_term, intercept_term, linear_term
-from tests.support.inference import bind_panel_fixture, compile_fit_fixture
-from tests.support.model import load_model_fixture
+from grassmoth_test_support.dynamics import decay_term, intercept_term, linear_term
+from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
+from grassmoth_test_support.model import load_model_fixture
 
 
 def _nonlinear_dynamics_uses_vector_field_backend_method_model_fixture() -> DynamicalModelSpec:

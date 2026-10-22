@@ -12,7 +12,7 @@ import pytest
 from grassmoth.artifacts.model.likelihood import LinkFunction
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.execution.emissions import gaussian_block_log_prob
-from tests.support.observation import mean_density, observation_kernel, observation_laws
+from grassmoth_test_support.observation import mean_density, observation_kernel, observation_laws
 
 # =============================================================================
 # Helpers

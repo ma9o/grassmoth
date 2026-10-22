@@ -1,0 +1,51 @@
+{
+  "action": "fit",
+  "input": {
+    "target": {
+      "kind": "new",
+      "dynamical_model_spec_ref": "${C2_MODEL_REVISION}",
+      "data_ref": {
+        "revision": "${C2_DATA_REVISION}",
+        "replicate_index": 0
+      }
+    },
+    "settings": {
+      "num_warmup": 2000,
+      "num_samples_per_chain": 4000,
+      "num_chains": 4,
+      "seed": 19,
+      "num_particles": 128,
+      "hardware": "A10",
+      "time_limit_seconds": 3600,
+      "algorithm": {
+        "method": "mpgibbs",
+        "n_parameter_particles": 2,
+        "tempering": null,
+        "dsmc": {
+          "drift": "none",
+          "latent_step": {
+            "kind": "adapted",
+            "target": 0.5
+          },
+          "latent_block_coords": 1,
+          "pilot_mixture": true
+        },
+        "parameter_proposal": "random_walk",
+        "diagnostic_metrics_all": false,
+        "diagnostic_metrics": [],
+        "param_step_size": 0.02,
+        "param_step_size_min": 1e-06,
+        "param_step_size_max": 1000.0,
+        "param_target_accept": 0.35,
+        "adaptation_rate": 0.05,
+        "adaptation_scheme": "simple",
+        "initialization": {
+          "kind": "gaussian",
+          "scale": 0.1
+        },
+        "compute_latent_posterior_summary": true
+      }
+    },
+    "repeat": 0
+  }
+}

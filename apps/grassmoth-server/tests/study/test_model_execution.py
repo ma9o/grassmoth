@@ -1,7 +1,6 @@
 """DynamicalModelSpec identity, parameter draws, and native model execution."""
 
 from datetime import UTC, datetime
-from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -19,21 +18,22 @@ from grassmoth.models.ssm.parameterization import (
     build_site_registry,
 )
 from grassmoth.models.structure import StructuralSelection
-from tests.support.helpers import make_model
-from tests.support.inference import compile_model_fixture, model_draws, particle_posterior
-from tests.support.model import load_model_fixture
+from grassmoth_server_test_support.fixtures import study_fixture_json
+from grassmoth_server_test_support.model import load_study_model_fixture
+from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.inference import compile_model_fixture, model_draws, particle_posterior
 
 
 def _conditioning_revises_the_same_type_and_retains_joint_uncertainty_complete_test_model() -> (
     DynamicalModelSpec
 ):
-    return load_model_fixture(
+    return load_study_model_fixture(
         "model_spec_execution/conditioning_revises_the_same_type_and_retains_joint_uncertainty_complete_test_model.json"
     )
 
 
 def _model_model() -> DynamicalModelSpec:
-    return load_model_fixture("model_spec_execution/model_model.json")
+    return load_study_model_fixture("model_spec_execution/model_model.json")
 
 
 @pytest.fixture(scope="module")
@@ -71,11 +71,9 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
             ),
             likelihood=LikelihoodSpec(
                 law=TypeAdapter(ObservationLawSpec).validate_json(
-                    (
-                        Path(__file__).resolve().parents[3]
-                        / "fixtures/models"
-                        / "model_spec_execution/conditioning_revises_the_same_type_and_retains_joint_uncertainty_observation_law.json"
-                    ).read_text()
+                    study_fixture_json(
+                        "model_spec_execution/conditioning_revises_the_same_type_and_retains_joint_uncertainty_observation_law.json"
+                    )
                 ),
                 reasoning="Joint law with category-specific parameter elements",
             ),

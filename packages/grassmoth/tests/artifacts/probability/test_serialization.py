@@ -17,7 +17,12 @@ from grassmoth.artifacts.probability.native import persistence_to_decay
 from grassmoth.artifacts.probability.serialization import NumPyroDistribution
 from grassmoth.models.parameters import require_priors
 from grassmoth.models.structure import StructuralSelection
-from tests.support.model import parameter_laws, parameter_named, replace_parameters, x_model
+from grassmoth_test_support.model import (
+    parameter_laws,
+    parameter_named,
+    replace_parameters,
+    x_model,
+)
 
 
 def _parameter_changes_distribution_without_keeping_authoring_history_model_with_prior_payloads() -> (

@@ -11,8 +11,8 @@ from grassmoth.artifacts.model.dynamical_model_spec import (
     DynamicalModelSpec,
     apply_model_edit,
 )
-from tests.support.helpers import make_model
-from tests.support.model import load_model_fixture
+from grassmoth_server_test_support.model import load_study_model_fixture
+from grassmoth_test_support.helpers import make_model
 
 pytestmark = pytest.mark.contract
 
@@ -62,7 +62,7 @@ def test_spec_diffs_replay_nested_edits_pruning_and_empty_checkpoints_in_both_di
 
 
 def test_law_changes_stay_at_their_owner_and_changed_families_replace_the_variant():
-    dynamical_model_spec = load_model_fixture("model_comparison/y_z_model.json")
+    dynamical_model_spec = load_study_model_fixture("model_comparison/y_z_model.json")
     parameter = dynamical_model_spec.parameters_for(dynamical_model_spec.edges[0].id)[0]
     identity = parameter.distribution
     assert identity is not None

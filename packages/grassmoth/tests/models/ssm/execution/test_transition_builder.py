@@ -11,7 +11,7 @@ from dynestyx import (
 
 from grassmoth.models.ssm.dynamics.vector_field import StructuralDrift
 from grassmoth.models.ssm.execution.dynamical_model import continuous_state_evolution
-from tests.support.dynamics import (
+from grassmoth_test_support.dynamics import (
     DenseLinear,
     DiagonalDecay,
     Intercept,

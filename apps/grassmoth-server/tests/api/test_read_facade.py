@@ -13,8 +13,8 @@ from grassmoth_server.actions.contracts.requests import EditModelRequest
 from grassmoth_server.api.read_only import create_read_facade_app
 from grassmoth_server.storage import paths as data_module
 from grassmoth_server.study.records import Applied
-from tests.support.action import applied_record, question_root
-from tests.support.git import git_oid
+from grassmoth_server_test_support.action import applied_record, question_root
+from grassmoth_test_support.git import git_oid
 
 pytestmark = pytest.mark.contract
 

@@ -209,9 +209,9 @@ class TestPivotToWideSparsity:
         )
 
         raw = pl.DataFrame(rows)
-        logger = logging.getLogger("grassmoth_server.storage.paths")
+        logger = logging.getLogger("grassmoth.observations.rows")
         logger.propagate = True
-        with caplog.at_level(logging.WARNING, logger="grassmoth_server.storage.paths"):
+        with caplog.at_level(logging.WARNING, logger="grassmoth.observations.rows"):
             wide = pivot_to_wide(raw, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
 
         assert wide.height == 24
@@ -241,7 +241,7 @@ class TestPivotToWideSparsity:
             )
 
         raw = pl.DataFrame(rows)
-        with caplog.at_level(logging.WARNING, logger="grassmoth_server.storage.paths"):
+        with caplog.at_level(logging.WARNING, logger="grassmoth.observations.rows"):
             pivot_to_wide(raw, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
 
         assert not any("Sparse" in msg for msg in caplog.messages)

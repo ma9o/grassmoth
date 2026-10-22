@@ -324,7 +324,10 @@ export interface components {
              */
             readonly target: number;
         };
-        /** Added[DataPoint] */
+        /**
+         * Added[DataPoint]
+         * @description The right payload exists at an identity absent on the left.
+         */
         readonly Added_DataPoint_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -333,7 +336,10 @@ export interface components {
             readonly kind: "added";
             readonly after: components["schemas"]["DataPoint"];
         };
-        /** Applied[GitOid] */
+        /**
+         * Applied[GitOid]
+         * @description A successful action result and the artifact changes it proposes to publish.
+         */
         readonly Applied_GitOid_: {
             /**
              * @description Discriminator identifying an applied outcome. (enum property replaced by openapi-typescript)
@@ -345,7 +351,10 @@ export interface components {
             /** @description Produced and retracted artifacts and retained report references. */
             readonly effects: components["schemas"]["ActionEffects"];
         };
-        /** Applied[NoneType] */
+        /**
+         * Applied[NoneType]
+         * @description A successful action result and the artifact changes it proposes to publish.
+         */
         readonly Applied_NoneType_: {
             /**
              * @description Discriminator identifying an applied outcome. (enum property replaced by openapi-typescript)
@@ -473,7 +482,10 @@ export interface components {
             readonly trace_ids: readonly string[];
             readonly attempt: components["schemas"]["ActionAttempt"];
         };
-        /** Attempt[ActionId, Union[ScientificActionRequest, DataDiffRequest[GitOid], ModelDiffRequest[GitOid]], NoneType] */
+        /**
+         * Attempt[ActionId, Union[ScientificActionRequest, DataDiffRequest[GitOid], ModelDiffRequest[GitOid]], NoneType]
+         * @description One action's request and successful result share the same attempt owner.
+         */
         readonly Attempt_ActionId_Union_ScientificActionRequest__DataDiffRequest_GitOid___ModelDiffRequest_GitOid___NoneType_: {
             readonly action: components["schemas"]["ActionId"];
             /**
@@ -484,7 +496,10 @@ export interface components {
             /** Outcome */
             readonly outcome: Domain.Applied<null> | components["schemas"]["Rejected"] | components["schemas"]["Raised"];
         };
-        /** Attempt[Literal['data_diff'], DataDiffRequest[GitOid], GitOid] */
+        /**
+         * Attempt[Literal['data_diff'], DataDiffRequest[GitOid], GitOid]
+         * @description One action's request and successful result share the same attempt owner.
+         */
         readonly Attempt_Literal__data_diff___DataDiffRequest_GitOid__GitOid_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -496,7 +511,10 @@ export interface components {
             /** Outcome */
             readonly outcome: Domain.Applied<Domain.GitOid> | components["schemas"]["Rejected"] | components["schemas"]["Raised"];
         };
-        /** Attempt[Literal['edit_model'], EditModelRequest[GitOid], GitOid] */
+        /**
+         * Attempt[Literal['edit_model'], EditModelRequest[GitOid], GitOid]
+         * @description One action's request and successful result share the same attempt owner.
+         */
         readonly Attempt_Literal__edit_model___EditModelRequest_GitOid__GitOid_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -508,7 +526,10 @@ export interface components {
             /** Outcome */
             readonly outcome: Domain.Applied<Domain.GitOid> | components["schemas"]["Rejected"] | components["schemas"]["Raised"];
         };
-        /** Attempt[Literal['edit_question'], EditQuestionRequest, GitOid] */
+        /**
+         * Attempt[Literal['edit_question'], EditQuestionRequest, GitOid]
+         * @description One action's request and successful result share the same attempt owner.
+         */
         readonly Attempt_Literal__edit_question___EditQuestionRequest_GitOid_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -520,7 +541,10 @@ export interface components {
             /** Outcome */
             readonly outcome: Domain.Applied<Domain.GitOid> | components["schemas"]["Rejected"] | components["schemas"]["Raised"];
         };
-        /** Attempt[Literal['fit'], FitRequest[GitOid], GitOid] */
+        /**
+         * Attempt[Literal['fit'], FitRequest[GitOid], GitOid]
+         * @description One action's request and successful result share the same attempt owner.
+         */
         readonly Attempt_Literal__fit___FitRequest_GitOid__GitOid_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -532,7 +556,10 @@ export interface components {
             /** Outcome */
             readonly outcome: Domain.Applied<Domain.GitOid> | components["schemas"]["Rejected"] | components["schemas"]["Raised"];
         };
-        /** Attempt[Literal['model_diff'], ModelDiffRequest[GitOid], GitOid] */
+        /**
+         * Attempt[Literal['model_diff'], ModelDiffRequest[GitOid], GitOid]
+         * @description One action's request and successful result share the same attempt owner.
+         */
         readonly Attempt_Literal__model_diff___ModelDiffRequest_GitOid__GitOid_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -544,7 +571,10 @@ export interface components {
             /** Outcome */
             readonly outcome: Domain.Applied<Domain.GitOid> | components["schemas"]["Rejected"] | components["schemas"]["Raised"];
         };
-        /** Attempt[Literal['prepare_data'], PrepareDataRequest[GitOid, FileSourceRef], GitOid] */
+        /**
+         * Attempt[Literal['prepare_data'], PrepareDataRequest[GitOid, FileSourceRef], GitOid]
+         * @description One action's request and successful result share the same attempt owner.
+         */
         readonly Attempt_Literal__prepare_data___PrepareDataRequest_GitOid__FileSourceRef__GitOid_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -556,7 +586,10 @@ export interface components {
             /** Outcome */
             readonly outcome: Domain.Applied<Domain.GitOid> | components["schemas"]["Rejected"] | components["schemas"]["Raised"];
         };
-        /** Attempt[Literal['simulate'], SimulateRequest[GitOid], GitOid] */
+        /**
+         * Attempt[Literal['simulate'], SimulateRequest[GitOid], GitOid]
+         * @description One action's request and successful result share the same attempt owner.
+         */
         readonly Attempt_Literal__simulate___SimulateRequest_GitOid__GitOid_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -587,7 +620,10 @@ export interface components {
         };
         /** @enum {string} */
         readonly AuxiliaryDrift: "none" | "amala" | "amala_plus";
-        /** BernoulliLogitsLawSpec[Expression] */
+        /**
+         * BernoulliLogitsLawSpec[Expression]
+         * @description The BernoulliLogits conditional law.
+         */
         readonly "BernoulliLogitsLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -596,7 +632,10 @@ export interface components {
             readonly distribution: "BernoulliLogits";
             readonly logits: components["schemas"]["Expression-Output"];
         };
-        /** BernoulliProbsLawSpec[Expression] */
+        /**
+         * BernoulliProbsLawSpec[Expression]
+         * @description The BernoulliProbs conditional law.
+         */
         readonly "BernoulliProbsLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -605,7 +644,10 @@ export interface components {
             readonly distribution: "BernoulliProbs";
             readonly probs: components["schemas"]["Expression-Output"];
         };
-        /** BetaLawSpec[Expression] */
+        /**
+         * BetaLawSpec[Expression]
+         * @description The Beta conditional law.
+         */
         readonly "BetaLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -657,7 +699,10 @@ export interface components {
         };
         readonly "CallId-Input": `call:${string}`;
         readonly "CallId-Output": `call:${string}`;
-        /** CategoricalLawSpec[Expression] */
+        /**
+         * CategoricalLawSpec[Expression]
+         * @description The Categorical conditional law.
+         */
         readonly "CategoricalLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1072,7 +1117,10 @@ export interface components {
             /** @description 'time_varying' (changes over time) or 'time_invariant' (fixed) */
             readonly temporal_status: components["schemas"]["TemporalStatus"];
         };
-        /** ContinueFitTarget[GitOid] */
+        /**
+         * ContinueFitTarget[GitOid]
+         * @description Continue the original target at the last retained draw of a prior fit.
+         */
         readonly ContinueFitTarget_GitOid_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1081,7 +1129,10 @@ export interface components {
             readonly kind: "continue";
             readonly fit_ref: components["schemas"]["GitOid-Output"];
         };
-        /** ContinueFitTarget[RevisionSelector] */
+        /**
+         * ContinueFitTarget[RevisionSelector]
+         * @description Continue the original target at the last retained draw of a prior fit.
+         */
         readonly ContinueFitTarget_RevisionSelector_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -1171,14 +1222,26 @@ export interface components {
             /** Variables */
             readonly variables: readonly components["schemas"]["IndicatorComparison"][];
         };
-        /** DataDiffInput[GitOid] */
+        /**
+         * DataDiffInput[GitOid]
+         * @description Compare saved histories statistically; left/right do not imply before/after revisions.
+         *
+         *     DataComparisonReport owns selection and comparison semantics. The action reads
+         *     retained observations without generating new draws or changing scientific state.
+         */
         readonly DataDiffInput_GitOid_: {
             /** @description References on the left side. Each reference selects one replicate by index, or all its retained histories when the index is omitted. */
             readonly left_ref: Domain.DataSelection<Domain.GitOid>;
             /** @description References on the right side, using the same selection rule. */
             readonly right_ref: Domain.DataSelection<Domain.GitOid>;
         };
-        /** DataDiffInput[RevisionSelector] */
+        /**
+         * DataDiffInput[RevisionSelector]
+         * @description Compare saved histories statistically; left/right do not imply before/after revisions.
+         *
+         *     DataComparisonReport owns selection and comparison semantics. The action reads
+         *     retained observations without generating new draws or changing scientific state.
+         */
         readonly DataDiffInput_RevisionSelector_: {
             /** @description References on the left side. Each reference selects one replicate by index, or all its retained histories when the index is omitted. */
             readonly left_ref: components["schemas"]["DataSelection_RevisionSelector_"];
@@ -1193,7 +1256,10 @@ export interface components {
             /** @description Exact history selections, point changes, per-history statistics, compatibility findings and predictive checks. */
             readonly report: components["schemas"]["DataComparisonReport"];
         };
-        /** DataDiffRequest[GitOid] */
+        /**
+         * DataDiffRequest[GitOid]
+         * @description Compare the saved observation histories; return ``DataDiffOutput``.
+         */
         readonly DataDiffRequest_GitOid_: {
             /**
              * Action
@@ -1211,7 +1277,10 @@ export interface components {
              */
             readonly reasoning: string | null;
         };
-        /** DataDiffRequest[RevisionSelector] */
+        /**
+         * DataDiffRequest[RevisionSelector]
+         * @description Compare the saved observation histories; return ``DataDiffOutput``.
+         */
         readonly DataDiffRequest_RevisionSelector_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -1292,7 +1361,14 @@ export interface components {
             /** Findings */
             readonly findings: readonly components["schemas"]["DataFinding"][];
         };
-        /** DataRef[GitOid, Annotated[Union[int, NoneType], FieldInfo(annotation=NoneType, required=False, default=None)]] */
+        /**
+         * DataRef[GitOid, Annotated[Union[int, NoneType], FieldInfo(annotation=NoneType, required=False, default=None)]]
+         * @description A prepared-data or simulation gitref with a selection of recorded histories.
+         *
+         *     An integer selects one history by its zero-based index: zero for prepared user
+         *     data, or less than the saved replicate count for a simulation. None selects
+         *     every retained history when the consuming action permits it.
+         */
         readonly DataRef_GitOid_Annotated_Union_int__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___: {
             readonly revision: components["schemas"]["GitOid-Output"];
             /**
@@ -1301,13 +1377,27 @@ export interface components {
              */
             readonly replicate_index: number | null;
         };
-        /** DataRef[GitOid, int] */
+        /**
+         * DataRef[GitOid, int]
+         * @description A prepared-data or simulation gitref with a selection of recorded histories.
+         *
+         *     An integer selects one history by its zero-based index: zero for prepared user
+         *     data, or less than the saved replicate count for a simulation. None selects
+         *     every retained history when the consuming action permits it.
+         */
         readonly DataRef_GitOid_int_: {
             readonly revision: components["schemas"]["GitOid-Output"];
             /** Replicate Index */
             readonly replicate_index: number;
         };
-        /** DataRef[RevisionSelector, Annotated[Union[int, NoneType], FieldInfo(annotation=NoneType, required=False, default=None)]] */
+        /**
+         * DataRef[RevisionSelector, Annotated[Union[int, NoneType], FieldInfo(annotation=NoneType, required=False, default=None)]]
+         * @description A prepared-data or simulation gitref with a selection of recorded histories.
+         *
+         *     An integer selects one history by its zero-based index: zero for prepared user
+         *     data, or less than the saved replicate count for a simulation. None selects
+         *     every retained history when the consuming action permits it.
+         */
         readonly DataRef_RevisionSelector_Annotated_Union_int__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___: {
             readonly revision: components["schemas"]["RevisionSelector"];
             /**
@@ -1316,7 +1406,14 @@ export interface components {
              */
             readonly replicate_index?: number | null;
         };
-        /** DataRef[RevisionSelector, int] */
+        /**
+         * DataRef[RevisionSelector, int]
+         * @description A prepared-data or simulation gitref with a selection of recorded histories.
+         *
+         *     An integer selects one history by its zero-based index: zero for prepared user
+         *     data, or less than the saved replicate count for a simulation. None selects
+         *     every retained history when the consuming action permits it.
+         */
         readonly DataRef_RevisionSelector_int_: {
             readonly revision: components["schemas"]["RevisionSelector"];
             /** Replicate Index */
@@ -1335,7 +1432,10 @@ export interface components {
             readonly observation: Domain.ObservationSpec<Domain.ObservationWindow | null>;
             readonly extraction: components["schemas"]["ExtractionSpec-Output"];
         };
-        /** DeltaLawSpec[Expression] */
+        /**
+         * DeltaLawSpec[Expression]
+         * @description The Delta conditional law.
+         */
         readonly "DeltaLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3736,14 +3836,20 @@ export interface components {
             readonly kind: "edge";
             readonly id: components["schemas"]["EdgeId-Output"];
         };
-        /** EditModelInput[GitOid] */
+        /**
+         * EditModelInput[GitOid]
+         * @description Create or revise a model from a question or model parent.
+         */
         readonly EditModelInput_GitOid_: {
             /** @description Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. */
             readonly parent_ref: components["schemas"]["GitOid-Input"];
             /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. The action retains the merged spec and its findings. */
             readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Input"];
         };
-        /** EditModelInput[RevisionSelector] */
+        /**
+         * EditModelInput[RevisionSelector]
+         * @description Create or revise a model from a question or model parent.
+         */
         readonly EditModelInput_RevisionSelector_: {
             /** @description Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. */
             readonly parent_ref: components["schemas"]["RevisionSelector"];
@@ -3764,7 +3870,10 @@ export interface components {
             /** @description Entities removed because they do not serve the question. */
             readonly pruning: components["schemas"]["ModelEditResult"];
         };
-        /** EditModelRequest[GitOid] */
+        /**
+         * EditModelRequest[GitOid]
+         * @description Create or revise a model from its selected parent; return ``EditModelOutput``.
+         */
         readonly EditModelRequest_GitOid_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -3780,7 +3889,10 @@ export interface components {
              */
             readonly reasoning: string | null;
         };
-        /** EditModelRequest[RevisionSelector] */
+        /**
+         * EditModelRequest[RevisionSelector]
+         * @description Create or revise a model from its selected parent; return ``EditModelOutput``.
+         */
         readonly EditModelRequest_RevisionSelector_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -3902,7 +4014,10 @@ export interface components {
         };
         /** @description An entity reference identifies a construct, edge, indicator, or mechanism by its persistent identity. */
         readonly EntityRef: components["schemas"]["ConstructRef-Output"] | components["schemas"]["EdgeRef"] | components["schemas"]["IndicatorRef"] | components["schemas"]["MechanismRef"];
-        /** Evaluated[ConvergenceAssessmentSubject, NumericCriterionEvidence] */
+        /**
+         * Evaluated[ConvergenceAssessmentSubject, NumericCriterionEvidence]
+         * @description One producer's measured outcome and the evidence supporting it.
+         */
         readonly Evaluated_ConvergenceAssessmentSubject_NumericCriterionEvidence_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3919,7 +4034,10 @@ export interface components {
             readonly outcome: "passed" | "failed";
             readonly evidence: components["schemas"]["NumericCriterionEvidence"];
         };
-        /** Evaluated[IndicatorCheckSubject, NumericCriterionEvidence] */
+        /**
+         * Evaluated[IndicatorCheckSubject, NumericCriterionEvidence]
+         * @description One producer's measured outcome and the evidence supporting it.
+         */
         readonly Evaluated_IndicatorCheckSubject_NumericCriterionEvidence_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3936,7 +4054,10 @@ export interface components {
             readonly outcome: "passed" | "failed";
             readonly evidence: components["schemas"]["NumericCriterionEvidence"];
         };
-        /** Evaluated[PredictiveSubject, tuple[NumericCriterionEvidence, ...]] */
+        /**
+         * Evaluated[PredictiveSubject, tuple[NumericCriterionEvidence, ...]]
+         * @description One producer's measured outcome and the evidence supporting it.
+         */
         readonly Evaluated_PredictiveSubject_tuple_NumericCriterionEvidence__________: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3954,7 +4075,10 @@ export interface components {
             /** Evidence */
             readonly evidence: readonly components["schemas"]["NumericCriterionEvidence"][];
         };
-        /** Evaluated[QuestionSubject, str] */
+        /**
+         * Evaluated[QuestionSubject, str]
+         * @description One producer's measured outcome and the evidence supporting it.
+         */
         readonly Evaluated_QuestionSubject_str_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3972,7 +4096,10 @@ export interface components {
             /** Evidence */
             readonly evidence: string;
         };
-        /** Evaluated[Union[IndicatorRef, Literal['dataset']], str] */
+        /**
+         * Evaluated[Union[IndicatorRef, Literal['dataset']], str]
+         * @description One producer's measured outcome and the evidence supporting it.
+         */
         readonly Evaluated_Union_IndicatorRef__Literal__dataset____str_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -3991,7 +4118,10 @@ export interface components {
             /** Evidence */
             readonly evidence: string;
         };
-        /** Evaluated[str, str] */
+        /**
+         * Evaluated[str, str]
+         * @description One producer's measured outcome and the evidence supporting it.
+         */
         readonly Evaluated_str_str_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -4235,7 +4365,10 @@ export interface components {
             readonly preflight: readonly components["schemas"]["SpecificationAssessment"][];
             readonly question: components["schemas"]["QuestionCheckReport"];
         };
-        /** FitInput[GitOid] */
+        /**
+         * FitInput[GitOid]
+         * @description Start or continue a fit; sample counts always mean additional retained draws.
+         */
         readonly FitInput_GitOid_: {
             readonly target: Domain.FitTarget<Domain.GitOid>;
             readonly settings: components["schemas"]["FitSettingsSpec-Output"];
@@ -4246,7 +4379,10 @@ export interface components {
              */
             readonly repeat: number;
         };
-        /** FitInput[RevisionSelector] */
+        /**
+         * FitInput[RevisionSelector]
+         * @description Start or continue a fit; sample counts always mean additional retained draws.
+         */
         readonly FitInput_RevisionSelector_: {
             readonly target: components["schemas"]["FitTarget_RevisionSelector_"];
             readonly settings?: components["schemas"]["FitSettingsSpec-Input"];
@@ -4271,7 +4407,10 @@ export interface components {
         };
         /** @enum {string} */
         readonly FitReliability: "not_fitted" | "converged" | "unconverged" | "unknown";
-        /** FitRequest[GitOid] */
+        /**
+         * FitRequest[GitOid]
+         * @description Fit the selected model to the selected history; return ``FitOutput``.
+         */
         readonly FitRequest_GitOid_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -4287,7 +4426,10 @@ export interface components {
              */
             readonly reasoning: string | null;
         };
-        /** FitRequest[RevisionSelector] */
+        /**
+         * FitRequest[RevisionSelector]
+         * @description Fit the selected model to the selected history; return ``FitOutput``.
+         */
         readonly FitRequest_RevisionSelector_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -4523,7 +4665,10 @@ export interface components {
             readonly steps: number;
         };
         readonly FrozenSamplerTuning: components["schemas"]["JointTuning"] | components["schemas"]["ParticleTuning"] | components["schemas"]["TransferredTuning"];
-        /** GammaLawSpec[Expression] */
+        /**
+         * GammaLawSpec[Expression]
+         * @description The Gamma conditional law.
+         */
         readonly "GammaLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5554,14 +5699,26 @@ export interface components {
             readonly specification: readonly components["schemas"]["SpecificationAssessment"][];
             readonly question: components["schemas"]["QuestionCheckReport"];
         };
-        /** ModelDiffInput[GitOid] */
+        /**
+         * ModelDiffInput[GitOid]
+         * @description Base and target specs for a directional patch, selected by question or model revisions.
+         *
+         *     The selections need not be chronologically ordered or share an editing parent.
+         *     Before/after determine patch direction; ModelDiffOutput defines its contract.
+         */
         readonly ModelDiffInput_GitOid_: {
             /** @description Question or model revision used as the base; a question denotes an empty spec. */
             readonly before_ref: components["schemas"]["GitOid-Output"];
             /** @description Question or model revision reconstructed by applying the patch to the base. */
             readonly after_ref: components["schemas"]["GitOid-Output"];
         };
-        /** ModelDiffInput[RevisionSelector] */
+        /**
+         * ModelDiffInput[RevisionSelector]
+         * @description Base and target specs for a directional patch, selected by question or model revisions.
+         *
+         *     The selections need not be chronologically ordered or share an editing parent.
+         *     Before/after determine patch direction; ModelDiffOutput defines its contract.
+         */
         readonly ModelDiffInput_RevisionSelector_: {
             /** @description Question or model revision used as the base; a question denotes an empty spec. */
             readonly before_ref: components["schemas"]["RevisionSelector"];
@@ -5582,7 +5739,10 @@ export interface components {
             /** @description Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. A question revision denotes the empty spec. */
             readonly changes: components["schemas"]["DynamicalModelSpec-Input"];
         };
-        /** ModelDiffRequest[GitOid] */
+        /**
+         * ModelDiffRequest[GitOid]
+         * @description Compare two saved specs as an edit document; return ``ModelDiffOutput``.
+         */
         readonly ModelDiffRequest_GitOid_: {
             /**
              * Action
@@ -5600,7 +5760,10 @@ export interface components {
              */
             readonly reasoning: string | null;
         };
-        /** ModelDiffRequest[RevisionSelector] */
+        /**
+         * ModelDiffRequest[RevisionSelector]
+         * @description Compare two saved specs as an edit document; return ``ModelDiffOutput``.
+         */
         readonly ModelDiffRequest_RevisionSelector_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -5677,7 +5840,10 @@ export interface components {
             /** @default null */
             readonly simulation: components["schemas"]["SimulationReport"] | null;
         };
-        /** NegativeBinomial2LawSpec[Expression] */
+        /**
+         * NegativeBinomial2LawSpec[Expression]
+         * @description The NegativeBinomial2 conditional law.
+         */
         readonly "NegativeBinomial2LawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5687,7 +5853,10 @@ export interface components {
             readonly mean: components["schemas"]["Expression-Output"];
             readonly concentration: components["schemas"]["Expression-Output"];
         };
-        /** NewFitTarget[GitOid] */
+        /**
+         * NewFitTarget[GitOid]
+         * @description Condition the selected model law on exactly one saved history.
+         */
         readonly NewFitTarget_GitOid_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5697,7 +5866,10 @@ export interface components {
             readonly dynamical_model_spec_ref: components["schemas"]["GitOid-Output"];
             readonly data_ref: Domain.DataRef<Domain.GitOid, number>;
         };
-        /** NewFitTarget[RevisionSelector] */
+        /**
+         * NewFitTarget[RevisionSelector]
+         * @description Condition the selected model law on exactly one saved history.
+         */
         readonly NewFitTarget_RevisionSelector_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5740,7 +5912,10 @@ export interface components {
              */
             readonly notes: string | null;
         };
-        /** NormalLawSpec[Expression] */
+        /**
+         * NormalLawSpec[Expression]
+         * @description The Normal conditional law.
+         */
         readonly "NormalLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5751,7 +5926,10 @@ export interface components {
             readonly scale: components["schemas"]["Expression-Output"];
         };
         readonly NotEvaluatedReason: components["schemas"]["PredictiveCheckReason"] | ("NONFINITE_EMISSION_MEAN" | "INSUFFICIENT_TIMES" | "NO_RELAXATION_TERM" | "EDGE_CONTRASTS_EXPLICIT" | "NO_OBSERVATION_SUPPORT" | "NO_OBSERVATIONS" | "STATIC_CONSTRUCT" | "INSUFFICIENT_OBSERVATIONS" | "ZERO_RESIDUAL_VARIANCE" | "ZERO_OBSERVED_VARIANCE" | "NONFINITE_PATHS" | "NONFINITE_SIGNAL" | "COMPARISON_INPUTS_MISSING" | "MISSING_REPLICATE_VALUES" | "CAUSAL_EVALUATION_FAILED" | "INSUFFICIENT_CHAIN_SAMPLES" | "NO_RETAINED_CHAINS" | "NO_OUTCOME" | "CONSTRUCT_UNDEFINED" | "NO_PANEL" | "STATE_NOT_RECORDED");
-        /** NotEvaluated[ConvergenceAssessmentSubject] */
+        /**
+         * NotEvaluated[ConvergenceAssessmentSubject]
+         * @description An explicit absence of evaluation, with a closed producer reason.
+         */
         readonly NotEvaluated_ConvergenceAssessmentSubject_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5765,7 +5943,10 @@ export interface components {
             /** Detail */
             readonly detail: string;
         };
-        /** NotEvaluated[IndicatorCheckSubject] */
+        /**
+         * NotEvaluated[IndicatorCheckSubject]
+         * @description An explicit absence of evaluation, with a closed producer reason.
+         */
         readonly NotEvaluated_IndicatorCheckSubject_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5779,7 +5960,10 @@ export interface components {
             /** Detail */
             readonly detail: string;
         };
-        /** NotEvaluated[IndicatorRef] */
+        /**
+         * NotEvaluated[IndicatorRef]
+         * @description An explicit absence of evaluation, with a closed producer reason.
+         */
         readonly NotEvaluated_IndicatorRef_: {
             /**
              * Kind
@@ -5794,7 +5978,10 @@ export interface components {
             /** Detail */
             readonly detail: string;
         };
-        /** NotEvaluated[Literal['causal_effect']] */
+        /**
+         * NotEvaluated[Literal['causal_effect']]
+         * @description An explicit absence of evaluation, with a closed producer reason.
+         */
         readonly NotEvaluated_Literal__causal_effect___: {
             /**
              * Kind
@@ -5813,7 +6000,10 @@ export interface components {
             /** Detail */
             readonly detail: string;
         };
-        /** NotEvaluated[PredictiveSubject] */
+        /**
+         * NotEvaluated[PredictiveSubject]
+         * @description An explicit absence of evaluation, with a closed producer reason.
+         */
         readonly NotEvaluated_PredictiveSubject_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5827,7 +6017,10 @@ export interface components {
             /** Detail */
             readonly detail: string;
         };
-        /** NotEvaluated[QuestionSubject] */
+        /**
+         * NotEvaluated[QuestionSubject]
+         * @description An explicit absence of evaluation, with a closed producer reason.
+         */
         readonly NotEvaluated_QuestionSubject_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5841,7 +6034,10 @@ export interface components {
             /** Detail */
             readonly detail: string;
         };
-        /** NotEvaluated[Union[IndicatorRef, Literal['dataset']]] */
+        /**
+         * NotEvaluated[Union[IndicatorRef, Literal['dataset']]]
+         * @description An explicit absence of evaluation, with a closed producer reason.
+         */
         readonly NotEvaluated_Union_IndicatorRef__Literal__dataset____: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -5856,7 +6052,10 @@ export interface components {
             /** Detail */
             readonly detail: string;
         };
-        /** NotEvaluated[str] */
+        /**
+         * NotEvaluated[str]
+         * @description An explicit absence of evaluation, with a closed producer reason.
+         */
         readonly NotEvaluated_str_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -6124,7 +6323,10 @@ export interface components {
             readonly categorical_levels: readonly string[] | null;
         };
         readonly ObservationWindow: string;
-        /** OrderedLogisticLawSpec[Expression] */
+        /**
+         * OrderedLogisticLawSpec[Expression]
+         * @description The OrderedLogistic conditional law.
+         */
         readonly "OrderedLogisticLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -6512,7 +6714,10 @@ export interface components {
             /** Interval Days */
             readonly interval_days: number | "model_clock";
         };
-        /** PoissonLawSpec[Expression] */
+        /**
+         * PoissonLawSpec[Expression]
+         * @description The Poisson conditional law.
+         */
         readonly "PoissonLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -6630,7 +6835,10 @@ export interface components {
             /** Target */
             readonly target: components["schemas"]["EntityRef"] | ("whole_model" | "observations");
         };
-        /** PrepareDataInput[GitOid, FileSourceRef] */
+        /**
+         * PrepareDataInput[GitOid, FileSourceRef]
+         * @description Extract observations using the definitions of the selected model.
+         */
         readonly PrepareDataInput_GitOid_FileSourceRef_: {
             /** @description Model revision owning the clock and observation definitions. */
             readonly dynamical_model_spec_ref: components["schemas"]["GitOid-Output"];
@@ -6648,7 +6856,10 @@ export interface components {
              */
             readonly context: string;
         };
-        /** PrepareDataInput[RevisionSelector, SourceFolder] */
+        /**
+         * PrepareDataInput[RevisionSelector, SourceFolder]
+         * @description Extract observations using the definitions of the selected model.
+         */
         readonly PrepareDataInput_RevisionSelector_SourceFolder_: {
             /** @description Model revision owning the clock and observation definitions. */
             readonly dynamical_model_spec_ref: components["schemas"]["RevisionSelector"];
@@ -6680,7 +6891,10 @@ export interface components {
             /** @description Retained extraction workers, failed chunks and reuse counts. */
             readonly extraction: components["schemas"]["DataPreparationResult"];
         };
-        /** PrepareDataRequest[GitOid, FileSourceRef] */
+        /**
+         * PrepareDataRequest[GitOid, FileSourceRef]
+         * @description Prepare the selected source data; return ``PrepareDataOutput``.
+         */
         readonly PrepareDataRequest_GitOid_FileSourceRef_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -6696,7 +6910,10 @@ export interface components {
              */
             readonly reasoning: string | null;
         };
-        /** PrepareDataRequest[RevisionSelector, SourceFolder] */
+        /**
+         * PrepareDataRequest[RevisionSelector, SourceFolder]
+         * @description Prepare the selected source data; return ``PrepareDataOutput``.
+         */
         readonly PrepareDataRequest_RevisionSelector_SourceFolder_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -6971,7 +7188,10 @@ export interface components {
              */
             readonly detail: string;
         };
-        /** Removed[DataPoint] */
+        /**
+         * Removed[DataPoint]
+         * @description The left payload exists at an identity absent on the right.
+         */
         readonly Removed_DataPoint_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -6999,7 +7219,10 @@ export interface components {
             /** Reason Ref */
             readonly reason_ref: string;
         };
-        /** Revised[DataPoint] */
+        /**
+         * Revised[DataPoint]
+         * @description Both payloads exist at the same identity and their stored values differ.
+         */
         readonly Revised_DataPoint_: {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -7187,7 +7410,10 @@ export interface components {
              */
             readonly source_columns: readonly string[];
         };
-        /** SimulateInput[GitOid] */
+        /**
+         * SimulateInput[GitOid]
+         * @description Generate histories from a selected model and an explicit simulation design.
+         */
         readonly SimulateInput_GitOid_: {
             /** @description Revision supplying the authored or fitted generative law. */
             readonly dynamical_model_spec_ref: components["schemas"]["GitOid-Output"];
@@ -7206,7 +7432,10 @@ export interface components {
              */
             readonly num_replicates: number;
         };
-        /** SimulateInput[RevisionSelector] */
+        /**
+         * SimulateInput[RevisionSelector]
+         * @description Generate histories from a selected model and an explicit simulation design.
+         */
         readonly SimulateInput_RevisionSelector_: {
             /** @description Revision supplying the authored or fitted generative law. */
             readonly dynamical_model_spec_ref: components["schemas"]["RevisionSelector"];
@@ -7241,7 +7470,10 @@ export interface components {
             /** @description Generation evidence and evaluated findings. */
             readonly report: components["schemas"]["SimulationReport"];
         };
-        /** SimulateRequest[GitOid] */
+        /**
+         * SimulateRequest[GitOid]
+         * @description Generate observation histories and their complete report; return ``SimulateOutput``.
+         */
         readonly SimulateRequest_GitOid_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -7257,7 +7489,10 @@ export interface components {
              */
             readonly reasoning: string | null;
         };
-        /** SimulateRequest[RevisionSelector] */
+        /**
+         * SimulateRequest[RevisionSelector]
+         * @description Generate observation histories and their complete report; return ``SimulateOutput``.
+         */
         readonly SimulateRequest_RevisionSelector_: {
             /**
              * @description Scientific action that owns this request or result. (enum property replaced by openapi-typescript)
@@ -7487,7 +7722,10 @@ export interface components {
         };
         /** @enum {string} */
         readonly StepStatus: "running" | "completed" | "failed";
-        /** StudentTLawSpec[Expression] */
+        /**
+         * StudentTLawSpec[Expression]
+         * @description The StudentT conditional law.
+         */
         readonly "StudentTLawSpec_Expression_-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -7522,7 +7760,10 @@ export interface components {
             /** @default null */
             readonly data: Domain.DataRef<Domain.GitOid, number> | null;
         };
-        /** SuccessfulPoll[Literal['data_diff'], DataDiffOutput] */
+        /**
+         * SuccessfulPoll[Literal['data_diff'], DataDiffOutput]
+         * @description A published scientific result and the complete execution log of its call.
+         */
         readonly SuccessfulPoll_Literal__data_diff___DataDiffOutput_: {
             readonly call_id: components["schemas"]["CallId-Output"];
             /**
@@ -7541,7 +7782,10 @@ export interface components {
             /** Messages */
             readonly messages: readonly components["schemas"]["ExecutionMessage"][];
         };
-        /** SuccessfulPoll[Literal['edit_model'], EditModelOutput] */
+        /**
+         * SuccessfulPoll[Literal['edit_model'], EditModelOutput]
+         * @description A published scientific result and the complete execution log of its call.
+         */
         readonly SuccessfulPoll_Literal__edit_model___EditModelOutput_: {
             readonly call_id: components["schemas"]["CallId-Output"];
             /**
@@ -7560,7 +7804,10 @@ export interface components {
             /** Messages */
             readonly messages: readonly components["schemas"]["ExecutionMessage"][];
         };
-        /** SuccessfulPoll[Literal['edit_question'], EditQuestionOutput] */
+        /**
+         * SuccessfulPoll[Literal['edit_question'], EditQuestionOutput]
+         * @description A published scientific result and the complete execution log of its call.
+         */
         readonly SuccessfulPoll_Literal__edit_question___EditQuestionOutput_: {
             readonly call_id: components["schemas"]["CallId-Output"];
             /**
@@ -7579,7 +7826,10 @@ export interface components {
             /** Messages */
             readonly messages: readonly components["schemas"]["ExecutionMessage"][];
         };
-        /** SuccessfulPoll[Literal['fit'], FitOutput] */
+        /**
+         * SuccessfulPoll[Literal['fit'], FitOutput]
+         * @description A published scientific result and the complete execution log of its call.
+         */
         readonly SuccessfulPoll_Literal__fit___FitOutput_: {
             readonly call_id: components["schemas"]["CallId-Output"];
             /**
@@ -7598,7 +7848,10 @@ export interface components {
             /** Messages */
             readonly messages: readonly components["schemas"]["ExecutionMessage"][];
         };
-        /** SuccessfulPoll[Literal['model_diff'], ModelDiffOutput] */
+        /**
+         * SuccessfulPoll[Literal['model_diff'], ModelDiffOutput]
+         * @description A published scientific result and the complete execution log of its call.
+         */
         readonly SuccessfulPoll_Literal__model_diff___ModelDiffOutput_: {
             readonly call_id: components["schemas"]["CallId-Output"];
             /**
@@ -7617,7 +7870,10 @@ export interface components {
             /** Messages */
             readonly messages: readonly components["schemas"]["ExecutionMessage"][];
         };
-        /** SuccessfulPoll[Literal['prepare_data'], PrepareDataOutput] */
+        /**
+         * SuccessfulPoll[Literal['prepare_data'], PrepareDataOutput]
+         * @description A published scientific result and the complete execution log of its call.
+         */
         readonly SuccessfulPoll_Literal__prepare_data___PrepareDataOutput_: {
             readonly call_id: components["schemas"]["CallId-Output"];
             /**
@@ -7636,7 +7892,10 @@ export interface components {
             /** Messages */
             readonly messages: readonly components["schemas"]["ExecutionMessage"][];
         };
-        /** SuccessfulPoll[Literal['simulate'], SimulateOutput] */
+        /**
+         * SuccessfulPoll[Literal['simulate'], SimulateOutput]
+         * @description A published scientific result and the complete execution log of its call.
+         */
         readonly SuccessfulPoll_Literal__simulate___SimulateOutput_: {
             readonly call_id: components["schemas"]["CallId-Output"];
             /**

@@ -15,7 +15,7 @@ from grassmoth.models.ssm.dynamics.simulator import (
     SimulationConfig,
     simulate,
 )
-from tests.support.dynamics import DenseLinear, reference_vector_field
+from grassmoth_test_support.dynamics import DenseLinear, reference_vector_field
 
 
 def _linear_setup():

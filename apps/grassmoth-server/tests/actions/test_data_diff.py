@@ -39,8 +39,9 @@ from grassmoth_server.study.errors import StudyLookupError
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
-from tests.support.action import applied_record, empty_simulation_summary
-from tests.support.git import artifact_revisions, git_oid
+from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
+from grassmoth_server_test_support.git import artifact_revisions
+from grassmoth_test_support.git import git_oid
 
 
 def _dataset(values, *, number=1, times=None, variable=None):
@@ -269,7 +270,7 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
         SemanticExtractionSpec,
     )
     from grassmoth_server.storage import paths as data_module
-    from tests.support.helpers import make_model
+    from grassmoth_test_support.helpers import make_model
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, history = ArtifactStore("DIFF"), StudyRepository("DIFF")

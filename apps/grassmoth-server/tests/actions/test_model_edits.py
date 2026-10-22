@@ -20,7 +20,8 @@ from grassmoth_server.actions.edit_model import edit_model
 from grassmoth_server.actions.messages import edit_messages
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import Applied, Rejected
-from tests.support.helpers import make_model, write_question
+from grassmoth_server_test_support.helpers import write_question
+from grassmoth_test_support.helpers import make_model
 
 pytestmark = pytest.mark.contract
 

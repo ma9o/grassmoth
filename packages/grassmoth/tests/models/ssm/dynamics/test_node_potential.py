@@ -19,8 +19,8 @@ from grassmoth.models.ssm.dynamics.spec import DynamicsSpec, compile_dynamics
 from grassmoth.models.ssm.dynamics.vector_field import VectorFieldArgs
 from grassmoth.models.ssm.execution.dynamical_model import continuous_state_evolution
 from grassmoth.models.structure import StructuralSelection, selected_edges
-from tests.support.dynamics import linear_term, potential_term
-from tests.support.model import load_model_fixture
+from grassmoth_test_support.dynamics import linear_term, potential_term
+from grassmoth_test_support.model import load_model_fixture
 
 
 def _directed_edges_cannot_be_reinterpreted_as_potentials_model_fixture() -> DynamicalModelSpec:

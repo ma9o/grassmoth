@@ -23,7 +23,7 @@ from grassmoth.models.ssm.execution.observation_distributions import (
     to_native,
 )
 from grassmoth.models.ssm.execution.observation_model import compile_observation_model
-from tests.support.observation import (
+from grassmoth_test_support.observation import (
     mean_density,
     mean_sampler,
     observation_kernel,
@@ -31,7 +31,7 @@ from tests.support.observation import (
 )
 
 if TYPE_CHECKING:
-    from tests.support.observation import ObservationParameters
+    from grassmoth_test_support.observation import ObservationParameters
 
 
 @pytest.mark.inference(concern="sampling")

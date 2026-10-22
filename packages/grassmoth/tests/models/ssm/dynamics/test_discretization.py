@@ -9,7 +9,12 @@ import pytest
 from grassmoth.artifacts.identity import scientific_id
 from grassmoth.models.ssm.dynamics.intervention import Intervention
 from grassmoth.models.ssm.dynamics.vector_field import VectorField, VectorFieldArgs
-from tests.support.dynamics import DenseLinear, hill_term, interaction_term, reference_vector_field
+from grassmoth_test_support.dynamics import (
+    DenseLinear,
+    hill_term,
+    interaction_term,
+    reference_vector_field,
+)
 
 pytestmark = pytest.mark.inference(concern="simulation")
 

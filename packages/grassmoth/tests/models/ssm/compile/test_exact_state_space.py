@@ -37,10 +37,9 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
 )
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.helpers import make_model
-from tests.support.inference import bind_panel_fixture, compile_fit_fixture
+from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
 
 """Declared deterministic state semantics survive compilation and posterior sampling."""
 
@@ -223,11 +222,9 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
 
 
 def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
-    from packages.grassmoth.tests.models.ssm.preparation.test_input_trajectories import (
-        _model as input_model,
-    )
+    from grassmoth_test_support.input_trajectories import deterministic_input_model
 
-    compiled, problem = _problem(input_model())
+    compiled, problem = _problem(deterministic_input_model())
     target = problem.runtime
     assert problem.exact_constraints is not None
     input_index = next(i for i, s in enumerate(compiled.states) if s.is_input)
@@ -421,7 +418,7 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
         compute_budget=COMPUTE_BUDGET,
         sampler=SamplerSpec(),
         clock=lambda: 0.0,
-        compiler=compile_staged,
+        compiler=compile_program,
         prepare_program=prepare_program,
         logger=logging.getLogger(__name__),
         wall_clock=lambda: datetime.now(UTC),

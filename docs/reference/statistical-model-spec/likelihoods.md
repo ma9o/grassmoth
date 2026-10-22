@@ -28,25 +28,4 @@ For endogenous constructs, particle inference supports direct point bindings `De
 
 The numerical backend derives its family and response from these expressions, and it rejects unsupported formulas before fitting.
 
-> The sections below are generated from the [law specifications](../../../packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py) and [dtype constraints](../../../packages/grassmoth/src/grassmoth/artifacts/observations/dtypes.py).
-> Edit those Python owners and run `bun run docs:distribution` from the repository root instead of editing them manually.
-
-## Dtype-to-Distribution Mapping
-
-The model author writes each indicator's law and coefficients through `edit_model`. Its `measurement_dtype` limits the families that law may use, and an indicator with any other family is rejected. The first column is the usual choice; the family and link names describe the law's numerical lowering.
-
-| `measurement_dtype` | Default distribution | Link | Alternatives |
-|---|---|---|---|
-| `continuous` | `gaussian` | `identity` | `student_t` (`identity`), `gamma` (`log` or `inverse`), `beta` (`logit` or `probit`), `delta` (`identity`) |
-| `binary` | `bernoulli` | `logit` | `bernoulli` with `probit`, `delta` (`identity`) |
-| `count` | `poisson` | `log` | `negative_binomial` (`log`), `delta` (`identity`) |
-| `ordinal` | `ordered_logistic` | `cumulative_logit` | `delta` (`identity`) |
-| `categorical` | `categorical` | `softmax` | `ordered_logistic` (`cumulative_logit`) when categories are substantively ordered, `delta` (`identity`) |
-
-## Distribution Families
-
-`DistributionFamily` names the internal numerical emission kernels: `delta`, `gaussian`, `student_t`, `poisson`, `gamma`, `bernoulli`, `negative_binomial`, `beta`, `ordered_logistic`, and `categorical`.
-
-## Link Functions
-
-`LinkFunction` names the internal responses derived from conditional expressions: `identity`, `log`, `inverse`, `logit`, `probit`, `cumulative_logit`, and `softmax`.
+For the supported families and links, read the [law specifications](../../../packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py). The [measurement dtype definitions](../../../packages/grassmoth/src/grassmoth/artifacts/observations/dtypes.py) own the allowed observation-family combinations.

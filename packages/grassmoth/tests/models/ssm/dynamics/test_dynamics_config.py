@@ -7,9 +7,9 @@ from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.models.ssm.dynamics.cache_identity import dynamics_spec_to_dict
 from grassmoth.models.ssm.dynamics.spec import DynamicsSpec, compile_dynamics
 from grassmoth.models.structure import StructuralSelection, selected_state_ids
-from tests.support.dynamics import decay_term, hill_term, potential_term
-from tests.support.inference import compile_model_fixture
-from tests.support.model import load_model_fixture
+from grassmoth_test_support.dynamics import decay_term, hill_term, potential_term
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import load_model_fixture
 
 
 def _scientific_model_roundtrip_preserves_derived_dynamics_model_fixture() -> DynamicalModelSpec:

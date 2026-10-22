@@ -1,7 +1,5 @@
 """Scientific entities gain detail through stable component references."""
 
-from pathlib import Path
-
 import numpyro.distributions as dist
 import pytest
 from pydantic import TypeAdapter, ValidationError
@@ -13,9 +11,10 @@ from grassmoth.artifacts.model.expressions import coefficient, hill, state
 from grassmoth.artifacts.model.likelihood import ObservationLawSpec
 from grassmoth.models.parameters import require_priors
 from grassmoth.models.structure import StructuralSelection
-from tests.support.helpers import graph_constructs
-from tests.support.inference import compile_model_fixture
-from tests.support.model import load_model_fixture
+from grassmoth_test_support.fixtures import model_fixture_json
+from grassmoth_test_support.helpers import graph_constructs
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import load_model_fixture
 
 
 def _entities_gain_detail_with_one_owner_and_native_prior_with_parameter_distributions() -> (
@@ -92,13 +91,7 @@ def test_entities_gain_detail_with_one_owner_and_native_prior():
     payload = before.model_dump(mode="python")
     next(iter(graph_constructs(payload)[1]["indicators"].values()))["likelihood"] = {
         "law": TypeAdapter(ObservationLawSpec)
-        .validate_json(
-            (
-                Path(__file__).resolve().parents[1]
-                / "fixtures/models"
-                / "common/y_gaussian_observation_law.json"
-            ).read_text()
-        )
+        .validate_json(model_fixture_json("common/y_gaussian_observation_law.json"))
         .model_dump(mode="json"),
         "reasoning": "Continuous measurement",
     }
@@ -178,11 +171,9 @@ def test_inconsistent_enrichment_is_rejected(change):
         next(iter(graph_constructs(payload)[1]["indicators"].values()))["likelihood"] = {
             "law": TypeAdapter(ObservationLawSpec)
             .validate_json(
-                (
-                    Path(__file__).resolve().parents[1]
-                    / "fixtures/models"
-                    / "additive_model/inconsistent_enrichment_is_rejected_observation_law.json"
-                ).read_text()
+                model_fixture_json(
+                    "additive_model/inconsistent_enrichment_is_rejected_observation_law.json"
+                )
             )
             .model_dump(mode="json"),
             "reasoning": "Wrong type",
@@ -192,7 +183,7 @@ def test_inconsistent_enrichment_is_rejected(change):
 
 
 def test_shared_endpoints_round_trip_once_and_resolve_forward_references():
-    from tests.support.helpers import make_model
+    from grassmoth_test_support.helpers import make_model
 
     dynamical_model_spec = make_model(["A", "B", "Y"], [("A", "Y"), ("B", "Y")])
     assert dynamical_model_spec.edges[0].effect is dynamical_model_spec.edges[1].effect
@@ -221,7 +212,7 @@ def test_shared_endpoints_round_trip_once_and_resolve_forward_references():
 
 
 def test_endpoint_identity_rejects_conflicting_definitions():
-    from tests.support.helpers import make_model
+    from grassmoth_test_support.helpers import make_model
 
     dynamical_model_spec = make_model(["A", "B", "Y"], [("A", "Y"), ("B", "Y")])
     payload = dynamical_model_spec.model_dump(mode="json")
@@ -231,7 +222,7 @@ def test_endpoint_identity_rejects_conflicting_definitions():
 
 
 def test_graph_membership_follows_edges_and_revisions_preserve_connectivity():
-    from tests.support.helpers import make_model
+    from grassmoth_test_support.helpers import make_model
 
     dynamical_model_spec = make_model(["A", "B", "C", "D"], [("A", "B"), ("B", "C"), ("C", "D")])
     with pytest.raises(ValidationError, match="connected causal graph"):

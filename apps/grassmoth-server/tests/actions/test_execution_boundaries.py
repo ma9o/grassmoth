@@ -19,11 +19,12 @@ from grassmoth_server.actions.runners import run_action
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.state import StudyState
-from tests.support.action import applied_record, edit_and_check, question_root
-from tests.support.data import metadata_for_model
-from tests.support.git import artifact_revision, artifact_revisions
-from tests.support.helpers import fixture_entity_id, make_model, run_async, write_question
-from tests.support.model import x_y_model
+from grassmoth_server_test_support.action import applied_record, edit_and_check, question_root
+from grassmoth_server_test_support.data import metadata_for_model
+from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
+from grassmoth_server_test_support.helpers import run_async, write_question
+from grassmoth_test_support.helpers import fixture_entity_id, make_model
+from grassmoth_test_support.model import x_y_model
 
 pytestmark = pytest.mark.contract
 
@@ -100,7 +101,7 @@ def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monke
 
     from grassmoth.actions.fit import execution
     from grassmoth_server.study.persistence import store as store_module
-    from tests.support.runner_fixtures import panel_frame, panel_metadata
+    from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
 
     event_loop_thread = get_ident()
     read_model = store_module.read_model
@@ -216,7 +217,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
 
     from grassmoth.actions.fit.conditioning import condition_model
     from grassmoth.models.ssm.inference.types import JointPosteriorDraws
-    from tests.support.inference import (
+    from grassmoth_test_support.inference import (
         compile_model_fixture,
         parameter_draws,
         particle_posterior,
@@ -236,7 +237,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
         )
         from grassmoth.actions.checks import fit_check_report
         from grassmoth.actions.contracts.bodies import FitOutput
-        from tests.support.inference import _report
+        from grassmoth_test_support.inference import _report
 
         return FitOutput(
             dynamical_model_spec=conditioned,

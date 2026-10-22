@@ -128,7 +128,6 @@ runtime-evaluated-base-classes = [
     "typing_extensions.TypedDict",
     "grassmoth.artifacts.base.Value",
     "grassmoth.public.Value",
-    "grassmoth_server.public.contracts.Value",
     "grassmoth_server.actions.contracts.effects.ActionEffects",
     "grassmoth_server.study.records.ExtractionWorkerResult",
     "grassmoth_server.study.records.AttemptMetadata",
@@ -183,7 +182,7 @@ treat-property-methods-as-class-attributes = false
 ban-relative-imports = "parents"
 
 [tool.ruff.lint.isort]
-known-first-party = ["grassmoth", "grassmoth_server"]
+known-first-party = ["grassmoth", "grassmoth_server", "grassmoth_test_support", "grassmoth_server_test_support"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -191,9 +190,8 @@ indent-style = "space"
 skip-magic-trailing-comma = false
 
 [tool.vulture]
-# src must prove its own liveness. scripts/checks/run_vulture.py checks evaluation,
-# scripts, notebooks, and tests as independent ownership seams; none of them can
-# keep a definition in src alive.
+# scripts/checks/run_vulture.py checks source, scripts, notebooks, and tests as
+# independent ownership seams. External callers cannot make source code live.
 paths = ["packages/grassmoth/src", "apps/grassmoth-server/src"]
 min_confidence = 60
 sort_by_size = true
@@ -241,10 +239,10 @@ ignore_names = [
 
 [tool.ty.environment]
 python-version = "3.12"
-extra-paths = ["apps/grassmoth-server", "apps/grassmoth-server/notebooks", "."]
+extra-paths = ["packages/grassmoth/tests", "apps/grassmoth-server/tests", "apps/grassmoth-server", "apps/grassmoth-server/notebooks", "."]
 
 [tool.ty.src]
-include = ["packages/grassmoth", "apps/grassmoth-server", "tests", "conftest.py", "scripts/check_python.py"]
+include = ["packages/grassmoth", "apps/grassmoth-server", "conftest.py", "scripts/check_python.py"]
 exclude = ["**/.venv/**", "**/node_modules/**"]
 
 [tool.ty.rules]
@@ -354,8 +352,8 @@ replace-imports-with-any = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = [".", "apps/grassmoth-server"]
-testpaths = ["packages/grassmoth/tests", "apps/grassmoth-server/tests", "tests"]
+pythonpath = [".", "packages/grassmoth/tests", "apps/grassmoth-server/tests", "apps/grassmoth-server"]
+testpaths = ["packages/grassmoth/tests", "apps/grassmoth-server/tests"]
 addopts = "--import-mode=importlib -n auto -m 'not (inference or workflow)' --strict-markers --tb=short -ra --instafail --timeout=300 --durations=10 --jaxtyping-packages=grassmoth.models.ssm.covariance,grassmoth.models.ssm.dynamics.vector_field,grassmoth.models.ssm.execution.emissions,grassmoth.models.ssm.inference.samplers.particle.math,beartype.beartype"
 markers = [
     "contract: isolated routing, validation, schema, identity, and projection without scientific numerical execution",

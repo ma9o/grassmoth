@@ -11,10 +11,11 @@ from grassmoth.models.inputs import input_fingerprints
 from grassmoth_server.actions.contracts.requests import EditModelRequest
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.state import ArtifactRecord, StudyState, is_stale
-from tests.support.action import edit_and_check, question_root
-from tests.support.git import artifact_revision, artifact_revisions, git_oid
-from tests.support.helpers import fixture_entity_id, make_model
-from tests.support.model import x_y_model
+from grassmoth_server_test_support.action import edit_and_check, question_root
+from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
+from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.helpers import fixture_entity_id, make_model
+from grassmoth_test_support.model import x_y_model
 
 pytestmark = pytest.mark.contract
 
@@ -66,7 +67,7 @@ def test_full_model_write_keeps_the_named_base_without_a_head_gate(workspace):
         ),
         state,
     )
-    from tests.support.action import model_findings
+    from grassmoth_server_test_support.action import model_findings
 
     checks, _ = model_findings(
         workspace, state.with_artifacts(second.effects.produced), action="edit_model"
@@ -90,7 +91,7 @@ def test_model_input_identity_preserves_findings_and_original_pins():
 
 
 def test_statistical_enrichment_preserves_structural_and_measurement_inputs():
-    from tests.support.helpers import make_model
+    from grassmoth_test_support.helpers import make_model
 
     measured = make_model(["X", "Y"], [("X", "Y")])
     specified = x_y_model()
@@ -130,7 +131,7 @@ def test_model_diff_addresses_question_and_model_without_checkpoint_traversal(wo
     from grassmoth_server.study.errors import StudyLookupError
     from grassmoth_server.study.persistence.store import ArtifactStore
     from grassmoth_server.study.records import AttemptRecord, EditAttempt, Raised
-    from tests.support.action import applied_record
+    from grassmoth_server_test_support.action import applied_record
 
     question = QuestionSpec(text="Does X change Y?", outcome=fixture_entity_id("construct", "Y"))
     root = question_root(workspace, question)

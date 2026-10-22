@@ -24,10 +24,10 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState, apply_effects
-from tests.support.action import applied_record, edit_and_check, question_root
-from tests.support.data import metadata_for_model
-from tests.support.git import artifact_revision, artifact_revisions
-from tests.support.helpers import make_model
+from grassmoth_server_test_support.action import applied_record, edit_and_check, question_root
+from grassmoth_server_test_support.data import metadata_for_model
+from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
+from grassmoth_test_support.helpers import make_model
 
 pytestmark = pytest.mark.contract
 
@@ -317,7 +317,7 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
         root,
     )
     state = apply_effects(root, effects.effects.produced)
-    from tests.support.runner_fixtures import panel_frame
+    from grassmoth_server_test_support.runner_fixtures import panel_frame
 
     variables = metadata_for_model(dynamical_model_spec).variables
     frame = panel_frame(n_days=3).with_columns(
@@ -344,7 +344,7 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
         parquet_files={"panel.parquet": frame},
     )
     from grassmoth.artifacts.observations.preparation import DataPreparationResult
-    from tests.support.action import prepared_profile
+    from grassmoth_server_test_support.action import prepared_profile
 
     prepared_profile(
         workspace,
@@ -367,7 +367,7 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
         ),
         state,
     )
-    from tests.support.action import model_findings
+    from grassmoth_server_test_support.action import model_findings
 
     checks, _ = model_findings(
         workspace, state.with_artifacts(effects.effects.produced), action="edit_model"

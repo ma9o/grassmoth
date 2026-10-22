@@ -1,0 +1,21 @@
+{
+  "action": "edit_question",
+  "input": {
+    "question": {
+      "text": "Compare fixed and learned diffusion scales with dense and sparse observations of two nonlinear stochastic paths; identify the input effect on y.",
+      "outcome": "construct:y",
+      "queries": {
+        "input contrast": {
+          "start": "2020-01-01",
+          "horizon": "16d",
+          "interventions": [
+            {
+              "target": "construct:u",
+              "value": 1.0
+            }
+          ]
+        }
+      }
+    }
+  }
+}

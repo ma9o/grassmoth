@@ -2,14 +2,13 @@
 
 vulture only scans .py files. This wrapper extracts code cells from every
 notebook under ``notebooks/`` into a temporary cache of ``.py`` shadows. The
-authoritative source pass scans ``[tool.vulture].paths`` and the maintained
-evaluation application that consumes its public library. Evaluation code,
-scripts, notebooks, and tests each run in a separate Vulture process that may
+authoritative source pass scans ``[tool.vulture].paths``. Scripts, notebooks,
+and tests each run in a separate Vulture process that may
 analyze source code to understand the protocols it consumes but reports only
-definitions owned by that seam. The five passes run concurrently with separate
+definitions owned by that seam. The passes run concurrently with separate
 reference caches; their output retains ownership order. Tests, scripts and
-notebooks cannot make source definitions live; the library's maintained callers
-can. References cannot leak between non-source seams.
+notebooks cannot make source definitions live. References cannot leak between
+non-source seams.
 
 Two kinds of phantom usage are emitted into the cache so vulture stops
 flagging legitimate-but-statically-invisible references:
@@ -61,12 +60,11 @@ SOURCE_ROOTS = (REPO_ROOT / "packages/grassmoth/src", REPO_ROOT / "apps/grassmot
 NOTEBOOKS_DIR = REPO_ROOT / "apps/grassmoth-server/notebooks"
 CACHE_ROOT = REPO_ROOT / ".vulture_cache"
 SEAM_PATHS = (
-    "apps/grassmoth-server/evaluation",
     "apps/grassmoth-server/scripts",
     "apps/grassmoth-server/notebooks",
     "tests",
 )
-TEST_PATHS = ("apps/grassmoth-server/tests", "packages/grassmoth/tests", "tests")
+TEST_PATHS = ("apps/grassmoth-server/tests", "packages/grassmoth/tests")
 PYPROJECT = REPO_ROOT / "pyproject.toml"
 
 BACKTICK_SPAN = re.compile(r"`([^`\n]+)`")
@@ -588,11 +586,7 @@ def _run_pass(
             if seam_path is not None
             else source_paths
         )
-        analysis_paths = (
-            [*source_paths, *owned_paths]
-            if seam_path is not None
-            else [*source_paths, "apps/grassmoth-server/evaluation"]
-        )
+        analysis_paths = [*source_paths, *owned_paths] if seam_path is not None else source_paths
         pass_cache_dir = cache_dir / (seam_path if seam_path is not None else "src")
         _build_phantom_refs(pass_cache_dir, analysis_paths)
         report_roots = owned_paths

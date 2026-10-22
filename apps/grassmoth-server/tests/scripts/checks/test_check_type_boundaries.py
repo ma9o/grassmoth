@@ -560,7 +560,7 @@ def test_json_decoding_obeys_whole_role_parse_rules(directory: str) -> None:
     [
         "src/grassmoth_server/study/new_reader.py",
         "scripts/fixtures/example.py",
-        "evaluation/fixtures/example.py",
+        "benchmarks/fixtures/example.py",
         "notebooks/example.py",
         "tests/schemas/example.py",
     ],

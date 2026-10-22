@@ -8,8 +8,8 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from tests.support.artifact_contract_support import validate_artifact_payload
-from tests.support.helpers import make_model
+from grassmoth_server_test_support.artifact_contract_support import validate_artifact_payload
+from grassmoth_test_support.helpers import make_model
 
 pytestmark = pytest.mark.contract
 

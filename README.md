@@ -41,7 +41,7 @@ The system is a continuous-discrete nonlinear state-space model: the latent cons
 </p>
 <!-- docs-latex:end -->
 
-Observations follow indicator-specific likelihoods (see the supported [distribution families](docs/reference/statistical-model-spec/likelihoods.md#distribution-families) and [link functions](docs/reference/statistical-model-spec/likelihoods.md#link-functions)):
+Observations follow indicator-specific [observation laws](packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py):
 
 <!-- docs-latex:start eyJkaXNwbGF5Ijp0cnVlLCJsYXRleCI6InlfaSh0KSBcXG1pZCBcXGJvbGRzeW1ib2x7XFxldGF9KHQpIFxcc2ltIEZfaVxcIVxcbGVmdChnX2leey0xfVxcbGVmdCgoXFxib2xkc3ltYm9se1xcTGFtYmRhfVxcYm9sZHN5bWJvbHtcXGV0YX0odCkrXFxib2xkc3ltYm9se1xcbXV9KV9pXFxyaWdodCk7IFxcdGhldGFfaVxccmlnaHQpIn0 -->
 <p align="center">
@@ -72,6 +72,6 @@ See the [dev setup guide](docs/guides/dev_setup.md) for full details including e
 - **How each action works:** [`edit_question`](docs/assets/action-flows/edit-question.svg), [edit_model](docs/assets/action-flows/edit-model.svg), [prepare_data](docs/assets/action-flows/prepare-data.svg), [fit](docs/assets/action-flows/fit.svg), [simulate](docs/assets/action-flows/simulate.svg), [data_diff](docs/assets/action-flows/data-diff.svg) and [model_diff](docs/assets/action-flows/model-diff.svg).
 - **[Bayesian workflow](docs/assets/bayesian-workflow.svg):** the book's workflow mapped onto the seven actions, including what is still missing.
 - **[Assumptions and limits](docs/assumptions.md):** the modeling commitments behind every result.
-- **Supported laws:** [likelihoods](docs/reference/statistical-model-spec/likelihoods.md) and [priors](docs/reference/statistical-model-spec/parameters.md), generated from the code.
+- **Supported laws:** the library's [observation laws](packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py) and [prior authoring definitions](packages/grassmoth/src/grassmoth/artifacts/probability/native.py).
 - **API:** one POST per action returns running progress or the complete saved result; the remaining routes serve the slim timeline, workspaces and uploads. See the Swagger UI at `http://localhost:8100/api/docs` while the tool server runs, and the generated [agent skill](.agents/skills/grassmoth-study-api/SKILL.md).
 - **Guides:** [dev setup](docs/guides/dev_setup.md), [integration testing](docs/guides/agentic_integration_testing.md), [code generation](docs/guides/codegen.md) and [benchmarks](docs/guides/running_evals.md).

@@ -4,9 +4,9 @@ from typing import cast
 
 from fastapi import Request
 
-from grassmoth_server.study.interface import TemporalClientProvider
+from grassmoth_server.study.calls import TemporalClientProvider
 
 
-def study_clients(request: Request) -> TemporalClientProvider:
+def temporal_client(request: Request) -> TemporalClientProvider:
     """Retrieve the application's shared Temporal client provider."""
-    return cast("TemporalClientProvider", request.app.state.study_clients)
+    return cast("TemporalClientProvider", request.app.state.temporal_client)

@@ -29,7 +29,7 @@ from grassmoth_server.actions.temporal.llm.storage import read_subroutine_json
 from grassmoth_server.llm.openrouter import create_openrouter_client
 from grassmoth_server.llm.specs import EmbeddedLLMSpec
 from grassmoth_server.storage import backend as storage
-from tests.support.helpers import run_async
+from grassmoth_server_test_support.helpers import run_async
 
 pytestmark = pytest.mark.timeout(240)
 

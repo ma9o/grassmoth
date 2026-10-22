@@ -26,8 +26,8 @@ from grassmoth.artifacts.model.parameter_spec import ParameterSpec
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.predictive.statistics import observation_signal_and_variance
 from grassmoth.models.ssm.predictive.types import PredictiveDraws, PredictiveTrajectory
-from tests.support.inference import compile_model_fixture
-from tests.support.model import (
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import (
     construct_named,
     indicator_named,
     likelihood_named,
@@ -373,7 +373,7 @@ def test_undefined_student_moments_produce_an_explicit_diagnostic():
 def test_diagnostic_noise_matches_point_and_interval_execution(
     families, interval, expected_variance, model_fixture_payload
 ):
-    from tests.support.inference import make_observation_support_runtime
+    from grassmoth_test_support.inference import make_observation_support_runtime
 
     channels = len(families)
     spec = model_fixture_payload()

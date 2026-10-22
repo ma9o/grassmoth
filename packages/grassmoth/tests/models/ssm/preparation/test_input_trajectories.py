@@ -13,10 +13,7 @@ from pydantic import ValidationError
 from grassmoth.actions.fit.conditioning import condition_model
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from grassmoth.artifacts.model.expressions import state
-from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
-from grassmoth.artifacts.probability.joint_layout import JointLawLayout
 from grassmoth.artifacts.scenarios import StateAssignment
 from grassmoth.models.ssm.compile.inputs import IncompleteModel, compile_model
 from grassmoth.models.ssm.inference.types import JointPosteriorDraws
@@ -33,80 +30,20 @@ from grassmoth.models.ssm.preparation.binding import (
 )
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
 from grassmoth.models.structure import StructuralSelection
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.inference import compile_model_fixture, parameter_draws, particle_posterior
-from tests.support.model import x_y_model
+from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.inference import (
+    compile_model_fixture,
+    parameter_draws,
+    particle_posterior,
+)
+from grassmoth_test_support.input_trajectories import deterministic_input_model
 
 _ORIGIN = datetime(2026, 1, 1, tzinfo=UTC)
 
 
-def _model(*, measured=False, time_origin="relative"):
-    dynamical_model_spec = x_y_model()
-    source = dynamical_model_spec.constructs[0]
-    layout = JointLawLayout(
-        parameters=(),
-        constructs=(source.id,),
-        time_points=(0.0, 0.5, 2.5),
-        time_origin=time_origin,
-        labels={},
-    )
-    source = source.revised(
-        role="exogenous",
-        dynamics=(),
-        coefficients=(),
-        distribution=layout.distribution_id,
-        indicators=(
-            source.indicators[0].revised(
-                likelihood=LikelihoodSpec(
-                    law=DeltaLawSpec(v=state(source.id)), reasoning="Exact known input"
-                ),
-            ),
-        )
-        if measured
-        else (),
-    )
-    target = dynamical_model_spec.constructs[1]
-    target = target.revised(
-        indicators=tuple(
-            indicator.revised(observation=indicator.observation.revised(aggregation="last"))
-            for indicator in target.indicators
-        )
-    )
-    parameters = tuple(
-        p for p in dynamical_model_spec.parameters if p.name not in {"rho_X", "sigma_X"}
-    )
-    return dynamical_model_spec.with_entities(
-        constructs=(source, target),
-        edges=replace_constructs(dynamical_model_spec.edges, (source, target)),
-        parameters=parameters,
-        distributions={
-            **{
-                key: value
-                for key, value in dynamical_model_spec.distributions.items()
-                if key in {p.distribution for p in parameters}
-            },
-            layout.distribution_id: dist.Delta(jnp.array([1.0, 3.0, 2.0]), event_dim=1),
-        },
-        law_layouts={layout.distribution_id: layout},
-    )
-
-
 @pytest.mark.contract
-def test_inputs_require_deterministic_laws_and_keep_independent_coordinates(tmp_path, monkeypatch):
-    dynamical_model_spec = _model()
-    from grassmoth_server.storage import paths as data
-    from grassmoth_server.study.persistence.store import ArtifactStore
-    from grassmoth_server.study.queries.lineage import law_provenance
-
-    monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
-    store = ArtifactStore("INPUTLAW")
-    record = store.write_artifact(
-        "model",
-        derived_from={},
-        produced_by="edit_model",
-        json_files={"model.json": dynamical_model_spec.model_dump(mode="json")},
-    )
-    assert law_provenance(store, record, dynamical_model_spec, None).kind == "authored"
+def test_inputs_require_deterministic_laws_and_keep_independent_coordinates():
+    dynamical_model_spec = deterministic_input_model()
     compiled_dynamical_model = compile_model_fixture(dynamical_model_spec)
     assert compiled_dynamical_model.states[0].is_input
     assert (
@@ -154,7 +91,9 @@ def test_inputs_require_deterministic_laws_and_keep_independent_coordinates(tmp_
 
 @pytest.mark.inference(concern="sampling")
 def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_readings():
-    compiled_dynamical_model = compile_model_fixture(_model(measured=True, time_origin=_ORIGIN))
+    compiled_dynamical_model = compile_model_fixture(
+        deterministic_input_model(measured=True, time_origin=_ORIGIN)
+    )
     variables = tuple(item.observation for item in compiled_dynamical_model.observations)
     rows = pl.DataFrame(
         [
@@ -208,7 +147,7 @@ def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_re
 @pytest.mark.inference(concern="predictive")
 @pytest.mark.inference(concern="simulation")
 def test_unmeasured_model_inputs_drive_both_simulation_arms_and_survive_conditioning():
-    dynamical_model_spec = _model()
+    dynamical_model_spec = deterministic_input_model()
     compiled_dynamical_model = compile_model_fixture(dynamical_model_spec)
     source = dynamical_model_spec.constructs[0]
     batch = generate_simulation_batch(

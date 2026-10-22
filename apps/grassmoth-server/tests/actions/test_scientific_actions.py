@@ -23,12 +23,18 @@ from grassmoth_server.actions.contracts.requests import SimulateRequest
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState
-from tests.support.action import applied_record, empty_simulation_summary
-from tests.support.git import artifact_revision, commit_id, git_oid
-from tests.support.helpers import write_question
-from tests.support.inference import compile_model_fixture, parameter_draws, particle_posterior
-from tests.support.model import stress_sleep_causal_model, stress_sleep_model, x_model, x_y_model
-from tests.support.runner_fixtures import panel_metadata
+from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
+from grassmoth_server_test_support.git import artifact_revision, commit_id
+from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.model import stress_sleep_causal_model, stress_sleep_model
+from grassmoth_server_test_support.runner_fixtures import panel_metadata
+from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.inference import (
+    compile_model_fixture,
+    parameter_draws,
+    particle_posterior,
+)
+from grassmoth_test_support.model import x_model, x_y_model
 
 if TYPE_CHECKING:
     from grassmoth_server.actions.contracts.identity import ArtifactId
@@ -94,9 +100,9 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     from grassmoth_server.actions.runners import run_action_locally
     from grassmoth_server.storage import paths as data_module
     from grassmoth_server.study.persistence.history import StudyRepository
-    from tests.support.helpers import run_async
-    from tests.support.inference import inference_metadata
-    from tests.support.runner_fixtures import panel_frame
+    from grassmoth_server_test_support.helpers import run_async
+    from grassmoth_server_test_support.inference import inference_metadata
+    from grassmoth_server_test_support.runner_fixtures import panel_frame
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, journal = ArtifactStore("TEST"), StudyRepository("TEST")
@@ -111,7 +117,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
 
     dynamical_model_spec = read_model(store, definition.revision)
     from grassmoth.artifacts.model.question import QuestionSpec
-    from tests.support.model import construct_named
+    from grassmoth_test_support.model import construct_named
 
     question = write_question(
         store,
@@ -136,7 +142,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     if fitted_laws:
         from grassmoth.actions.fit.conditioning import condition_model
         from grassmoth.models.ssm.inference.types import JointPosteriorDraws
-        from tests.support.inference import parameter_draws
+        from grassmoth_test_support.inference import parameter_draws
 
         dynamical_model_spec, _ = condition_model(
             dynamical_model_spec,
@@ -373,7 +379,7 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
     from grassmoth.models.ssm import compiled_access as numeric
     from grassmoth_server.compute.resources import read_compute_budget
     from grassmoth_server.storage import paths as data_module
-    from tests.support.inference import inference_log
+    from grassmoth_server_test_support.inference import inference_log
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     dynamical_model_spec = x_y_model()
@@ -405,7 +411,7 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
     assert not isinstance(evidence, ObservationPreflightFailure)
     from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
     from grassmoth.artifacts.simulation import SimulationReport
-    from tests.support.inference import _report
+    from grassmoth_test_support.inference import _report
 
     generated = SimulationReport(
         summary=empty_simulation_summary(),
@@ -475,8 +481,8 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
 def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
     from grassmoth.artifacts.observations.preparation import DataPreparationResult
     from grassmoth_server.storage import paths as data_module
-    from tests.support.action import prepared_profile
-    from tests.support.runner_fixtures import seed_panel
+    from grassmoth_server_test_support.action import prepared_profile
+    from grassmoth_server_test_support.runner_fixtures import seed_panel
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("TEST")
@@ -504,7 +510,7 @@ def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
     )
     from grassmoth.artifacts.observations.dataset import SelectedObservations
     from grassmoth_server.study.queries.data import read_data_history
-    from tests.support.data import metadata_for_model
+    from grassmoth_server_test_support.data import metadata_for_model
 
     history = read_data_history(
         store, DataRef[GitOid, int](revision=panel.revision, replicate_index=0)
@@ -514,7 +520,7 @@ def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
         SelectedObservations,
     )
     current = state.with_artifacts([revised])
-    from tests.support.action import data_profile
+    from grassmoth_server_test_support.action import data_profile
 
     assert (
         data_profile(

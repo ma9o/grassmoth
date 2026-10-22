@@ -10,7 +10,7 @@ from grassmoth.models.ssm.inference.samplers.pgibbs.parameters import (
     metropolis_kernel,
     nuts_kernel,
 )
-from tests.support.interval_particle import gaussian_interval_case
+from grassmoth_test_support.interval_particle import gaussian_interval_case
 
 pytestmark = [
     pytest.mark.inference(concern="sampling"),

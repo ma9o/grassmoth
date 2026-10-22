@@ -28,12 +28,13 @@ from grassmoth_server.actions.contracts.requests import SimulateRequest
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
-from tests.support.action import applied_record, empty_simulation_summary
-from tests.support.compute import COMPUTE_BUDGET
-from tests.support.data import metadata_for_model
-from tests.support.helpers import make_model, write_question
-from tests.support.inference import compile_model_fixture
-from tests.support.model import x_y_model
+from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
+from grassmoth_server_test_support.data import metadata_for_model
+from grassmoth_server_test_support.helpers import write_question
+from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import x_y_model
 
 pytestmark = pytest.mark.inference(concern="simulation")
 

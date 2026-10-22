@@ -1,7 +1,6 @@
 """Saved model revisions preserve scientific identity and their owned numerical laws."""
 
 from datetime import UTC, datetime
-from pathlib import Path
 
 import jax.numpy as jnp
 import numpy as np
@@ -33,17 +32,20 @@ from grassmoth_server.study.errors import StudyLookupError
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model, read_question
 from grassmoth_server.study.records import Applied, AttemptRecord, EditAttempt, Raised
-from tests.support.action import applied_record, question_root
-from tests.support.git import artifact_revision, commit_id
-from tests.support.helpers import graph_constructs, write_question
-from tests.support.inference import compile_model_fixture
-from tests.support.model import load_model_fixture, x_y_model
+from grassmoth_server_test_support.action import applied_record, question_root
+from grassmoth_server_test_support.git import artifact_revision, commit_id
+from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.model import load_study_model_fixture
+from grassmoth_test_support.fixtures import model_fixture_json
+from grassmoth_test_support.helpers import graph_constructs
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import x_y_model
 
 
 def _fitted_snapshot_keeps_joint_arrays_lazy_and_workspace_bound_complete_test_model() -> (
     DynamicalModelSpec
 ):
-    return load_model_fixture(
+    return load_study_model_fixture(
         "snapshots/fitted_snapshot_keeps_joint_arrays_lazy_and_workspace_bound_complete_test_model.json"
     )
 
@@ -441,13 +443,7 @@ def test_owned_likelihood_survives_reused_names(workspace, monkeypatch):
     payload = _model().model_dump(mode="json")
     next(iter(graph_constructs(payload)[1]["indicators"].values()))["likelihood"] = {
         "law": TypeAdapter(ObservationLawSpec)
-        .validate_json(
-            (
-                Path(__file__).resolve().parents[1]
-                / "fixtures/models"
-                / "common/y_gaussian_observation_law.json"
-            ).read_text()
-        )
+        .validate_json(model_fixture_json("common/y_gaussian_observation_law.json"))
         .model_dump(mode="json"),
         "reasoning": "Test",
     }

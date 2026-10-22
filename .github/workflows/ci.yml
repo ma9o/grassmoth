@@ -40,7 +40,6 @@ jobs:
               - 'pyproject.toml'
               - 'uv.lock'
               - 'conftest.py'
-              - 'tests/**'
               - 'scripts/check_python.py'
               - 'packages/api-types/**'
               - 'package.json'

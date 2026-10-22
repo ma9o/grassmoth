@@ -18,13 +18,14 @@ from grassmoth.artifacts.probability.native import (
 )
 from grassmoth.artifacts.probability.serialization import NumPyroDistribution
 from grassmoth.study.projections.priors import prior_density, quantity_prior_densities
-from tests.support.model import construct_named, load_model_fixture
+from grassmoth_server_test_support.model import load_study_model_fixture
+from grassmoth_test_support.model import construct_named
 
 
 def _quantity_curves_put_authored_laws_on_the_posterior_scale_complete_test_model() -> (
     DynamicalModelSpec
 ):
-    dynamical_model_spec = load_model_fixture(
+    dynamical_model_spec = load_study_model_fixture(
         "snapshots/fitted_snapshot_keeps_joint_arrays_lazy_and_workspace_bound_complete_test_model.json"
     )
     x = construct_named(dynamical_model_spec, "X")

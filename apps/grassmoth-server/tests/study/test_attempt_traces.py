@@ -73,7 +73,7 @@ def test_collects_finalized_traces_and_validates_commit_paths(data_root):
 def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_root):
     del data_root
     from grassmoth_server.study.persistence.store import ArtifactStore
-    from tests.support.helpers import write_question
+    from grassmoth_server_test_support.helpers import write_question
 
     question = write_question(ArtifactStore("ws-trace"))
     previous_state = StudyRepository("ws-trace").state()

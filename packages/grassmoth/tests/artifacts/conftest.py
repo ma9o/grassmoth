@@ -12,7 +12,7 @@ from grassmoth.artifacts.model.indicator import IndicatorPolarity, IndicatorSpec
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec
 from grassmoth.artifacts.observations.semantics import SummaryOperator
 from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
-from tests.support.helpers import fixture_entity_id
+from grassmoth_test_support.helpers import fixture_entity_id
 
 if TYPE_CHECKING:
     from grassmoth.artifacts.observations.dtypes import MeasurementDtype

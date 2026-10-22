@@ -41,7 +41,7 @@ from grassmoth_server.study.records import (
     Raised,
     Rejected,
 )
-from tests.support.action import applied_record, empty_simulation_summary
+from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
 
 pytestmark = pytest.mark.contract
 
@@ -100,7 +100,7 @@ def test_failed_attempt_and_invalid_publication_do_not_advance_scientific_state(
 
 
 def test_out_of_order_publication_selects_submission_order_and_retains_input_parents(study):
-    from tests.support.action import question_root
+    from grassmoth_server_test_support.action import question_root
 
     repository, store = study
     root = question_root("STUDY")
@@ -134,7 +134,7 @@ def test_out_of_order_publication_selects_submission_order_and_retains_input_par
 
     from grassmoth_server.actions.contracts.requests import DataDiffRequest
     from grassmoth_server.study.records import failed_attempt
-    from tests.support.git import git_oid
+    from grassmoth_test_support.git import git_oid
 
     compared = repository.append(
         AttemptRecord(
@@ -168,7 +168,7 @@ def test_out_of_order_publication_selects_submission_order_and_retains_input_par
 
 def test_question_publication_admits_one_call_and_reuses_its_result(study):
     from grassmoth.artifacts.model.question import QuestionSpec
-    from tests.support.action import question_root
+    from grassmoth_server_test_support.action import question_root
 
     repository, _ = study
     first = question_root("STUDY", QuestionSpec(text="First?", outcome="construct:outcome"))
@@ -206,10 +206,10 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
         run_action_activity,
     )
     from grassmoth_server.actions.temporal.study.messages import ActionRequest, StudyInit
-    from tests.support.helpers import run_async
+    from grassmoth_server_test_support.helpers import run_async
 
     repository, store = study
-    from tests.support.action import question_root
+    from grassmoth_server_test_support.action import question_root
 
     root = question_root("STUDY").commit_id
     head = repository.append(

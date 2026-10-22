@@ -6,13 +6,13 @@ import type {
 } from "@grassmoth/api-types";
 import { dump } from "npyjs";
 import { expect, it } from "vitest";
-import { decodeFixture, fixtureValue } from "@/components/__fixtures__/fixture-value";
-import rawReports from "@/components/dag/__fixtures__/simulation-reports.json";
+import { fixtureValue } from "@/components/__fixtures__/fixture-value";
+import { scenarioResult } from "@/components/__fixtures__/study-scenario";
 import { dataComparisonChart } from "@/components/charts/series-adapters";
 import { outcome } from "@/lib/__fixtures__/model";
 import { dataComparisonView, type DataSourceResult } from "@/lib/model-asset/data-comparison";
 
-const reports = decodeFixture(rawReports);
+const simulationReport = scenarioResult("simulated").body.report;
 
 const observation = {
   ...fixtureValue(outcome.indicators[0]).observation,
@@ -93,12 +93,12 @@ const sources = new Map<string, DataSourceResult>([
       action: "simulate",
       body: {
         report: {
-          ...fixtureValue(reports[0]),
+          ...simulationReport,
           evidence: {
-            ...fixtureValue(reports[0]).evidence,
+            ...simulationReport.evidence,
             time_origin: "2026-01-03T00:00:00Z",
             observation_layout: {
-              ...fixtureValue(reports[0]).evidence.observation_layout,
+              ...simulationReport.evidence.observation_layout,
               variables: [observation],
             },
           },

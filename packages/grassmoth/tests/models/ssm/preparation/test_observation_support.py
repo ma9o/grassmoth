@@ -5,8 +5,8 @@ import pytest
 
 from grassmoth.artifacts.observations.dataset import ObservationDataset, SelectedObservations
 from grassmoth.models.ssm import compiled_access as numeric
-from tests.support.inference import compile_model_fixture
-from tests.support.model import mixed_family_model
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.model import mixed_family_model
 
 pytestmark = pytest.mark.contract
 

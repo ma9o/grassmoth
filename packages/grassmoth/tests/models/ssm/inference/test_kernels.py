@@ -10,7 +10,7 @@ import pytest
 from grassmoth.artifacts.model.likelihood import LinkFunction
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.execution.observation_model import compile_observation_model
-from tests.support.observation import observation_kernel, observation_laws
+from grassmoth_test_support.observation import observation_kernel, observation_laws
 
 
 class TestBuildObservationKernel:
