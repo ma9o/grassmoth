@@ -46,9 +46,6 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
     ReplicaExchangeKernel,
 )
 from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
-from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
-    build_particle_diagnostic_flags,
-)
 from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_dsmc_weights
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.types import (
@@ -107,7 +104,7 @@ def fit_marginal_particle_gibbs(
         sampler.num_samples_per_chain,
         int(observations.shape[0]),
         int(observations.shape[1]) if observations.ndim >= 2 else 0,
-        sampler.num_particles,
+        options.dsmc.num_particles,
         options.n_parameter_particles,
     )
 
@@ -168,12 +165,8 @@ def fit_marginal_particle_gibbs(
         return build_marginal_particle_gibbs_kernel(
             runtime,
             exact_constraints=bundle.exact_constraints,
-            num_particles=sampler.num_particles,
             num_parameter_particles=options.n_parameter_particles,
-            param_step_size=options.param_step_size,
             target_accept=options.param_target_accept,
-            min_scale=options.param_step_size_min,
-            max_scale=options.param_step_size_max,
             parameter_preconditioner_chol=initialization.parameter_chol,
             parameter_proposal=options.parameter_proposal,
             paid_mix=paid_mix,
@@ -182,7 +175,6 @@ def fit_marginal_particle_gibbs(
             )
             if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
             else initialization.paths[0],
-            diagnostic_metrics_all=options.diagnostic_metrics_all,
             diagnostic_metrics=options.diagnostic_metrics,
             dsmc=options.dsmc,
         )
@@ -230,7 +222,6 @@ def fit_marginal_particle_gibbs(
         num_samples=sampler.num_samples_per_chain,
         num_chains=sampler.num_chains,
         key=sampling_key,
-        adaptation_rate=options.adaptation_rate,
         initialization=initialization,
         adaptation_scheme=options.adaptation_scheme,
         tempering=tempering,
@@ -307,7 +298,7 @@ def fit_marginal_particle_gibbs(
         else "m_pgibbs_pseudo_langevin",
         mcmc_phase_seconds=float(mcmc_phase_seconds),
         drift=kernel.dsmc.drift,
-        diagnostic_metrics=tuple(sorted(kernel.diagnostic_metrics)),
+        diagnostic_metrics=kernel.diagnostic_metrics,
         param_target_accept=float(kernel.target_accept[0]),
         parameter_preconditioned=bool(kernel.preconditioned),
         diagnostic_summary_phase=diagnostic_summary_phase,
@@ -324,12 +315,10 @@ def fit_marginal_particle_gibbs(
         dsmc_weights=summarize_dsmc_weights(
             summary_extra_fields,
             num_steps=len(bundle.runtime.times),
-            num_particles=sampler.num_particles,
+            num_particles=options.dsmc.num_particles,
             phase=diagnostic_summary_phase,
         )
-        if build_particle_diagnostic_flags(
-            diagnostic_metrics=kernel.diagnostic_metrics
-        ).particle_weights
+        if "particle_weights" in kernel.diagnostic_metrics
         else None,
         tempering=run_result.tempering,
         latent_move_rms_mean=float(jnp.mean(summary_extra_fields["latent_move_rms"]))

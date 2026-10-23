@@ -17,7 +17,7 @@ from grassmoth.artifacts.model.construct import (
 from grassmoth.artifacts.model.expressions import LiteralExpression, coefficient, state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec, NormalLawSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec, PotentialMechanismSpec
-from grassmoth.artifacts.sampling import DsmcSpec, SamplerSpec
+from grassmoth.artifacts.sampling import DsmcSpec, FixedLatentStepSpec, SamplerSpec
 from grassmoth.models.ssm.compile.observation_partition import compile_observation_partition
 from grassmoth.models.ssm.compile.state_space import (
     AdditiveRecurrences,
@@ -194,12 +194,11 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
     np.testing.assert_allclose(gradient[0, x], numerical, rtol=0.01)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=4,
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        dsmc=DsmcSpec(drift="amala_plus", latent_block_coords=1),
+        dsmc=DsmcSpec(num_particles=4, drift="amala_plus", latent_block_coords=1),
     )
     after, info = jax.jit(kernel.step_fn)(
         _initial(target, coordinates, kernel=kernel), jax.random.key(4)
@@ -221,6 +220,44 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
     )
 
 
+def test_parameter_free_model_moves_paths_and_replays_static_and_accumulated_states():
+    model = _model()
+    baseline = next(c for c in model.constructs if c.name == "baseline").revised(
+        coefficients=tuple(
+            coefficient(0.0, role=role)
+            for role in ("initial_mean", "initial_scale", "diffusion_scale")
+        )
+    )
+    compiled, problem = _problem(
+        model.with_entities(edges=replace_constructs(model.edges, (baseline,)))
+    )
+    target = problem.runtime
+    assert target.initial_position.size == 0
+    kernel = build_marginal_particle_gibbs_kernel(
+        target,
+        num_parameter_particles=2,
+        exact_constraints=problem.exact_constraints,
+        dsmc=DsmcSpec(
+            num_particles=8, latent_step=FixedLatentStepSpec(delta=0.1), pilot_mixture=False
+        ),
+    )
+    context = target.context(target.initial_position, target.times)
+    current = _initial(target, target.initial_path(context), kernel=kernel)
+    step = jax.jit(kernel.step_fn)
+    for key in jax.random.split(jax.random.key(2), 4):
+        current, info = step(current, key)
+        assert np.isfinite(current.complete_log_posterior)
+        assert np.any(info["latent_proposed"])
+    indices = {s.name: i for i, s in enumerate(compiled.states)}
+    path = current.latent_trajectory
+    np.testing.assert_allclose(
+        path[1:, indices["total"]], jnp.cumsum(path[:-1, indices["driver"]]), atol=1e-6
+    )
+    np.testing.assert_array_equal(
+        path[:, indices["baseline"]], jnp.repeat(path[0, indices["baseline"]], len(path))
+    )
+
+
 def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
     from grassmoth_test_support.input_trajectories import deterministic_input_model
 
@@ -234,12 +271,11 @@ def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
     assert not target.independent_mask[:, input_index].any()
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=4,
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        dsmc=DsmcSpec(drift="amala_plus", latent_block_coords=1),
+        dsmc=DsmcSpec(num_particles=4, drift="amala_plus", latent_block_coords=1),
     )
     after, info = jax.jit(kernel.step_fn)(_initial(target, path, kernel=kernel), jax.random.key(6))
     np.testing.assert_array_equal(after.latent_trajectory[:, input_index], path[:, input_index])
@@ -293,11 +329,10 @@ def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_
     target = problem.runtime
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=4,
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="pseudo_langevin",
-        dsmc=DsmcSpec(drift="amala_plus", latent_block_coords=1),
+        dsmc=DsmcSpec(num_particles=4, drift="amala_plus", latent_block_coords=1),
     )
 
     def chain(key):
@@ -553,11 +588,10 @@ def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(metho
     b, x, a, y = (indices[name] for name in ("baseline", "driver", "total", "outcome"))
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=9,
         num_parameter_particles=2,
         param_step_size=0.1,
         parameter_proposal="random_walk",
-        dsmc=DsmcSpec(drift=method),
+        dsmc=DsmcSpec(num_particles=9, drift=method),
     )
 
     def draw_and_step(key):
@@ -618,7 +652,7 @@ def test_parallel_accumulator_preserves_an_exact_random_initial_value():
     target = problem.runtime
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=4,
+        dsmc=DsmcSpec(num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=target.exact_constraints,

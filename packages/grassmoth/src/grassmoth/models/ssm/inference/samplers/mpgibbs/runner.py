@@ -26,11 +26,7 @@ from grassmoth.models.ssm.inference.mcmc_state import (
     _clip_dual_averaging_state,
     _clip_scale,
 )
-from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
-    CompanionTuning,
-    initial_companion_tuning,
-    restarted_dual_averaging,
-)
+from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import restarted_dual_averaging
 from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
     ExchangeRecord,
     ReplicaExchangeKernel,
@@ -72,7 +68,10 @@ if TYPE_CHECKING:
     from grassmoth.compute.budget import ComputeBudget
     from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
     from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
-    from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import CompanionKernel
+    from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
+        CompanionKernel,
+        CompanionTuning,
+    )
     from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
         MarginalParticleGibbsKernel,
     )
@@ -193,6 +192,27 @@ class _Population(NamedTuple):
     companions: CompanionTuning | None
 
 
+# Gain of the simple step-size scheme; a fixed property of warmup, not a setting.
+ADAPTATION_RATE = 0.05
+
+
+def _initial_companion_tuning(
+    companion: CompanionKernel,
+    states: TrajectoryMCMCState,
+    key: jax.Array,
+    num_warmup: int,
+    compiler: ProgramCompiler,
+) -> CompanionTuning:
+    # The NUTS warmup schedule spans this run's warmup; it is frozen when that ends.
+    tuning_key = random.fold_in(key, 1)
+    program = compiler(
+        lambda chains, draw_key: companion.initial_tuning(chains, draw_key, num_warmup),
+        states,
+        tuning_key,
+    )
+    return program.call(states, tuning_key)
+
+
 def run_marginal_particle_gibbs(
     target: ParticleTarget,
     *,
@@ -203,7 +223,7 @@ def run_marginal_particle_gibbs(
     num_samples: int,
     num_chains: int,
     key: jax.Array,
-    adaptation_rate: float,
+    adaptation_rate: float = ADAPTATION_RATE,
     initialization: ParticleInitialization,
     compute_budget: ComputeBudget,
     # Both adaptation policies stop updating after warmup.
@@ -312,7 +332,7 @@ def run_marginal_particle_gibbs(
         jnp.asarray(0),
         None
         if companion is None
-        else initial_companion_tuning(states.param_step_size, len(companion.moves)),
+        else _initial_companion_tuning(companion, states, key, num_warmup, compiler),
     )
     if continuation is not None and num_warmup == 0:
         initial = restore_state(initial, continuation.native_state)
@@ -344,23 +364,16 @@ def run_marginal_particle_gibbs(
                 updated, info, exchange = tempering.step(
                     current.chains, keys, current.betas, current.iteration, batch_size=batch_size
                 )
+            moved_companions = current.companions
             companion_accepted = None
             companion_record: dict[str, jax.Array] = {}
-            if companion is not None and current.companions is not None:
-                updated, companion_accepted, companion_jumps = jax.vmap(companion.step)(
+            if companion is not None and moved_companions is not None:
+                updated, moved_companions, companion_accepted, records = jax.vmap(companion.step)(
                     updated,
-                    current.companions.step_size,
+                    moved_companions,
                     jax.vmap(lambda draw_key: random.fold_in(draw_key, 1))(keys),
                 )
-                companion_record = {
-                    f"{move.name}_{name}": values[cold_indices, index]
-                    for index, move in enumerate(companion.moves)
-                    for name, values in (
-                        ("accept_prob", companion_accepted),
-                        ("jump_rms", companion_jumps),
-                        ("step_size", current.companions.step_size),
-                    )
-                }
+                companion_record = {name: values[cold_indices] for name, values in records.items()}
             cold = jax.tree.map(lambda value: value[cold_indices], updated)
             cold_info = jax.tree.map(lambda value: value[cold_indices], info)
             record: dict[str, jax.Array] = {
@@ -459,12 +472,14 @@ def run_marginal_particle_gibbs(
                     updated.param_step_size, updated.param_da, info["parameter_accepted"]
                 )
                 updated = updated._replace(param_step_size=param_step_size, param_da=param_da)
-                companions = current.companions
+                # NUTS adapted itself in its transition; Metropolis steps adapt here.
+                companions = moved_companions
                 if companions is not None and companion_accepted is not None:
-                    companions = CompanionTuning(
-                        *jax.vmap(adapt_steps, in_axes=1, out_axes=1)(
-                            companions.step_size, companions.dual_averaging, companion_accepted
-                        )
+                    step_size, dual_averaging = jax.vmap(adapt_steps, in_axes=1, out_axes=1)(
+                        companions.step_size, companions.dual_averaging, companion_accepted
+                    )
+                    companions = companions._replace(
+                        step_size=step_size, dual_averaging=dual_averaging
                     )
                 covariance, parameter_chol, changed = adapt_parameter_covariance(
                     current.parameter_covariance,
@@ -494,14 +509,19 @@ def run_marginal_particle_gibbs(
                         return scale, restarted_dual_averaging(scale)
 
                     scale, param_da = restart(chains.param_step_size)
-                    return chains._replace(
+                    chains = chains._replace(
                         parameter_chol=jnp.broadcast_to(
                             parameter_chol, chains.parameter_chol.shape
                         ),
                         param_step_size=scale,
                         param_da=param_da,
-                    ), None if companion_tuning is None else CompanionTuning(
-                        *restart(companion_tuning.step_size)
+                    )
+                    if companion_tuning is None:
+                        return chains, None
+                    # NUTS keeps its own mass matrix, so only Metropolis steps restart.
+                    steps, dual_averaging = restart(companion_tuning.step_size)
+                    return chains, companion_tuning._replace(
+                        step_size=steps, dual_averaging=dual_averaging
                     )
 
                 updated, companions = jax.lax.cond(
@@ -568,7 +588,7 @@ def run_marginal_particle_gibbs(
             initial,
             num_warmup=num_warmup,
             num_samples=num_samples,
-            max_batch_size=max(kernel.num_particles, (1 << (num_steps - 1).bit_length()) // 2),
+            max_batch_size=max(kernel.dsmc.num_particles, (1 << (num_steps - 1).bit_length()) // 2),
             budget=compute_budget,
             target=target,
             path_dtype=states.latent_trajectory.dtype,

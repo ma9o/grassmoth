@@ -8,13 +8,7 @@ import numpy as np
 import pytest
 
 from grassmoth.artifacts.continuation import SamplerCheckpoint
-from grassmoth.artifacts.sampling import (
-    ConditionalNutsSpec,
-    MarginalParticleGibbsSpec,
-    MetropolisHastingsSpec,
-    ParticleGibbsSpec,
-    SamplerSpec,
-)
+from grassmoth.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec, SamplerSpec
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.types import MCMCPosterior
 from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
@@ -25,27 +19,15 @@ from grassmoth_test_support.inference import nonlinear_fit_fixture
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
-@pytest.mark.parametrize("method", ["mh", "nuts", "marginal", "companions"])
+@pytest.mark.parametrize("companion", ["none", "centred_and_scale_noncentred_mh", "centred_nuts"])
 @pytest.mark.inference(concern="warmup")
-def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(method):
+def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(companion):
     prepared, panel = nonlinear_fit_fixture()
-    algorithm = (
-        MarginalParticleGibbsSpec(
-            companion="none" if method == "marginal" else "centred_and_scale_noncentred_mh",
-        )
-        if method in {"marginal", "companions"}
-        else ParticleGibbsSpec(
-            parameter_kernel=MetropolisHastingsSpec()
-            if method == "mh"
-            else ConditionalNutsSpec(max_tree_depth=3, initial_step_size=0.01),
-        )
-    )
     settings = SamplerSpec(
-        algorithm=algorithm,
-        num_warmup=5 if method in {"mh", "nuts"} else 40,
+        algorithm=MarginalParticleGibbsSpec(companion=companion, dsmc=DsmcSpec(num_particles=4)),
+        num_warmup=40,
         num_samples_per_chain=4,
         num_chains=2,
-        num_particles=4,
     )
 
     def run(options, checkpoint=None):
@@ -68,9 +50,11 @@ def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundt
 
     full = run(settings)
     assert full.diagnostics.sampler_diagnostics.initialization.source == "gaussian"
-    assert (method == "companions") == (
-        "scale_noncentred_mh_step_size" in full.diagnostics.phase_extra_fields["post_warmup"]
+    retained = full.diagnostics.phase_extra_fields["post_warmup"]
+    assert (companion == "centred_and_scale_noncentred_mh") == (
+        "scale_noncentred_mh_step_size" in retained
     )
+    assert (companion == "centred_nuts") == ("diverging" in retained)
     first = run(settings.revised(num_samples_per_chain=2))
     checkpoint = SamplerCheckpoint.model_validate(
         unpack_result(pack_result(first.diagnostics.checkpoint))

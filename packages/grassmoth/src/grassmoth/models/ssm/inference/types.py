@@ -35,7 +35,6 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     NutsDADiagnostics,
     ParameterDiagnostics,
     ParetoKPoint,
-    ParticleGibbsDiagnostics,
     ParticleSamplerDiagnostics,
     RankHistogram,
     TraceSeries,
@@ -116,9 +115,7 @@ class ProductionDiagnostics:
     compiled_step: Compiled | None = None
     public_sites: tuple[str, ...] | None = None
     exact_observation_rows: jnp.ndarray | None = None
-    sampler_diagnostics: (
-        ParticleSamplerDiagnostics | NutsDADiagnostics | ParticleGibbsDiagnostics | None
-    ) = None
+    sampler_diagnostics: ParticleSamplerDiagnostics | NutsDADiagnostics | None = None
     phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]] | None = None
     warmup_complete_log_posterior_history: jnp.ndarray | None = None
     all_complete_log_posterior_history: jnp.ndarray | None = None

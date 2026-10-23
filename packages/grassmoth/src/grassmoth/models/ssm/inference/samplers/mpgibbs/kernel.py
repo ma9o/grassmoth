@@ -18,8 +18,12 @@ resulting asymmetry is corrected exactly in the Barker label-selection weights
 (identically zero in the random-walk case). The latent trajectory is updated by
 conditional SMC against the posterior mixture over the parameter ensemble.
 
-``delta`` is ``MarginalParticleGibbsSpec.param_step_size``, whose description gives
-the step-size convention.
+Step-size convention. ``delta`` (``param_step_size``) is the variance coefficient
+of each half, not the conventional MALA step. The combined kernel has variance
+``4 delta Sigma`` (and drift ``2 delta Sigma g`` for pseudo-Langevin), so a MALA
+step ``h`` corresponds to ``delta = h / 4``. Fits start at
+``INITIAL_PARAM_STEP_SIZE``; warmup adapts ``delta`` within the step bounds and
+rescales it whenever ``Sigma`` is re-estimated, keeping the average variance.
 """
 
 # References:
@@ -44,7 +48,6 @@ from grassmoth.models.ssm.inference.samplers.particle.context import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
     build_particle_diagnostic_flags,
-    resolve_particle_diagnostic_metrics,
 )
 from grassmoth.models.ssm.inference.samplers.particle.dsmc import step as dsmc_step
 from grassmoth.models.ssm.inference.samplers.particle.dsmc import (
@@ -65,6 +68,7 @@ from grassmoth.models.ssm.inference.tracing import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from grassmoth.artifacts.sampling import ParticleDiagnosticMetric
     from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
     from grassmoth.models.ssm.inference.samplers.particle.contract import (
         PaidMixture,
@@ -73,6 +77,10 @@ if TYPE_CHECKING:
 
 
 _DEFAULT_OPTIONS = MarginalParticleGibbsSpec()
+# Warmup adapts the step from here; fits always run warmup, so these are not settings.
+INITIAL_PARAM_STEP_SIZE = 0.02
+PARAM_STEP_SIZE_MIN = 1e-6
+PARAM_STEP_SIZE_MAX = 1e3
 type MarginalParticleStepResult = tuple[TrajectoryMCMCState, dict[str, jnp.ndarray]]
 
 
@@ -95,7 +103,6 @@ class MarginalParticleGibbsKernel(NamedTuple):
         [TrajectoryMCMCState, jnp.ndarray],
         TracedResult[MarginalParticleStepResult, MarginalParticleTraceRecord],
     ]
-    num_particles: int
     num_parameter_particles: int
     initial_param_step_size: jax.Array
     target_accept: jax.Array
@@ -104,19 +111,18 @@ class MarginalParticleGibbsKernel(NamedTuple):
     preconditioned: bool
     initial_parameter_chol: jax.Array
     dsmc: DsmcSpec
-    diagnostic_metrics: frozenset[str]
+    diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...]
     exact_constraints: ExactStateConstraints | None
 
 
 def build_marginal_particle_gibbs_kernel(
     target: ParticleTarget,
     *,
-    num_particles: int,
     num_parameter_particles: int,
-    param_step_size: float,
+    param_step_size: float = INITIAL_PARAM_STEP_SIZE,
     target_accept: float | None = None,
-    min_scale: float = _DEFAULT_OPTIONS.param_step_size_min,
-    max_scale: float = _DEFAULT_OPTIONS.param_step_size_max,
+    min_scale: float = PARAM_STEP_SIZE_MIN,
+    max_scale: float = PARAM_STEP_SIZE_MAX,
     parameter_preconditioner_chol: jnp.ndarray | None = None,
     parameter_proposal: Literal[
         "random_walk", "pseudo_langevin"
@@ -125,19 +131,10 @@ def build_marginal_particle_gibbs_kernel(
     paid_mix: PaidMixture | None = None,
     parameter_reference_path: jnp.ndarray | None = None,
     exact_constraints: ExactStateConstraints | None = None,
-    diagnostic_metrics_all: bool = _DEFAULT_OPTIONS.diagnostic_metrics_all,
-    diagnostic_metrics: tuple[str, ...] | list[str] | None = _DEFAULT_OPTIONS.diagnostic_metrics,
+    diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...] = _DEFAULT_OPTIONS.diagnostic_metrics,
 ) -> MarginalParticleGibbsKernel:
     """Build a marginalized Particle Gibbs joint state update."""
-    resolved_diagnostic_metrics = resolve_particle_diagnostic_metrics(
-        diagnostic_metrics_all=diagnostic_metrics_all,
-        diagnostic_metrics=diagnostic_metrics,
-    )
-    diagnostic_flags = build_particle_diagnostic_flags(
-        diagnostic_metrics=resolved_diagnostic_metrics,
-    )
-    if num_particles < 2:
-        raise ValueError("marginal_particle_gibbs requires num_particles >= 2.")
+    diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=diagnostic_metrics)
     if num_parameter_particles < 2:
         raise ValueError("marginal_particle_gibbs requires num_parameter_particles >= 2.")
     if min_scale > max_scale:
@@ -249,11 +246,10 @@ def build_marginal_particle_gibbs_kernel(
     static = build_smoother_setup(
         target,
         dsmc,
-        num_particles=num_particles,
         num_parameter_particles=num_parameter_particles,
         free_mask=latent_free_mask,
         paid_mix=paid_mix,
-        diagnostic_metrics=resolved_diagnostic_metrics,
+        diagnostic_metrics=diagnostic_metrics,
     )
 
     def _step(
@@ -374,7 +370,7 @@ def build_marginal_particle_gibbs_kernel(
             )
 
             def particle_identity() -> dict[str, jax.Array]:
-                particle_ids = jnp.arange(num_particles, dtype=origin_path.dtype)
+                particle_ids = jnp.arange(dsmc.num_particles, dtype=origin_path.dtype)
                 return {
                     "selected_particle_per_t": origin_path.astype(jnp.float32),
                     "reference_path_hit_rate": jnp.mean((origin_path == 0).astype(jnp.float32)),
@@ -442,7 +438,6 @@ def build_marginal_particle_gibbs_kernel(
         step_fn=_step_fn,
         parameter_gradient_fn=_theta_logpost_grad,
         trace_step_fn=_trace_step_fn,
-        num_particles=num_particles,
         num_parameter_particles=num_parameter_particles,
         initial_param_step_size=scalar_operand(value=param_step_size),
         target_accept=scalar_operand(value=target_accept),
@@ -455,6 +450,6 @@ def build_marginal_particle_gibbs_kernel(
         if parameter_preconditioner_chol is None
         else jnp.asarray(parameter_preconditioner_chol, dtype=target.initial_position.dtype),
         dsmc=dsmc,
-        diagnostic_metrics=resolved_diagnostic_metrics,
+        diagnostic_metrics=diagnostic_metrics,
         exact_constraints=exact_constraints,
     )

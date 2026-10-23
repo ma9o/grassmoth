@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from grassmoth.artifacts.reports.posterior_diagnostics import ParticleWeightMetric
+from grassmoth.artifacts.sampling import DsmcSpec
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
@@ -26,7 +27,7 @@ def test_particle_trace_records_the_same_transition_and_selected_path(
     joint = jnp.linspace(-0.2, 0.3, steps + 1)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=8,
+        dsmc=DsmcSpec(num_particles=8),
         num_parameter_particles=labels,
         param_step_size=0.3,
         parameter_proposal=proposal,

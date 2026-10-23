@@ -15,7 +15,7 @@ def test_compilation_completion_is_emitted_only_after_the_work_finishes(caplog):
     caplog.set_level(logging.INFO)
     ticks = iter((12.0, 17.5))
     with inference_phase(
-        "pgibbs",
+        "mpgibbs",
         "compiling_sweeps",
         clock=lambda: next(ticks),
         logger=logging.getLogger(__name__),
@@ -25,7 +25,7 @@ def test_compilation_completion_is_emitted_only_after_the_work_finishes(caplog):
     events = [json.loads(record.message) for record in caplog.records]
     assert [event["event"] for event in events] == ["started", "complete"]
     assert events[-1]["elapsed_seconds"] == 5.5
-    assert events[-1]["sampler"] == "pgibbs"
+    assert events[-1]["sampler"] == "mpgibbs"
     assert events[-1]["stage"] == "compiling_sweeps"
     assert events[-1]["time_utc"].endswith("+00:00")
 

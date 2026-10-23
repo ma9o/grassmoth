@@ -31,8 +31,7 @@ def _context(target, method, *, mixture=False, count=4):
     path = jnp.linspace(-0.2, 0.4, target.times.size + 1)[1:, None]
     static = build_smoother_setup(
         target,
-        DsmcSpec(drift=method),
-        num_particles=count,
+        DsmcSpec(num_particles=count, drift=method),
         num_parameter_particles=2,
         free_mask=target.independent_mask,
         paid_mix=PaidMixture(jnp.zeros_like(path), jnp.ones_like(path), jnp.asarray([mixture])),
@@ -229,11 +228,10 @@ def test_conditional_tree_preserves_analytic_posterior(interval, parameter_count
     before = jnp.asarray(
         (means[labels] + rng.normal(size=(size, len(mean))) @ conditional_chol.T)[..., None]
     )
-    spec = DsmcSpec(drift=drift, pilot_mixture=mixture)
+    spec = DsmcSpec(num_particles=4, drift=drift, pilot_mixture=mixture)
     setup = build_smoother_setup(
         target,
         spec,
-        num_particles=4,
         num_parameter_particles=parameter_count,
         free_mask=target.independent_mask,
         paid_mix=PaidMixture(
@@ -419,11 +417,10 @@ def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, s
     times = np.arange(float(steps))
     target = interval_target(times, np.full((steps, 1), 0.2), times[:, None], ("last",))
     reference = jnp.linspace(-0.2, 0.3, steps)[:, None]
-    options = DsmcSpec(drift=method)
+    options = DsmcSpec(num_particles=5, drift=method)
     setup = build_smoother_setup(
         target,
         options,
-        num_particles=5,
         num_parameter_particles=1,
         free_mask=target.independent_mask,
         paid_mix=PaidMixture(

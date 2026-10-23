@@ -20,7 +20,6 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
           {
             nuts_da: "Joint NUTS-DA",
             mpgibbs: "Marginalized Particle Gibbs",
-            pgibbs: "Particle Gibbs",
           }[report.inference_metadata.engine.method]
         }{" "}
         · {mcmc?.num_chains ?? "Unavailable"} chains ×{" "}
@@ -58,19 +57,15 @@ export function FitDetails({ context }: { context: ScopeContext }) {
   const mcmc = report.inference_diagnostics;
   const sampler = report.inference_metadata.sampler_diagnostics;
   const gibbs = sampler && "latent_update_fraction" in sampler ? sampler : null;
-  const parameters = sampler && "parameters" in sampler ? sampler.parameters : null;
-  const nuts =
-    sampler && "max_tree_depth_fraction" in sampler
-      ? sampler
-      : parameters?.method === "nuts_da"
-        ? parameters
-        : null;
+  const nuts = sampler && "max_tree_depth_fraction" in sampler ? sampler : null;
+  const algorithm = gibbs?.settings.algorithm;
+  const companionNuts = algorithm?.method === "mpgibbs" && algorithm.companion === "centred_nuts";
   const tempering = sampler && "tempering" in sampler ? sampler.tempering : null;
   return (
     <>
       <FitCalibration context={context} />
       {nuts && (
-        <Section title={parameters ? "Conditional NUTS adaptation" : "Joint sampler adaptation"}>
+        <Section title="Joint sampler adaptation">
           <KeyValue
             rows={[
               ["Divergences", String(mcmc?.num_divergences ?? "Unavailable")],
@@ -90,15 +85,12 @@ export function FitDetails({ context }: { context: ScopeContext }) {
           />
         </Section>
       )}
-      {parameters?.method === "mh" && (
-        <Section title="Conditional MH adaptation">
+      {companionNuts && (
+        <Section title="Conditional NUTS companion">
           <KeyValue
             rows={[
-              ["Parameter acceptance", formatSignificant(parameters.acceptance_rate)],
-              [
-                "Final step sizes",
-                parameters.final_step_size.map((value) => formatSignificant(value)).join(", "),
-              ],
+              ["Divergences", String(mcmc?.num_divergences ?? "Unavailable")],
+              ["Deepest tree", String(mcmc?.tree_depth_max ?? "Unavailable")],
             ]}
           />
         </Section>

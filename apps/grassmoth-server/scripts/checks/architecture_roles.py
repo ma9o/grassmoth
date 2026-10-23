@@ -60,8 +60,6 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "models/ssm/inference/samplers/nuts": "execution",
     "models/ssm/inference/samplers/mpgibbs/fit": "execution",
     "models/ssm/inference/samplers/mpgibbs/runner": "execution",
-    "models/ssm/inference/samplers/pgibbs/fit": "execution",
-    "models/ssm/inference/samplers/pgibbs/runner": "execution",
     "models/ssm/inference/samplers/progress": "execution",
     "models/ssm/inference/samplers/sweeps": "execution",
     "models/ssm/inference/samplers/particle/context": "compiler",
@@ -152,8 +150,6 @@ ANNOTATION_MODULES = frozenset(
         "models/ssm/inference/mcmc_state",
         "models/ssm/inference/samplers/mpgibbs/fit",
         "models/ssm/inference/samplers/mpgibbs/runner",
-        "models/ssm/inference/samplers/pgibbs/fit",
-        "models/ssm/inference/samplers/pgibbs/runner",
     }
 )
 

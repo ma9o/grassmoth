@@ -6,15 +6,15 @@ Methods:
 - NUTS-DA: joint parameter/trajectory updates with dual averaging and diagonal
   mass adaptation, with independent chains advanced together.
 - Marginalized Particle Gibbs: collapsed joint parameter/trajectory updates
-  using the shared dSMC smoother and its auxiliary proposals.
-- Particle Gibbs: conditional MH or NUTS parameter updates followed by dSMC.
+  using the dSMC smoother and its auxiliary proposals, optionally followed by
+  conditional MH or NUTS parameter moves.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Literal
 
-from grassmoth.artifacts.sampling import NutsDASpec, ParticleGibbsSpec
+from grassmoth.artifacts.sampling import NutsDASpec
 from grassmoth.models.ssm.inference.reparameterization import AutoReparam
 from grassmoth.models.ssm.preparation.preflight import (
     ObservationPreflightFailure,
@@ -63,21 +63,6 @@ def fit(
     if failure is not None:
         return failure
     resolved_reparam = AutoReparam(centered=0.0) if reparam == "auto" else reparam
-    if isinstance(sampler.algorithm, ParticleGibbsSpec):
-        from grassmoth.models.ssm.inference.samplers.pgibbs.fit import fit_particle_gibbs
-
-        return fit_particle_gibbs(
-            priors,
-            panel,
-            compute_budget=compute_budget,
-            sampler=sampler,
-            reparam=resolved_reparam,
-            clock=clock,
-            logger=logger,
-            wall_clock=wall_clock,
-            continuation=continuation,
-            prepare_program=prepare_program,
-        )
     if isinstance(sampler.algorithm, NutsDASpec):
         from grassmoth.models.ssm.inference.samplers.nuts import fit_nuts_da
 

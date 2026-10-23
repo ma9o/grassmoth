@@ -32,9 +32,6 @@ def resolve_sampler_spec(
         else settings.num_samples_per_chain,
         num_chains=configured.num_chains if settings.num_chains is None else settings.num_chains,
         seed=configured.seed if settings.seed is None else settings.seed,
-        num_particles=configured.num_particles
-        if settings.num_particles is None
-        else settings.num_particles,
         hardware=configured.hardware if settings.hardware is None else settings.hardware,
         time_limit_seconds=configured.time_limit_seconds
         if settings.time_limit_seconds is None

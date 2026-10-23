@@ -177,7 +177,6 @@ def run_nuts_da(
         return initialize(
             point,
             num_warmup=sampler.num_warmup,
-            step_size=options.initial_step_size,
             adapt_step_size=True,
             adapt_mass_matrix=True,
             dense_mass=False,

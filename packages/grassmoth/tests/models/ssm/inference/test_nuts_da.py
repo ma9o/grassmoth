@@ -86,9 +86,7 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior():
         prepared.prior_runtime_bundle,
         panel,
         sampler=SamplerSpec(
-            algorithm=NutsDASpec(
-                trajectory=NutsTrajectorySpec(max_tree_depth=3), initial_step_size=0.01
-            ),
+            algorithm=NutsDASpec(trajectory=NutsTrajectorySpec(max_tree_depth=3)),
             num_warmup=0,
             num_samples_per_chain=4,
             num_chains=2,
@@ -126,9 +124,7 @@ def test_continuation_matches_uninterrupted_random_stream_and_tuning(
 ):
     target, _, _ = gaussian_interval_case()
     settings = SamplerSpec(
-        algorithm=NutsDASpec(
-            trajectory=trajectory, initial_step_size=0.05, parameterization=parameterization
-        ),
+        algorithm=NutsDASpec(trajectory=trajectory, parameterization=parameterization),
         num_warmup=12,
         num_samples_per_chain=8,
         num_chains=2,

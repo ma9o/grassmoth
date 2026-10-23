@@ -122,11 +122,12 @@ def test_production_fit_consumes_gaussian_initialization(leaf):
             num_warmup=2,
             num_samples_per_chain=3,
             num_chains=2,
-            num_particles=4,
             seed=7,
             algorithm=MarginalParticleGibbsSpec(
-                diagnostic_metrics_all=leaf == "amala_plus",
-                dsmc=DsmcSpec(drift=leaf),
+                diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights")
+                if leaf == "amala_plus"
+                else (),
+                dsmc=DsmcSpec(num_particles=4, drift=leaf),
             ),
         ),
         reparam=None,

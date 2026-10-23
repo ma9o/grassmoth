@@ -190,7 +190,6 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
     target, mean, covariance = gaussian_interval_case()
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=12,
         num_parameter_particles=3,
         param_step_size=0.3,
         parameter_proposal="random_walk",
@@ -198,7 +197,7 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
         paid_mix=PaidMixture(
             jnp.zeros((len(mean) - 1, 1)), jnp.ones((len(mean) - 1, 1)), jnp.asarray([True])
         ),
-        dsmc=DsmcSpec(drift=method if kappa else "none"),
+        dsmc=DsmcSpec(num_particles=12, drift=method if kappa else "none"),
     )
     # Replicate chains to resolve the weakly identified offset/path direction
     # without loosening the analytic moment tolerances.
@@ -250,12 +249,11 @@ def test_reusable_tree_levels_preserve_joint_posterior_with_padding(method, kapp
     before = mean + np.random.default_rng(410).normal(size=(size, mean.size)) @ chol.T
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=4,
         num_parameter_particles=2,
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        dsmc=DsmcSpec(drift=method if kappa else "none", pilot_mixture=False),
+        dsmc=DsmcSpec(num_particles=4, drift=method if kappa else "none", pilot_mixture=False),
     )
 
     def advance(point, key):

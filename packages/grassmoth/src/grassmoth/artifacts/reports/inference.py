@@ -24,7 +24,6 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     MCMCEvidence,
     NutsDADiagnostics,
     ParetoKPoint,
-    ParticleGibbsDiagnostics,
     ParticleSamplerDiagnostics,
     PosteriorMarginal,
     RankHistogram,
@@ -81,9 +80,7 @@ class InferenceMetadata(Value):
     num_chains: int = Field(ge=1)
     duration_seconds: float = Field(ge=0)
     engine: MCMCEvidence
-    sampler_diagnostics: (
-        ParticleSamplerDiagnostics | NutsDADiagnostics | ParticleGibbsDiagnostics | None
-    )
+    sampler_diagnostics: ParticleSamplerDiagnostics | NutsDADiagnostics | None
 
 
 class PosteriorDrawsInfo(Value):

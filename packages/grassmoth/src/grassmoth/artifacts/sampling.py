@@ -35,14 +35,33 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import AfterValidator, Field, model_validator
 
 from grassmoth.artifacts.base import Value
 
 type AuxiliaryDrift = Literal["none", "amala", "amala_plus"]
-type CompanionMoves = Literal["none", "centred_mh", "centred_and_scale_noncentred_mh"]
+type CompanionMoves = Literal[
+    "none", "centred_mh", "centred_and_scale_noncentred_mh", "centred_nuts"
+]
 type LatentBlockSize = Literal[1, 2, "all"]
 type JointParameterization = Literal["centred", "non_centred", "mixed"]
+type ParticleDiagnosticMetric = Literal[
+    "particle_identity", "parameter_movement", "particle_weights"
+]
+
+
+def _metric_set(
+    metrics: tuple[ParticleDiagnosticMetric, ...],
+) -> tuple[ParticleDiagnosticMetric, ...]:
+    """Reject repeated metrics and order the rest, so equal selections share one call identity."""
+    if len(set(metrics)) != len(metrics):
+        raise ValueError("Diagnostic metrics must be unique")
+    return tuple(sorted(metrics))
+
+
+type ParticleDiagnosticMetrics = Annotated[
+    tuple[ParticleDiagnosticMetric, ...], AfterValidator(_metric_set)
+]
 
 
 class AdaptedLatentStepSpec(Value):
@@ -185,41 +204,6 @@ class NutsDASpec(Value):
         default_factory=NutsTrajectorySpec,
         description="NUTS chooses each trajectory's length; fixed runs a set number of steps.",
     )
-    initial_step_size: float = Field(
-        default=1.0,
-        gt=0,
-        allow_inf_nan=False,
-        description=(
-            "First step size, and the anchor dual averaging shrinks towards until the first "
-            "mass-matrix window ends (Hoffman & Gelman 2014, section 3.2). With zero warmup in "
-            "a new fit it is the step for every draw."
-        ),
-    )
-
-
-class ConditionalNutsSpec(Value):
-    """Conditional NUTS parameter updates within Particle Gibbs.
-
-    Its diagonal mass starts from the initializer's scale and adapts in warmup windows.
-    """
-
-    method: Literal["nuts_da"] = "nuts_da"
-    target_accept_prob: float = Field(
-        default=0.8,
-        gt=0,
-        lt=1,
-        allow_inf_nan=False,
-        description="Dual-averaging target; see NutsDASpec.target_accept_prob.",
-    )
-    max_tree_depth: int = Field(
-        default=10, ge=1, description="Doubling limit; see NutsTrajectorySpec.max_tree_depth."
-    )
-    initial_step_size: float = Field(
-        default=1.0,
-        gt=0,
-        allow_inf_nan=False,
-        description="First step size; see NutsDASpec.initial_step_size.",
-    )
 
 
 class GaussianReferenceTemperingSpec(Value):
@@ -284,8 +268,8 @@ class GaussianInitializationSpec(Value):
         allow_inf_nan=False,
         description=(
             "Standard deviation of the starts around the native starting values, in the "
-            "centred chart. The initial parameter preconditioner is scale times the identity; "
-            "PGibbs's MH update keeps its shape, and MPGibbs re-estimates it in warmup windows."
+            "centred chart. The initial parameter preconditioner is scale times the identity, "
+            "and MPGibbs re-estimates it in warmup windows."
         ),
     )
 
@@ -299,6 +283,15 @@ class DsmcSpec(Value):
     The auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).
     """
 
+    num_particles: int = Field(
+        default=64,
+        ge=2,
+        description=(
+            "Particles per sweep, including the current path. More particles give each time "
+            "step more candidates, but each dSMC merge scores N x N candidate pairs, so memory "
+            "and work per merge grow as N^2 (Corenflos, Chopin & Särkkä 2022, section 4)."
+        ),
+    )
     drift: AuxiliaryDrift = Field(
         default="none",
         description=(
@@ -346,68 +339,6 @@ class DsmcSpec(Value):
     )
 
 
-class MetropolisHastingsSpec(Value):
-    """Conditional isotropic Gaussian random walk with warmup dual averaging.
-
-    The proposal covariance is a scaled identity; only its scale adapts.
-    """
-
-    method: Literal["mh"] = "mh"
-    initial_step_size: float = Field(
-        default=0.1,
-        gt=0,
-        allow_inf_nan=False,
-        description=(
-            "Starting multiplier of the preconditioned step. It also sets dual averaging's "
-            "anchor at log(10 * initial_step_size) (Hoffman & Gelman 2014, section 3.2)."
-        ),
-    )
-    target_accept_prob: float = Field(
-        default=0.3,
-        gt=0,
-        lt=1,
-        allow_inf_nan=False,
-        description=(
-            "Acceptance probability that dual averaging targets in warmup. For random-walk "
-            "Metropolis the optimum falls from about 0.43 in one dimension (Agrawal et al. "
-            "2023, figure 2) to 0.234 in high dimension (Roberts, Gelman & Gilks 1997)."
-        ),
-    )
-
-
-type ConditionalParameterSpec = Annotated[
-    MetropolisHastingsSpec | ConditionalNutsSpec, Field(discriminator="method")
-]
-
-
-class ParticleGibbsSpec(Value):
-    """Conditional MH or NUTS parameters and dSMC trajectories on the exact joint posterior.
-
-    Particle Gibbs alternates a parameter update at the current path with a conditional
-    dSMC path update (Andrieu, Doucet & Holenstein 2010, section 2.4.3). It mixes slowly
-    when parameters and path are strongly correlated (Corenflos 2025, section 1), and is
-    kept as the control that isolates what marginalizing the parameters gains.
-    """
-
-    method: Literal["pgibbs"] = "pgibbs"
-    parameter_kernel: ConditionalParameterSpec = Field(
-        default_factory=MetropolisHastingsSpec,
-        description="Parameter update at the current path: random-walk MH or NUTS.",
-    )
-    dsmc: DsmcSpec = Field(default_factory=DsmcSpec, description="Path update.")
-    initialization: GaussianInitializationSpec = Field(
-        default_factory=GaussianInitializationSpec,
-        description="Independent Gaussian starts, which also set the initial proposal scale.",
-    )
-    diagnostic_metrics_all: bool = Field(
-        default=False,
-        description=(
-            "Record every optional particle trace, as listed in "
-            "MarginalParticleGibbsSpec.diagnostic_metrics."
-        ),
-    )
-
-
 class MarginalParticleGibbsSpec(Value):
     """Marginalized parameter ensemble and conditional dSMC trajectory updates.
 
@@ -448,16 +379,19 @@ class MarginalParticleGibbsSpec(Value):
     companion: CompanionMoves = Field(
         default="none",
         description=(
-            "Exact Metropolis moves after each sweep, each with its own warmup-adapted step: "
-            "every parameter at the current path, then, for centred_and_scale_noncentred_mh, "
-            "the diffusion scales with the path's innovations held fixed. Not available "
-            "with tempering."
+            "Exact moves after each sweep, which update the parameters at the current path "
+            "as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). "
+            "centred_mh is a random walk on every parameter, shaped by the sweep's "
+            "preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh "
+            "follows it with a random walk on the diffusion scales that holds the path's "
+            "innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one "
+            "NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step "
+            "towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with "
+            "trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path "
+            "density. Not available with tempering."
         ),
     )
-    diagnostic_metrics_all: bool = Field(
-        default=False, description="Record every optional particle trace below."
-    )
-    diagnostic_metrics: tuple[str, ...] = Field(
+    diagnostic_metrics: ParticleDiagnosticMetrics = Field(
         default=(),
         description=(
             "Optional traces to record: particle_identity (the selected particle per time "
@@ -466,21 +400,6 @@ class MarginalParticleGibbsSpec(Value):
             "entropy and spread per tree node). They cost memory and output size, and no "
             "convergence check reads them; they explain a failing sampler."
         ),
-    )
-    param_step_size: float = Field(
-        default=0.02,
-        description=(
-            "Starting δ of the parameter proposal. Each half has covariance 2δΣ, so a whole "
-            "move has covariance 4δΣ (and drift 2δΣg for pseudo_langevin): a MALA step h is "
-            "δ = h / 4. Warmup adapts δ towards param_target_accept and rescales it whenever "
-            "Σ is re-estimated, keeping the average proposal variance."
-        ),
-    )
-    param_step_size_min: float = Field(
-        default=1e-6, description="Lower bound on δ during adaptation and rescaling."
-    )
-    param_step_size_max: float = Field(
-        default=1e3, description="Upper bound on δ during adaptation and rescaling."
     )
     param_target_accept: float = Field(
         default=0.35,
@@ -491,18 +410,12 @@ class MarginalParticleGibbsSpec(Value):
             "dimension (Agrawal et al. 2023), below this default."
         ),
     )
-    adaptation_rate: float = Field(
-        default=0.05,
-        description=(
-            "Gain of the simple scheme: after each warmup sweep δ is multiplied by "
-            "exp(adaptation_rate * (moved - param_target_accept)), where moved is 0 or 1."
-        ),
-    )
     adaptation_scheme: Literal["simple", "dual_averaging"] = Field(
         default="simple",
         description=(
-            "simple adapts with a constant gain and keeps the last δ; dual_averaging keeps "
-            "the averaged δ at the end of warmup (Hoffman & Gelman 2014, section 3.2)."
+            "How warmup adapts the parameter step: simple uses a constant gain and keeps the "
+            "last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & "
+            "Gelman 2014, section 3.2)."
         ),
     )
     initialization: GaussianInitializationSpec = Field(
@@ -519,7 +432,7 @@ class MarginalParticleGibbsSpec(Value):
 
 
 type InferenceAlgorithmSpec = Annotated[
-    NutsDASpec | MarginalParticleGibbsSpec | ParticleGibbsSpec, Field(discriminator="method")
+    NutsDASpec | MarginalParticleGibbsSpec, Field(discriminator="method")
 ]
 
 
@@ -559,16 +472,6 @@ class SamplerSpec(Value):
         ge=0,
         description="Seeds initialization and sampling; another seed is an independent replicate.",
     )
-    num_particles: int = Field(
-        default=64,
-        ge=2,
-        description=(
-            "Particles per dSMC sweep for pgibbs and mpgibbs, including the current path; "
-            "nuts_da ignores it. More particles give each time step more candidates, but each "
-            "dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 "
-            "(Corenflos, Chopin & Särkkä 2022, section 4)."
-        ),
-    )
     hardware: InferenceHardware = Field(
         default=InferenceHardware.L40S,
         description=(
@@ -587,7 +490,7 @@ class SamplerSpec(Value):
     )
     algorithm: InferenceAlgorithmSpec = Field(
         default_factory=MarginalParticleGibbsSpec,
-        description="Exact joint sampler: mpgibbs (default), pgibbs or nuts_da.",
+        description="Exact joint sampler: mpgibbs (default) or nuts_da.",
     )
 
     @property
@@ -596,9 +499,6 @@ class SamplerSpec(Value):
         algorithm = self.algorithm
         if isinstance(algorithm, NutsDASpec):
             return (algorithm.method, algorithm.trajectory.kind, algorithm.parameterization)
-        if isinstance(algorithm, ParticleGibbsSpec):
-            return (algorithm.method, algorithm.parameter_kernel.method)
-        assert isinstance(algorithm, MarginalParticleGibbsSpec)
         return (
             algorithm.method,
             algorithm.parameter_proposal,

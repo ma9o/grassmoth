@@ -11,7 +11,7 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from grassmoth.artifacts.sampling import GaussianInitializationSpec
+from grassmoth.artifacts.sampling import DsmcSpec, GaussianInitializationSpec
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -84,7 +84,7 @@ def test_adapted_particle_kernel_recovers_correlated_unequal_scale_gaussian(prop
     assert isinstance(initialization, ParticleInitialization)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=4,
+        dsmc=DsmcSpec(num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.02,
         parameter_preconditioner_chol=initialization.parameter_chol,

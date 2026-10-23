@@ -20,5 +20,4 @@ class FitSettingsSpec(Value):
     num_samples_per_chain: int | None = Field(default=None, ge=0)
     num_warmup: int | None = Field(default=None, ge=0)
     num_chains: int | None = Field(default=None, ge=1)
-    num_particles: int | None = Field(default=None, ge=2)
     seed: int | None = Field(default=None, ge=0)

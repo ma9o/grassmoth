@@ -1,4 +1,4 @@
-"""Warmup-only dSMC scale adaptation shared by both Particle Gibbs families."""
+"""Warmup-only dSMC scale adaptation for the particle sampler."""
 
 from __future__ import annotations
 

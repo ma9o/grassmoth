@@ -21,7 +21,7 @@ from grassmoth.artifacts.reports.checks import (
 from grassmoth.artifacts.reports.display_frames import central_frame
 from grassmoth.artifacts.reports.effects import HistogramBin
 from grassmoth.artifacts.reports.empirical import EmpiricalPoint
-from grassmoth.artifacts.sampling import SamplerSpec
+from grassmoth.artifacts.sampling import ParticleDiagnosticMetric, SamplerSpec
 
 
 class ParameterDiagnostics(Value):
@@ -182,7 +182,7 @@ class LOODiagnostics(Value):
 class MCMCEvidence(Value):
     """The algorithm that sampled the exact joint state and parameter target."""
 
-    method: Literal["nuts_da", "mpgibbs", "pgibbs"] = "mpgibbs"
+    method: Literal["nuts_da", "mpgibbs"] = "mpgibbs"
 
 
 class NutsDADiagnostics(Value):
@@ -190,29 +190,6 @@ class NutsDADiagnostics(Value):
 
     settings: SamplerSpec
     mcmc_phase_seconds: float
-    final_step_size: tuple[float, ...]
-    max_tree_depth_fraction: float | None
-
-
-class FixedParameterDiagnostics(Value):
-    """A model with no free parameter coordinates needs only trajectory updates."""
-
-    method: Literal["fixed"] = "fixed"
-
-
-class ConditionalMetropolisDiagnostics(Value):
-    """Realized MH acceptance and frozen scales for the conditional parameter block."""
-
-    method: Literal["mh"] = "mh"
-    acceptance_rate: float
-    final_step_size: tuple[float, ...]
-
-
-class ConditionalNutsDiagnostics(Value):
-    """Realized conditional NUTS adaptation, with tree diagnostics confined to parameters."""
-
-    method: Literal["nuts_da"] = "nuts_da"
-    acceptance_rate: float
     final_step_size: tuple[float, ...]
     max_tree_depth_fraction: float | None
 
@@ -393,7 +370,7 @@ type DiagnosticPhase = Literal["warmup", "post_warmup"]
 
 
 class DsmcWeightDiagnostics(Value):
-    """Shared PGibbs/mPGibbs tree and terminal weight diagnostics.
+    """dSMC tree and terminal weight diagnostics.
 
     Tree nodes are ordered by increasing level, then start time. Terminal weights
     include the exact full-path correction and precede the modified Gibbs move;
@@ -403,21 +380,6 @@ class DsmcWeightDiagnostics(Value):
     phase: DiagnosticPhase
     tree: tuple[DsmcNodeWeightDiagnostics, ...]
     terminal: ParticleWeightDiagnostics
-
-
-class ParticleGibbsDiagnostics(Value):
-    """Blocked parameter and dSMC trajectory telemetry from the native producer."""
-
-    settings: SamplerSpec
-    mcmc_phase_seconds: float
-    initialization: InitializationDiagnostics
-    parameters: (
-        FixedParameterDiagnostics | ConditionalMetropolisDiagnostics | ConditionalNutsDiagnostics
-    ) = Field(discriminator="method")
-    latent_update_fraction: float
-    latent_frozen_fraction: float
-    latent_move_rms_mean: float
-    dsmc_weights: DsmcWeightDiagnostics | None
 
 
 class ReplicaSwapCounts(Value):
@@ -442,7 +404,7 @@ class ParticleSamplerDiagnostics(Value):
     parameter_kernel: str
     mcmc_phase_seconds: float
     drift: str
-    diagnostic_metrics: tuple[str, ...]
+    diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...]
     param_target_accept: float
     parameter_preconditioned: bool
     diagnostic_summary_phase: DiagnosticPhase

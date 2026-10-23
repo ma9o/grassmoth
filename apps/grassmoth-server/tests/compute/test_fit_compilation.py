@@ -91,17 +91,20 @@ def test_particle_fit_settings_reuse_jax_executable_and_preserve_transitions(tmp
         jax.clear_caches()
         kernel = build_marginal_particle_gibbs_kernel(
             target,
-            num_particles=4,
             num_parameter_particles=2,
             param_step_size=scale,
             parameter_preconditioner_chol=initialization.parameter_chol,
-            diagnostic_metrics_all=diagnostic,
+            diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights")
+            if diagnostic
+            else (),
             paid_mix=PaidMixture(
                 initialization.pilot_mean,
                 initialization.pilot_proposal_variance,
                 scalar_operand(value=fixed),
             ),
-            dsmc=DsmcSpec(latent_step=FixedLatentStepSpec()) if fixed else DsmcSpec(),
+            dsmc=DsmcSpec(num_particles=4, latent_step=FixedLatentStepSpec())
+            if fixed
+            else DsmcSpec(num_particles=4),
         )
         with local_compilation_cache(tmp_path, commit=lambda: None):
             results.append(

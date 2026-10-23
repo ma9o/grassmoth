@@ -35,14 +35,12 @@ inference:
     num_samples_per_chain: 1000
     num_chains: 4
     seed: 0
-    num_particles: 64
     # Select {method: nuts_da} for joint state/parameter NUTS with dual averaging.
-    # Select {method: pgibbs, parameter_kernel: {method: mh}} for blocked PG;
-    # parameter_kernel: {method: nuts_da} uses conditional NUTS instead.
     algorithm:
       method: mpgibbs
       n_parameter_particles: 2
       dsmc:
+        num_particles: 64
         drift: none
         latent_block_coords: 1
         latent_step:
@@ -50,6 +48,4 @@ inference:
           target: 0.5
         pilot_mixture: true
       parameter_proposal: random_walk
-      param_step_size: 0.02
       param_target_accept: 0.35
-      adaptation_rate: 0.05

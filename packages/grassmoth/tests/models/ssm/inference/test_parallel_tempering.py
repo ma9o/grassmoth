@@ -12,7 +12,7 @@ import pytest
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec
-from grassmoth.artifacts.sampling import GaussianReferenceTemperingSpec
+from grassmoth.artifacts.sampling import DsmcSpec, GaussianReferenceTemperingSpec
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
@@ -60,7 +60,7 @@ def _reference(target):
 def _local_kernel(target):
     return build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=4,
+        dsmc=DsmcSpec(num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.4,
         parameter_proposal="pseudo_langevin",

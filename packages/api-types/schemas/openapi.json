@@ -3066,7 +3066,8 @@
         "enum": [
           "none",
           "centred_mh",
-          "centred_and_scale_noncentred_mh"
+          "centred_and_scale_noncentred_mh",
+          "centred_nuts"
         ],
         "type": "string",
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -3281,208 +3282,6 @@
         "title": "ComputedExtractionSpec",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.observations.preparation",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ConditionalMetropolisDiagnostics": {
-        "additionalProperties": false,
-        "description": "Realized MH acceptance and frozen scales for the conditional parameter block.",
-        "properties": {
-          "method": {
-            "const": "mh",
-            "default": "mh",
-            "title": "Method",
-            "type": "string"
-          },
-          "acceptance_rate": {
-            "title": "Acceptance Rate",
-            "type": "number"
-          },
-          "final_step_size": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Final Step Size",
-            "type": "array"
-          }
-        },
-        "required": [
-          "method",
-          "acceptance_rate",
-          "final_step_size"
-        ],
-        "title": "ConditionalMetropolisDiagnostics",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "ConditionalNutsDiagnostics": {
-        "additionalProperties": false,
-        "description": "Realized conditional NUTS adaptation, with tree diagnostics confined to parameters.",
-        "properties": {
-          "method": {
-            "const": "nuts_da",
-            "default": "nuts_da",
-            "title": "Method",
-            "type": "string"
-          },
-          "acceptance_rate": {
-            "title": "Acceptance Rate",
-            "type": "number"
-          },
-          "final_step_size": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Final Step Size",
-            "type": "array"
-          },
-          "max_tree_depth_fraction": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Tree Depth Fraction"
-          }
-        },
-        "required": [
-          "method",
-          "acceptance_rate",
-          "final_step_size",
-          "max_tree_depth_fraction"
-        ],
-        "title": "ConditionalNutsDiagnostics",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "ConditionalNutsSpec-Input": {
-        "additionalProperties": false,
-        "description": "Conditional NUTS parameter updates within Particle Gibbs.\n\nIts diagonal mass starts from the initializer's scale and adapts in warmup windows.",
-        "properties": {
-          "method": {
-            "const": "nuts_da",
-            "default": "nuts_da",
-            "title": "Method",
-            "type": "string"
-          },
-          "target_accept_prob": {
-            "default": 0.8,
-            "description": "Dual-averaging target; see NutsDASpec.target_accept_prob.",
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Target Accept Prob",
-            "type": "number"
-          },
-          "max_tree_depth": {
-            "default": 10,
-            "description": "Doubling limit; see NutsTrajectorySpec.max_tree_depth.",
-            "minimum": 1,
-            "title": "Max Tree Depth",
-            "type": "integer"
-          },
-          "initial_step_size": {
-            "default": 1.0,
-            "description": "First step size; see NutsDASpec.initial_step_size.",
-            "exclusiveMinimum": 0,
-            "title": "Initial Step Size",
-            "type": "number"
-          }
-        },
-        "title": "ConditionalNutsSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ConditionalNutsSpec-Output": {
-        "additionalProperties": false,
-        "description": "Conditional NUTS parameter updates within Particle Gibbs.\n\nIts diagonal mass starts from the initializer's scale and adapts in warmup windows.",
-        "properties": {
-          "method": {
-            "const": "nuts_da",
-            "default": "nuts_da",
-            "title": "Method",
-            "type": "string"
-          },
-          "target_accept_prob": {
-            "default": 0.8,
-            "description": "Dual-averaging target; see NutsDASpec.target_accept_prob.",
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Target Accept Prob",
-            "type": "number"
-          },
-          "max_tree_depth": {
-            "default": 10,
-            "description": "Doubling limit; see NutsTrajectorySpec.max_tree_depth.",
-            "minimum": 1,
-            "title": "Max Tree Depth",
-            "type": "integer"
-          },
-          "initial_step_size": {
-            "default": 1.0,
-            "description": "First step size; see NutsDASpec.initial_step_size.",
-            "exclusiveMinimum": 0,
-            "title": "Initial Step Size",
-            "type": "number"
-          }
-        },
-        "required": [
-          "method",
-          "target_accept_prob",
-          "max_tree_depth",
-          "initial_step_size"
-        ],
-        "title": "ConditionalNutsSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ConditionalParameterSpec-Input": {
-        "discriminator": {
-          "mapping": {
-            "mh": "#/components/schemas/MetropolisHastingsSpec-Input",
-            "nuts_da": "#/components/schemas/ConditionalNutsSpec-Input"
-          },
-          "propertyName": "method"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/MetropolisHastingsSpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/ConditionalNutsSpec-Input"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ConditionalParameterSpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "mh": "#/components/schemas/MetropolisHastingsSpec-Output",
-            "nuts_da": "#/components/schemas/ConditionalNutsSpec-Output"
-          },
-          "propertyName": "method"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/MetropolisHastingsSpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/ConditionalNutsSpec-Output"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -4935,6 +4734,13 @@
         "additionalProperties": false,
         "description": "Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.\n\nEach sweep refreshes an auxiliary point near the current path, draws candidates\naround it at every time step, and selects a new path through the conditional dSMC\ntree (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, Algorithm 4), whose depth grows with log T.\nThe auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).",
         "properties": {
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, section 4).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
           "drift": {
             "$ref": "#/components/schemas/AuxiliaryDrift",
             "default": "none",
@@ -4966,6 +4772,13 @@
         "additionalProperties": false,
         "description": "Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.\n\nEach sweep refreshes an auxiliary point near the current path, draws candidates\naround it at every time step, and selects a new path through the conditional dSMC\ntree (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, Algorithm 4), whose depth grows with log T.\nThe auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).",
         "properties": {
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, section 4).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
           "drift": {
             "$ref": "#/components/schemas/AuxiliaryDrift",
             "default": "none",
@@ -4988,6 +4801,7 @@
           }
         },
         "required": [
+          "num_particles",
           "drift",
           "latent_step",
           "latent_block_coords",
@@ -5001,7 +4815,7 @@
       },
       "DsmcWeightDiagnostics": {
         "additionalProperties": false,
-        "description": "Shared PGibbs/mPGibbs tree and terminal weight diagnostics.\n\nTree nodes are ordered by increasing level, then start time. Terminal weights\ninclude the exact full-path correction and precede the modified Gibbs move;\ntheir reference probability is not that move's rejection probability.",
+        "description": "dSMC tree and terminal weight diagnostics.\n\nTree nodes are ordered by increasing level, then start time. Terminal weights\ninclude the exact full-path correction and precede the modified Gibbs move;\ntheir reference probability is not that move's rejection probability.",
         "properties": {
           "phase": {
             "$ref": "#/components/schemas/DiagnosticPhase"
@@ -16349,19 +16163,6 @@
             "default": null,
             "title": "Num Chains"
           },
-          "num_particles": {
-            "anyOf": [
-              {
-                "minimum": 2,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Num Particles"
-          },
           "seed": {
             "anyOf": [
               {
@@ -16460,19 +16261,6 @@
             "default": null,
             "title": "Num Chains"
           },
-          "num_particles": {
-            "anyOf": [
-              {
-                "minimum": 2,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Num Particles"
-          },
           "seed": {
             "anyOf": [
               {
@@ -16494,7 +16282,6 @@
           "num_samples_per_chain",
           "num_warmup",
           "num_chains",
-          "num_particles",
           "seed"
         ],
         "title": "FitSettingsSpec",
@@ -16658,26 +16445,6 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "FixedParameterDiagnostics": {
-        "additionalProperties": false,
-        "description": "A model with no free parameter coordinates needs only trajectory updates.",
-        "properties": {
-          "method": {
-            "const": "fixed",
-            "default": "fixed",
-            "title": "Method",
-            "type": "string"
-          }
-        },
-        "required": [
-          "method"
-        ],
-        "title": "FixedParameterDiagnostics",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "FixedTrajectorySpec-Input": {
@@ -16887,7 +16654,7 @@
         "properties": {
           "scale": {
             "default": 0.1,
-            "description": "Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity; PGibbs's MH update keeps its shape, and MPGibbs re-estimates it in warmup windows.",
+            "description": "Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity, and MPGibbs re-estimates it in warmup windows.",
             "exclusiveMinimum": 0,
             "title": "Scale",
             "type": "number"
@@ -16905,7 +16672,7 @@
         "properties": {
           "scale": {
             "default": 0.1,
-            "description": "Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity; PGibbs's MH update keeps its shape, and MPGibbs re-estimates it in warmup windows.",
+            "description": "Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity, and MPGibbs re-estimates it in warmup windows.",
             "exclusiveMinimum": 0,
             "title": "Scale",
             "type": "number"
@@ -17459,8 +17226,7 @@
         "discriminator": {
           "mapping": {
             "mpgibbs": "#/components/schemas/MarginalParticleGibbsSpec-Input",
-            "nuts_da": "#/components/schemas/NutsDASpec-Input",
-            "pgibbs": "#/components/schemas/ParticleGibbsSpec-Input"
+            "nuts_da": "#/components/schemas/NutsDASpec-Input"
           },
           "propertyName": "method"
         },
@@ -17470,9 +17236,6 @@
           },
           {
             "$ref": "#/components/schemas/MarginalParticleGibbsSpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/ParticleGibbsSpec-Input"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -17483,8 +17246,7 @@
         "discriminator": {
           "mapping": {
             "mpgibbs": "#/components/schemas/MarginalParticleGibbsSpec-Output",
-            "nuts_da": "#/components/schemas/NutsDASpec-Output",
-            "pgibbs": "#/components/schemas/ParticleGibbsSpec-Output"
+            "nuts_da": "#/components/schemas/NutsDASpec-Output"
           },
           "propertyName": "method"
         },
@@ -17494,9 +17256,6 @@
           },
           {
             "$ref": "#/components/schemas/MarginalParticleGibbsSpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/ParticleGibbsSpec-Output"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -17713,9 +17472,6 @@
               },
               {
                 "$ref": "#/components/schemas/NutsDADiagnostics"
-              },
-              {
-                "$ref": "#/components/schemas/ParticleGibbsDiagnostics"
               },
               {
                 "type": "null"
@@ -18944,8 +18700,7 @@
             "default": "mpgibbs",
             "enum": [
               "nuts_da",
-              "mpgibbs",
-              "pgibbs"
+              "mpgibbs"
             ],
             "title": "Method",
             "type": "string"
@@ -19006,40 +18761,12 @@
           "companion": {
             "$ref": "#/components/schemas/CompanionMoves",
             "default": "none",
-            "description": "Exact Metropolis moves after each sweep, each with its own warmup-adapted step: every parameter at the current path, then, for centred_and_scale_noncentred_mh, the diffusion scales with the path's innovations held fixed. Not available with tempering."
-          },
-          "diagnostic_metrics_all": {
-            "default": false,
-            "description": "Record every optional particle trace below.",
-            "title": "Diagnostic Metrics All",
-            "type": "boolean"
+            "description": "Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density. Not available with tempering."
           },
           "diagnostic_metrics": {
+            "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
             "default": [],
-            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Diagnostic Metrics",
-            "type": "array"
-          },
-          "param_step_size": {
-            "default": 0.02,
-            "description": "Starting \u03b4 of the parameter proposal. Each half has covariance 2\u03b4\u03a3, so a whole move has covariance 4\u03b4\u03a3 (and drift 2\u03b4\u03a3g for pseudo_langevin): a MALA step h is \u03b4 = h / 4. Warmup adapts \u03b4 towards param_target_accept and rescales it whenever \u03a3 is re-estimated, keeping the average proposal variance.",
-            "title": "Param Step Size",
-            "type": "number"
-          },
-          "param_step_size_min": {
-            "default": 1e-06,
-            "description": "Lower bound on \u03b4 during adaptation and rescaling.",
-            "title": "Param Step Size Min",
-            "type": "number"
-          },
-          "param_step_size_max": {
-            "default": 1000.0,
-            "description": "Upper bound on \u03b4 during adaptation and rescaling.",
-            "title": "Param Step Size Max",
-            "type": "number"
+            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
           },
           "param_target_accept": {
             "default": 0.35,
@@ -19047,15 +18774,9 @@
             "title": "Param Target Accept",
             "type": "number"
           },
-          "adaptation_rate": {
-            "default": 0.05,
-            "description": "Gain of the simple scheme: after each warmup sweep \u03b4 is multiplied by exp(adaptation_rate * (moved - param_target_accept)), where moved is 0 or 1.",
-            "title": "Adaptation Rate",
-            "type": "number"
-          },
           "adaptation_scheme": {
             "default": "simple",
-            "description": "simple adapts with a constant gain and keeps the last \u03b4; dual_averaging keeps the averaged \u03b4 at the end of warmup (Hoffman & Gelman 2014, section 3.2).",
+            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2).",
             "enum": [
               "simple",
               "dual_averaging"
@@ -19120,40 +18841,12 @@
           "companion": {
             "$ref": "#/components/schemas/CompanionMoves",
             "default": "none",
-            "description": "Exact Metropolis moves after each sweep, each with its own warmup-adapted step: every parameter at the current path, then, for centred_and_scale_noncentred_mh, the diffusion scales with the path's innovations held fixed. Not available with tempering."
-          },
-          "diagnostic_metrics_all": {
-            "default": false,
-            "description": "Record every optional particle trace below.",
-            "title": "Diagnostic Metrics All",
-            "type": "boolean"
+            "description": "Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density. Not available with tempering."
           },
           "diagnostic_metrics": {
+            "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
             "default": [],
-            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Diagnostic Metrics",
-            "type": "array"
-          },
-          "param_step_size": {
-            "default": 0.02,
-            "description": "Starting \u03b4 of the parameter proposal. Each half has covariance 2\u03b4\u03a3, so a whole move has covariance 4\u03b4\u03a3 (and drift 2\u03b4\u03a3g for pseudo_langevin): a MALA step h is \u03b4 = h / 4. Warmup adapts \u03b4 towards param_target_accept and rescales it whenever \u03a3 is re-estimated, keeping the average proposal variance.",
-            "title": "Param Step Size",
-            "type": "number"
-          },
-          "param_step_size_min": {
-            "default": 1e-06,
-            "description": "Lower bound on \u03b4 during adaptation and rescaling.",
-            "title": "Param Step Size Min",
-            "type": "number"
-          },
-          "param_step_size_max": {
-            "default": 1000.0,
-            "description": "Upper bound on \u03b4 during adaptation and rescaling.",
-            "title": "Param Step Size Max",
-            "type": "number"
+            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
           },
           "param_target_accept": {
             "default": 0.35,
@@ -19161,15 +18854,9 @@
             "title": "Param Target Accept",
             "type": "number"
           },
-          "adaptation_rate": {
-            "default": 0.05,
-            "description": "Gain of the simple scheme: after each warmup sweep \u03b4 is multiplied by exp(adaptation_rate * (moved - param_target_accept)), where moved is 0 or 1.",
-            "title": "Adaptation Rate",
-            "type": "number"
-          },
           "adaptation_scheme": {
             "default": "simple",
-            "description": "simple adapts with a constant gain and keeps the last \u03b4; dual_averaging keeps the averaged \u03b4 at the end of warmup (Hoffman & Gelman 2014, section 3.2).",
+            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2).",
             "enum": [
               "simple",
               "dual_averaging"
@@ -19189,13 +18876,8 @@
           "dsmc",
           "parameter_proposal",
           "companion",
-          "diagnostic_metrics_all",
           "diagnostic_metrics",
-          "param_step_size",
-          "param_step_size_min",
-          "param_step_size_max",
           "param_target_accept",
-          "adaptation_rate",
           "adaptation_scheme",
           "initialization"
         ],
@@ -19259,75 +18941,6 @@
         "x-python-module": "grassmoth.artifacts.identity",
         "x-layer": "identity",
         "x-concern": "identity"
-      },
-      "MetropolisHastingsSpec-Input": {
-        "additionalProperties": false,
-        "description": "Conditional isotropic Gaussian random walk with warmup dual averaging.\n\nThe proposal covariance is a scaled identity; only its scale adapts.",
-        "properties": {
-          "method": {
-            "const": "mh",
-            "default": "mh",
-            "title": "Method",
-            "type": "string"
-          },
-          "initial_step_size": {
-            "default": 0.1,
-            "description": "Starting multiplier of the preconditioned step. It also sets dual averaging's anchor at log(10 * initial_step_size) (Hoffman & Gelman 2014, section 3.2).",
-            "exclusiveMinimum": 0,
-            "title": "Initial Step Size",
-            "type": "number"
-          },
-          "target_accept_prob": {
-            "default": 0.3,
-            "description": "Acceptance probability that dual averaging targets in warmup. For random-walk Metropolis the optimum falls from about 0.43 in one dimension (Agrawal et al. 2023, figure 2) to 0.234 in high dimension (Roberts, Gelman & Gilks 1997).",
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Target Accept Prob",
-            "type": "number"
-          }
-        },
-        "title": "MetropolisHastingsSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "MetropolisHastingsSpec-Output": {
-        "additionalProperties": false,
-        "description": "Conditional isotropic Gaussian random walk with warmup dual averaging.\n\nThe proposal covariance is a scaled identity; only its scale adapts.",
-        "properties": {
-          "method": {
-            "const": "mh",
-            "default": "mh",
-            "title": "Method",
-            "type": "string"
-          },
-          "initial_step_size": {
-            "default": 0.1,
-            "description": "Starting multiplier of the preconditioned step. It also sets dual averaging's anchor at log(10 * initial_step_size) (Hoffman & Gelman 2014, section 3.2).",
-            "exclusiveMinimum": 0,
-            "title": "Initial Step Size",
-            "type": "number"
-          },
-          "target_accept_prob": {
-            "default": 0.3,
-            "description": "Acceptance probability that dual averaging targets in warmup. For random-walk Metropolis the optimum falls from about 0.43 in one dimension (Agrawal et al. 2023, figure 2) to 0.234 in high dimension (Roberts, Gelman & Gilks 1997).",
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Target Accept Prob",
-            "type": "number"
-          }
-        },
-        "required": [
-          "method",
-          "initial_step_size",
-          "target_accept_prob"
-        ],
-        "title": "MetropolisHastingsSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
       },
       "MixedLawProvenance": {
         "additionalProperties": false,
@@ -20916,13 +20529,6 @@
           "trajectory": {
             "$ref": "#/components/schemas/JointTrajectorySpec-Input",
             "description": "NUTS chooses each trajectory's length; fixed runs a set number of steps."
-          },
-          "initial_step_size": {
-            "default": 1.0,
-            "description": "First step size, and the anchor dual averaging shrinks towards until the first mass-matrix window ends (Hoffman & Gelman 2014, section 3.2). With zero warmup in a new fit it is the step for every draw.",
-            "exclusiveMinimum": 0,
-            "title": "Initial Step Size",
-            "type": "number"
           }
         },
         "title": "NutsDASpec",
@@ -20957,21 +20563,13 @@
           "trajectory": {
             "$ref": "#/components/schemas/JointTrajectorySpec-Output",
             "description": "NUTS chooses each trajectory's length; fixed runs a set number of steps."
-          },
-          "initial_step_size": {
-            "default": 1.0,
-            "description": "First step size, and the anchor dual averaging shrinks towards until the first mass-matrix window ends (Hoffman & Gelman 2014, section 3.2). With zero warmup in a new fit it is the step for every draw.",
-            "exclusiveMinimum": 0,
-            "title": "Initial Step Size",
-            "type": "number"
           }
         },
         "required": [
           "method",
           "parameterization",
           "target_accept_prob",
-          "trajectory",
-          "initial_step_size"
+          "trajectory"
         ],
         "title": "NutsDASpec",
         "type": "object",
@@ -22222,154 +21820,22 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "ParticleGibbsDiagnostics": {
-        "additionalProperties": false,
-        "description": "Blocked parameter and dSMC trajectory telemetry from the native producer.",
-        "properties": {
-          "settings": {
-            "$ref": "#/components/schemas/SamplerSpec"
-          },
-          "mcmc_phase_seconds": {
-            "title": "Mcmc Phase Seconds",
-            "type": "number"
-          },
-          "initialization": {
-            "$ref": "#/components/schemas/InitializationDiagnostics"
-          },
-          "parameters": {
-            "discriminator": {
-              "mapping": {
-                "fixed": "#/components/schemas/FixedParameterDiagnostics",
-                "mh": "#/components/schemas/ConditionalMetropolisDiagnostics",
-                "nuts_da": "#/components/schemas/ConditionalNutsDiagnostics"
-              },
-              "propertyName": "method"
-            },
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/FixedParameterDiagnostics"
-              },
-              {
-                "$ref": "#/components/schemas/ConditionalMetropolisDiagnostics"
-              },
-              {
-                "$ref": "#/components/schemas/ConditionalNutsDiagnostics"
-              }
-            ],
-            "title": "Parameters"
-          },
-          "latent_update_fraction": {
-            "title": "Latent Update Fraction",
-            "type": "number"
-          },
-          "latent_frozen_fraction": {
-            "title": "Latent Frozen Fraction",
-            "type": "number"
-          },
-          "latent_move_rms_mean": {
-            "title": "Latent Move Rms Mean",
-            "type": "number"
-          },
-          "dsmc_weights": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DsmcWeightDiagnostics"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "settings",
-          "mcmc_phase_seconds",
-          "initialization",
-          "parameters",
-          "latent_update_fraction",
-          "latent_frozen_fraction",
-          "latent_move_rms_mean",
-          "dsmc_weights"
+      "ParticleDiagnosticMetric": {
+        "enum": [
+          "particle_identity",
+          "parameter_movement",
+          "particle_weights"
         ],
-        "title": "ParticleGibbsDiagnostics",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "ParticleGibbsSpec-Input": {
-        "additionalProperties": false,
-        "description": "Conditional MH or NUTS parameters and dSMC trajectories on the exact joint posterior.\n\nParticle Gibbs alternates a parameter update at the current path with a conditional\ndSMC path update (Andrieu, Doucet & Holenstein 2010, section 2.4.3). It mixes slowly\nwhen parameters and path are strongly correlated (Corenflos 2025, section 1), and is\nkept as the control that isolates what marginalizing the parameters gains.",
-        "properties": {
-          "method": {
-            "const": "pgibbs",
-            "default": "pgibbs",
-            "title": "Method",
-            "type": "string"
-          },
-          "parameter_kernel": {
-            "$ref": "#/components/schemas/ConditionalParameterSpec-Input",
-            "description": "Parameter update at the current path: random-walk MH or NUTS."
-          },
-          "dsmc": {
-            "$ref": "#/components/schemas/DsmcSpec-Input",
-            "description": "Path update."
-          },
-          "initialization": {
-            "$ref": "#/components/schemas/GaussianInitializationSpec-Input",
-            "description": "Independent Gaussian starts, which also set the initial proposal scale."
-          },
-          "diagnostic_metrics_all": {
-            "default": false,
-            "description": "Record every optional particle trace, as listed in MarginalParticleGibbsSpec.diagnostic_metrics.",
-            "title": "Diagnostic Metrics All",
-            "type": "boolean"
-          }
-        },
-        "title": "ParticleGibbsSpec",
-        "type": "object",
+        "type": "string",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "ParticleGibbsSpec-Output": {
-        "additionalProperties": false,
-        "description": "Conditional MH or NUTS parameters and dSMC trajectories on the exact joint posterior.\n\nParticle Gibbs alternates a parameter update at the current path with a conditional\ndSMC path update (Andrieu, Doucet & Holenstein 2010, section 2.4.3). It mixes slowly\nwhen parameters and path are strongly correlated (Corenflos 2025, section 1), and is\nkept as the control that isolates what marginalizing the parameters gains.",
-        "properties": {
-          "method": {
-            "const": "pgibbs",
-            "default": "pgibbs",
-            "title": "Method",
-            "type": "string"
-          },
-          "parameter_kernel": {
-            "$ref": "#/components/schemas/ConditionalParameterSpec-Output",
-            "description": "Parameter update at the current path: random-walk MH or NUTS."
-          },
-          "dsmc": {
-            "$ref": "#/components/schemas/DsmcSpec-Output",
-            "description": "Path update."
-          },
-          "initialization": {
-            "$ref": "#/components/schemas/GaussianInitializationSpec-Output",
-            "description": "Independent Gaussian starts, which also set the initial proposal scale."
-          },
-          "diagnostic_metrics_all": {
-            "default": false,
-            "description": "Record every optional particle trace, as listed in MarginalParticleGibbsSpec.diagnostic_metrics.",
-            "title": "Diagnostic Metrics All",
-            "type": "boolean"
-          }
+      "ParticleDiagnosticMetrics": {
+        "items": {
+          "$ref": "#/components/schemas/ParticleDiagnosticMetric"
         },
-        "required": [
-          "method",
-          "parameter_kernel",
-          "dsmc",
-          "initialization",
-          "diagnostic_metrics_all"
-        ],
-        "title": "ParticleGibbsSpec",
-        "type": "object",
+        "type": "array",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
@@ -22395,7 +21861,7 @@
           },
           "diagnostic_metrics": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/ParticleDiagnosticMetric"
             },
             "title": "Diagnostic Metrics",
             "type": "array"
@@ -24480,13 +23946,6 @@
             "title": "Seed",
             "type": "integer"
           },
-          "num_particles": {
-            "default": 64,
-            "description": "Particles per dSMC sweep for pgibbs and mpgibbs, including the current path; nuts_da ignores it. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, section 4).",
-            "minimum": 2,
-            "title": "Num Particles",
-            "type": "integer"
-          },
           "hardware": {
             "$ref": "#/components/schemas/InferenceHardware",
             "default": "L40S",
@@ -24501,7 +23960,7 @@
           },
           "algorithm": {
             "$ref": "#/components/schemas/InferenceAlgorithmSpec-Output",
-            "description": "Exact joint sampler: mpgibbs (default), pgibbs or nuts_da."
+            "description": "Exact joint sampler: mpgibbs (default) or nuts_da."
           }
         },
         "required": [
@@ -24509,7 +23968,6 @@
           "num_samples_per_chain",
           "num_chains",
           "seed",
-          "num_particles",
           "hardware",
           "time_limit_seconds",
           "algorithm"

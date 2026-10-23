@@ -183,10 +183,9 @@ For local-study GPU fits, select `inference.sampler.hardware: L40S` (the default
 Use `local` to fit on this machine; the other
 [hardware enum values](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py)
 select Modal GPUs. Select `inference.sampler.algorithm: {method: nuts_da}` for
-joint parameter/state NUTS. The particle samplers are `method: mpgibbs` and
-`method: pgibbs`; the latter selects conditional MH or NUTS through
-`parameter_kernel: {method: mh}` or `{method: nuts_da}`. Both use the shared
-`dsmc` settings in the [sampler contract](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
+joint parameter/state NUTS. The particle sampler is `method: mpgibbs`; its
+`companion` adds conditional MH or NUTS parameter moves, and its `dsmc` settings
+are in the [sampler contract](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
 The [Modal compute adapter](../../apps/grassmoth-server/src/grassmoth_server/actions/fit/remote.py)
 uses the installed Modal credentials, creates an ephemeral
 `grassmoth-server` app with the current source, and reuses

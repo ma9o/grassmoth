@@ -13,7 +13,9 @@ from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
 )
 
 if TYPE_CHECKING:
-    from grassmoth.artifacts.sampling import DsmcSpec
+    from collections.abc import Collection
+
+    from grassmoth.artifacts.sampling import DsmcSpec, ParticleDiagnosticMetric
     from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
     from grassmoth.models.ssm.inference.targets.particle import (
         ParticleContext,
@@ -25,11 +27,10 @@ def build_smoother_setup(
     target: ParticleTarget,
     spec: DsmcSpec,
     *,
-    num_particles: int,
     num_parameter_particles: int,
     free_mask: jax.Array,
     paid_mix: PaidMixture | None,
-    diagnostic_metrics: frozenset[str],
+    diagnostic_metrics: Collection[ParticleDiagnosticMetric],
 ) -> SmootherSetup:
     """Bind local auxiliary factors while retaining the exact scientific target."""
     local_target = target.tree_target()
@@ -49,7 +50,7 @@ def build_smoother_setup(
         runtime_observations=target.observations,
         runtime_times=target.times,
         latent_free_mask=free_mask,
-        num_particles=num_particles,
+        num_particles=spec.num_particles,
         num_parameter_particles=num_parameter_particles,
         drift=spec.drift,
         latent_block_coords=spec.latent_block_coords,

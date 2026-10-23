@@ -42,10 +42,10 @@ class TestSamplerSpec:
 
     def test_marginal_particle_gibbs_defaults(self):
         result = InferenceConfig().sampler
-        assert result.num_particles == 64
         options = result.algorithm
         assert isinstance(options, MarginalParticleGibbsSpec)
         assert options.n_parameter_particles == 2
+        assert options.dsmc.num_particles == 64
         assert options.dsmc.drift == "none"
         assert options.dsmc.pilot_mixture is True
         assert options.dsmc.latent_block_coords == 1
@@ -53,7 +53,6 @@ class TestSamplerSpec:
         assert options.parameter_proposal == "random_walk"
         encoded = result.model_dump_json()
         assert SamplerSpec.model_validate_json(encoded) == result
-        assert options.param_step_size == 0.02
         assert options.param_target_accept == 0.35
 
     def test_public_overrides_resolve_without_mutating_defaults(self, monkeypatch):
@@ -64,9 +63,8 @@ class TestSamplerSpec:
             num_samples_per_chain=20,
             num_chains=2,
             seed=3,
-            num_particles=8,
             algorithm=MarginalParticleGibbsSpec(
-                dsmc=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.31))
+                dsmc=DsmcSpec(num_particles=8, latent_step=FixedLatentStepSpec(delta=0.31))
             ),
         )
         config = _make_pipeline_config()
@@ -84,7 +82,6 @@ class TestSamplerSpec:
                 num_samples_per_chain=30,
                 num_chains=4,
                 seed=0,
-                num_particles=16,
                 time_limit_seconds=90,
             )
         )
@@ -93,9 +90,8 @@ class TestSamplerSpec:
             resolved.num_samples_per_chain,
             resolved.num_chains,
             resolved.seed,
-            resolved.num_particles,
             resolved.time_limit_seconds,
-        ) == (0, 30, 4, 0, 16, 90)
+        ) == (0, 30, 4, 0, 90)
         assert resolved.algorithm is configured.algorithm
         assert isinstance(resolved.algorithm, MarginalParticleGibbsSpec)
         assert resolved.algorithm.dsmc.latent_step == FixedLatentStepSpec(delta=0.31)
@@ -104,8 +100,7 @@ class TestSamplerSpec:
             configured.num_samples_per_chain,
             configured.num_chains,
             configured.seed,
-            configured.num_particles,
-        ) == (10, 20, 2, 3, 8)
+        ) == (10, 20, 2, 3)
         assert resolve_sampler_spec(FitSettingsSpec()) == configured
         assert configured.time_limit_seconds == 14400
         assert resolve_sampler_spec(FitSettingsSpec(), resolved).time_limit_seconds == 90
@@ -158,20 +153,16 @@ FULL_CONFIG = textwrap.dedent("""\
         num_samples_per_chain: 2000
         num_chains: 2
         seed: 123
-        num_particles: 24
         algorithm:
           method: mpgibbs
           n_parameter_particles: 3
           dsmc:
+            num_particles: 24
             latent_step:
               kind: fixed
               delta: 0.29
             drift: amala
-          param_step_size: 0.03
-          param_step_size_min: 0.000001
-          param_step_size_max: 0.7
           param_target_accept: 0.4
-          adaptation_rate: 0.03
           initialization:
             scale: 0.25
 """)
@@ -233,16 +224,12 @@ class TestLoadConfig:
         assert cfg.inference.sampler.num_chains == 2
         assert cfg.inference.sampler.seed == 123
         assert cfg.inference.compute_loo_diagnostics is False
-        assert cfg.inference.sampler.num_particles == 24
         assert isinstance(cfg.inference.sampler.algorithm, MarginalParticleGibbsSpec)
+        assert cfg.inference.sampler.algorithm.dsmc.num_particles == 24
         assert cfg.inference.sampler.algorithm.n_parameter_particles == 3
         assert cfg.inference.sampler.algorithm.dsmc.latent_step == FixedLatentStepSpec(delta=0.29)
         assert cfg.inference.sampler.algorithm.dsmc.drift == "amala"
-        assert cfg.inference.sampler.algorithm.param_step_size == 0.03
-        assert cfg.inference.sampler.algorithm.param_step_size_min == 1e-6
-        assert cfg.inference.sampler.algorithm.param_step_size_max == 0.7
         assert cfg.inference.sampler.algorithm.param_target_accept == 0.4
-        assert cfg.inference.sampler.algorithm.adaptation_rate == 0.03
         assert cfg.inference.sampler.algorithm.initialization == GaussianInitializationSpec(
             scale=0.25
         )

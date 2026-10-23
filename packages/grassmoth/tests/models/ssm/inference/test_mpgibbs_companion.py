@@ -1,4 +1,4 @@
-"""Companion moves are exact Metropolis transitions with their own warmup-adapted steps."""
+"""Companion moves are exact parameter transitions with their own warmup-adapted steps."""
 
 import logging
 import time
@@ -11,6 +11,7 @@ import pytest
 from pydantic import ValidationError
 
 from grassmoth.artifacts.sampling import (
+    DsmcSpec,
     GaussianInitializationSpec,
     GaussianReferenceTemperingSpec,
     MarginalParticleGibbsSpec,
@@ -20,6 +21,7 @@ from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordin
 from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
     build_companion_kernel,
     build_companion_proposal,
+    build_conditional_nuts,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -33,6 +35,7 @@ from grassmoth.models.ssm.inference.warmup.initialization import (
     prepare_particle_initialization,
 )
 from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.interval_particle import gaussian_interval_case
 from packages.grassmoth.tests.models.ssm.inference.test_joint_coordinates import (
     _correlated_target,
 )
@@ -42,9 +45,9 @@ from packages.grassmoth.tests.models.ssm.inference.test_joint_coordinates import
 def test_companion_choice_identifies_the_kernel_and_excludes_tempering():
     identities = {
         SamplerSpec(algorithm=MarginalParticleGibbsSpec(companion=choice)).kernel_identity
-        for choice in ("none", "centred_mh", "centred_and_scale_noncentred_mh")
+        for choice in ("none", "centred_mh", "centred_and_scale_noncentred_mh", "centred_nuts")
     }
-    assert len(identities) == 3
+    assert len(identities) == 4
     with pytest.raises(ValidationError, match="tempering"):
         MarginalParticleGibbsSpec(
             companion="centred_mh", tempering=GaussianReferenceTemperingSpec()
@@ -107,7 +110,80 @@ def test_companion_proposals_are_reversible_with_exact_ratios_and_refreshed_stat
 
 
 @pytest.mark.inference(concern="sampling")
-def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it():
+@pytest.mark.inference(concern="recovery")
+def test_centred_nuts_preserves_the_joint_posterior_and_freezes_its_adaptation():
+    target, mean, covariance = gaussian_interval_case()
+    warmup, retained = 250, 1500
+    nuts = build_conditional_nuts(
+        target, build_companion_proposal(target, "centred_mh", jnp.zeros_like)
+    )
+    center = jnp.asarray(mean)
+    loading = jnp.asarray(covariance[1:, 0] / covariance[0, 0])
+    conditional_chol = jnp.linalg.cholesky(
+        jnp.asarray(covariance[1:, 1:])
+        - jnp.outer(jnp.asarray(covariance[1:, 0]), jnp.asarray(covariance[0, 1:]))
+        / covariance[0, 0]
+    )
+
+    def chain(key):
+        init_key, run_key = jax.random.split(key)
+        state = _initialize_chain_state(
+            center[:1],
+            observations=target.observations,
+            times=target.times,
+            target=target,
+            parameter_gradient_fn=jnp.zeros_like,
+            initial_latent_delta=jnp.full(target.times.shape, 0.1),
+            param_step_size=0.02,
+            parameter_chol=jnp.sqrt(jnp.asarray(covariance[:1, :1])),
+            param_min_scale=1e-6,
+            param_max_scale=1e3,
+            initial_latent_trajectory=center[1:, None],
+            exact_constraints=target.exact_constraints,
+        )
+
+        def update(carry, step_key):
+            state, tuning = carry
+            theta_key, path_key = jax.random.split(step_key)
+            state, tuning, record = nuts.step(state, tuning, theta_key)
+            # Independently known x|theta completes an exact blocked Gibbs sweep.
+            # Its changing path catches a stale NUTS energy/gradient cache.
+            path = (
+                center[1:]
+                + loading * (state.position[0] - center[0])
+                + conditional_chol @ jax.random.normal(path_key, (len(mean) - 1,))
+            )[:, None]
+            draw = jnp.concatenate((state.position, path[:, 0]))
+            return (state._replace(latent_trajectory=path), tuning), (
+                draw,
+                record["centred_nuts_step_size"],
+            )
+
+        _, (draws, scales) = jax.lax.scan(
+            update,
+            (state, nuts.initialize(state, init_key, warmup)),
+            jax.random.split(run_key, warmup + retained),
+        )
+        return draws[warmup:], scales[warmup:]
+
+    draws, scales = jax.jit(jax.vmap(chain))(jax.random.split(jax.random.key(348), 4))
+    whitened = np.linalg.solve(
+        np.linalg.cholesky(covariance), (np.asarray(draws).reshape(-1, len(mean)) - mean).T
+    ).T
+    np.testing.assert_allclose(whitened.mean(axis=0), 0.0, atol=0.12)
+    np.testing.assert_allclose(np.cov(whitened, rowvar=False), np.eye(len(mean)), atol=0.15)
+    np.testing.assert_array_equal(scales, np.broadcast_to(scales[:, :1], scales.shape))
+
+
+@pytest.mark.inference(concern="sampling")
+@pytest.mark.parametrize(
+    ("companion", "moves"),
+    [
+        ("centred_and_scale_noncentred_mh", ("centred_mh", "scale_noncentred_mh")),
+        ("centred_nuts", ("centred_nuts",)),
+    ],
+)
+def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, moves):
     target = _correlated_target()
     assert [
         move.name
@@ -128,7 +204,7 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it():
     assert isinstance(initialization, ParticleInitialization)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        num_particles=4,
+        dsmc=DsmcSpec(num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.02,
         parameter_preconditioner_chol=initialization.parameter_chol,
@@ -139,7 +215,7 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it():
         kernel=kernel,
         companion=build_companion_kernel(
             target,
-            "centred_and_scale_noncentred_mh",
+            companion,
             diffusion_mask=jnp.ones(1, dtype=bool),
             parameter_gradient=kernel.parameter_gradient_fn,
         ),
@@ -156,15 +232,21 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it():
         wall_clock=lambda: datetime.now(UTC),
         logger=logging.getLogger(__name__),
     )
-    for move in ("centred_mh", "scale_noncentred_mh"):
+    for move in moves:
         warmup = np.asarray(result.warmup_chain_extra_fields[f"{move}_step_size"])
         retained = np.asarray(result.chain_extra_fields[f"{move}_step_size"])
         assert warmup.shape == (2, 60)
         assert np.all(np.ptp(warmup, axis=1) > 0)
         np.testing.assert_array_equal(retained, np.repeat(retained[:, :1], 20, axis=1))
         accepted = np.asarray(result.all_chain_extra_fields[f"{move}_accept_prob"])
-        assert set(np.unique(accepted)) <= {0.0, 1.0}
+        # Metropolis moves record acceptance indicators; NUTS its acceptance statistic.
+        if move != "centred_nuts":
+            assert set(np.unique(accepted)) <= {0.0, 1.0}
         assert np.all(np.isfinite(result.all_chain_extra_fields[f"{move}_jump_rms"]))
+    if companion == "centred_nuts":
+        assert result.chain_extra_fields["diverging"].shape == (2, 20)
+        assert np.all(np.asarray(result.chain_extra_fields["tree_depth"]) >= 1)
+        return
     assert not np.array_equal(
         result.warmup_chain_extra_fields["centred_mh_step_size"],
         result.warmup_chain_extra_fields["scale_noncentred_mh_step_size"],
