@@ -36,7 +36,6 @@ processes:
     working_dir: apps/grassmoth-server
     command: uv run python -m grassmoth_server.actions.temporal.worker
     environment:
-      - PYTHONHASHSEED=0
       - TEMPORAL_ADDRESS=localhost:7233
     depends_on:
       temporal:
