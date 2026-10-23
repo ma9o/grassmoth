@@ -1,4 +1,4 @@
-"""Whole library fits reuse JAX's cache in fresh and previously traced processes."""
+"""Whole library fits reuse JAX's cache across fresh processes, hash seeds and earlier traces."""
 
 import json
 import os
@@ -16,7 +16,8 @@ def test_whole_fits_reuse_jax_cache_across_processes(tmp_path):
     root = Path(__file__).resolve().parents[4]
     results = []
     started = monotonic()
-    for phase in ("populate", "reuse"):
+    # A different hash seed in the second process rejects programs that follow set order.
+    for phase, hash_seed in (("populate", "0"), ("reuse", "1")):
         output = tmp_path / f"{phase}.json"
         process = subprocess.run(
             [sys.executable, "-m", "grassmoth_server_test_support.fit_cache", phase, str(output)],
@@ -24,7 +25,7 @@ def test_whole_fits_reuse_jax_cache_across_processes(tmp_path):
             env={
                 **os.environ,
                 "PYTHONPATH": str(root / "apps/grassmoth-server/tests"),
-                "PYTHONHASHSEED": "0",
+                "PYTHONHASHSEED": hash_seed,
                 "JAX_PLATFORMS": "cpu",
                 "JAX_COMPILATION_CACHE_DIR": str(tmp_path / "cache"),
                 "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": "0",

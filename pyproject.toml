@@ -13,6 +13,8 @@ members = ["packages/grassmoth", "apps/grassmoth-server"]
 [tool.uv.sources]
 grassmoth = { workspace = true }
 grassmoth-server = { workspace = true }
+# Sorted Distribution pytree fields; return to PyPI once NumPyro releases them.
+numpyro = { git = "https://github.com/ma9o/numpyro", rev = "08d156e39814b8b6b61caa8dd294352059abbd0a" }
 
 [dependency-groups]
 cloud = [
