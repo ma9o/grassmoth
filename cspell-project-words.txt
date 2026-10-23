@@ -29,6 +29,7 @@ Excalidraw
 Gaussianity
 hessmc
 Langevin
+linearizations
 Lyapunov
 Megaprompt
 Maruyama

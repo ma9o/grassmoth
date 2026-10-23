@@ -1,7 +1,8 @@
-"""Initialization and particle sampling use the exact joint density.
+"""Targets and likelihoods use the exact joint density.
 
-Guard against reintroducing a linearized Gaussian likelihood backend. This is a
-static source scan, with no JAX execution or model build.
+Linearizations may only shape exactly corrected proposals. Guard against
+reintroducing a linearized Gaussian likelihood backend. This is a static source
+scan, with no JAX execution or model build.
 """
 
 from __future__ import annotations
@@ -36,7 +37,8 @@ def test_linearized_backends_are_absent_from_production() -> None:
             offenders[rel] = hits
 
     assert not offenders, (
-        "Initialization and particle sampling must use the exact joint density. "
+        "Targets and likelihoods must use the exact joint density. "
+        "Linearizations may only shape exactly corrected proposals. "
         "Linearized backend references found in: "
         f"{offenders}"
     )

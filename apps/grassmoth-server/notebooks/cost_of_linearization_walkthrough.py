@@ -533,8 +533,9 @@ def bridge_md(mo):
     the cost map is hot, and only an exact engine (particle/SMC, Euler–Maruyama, the
     auxiliary-corrected `amala` / `amala_plus` proposals) may
     stand on a reported path. The guard test
-    `tests/models/ssm/test_linearization_init_only.py` enforces that the linearization backend
-    is importable only from the warmup path. The persistent noise floor in §9's left column is
+    `packages/grassmoth/tests/models/ssm/test_no_linearized_likelihood.py` enforces that no
+    linearized likelihood backend appears in production source; linearizations may shape
+    exactly corrected proposals. The persistent noise floor in §9's left column is
     a second face of the same principle: it is the price a *Gaussian emission* pays against the
     truth's heavy tails, and it is exactly why the production filter runs particle/SMC over the
     **true** emission density rather than a Gaussian surrogate — a cost no amount of clever

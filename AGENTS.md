@@ -63,6 +63,11 @@
 
 - Represent structural assumptions as DAGs with explicit latent confounders. ADMGs are only for internal projection into y0's identification algorithm, never user-facing.
 
-- The latent SSM is continuous-time **nonlinear**. Linearization and Gaussian approximations are allowed **only for particle-sampler initialization**: parameter positions, proposal preconditioner, and cSMC reference trajectory.
+- The latent SSM is continuous-time **nonlinear**, and every target is the exact nonlinear model. Never replace a nonlinear drift, emission or recurrence with a linear or Gaussian one in a target, a likelihood, a diagnostic or a reported quantity.
+- Linearizations and Gaussian approximations may shape proposals at any stage of sampling, as long as the move stays exact:
+  - its correction (Metropolis–Hastings ratio or particle weights) uses the true densities;
+  - the approximation is built only from what the move holds fixed (the auxiliary point u, or the parameters during a path update), unless the acceptance ratio also accounts for rebuilding it around the proposed state;
+  - adapting it from the chain's history happens only during warmup;
+  - each such proposal documents where it loses efficiency (poor fit, multiple modes). A bad approximation may cost mixing, never correctness.
 - Production posteriors, all diagnostics, posterior-predictive checks, and counterfactual/predictive outputs must use the exact engines in [docs/assumptions.md](docs/assumptions.md#model-class).
-- Before reintroducing linearization, run [test_linearization_init_only.py](packages/grassmoth/tests/models/ssm/test_linearization_init_only.py), which restricts Laplace imports to warmup/init.
+- [test_no_linearized_likelihood.py](packages/grassmoth/tests/models/ssm/test_no_linearized_likelihood.py) enforces the first rule: it fails if a linearized likelihood backend appears anywhere in production source.
