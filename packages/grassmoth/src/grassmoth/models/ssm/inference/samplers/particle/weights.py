@@ -33,7 +33,10 @@ def weight_statistics(logits: jax.Array) -> dict[ParticleWeightMetric, jax.Array
     centered before reduction so additive offsets cannot inflate their variance.
     Undefined distributions produce nonfinite measurements, never uniform weights.
     """
-    log_probs = jax.nn.log_softmax(logits, axis=-1)
+    # Keep diagnostic primitives inline: outlining the same helper in sampling
+    # and diagnostic branches makes JAX's helper sharing depend on prior traces.
+    shifted = logits - jax.lax.stop_gradient(jnp.max(logits, axis=-1, keepdims=True))
+    log_probs = shifted - jnp.log(jnp.sum(jnp.exp(shifted), axis=-1, keepdims=True))
     probabilities = jnp.exp(log_probs)
     ess = jnp.exp(-jax.scipy.special.logsumexp(2 * log_probs, axis=-1))
     finite = jnp.isfinite(logits)
@@ -49,7 +52,10 @@ def weight_statistics(logits: jax.Array) -> dict[ParticleWeightMetric, jax.Array
         ParticleWeightMetric.ESS: ess,
         ParticleWeightMetric.ESS_FRACTION: ess / logits.shape[-1],
         ParticleWeightMetric.ENTROPY: -jnp.sum(
-            jnp.where(jnp.isneginf(log_probs), 0.0, probabilities * log_probs), axis=-1
+            jax.lax.select(
+                jnp.isneginf(log_probs), jnp.zeros_like(log_probs), probabilities * log_probs
+            ),
+            axis=-1,
         ),
         ParticleWeightMetric.MAX_PROBABILITY: jnp.max(probabilities, axis=-1),
         ParticleWeightMetric.REFERENCE_PROBABILITY: probabilities[..., 0],
