@@ -97,4 +97,4 @@ def compile_expression(
     def outlined(*arguments: jax.Array | float) -> jax.Array:
         return jnp.asarray(numerical(*arguments))
 
-    return operands, jax.jit(outlined, inline=jax.Inline.XLA_LATE)
+    return operands, jax.jit(outlined, inline=jax.Inline.JAX_EARLY)

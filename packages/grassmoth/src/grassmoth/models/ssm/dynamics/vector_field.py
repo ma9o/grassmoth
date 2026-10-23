@@ -145,7 +145,7 @@ class VectorField(eqx.Module):
         """Apply whole-state interventions to the initial state at the requested start time."""
         return apply_variable_overrides_to_state(eta0, jnp.asarray(t0), args.intervention)
 
-    @eqx.filter_jit(inline=jax.Inline.XLA_LATE)  # ty: ignore[no-matching-overload]  # pyright: ignore[reportCallIssue] -- Equinox forwards jitkwargs to JAX; its overloads omit them.
+    @eqx.filter_jit(inline=jax.Inline.JAX_EARLY)  # ty: ignore[no-matching-overload]  # pyright: ignore[reportCallIssue] -- Equinox forwards jitkwargs to JAX; its overloads omit them.
     def _natural_derivative(
         self, t: Array, eta: Float[Array, " D"], args: VectorFieldArgs
     ) -> Float[Array, " D"]:
