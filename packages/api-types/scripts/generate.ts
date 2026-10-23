@@ -20,6 +20,14 @@ function writeOrCheck(path: string, content: string): void {
 }
 
 const schema = JSON.parse(readFileSync(resolve(ROOT, "schemas/openapi.json"), "utf8"));
+// The viewer consumes the binary representation. Keep its existing operation
+// types while the published OpenAPI also describes JSON for curl callers.
+for (const methods of Object.values(schema.paths) as Record<string, JsonSchema>[]) {
+  for (const operation of Object.values(methods)) {
+    const content = operation.responses?.["200"]?.content;
+    if (content?.["application/msgpack"]) delete content["application/json"];
+  }
+}
 const definitions: Record<string, JsonSchema> = schema.components.schemas;
 const refTail = (ref: string) => ref.slice(ref.lastIndexOf("/") + 1);
 const templates = new Map<string, string>(

@@ -34,6 +34,7 @@ from grassmoth_server.actions.contracts.polling import ActionPoll
 from grassmoth_server.actions.contracts.progress import ProgressEvent
 from grassmoth_server.actions.contracts.requests import DataDiffRequest, ModelDiffRequest
 from grassmoth_server.actions.contracts.timeline import TimelineResponse, TimelineRevision
+from grassmoth_server.api.schema import with_json_responses
 from grassmoth_server.llm.traces import LLMTrace
 from grassmoth_server.study.records import StudyRevision
 from grassmoth_server.study.snapshot import ModelSnapshot
@@ -156,14 +157,16 @@ def export_openapi() -> JsonSchemaValue:
     components: JsonSchemaValue = {"schemas": dict(sorted(definitions.items()))}
     if security_schemes:
         components["securitySchemes"] = security_schemes
-    return {
-        "openapi": app.openapi_version,
-        "info": {"title": app.title, "version": app.version, "description": app.description},
-        "paths": paths,
-        "components": components,
-        "x-contract-roots": root_refs,
-        "x-typescript-generics": generic_refs,
-    }
+    return with_json_responses(
+        {
+            "openapi": app.openapi_version,
+            "info": {"title": app.title, "version": app.version, "description": app.description},
+            "paths": paths,
+            "components": components,
+            "x-contract-roots": root_refs,
+            "x-typescript-generics": generic_refs,
+        }
+    )
 
 
 _BASE_URL = "${TOOL_SERVER_URL:-http://localhost:8100}"
@@ -253,7 +256,7 @@ def _curl_block(
     url = f"{_BASE_URL}{_path_with_placeholders(path, parameters)}"
     lines = [f'curl -s "{url}"']
     if "application/msgpack" in operation.get("responses", {}).get("200", {}).get("content", {}):
-        lines[0] += " -o /tmp/action.msgpack"
+        lines[0] += " -H 'Accept: application/json' -o /tmp/action.json"
     if method != "get":
         lines[0] += " \\"
         lines.append(f"  -X {method.upper()} \\")

@@ -82,6 +82,7 @@ export interface paths {
          *     Args:
          *         workspace_id: Study workspace containing the source folder and revision
          *             history.
+         *         request: HTTP request selecting the response representation.
          *         body: Preparation request selecting a model, source folder, and computed
          *             rules or semantic extraction instructions for its observation IDs.
          *         clients: Provider of the shared Temporal connection used to dispatch
@@ -5929,7 +5930,7 @@ export interface components {
             /**
              * Npy
              * Format: binary
-             * @description Lossless NPY bytes, including dtype and dimensions; never base64 or scalar JSON.
+             * @description Lossless NPY bytes, including dtype and dimensions, in MessagePack. JSON action responses replace the entire NumericalArray with nested lists in that shape (a scalar for a zero-dimensional array); non-finite values are null.
              */
             readonly npy: Uint8Array;
         };

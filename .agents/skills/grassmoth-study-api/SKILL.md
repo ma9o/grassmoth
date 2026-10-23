@@ -17,11 +17,9 @@ complete input/output schemas, defaults and alternatives.
 - **Results and errors:** `body` contains the action's scientific output only on
   success; otherwise it is null. `messages` holds progress, traces and failure
   details. Completed results are saved and GET never recomputes them.
-- **Binary responses:** action POST/GET return `application/msgpack`, decoded with
-  `msgpack.unpackb(response_bytes, raw=False)` in Python. Numerical `arrays` entries
-  contain NPY bytes: `numpy.load(io.BytesIO(entry["npy"]), allow_pickle=False)`.
-  TypeScript uses the shared client and `readNumericalArray(entry)`. Workspace,
-  timeline, upload and HTTP error responses are JSON.
+- **JSON responses:** send `Accept: application/json` on action POST/GET to read
+  results with curl and jq. Numerical values are nested lists; non-finite values
+  are null. Workspace, timeline, upload and HTTP error responses are also JSON.
 - **Call reuse:** revision selectors accept exact Git hashes or `"latest"`, pinned
   once at POST. Identical resolved inputs reuse running calls, successes **and
   failures**. Changing `reasoning` does not create a new call; change the inputs
@@ -65,7 +63,7 @@ The computed comparison report; original histories remain in their producing res
 | `report` | [`DataComparisonReport`](../../../packages/grassmoth/src/grassmoth/artifacts/reports/data_comparison.py) | required | Exact history selections, point changes, per-history statistics, compatibility findings and predictive checks. |
 
 ```bash
-curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/data_diff" -o /tmp/action.msgpack \
+curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/data_diff" -H 'Accept: application/json' -o /tmp/action.json \
   -X POST \
   -H 'Content-Type: application/json' \
   -d '{"action": "data_diff", "input": {"left_ref": [{"revision": "string"}], "right_ref": [{"revision": "string"}]}}'
@@ -100,7 +98,7 @@ The produced model and its recorded scientific findings.
 | `pruning` | [`ModelEditResult`](../../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Entities removed because they do not serve the question. |
 
 ```bash
-curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit_model" -o /tmp/action.msgpack \
+curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit_model" -H 'Accept: application/json' -o /tmp/action.json \
   -X POST \
   -H 'Content-Type: application/json' \
   -d '{"action": "edit_model", "input": {"parent_ref": "string", "dynamical_model_spec": {}}}'
@@ -131,7 +129,7 @@ The question saved by this action.
 | `question` | [`QuestionSpec`](../../../packages/grassmoth/src/grassmoth/artifacts/model/question.py) | required | The saved question, including its outcome and intervention queries. |
 
 ```bash
-curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit_question" -o /tmp/action.msgpack \
+curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit_question" -H 'Accept: application/json' -o /tmp/action.json \
   -X POST \
   -H 'Content-Type: application/json' \
   -d '{"action": "edit_question", "input": {"question": {"text": "string", "outcome": "string"}}}'
@@ -166,7 +164,7 @@ A conditioned model, its completed checks, and self-contained inference evidence
 | `inference` | [`InferenceReport`](../../../packages/grassmoth/src/grassmoth/artifacts/reports/inference.py) | required | Run provenance, native sampler evidence, diagnostics and parameter summaries. |
 
 ```bash
-curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit" -o /tmp/action.msgpack \
+curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit" -H 'Accept: application/json' -o /tmp/action.json \
   -X POST \
   -H 'Content-Type: application/json' \
   -d '{"action": "fit", "input": {"target": {"kind": "new", "dynamical_model_spec_ref": "string", "data_ref": {"revision": "string", "replicate_index": 0}}}}'
@@ -207,7 +205,7 @@ are computed here; those remain owned by their producing actions.
 | `changes` | [`DynamicalModelSpec`](../../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Merge this document into the before spec to obtain the after spec. Omitted fields are unchanged, supplied fields are added or updated, and null map entries delete their identities. A question revision denotes the empty spec. |
 
 ```bash
-curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/model_diff" -o /tmp/action.msgpack \
+curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/model_diff" -H 'Accept: application/json' -o /tmp/action.json \
   -X POST \
   -H 'Content-Type: application/json' \
   -d '{"action": "model_diff", "input": {"before_ref": "string", "after_ref": "string"}}'
@@ -225,6 +223,7 @@ are pinned before computing call identity.
 Args:
     workspace_id: Study workspace containing the source folder and revision
         history.
+    request: HTTP request selecting the response representation.
     body: Preparation request selecting a model, source folder, and computed
         rules or semantic extraction instructions for its observation IDs.
     clients: Provider of the shared Temporal connection used to dispatch
@@ -262,7 +261,7 @@ Prepared observations, their resolved metadata, and data-quality findings.
 | `extraction` | [`DataPreparationResult`](../../../packages/grassmoth/src/grassmoth/artifacts/observations/preparation.py) | required | Retained extraction workers, failed chunks and reuse counts. |
 
 ```bash
-curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/prepare_data" -o /tmp/action.msgpack \
+curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/prepare_data" -H 'Accept: application/json' -o /tmp/action.json \
   -X POST \
   -H 'Content-Type: application/json' \
   -d '{"action": "prepare_data", "input": {"dynamical_model_spec_ref": "string", "source": "string", "extraction": {}}}'
@@ -297,7 +296,7 @@ Generated histories and their complete scientific report, including owned numeri
 | `report` | [`SimulationReport`](../../../packages/grassmoth/src/grassmoth/artifacts/simulation.py) | required | Generation evidence and evaluated findings. |
 
 ```bash
-curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/simulate" -o /tmp/action.msgpack \
+curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/simulate" -H 'Accept: application/json' -o /tmp/action.json \
   -X POST \
   -H 'Content-Type: application/json' \
   -d '{"action": "simulate", "input": {"dynamical_model_spec_ref": "string", "simulation": {"start": "string", "horizon": "string"}}}'
@@ -326,7 +325,7 @@ Read an existing call by ID. Never resolve inputs, start a workflow, execute, or
 - `call_id` (path, required)
 
 ```bash
-curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/ACTION/CALL_ID" -o /tmp/action.msgpack
+curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/ACTION/CALL_ID" -H 'Accept: application/json' -o /tmp/action.json
 ```
 
 ### POST `/api/upload`

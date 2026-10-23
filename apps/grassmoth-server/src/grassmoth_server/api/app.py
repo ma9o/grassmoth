@@ -8,9 +8,9 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from grassmoth_server.api.schema import StudyAPI
 from grassmoth_server.api.studies import router as study_router
 from grassmoth_server.api.uploads import uploads_router
 from grassmoth_server.api.workspaces import workspaces_router
@@ -31,11 +31,9 @@ complete input/output schemas, defaults and alternatives.
 - **Results and errors:** `body` contains the action's scientific output only on
   success; otherwise it is null. `messages` holds progress, traces and failure
   details. Completed results are saved and GET never recomputes them.
-- **Binary responses:** action POST/GET return `application/msgpack`, decoded with
-  `msgpack.unpackb(response_bytes, raw=False)` in Python. Numerical `arrays` entries
-  contain NPY bytes: `numpy.load(io.BytesIO(entry["npy"]), allow_pickle=False)`.
-  TypeScript uses the shared client and `readNumericalArray(entry)`. Workspace,
-  timeline, upload and HTTP error responses are JSON.
+- **JSON responses:** send `Accept: application/json` on action POST/GET to read
+  results with curl and jq. Numerical values are nested lists; non-finite values
+  are null. Workspace, timeline, upload and HTTP error responses are also JSON.
 - **Call reuse:** revision selectors accept exact Git hashes or `"latest"`, pinned
   once at POST. Identical resolved inputs reuse running calls, successes **and
   failures**. Changing `reasoning` does not create a new call; change the inputs
@@ -51,14 +49,14 @@ complete input/output schemas, defaults and alternatives.
 
 
 @asynccontextmanager
-async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
+async def _lifespan(_app: StudyAPI) -> AsyncIterator[None]:
     from grassmoth_server.config import configure_jax_persistent_cache
 
     configure_jax_persistent_cache()
     yield
 
 
-app = FastAPI(
+app = StudyAPI(
     lifespan=_lifespan,
     title="grassmoth study API",
     description=_API_DESCRIPTION,

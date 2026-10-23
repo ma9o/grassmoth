@@ -22,7 +22,11 @@ class NumericalArray(Value):
     """
 
     npy: bytes = Field(
-        description="Lossless NPY bytes, including dtype and dimensions; never base64 or scalar JSON.",
+        description=(
+            "Lossless NPY bytes, including dtype and dimensions, in MessagePack. "
+            "JSON action responses replace the entire NumericalArray with nested lists "
+            "in that shape (a scalar for a zero-dimensional array); non-finite values are null."
+        ),
         json_schema_extra={"tsType": "Uint8Array"},
     )
 

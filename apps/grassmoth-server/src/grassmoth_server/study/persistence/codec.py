@@ -11,7 +11,10 @@ from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, cast
 
 import msgpack
+import orjson
 from pydantic_core import to_jsonable_python
+
+from grassmoth.public import NumericalArray
 
 if TYPE_CHECKING:
     import numpy as np
@@ -94,6 +97,26 @@ def unpack_result(payload: bytes) -> Mapping[str, object]:
         return value
 
     return cast("Mapping[str, object]", restore(msgpack.unpackb(payload, raw=False)))
+
+
+def json_result(payload: bytes) -> bytes:
+    """Render the served envelope as strict JSON, expanding NPY values in place.
+
+    Shared buffers are restored by the wire decoder. Non-finite numbers become
+    null, including masked observations and unavailable numerical diagnostics.
+    """
+
+    def expand(value: object) -> object:
+        if isinstance(value, Mapping):
+            if set(value) == {"npy"}:
+                array = NumericalArray(npy=cast("bytes", value["npy"])).values
+                return array.item() if array.ndim == 0 else array
+            return {key: expand(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [expand(item) for item in value]
+        return value
+
+    return orjson.dumps(expand(unpack_result(payload)), option=orjson.OPT_SERIALIZE_NUMPY)
 
 
 def pack_envelope(metadata: JsonObject, body: bytes) -> bytes:
