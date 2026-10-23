@@ -24,7 +24,7 @@ Direct library measurements are reserved for quantities no action exposes, such
 as kernel timing or initializer scoring. The service contract is its request and
 response bodies, documented by the
 [OpenAPI schema](../../packages/api-types/schemas/openapi.json) and the generated
-[curl guide](../../.agents/skills/grassmoth-study-api/SKILL.md). The
+[study API reference](../reference/study-api.md). The
 [action charts](../../README.md#documentation) own execution flow.
 
 Experiments needing a new capability patch its framework owner in an isolated

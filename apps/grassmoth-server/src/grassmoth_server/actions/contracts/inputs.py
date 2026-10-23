@@ -102,8 +102,12 @@ type FitTarget[RevisionT] = Annotated[
 class FitInput[RevisionT](Value):
     """Start or continue a fit; sample counts always mean additional retained draws."""
 
-    target: FitTarget[RevisionT]
-    settings: FitSettingsSpec = Field(default_factory=FitSettingsSpec)
+    target: FitTarget[RevisionT] = Field(
+        description="A model and saved history to fit, or a prior fit to continue."
+    )
+    settings: FitSettingsSpec = Field(
+        default_factory=FitSettingsSpec, description="Sampler overrides for this call."
+    )
     repeat: int = Field(
         default=0,
         ge=0,

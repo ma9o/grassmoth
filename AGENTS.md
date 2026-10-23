@@ -47,7 +47,7 @@
 
 # Data Pipeline
 
-- Experiments and comparisons use the server's public study actions over HTTP, following the [benchmark workflow](benchmarks/README.md#running) and [study API skill](.agents/skills/grassmoth-study-api/SKILL.md). Develop missing capabilities as the smallest coherent patch to their framework owners, applied in an isolated checkout with its own server and study; retain the patch and experiment declaration in `scratchpad/`. Exercise the patched framework through the same actions. Do not recreate model preparation, initialization, sampling orchestration, diagnostics or convergence gates in experiment harnesses.
+- Experiments and comparisons use the server's public study actions over HTTP, following the [benchmark workflow](benchmarks/README.md#running) and [study API reference](docs/reference/study-api.md). Develop missing capabilities as the smallest coherent patch to their framework owners, applied in an isolated checkout with its own server and study; retain the patch and experiment declaration in `scratchpad/`. Exercise the patched framework through the same actions. Do not recreate model preparation, initialization, sampling orchestration, diagnostics or convergence gates in experiment harnesses.
 
 - External callers use the [public study library](docs/guides/public_study_library.md). Check each scratchpad experiment or notebook with `bun run --cwd apps/grassmoth-server lint:public <caller-path>`; paths are relative to `apps/grassmoth-server`.
 

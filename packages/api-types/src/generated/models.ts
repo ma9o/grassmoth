@@ -436,7 +436,9 @@ export type Evaluated<Subject, Evidence> = {
     readonly evidence: Evidence;
 };
 export type FitInput<RevisionT> = {
+    /** @description A model and saved history to fit, or a prior fit to continue. */
     readonly target: FitTarget<RevisionT>;
+    /** @description Sampler overrides for this call. */
     readonly settings: FitSettingsSpec;
     /**
      * Repeat

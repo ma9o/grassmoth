@@ -245,7 +245,7 @@ curl -s -X POST http://localhost:8100/api/studies/$WORKSPACE_ID/edit_question \
   -d "{\"action\":\"edit_question\",\"input\":{\"question\":{\"text\":\"$QUESTION\"}}}"
 ```
 
-`GET /api/workspaces` includes the `X-Actions-Enabled` capability header. Poll the returned `call_id` using the [action API contract](../../.agents/skills/grassmoth-study-api/SKILL.md). A read-only facade serves saved calls, including failures and comparisons; unsaved POST calls return 403. The [action charts](../../README.md#documentation) show what each action does.
+`GET /api/workspaces` includes the `X-Actions-Enabled` capability header. Poll the returned `call_id` using the [study API reference](../reference/study-api.md). A read-only facade serves saved calls, including failures and comparisons; unsaved POST calls return 403. The [action charts](../../README.md#documentation) show what each action does.
 
 ### 2. Observe the study
 
@@ -283,4 +283,4 @@ curl -s http://localhost:8100/api/studies/$WORKSPACE_ID/timeline \
   | jq '.attempts[] | select(.record.attempt.outcome.status=="raised") | {seq: .record.seq, attempt: .record.attempt}'
 ```
 
-Correct the scientific inputs and submit the changed call through its named action route. An identical resolved call returns its saved failure; changing only `reasoning` does not create another call. See the [action API contract](../../.agents/skills/grassmoth-study-api/SKILL.md).
+Correct the scientific inputs and submit the changed call through its named action route. An identical resolved call returns its saved failure; changing only `reasoning` does not create another call. See the [study API reference](../reference/study-api.md).

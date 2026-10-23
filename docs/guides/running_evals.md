@@ -6,7 +6,7 @@ request bodies and `notes.md`; there is no separate benchmark runner.
 
 Read the [integration testing guide](agentic_integration_testing.md) before
 starting a stack. Use the generated
-[study API skill](../../.agents/skills/grassmoth-study-api/SKILL.md) to submit
+[study API reference](../reference/study-api.md) to submit
 requests and poll saved calls. Stage 00's
 [notes](../../benchmarks/00_current_sampler/notes.md#http-request-files)
 identify its revision placeholders and sparse-data upload format.
@@ -24,7 +24,7 @@ curl -sS "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit
   | jq '{call_id, status, messages}'
 ```
 
-Poll the returned call ID as the skill describes; POST and polling responses
+Poll the returned call ID as the reference describes; POST and polling responses
 use JSON when requested with `Accept: application/json`. The server retains the scientific result and execution log.
 Record the study workspace, call IDs, outcomes and proposed decision in the
 stage's `notes.md`, and retain billing evidence with the run outputs.

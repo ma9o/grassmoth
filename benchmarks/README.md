@@ -149,7 +149,7 @@ where it stopped.
 
 All benchmark fits go through one study on the server, calling the public
 actions over HTTP as the
-[study API skill](../.agents/skills/grassmoth-study-api/SKILL.md)
+[study API reference](../docs/reference/study-api.md)
 describes. Start the stack as the
 [integration testing guide](../docs/guides/agentic_integration_testing.md)
 says. The server saves every result with its logs, phase timings and code hash,

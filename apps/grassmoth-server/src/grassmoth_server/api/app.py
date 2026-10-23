@@ -21,8 +21,12 @@ if TYPE_CHECKING:
 
 
 _API_DESCRIPTION = """\
-Start a study with `edit_question`. Endpoint examples follow; `/api/docs` has
-complete input/output schemas, defaults and alternatives.
+Seven actions carry out a study. Set the question with `edit_question` and build
+the model with `edit_model`. Upload tables with `/api/upload`, extract
+observations with `prepare_data`, and condition the model on them with `fit`.
+`simulate` samples an authored or fitted model; `data_diff` and `model_diff`
+compare saved revisions. `/api/docs` has complete input/output schemas, defaults
+and alternatives.
 
 - **Submit and poll:** POST JSON `{action, input, reasoning}` to
   `/api/studies/{workspace_id}/{action}`; `reasoning` is optional. Poll GET

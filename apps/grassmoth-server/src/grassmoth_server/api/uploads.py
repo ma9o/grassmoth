@@ -15,7 +15,7 @@ uploads_router = APIRouter(prefix="/api")
 async def upload_file(
     file: Annotated[UploadFile, File()], workspace_id: Annotated[str, Form(alias="workspaceId")]
 ) -> str:
-    """Stage one named raw input file for prepare_data; that call captures its SHA-256."""
+    """Stage one named raw input file in the workspace's input folder. prepare_data reads that folder when input.source is "input" and captures each file's SHA-256."""
     result = stage_input(workspace_id, file.filename or "", await file.read())
     if isinstance(result, StudyError):
         raise_study_error(result)

@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pydantic.json_schema import JsonSchemaValue
 
+# Relative to the study API reference in docs/reference/.
 _SOURCE_ROOTS = {
-    "grassmoth": "../../../packages/grassmoth/src",
-    "grassmoth_server": "../../../apps/grassmoth-server/src",
+    "grassmoth": "../../packages/grassmoth/src",
+    "grassmoth_server": "../../apps/grassmoth-server/src",
 }
 
 

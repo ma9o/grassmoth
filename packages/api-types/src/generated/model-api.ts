@@ -72,26 +72,7 @@ export interface paths {
         readonly put?: never;
         /**
          * Prepare Data
-         * @description Prepare observations from uploaded tables using the selected model's definitions.
-         *
-         *     The source is a folder under ``data/{workspace_id}/``, including subfolders.
-         *     CSV and Parquet tables must supply a date or datetime timestamp column and
-         *     are concatenated in captured file order. Source bytes and revision selectors
-         *     are pinned before computing call identity.
-         *
-         *     Args:
-         *         workspace_id: Study workspace containing the source folder and revision
-         *             history.
-         *         request: HTTP request selecting the response representation.
-         *         body: Preparation request selecting a model, source folder, and computed
-         *             rules or semantic extraction instructions for its observation IDs.
-         *         clients: Provider of the shared Temporal connection used to dispatch
-         *             or retrieve the preparation workflow.
-         *
-         *     Returns:
-         *         Current call status or a cached HTTP response for the same call. Polling
-         *         by call ID exposes progress messages and, on success, the prepared
-         *         observations and available profiles.
+         * @description Prepare observations from uploaded tables using the selected model's definitions. input.source is a folder under data/{workspace_id}/, including subfolders. CSV and Parquet tables must supply a date or datetime timestamp column and are concatenated in captured file order. Source bytes and revision selectors are pinned before computing call identity. GET polls call_id.
          */
         readonly post: operations["prepare_data"];
         readonly delete?: never;
@@ -151,7 +132,7 @@ export interface paths {
         readonly put?: never;
         /**
          * Data Diff
-         * @description Compare input.left_ref and input.right_ref, each a nonempty list of {revision, replicate_index} references. Omit the index to compare all recorded histories. Data latest selects prepared user data; simulations require explicit gitrefs. Retain the complete comparison in Git. GET polls call_id. Identical resolved calls reuse successes and failures; the comparison is the body.
+         * @description Compare input.left_ref and input.right_ref, each a nonempty list of {revision, replicate_index} references. Omit the index to compare all recorded histories. Data latest selects prepared user data; simulations require exact Git hashes. Retain the complete comparison in Git. GET polls call_id. Identical resolved calls reuse successes and failures; the comparison is the body.
          */
         readonly post: operations["data_diff"];
         readonly delete?: never;
@@ -233,7 +214,7 @@ export interface paths {
         readonly put?: never;
         /**
          * Upload File
-         * @description Stage one named raw input file for prepare_data; that call captures its SHA-256.
+         * @description Stage one named raw input file in the workspace's input folder. prepare_data reads that folder when input.source is "input" and captures each file's SHA-256.
          */
         readonly post: operations["upload_file_api_upload_post"];
         readonly delete?: never;
@@ -4330,7 +4311,9 @@ export interface components {
          * @description Start or continue a fit; sample counts always mean additional retained draws.
          */
         readonly FitInput_GitOid_: {
+            /** @description A model and saved history to fit, or a prior fit to continue. */
             readonly target: Domain.FitTarget<Domain.GitOid>;
+            /** @description Sampler overrides for this call. */
             readonly settings: components["schemas"]["FitSettingsSpec-Output"];
             /**
              * Repeat
@@ -4344,7 +4327,9 @@ export interface components {
          * @description Start or continue a fit; sample counts always mean additional retained draws.
          */
         readonly FitInput_RevisionSelector_: {
+            /** @description A model and saved history to fit, or a prior fit to continue. */
             readonly target: components["schemas"]["FitTarget_RevisionSelector_"];
+            /** @description Sampler overrides for this call. */
             readonly settings?: components["schemas"]["FitSettingsSpec-Input"];
             /**
              * Repeat

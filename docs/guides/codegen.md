@@ -8,7 +8,7 @@ Generated API artifacts and generated documentation have separate ownership and 
 
 - **Contract graph**: [`artifact_contracts.py`](../../apps/grassmoth-server/scripts/artifact_contracts.py), the domain owners, and typed FastAPI routes are the source of truth. [`export_api.py`](../../apps/grassmoth-server/scripts/codegen/export_api.py) generates their validation and serialization schemas together in `openapi.json`, including stored roots and generic bodies.
 - **Types and client**: [`generate.ts`](../../packages/api-types/scripts/generate.ts) runs [openapi-typescript](https://openapi-ts.dev/node) once. Named contract aliases and generic declarations come from that AST; [openapi-fetch](https://openapi-ts.dev/openapi-fetch/) supplies the runtime client. Upload inputs use native `Blob` values, serialized as `FormData` by the caller.
-- **Agent skill**: The exporter generates `grassmoth-study-api` from the application's endpoint descriptions and [action contracts](../../apps/grassmoth-server/src/grassmoth_server/api/studies.py). Input and success-body tables carry the Python owners' type and field descriptions, presence rules and defaults; nested types link to their source owners.
+- **Study API reference and agent skill**: The exporter generates the [study API reference](../reference/study-api.md) from the application's endpoint descriptions and [action contracts](../../apps/grassmoth-server/src/grassmoth_server/api/studies.py). Input and success-body tables carry the Python owners' type and field descriptions, presence rules and defaults; nested types link to their source owners. Example requests come from the synthetic interface scenarios. The `grassmoth-study-api` agent skill carries the API description and links to the reference, action charts and modeling references.
 
 Native NumPyro distributions use the shared [JSON codec](../../packages/grassmoth/src/grassmoth/artifacts/probability/serialization.py) on scientific parameters and compiled sites. Export derives constructor signatures from native distribution arguments and constraints. There is no separate prior-parameter class hierarchy. Numerical arguments belong to their native law; inference and simulation evidence own their numerical values directly. The [result codec](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/codec.py) shares repeated binary buffers when saving or serving a result. Its Python decoder and the [TypeScript client](../../packages/api-types/src/client.ts) restore those values before consumers read the scientific fields.
 
@@ -154,7 +154,7 @@ the payload or its absence reason.
 
 - **New/changed field**: edit the owning Python model.
 - **New artifact contract**: add the payload class in `artifacts/`, register it in `ARTIFACT_CONTRACTS`, add re-export in `index.ts`.
-- **New/changed endpoint**: update its typed FastAPI contract and regenerate the OpenAPI schema and agent skill.
+- **New/changed endpoint**: update its typed FastAPI contract and regenerate the OpenAPI schema, study API reference and agent skill.
 
 ## File ownership
 

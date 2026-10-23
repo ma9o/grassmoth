@@ -93,27 +93,7 @@ async def prepare_data(
     ],
     clients: Annotated[TemporalClientProvider, Depends(temporal_client)],
 ) -> Response:
-    """Prepare observations from uploaded tables using the selected model's definitions.
-
-    The source is a folder under ``data/{workspace_id}/``, including subfolders.
-    CSV and Parquet tables must supply a date or datetime timestamp column and
-    are concatenated in captured file order. Source bytes and revision selectors
-    are pinned before computing call identity.
-
-    Args:
-        workspace_id: Study workspace containing the source folder and revision
-            history.
-        request: HTTP request selecting the response representation.
-        body: Preparation request selecting a model, source folder, and computed
-            rules or semantic extraction instructions for its observation IDs.
-        clients: Provider of the shared Temporal connection used to dispatch
-            or retrieve the preparation workflow.
-
-    Returns:
-        Current call status or a cached HTTP response for the same call. Polling
-        by call ID exposes progress messages and, on success, the prepared
-        observations and available profiles.
-    """
+    """Prepare observations from uploaded tables using the selected model's definitions. input.source is a folder under data/{workspace_id}/, including subfolders. CSV and Parquet tables must supply a date or datetime timestamp column and are concatenated in captured file order. Source bytes and revision selectors are pinned before computing call identity. GET polls call_id."""
     return _http_response(await calls.submit_action(workspace_id, body, clients), request)
 
 
@@ -146,7 +126,7 @@ async def data_diff(
     body: Annotated[DataDiffRequest[RevisionSelector], Body(discriminator="action")],
     temporal_client: Annotated[TemporalClientProvider, Depends(temporal_client)],
 ) -> Response:
-    """Compare input.left_ref and input.right_ref, each a nonempty list of {revision, replicate_index} references. Omit the index to compare all recorded histories. Data latest selects prepared user data; simulations require explicit gitrefs. Retain the complete comparison in Git. GET polls call_id. Identical resolved calls reuse successes and failures; the comparison is the body."""
+    """Compare input.left_ref and input.right_ref, each a nonempty list of {revision, replicate_index} references. Omit the index to compare all recorded histories. Data latest selects prepared user data; simulations require exact Git hashes. Retain the complete comparison in Git. GET polls call_id. Identical resolved calls reuse successes and failures; the comparison is the body."""
     return _http_response(await calls.submit_action(workspace_id, body, temporal_client), request)
 
 

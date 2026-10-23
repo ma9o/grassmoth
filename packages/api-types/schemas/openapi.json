@@ -3,7 +3,7 @@
   "info": {
     "title": "grassmoth study API",
     "version": "0.1.0",
-    "description": "Start a study with `edit_question`. Endpoint examples follow; `/api/docs` has\ncomplete input/output schemas, defaults and alternatives.\n\n- **Submit and poll:** POST JSON `{action, input, reasoning}` to\n  `/api/studies/{workspace_id}/{action}`; `reasoning` is optional. Poll GET\n  `/api/studies/{workspace_id}/{action}/{call_id}` until `status` is `success` or\n  `failed`. GET never starts or retries work; an unknown call returns 404.\n- **Results and errors:** `body` contains the action's scientific output only on\n  success; otherwise it is null. `messages` holds progress, traces and failure\n  details. Completed results are saved and GET never recomputes them.\n- **JSON responses:** send `Accept: application/json` on action POST/GET to read\n  results with curl and jq. Numerical values are nested lists; non-finite values\n  are null. Workspace, timeline, upload and HTTP error responses are also JSON.\n- **Call reuse:** revision selectors accept exact Git hashes or `\"latest\"`, pinned\n  once at POST. Identical resolved inputs reuse running calls, successes **and\n  failures**. Changing `reasoning` does not create a new call; change the inputs\n  to make a new attempt.\n- **Artifact references:** response `commit_id` identifies the call's journal entry.\n  For subsequent inputs, GET `/api/studies/{workspace_id}/timeline`, find the call,\n  and select the required artifact by `artifact_id` in\n  `record.attempt.outcome.effects.produced`. Use its `revision` for model,\n  question, data and fit references.\n- **Read-only access:** `/api/workspaces` reports `X-Actions-Enabled`. With\n  `READ_ONLY_FACADE=1`, saved calls remain readable; an unsaved POST returns 403.\n"
+    "description": "Seven actions carry out a study. Set the question with `edit_question` and build\nthe model with `edit_model`. Upload tables with `/api/upload`, extract\nobservations with `prepare_data`, and condition the model on them with `fit`.\n`simulate` samples an authored or fitted model; `data_diff` and `model_diff`\ncompare saved revisions. `/api/docs` has complete input/output schemas, defaults\nand alternatives.\n\n- **Submit and poll:** POST JSON `{action, input, reasoning}` to\n  `/api/studies/{workspace_id}/{action}`; `reasoning` is optional. Poll GET\n  `/api/studies/{workspace_id}/{action}/{call_id}` until `status` is `success` or\n  `failed`. GET never starts or retries work; an unknown call returns 404.\n- **Results and errors:** `body` contains the action's scientific output only on\n  success; otherwise it is null. `messages` holds progress, traces and failure\n  details. Completed results are saved and GET never recomputes them.\n- **JSON responses:** send `Accept: application/json` on action POST/GET to read\n  results with curl and jq. Numerical values are nested lists; non-finite values\n  are null. Workspace, timeline, upload and HTTP error responses are also JSON.\n- **Call reuse:** revision selectors accept exact Git hashes or `\"latest\"`, pinned\n  once at POST. Identical resolved inputs reuse running calls, successes **and\n  failures**. Changing `reasoning` does not create a new call; change the inputs\n  to make a new attempt.\n- **Artifact references:** response `commit_id` identifies the call's journal entry.\n  For subsequent inputs, GET `/api/studies/{workspace_id}/timeline`, find the call,\n  and select the required artifact by `artifact_id` in\n  `record.attempt.outcome.effects.produced`. Use its `revision` for model,\n  question, data and fit references.\n- **Read-only access:** `/api/workspaces` reports `X-Actions-Enabled`. With\n  `READ_ONLY_FACADE=1`, saved calls remain readable; an unsaved POST returns 403.\n"
   },
   "paths": {
     "/api/studies/{workspace_id}/{action}/{call_id}": {
@@ -214,7 +214,7 @@
     "/api/studies/{workspace_id}/prepare_data": {
       "post": {
         "summary": "Prepare Data",
-        "description": "Prepare observations from uploaded tables using the selected model's definitions.\n\nThe source is a folder under ``data/{workspace_id}/``, including subfolders.\nCSV and Parquet tables must supply a date or datetime timestamp column and\nare concatenated in captured file order. Source bytes and revision selectors\nare pinned before computing call identity.\n\nArgs:\n    workspace_id: Study workspace containing the source folder and revision\n        history.\n    request: HTTP request selecting the response representation.\n    body: Preparation request selecting a model, source folder, and computed\n        rules or semantic extraction instructions for its observation IDs.\n    clients: Provider of the shared Temporal connection used to dispatch\n        or retrieve the preparation workflow.\n\nReturns:\n    Current call status or a cached HTTP response for the same call. Polling\n    by call ID exposes progress messages and, on success, the prepared\n    observations and available profiles.",
+        "description": "Prepare observations from uploaded tables using the selected model's definitions. input.source is a folder under data/{workspace_id}/, including subfolders. CSV and Parquet tables must supply a date or datetime timestamp column and are concatenated in captured file order. Source bytes and revision selectors are pinned before computing call identity. GET polls call_id.",
         "operationId": "prepare_data",
         "parameters": [
           {
@@ -412,7 +412,7 @@
     "/api/studies/{workspace_id}/data_diff": {
       "post": {
         "summary": "Data Diff",
-        "description": "Compare input.left_ref and input.right_ref, each a nonempty list of {revision, replicate_index} references. Omit the index to compare all recorded histories. Data latest selects prepared user data; simulations require explicit gitrefs. Retain the complete comparison in Git. GET polls call_id. Identical resolved calls reuse successes and failures; the comparison is the body.",
+        "description": "Compare input.left_ref and input.right_ref, each a nonempty list of {revision, replicate_index} references. Omit the index to compare all recorded histories. Data latest selects prepared user data; simulations require exact Git hashes. Retain the complete comparison in Git. GET polls call_id. Identical resolved calls reuse successes and failures; the comparison is the body.",
         "operationId": "data_diff",
         "parameters": [
           {
@@ -614,7 +614,7 @@
     "/api/upload": {
       "post": {
         "summary": "Upload File",
-        "description": "Stage one named raw input file for prepare_data; that call captures its SHA-256.",
+        "description": "Stage one named raw input file in the workspace's input folder. prepare_data reads that folder when input.source is \"input\" and captures each file's SHA-256.",
         "operationId": "upload_file_api_upload_post",
         "requestBody": {
           "required": true,
@@ -15745,10 +15745,12 @@
         "description": "Start or continue a fit; sample counts always mean additional retained draws.",
         "properties": {
           "target": {
-            "$ref": "#/components/schemas/FitTarget_Annotated_Any__WithJsonSchema__"
+            "$ref": "#/components/schemas/FitTarget_Annotated_Any__WithJsonSchema__",
+            "description": "A model and saved history to fit, or a prior fit to continue."
           },
           "settings": {
-            "$ref": "#/components/schemas/FitSettingsSpec-Output"
+            "$ref": "#/components/schemas/FitSettingsSpec-Output",
+            "description": "Sampler overrides for this call."
           },
           "repeat": {
             "default": 0,
@@ -15778,10 +15780,12 @@
         "description": "Start or continue a fit; sample counts always mean additional retained draws.",
         "properties": {
           "target": {
-            "$ref": "#/components/schemas/FitTarget_GitOid_"
+            "$ref": "#/components/schemas/FitTarget_GitOid_",
+            "description": "A model and saved history to fit, or a prior fit to continue."
           },
           "settings": {
-            "$ref": "#/components/schemas/FitSettingsSpec-Output"
+            "$ref": "#/components/schemas/FitSettingsSpec-Output",
+            "description": "Sampler overrides for this call."
           },
           "repeat": {
             "default": 0,
@@ -15809,10 +15813,12 @@
         "description": "Start or continue a fit; sample counts always mean additional retained draws.",
         "properties": {
           "target": {
-            "$ref": "#/components/schemas/FitTarget_RevisionSelector_"
+            "$ref": "#/components/schemas/FitTarget_RevisionSelector_",
+            "description": "A model and saved history to fit, or a prior fit to continue."
           },
           "settings": {
-            "$ref": "#/components/schemas/FitSettingsSpec-Input"
+            "$ref": "#/components/schemas/FitSettingsSpec-Input",
+            "description": "Sampler overrides for this call."
           },
           "repeat": {
             "default": 0,
