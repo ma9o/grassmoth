@@ -40,8 +40,8 @@ class TrajectoryMCMCState(NamedTuple):
 def _clip_scale(
     scale: jnp.ndarray,
     *,
-    min_scale: float | None,
-    max_scale: float | None,
+    min_scale: float | jax.Array | None,
+    max_scale: float | jax.Array | None,
 ) -> jnp.ndarray:
     clipped = scale
     if min_scale is not None:
@@ -94,10 +94,10 @@ def _adapt_scale(
     scale: jnp.ndarray,
     *,
     accepted: jnp.ndarray,
-    target_accept: float,
-    adaptation_rate: float,
-    min_scale: float = 1e-6,
-    max_scale: float = 1e3,
+    target_accept: float | jax.Array,
+    adaptation_rate: float | jax.Array,
+    min_scale: float | jax.Array = 1e-6,
+    max_scale: float | jax.Array = 1e3,
 ) -> jnp.ndarray:
     """Simple exponential step-size adaptation on per-step binary accept."""
     dtype = scale.dtype
@@ -110,26 +110,11 @@ def _adapt_scale(
     return jnp.clip(scale * factor, min_scale_arr, max_scale_arr)
 
 
-def _latent_summary_from_chain_moments(
-    chain_means: jnp.ndarray,
-    chain_stds: jnp.ndarray,
-) -> Mapping[str, jnp.ndarray]:
-    pooled_mean = jnp.mean(chain_means, axis=0)
-    pooled_second_moment = jnp.mean(chain_stds * chain_stds + chain_means * chain_means, axis=0)
-    pooled_var = jnp.maximum(pooled_second_moment - pooled_mean * pooled_mean, 0.0)
-    return {
-        "chain_mean": chain_means,
-        "chain_std": chain_stds,
-        "mean": pooled_mean,
-        "std": jnp.sqrt(pooled_var),
-    }
-
-
 def _clip_dual_averaging_state(
     da_state: DualAveragingAdaptationState,
     *,
-    min_scale: float | None,
-    max_scale: float | None,
+    min_scale: float | jax.Array | None,
+    max_scale: float | jax.Array | None,
 ) -> DualAveragingAdaptationState:
     if min_scale is None and max_scale is None:
         return da_state

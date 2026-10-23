@@ -1,13 +1,26 @@
 """Capture the actual compute environment at the fitting boundary."""
 
+import hashlib
 import importlib.metadata
 import os
 import platform
+from importlib.resources import files
+from pathlib import Path
 
 import jax
 
 from grassmoth.public import FitRuntime, InferenceHardware, SamplerSpec
-from grassmoth_server.compute.compilation_cache import numerical_source_digest
+
+
+def numerical_source_digest() -> str:
+    """Record shipped source provenance without participating in compilation caching."""
+    roots = (Path(str(files("grassmoth"))), Path(__file__).resolve().parents[2])
+    digest = hashlib.sha256()
+    for root in roots:
+        for path in sorted(root.rglob("*.py")):
+            digest.update(path.relative_to(root.parent).as_posix().encode())
+            digest.update(path.read_bytes())
+    return digest.hexdigest()
 
 
 def fit_runtime(sampler: SamplerSpec) -> FitRuntime:

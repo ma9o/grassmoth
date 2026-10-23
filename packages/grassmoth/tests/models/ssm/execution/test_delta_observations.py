@@ -441,7 +441,6 @@ def _conditioned_initial_state(problem):
         param_step_size=0.01,
         param_min_scale=1e-6,
         param_max_scale=1e3,
-        param_target_accept=0.35,
         initial_latent_trajectory=jnp.full((3, 2), 0.25),
         exact_constraints=problem.exact_constraints,
     )
@@ -497,7 +496,7 @@ def test_conditioned_smoother_traces_with_missing_and_observed_coordinates(point
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        paid_mix=PaidMixture(path, jnp.ones_like(path)),
+        paid_mix=PaidMixture(path, jnp.ones_like(path), jnp.asarray([True])),
         dsmc=DsmcSpec(drift=proposal, latent_block_coords=1),
     )
     shape, _ = jax.eval_shape(kernel.step_fn, state, jax.random.key(1))
@@ -516,7 +515,7 @@ def test_particle_updates_keep_exact_readings_and_move_missing_states(point_prob
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        paid_mix=PaidMixture(path, jnp.ones_like(path)),
+        paid_mix=PaidMixture(path, jnp.ones_like(path), jnp.asarray([True])),
         dsmc=DsmcSpec(drift=proposal, latent_block_coords=1),
     )
     step = jax.jit(kernel.step_fn)

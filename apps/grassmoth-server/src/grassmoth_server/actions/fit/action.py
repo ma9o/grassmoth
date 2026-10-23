@@ -29,7 +29,7 @@ from grassmoth_server.actions.fit.execution import (
 )
 from grassmoth_server.actions.fit.runtime import fit_runtime
 from grassmoth_server.bootstrap import initialize_numerical_runtime
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
+from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
 from grassmoth_server.compute.resources import read_compute_budget
 
 
@@ -51,7 +51,7 @@ def run_fit(
     def compile_profiled[Result](
         function: Callable[..., Result], *args: object, **kwargs: object
     ) -> PreparedProgram[Result]:
-        program = compile_staged(function, *args, **kwargs)
+        program = compile_program(function, *args, **kwargs)
         dump_compiled_analysis(program.executable, profile_dir, "run_batched_step")
         return program
 

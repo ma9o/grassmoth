@@ -112,7 +112,6 @@ def test_supplied_initial_path_does_not_compute_a_predictive_rollout():
         param_step_size=0.01,
         param_min_scale=1e-6,
         param_max_scale=1.0,
-        param_target_accept=0.35,
         initial_latent_trajectory=initial_path,
     )
     target.initial_path.assert_not_called()

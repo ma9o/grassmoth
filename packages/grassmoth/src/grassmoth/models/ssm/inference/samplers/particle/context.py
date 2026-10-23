@@ -19,9 +19,6 @@ from grassmoth.models.ssm.inference.samplers.particle.contract import (
     SmootherSetup,
     TrajectoryLabelScores,
 )
-from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
-    build_particle_diagnostic_flags,
-)
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     _normalize_log_probs,
     _value_and_grad_by_param,
@@ -160,7 +157,5 @@ def build_smoother_context(
         pairwise_transition_log_probs=_pairwise_transition_log_probs,
         score_labels=_score_labels,
         intervals=static.intervals,
-        diagnostic_weights=build_particle_diagnostic_flags(
-            diagnostic_metrics=static.diagnostic_metrics
-        ).particle_weights,
+        diagnostic_weights=static.diagnostic_weights,
     )

@@ -8,7 +8,11 @@ from grassmoth.public import InferenceAlgorithmSpec, InferenceHardware, Value
 
 
 class FitSettingsSpec(Value):
-    """Optional numerical controls applied to the configured joint sampler."""
+    """Optional numerical controls applied to the configured joint sampler.
+
+    Each field means what the SamplerSpec field of the same name means. Null keeps the
+    server's configured value, or the continued fit's.
+    """
 
     hardware: InferenceHardware | None = None
     time_limit_seconds: int | None = Field(default=None, ge=1)

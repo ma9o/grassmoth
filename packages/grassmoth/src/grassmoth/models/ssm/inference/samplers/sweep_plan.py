@@ -17,6 +17,9 @@ if TYPE_CHECKING:
     from jax.stages import Compiled
 
 
+SWEEP_BLOCK_SIZE = 25
+
+
 @dataclass(frozen=True)
 class EmptySweepPhase:
     """Output shapes for a phase with no requested transitions."""
@@ -56,7 +59,6 @@ class SweepPlan:
 
     warmup: SweepPhase
     posterior: SweepPhase
-    block_size: int
     batch_size: int
     compiled_step: Compiled
     memory: MemoryDemand = NO_MEMORY_DEMAND
@@ -73,7 +75,7 @@ def sweep_block[Carry](
     def block(
         state: Carry, count: jax.Array, posterior: jax.Array
     ) -> tuple[Carry, dict[str, jax.Array]]:
-        transition = jax.jit(step)
+        transition = jax.jit(step, inline=jax.Inline.JAX_EARLY)
         _, shapes = jax.eval_shape(transition, state, posterior)
         zeros = jax.tree.map(lambda shape: jnp.zeros(shape.shape, shape.dtype), shapes)
 

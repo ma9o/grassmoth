@@ -20,6 +20,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     ParticleSamplerDiagnostics,
 )
 from grassmoth.artifacts.sampling import MarginalParticleGibbsSpec
+from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
@@ -30,6 +31,10 @@ from grassmoth.models.ssm.inference.extraction import (
     project_initialization,
 )
 from grassmoth.models.ssm.inference.problem import build_particle_problem
+from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
+    build_companion_kernel,
+    diffusion_scale_mask,
+)
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
     build_marginal_particle_gibbs_kernel,
@@ -107,7 +112,7 @@ def fit_marginal_particle_gibbs(
     )
 
     base_key = random.PRNGKey(sampler.seed)
-    trace_key, laps_key, sampling_key = random.split(base_key, 3)
+    trace_key, initialization_key, sampling_key = random.split(base_key, 3)
 
     phase_t0 = clock()
     logger.info("phase 1/4: building marginalized Particle Gibbs runtime bundle...")
@@ -133,7 +138,7 @@ def fit_marginal_particle_gibbs(
     )
 
     phase_t0 = clock()
-    logger.info("phase 2/4: particle initialization (%s)", options.initialization.kind)
+    logger.info("phase 2/4: Gaussian particle initialization")
     if continuation is not None:
         initialization = continued_particle_initialization(continuation)
     else:
@@ -144,16 +149,16 @@ def fit_marginal_particle_gibbs(
                 bundle.runtime,
                 compute_budget=compute_budget,
                 spec=options.initialization,
-                key=laps_key,
+                key=initialization_key,
                 num_chains=sampler.num_chains,
                 compiler=compiler,
             )
     if isinstance(initialization, InitializationFailure):
         return initialization
-    paid_mix = (
-        None
-        if not options.dsmc.pilot_mixture
-        else PaidMixture(initialization.pilot_mean, initialization.pilot_proposal_variance)
+    paid_mix = PaidMixture(
+        initialization.pilot_mean,
+        initialization.pilot_proposal_variance,
+        scalar_operand(value=options.dsmc.pilot_mixture),
     )
 
     phase_t0 = clock()
@@ -207,6 +212,16 @@ def fit_marginal_particle_gibbs(
                 scale=options.tempering.reference_scale,
             )
         tempering = ReplicaExchangeKernel(bundle.runtime, reference, make_kernel, options.tempering)
+    companion = (
+        None
+        if options.companion == "none"
+        else build_companion_kernel(
+            bundle.runtime,
+            options.companion,
+            diffusion_mask=diffusion_scale_mask(bundle.runtime, priors),
+            parameter_gradient=kernel.parameter_gradient_fn,
+        )
+    )
     run_result = run_marginal_particle_gibbs(
         bundle.runtime,
         kernel=kernel,
@@ -216,11 +231,10 @@ def fit_marginal_particle_gibbs(
         num_chains=sampler.num_chains,
         key=sampling_key,
         adaptation_rate=options.adaptation_rate,
-        retain_latent_paths=sampler.retain_latent_paths,
         initialization=initialization,
-        compute_latent_posterior_summary=options.compute_latent_posterior_summary,
         adaptation_scheme=options.adaptation_scheme,
         tempering=tempering,
+        companion=companion,
         clock=clock,
         logger=logger,
         wall_clock=wall_clock,
@@ -294,7 +308,7 @@ def fit_marginal_particle_gibbs(
         mcmc_phase_seconds=float(mcmc_phase_seconds),
         drift=kernel.dsmc.drift,
         diagnostic_metrics=tuple(sorted(kernel.diagnostic_metrics)),
-        param_target_accept=float(kernel.target_accept),
+        param_target_accept=float(kernel.target_accept[0]),
         parameter_preconditioned=bool(kernel.preconditioned),
         diagnostic_summary_phase=diagnostic_summary_phase,
         parameter_accept_rate=float(jnp.mean(summary_extra_fields["parameter_accept_prob"])),
@@ -353,9 +367,7 @@ def fit_marginal_particle_gibbs(
             states=tuple(
                 (ConstructRef(id=s.id), s.name) for s in panel.compiled_dynamical_model.states
             ),
-        )
-        if run_result.latent_paths is not None
-        else None,
+        ),
         sampler_diagnostics=kernel_diagnostics,
         phase_extra_fields={
             "initialization" if continuation is None else "continued_start": starting_values,
@@ -365,7 +377,6 @@ def fit_marginal_particle_gibbs(
         },
         warmup_complete_log_posterior_history=run_result.warmup_complete_log_posterior_history,
         all_complete_log_posterior_history=run_result.all_complete_log_posterior_history,
-        latent_posterior_summary=run_result.latent_posterior_summary,
         exact_observation_rows=jnp.any(
             ~bundle.exact_constraints.free_mask & bundle.runtime.state_density_mask, axis=-1
         )
@@ -381,9 +392,7 @@ def fit_marginal_particle_gibbs(
     return MCMCPosterior.from_run(
         draws=JointPosteriorDraws(
             parameters=mcmc.get_samples(),
-            latent_paths=latent_paths.reshape((-1, *latent_paths.shape[2:]))
-            if latent_paths is not None
-            else None,
+            latent_paths=latent_paths.reshape((-1, *latent_paths.shape[2:])),
         ),
         diagnostics=diagnostics,
         initial_latent_delta=run_result.initial_latent_delta,

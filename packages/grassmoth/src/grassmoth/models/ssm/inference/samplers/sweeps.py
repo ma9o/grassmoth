@@ -19,6 +19,7 @@ from grassmoth.models.ssm.inference.samplers.progress import (
     log_inference_event,
 )
 from grassmoth.models.ssm.inference.samplers.sweep_plan import (
+    SWEEP_BLOCK_SIZE,
     CompiledSweepPhase,
     EmptySweepPhase,
     SweepPlan,
@@ -71,6 +72,7 @@ def compile_sweeps[Carry](
     max_batch_size: int,
     budget: ComputeBudget,
     additional_overhead: MemoryDemand = NO_MEMORY_DEMAND,
+    excluded_history: frozenset[str] = frozenset(),
 ) -> SweepPlan:
     """Check compiled peak memory plus histories, without timing or executing a sweep.
 
@@ -78,7 +80,7 @@ def compile_sweeps[Carry](
     fits the budget. Independent chains remain vectorized. The common cap of
     25 sequential sweeps bounds output buffers and host progress latency.
     """
-    block_size = min(25, max(1, num_warmup, num_samples))
+    block_size = SWEEP_BLOCK_SIZE
 
     def prepare_phase(
         batch: int,
@@ -96,6 +98,7 @@ def compile_sweeps[Carry](
         shapes = {
             name: jax.ShapeDtypeStruct(shape.shape[1:], shape.dtype)
             for name, shape in block_shapes.items()
+            if name not in excluded_history
         }
         return compile_program, arguments, shapes
 
@@ -120,9 +123,7 @@ def compile_sweeps[Carry](
             if num_samples or num_warmup + num_samples == 0
             else EmptySweepPhase(shapes)
         )
-        return SweepPlan(warmup, posterior, block_size, batch, executable), compiled_memory(
-            executable
-        )
+        return SweepPlan(warmup, posterior, batch, executable), compiled_memory(executable)
 
     history_bytes = sum(
         steps * sum(shape.size * shape.dtype.itemsize for shape in shapes.values())
@@ -173,9 +174,10 @@ def compile_projected_sweeps[Carry](
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
     label: str,
+    excluded_history: frozenset[str] = frozenset(),
 ) -> SweepPlan:
     """Compile independent exact observation projection while the sampler compiles."""
-    block_size = min(25, max(1, num_warmup, num_samples))
+    block_size = SWEEP_BLOCK_SIZE
 
     def project(position: jax.Array, path: jax.Array) -> jax.Array:
         return jnp.asarray(
@@ -221,6 +223,7 @@ def compile_projected_sweeps[Carry](
             max_batch_size=max_batch_size,
             budget=budget,
             additional_overhead=overhead,
+            excluded_history=excluded_history,
             prepare_program=prepare_program,
         )
         projection = future.result()
@@ -275,12 +278,12 @@ def run_sweeps[Carry](
                 logger=logger,
                 wall_clock=wall_clock,
                 total=phase.steps,
-                block_size=plan.block_size,
+                block_size=SWEEP_BLOCK_SIZE,
                 particle_batch_size=plan.batch_size,
             ):
                 remaining = phase.steps
                 while remaining:
-                    count = 1 if completed == 0 else min(plan.block_size, remaining)
+                    count = 1 if completed == 0 else min(SWEEP_BLOCK_SIZE, remaining)
                     transition: tuple[Carry, dict[str, jax.Array]] = phase.executable(
                         phase.arguments, state, jnp.asarray(count), jnp.asarray(stage == "sampling")
                     )
@@ -292,7 +295,7 @@ def run_sweeps[Carry](
                                 plan.projection_arguments, block["positions"], block["paths"]
                             ),
                         }
-                    host_block = jax.device_get(block)
+                    host_block = jax.device_get({name: block[name] for name in buffers})
                     start = phase.steps - remaining
                     for name in buffers:
                         buffers[name][:, start : start + count] = host_block[name][:count].swapaxes(

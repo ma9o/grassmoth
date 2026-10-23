@@ -60,11 +60,3 @@ class MarginalParticleTraceRecord:
     parameters: ParameterProposalTraceRecord
     smoother: SmootherTraceRecord
     label_selection: CategoricalTraceRecord  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.
-
-
-@dataclass(frozen=True)
-class EnsemblePhaseTraceRecord:
-    """Post-transition positions (iteration, member, coordinate) and used step sizes (iteration,)."""
-
-    positions: jax.Array
-    step_sizes: jax.Array

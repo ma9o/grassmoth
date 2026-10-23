@@ -17,6 +17,8 @@ from blackjax.adaptation.step_size import (
 )
 from numpyro.infer.hmc import HMCState, hmc
 
+from grassmoth.compute.programs import scalar_operand
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
@@ -51,10 +53,13 @@ def metropolis_kernel(
     num_warmup: int,
 ) -> ParameterKernel[MetropolisState]:
     """Build an MH update of theta conditional on the current free latent states."""
-    adapt_init, adapt_step, _ = dual_averaging_adaptation(spec.target_accept_prob)
+    target_accept = scalar_operand(value=spec.target_accept_prob)
+    initial_scale = scalar_operand(value=spec.initial_step_size)
+    warmup_steps = scalar_operand(value=num_warmup, dtype=jnp.int32)
+    adapt_init, _, _ = dual_averaging_adaptation(target=0.0)
 
     def initialize(position: jax.Array, _path: jax.Array, _key: jax.Array) -> MetropolisState:
-        scale = jnp.asarray(spec.initial_step_size, dtype=position.dtype)
+        scale = jnp.asarray(initial_scale[0], dtype=position.dtype)
         return MetropolisState(position, jnp.asarray(0), adapt_init(scale), scale)
 
     def step(
@@ -72,16 +77,17 @@ def metropolis_kernel(
         position = jnp.where(accepted, proposal, state.position)
 
         def adapt() -> tuple[DualAveragingAdaptationState, jax.Array]:
+            adapt_step = dual_averaging_adaptation(target_accept[0])[1]  # pyright: ignore[reportArgumentType] -- BlackJAX accepts scalar JAX arithmetic; its target annotation only permits float.
             adaptation = adapt_step(state.adaptation, accept_prob)
             log_scale = jnp.where(
-                state.iteration + 1 == num_warmup,
+                state.iteration + 1 == warmup_steps[0],
                 adaptation.log_step_size_avg,
                 adaptation.log_step_size,
             )
             return adaptation, jnp.exp(log_scale).astype(state.position.dtype)
 
         adaptation, scale = jax.lax.cond(
-            state.iteration < num_warmup,
+            state.iteration < warmup_steps[0],
             adapt,
             lambda: (state.adaptation, state.step_size),
         )

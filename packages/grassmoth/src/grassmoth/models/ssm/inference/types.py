@@ -116,7 +116,6 @@ class ProductionDiagnostics:
     compiled_step: Compiled | None = None
     public_sites: tuple[str, ...] | None = None
     exact_observation_rows: jnp.ndarray | None = None
-    latent_posterior_summary: Mapping[str, jnp.ndarray] | None = None
     sampler_diagnostics: (
         ParticleSamplerDiagnostics | NutsDADiagnostics | ParticleGibbsDiagnostics | None
     ) = None
@@ -125,13 +124,7 @@ class ProductionDiagnostics:
     all_complete_log_posterior_history: jnp.ndarray | None = None
 
     def __post_init__(self) -> None:
-        """Freeze posterior summaries and phase-specific diagnostic mappings after construction."""
-        if self.latent_posterior_summary is not None:
-            object.__setattr__(
-                self,
-                "latent_posterior_summary",
-                MappingProxyType(dict(self.latent_posterior_summary)),
-            )
+        """Freeze phase-specific diagnostic mappings after construction."""
         if self.phase_extra_fields is not None:
             object.__setattr__(
                 self,

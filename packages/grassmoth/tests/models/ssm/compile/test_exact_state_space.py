@@ -153,7 +153,6 @@ def _initial(target, path, *, kernel, position=None):
         param_step_size=0.01,
         param_min_scale=1e-6,
         param_max_scale=1.0,
-        param_target_accept=0.35,
         initial_latent_trajectory=path,
         exact_constraints=target.exact_constraints,
     )

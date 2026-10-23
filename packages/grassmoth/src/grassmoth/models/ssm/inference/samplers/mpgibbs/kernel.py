@@ -11,19 +11,15 @@ space via the auxiliary decomposition
 where ``g`` is a fixed, parameter-only gradient oracle. The default computes
 the complete-data gradient on a fixed pilot path chosen at construction; it
 must not use the changing reference trajectory during the chain. ``parameter_proposal``
-selects the drift: ``random_walk`` sets ``g = 0`` (the symmetric special case),
-while the default ``pseudo_langevin`` (Corenflos 2025, §3.1) drifts the
+selects the drift: the default ``random_walk`` sets ``g = 0`` (the symmetric special
+case), while ``pseudo_langevin`` (Corenflos 2025, §3.1) drifts the
 theta->u half by ``g`` so the two halves reproduce preconditioned MALA. The
 resulting asymmetry is corrected exactly in the Barker label-selection weights
 (identically zero in the random-walk case). The latent trajectory is updated by
 conditional SMC against the posterior mixture over the parameter ensemble.
 
-Step-size convention. ``delta`` here (``param_step_size``) is the variance
-coefficient of each half, not the conventional MALA step. The combined kernel
-has variance ``4 delta Sigma`` (and drift ``2 delta Sigma g`` for pseudo-Langevin),
-so ``param_step_size`` maps to MALA's ``h`` and to the RW variance coefficient
-via ``h = 4 * param_step_size`` in both branches. Tune accordingly: a familiar
-MALA step of ``h = 0.1`` corresponds to ``param_step_size = 0.025`` here.
+``delta`` is ``MarginalParticleGibbsSpec.param_step_size``, whose description gives
+the step-size convention.
 """
 
 # References:
@@ -40,6 +36,7 @@ import jax.numpy as jnp
 from jax import random
 
 from grassmoth.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec
+from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.compile.state_space import AdditiveRecurrences, ParallelRecurrences
 from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCState, _clip_scale
 from grassmoth.models.ssm.inference.samplers.particle.context import (
@@ -100,10 +97,10 @@ class MarginalParticleGibbsKernel(NamedTuple):
     ]
     num_particles: int
     num_parameter_particles: int
-    initial_param_step_size: float
-    target_accept: float
-    min_scale: float
-    max_scale: float
+    initial_param_step_size: jax.Array
+    target_accept: jax.Array
+    min_scale: jax.Array
+    max_scale: jax.Array
     preconditioned: bool
     initial_parameter_chol: jax.Array
     dsmc: DsmcSpec
@@ -151,6 +148,9 @@ def build_marginal_particle_gibbs_kernel(
     use_gradient_drift = parameter_proposal == "pseudo_langevin"
     if target_accept is None:
         target_accept = _DEFAULT_OPTIONS.param_target_accept
+
+    runtime_min_scale = scalar_operand(value=min_scale)
+    runtime_max_scale = scalar_operand(value=max_scale)
 
     assert all(
         isinstance(stage, (AdditiveRecurrences, ParallelRecurrences))
@@ -279,8 +279,8 @@ def build_marginal_particle_gibbs_kernel(
                     param_key,
                     _clip_scale(
                         state.param_step_size,
-                        min_scale=min_scale,
-                        max_scale=max_scale,
+                        min_scale=runtime_min_scale[0],
+                        max_scale=runtime_max_scale[0],
                     ),
                     state.parameter_chol,
                 )
@@ -362,28 +362,38 @@ def build_marginal_particle_gibbs_kernel(
                 "latent_move_rms_per_t": latent_move_rms_per_t,
                 "final_label_log_probs": final_label_log_probs.astype(jnp.float32),
             }
-            if diagnostic_flags.parameter_movement:
-                parameter_jump = next_position - state.position
-                step_info["parameter_jump_rms"] = (
+            parameter_jump = next_position - state.position
+            step_info["parameter_jump_rms"] = jax.lax.cond(
+                diagnostic_flags.parameter_movement[0],
+                lambda: (
                     jnp.sqrt(jnp.mean(parameter_jump * parameter_jump))
                     if parameter_jump.size
                     else zero_scalar
-                )
-            if diagnostic_flags.particle_identity:
-                reference_path_hit_rate = jnp.mean((origin_path == 0).astype(state.position.dtype))
+                ),
+                lambda: zero_scalar,
+            )
+
+            def particle_identity() -> dict[str, jax.Array]:
                 particle_ids = jnp.arange(num_particles, dtype=origin_path.dtype)
-                selected_particle_unique_count = jnp.sum(
-                    jnp.any(origin_path[:, None] == particle_ids[None, :], axis=0)
-                ).astype(traj_dtype)
-                step_info.update(
-                    {
-                        "selected_particle_per_t": origin_path.astype(jnp.float32),
-                        "reference_path_hit_rate": reference_path_hit_rate.astype(jnp.float32),
-                        "selected_particle_unique_count": (
-                            selected_particle_unique_count.astype(jnp.float32)
-                        ),
-                    }
+                return {
+                    "selected_particle_per_t": origin_path.astype(jnp.float32),
+                    "reference_path_hit_rate": jnp.mean((origin_path == 0).astype(jnp.float32)),
+                    "selected_particle_unique_count": jnp.sum(
+                        jnp.any(origin_path[:, None] == particle_ids[None, :], axis=0)
+                    ).astype(jnp.float32),
+                }
+
+            step_info.update(
+                jax.lax.cond(
+                    diagnostic_flags.particle_identity[0],
+                    particle_identity,
+                    lambda: {
+                        "selected_particle_per_t": jnp.zeros(origin_path.shape, jnp.float32),
+                        "reference_path_hit_rate": jnp.asarray(0.0, jnp.float32),
+                        "selected_particle_unique_count": jnp.asarray(0.0, jnp.float32),
+                    },
                 )
+            )
 
         result = (
             state._replace(
@@ -434,10 +444,10 @@ def build_marginal_particle_gibbs_kernel(
         trace_step_fn=_trace_step_fn,
         num_particles=num_particles,
         num_parameter_particles=num_parameter_particles,
-        initial_param_step_size=param_step_size,
-        target_accept=target_accept,
-        min_scale=min_scale,
-        max_scale=max_scale,
+        initial_param_step_size=scalar_operand(value=param_step_size),
+        target_accept=scalar_operand(value=target_accept),
+        min_scale=runtime_min_scale,
+        max_scale=runtime_max_scale,
         preconditioned=parameter_preconditioner_chol is not None,
         initial_parameter_chol=jnp.eye(
             target.initial_position.size, dtype=target.initial_position.dtype

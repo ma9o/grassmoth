@@ -1,13 +1,30 @@
 """Explicit compilation dependencies for pure numerical setup programs."""
 
-from collections.abc import Callable
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 import jax
-from jax.stages import Compiled
+import jax.numpy as jnp
 
-from grassmoth.compute.budget import MemoryDemand
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from jax.stages import Compiled
+    from jax.typing import DTypeLike
+
+    from grassmoth.compute.budget import MemoryDemand
+
+
+def scalar_operand(*, value: bool | int | float, dtype: DTypeLike | None = None) -> jax.Array:
+    """Keep scalar controls as runtime operands until traced code selects ``[0]``.
+
+    JAX embeds closed-over zero-dimensional arrays as literals. A one-element
+    array is captured by closure conversion instead, so its value can change
+    without changing the numerical program.
+    """
+    return jnp.asarray([value], dtype=dtype)
 
 
 @dataclass(frozen=True)
@@ -29,7 +46,7 @@ class ProgramCompiler(Protocol):
 
 
 class ProgramPreparer(Protocol):
-    """Supply the existing staged compilation operation and its sizing evidence."""
+    """Prepare a JAX program and expose its sizing evidence."""
 
     def __call__[Result](
         self, function: Callable[..., Result], *args: object, **kwargs: object
@@ -41,6 +58,6 @@ class ProgramPreparer(Protocol):
 def compile_jit[Result](
     function: Callable[..., Result], *args: object, **kwargs: object
 ) -> PreparedProgram[Result]:
-    """Compile a numerical program directly without persistent staging effects."""
+    """Compile a numerical program directly through the JAX executable cache."""
     executable = jax.jit(function).lower(*args, **kwargs).compile()
     return PreparedProgram(executable, cast("Callable[..., Result]", executable))

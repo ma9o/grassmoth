@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from functools import partial
 from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
 
 from grassmoth.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
+from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.mcmc_state import _clip_scale
 
 INITIAL_DELTA = 0.01
@@ -27,6 +27,25 @@ def initial_delta(spec: DsmcSpec) -> float:
         spec.latent_step.delta
         if isinstance(spec.latent_step, FixedLatentStepSpec)
         else INITIAL_DELTA
+    )
+
+
+class LatentAdaptation(NamedTuple):
+    """Runtime scale-adaptation controls, independent of the proposal structure."""
+
+    enabled: jax.Array
+    target: jax.Array
+
+
+def latent_adaptation(spec: DsmcSpec) -> LatentAdaptation:
+    """Resolve the authored scale policy before tracing any transitions."""
+    return LatentAdaptation(
+        enabled=scalar_operand(value=not isinstance(spec.latent_step, FixedLatentStepSpec)),
+        target=scalar_operand(
+            value=0.5
+            if isinstance(spec.latent_step, FixedLatentStepSpec)
+            else spec.latent_step.target
+        ),
     )
 
 
@@ -50,18 +69,16 @@ def initialize_adaptation(delta: jax.Array) -> DsmcAdaptation:
     )
 
 
-@partial(jax.jit, static_argnames=("spec", "num_warmup"))
+@jax.jit
 def adapt_scales(
     state: DsmcAdaptation,
-    spec: DsmcSpec,
+    settings: LatentAdaptation,
     accepted: jax.Array,
     proposed: jax.Array,
-    num_warmup: int,
+    num_warmup: int | jax.Array,
 ) -> DsmcAdaptation:
     """Adapt only proposed coordinates; freeze scales and windows after warmup."""
-    if isinstance(spec.latent_step, FixedLatentStepSpec):
-        return state
-    target = spec.latent_step.target
+    target = settings.target[0]
 
     def update() -> DsmcAdaptation:
         slot = state.iteration % ADAPTATION_WINDOW
@@ -90,5 +107,7 @@ def adapt_scales(
             delta, accept_window, proposal_window, iteration, accepted_total, count
         )
 
-    adapted: DsmcAdaptation = jax.lax.cond(state.iteration < num_warmup, update, lambda: state)
+    adapted: DsmcAdaptation = jax.lax.cond(
+        settings.enabled[0] & (state.iteration < num_warmup), update, lambda: state
+    )
     return adapted

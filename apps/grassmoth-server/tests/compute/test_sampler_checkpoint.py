@@ -10,8 +10,6 @@ import pytest
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
     ConditionalNutsSpec,
-    GaussianInitializationSpec,
-    LapsInitializationSpec,
     MarginalParticleGibbsSpec,
     MetropolisHastingsSpec,
     ParticleGibbsSpec,
@@ -19,7 +17,7 @@ from grassmoth.artifacts.sampling import (
 )
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.types import MCMCPosterior
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
+from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 from grassmoth_test_support.compute import COMPUTE_BUDGET
 from grassmoth_test_support.inference import nonlinear_fit_fixture
@@ -27,37 +25,27 @@ from grassmoth_test_support.inference import nonlinear_fit_fixture
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
-@pytest.mark.parametrize(
-    ("method", "initializer"),
-    [("mh", "laps"), ("nuts", "gaussian"), ("marginal", "laps"), ("marginal", "gaussian")],
-)
+@pytest.mark.parametrize("method", ["mh", "nuts", "marginal", "companions"])
 @pytest.mark.inference(concern="warmup")
-def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(
-    method, initializer
-):
+def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(method):
     prepared, panel = nonlinear_fit_fixture()
-    initialization = (
-        LapsInitializationSpec(ensemble_size=32, num_unadjusted_steps=100, num_adjusted_steps=5)
-        if initializer == "laps"
-        else GaussianInitializationSpec()
-    )
     algorithm = (
-        MarginalParticleGibbsSpec(initialization=initialization)
-        if method == "marginal"
+        MarginalParticleGibbsSpec(
+            companion="none" if method == "marginal" else "centred_and_scale_noncentred_mh",
+        )
+        if method in {"marginal", "companions"}
         else ParticleGibbsSpec(
             parameter_kernel=MetropolisHastingsSpec()
             if method == "mh"
             else ConditionalNutsSpec(max_tree_depth=3, initial_step_size=0.01),
-            initialization=initialization,
         )
     )
     settings = SamplerSpec(
         algorithm=algorithm,
-        num_warmup=40 if method == "marginal" else 5,
+        num_warmup=5 if method in {"mh", "nuts"} else 40,
         num_samples_per_chain=4,
         num_chains=2,
         num_particles=4,
-        retain_latent_paths=True,
     )
 
     def run(options, checkpoint=None):
@@ -69,7 +57,7 @@ def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundt
             compute_budget=COMPUTE_BUDGET,
             reparam=None,
             clock=time.monotonic,
-            compiler=compile_staged,
+            compiler=compile_program,
             prepare_program=prepare_program,
             logger=logging.getLogger(__name__),
             wall_clock=lambda: datetime.now(UTC),
@@ -79,7 +67,10 @@ def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundt
         return result
 
     full = run(settings)
-    assert full.diagnostics.sampler_diagnostics.initialization.source == initializer
+    assert full.diagnostics.sampler_diagnostics.initialization.source == "gaussian"
+    assert (method == "companions") == (
+        "scale_noncentred_mh_step_size" in full.diagnostics.phase_extra_fields["post_warmup"]
+    )
     first = run(settings.revised(num_samples_per_chain=2))
     checkpoint = SamplerCheckpoint.model_validate(
         unpack_result(pack_result(first.diagnostics.checkpoint))

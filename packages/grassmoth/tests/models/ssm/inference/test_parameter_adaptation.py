@@ -101,7 +101,6 @@ def test_adapted_particle_kernel_recovers_correlated_unequal_scale_gaussian(prop
         key=jax.random.key(293),
         adaptation_rate=0.05,
         adaptation_scheme="dual_averaging",
-        retain_latent_paths=False,
         initialization=initialization,
         compute_budget=COMPUTE_BUDGET,
         clock=time.monotonic,

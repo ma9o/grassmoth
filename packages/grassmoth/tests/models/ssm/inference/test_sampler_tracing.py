@@ -6,18 +6,10 @@ import numpy as np
 import pytest
 
 from grassmoth.artifacts.reports.posterior_diagnostics import ParticleWeightMetric
-from grassmoth.artifacts.sampling import LapsInitializationSpec
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
-from grassmoth.models.ssm.inference.warmup.laps_ensemble import (
-    LapsEnsemble,
-    LapsTraceRecord,
-    NoLapsTrace,
-    run_laps_ensemble,
-)
-from grassmoth_test_support.compute import COMPUTE_BUDGET
 from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
 
 
@@ -121,45 +113,3 @@ def test_particle_trace_records_the_same_transition_and_selected_path(
         )
         np.testing.assert_allclose(state.trajectory_log_prob, trajectory, rtol=2e-6, atol=2e-6)
         np.testing.assert_allclose(state.complete_log_posterior, complete, rtol=2e-6, atol=2e-6)
-
-
-@pytest.mark.inference(concern="warmup")
-def test_laps_trace_preserves_initialization_and_executed_phase_lengths():
-    def log_density(point):
-        return -0.5 * jnp.sum((point - jnp.array([0.3, -0.7])) ** 2)
-
-    spec = LapsInitializationSpec(
-        ensemble_size=16, num_unadjusted_steps=80, num_adjusted_steps=8, steps_per_sample=3
-    )
-
-    def run(*, record_trace):
-        return run_laps_ensemble(
-            log_density,
-            dimension=2,
-            scientific_dimension=2,
-            key=jax.random.key(718),
-            spec=spec,
-            compute_budget=COMPUTE_BUDGET,
-            record_trace=record_trace,
-        )
-
-    ordinary, traced = run(record_trace=False), run(record_trace=True)
-    assert isinstance(ordinary, LapsEnsemble)
-    assert isinstance(traced, LapsEnsemble)
-    assert isinstance(ordinary.trace, NoLapsTrace)
-    assert isinstance(traced.trace, LapsTraceRecord)
-    np.testing.assert_allclose(traced.positions, ordinary.positions, rtol=2e-5, atol=2e-5)
-    assert traced.diagnostics.unadjusted_steps == ordinary.diagnostics.unadjusted_steps
-    trace = traced.trace
-    for phase, count in (
-        (trace.unadjusted, traced.diagnostics.unadjusted_steps),
-        (trace.adjusted, spec.num_adjusted_steps),
-    ):
-        assert phase.positions.shape == (count, spec.ensemble_size, 2)
-        assert phase.step_sizes.shape == (count,)
-        assert np.isfinite(phase.positions).all()
-        assert (np.asarray(phase.step_sizes) > 0).all()
-    np.testing.assert_array_equal(trace.adjusted.positions[-1], traced.positions)
-    np.testing.assert_allclose(
-        trace.adjusted_acceptance.mean(), traced.diagnostics.adjusted_acceptance
-    )

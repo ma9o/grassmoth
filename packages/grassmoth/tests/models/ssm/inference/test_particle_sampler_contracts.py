@@ -107,18 +107,18 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
     kernel = Mock(
         spec=MarginalParticleGibbsKernel,
         parameter_gradient_fn=jnp.zeros_like,
-        target_accept=0.35,
+        target_accept=jnp.asarray([0.35]),
         exact_constraints=None,
-        initial_param_step_size=0.01,
+        initial_param_step_size=jnp.asarray([0.01]),
         initial_parameter_chol=jnp.eye(1),
         dsmc=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.1)),
-        min_scale=1e-6,
-        max_scale=1.0,
+        min_scale=jnp.asarray([1e-6]),
+        max_scale=jnp.asarray([1.0]),
     )
     step = Mock(side_effect=AssertionError("Invalid initial states must fail before sampling"))
     monkeypatch.setattr(runner, "compile_projected_sweeps", step)
 
-    # Execute the synthetic initializer without serializing its mocks into a cached program.
+    # Execute the synthetic initializer directly so mocks stay outside JAX tracing.
     def compiler(function, *_args, **_kwargs):
         return Mock(call=function)
 
@@ -132,7 +132,6 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
             num_chains=2,
             key=random.PRNGKey(0),
             adaptation_rate=0.1,
-            retain_latent_paths=True,
             initialization=Mock(
                 spec=ParticleInitialization,
                 positions=jnp.asarray(positions),
@@ -148,7 +147,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
     target.initial_path.assert_not_called()
 
 
-def test_laps_failure_stops_production_before_sampling(monkeypatch):
+def test_initialization_failure_stops_production_before_sampling(monkeypatch):
     from importlib import import_module
 
     fitting = import_module("grassmoth.models.ssm.inference.samplers.mpgibbs.fit")
@@ -156,7 +155,7 @@ def test_laps_failure_stops_production_before_sampling(monkeypatch):
     monkeypatch.setattr(
         fitting, "build_particle_problem", Mock(return_value=Mock(runtime=target, public_sites=()))
     )
-    failure = InitializationFailure.unavailable("No finite LAPS ensemble")
+    failure = InitializationFailure.unavailable("No finite Gaussian starts")
     initialize = Mock(return_value=failure)
     sample = Mock(side_effect=AssertionError("Failed initialization must stop the fit"))
     monkeypatch.setattr(fitting, "prepare_particle_initialization", initialize)

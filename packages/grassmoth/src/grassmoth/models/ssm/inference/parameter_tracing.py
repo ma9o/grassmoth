@@ -1,6 +1,6 @@
 """Shared utilities for inference backends.
 
-Particle inference and LAPS initialization share NumPyro's prior replay and
+Particle inference and initialization share NumPyro's prior replay and
 transformations. Application metadata supports initialization proposals and
 reporting; it never reconstructs the prior density or deterministic model sites.
 """
@@ -68,7 +68,7 @@ def _discover_sites(
     Site discovery is structural: it only needs the latent sample/deterministic
     sites emitted by ``numpyro_model``. Discovery replays the model with a zero
     likelihood; the particle target owns the exact joint likelihood used by
-    LAPS and sampling.
+    initialization and sampling.
     """
     model_fn = functools.partial(numpyro_model, panel, priors, likelihood_backend=None)
     if reparam is not None:

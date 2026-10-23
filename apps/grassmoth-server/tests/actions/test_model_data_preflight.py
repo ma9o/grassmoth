@@ -19,7 +19,7 @@ from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import EditModelInput
 from grassmoth_server.actions.contracts.requests import EditModelRequest
 from grassmoth_server.actions.messages import edit_messages
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
+from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState
@@ -89,7 +89,7 @@ def test_noisy_interval_summary_passes_fit_admission_and_dispatches(monkeypatch)
         reparam=None,
         clock=time.monotonic,
         compute_budget=COMPUTE_BUDGET,
-        compiler=compile_staged,
+        compiler=compile_program,
         prepare_program=prepare_program,
         logger=logging.getLogger(__name__),
         wall_clock=lambda: datetime.now(UTC),
@@ -105,7 +105,7 @@ def test_noisy_interval_summary_passes_fit_admission_and_dispatches(monkeypatch)
         logger=logging.getLogger(__name__),
         wall_clock=dispatch.call_args.kwargs["wall_clock"],
         continuation=None,
-        compiler=compile_staged,
+        compiler=compile_program,
         prepare_program=prepare_program,
     )
 

@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, NamedTuple
 import jax
 import jax.numpy as jnp
 
+from grassmoth.artifacts.reports.posterior_diagnostics import ParticleWeightMetric
 from grassmoth.models.ssm.inference.samplers.particle.auxiliary import build_auxiliary
 from grassmoth.models.ssm.inference.samplers.particle.contract import (
     ParticleSmootherResult,
@@ -57,7 +58,6 @@ from grassmoth.models.ssm.inference.tracing import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from grassmoth.artifacts.reports.posterior_diagnostics import ParticleWeightMetric
     from grassmoth.models.ssm.compile.interval_tree import CompiledIntervalTreeLevel
 
 
@@ -135,6 +135,19 @@ def _step(
         ),
         obs_increment_fn=jax.jit(ctx.obs_increment_fn, inline=jax.Inline.JAX_EARLY),
     )
+
+    def measure_weights(logits: jax.Array) -> dict[ParticleWeightMetric, jax.Array]:
+        result: dict[ParticleWeightMetric, jax.Array] = jax.lax.cond(
+            jnp.reshape(ctx.diagnostic_weights, ()),
+            weight_statistics,
+            lambda values: {
+                metric: jnp.zeros(values.shape[:-1], dtype=values.dtype)
+                for metric in ParticleWeightMetric
+            },
+            logits,
+        )
+        return result
+
     count = ctx.num_free_particles + 1
     steps = ctx.num_steps
     labels = ctx.num_parameter_particles
@@ -314,7 +327,7 @@ def _step(
             jnp.full(count, -math.log(count), dtype=ctx.traj_dtype),
             stats,
         )
-        metrics = weight_statistics(logits.reshape(-1)) if ctx.diagnostic_weights else {}
+        metrics = measure_weights(logits.reshape(-1))
         return segment, metrics, (li, ri)
 
     def path_from_origins(origins: jax.Array) -> jax.Array:
@@ -336,8 +349,8 @@ def _step(
     origins = jnp.broadcast_to(jnp.arange(count)[None, :, None], (padded, count, 1))
     leaf_logits = jax.scipy.special.logsumexp(logpi + evidence, axis=-1)
     weights = jax.nn.log_softmax(leaf_logits, axis=-1)
-    leaf_metrics = weight_statistics(leaf_logits) if ctx.diagnostic_weights else {}
-    node_statistics = (leaf_metrics,) if ctx.diagnostic_weights else ()
+    leaf_metrics = measure_weights(leaf_logits)
+    node_statistics = (leaf_metrics,)
     if steps == 1:
         root_logits = leaf_logits[0]
         root_logits = root_logits + jax.vmap(terminal_correction)(origins[0], evidence[0], prior[0])
@@ -511,19 +524,16 @@ def _step(
 
         root_origins, _ = jax.lax.scan(descend, indices, jnp.arange(depth))
         root = jax.tree.map(lambda value: value[0], segments)
-        if ctx.diagnostic_weights:
-            node_statistics = (
-                *node_statistics,
-                *(
-                    {
-                        metric: values[
-                            level, : (steps + (1 << (level + 1)) - 1) // (1 << (level + 1))
-                        ]
-                        for metric, values in history_metrics.items()
-                    }
-                    for level in range(depth)
-                ),
-            )
+        node_statistics = (
+            *node_statistics,
+            *(
+                {
+                    metric: values[level, : (steps + (1 << (level + 1)) - 1) // (1 << (level + 1))]
+                    for metric, values in history_metrics.items()
+                }
+                for level in range(depth)
+            ),
+        )
         # A conditional resampling stage makes full-path work linear in N.
         # No N x N x T candidate paths or replay-gradient arrays are formed.
         batch = count if batch_size is None else min(count, batch_size)
@@ -536,15 +546,11 @@ def _step(
         chosen = _forced_move(select_key, root_logits)
         selected_origins = root_origins[chosen, :steps]
     path = path_from_origins(selected_origins).astype(ctx.latent_dtype)
-    weight_diagnostics = (
-        weight_history_fields(
-            (
-                *node_statistics,
-                {metric: value[None] for metric, value in weight_statistics(root_logits).items()},
-            )
+    weight_diagnostics = weight_history_fields(
+        (
+            *node_statistics,
+            {metric: value[None] for metric, value in measure_weights(root_logits).items()},
         )
-        if ctx.diagnostic_weights
-        else {}
     )
     result = ParticleSmootherResult(
         latent_path=path,

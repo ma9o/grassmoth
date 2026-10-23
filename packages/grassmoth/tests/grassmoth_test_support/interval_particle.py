@@ -183,6 +183,5 @@ def initialize_interval_chain(
         param_step_size=0.3,
         param_min_scale=1e-6,
         param_max_scale=1.0,
-        param_target_accept=0.35,
         initial_latent_trajectory=joint[1:, None],
     )

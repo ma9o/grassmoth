@@ -62,7 +62,7 @@ class NutsDARun:
     """Aligned retained chains and adaptation telemetry from joint NUTS."""
 
     positions: jax.Array
-    paths: jax.Array | None
+    paths: jax.Array
     observation_log_probs: jax.Array
     phase_extra_fields: Mapping[str, Mapping[str, jax.Array]]
     final_step_size: jax.Array
@@ -302,7 +302,7 @@ def run_nuts_da(
     }
     return NutsDARun(
         positions=run.history.posterior["positions"],
-        paths=run.history.posterior["paths"] if sampler.retain_latent_paths else None,
+        paths=run.history.posterior["paths"],
         observation_log_probs=run.history.posterior["observation_log_probs"],
         phase_extra_fields={
             "warmup": run.history.warmup,
@@ -390,9 +390,7 @@ def fit_nuts_da(
     return MCMCPosterior.from_run(
         draws=JointPosteriorDraws(
             parameters=mcmc.get_samples(),
-            latent_paths=run.paths.reshape((-1, *run.paths.shape[2:]))
-            if run.paths is not None
-            else None,
+            latent_paths=run.paths.reshape((-1, *run.paths.shape[2:])),
             state_ids=tuple(state.id for state in panel.compiled_dynamical_model.states),
         ),
         diagnostics=ProductionDiagnostics(
@@ -408,9 +406,7 @@ def fit_nuts_da(
                 states=tuple(
                     (ConstructRef(id=s.id), s.name) for s in panel.compiled_dynamical_model.states
                 ),
-            )
-            if run.paths is not None
-            else None,
+            ),
             exact_observation_rows=jnp.any(
                 ~bundle.exact_constraints.free_mask & bundle.runtime.state_density_mask, axis=-1
             )

@@ -20,7 +20,7 @@ including standalone notebook support tests. The top-level groups are `contract`
 |-------|---------------|--------|
 | `contract` | — | Isolated routing, validation, schema, identity, and projection without scientific numerical execution |
 | `inference` | `sampling` | Parameterization, exact probability targets, particle sampling, and posterior diagnostics |
-| `inference` | `warmup` | LAPS initialization, proposal preconditioning, and exact joint-density gradients |
+| `inference` | `warmup` | Initialization, proposal preconditioning, and exact joint-density gradients |
 | `inference` | `simulation` | State dynamics, deterministic/stochastic trajectories, steady states, and interventions |
 | `inference` | `predictive` | Prior/posterior predictive generation, observation sampling, and predictive diagnostics |
 | `inference` | `recovery` | Fitted accuracy and uncertainty checked against known generating parameters |
@@ -110,7 +110,7 @@ Library tests belong to `packages/grassmoth/tests`, service tests to
 `apps/grassmoth-server/tests`. Each suite owns its fixtures and test support:
 
 ```bash
-uv run pytest packages/grassmoth/tests/models/ssm/inference/test_laps_initialization.py -m "contract or inference(concern='warmup')" -n 0
+uv run pytest packages/grassmoth/tests/models/ssm/inference/test_particle_initialization.py -m "contract or inference(concern='warmup')" -n 0
 uv run pytest packages/grassmoth/tests/models/ssm/execution/test_emissions.py packages/grassmoth/tests/models/ssm/execution/test_observation_sampling.py -m "contract or inference(concern='sampling') or inference(concern='predictive')"
 uv run pytest packages/grassmoth/tests apps/grassmoth-server/tests --collect-only -m contract -n 0
 ```
@@ -134,13 +134,13 @@ New studies initialize their local bare repository on first use. On a fresh chec
 
 ```bash
 git clone --mirror data/HEALTHDEMO/study/history.bundle data/HEALTHDEMO/study/history.git
-git --git-dir=data/HEALTHDEMO/study/history.git config grassmoth.format 28
+git --git-dir=data/HEALTHDEMO/study/history.git config grassmoth.format 29
 ```
 
 #### Storage format
 
 The [storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/git_objects.py)
-requires format 28. Start a new study or restore a format-28 bundle. The application
+requires format 29. Start a new study or restore a format-29 bundle. The application
 reads only this format and does not perform automatic migrations.
 
 ### Local stack

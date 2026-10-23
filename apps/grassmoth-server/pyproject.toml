@@ -9,9 +9,7 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
     "grassmoth",
     "botocore>=1.43.75",
-    "cloudpickle>=3.1.2",
     "fastapi>=0.142.2",
-    "flatbuffers>=25.12.19",
     "fsspec>=2026.9.0",
     "jax>=0.11.2",
     "jaxlib>=0.11.2",

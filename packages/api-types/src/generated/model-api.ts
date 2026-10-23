@@ -304,6 +304,7 @@ export interface components {
             readonly kind: "adapted";
             /**
              * Target
+             * @description Fraction of proposals at each time step that should change its state. In a new fit every time step's scale starts at 0.01, adapts towards this target during warmup and is then frozen. Corenflos & Särkkä (2025, section 4) target 0.5 per time step, below Finke & Thiery's 1 - (N + 1)^(-1/3), because a higher target can be unreachable at some time steps and leaves the sampler stuck there. Corenflos & Finke (2024, section 5.2) use 0.75 and note that the optimum depends on N and on the state dimension.
              * @default 0.5
              */
             readonly target?: number;
@@ -320,6 +321,7 @@ export interface components {
             readonly kind: "adapted";
             /**
              * Target
+             * @description Fraction of proposals at each time step that should change its state. In a new fit every time step's scale starts at 0.01, adapts towards this target during warmup and is then frozen. Corenflos & Särkkä (2025, section 4) target 0.5 per time step, below Finke & Thiery's 1 - (N + 1)^(-1/3), because a higher target can be unreachable at some time steps and leaves the sampler stuck there. Corenflos & Finke (2024, section 5.2) use 0.75 and note that the optimum depends on N and on the state dimension.
              * @default 0.5
              */
             readonly target: number;
@@ -874,6 +876,8 @@ export interface components {
          * @enum {string}
          */
         readonly CoefficientRole: "center" | "decay" | "quartic" | "intercept" | "weight" | "emax" | "ec50" | "exponent" | "loading" | "observation_intercept" | "observation_scale" | "degrees_of_freedom" | "shape" | "dispersion" | "concentration" | "cutpoint_base" | "cutpoint_gaps" | "category_intercepts" | "category_slopes" | "diffusion_scale" | "diffusion_loading" | "process_degrees_of_freedom" | "initial_mean" | "initial_scale" | "initial_correlation";
+        /** @enum {string} */
+        readonly CompanionMoves: "none" | "centred_mh" | "centred_and_scale_noncentred_mh";
         /**
          * CompletedExtractionWorker
          * @description Counts of extracted observations and windows retained from a completed worker.
@@ -1002,6 +1006,8 @@ export interface components {
         /**
          * ConditionalNutsSpec
          * @description Conditional NUTS parameter updates within Particle Gibbs.
+         *
+         *     Its diagonal mass starts from the initializer's scale and adapts in warmup windows.
          */
         readonly "ConditionalNutsSpec-Input": {
             /**
@@ -1011,16 +1017,19 @@ export interface components {
             readonly method: "nuts_da";
             /**
              * Target Accept Prob
+             * @description Dual-averaging target; see NutsDASpec.target_accept_prob.
              * @default 0.8
              */
             readonly target_accept_prob?: number;
             /**
              * Max Tree Depth
+             * @description Doubling limit; see NutsTrajectorySpec.max_tree_depth.
              * @default 10
              */
             readonly max_tree_depth?: number;
             /**
              * Initial Step Size
+             * @description First step size; see NutsDASpec.initial_step_size.
              * @default 1
              */
             readonly initial_step_size?: number;
@@ -1028,6 +1037,8 @@ export interface components {
         /**
          * ConditionalNutsSpec
          * @description Conditional NUTS parameter updates within Particle Gibbs.
+         *
+         *     Its diagonal mass starts from the initializer's scale and adapts in warmup windows.
          */
         readonly "ConditionalNutsSpec-Output": {
             /**
@@ -1037,16 +1048,19 @@ export interface components {
             readonly method: "nuts_da";
             /**
              * Target Accept Prob
+             * @description Dual-averaging target; see NutsDASpec.target_accept_prob.
              * @default 0.8
              */
             readonly target_accept_prob: number;
             /**
              * Max Tree Depth
+             * @description Doubling limit; see NutsTrajectorySpec.max_tree_depth.
              * @default 10
              */
             readonly max_tree_depth: number;
             /**
              * Initial Step Size
+             * @description First step size; see NutsDASpec.initial_step_size.
              * @default 1
              */
             readonly initial_step_size: number;
@@ -1523,15 +1537,28 @@ export interface components {
         /**
          * DsmcSpec
          * @description Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.
+         *
+         *     Each sweep refreshes an auxiliary point near the current path, draws candidates
+         *     around it at every time step, and selects a new path through the conditional dSMC
+         *     tree (Corenflos, Chopin & Särkkä 2022, Algorithm 4), whose depth grows with log T.
+         *     The auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).
          */
         readonly "DsmcSpec-Input": {
-            /** @default none */
+            /**
+             * @description Gradient information in the auxiliary point. none (kappa 0, Particle-RWM) centres it on the current state. amala (kappa 1, Algorithm 3) drifts it along the gradient of the local prior and observation terms; amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & Särkkä (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4).
+             * @default none
+             */
             readonly drift?: components["schemas"]["AuxiliaryDrift"];
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. */
             readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
-            /** @default 1 */
+            /**
+             * @description State coordinates proposed per sweep, drawn uniformly from the free ones; the others keep their current paths at every time step. 1 proposes one coordinate's whole path, all proposes the full state. Importance weights degenerate as the proposed dimension grows, which blocking counters (Corenflos & Särkkä 2025, section 3.1): smaller blocks keep larger scales at the same movement rate, but each coordinate is proposed only every D/k sweeps, and coupled coordinates move slowly when proposed apart.
+             * @default 1
+             */
             readonly latent_block_coords?: components["schemas"]["LatentBlockSize"];
             /**
              * Pilot Mixture
+             * @description Mix two fixed Gaussians into every candidate draw: 85% of candidates come from the local auxiliary proposal, 10% from a Gaussian at the initializer's mean path with a quarter of its variance, and 5% from one with four times its variance. Weights use the full mixture density, so the target is unchanged (a defensive mixture, Hesterberg 1995). It adds candidates away from the current path, as Corenflos, Chopin & Särkkä (2022, section 4) suggest for separable proposals. The auxiliary factor still scores each candidate against the refreshed point, so at a small scale distant pilot draws are rarely kept. The moments come from the num_chains starting paths.
              * @default true
              */
             readonly pilot_mixture?: boolean;
@@ -1539,15 +1566,28 @@ export interface components {
         /**
          * DsmcSpec
          * @description Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.
+         *
+         *     Each sweep refreshes an auxiliary point near the current path, draws candidates
+         *     around it at every time step, and selects a new path through the conditional dSMC
+         *     tree (Corenflos, Chopin & Särkkä 2022, Algorithm 4), whose depth grows with log T.
+         *     The auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).
          */
         readonly "DsmcSpec-Output": {
-            /** @default none */
+            /**
+             * @description Gradient information in the auxiliary point. none (kappa 0, Particle-RWM) centres it on the current state. amala (kappa 1, Algorithm 3) drifts it along the gradient of the local prior and observation terms; amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & Särkkä (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4).
+             * @default none
+             */
             readonly drift: components["schemas"]["AuxiliaryDrift"];
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. */
             readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
-            /** @default 1 */
+            /**
+             * @description State coordinates proposed per sweep, drawn uniformly from the free ones; the others keep their current paths at every time step. 1 proposes one coordinate's whole path, all proposes the full state. Importance weights degenerate as the proposed dimension grows, which blocking counters (Corenflos & Särkkä 2025, section 3.1): smaller blocks keep larger scales at the same movement rate, but each coordinate is proposed only every D/k sweeps, and coupled coordinates move slowly when proposed apart.
+             * @default 1
+             */
             readonly latent_block_coords: components["schemas"]["LatentBlockSize"];
             /**
              * Pilot Mixture
+             * @description Mix two fixed Gaussians into every candidate draw: 85% of candidates come from the local auxiliary proposal, 10% from a Gaussian at the initializer's mean path with a quarter of its variance, and 5% from one with four times its variance. Weights use the full mixture density, so the target is unchanged (a defensive mixture, Hesterberg 1995). It adds candidates away from the current path, as Corenflos, Chopin & Särkkä (2022, section 4) suggest for separable proposals. The auxiliary factor still scores each candidate against the refreshed point, so at a small scale distant pilot draws are rarely kept. The moments come from the num_chains starting paths.
              * @default true
              */
             readonly pilot_mixture: boolean;
@@ -4492,6 +4532,9 @@ export interface components {
         /**
          * FitSettingsSpec
          * @description Optional numerical controls applied to the configured joint sampler.
+         *
+         *     Each field means what the SamplerSpec field of the same name means. Null keeps the
+         *     server's configured value, or the continued fit's.
          */
         readonly "FitSettingsSpec-Input": {
             /** @default null */
@@ -4532,6 +4575,9 @@ export interface components {
         /**
          * FitSettingsSpec
          * @description Optional numerical controls applied to the configured joint sampler.
+         *
+         *     Each field means what the SamplerSpec field of the same name means. Null keeps the
+         *     server's configured value, or the continued fit's.
          */
         readonly "FitSettingsSpec-Output": {
             /** @default null */
@@ -4601,6 +4647,7 @@ export interface components {
             readonly kind: "fixed";
             /**
              * Delta
+             * @description Variance of the candidates around each proposed state, at every time step: half comes from refreshing the auxiliary point and half from drawing around it (Corenflos & Finke 2024, Algorithm 3). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving.
              * @default 0.01
              */
             readonly delta?: number;
@@ -4617,6 +4664,7 @@ export interface components {
             readonly kind: "fixed";
             /**
              * Delta
+             * @description Variance of the candidates around each proposed state, at every time step: half comes from refreshing the auxiliary point and half from drawing around it (Corenflos & Finke 2024, Algorithm 3). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving.
              * @default 0.01
              */
             readonly delta: number;
@@ -4634,7 +4682,7 @@ export interface components {
         };
         /**
          * FixedTrajectorySpec
-         * @description A fixed number of leapfrog steps with the production jitter policy.
+         * @description A fixed number of leapfrog steps, with the step size jittered by up to 20%.
          */
         readonly "FixedTrajectorySpec-Input": {
             /**
@@ -4644,13 +4692,14 @@ export interface components {
             readonly kind: "fixed";
             /**
              * Steps
+             * @description Leapfrog steps per transition. Each transition scales the adapted step size by a uniform factor in [0.8, 1.2], so trajectories cannot stay periodic (Neal 2011, section 5.3.2). Every transition costs the same number of gradients, so chains advanced together never wait for the longest NUTS tree, which limits NUTS on accelerators (Hoffman, Radul & Sountsov 2021).
              * @default 8
              */
             readonly steps?: number;
         };
         /**
          * FixedTrajectorySpec
-         * @description A fixed number of leapfrog steps with the production jitter policy.
+         * @description A fixed number of leapfrog steps, with the step size jittered by up to 20%.
          */
         readonly "FixedTrajectorySpec-Output": {
             /**
@@ -4660,6 +4709,7 @@ export interface components {
             readonly kind: "fixed";
             /**
              * Steps
+             * @description Leapfrog steps per transition. Each transition scales the adapted step size by a uniform factor in [0.8, 1.2], so trajectories cannot stay periodic (Neal 2011, section 5.3.2). Every transition costs the same number of gradients, so chains advanced together never wait for the longest NUTS tree, which limits NUTS on accelerators (Hoffman, Radul & Sountsov 2021).
              * @default 8
              */
             readonly steps: number;
@@ -4703,12 +4753,8 @@ export interface components {
          */
         readonly "GaussianInitializationSpec-Input": {
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly kind: "gaussian";
-            /**
              * Scale
+             * @description Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity; PGibbs's MH update keeps its shape, and MPGibbs re-estimates it in warmup windows.
              * @default 0.1
              */
             readonly scale?: number;
@@ -4722,12 +4768,8 @@ export interface components {
          */
         readonly "GaussianInitializationSpec-Output": {
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly kind: "gaussian";
-            /**
              * Scale
+             * @description Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity; PGibbs's MH update keeps its shape, and MPGibbs re-estimates it in warmup windows.
              * @default 0.1
              */
             readonly scale: number;
@@ -4740,20 +4782,27 @@ export interface components {
          *     its endpoint is independently refreshed every sweep, and even/odd neighboring
          *     swaps alternate. Rejection-based ladder adaptation runs during the first half
          *     of warmup, leaving the rest to settle before retaining posterior draws.
+         *
+         *     It is for posteriors whose chains stay in separate modes: states that move freely
+         *     under the reference reach the exact chain through swaps (Syed et al. 2022). Its
+         *     limits are in docs/assumptions.md, under Model class.
          */
         readonly "GaussianReferenceTemperingSpec-Input": {
             /**
              * Num Temperatures
+             * @description Replicas per chain, initially evenly spaced from beta one (the exact posterior) to beta zero (the Gaussian reference). Each replica runs a full sweep, so cost grows linearly. With alternating even/odd swaps the round-trip rate tends to 1 / (2 + 2Λ) instead of collapsing as replicas are added, and about 2Λ replicas are optimal, where Λ is the posterior's communication barrier (Syed et al. 2022, sections 4.2 and 5.3).
              * @default 48
              */
             readonly num_temperatures?: number;
             /**
              * Reference Scale
+             * @description Multiplies the reference's standard deviations for parameters and path innovations. The reference is built at initialization from the starting draws and the transition Jacobians along their mean path. Above 1 it covers mass the starting draws missed, but overlaps the posterior less, which raises the barrier and so the replicas needed.
              * @default 1
              */
             readonly reference_scale?: number;
             /**
              * Adaptation Interval
+             * @description Sweeps between ladder updates in the first half of warmup. Each update respaces the temperatures to equalize the swap rejection rates estimated since the last update (Syed et al. 2022, sections 5.1-5.2). An interval above half the warmup leaves the evenly spaced ladder unadapted.
              * @default 500
              */
             readonly adaptation_interval?: number;
@@ -4766,20 +4815,27 @@ export interface components {
          *     its endpoint is independently refreshed every sweep, and even/odd neighboring
          *     swaps alternate. Rejection-based ladder adaptation runs during the first half
          *     of warmup, leaving the rest to settle before retaining posterior draws.
+         *
+         *     It is for posteriors whose chains stay in separate modes: states that move freely
+         *     under the reference reach the exact chain through swaps (Syed et al. 2022). Its
+         *     limits are in docs/assumptions.md, under Model class.
          */
         readonly "GaussianReferenceTemperingSpec-Output": {
             /**
              * Num Temperatures
+             * @description Replicas per chain, initially evenly spaced from beta one (the exact posterior) to beta zero (the Gaussian reference). Each replica runs a full sweep, so cost grows linearly. With alternating even/odd swaps the round-trip rate tends to 1 / (2 + 2Λ) instead of collapsing as replicas are added, and about 2Λ replicas are optimal, where Λ is the posterior's communication barrier (Syed et al. 2022, sections 4.2 and 5.3).
              * @default 48
              */
             readonly num_temperatures: number;
             /**
              * Reference Scale
+             * @description Multiplies the reference's standard deviations for parameters and path innovations. The reference is built at initialization from the starting draws and the transition Jacobians along their mean path. Above 1 it covers mass the starting draws missed, but overlaps the posterior less, which raises the barrier and so the replicas needed.
              * @default 1
              */
             readonly reference_scale: number;
             /**
              * Adaptation Interval
+             * @description Sweeps between ladder updates in the first half of warmup. Each update respaces the temperatures to equalize the swap rejection rates estimated since the last update (Syed et al. 2022, sections 5.1-5.2). An interval above half the warmup leaves the evenly spaced ladder unadapted.
              * @default 500
              */
             readonly adaptation_interval: number;
@@ -5076,7 +5132,7 @@ export interface components {
              */
             readonly kind: "initial_state_correlation";
         };
-        readonly InitializationDiagnostics: components["schemas"]["LapsInitializationDiagnostics"] | components["schemas"]["GaussianInitializationDiagnostics"] | components["schemas"]["ContinuedInitializationDiagnostics"];
+        readonly InitializationDiagnostics: components["schemas"]["GaussianInitializationDiagnostics"] | components["schemas"]["ContinuedInitializationDiagnostics"];
         /**
          * IntervalEffectTransformSpec
          * @description Divide an interval effect by its explicit duration in days.
@@ -5229,116 +5285,6 @@ export interface components {
             /** Ecdf */
             readonly ecdf: number;
         };
-        /**
-         * LapsInitializationDiagnostics
-         * @description Realized joint-ensemble initialization, without any claim of posterior convergence.
-         */
-        readonly LapsInitializationDiagnostics: {
-            /**
-             * Source
-             * @default laps
-             * @constant
-             */
-            readonly source: "laps";
-            /** Ensemble Size */
-            readonly ensemble_size: number;
-            /** Joint Dimension */
-            readonly joint_dimension: number;
-            /** Unadjusted Steps */
-            readonly unadjusted_steps: number;
-            /** Adjusted Steps */
-            readonly adjusted_steps: number;
-            /** Unadjusted Step Size */
-            readonly unadjusted_step_size: number;
-            /** Adjusted Step Size */
-            readonly adjusted_step_size: number;
-            /** Adjusted Acceptance */
-            readonly adjusted_acceptance: number;
-            /** Early Stopped */
-            readonly early_stopped: boolean;
-        };
-        /**
-         * LapsInitializationSpec
-         * @description Joint ensemble initialization; its draws are never reported as posterior samples.
-         */
-        readonly "LapsInitializationSpec-Input": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly kind: "laps";
-            /**
-             * Ensemble Size
-             * @default 1024
-             */
-            readonly ensemble_size?: number;
-            /**
-             * Num Unadjusted Steps
-             * @default 10000
-             */
-            readonly num_unadjusted_steps?: number;
-            /**
-             * Num Adjusted Steps
-             * @default 100
-             */
-            readonly num_adjusted_steps?: number;
-            /**
-             * Steps Per Sample
-             * @default 15
-             */
-            readonly steps_per_sample?: number;
-            /**
-             * Initial Scale
-             * @default 1
-             */
-            readonly initial_scale?: number;
-            /**
-             * Covariance Regularization
-             * @default 0.0001
-             */
-            readonly covariance_regularization?: number;
-        };
-        /**
-         * LapsInitializationSpec
-         * @description Joint ensemble initialization; its draws are never reported as posterior samples.
-         */
-        readonly "LapsInitializationSpec-Output": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly kind: "laps";
-            /**
-             * Ensemble Size
-             * @default 1024
-             */
-            readonly ensemble_size: number;
-            /**
-             * Num Unadjusted Steps
-             * @default 10000
-             */
-            readonly num_unadjusted_steps: number;
-            /**
-             * Num Adjusted Steps
-             * @default 100
-             */
-            readonly num_adjusted_steps: number;
-            /**
-             * Steps Per Sample
-             * @default 15
-             */
-            readonly steps_per_sample: number;
-            /**
-             * Initial Scale
-             * @default 1
-             */
-            readonly initial_scale: number;
-            /**
-             * Covariance Regularization
-             * @default 0.0001
-             */
-            readonly covariance_regularization: number;
-        };
         /** @enum {unknown} */
         readonly LatentBlockSize: 1 | 2 | "all";
         /**
@@ -5444,6 +5390,13 @@ export interface components {
         /**
          * MarginalParticleGibbsSpec
          * @description Marginalized parameter ensemble and conditional dSMC trajectory updates.
+         *
+         *     m-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around
+         *     a shared auxiliary point, runs conditional dSMC against the posterior mixture over
+         *     them and selects a parameter together with the new path. Parameter moves are thus
+         *     marginalized over paths, as in PMMH, instead of conditioned on one. The proposal
+         *     covariance starts from the initializer and is re-estimated at the end of each
+         *     warmup window (section 3.4).
          */
         readonly "MarginalParticleGibbsSpec-Input": {
             /**
@@ -5453,69 +5406,91 @@ export interface components {
             readonly method: "mpgibbs";
             /**
              * N Parameter Particles
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).
              * @default 2
              */
             readonly n_parameter_particles?: number;
-            /** @default null */
+            /**
+             * @description Gaussian-reference parallel tempering; null runs the exact posterior alone.
+             * @default null
+             */
             readonly tempering?: components["schemas"]["GaussianReferenceTemperingSpec-Input"] | null;
+            /** @description Path update. */
             readonly dsmc?: components["schemas"]["DsmcSpec-Input"];
             /**
              * Parameter Proposal
+             * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk
              * @enum {string}
              */
             readonly parameter_proposal?: "random_walk" | "pseudo_langevin";
             /**
+             * @description Exact Metropolis moves after each sweep, each with its own warmup-adapted step: every parameter at the current path, then, for centred_and_scale_noncentred_mh, the diffusion scales with the path's innovations held fixed. Not available with tempering.
+             * @default none
+             */
+            readonly companion?: components["schemas"]["CompanionMoves"];
+            /**
              * Diagnostic Metrics All
+             * @description Record every optional particle trace below.
              * @default false
              */
             readonly diagnostic_metrics_all?: boolean;
             /**
              * Diagnostic Metrics
+             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
              * @default []
              */
             readonly diagnostic_metrics?: readonly string[];
             /**
              * Param Step Size
+             * @description Starting δ of the parameter proposal. Each half has covariance 2δΣ, so a whole move has covariance 4δΣ (and drift 2δΣg for pseudo_langevin): a MALA step h is δ = h / 4. Warmup adapts δ towards param_target_accept and rescales it whenever Σ is re-estimated, keeping the average proposal variance.
              * @default 0.02
              */
             readonly param_step_size?: number;
             /**
              * Param Step Size Min
+             * @description Lower bound on δ during adaptation and rescaling.
              * @default 0.000001
              */
             readonly param_step_size_min?: number;
             /**
              * Param Step Size Max
+             * @description Upper bound on δ during adaptation and rescaling.
              * @default 1000
              */
             readonly param_step_size_max?: number;
             /**
              * Param Target Accept
+             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023), below this default.
              * @default 0.35
              */
             readonly param_target_accept?: number;
             /**
              * Adaptation Rate
+             * @description Gain of the simple scheme: after each warmup sweep δ is multiplied by exp(adaptation_rate * (moved - param_target_accept)), where moved is 0 or 1.
              * @default 0.05
              */
             readonly adaptation_rate?: number;
             /**
              * Adaptation Scheme
+             * @description simple adapts with a constant gain and keeps the last δ; dual_averaging keeps the averaged δ at the end of warmup (Hoffman & Gelman 2014, section 3.2).
              * @default simple
              * @enum {string}
              */
             readonly adaptation_scheme?: "simple" | "dual_averaging";
-            readonly initialization?: components["schemas"]["ParticleInitializationSpec-Input"];
-            /**
-             * Compute Latent Posterior Summary
-             * @default true
-             */
-            readonly compute_latent_posterior_summary?: boolean;
+            /** @description Independent Gaussian starts, which also set the initial proposal scale. */
+            readonly initialization?: components["schemas"]["GaussianInitializationSpec-Input"];
         };
         /**
          * MarginalParticleGibbsSpec
          * @description Marginalized parameter ensemble and conditional dSMC trajectory updates.
+         *
+         *     m-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around
+         *     a shared auxiliary point, runs conditional dSMC against the posterior mixture over
+         *     them and selects a parameter together with the new path. Parameter moves are thus
+         *     marginalized over paths, as in PMMH, instead of conditioned on one. The proposal
+         *     covariance starts from the initializer and is re-estimated at the end of each
+         *     warmup window (section 3.4).
          */
         readonly "MarginalParticleGibbsSpec-Output": {
             /**
@@ -5525,65 +5500,80 @@ export interface components {
             readonly method: "mpgibbs";
             /**
              * N Parameter Particles
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).
              * @default 2
              */
             readonly n_parameter_particles: number;
-            /** @default null */
+            /**
+             * @description Gaussian-reference parallel tempering; null runs the exact posterior alone.
+             * @default null
+             */
             readonly tempering: components["schemas"]["GaussianReferenceTemperingSpec-Output"] | null;
+            /** @description Path update. */
             readonly dsmc: components["schemas"]["DsmcSpec-Output"];
             /**
              * Parameter Proposal
+             * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk
              * @enum {string}
              */
             readonly parameter_proposal: "random_walk" | "pseudo_langevin";
             /**
+             * @description Exact Metropolis moves after each sweep, each with its own warmup-adapted step: every parameter at the current path, then, for centred_and_scale_noncentred_mh, the diffusion scales with the path's innovations held fixed. Not available with tempering.
+             * @default none
+             */
+            readonly companion: components["schemas"]["CompanionMoves"];
+            /**
              * Diagnostic Metrics All
+             * @description Record every optional particle trace below.
              * @default false
              */
             readonly diagnostic_metrics_all: boolean;
             /**
              * Diagnostic Metrics
+             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
              * @default []
              */
             readonly diagnostic_metrics: readonly string[];
             /**
              * Param Step Size
+             * @description Starting δ of the parameter proposal. Each half has covariance 2δΣ, so a whole move has covariance 4δΣ (and drift 2δΣg for pseudo_langevin): a MALA step h is δ = h / 4. Warmup adapts δ towards param_target_accept and rescales it whenever Σ is re-estimated, keeping the average proposal variance.
              * @default 0.02
              */
             readonly param_step_size: number;
             /**
              * Param Step Size Min
+             * @description Lower bound on δ during adaptation and rescaling.
              * @default 0.000001
              */
             readonly param_step_size_min: number;
             /**
              * Param Step Size Max
+             * @description Upper bound on δ during adaptation and rescaling.
              * @default 1000
              */
             readonly param_step_size_max: number;
             /**
              * Param Target Accept
+             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023), below this default.
              * @default 0.35
              */
             readonly param_target_accept: number;
             /**
              * Adaptation Rate
+             * @description Gain of the simple scheme: after each warmup sweep δ is multiplied by exp(adaptation_rate * (moved - param_target_accept)), where moved is 0 or 1.
              * @default 0.05
              */
             readonly adaptation_rate: number;
             /**
              * Adaptation Scheme
+             * @description simple adapts with a constant gain and keeps the last δ; dual_averaging keeps the averaged δ at the end of warmup (Hoffman & Gelman 2014, section 3.2).
              * @default simple
              * @enum {string}
              */
             readonly adaptation_scheme: "simple" | "dual_averaging";
-            readonly initialization: components["schemas"]["ParticleInitializationSpec-Output"];
-            /**
-             * Compute Latent Posterior Summary
-             * @default true
-             */
-            readonly compute_latent_posterior_summary: boolean;
+            /** @description Independent Gaussian starts, which also set the initial proposal scale. */
+            readonly initialization: components["schemas"]["GaussianInitializationSpec-Output"];
         };
         /**
          * @description A measurement dtype defines the observed value domain of an indicator.
@@ -5608,7 +5598,9 @@ export interface components {
         };
         /**
          * MetropolisHastingsSpec
-         * @description Conditional Gaussian random walk with LAPS preconditioning and warmup dual averaging.
+         * @description Conditional isotropic Gaussian random walk with warmup dual averaging.
+         *
+         *     The proposal covariance is a scaled identity; only its scale adapts.
          */
         readonly "MetropolisHastingsSpec-Input": {
             /**
@@ -5618,18 +5610,22 @@ export interface components {
             readonly method: "mh";
             /**
              * Initial Step Size
+             * @description Starting multiplier of the preconditioned step. It also sets dual averaging's anchor at log(10 * initial_step_size) (Hoffman & Gelman 2014, section 3.2).
              * @default 0.1
              */
             readonly initial_step_size?: number;
             /**
              * Target Accept Prob
+             * @description Acceptance probability that dual averaging targets in warmup. For random-walk Metropolis the optimum falls from about 0.43 in one dimension (Agrawal et al. 2023, figure 2) to 0.234 in high dimension (Roberts, Gelman & Gilks 1997).
              * @default 0.3
              */
             readonly target_accept_prob?: number;
         };
         /**
          * MetropolisHastingsSpec
-         * @description Conditional Gaussian random walk with LAPS preconditioning and warmup dual averaging.
+         * @description Conditional isotropic Gaussian random walk with warmup dual averaging.
+         *
+         *     The proposal covariance is a scaled identity; only its scale adapts.
          */
         readonly "MetropolisHastingsSpec-Output": {
             /**
@@ -5639,11 +5635,13 @@ export interface components {
             readonly method: "mh";
             /**
              * Initial Step Size
+             * @description Starting multiplier of the preconditioned step. It also sets dual averaging's anchor at log(10 * initial_step_size) (Hoffman & Gelman 2014, section 3.2).
              * @default 0.1
              */
             readonly initial_step_size: number;
             /**
              * Target Accept Prob
+             * @description Acceptance probability that dual averaging targets in warmup. For random-walk Metropolis the optimum falls from about 0.43 in one dimension (Agrawal et al. 2023, figure 2) to 0.234 in high dimension (Roberts, Gelman & Gilks 1997).
              * @default 0.3
              */
             readonly target_accept_prob: number;
@@ -6165,6 +6163,11 @@ export interface components {
         /**
          * NutsDASpec
          * @description Joint HMC with dual averaging and windowed diagonal mass adaptation.
+         *
+         *     It moves every parameter and free latent coordinate at once on the exact joint
+         *     density, with no particle approximation. It also reconstructs deterministic
+         *     recurrences that the particle samplers reject, and is a diagnostic when particle
+         *     chains fail to converge.
          */
         readonly "NutsDASpec-Input": {
             /**
@@ -6173,18 +6176,21 @@ export interface components {
              */
             readonly method: "nuts_da";
             /**
-             * @description Experimental coordinates for the unchanged joint posterior; frozen per fit.
+             * @description Coordinates the sampler moves in; the posterior is the same in all three, only its geometry changes. centred samples each path directly, standardized by the prior's per-step covariances at the starting parameters. non_centred samples each free coordinate's Euler-Maruyama innovation and rebuilds the path from the current parameters. mixed keeps coordinates with a direct point reading centred and makes the rest non-centred. Centred mixes well where data pin the states, non-centred where data are weak against the dynamics (Papaspiliopoulos, Roberts & Sköld 2007). Frozen per fit; changing it on a continued fit requires warmup.
              * @default centred
              */
             readonly parameterization?: components["schemas"]["JointParameterization"];
             /**
              * Target Accept Prob
+             * @description Mean acceptance statistic that dual averaging steers the step size towards during warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks the step, which removes divergences in strongly curved regions at the cost of longer trajectories. 0.8 is the NumPyro and Stan default.
              * @default 0.8
              */
             readonly target_accept_prob?: number;
+            /** @description NUTS chooses each trajectory's length; fixed runs a set number of steps. */
             readonly trajectory?: components["schemas"]["JointTrajectorySpec-Input"];
             /**
              * Initial Step Size
+             * @description First step size, and the anchor dual averaging shrinks towards until the first mass-matrix window ends (Hoffman & Gelman 2014, section 3.2). With zero warmup in a new fit it is the step for every draw.
              * @default 1
              */
             readonly initial_step_size?: number;
@@ -6192,6 +6198,11 @@ export interface components {
         /**
          * NutsDASpec
          * @description Joint HMC with dual averaging and windowed diagonal mass adaptation.
+         *
+         *     It moves every parameter and free latent coordinate at once on the exact joint
+         *     density, with no particle approximation. It also reconstructs deterministic
+         *     recurrences that the particle samplers reject, and is a diagnostic when particle
+         *     chains fail to converge.
          */
         readonly "NutsDASpec-Output": {
             /**
@@ -6200,25 +6211,28 @@ export interface components {
              */
             readonly method: "nuts_da";
             /**
-             * @description Experimental coordinates for the unchanged joint posterior; frozen per fit.
+             * @description Coordinates the sampler moves in; the posterior is the same in all three, only its geometry changes. centred samples each path directly, standardized by the prior's per-step covariances at the starting parameters. non_centred samples each free coordinate's Euler-Maruyama innovation and rebuilds the path from the current parameters. mixed keeps coordinates with a direct point reading centred and makes the rest non-centred. Centred mixes well where data pin the states, non-centred where data are weak against the dynamics (Papaspiliopoulos, Roberts & Sköld 2007). Frozen per fit; changing it on a continued fit requires warmup.
              * @default centred
              */
             readonly parameterization: components["schemas"]["JointParameterization"];
             /**
              * Target Accept Prob
+             * @description Mean acceptance statistic that dual averaging steers the step size towards during warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks the step, which removes divergences in strongly curved regions at the cost of longer trajectories. 0.8 is the NumPyro and Stan default.
              * @default 0.8
              */
             readonly target_accept_prob: number;
+            /** @description NUTS chooses each trajectory's length; fixed runs a set number of steps. */
             readonly trajectory: components["schemas"]["JointTrajectorySpec-Output"];
             /**
              * Initial Step Size
+             * @description First step size, and the anchor dual averaging shrinks towards until the first mass-matrix window ends (Hoffman & Gelman 2014, section 3.2). With zero warmup in a new fit it is the step for every draw.
              * @default 1
              */
             readonly initial_step_size: number;
         };
         /**
          * NutsTrajectorySpec
-         * @description A dynamically terminated trajectory, bounded by tree depth.
+         * @description A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).
          */
         readonly "NutsTrajectorySpec-Input": {
             /**
@@ -6228,13 +6242,14 @@ export interface components {
             readonly kind: "nuts";
             /**
              * Max Tree Depth
+             * @description Maximum number of trajectory doublings per transition, so at most 2^max_tree_depth - 1 leapfrog steps. The report gives the fraction of transitions that reach it; frequent hits mean the step is small against the posterior's longest scale, and each extra level can double the cost. 10 is the NumPyro and Stan default.
              * @default 10
              */
             readonly max_tree_depth?: number;
         };
         /**
          * NutsTrajectorySpec
-         * @description A dynamically terminated trajectory, bounded by tree depth.
+         * @description A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).
          */
         readonly "NutsTrajectorySpec-Output": {
             /**
@@ -6244,6 +6259,7 @@ export interface components {
             readonly kind: "nuts";
             /**
              * Max Tree Depth
+             * @description Maximum number of trajectory doublings per transition, so at most 2^max_tree_depth - 1 leapfrog steps. The report gives the fraction of transitions that reach it; frequent hits mean the step is small against the posterior's longest scale, and each extra level can double the cost. 10 is the NumPyro and Stan default.
              * @default 10
              */
             readonly max_tree_depth: number;
@@ -6528,6 +6544,11 @@ export interface components {
         /**
          * ParticleGibbsSpec
          * @description Conditional MH or NUTS parameters and dSMC trajectories on the exact joint posterior.
+         *
+         *     Particle Gibbs alternates a parameter update at the current path with a conditional
+         *     dSMC path update (Andrieu, Doucet & Holenstein 2010, section 2.4.3). It mixes slowly
+         *     when parameters and path are strongly correlated (Corenflos 2025, section 1), and is
+         *     kept as the control that isolates what marginalizing the parameters gains.
          */
         readonly "ParticleGibbsSpec-Input": {
             /**
@@ -6535,11 +6556,15 @@ export interface components {
              * @enum {string}
              */
             readonly method: "pgibbs";
+            /** @description Parameter update at the current path: random-walk MH or NUTS. */
             readonly parameter_kernel?: components["schemas"]["ConditionalParameterSpec-Input"];
+            /** @description Path update. */
             readonly dsmc?: components["schemas"]["DsmcSpec-Input"];
-            readonly initialization?: components["schemas"]["ParticleInitializationSpec-Input"];
+            /** @description Independent Gaussian starts, which also set the initial proposal scale. */
+            readonly initialization?: components["schemas"]["GaussianInitializationSpec-Input"];
             /**
              * Diagnostic Metrics All
+             * @description Record every optional particle trace, as listed in MarginalParticleGibbsSpec.diagnostic_metrics.
              * @default false
              */
             readonly diagnostic_metrics_all?: boolean;
@@ -6547,6 +6572,11 @@ export interface components {
         /**
          * ParticleGibbsSpec
          * @description Conditional MH or NUTS parameters and dSMC trajectories on the exact joint posterior.
+         *
+         *     Particle Gibbs alternates a parameter update at the current path with a conditional
+         *     dSMC path update (Andrieu, Doucet & Holenstein 2010, section 2.4.3). It mixes slowly
+         *     when parameters and path are strongly correlated (Corenflos 2025, section 1), and is
+         *     kept as the control that isolates what marginalizing the parameters gains.
          */
         readonly "ParticleGibbsSpec-Output": {
             /**
@@ -6554,17 +6584,19 @@ export interface components {
              * @enum {string}
              */
             readonly method: "pgibbs";
+            /** @description Parameter update at the current path: random-walk MH or NUTS. */
             readonly parameter_kernel: components["schemas"]["ConditionalParameterSpec-Output"];
+            /** @description Path update. */
             readonly dsmc: components["schemas"]["DsmcSpec-Output"];
-            readonly initialization: components["schemas"]["ParticleInitializationSpec-Output"];
+            /** @description Independent Gaussian starts, which also set the initial proposal scale. */
+            readonly initialization: components["schemas"]["GaussianInitializationSpec-Output"];
             /**
              * Diagnostic Metrics All
+             * @description Record every optional particle trace, as listed in MarginalParticleGibbsSpec.diagnostic_metrics.
              * @default false
              */
             readonly diagnostic_metrics_all: boolean;
         };
-        readonly "ParticleInitializationSpec-Input": components["schemas"]["LapsInitializationSpec-Input"] | components["schemas"]["GaussianInitializationSpec-Input"];
-        readonly "ParticleInitializationSpec-Output": components["schemas"]["LapsInitializationSpec-Output"] | components["schemas"]["GaussianInitializationSpec-Output"];
         /**
          * ParticleSamplerDiagnostics
          * @description Typed exact-sampler settings and transition telemetry from the native producer.
@@ -7300,42 +7332,46 @@ export interface components {
         readonly SamplerSpec: {
             /**
              * Num Warmup
+             * @description Warmup sweeps per chain. Every adaptive step, scale, covariance and ladder is learned here and frozen before draws are retained. Zero keeps the tuning as it is: a continued fit's frozen tuning, or the starting values of a new fit. With zero samples as well, both sweep programs compile and neither runs. Switching the algorithm or joint parameterization on a continued fit requires warmup.
              * @default 4000
              */
             readonly num_warmup: number;
             /**
              * Num Samples Per Chain
+             * @description Draws retained per chain after warmup; a continued fit appends them to its chains. Zero returns checks without a conditioned model.
              * @default 1000
              */
             readonly num_samples_per_chain: number;
             /**
              * Num Chains
+             * @description Independent chains, which the convergence checks compare: rank-normalized R-hat, and bulk and tail ESS of at least 100 per chain. Vehtari et al. (2021) recommend at least four. Tempering runs one ladder per chain.
              * @default 4
              */
             readonly num_chains: number;
             /**
              * Seed
+             * @description Seeds initialization and sampling; another seed is an independent replicate.
              * @default 0
              */
             readonly seed: number;
             /**
              * Num Particles
+             * @description Particles per dSMC sweep for pgibbs and mpgibbs, including the current path; nuts_da ignores it. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & Särkkä 2022, section 4).
              * @default 64
              */
             readonly num_particles: number;
-            /** @default L40S */
+            /**
+             * @description local runs in the server process; any other value requests that Modal GPU type. Modal may run A100 on an 80 GB card at the same price, and H100 on an H200 unless it is written H100!. The fit records the device it ran on.
+             * @default L40S
+             */
             readonly hardware: components["schemas"]["InferenceHardware"];
             /**
              * Time Limit Seconds
-             * @description Modal startup and execution timeout per phase. Local fits have no enforced timeout.
+             * @description Modal startup and execution timeout per phase. Reaching it fails the fit, with no retry. Local fits have no enforced timeout.
              * @default 14400
              */
             readonly time_limit_seconds: number;
-            /**
-             * Retain Latent Paths
-             * @default true
-             */
-            readonly retain_latent_paths: boolean;
+            /** @description Exact joint sampler: mpgibbs (default), pgibbs or nuts_da. */
             readonly algorithm: components["schemas"]["InferenceAlgorithmSpec-Output"];
         };
         /**

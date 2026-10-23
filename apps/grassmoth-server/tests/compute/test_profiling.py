@@ -68,7 +68,7 @@ def test_fit_shell_closes_trace_and_owns_artifact_writes(monkeypatch, tmp_path, 
     monkeypatch.setenv("GRASSMOTH_PROFILE_DIR", str(tmp_path))
     monkeypatch.setattr(shell, "fit", run)
     monkeypatch.setattr(
-        shell, "compile_staged", lambda *_args, **_kwargs: PreparedProgram(compiled, lambda: None)
+        shell, "compile_program", lambda *_args, **_kwargs: PreparedProgram(compiled, lambda: None)
     )
     monkeypatch.setattr(
         jax.profiler, "start_trace", lambda *_args, **_kwargs: calls.append("start")

@@ -1,4 +1,4 @@
-"""LAPS and particle sampling use the exact joint density.
+"""Initialization and particle sampling use the exact joint density.
 
 Guard against reintroducing a linearized Gaussian likelihood backend. This is a
 static source scan, with no JAX execution or model build.
@@ -36,7 +36,7 @@ def test_linearized_backends_are_absent_from_production() -> None:
             offenders[rel] = hits
 
     assert not offenders, (
-        "LAPS initialization and particle sampling must use the exact joint density. "
+        "Initialization and particle sampling must use the exact joint density. "
         "Linearized backend references found in: "
         f"{offenders}"
     )

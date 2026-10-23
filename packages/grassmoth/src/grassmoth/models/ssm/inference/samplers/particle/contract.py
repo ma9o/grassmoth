@@ -50,6 +50,7 @@ class PaidMixture(NamedTuple):
 
     mean: jnp.ndarray
     variance: jnp.ndarray
+    enabled: jnp.ndarray
 
 
 class TrajectoryLabelScores(NamedTuple):
@@ -93,7 +94,7 @@ class SmootherSetup(NamedTuple):
     transition_initial_log_prob_fn: Callable[[ParticleContext, jnp.ndarray], jnp.ndarray]
     transition_value_grad_fn: TransitionValueGradFn
     transition_pairwise_log_probs_fn: TransitionLogProbFn
-    diagnostic_metrics: frozenset[str]
+    diagnostic_weights: jnp.ndarray
     intervals: ParticleIntervalObservations | None
 
 
@@ -125,4 +126,4 @@ class SmootherContext(NamedTuple):
     pairwise_transition_log_probs: Callable[..., jnp.ndarray]
     score_labels: Callable[[jnp.ndarray], TrajectoryLabelScores]
     intervals: ParticleIntervalObservations | None
-    diagnostic_weights: bool
+    diagnostic_weights: jnp.ndarray | bool

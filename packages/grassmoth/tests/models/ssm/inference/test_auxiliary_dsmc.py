@@ -35,7 +35,7 @@ def _context(target, method, *, mixture=False, count=4):
         num_particles=count,
         num_parameter_particles=2,
         free_mask=target.independent_mask,
-        paid_mix=PaidMixture(jnp.zeros_like(path), jnp.ones_like(path)) if mixture else None,
+        paid_mix=PaidMixture(jnp.zeros_like(path), jnp.ones_like(path), jnp.asarray([mixture])),
         diagnostic_metrics=frozenset(),
     )
     return build_smoother_context(
@@ -236,9 +236,9 @@ def test_conditional_tree_preserves_analytic_posterior(interval, parameter_count
         num_particles=4,
         num_parameter_particles=parameter_count,
         free_mask=target.independent_mask,
-        paid_mix=PaidMixture(jnp.zeros_like(before[0]), jnp.ones_like(before[0]))
-        if spec.pilot_mixture
-        else None,
+        paid_mix=PaidMixture(
+            jnp.zeros_like(before[0]), jnp.ones_like(before[0]), jnp.asarray([mixture])
+        ),
         diagnostic_metrics=frozenset(),
     )
 
@@ -426,9 +426,9 @@ def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, s
         num_particles=5,
         num_parameter_particles=1,
         free_mask=target.independent_mask,
-        paid_mix=PaidMixture(jnp.zeros_like(reference), jnp.ones_like(reference))
-        if mixture
-        else None,
+        paid_mix=PaidMixture(
+            jnp.zeros_like(reference), jnp.ones_like(reference), jnp.asarray([mixture])
+        ),
         diagnostic_metrics=frozenset(),
     )
     ctx = build_smoother_context(
@@ -518,13 +518,21 @@ def test_dsmc_batching_preserves_nonlocal_mixture_transition(
         atol=2e-5,
     )
 
-    def unexpected_weight_work(*args, **kwargs):
-        pytest.fail("disabled weight diagnostics must not trace any diagnostic reductions")
+    reductions = []
+    original = dsmc.weight_statistics
 
-    monkeypatch.setattr(dsmc, "weight_statistics", unexpected_weight_work)
+    def observed_weight_work(logits):
+        jax.debug.callback(lambda: reductions.append(True))
+        return original(logits)
+
+    monkeypatch.setattr(dsmc, "weight_statistics", observed_weight_work)
     disabled = jax.jit(
-        lambda: trace_step(ctx._replace(diagnostic_weights=False), key, path, None)
-    )()
-    assert not any(key.startswith("dsmc_weight_") for key in disabled.result.diagnostics)
+        lambda enabled: trace_step(ctx._replace(diagnostic_weights=enabled), key, path, None)
+    )(jnp.asarray([False]))
+    jax.effects_barrier()
+    assert not reductions
+    for name, values in disabled.result.diagnostics.items():
+        if name.startswith("dsmc_weight_"):
+            np.testing.assert_array_equal(values, jnp.zeros_like(values))
     np.testing.assert_array_equal(disabled.result.origin_path, parallel.result.origin_path)
     np.testing.assert_allclose(disabled.result.latent_path, parallel.result.latent_path)

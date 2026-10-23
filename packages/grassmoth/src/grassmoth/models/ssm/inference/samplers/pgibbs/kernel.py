@@ -13,11 +13,13 @@ from typing import TYPE_CHECKING, NamedTuple, Protocol
 import jax
 import jax.numpy as jnp
 
+from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     DsmcAdaptation,
     adapt_scales,
     initial_delta,
     initialize_adaptation,
+    latent_adaptation,
 )
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
@@ -91,12 +93,16 @@ def build_particle_gibbs_kernel[State](
         ),
     )
 
+    adaptation = latent_adaptation(spec)
+    warmup_steps = scalar_operand(value=num_warmup, dtype=jnp.int32)
+    starting_delta = scalar_operand(value=initial_delta(spec))
+
     def initialize(
         position: jax.Array, path: jax.Array, key: jax.Array
     ) -> ParticleGibbsState[State]:
         context = target.context(position, target.times)
         path = target.replay_path(context, path)
-        delta = jnp.full((len(path),), initial_delta(spec), dtype=path.dtype)
+        delta = jnp.full((len(path),), starting_delta[0], dtype=path.dtype)
         return ParticleGibbsState(
             parameters.initialize(position, path, key),
             path,
@@ -137,7 +143,7 @@ def build_particle_gibbs_kernel[State](
         proposed = jnp.any(smooth.proposal_mask, axis=-1)
         moved = jnp.any((path != reference) & smooth.proposal_mask, axis=-1)
         displacement = jnp.square(path - reference)
-        tuning = adapt_scales(state.adaptation, spec, moved, proposed, num_warmup)
+        tuning = adapt_scales(state.adaptation, adaptation, moved, proposed, warmup_steps[0])
         log_posterior = smooth.label_scores.log_posteriors[0].astype(state.log_posterior.dtype)
         return ParticleGibbsState(updated_parameters, path, tuning, log_posterior), {
             **parameter_info,

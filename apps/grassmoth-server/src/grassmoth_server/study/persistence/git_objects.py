@@ -17,15 +17,15 @@ def open_repository(workspace_id: str, path: Path | None = None) -> pygit2.Repos
         repository = pygit2.Repository(str(destination))
         if (
             "grassmoth.format" not in repository.config
-            or repository.config.get_int("grassmoth.format") != 28
+            or repository.config.get_int("grassmoth.format") != 29
         ):
             raise ValueError(
-                "This study uses an incompatible storage format. Create a new study for format 28."
+                "This study uses an incompatible storage format. Create a new study for format 29."
             )
         return repository
     destination.parent.mkdir(parents=True, exist_ok=True)
     repository = pygit2.init_repository(str(destination), bare=True, initial_head="main")
-    repository.config["grassmoth.format"] = 28
+    repository.config["grassmoth.format"] = 29
     repository.config["user.name"] = "grassmoth"
     repository.config["user.email"] = "study@local"
     return repository

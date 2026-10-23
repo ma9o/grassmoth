@@ -195,7 +195,9 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        paid_mix=PaidMixture(jnp.zeros((len(mean) - 1, 1)), jnp.ones((len(mean) - 1, 1))),
+        paid_mix=PaidMixture(
+            jnp.zeros((len(mean) - 1, 1)), jnp.ones((len(mean) - 1, 1)), jnp.asarray([True])
+        ),
         dsmc=DsmcSpec(drift=method if kappa else "none"),
     )
     # Replicate chains to resolve the weakly identified offset/path direction

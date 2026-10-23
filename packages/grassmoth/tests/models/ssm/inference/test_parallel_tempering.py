@@ -343,7 +343,6 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
             paths=jnp.broadcast_to(reference.path_mean, (2, *reference.path_mean.shape)),
             parameter_chol=jnp.eye(1),
         ),
-        retain_latent_paths=True,
         tempering=exchange if tempered else None,
         clock=perf_counter,
         compiler=compile_program,

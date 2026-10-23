@@ -80,8 +80,7 @@ def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(
         np.testing.assert_allclose(run.observation_log_probs[chain, 0], expected, rtol=2e-6)
 
 
-@pytest.mark.parametrize("retain_paths", [False, True])
-def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
+def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior():
     prepared, panel = nonlinear_fit_fixture()
     result = fit(
         prepared.prior_runtime_bundle,
@@ -93,7 +92,6 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
             num_warmup=0,
             num_samples_per_chain=4,
             num_chains=2,
-            retain_latent_paths=retain_paths,
         ),
         compute_budget=COMPUTE_BUDGET,
         reparam=None,
@@ -107,9 +105,8 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior(retain_paths):
     assert result.evidence.method == "nuts_da"
     assert result.draws.describe().n_draws == 8
     assert all(values.shape[0] == 8 for values in result.get_samples().values())
-    assert (result.draws.latent_paths is not None) == retain_paths
-    if result.draws.latent_paths is not None:
-        assert result.draws.latent_paths.shape == (8, len(panel.times), 1)
+    assert result.draws.latent_paths is not None
+    assert result.draws.latent_paths.shape == (8, len(panel.times), 1)
     assert np.isfinite(result.diagnostics.observation_log_probs).all()
     assert isinstance(result.diagnostics.sampler_diagnostics, NutsDADiagnostics)
     assert result.diagnostics.phase_extra_fields is not None

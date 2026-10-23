@@ -8,6 +8,9 @@ import jax
 import jax.numpy as jnp
 
 from grassmoth.models.ssm.inference.samplers.particle.contract import SmootherSetup
+from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
+    build_particle_diagnostic_flags,
+)
 
 if TYPE_CHECKING:
     from grassmoth.artifacts.sampling import DsmcSpec
@@ -54,6 +57,8 @@ def build_smoother_setup(
         transition_initial_log_prob_fn=local_target.initial_log_prob,
         transition_value_grad_fn=local_target._transition_value_and_grad,
         transition_pairwise_log_probs_fn=local_target.pairwise_transition_log_prob,
-        diagnostic_metrics=diagnostic_metrics,
+        diagnostic_weights=build_particle_diagnostic_flags(
+            diagnostic_metrics=diagnostic_metrics
+        ).particle_weights,
         intervals=local_target.intervals,
     )

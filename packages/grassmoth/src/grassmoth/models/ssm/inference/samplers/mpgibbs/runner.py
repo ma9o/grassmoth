@@ -18,13 +18,18 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     TemperingDiagnostics,
 )
 from grassmoth.artifacts.sampling import FixedLatentStepSpec
+from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import restore_state, retain_state
 from grassmoth.models.ssm.inference.mcmc_state import (
     TrajectoryMCMCState,
     _adapt_scale,
     _clip_dual_averaging_state,
     _clip_scale,
-    _latent_summary_from_chain_moments,
+)
+from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
+    CompanionTuning,
+    initial_companion_tuning,
+    restarted_dual_averaging,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
     ExchangeRecord,
@@ -36,9 +41,10 @@ from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     adapt_scales,
     initial_delta,
     initialize_adaptation,
+    latent_adaptation,
 )
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
-    build_particle_diagnostic_flags,
+    excluded_particle_diagnostics,
 )
 from grassmoth.models.ssm.inference.samplers.particle.math import _masked_mean
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
@@ -58,6 +64,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
     from datetime import datetime
 
+    from blackjax.adaptation.step_size import DualAveragingAdaptationState
     from jax.stages import Compiled
 
     from grassmoth.artifacts.arrays import NumericalArray
@@ -65,6 +72,7 @@ if TYPE_CHECKING:
     from grassmoth.compute.budget import ComputeBudget
     from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
     from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
+    from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import CompanionKernel
     from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
         MarginalParticleGibbsKernel,
     )
@@ -85,8 +93,7 @@ class ParticleChainResult:
     complete_log_posterior_history: jnp.ndarray
     warmup_complete_log_posterior_history: jnp.ndarray
     all_complete_log_posterior_history: jnp.ndarray
-    latent_posterior_summary: Mapping[str, jnp.ndarray] | None
-    latent_paths: jnp.ndarray | None
+    latent_paths: jnp.ndarray
     initial_param_step_size: jnp.ndarray
     final_param_step_size: jnp.ndarray
     final_parameter_chol: jax.Array
@@ -107,7 +114,7 @@ class ParticleChainResult:
         return jnp.mean(self.complete_log_posterior_history, axis=1)
 
     def __post_init__(self) -> None:
-        """Freeze retained, warmup, and combined chain diagnostics and any latent summary mapping."""
+        """Freeze retained, warmup, and combined chain diagnostics."""
         object.__setattr__(
             self, "chain_extra_fields", MappingProxyType(dict(self.chain_extra_fields))
         )
@@ -119,12 +126,6 @@ class ParticleChainResult:
         object.__setattr__(
             self, "all_chain_extra_fields", MappingProxyType(dict(self.all_chain_extra_fields))
         )
-        if self.latent_posterior_summary is not None:
-            object.__setattr__(
-                self,
-                "latent_posterior_summary",
-                MappingProxyType(dict(self.latent_posterior_summary)),
-            )
         freeze_fields(self)
 
 
@@ -136,11 +137,10 @@ def _initialize_chain_state(
     target: ParticleTarget,
     parameter_gradient_fn: Callable[[jax.Array], jax.Array],
     initial_latent_delta: jnp.ndarray,
-    param_step_size: float,
+    param_step_size: float | jax.Array,
     parameter_chol: jax.Array,
-    param_min_scale: float,
-    param_max_scale: float,
-    param_target_accept: float,
+    param_min_scale: float | jax.Array,
+    param_max_scale: float | jax.Array,
     initial_latent_trajectory: jnp.ndarray,
     exact_constraints: ExactStateConstraints | None = None,
 ) -> TrajectoryMCMCState:
@@ -163,7 +163,7 @@ def _initialize_chain_state(
         min_scale=param_min_scale,
         max_scale=param_max_scale,
     )
-    da_init, _da_update, _ = dual_averaging_adaptation(target=float(param_target_accept))
+    da_init, _da_update, _ = dual_averaging_adaptation(target=0.0)
     return TrajectoryMCMCState(
         position=init_position,
         parameter_gradient=parameter_gradient_fn(init_position),
@@ -190,7 +190,7 @@ class _Population(NamedTuple):
     warmup_attempts: jax.Array
     warmup_rejections: jax.Array
     ladder_frozen_at: jax.Array
-    moments: tuple[jax.Array, jax.Array, jax.Array] | None
+    companions: CompanionTuning | None
 
 
 def run_marginal_particle_gibbs(
@@ -204,26 +204,21 @@ def run_marginal_particle_gibbs(
     num_chains: int,
     key: jax.Array,
     adaptation_rate: float,
-    retain_latent_paths: bool,
     initialization: ParticleInitialization,
     compute_budget: ComputeBudget,
-    compute_latent_posterior_summary: bool = True,
     # Both adaptation policies stop updating after warmup.
     adaptation_scheme: Literal["simple", "dual_averaging"] = "simple",
     tempering: ReplicaExchangeKernel | None = None,
+    companion: CompanionKernel | None = None,
     clock: Callable[[], float],
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleChainResult:
-    """Run marginalized Particle Gibbs chains from paired LAPS starts."""
+    """Run marginalized Particle Gibbs chains from paired starts."""
+    assert companion is None or tempering is None, "The sampler spec owns this exclusion"
     windows = covariance_windows(num_warmup)
     use_dual_averaging = adaptation_scheme == "dual_averaging"
-    da_param_update = (
-        dual_averaging_adaptation(target=float(kernel.target_accept))[1]
-        if use_dual_averaging
-        else None
-    )
     observations = target.observations
     times = target.times
     num_steps = int(observations.shape[0])
@@ -261,17 +256,15 @@ def run_marginal_particle_gibbs(
                     parameter_gradient_fn=kernel.parameter_gradient_fn,
                     initial_latent_delta=initial_latent_delta,
                     exact_constraints=kernel.exact_constraints,
-                    param_step_size=kernel.initial_param_step_size,
+                    param_step_size=kernel.initial_param_step_size[0],
                     parameter_chol=kernel.initial_parameter_chol,
-                    param_min_scale=kernel.min_scale,
-                    param_max_scale=kernel.max_scale,
-                    param_target_accept=kernel.target_accept,
+                    param_min_scale=kernel.min_scale[0],
+                    param_max_scale=kernel.max_scale[0],
                     initial_latent_trajectory=path,
                 )
             ),
             chain_init_positions,
             chain_initial_latents,
-            static_tree=jax.tree.structure(target.context(target.initial_position, times)),
         )
         states = initialize.call(chain_init_positions, chain_initial_latents)
         jax.block_until_ready(states)
@@ -297,10 +290,12 @@ def run_marginal_particle_gibbs(
     swap_attempted = jnp.zeros_like(swap_accepted)
     warmup_attempts = jnp.zeros_like(swap_attempted)
     warmup_rejections = jnp.zeros(swap_attempted.shape, dtype=betas.dtype)
-    moments = None
-    if compute_latent_posterior_summary:
-        example = states.latent_trajectory[cold_indices]
-        moments = (jnp.zeros_like(example), jnp.zeros_like(example), jnp.asarray(0))
+    warmup_steps = scalar_operand(value=num_warmup, dtype=jnp.int32)
+    scale_adaptation = latent_adaptation(kernel.dsmc)
+    runtime_adaptation_rate = scalar_operand(value=adaptation_rate)
+    ladder_interval = scalar_operand(
+        value=1 if tempering is None else tempering.spec.adaptation_interval, dtype=jnp.int32
+    )
     initial = _Population(
         states,
         key
@@ -315,12 +310,12 @@ def run_marginal_particle_gibbs(
         warmup_attempts,
         warmup_rejections,
         jnp.asarray(0),
-        moments,
+        None
+        if companion is None
+        else initial_companion_tuning(states.param_step_size, len(companion.moves)),
     )
     if continuation is not None and num_warmup == 0:
-        initial = restore_state(initial._replace(moments=None), continuation.native_state)._replace(
-            moments=moments
-        )
+        initial = restore_state(initial, continuation.native_state)
         scale = kernel.dsmc.latent_step
         if isinstance(scale, FixedLatentStepSpec):
             delta = jnp.full_like(initial.chains.latent_delta, scale.delta)
@@ -330,7 +325,6 @@ def run_marginal_particle_gibbs(
             )
     initial_param_step_size = initial.chains.param_step_size[cold_indices]
     initial_latent_delta = initial.chains.latent_delta[cold_indices]
-    diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=kernel.diagnostic_metrics)
 
     def step_factory(
         batch_size: int,
@@ -350,6 +344,23 @@ def run_marginal_particle_gibbs(
                 updated, info, exchange = tempering.step(
                     current.chains, keys, current.betas, current.iteration, batch_size=batch_size
                 )
+            companion_accepted = None
+            companion_record: dict[str, jax.Array] = {}
+            if companion is not None and current.companions is not None:
+                updated, companion_accepted, companion_jumps = jax.vmap(companion.step)(
+                    updated,
+                    current.companions.step_size,
+                    jax.vmap(lambda draw_key: random.fold_in(draw_key, 1))(keys),
+                )
+                companion_record = {
+                    f"{move.name}_{name}": values[cold_indices, index]
+                    for index, move in enumerate(companion.moves)
+                    for name, values in (
+                        ("accept_prob", companion_accepted),
+                        ("jump_rms", companion_jumps),
+                        ("step_size", current.companions.step_size),
+                    )
+                }
             cold = jax.tree.map(lambda value: value[cold_indices], updated)
             cold_info = jax.tree.map(lambda value: value[cold_indices], info)
             record: dict[str, jax.Array] = {
@@ -374,87 +385,85 @@ def run_marginal_particle_gibbs(
                     )
                 },
             }
-            if diagnostic_flags.particle_weights:
-                record = {
-                    **record,
-                    **{
-                        metric.history_key: cold_info[metric.history_key]
-                        for metric in ParticleWeightMetric
-                    },
-                }
-            if diagnostic_flags.particle_identity:
-                record = {
-                    **record,
-                    **{
-                        name: cold_info[name]
-                        for name in (
-                            "selected_particle_per_t",
-                            "reference_path_hit_rate",
-                            "selected_particle_unique_count",
-                        )
-                    },
-                }
-            if diagnostic_flags.parameter_movement:
-                record = {**record, "parameter_jump_rms": cold_info["parameter_jump_rms"]}
+            record = {
+                **record,
+                **{
+                    metric.history_key: cold_info[metric.history_key]
+                    for metric in ParticleWeightMetric
+                },
+                **{
+                    name: cold_info[name]
+                    for name in (
+                        "selected_particle_per_t",
+                        "reference_path_hit_rate",
+                        "selected_particle_unique_count",
+                        "parameter_jump_rms",
+                    )
+                },
+                **companion_record,
+            }
+
+            def adapt_steps(
+                step_size: jax.Array,
+                dual_averaging: DualAveragingAdaptationState,
+                accepted: jax.Array,
+            ) -> tuple[jax.Array, DualAveragingAdaptationState]:
+                """Advance one batch of step scalars under the configured warmup policy."""
+                if not use_dual_averaging:
+                    return _adapt_scale(
+                        step_size,
+                        accepted=accepted,
+                        target_accept=kernel.target_accept[0],
+                        adaptation_rate=runtime_adaptation_rate[0],
+                        min_scale=kernel.min_scale[0],
+                        max_scale=kernel.max_scale[0],
+                    ), dual_averaging
+                update = dual_averaging_adaptation(target=kernel.target_accept[0])[1]  # pyright: ignore[reportArgumentType] -- BlackJAX accepts scalar JAX arithmetic; its target annotation only permits float.
+                dual_averaging = jax.vmap(
+                    lambda state, rate: _clip_dual_averaging_state(
+                        update(state, rate),
+                        min_scale=kernel.min_scale[0],
+                        max_scale=kernel.max_scale[0],
+                    )
+                )(dual_averaging, accepted)
+                log_step = jnp.where(
+                    current.iteration + 1 == warmup_steps[0],
+                    dual_averaging.log_step_size_avg,
+                    dual_averaging.log_step_size,
+                )
+                return _clip_scale(
+                    jnp.exp(log_step).astype(step_size.dtype),
+                    min_scale=kernel.min_scale[0],
+                    max_scale=kernel.max_scale[0],
+                ), dual_averaging
 
             def retain(updated: TrajectoryMCMCState) -> _Population:
-                next_moments = current.moments
-                if next_moments is not None:
-                    latent_sum, latent_sumsq, count = next_moments
-                    next_moments = (
-                        latent_sum + cold.latent_trajectory,
-                        latent_sumsq + cold.latent_trajectory * cold.latent_trajectory,
-                        count + 1,
-                    )
                 return current._replace(
                     chains=updated,
                     random_key=next_key,
                     iteration=current.iteration + 1,
                     swap_accepted=current.swap_accepted + exchange.accepted,
                     swap_attempted=current.swap_attempted + exchange.attempted,
-                    moments=next_moments,
                 )
 
             def adapt(updated: TrajectoryMCMCState) -> _Population:
                 tuning = adapt_scales(
                     current.adaptation,
-                    kernel.dsmc,
+                    scale_adaptation,
                     info["latent_accepted"],
                     info["latent_proposed"],
-                    num_warmup,
+                    warmup_steps[0],
                 )
                 updated = updated._replace(latent_delta=tuning.delta)
-                if da_param_update is not None:
-                    update_param = da_param_update
-                    param_da = jax.vmap(
-                        lambda da, accepted: _clip_dual_averaging_state(
-                            update_param(da, accepted),
-                            min_scale=kernel.min_scale,
-                            max_scale=kernel.max_scale,
-                        )
-                    )(updated.param_da, info["parameter_accepted"])
-                    log_step = jnp.where(
-                        current.iteration + 1 == num_warmup,
-                        param_da.log_step_size_avg,
-                        param_da.log_step_size,
-                    )
-                    updated = updated._replace(
-                        param_step_size=_clip_scale(
-                            jnp.exp(log_step).astype(updated.param_step_size.dtype),
-                            min_scale=kernel.min_scale,
-                            max_scale=kernel.max_scale,
-                        ),
-                        param_da=param_da,
-                    )
-                else:
-                    updated = updated._replace(
-                        param_step_size=_adapt_scale(
-                            updated.param_step_size,
-                            accepted=info["parameter_accepted"],
-                            target_accept=kernel.target_accept,
-                            adaptation_rate=adaptation_rate,
-                            min_scale=kernel.min_scale,
-                            max_scale=kernel.max_scale,
+                param_step_size, param_da = adapt_steps(
+                    updated.param_step_size, updated.param_da, info["parameter_accepted"]
+                )
+                updated = updated._replace(param_step_size=param_step_size, param_da=param_da)
+                companions = current.companions
+                if companions is not None and companion_accepted is not None:
+                    companions = CompanionTuning(
+                        *jax.vmap(adapt_steps, in_axes=1, out_axes=1)(
+                            companions.step_size, companions.dual_averaging, companion_accepted
                         )
                     )
                 covariance, parameter_chol, changed = adapt_parameter_covariance(
@@ -465,33 +474,50 @@ def run_marginal_particle_gibbs(
                     windows,
                 )
 
-                def replace_geometry(chains: TrajectoryMCMCState) -> TrajectoryMCMCState:
+                def replace_geometry(
+                    chains: TrajectoryMCMCState, companion_tuning: CompanionTuning | None
+                ) -> tuple[TrajectoryMCMCState, CompanionTuning | None]:
                     if dim == 0:
-                        return chains
-                    # param_step_size is a variance coefficient: preserve the
+                        return chains, companion_tuning
+                    # Step sizes are variance coefficients: preserve each
                     # proposal's average variance while changing its shape.
                     ratio = jnp.sum(chains.parameter_chol[0] ** 2) / jnp.sum(parameter_chol**2)
-                    scale = _clip_scale(
-                        chains.param_step_size * ratio,
-                        min_scale=kernel.min_scale,
-                        max_scale=kernel.max_scale,
-                    )
-                    da_init, _, _ = dual_averaging_adaptation(target=float(kernel.target_accept))
+
+                    def restart(
+                        step_size: jax.Array,
+                    ) -> tuple[jax.Array, DualAveragingAdaptationState]:
+                        scale = _clip_scale(
+                            step_size * ratio,
+                            min_scale=kernel.min_scale[0],
+                            max_scale=kernel.max_scale[0],
+                        )
+                        return scale, restarted_dual_averaging(scale)
+
+                    scale, param_da = restart(chains.param_step_size)
                     return chains._replace(
                         parameter_chol=jnp.broadcast_to(
                             parameter_chol, chains.parameter_chol.shape
                         ),
                         param_step_size=scale,
-                        param_da=jax.vmap(da_init)(scale),
+                        param_da=param_da,
+                    ), None if companion_tuning is None else CompanionTuning(
+                        *restart(companion_tuning.step_size)
                     )
 
-                updated = jax.lax.cond(changed, replace_geometry, lambda chains: chains, updated)
+                updated, companions = jax.lax.cond(
+                    changed,
+                    replace_geometry,
+                    lambda chains, companion_tuning: (chains, companion_tuning),
+                    updated,
+                    companions,
+                )
                 next_state: _Population = current._replace(
                     chains=updated,
                     random_key=next_key,
                     iteration=current.iteration + 1,
                     adaptation=tuning,
                     parameter_covariance=covariance,
+                    companions=companions,
                 )
                 if tempering is not None:
                     exchange_kernel = tempering
@@ -516,8 +542,8 @@ def run_marginal_particle_gibbs(
                         )
 
                     adapted: _Population = jax.lax.cond(
-                        (next_state.iteration % tempering.spec.adaptation_interval == 0)
-                        & (next_state.iteration <= num_warmup // 2),
+                        (next_state.iteration % ladder_interval[0] == 0)
+                        & (next_state.iteration <= warmup_steps[0] // 2),
                         adapt_ladder,
                         lambda population: population,
                         next_state,
@@ -552,6 +578,7 @@ def run_marginal_particle_gibbs(
             wall_clock=wall_clock,
             label="mpgibbs",
             prepare_program=prepare_program,
+            excluded_history=excluded_particle_diagnostics(kernel.diagnostic_metrics),
         )
     run = run_sweeps(
         plan, initial, clock=clock, logger=logger, wall_clock=wall_clock, label="mpgibbs"
@@ -568,13 +595,6 @@ def run_marginal_particle_gibbs(
         name: jnp.concatenate((warmup_extra[name], value), axis=1)
         for name, value in posterior_extra.items()
     }
-    latent_summary = None
-    if final.moments is not None:
-        latent_sum, latent_sumsq, count = final.moments
-        denom = jnp.maximum(count, 1).astype(latent_sum.dtype)
-        mean = latent_sum / denom
-        variance = jnp.maximum(latent_sumsq / denom - mean * mean, 0.0)
-        latent_summary = _latent_summary_from_chain_moments(mean, jnp.sqrt(variance))
     complete_lp = run.history.posterior["log_posterior"]
     return ParticleChainResult(
         starting_values={
@@ -592,8 +612,7 @@ def run_marginal_particle_gibbs(
         all_complete_log_posterior_history=jnp.concatenate(
             (run.history.warmup["log_posterior"], complete_lp), axis=1
         ),
-        latent_posterior_summary=latent_summary,
-        latent_paths=run.history.posterior["paths"] if retain_latent_paths else None,
+        latent_paths=run.history.posterior["paths"],
         initial_param_step_size=initial_param_step_size,
         final_param_step_size=final.chains.param_step_size[cold_indices],
         final_parameter_chol=final.chains.parameter_chol[0],
@@ -602,7 +621,7 @@ def run_marginal_particle_gibbs(
         compiled_step=plan.compiled_step,
         first_step_seconds=run.first_step_seconds,
         sampling_loop_seconds=run.sampling_loop_seconds,
-        final_state=retain_state(final._replace(moments=None)),
+        final_state=retain_state(final),
         random_key=final.random_key,
         last_parameters=final.chains.position[cold_indices],
         last_paths=final.chains.latent_trajectory[cold_indices],

@@ -4,12 +4,11 @@ import hashlib
 import io
 import json
 import os
-import pickle
 import subprocess
 import sys
 import tarfile
 import textwrap
-from types import FunctionType, SimpleNamespace
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import jax
@@ -32,77 +31,34 @@ KERNELS = "xla_gpu_kernel_cache_file"
 
 @pytest.mark.parametrize("package", ["grassmoth", "grassmoth_server"])
 def test_source_identity_tracks_both_workspace_packages(tmp_path, monkeypatch, package):
-    from grassmoth_server.compute import compilation_cache as cache
+    from grassmoth_server.actions.fit import runtime
 
     library = tmp_path / "packages/grassmoth/src/grassmoth"
     service = tmp_path / "apps/grassmoth-server/src/grassmoth_server"
     for root in (library, service):
         root.mkdir(parents=True)
         (root / "__init__.py").write_text('"""Package source."""\n')
-    monkeypatch.setattr(cache, "files", lambda _package: library)
-    monkeypatch.setattr(cache, "__file__", str(service / "compute/compilation_cache.py"))
-    before = cache.numerical_source_digest()
+    monkeypatch.setattr(runtime, "files", lambda _package: library)
+    monkeypatch.setattr(runtime, "__file__", str(service / "actions/fit/runtime.py"))
+    before = runtime.numerical_source_digest()
     owner = library if package == "grassmoth" else service
     (owner / "new_owner.py").write_text("VALUE = 1\n")
-    added = cache.numerical_source_digest()
+    added = runtime.numerical_source_digest()
     assert added != before
     (owner / "new_owner.py").write_text("VALUE = 2\n")
-    assert cache.numerical_source_digest() not in {before, added}
-
-
-def test_staging_preserves_public_and_user_created_jax_callables():
-    from grassmoth_server.compute import compilation_cache as cache
-
-    public = (jnp.log, jnp.add)
-    restored = pickle.loads(cache._program_bytes(public))
-    assert all(left is right for left, right in zip(public, restored, strict=True))
-
-    def programs(offset):
-        generated = FunctionType(
-            (lambda value, increment: value + increment).__code__,
-            {},
-            argdefs=(offset,),
-        )
-        return (
-            jax.jit(lambda value: value + offset),
-            jnp.frompyfunc(lambda value: value + offset, 1, 1),
-            generated,
-        )
-
-    first = cache._program_bytes(programs(1))
-    second = cache._program_bytes(programs(2))
-    assert first != second
-    for data, expected in ((first, 4), (second, 5)):
-        for function in pickle.loads(data):
-            assert function(jnp.asarray(3, dtype=jnp.float32)) == expected
-
-
-@pytest.mark.parametrize("dependency", ["cuthbert", "cuthbertlib", "cd-dynamax"])
-def test_staged_program_key_tracks_all_installed_dependency_versions(monkeypatch, dependency):
-    from grassmoth_server.compute import compilation_cache as cache
-
-    monkeypatch.setattr(cache, "numerical_source_digest", lambda: "source")
-    monkeypatch.setattr(cache, "cache_namespace", lambda _policy: "namespace")
-    packages = [
-        SimpleNamespace(name="jax", version="unchanged"),
-        SimpleNamespace(name=dependency, version="1"),
-    ]
-    monkeypatch.setattr(cache, "distributions", lambda: iter(packages))
-    layout = (jax.ShapeDtypeStruct((2,), "float32"),)
-    original = cache._program_key(b"same structure", layout)
-    packages.reverse()
-    assert cache._program_key(b"same structure", layout) == original
-    packages[0] = SimpleNamespace(name=dependency, version="2")
-    assert cache._program_key(b"same structure", layout) != original
+    assert runtime.numerical_source_digest() not in {before, added}
 
 
 @pytest.mark.parametrize("output_only", [False, True])
-def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp_path, output_only):
+def test_jax_persistent_cache_reuses_executable_with_runtime_values_across_processes(
+    tmp_path, output_only
+):
     script = textwrap.dedent(
         """
         import json, os
         import jax
         import jax.numpy as jnp
+        from jax._src import compiler
         from grassmoth_server.compute.compilation_cache import prepare_program
         from grassmoth.artifacts.model.expressions import StateExpression
         from grassmoth.models.ssm.dynamics.expression import ExpressionComponent
@@ -111,47 +67,48 @@ def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp
             target=0, edge_owned=False, expression=StateExpression(construct_id='construct:test'),
             evaluate_fn=lambda values, params: values,
         )
-
-        def make_program(offset, power):
-            def program(carry):
-                assert os.environ['FORBID_TRACE'] == '0', 'cache hit retraced the program'
-                if os.environ['OUTPUT_ONLY'] == '1':
-                    return template, (carry + offset) ** power
-                return jax.lax.cond(
-                    True, lambda: (template, (carry[1] + offset) ** power), lambda: carry
-                )
-            return program
-
+        offset = jnp.asarray(float(os.environ['OFFSET']))
+        enabled = jnp.asarray(os.environ['ENABLED'] == '1')
+        power = int(os.environ['POWER'])
+        value = jnp.ones((2,), dtype=jnp.float32)
         output_only = os.environ['OUTPUT_ONLY'] == '1'
-        example = jax.ShapeDtypeStruct((2,), jnp.float32)
-        compile_program, arguments, shapes, memory = prepare_program(
-            make_program(jnp.asarray(float(os.environ['OFFSET'])), int(os.environ['POWER'])),
-            example if output_only else (template, example),
-            static_tree=jax.tree.structure(template) if output_only else None,
+
+        def program(carry):
+            values = carry if output_only else carry[1]
+            result = jax.lax.cond(enabled, lambda: values + offset, lambda: values - offset)
+            return template, result ** power
+
+        compiled = []
+        original = compiler.backend_compile_and_load
+        def observe(*args, **kwargs):
+            assert os.environ['FORBID_COMPILE'] == '0', 'warm program invoked XLA compilation'
+            compiled.append(True)
+            return original(*args, **kwargs)
+        compiler.backend_compile_and_load = observe
+        leaf = jax.ShapeDtypeStruct((2,), jnp.float32)
+        compile_program, operands, shapes, memory = prepare_program(
+            program, leaf if output_only else (template, leaf),
         )
         executable = compile_program()
-        value = jnp.ones((2,), dtype=jnp.float32)
-        actual = executable(arguments, value if output_only else (template, value))
-        if not output_only:
-            executable(arguments, actual)
-        # Returned static metadata must remain compatible with the live caller's model.
-        jax.jit(lambda carry: jax.lax.cond(True, lambda: carry, lambda: (template, carry[1])))(actual)
+        actual = executable(operands, value if output_only else (template, value))
         assert actual[0].evaluate_fn is template.evaluate_fn
         print(json.dumps({'value': actual[1].tolist(), 'shape': shapes[1].shape,
-                          'bytes': memory.device_bytes}))
+                          'bytes': memory.device_bytes, 'compiled': len(compiled)}))
         """
     )
     results = []
-    for offset, power, forbid_trace in ((1, 2, 0), (3, 2, 1), (3, 3, 0)):
+    for offset, enabled, power, forbid_compile in ((1, 0, 2, 0), (3, 1, 2, 1), (3, 1, 3, 0)):
         process = subprocess.run(
             [sys.executable, "-c", script],
             env={
                 **os.environ,
-                "PYTHONHASHSEED": "0",
                 "JAX_COMPILATION_CACHE_DIR": str(tmp_path),
+                "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": "0",
+                "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES": "0",
                 "OFFSET": str(offset),
+                "ENABLED": str(enabled),
                 "POWER": str(power),
-                "FORBID_TRACE": str(forbid_trace),
+                "FORBID_COMPILE": str(forbid_compile),
                 "OUTPUT_ONLY": str(int(output_only)),
             },
             check=True,
@@ -159,38 +116,26 @@ def test_staged_program_reuses_structure_across_processes_and_rebinds_arrays(tmp
             text=True,
         )
         results.append(json.loads(process.stdout))
-    assert [result["value"] for result in results] == [[4.0, 4.0], [16.0, 16.0], [64.0, 64.0]]
+    assert [result["value"] for result in results] == [[0.0, 0.0], [16.0, 16.0], [64.0, 64.0]]
+    assert [result["compiled"] for result in results] == [1, 0, 1]
     assert all(result["shape"] == [2] and result["bytes"] > 0 for result in results)
-    assert len(tuple(tmp_path.glob("grassmoth-shapes-*-cache"))) == 2
-    assert len(tuple(tmp_path.glob("grassmoth-program-*-cache"))) == 2
+    assert not tuple(tmp_path.glob("grassmoth-*-cache"))
 
 
-def test_staged_key_keeps_input_tree_identity_with_identical_leaf_layouts(tmp_path):
-    from grassmoth_server.compute.compilation_cache import prepare_program
-
-    def identity(value):
-        return value
-
-    leaf = jax.ShapeDtypeStruct((2,), jnp.float32)
-    with local_compilation_cache(tmp_path, commit=lambda: None) as working:
-        for argument in ({"a": leaf}, {"b": leaf}, (leaf,), {"a": leaf}):
-            prepare_program(identity, argument)
-        assert len(tuple(working.glob("grassmoth-shapes-*-cache"))) == 3
-
-
-def test_restored_staged_outputs_preserve_weak_scalar_types(tmp_path):
-    from grassmoth_server.compute.compilation_cache import compile_staged
+def test_jax_compilation_preserves_output_trees_and_weak_scalar_types(tmp_path):
+    from grassmoth_server.compute.compilation_cache import compile_program
 
     def increment(value):
-        return value + 1
+        return jax.tree.map(lambda leaf: leaf + 1, value)
 
     scalar = jnp.asarray(2.0)
     with local_compilation_cache(tmp_path, commit=lambda: None):
-        cold = compile_staged(increment, scalar).call(scalar)
-    with local_compilation_cache(tmp_path, commit=lambda: None):
-        warm = compile_staged(increment, scalar).call(scalar)
-    assert jax.typeof(cold) == jax.typeof(warm) == jax.typeof(scalar)
-    assert cold == warm == 3
+        for value in ({"a": scalar}, {"b": scalar}, (scalar,), scalar):
+            actual = compile_program(increment, value).call(value)
+            assert jax.tree.structure(actual) == jax.tree.structure(value)
+            for leaf in jax.tree.leaves(actual):
+                assert jax.typeof(leaf) == jax.typeof(scalar)
+                assert leaf == 3
 
 
 def _file(root, name, content, modified):
@@ -203,7 +148,6 @@ def _file(root, name, content, modified):
 def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path):
     working = tmp_path / "working"
     policy = CachePolicy(
-        staged=CacheLimit(files=2, bytes=9),
         executables=CacheLimit(files=2, bytes=9),
         autotune=CacheLimit(files=1, bytes=5),
         kernels=CacheLimit(files=1, bytes=6),
@@ -219,12 +163,12 @@ def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path
     (working / "link-cache").symlink_to(working / "new-cache")
     archive = tmp_path / "volume" / "selected.tar"
     commit = Mock()
-    persisted = persist_cache(archive, working, (), policy, "accelerator", commit)
+    persisted = persist_cache(archive, working, (), policy, commit)
     assert (persisted.files, persisted.bytes) == (4, 19)
-    assert persisted.archive_bytes == archive.stat().st_size <= policy.archive_bytes("accelerator")
+    assert persisted.archive_bytes == archive.stat().st_size <= policy.archive_bytes()
     assert min(persisted.copy_seconds, persisted.selection_seconds, persisted.commit_seconds) >= 0
     commit.assert_called_once_with()
-    staged, transfer = stage_cache(archive, tmp_path / "fresh", policy, "accelerator")
+    staged, transfer = stage_cache(archive, tmp_path / "fresh", policy)
     assert [entry.path for entry in staged] == [
         "new-cache",
         "old-cache",
@@ -240,7 +184,7 @@ def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path
         assert (tmp_path / "fresh" / entry.path).read_bytes() == (working / entry.path).read_bytes()
         assert (tmp_path / "fresh" / entry.path).stat().st_mtime_ns == entry.modified_ns
     commit.reset_mock()
-    unchanged = persist_cache(archive, tmp_path / "fresh", staged, policy, "accelerator", commit)
+    unchanged = persist_cache(archive, tmp_path / "fresh", staged, policy, commit)
     assert (unchanged.files, unchanged.bytes, unchanged.copy_seconds, unchanged.commit_seconds) == (
         0,
         0,
@@ -279,16 +223,16 @@ def test_invalid_bundles_fail_before_use_without_fallback(tmp_path, defect):
     _bundle(archive, entries)
     if defect == "archive":
         with archive.open("r+b") as target:
-            target.truncate(policy.archive_bytes("accelerator") + 1)
+            target.truncate(policy.archive_bytes() + 1)
     with pytest.raises(ValueError, match="cache"):
-        stage_cache(archive, tmp_path / "local", policy, "accelerator")
+        stage_cache(archive, tmp_path / "local", policy)
     assert not (tmp_path / "escape").exists()
 
 
 def test_local_lifecycle_isolated_namespaces_failure_cleanup_and_accounting(tmp_path, monkeypatch):
     # Backend discovery is separate from this I/O contract.
     monkeypatch.setattr(
-        "grassmoth_server.compute.compilation_cache.cache_namespace", lambda _policy: "a" * 64
+        "grassmoth_server.compute.compilation_cache.accelerator_partition", lambda: "a" * 64
     )
     persistent = tmp_path / "volume"
     persistent.mkdir()
@@ -304,8 +248,6 @@ def test_local_lifecycle_isolated_namespaces_failure_cleanup_and_accounting(tmp_
     assert not working.exists()
     assert [(r.phase, r.files, r.bytes) for r in reports] == [
         ("stage", 0, 0),
-        ("stage", 0, 0),
-        ("persist", 0, 0),
         ("persist", 1, 6),
     ]
     assert {key: jax.config.values[key] for key in before} == before
@@ -315,9 +257,7 @@ def test_local_lifecycle_isolated_namespaces_failure_cleanup_and_accounting(tmp_
         assert working == first_path
         assert (working / "compiled-cache").read_bytes() == b"binary"
     assert [(r.phase, r.files) for r in reports] == [
-        ("stage", 0),
         ("stage", 1),
-        ("persist", 0),
         ("persist", 0),
     ]
     commit.assert_called_once_with()
@@ -334,7 +274,7 @@ def test_local_lifecycle_isolated_namespaces_failure_cleanup_and_accounting(tmp_
 
 def test_commit_failure_propagates_and_restores_configuration(tmp_path, monkeypatch):
     monkeypatch.setattr(
-        "grassmoth_server.compute.compilation_cache.cache_namespace", lambda _policy: "a" * 64
+        "grassmoth_server.compute.compilation_cache.accelerator_partition", lambda: "a" * 64
     )
     original = jax.config.jax_compilation_cache_dir
     with (
@@ -371,53 +311,28 @@ def test_kernel_cache_path_does_not_change_executable_keys_between_contexts(tmp_
     assert keys[0] == keys[1]
 
 
-def test_topology_writers_keep_separate_binaries_and_share_staged_artifacts(tmp_path, monkeypatch):
+def test_topology_writers_keep_separate_jax_binaries(tmp_path, monkeypatch):
     from grassmoth_server.compute import compilation_cache as cache
 
-    monkeypatch.setattr(cache, "cache_namespace", lambda _policy: "namespace")
     commit = Mock()
     for topology in ("a" * 64, "b" * 64):
         monkeypatch.setattr(cache, "accelerator_partition", lambda topology=topology: topology)
         with local_compilation_cache(tmp_path, commit=commit) as working:
             assert not (working / "compiled-cache").exists()
             assert not (working / KERNELS).exists()
-            if topology.startswith("a"):
-                _file(working, "grassmoth-program-shared-cache", b"staged", 1)
-            else:
-                assert (working / "grassmoth-program-shared-cache").read_bytes() == b"staged"
             _file(working, "compiled-cache", topology.encode(), 2)
             _file(working, KERNELS, topology.encode(), 2)
-    assert commit.call_count == 2  # One volume commit per fit, not per archive.
-    snapshots = {path.name: path.read_bytes() for path in (tmp_path / "namespace").iterdir()}
-    assert set(snapshots) == {"shared.tar", "a" * 64 + ".tar", "b" * 64 + ".tar"}
+    assert commit.call_count == 2
+    snapshots = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+    assert set(snapshots) == {"a" * 64 + ".tar", "b" * 64 + ".tar"}
     for topology in ("a" * 64, "b" * 64):
         monkeypatch.setattr(cache, "accelerator_partition", lambda topology=topology: topology)
         with local_compilation_cache(tmp_path, commit=commit) as working:
             assert (working / "compiled-cache").read_bytes() == topology.encode()
             assert (working / KERNELS).read_bytes() == topology.encode()
-            assert (working / "grassmoth-program-shared-cache").read_bytes() == b"staged"
     assert commit.call_count == 2
-    assert snapshots == {
-        path.name: path.read_bytes() for path in (tmp_path / "namespace").iterdir()
-    }
-    archive_limit = 400 * 1024**2 + 256 * 1024 + 529 * 1024 + 10240
-    assert (
-        sum(FIT_CACHE_POLICY.archive_bytes(p) for p in ("shared", "accelerator")) <= archive_limit
-    )
-
-
-@pytest.mark.parametrize(
-    ("partition", "name"),
-    [("shared", "binary-cache"), ("accelerator", "grassmoth-program-export-cache")],
-)
-def test_bundle_rejects_entries_owned_by_other_partition(tmp_path, partition, name):
-    archive = tmp_path / "wrong.tar"
-    _bundle(
-        archive,
-        [{"path": name, "size": 3, "modified_ns": 1, "sha256": hashlib.sha256(b"abc").hexdigest()}],
-    )
-    with pytest.raises(ValueError, match="another partition"):
-        stage_cache(archive, tmp_path / "working", FIT_CACHE_POLICY, partition)
+    assert snapshots == {path.name: path.read_bytes() for path in tmp_path.iterdir()}
+    assert FIT_CACHE_POLICY.archive_bytes() <= 336 * 1024**2 + 128 * 1024 + 513 * 1024 + 10240
 
 
 def test_accelerator_partition_matches_jax_fingerprint_component(monkeypatch):

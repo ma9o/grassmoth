@@ -307,20 +307,6 @@ class PosteriorPredictiveChecks(Value):
     test_stats: tuple[PPCTestStat, ...] = Field(default_factory=tuple)
 
 
-class LapsInitializationDiagnostics(Value):
-    """Realized joint-ensemble initialization, without any claim of posterior convergence."""
-
-    source: Literal["laps"] = "laps"
-    ensemble_size: int
-    joint_dimension: int
-    unadjusted_steps: int
-    adjusted_steps: int
-    unadjusted_step_size: float
-    adjusted_step_size: float
-    adjusted_acceptance: float
-    early_stopped: bool
-
-
 class ContinuedInitializationDiagnostics(Value):
     """Starting values come from a previous fit; no initializer was executed."""
 
@@ -337,9 +323,7 @@ class GaussianInitializationDiagnostics(Value):
 
 
 type InitializationDiagnostics = (
-    LapsInitializationDiagnostics
-    | GaussianInitializationDiagnostics
-    | ContinuedInitializationDiagnostics
+    GaussianInitializationDiagnostics | ContinuedInitializationDiagnostics
 )
 
 

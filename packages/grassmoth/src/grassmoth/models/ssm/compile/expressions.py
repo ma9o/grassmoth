@@ -94,7 +94,6 @@ def compile_expression(
             cse=structural_cse,  # pyright: ignore[reportArgumentType] -- SymPy supports callable CSE; its annotation only declares bool.
         )
 
-    # A named Python wrapper retains a module identity for staged-program serialization.
     def outlined(*arguments: jax.Array | float) -> jax.Array:
         return jnp.asarray(numerical(*arguments))
 

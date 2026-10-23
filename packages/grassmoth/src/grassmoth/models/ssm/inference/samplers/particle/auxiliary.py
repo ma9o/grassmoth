@@ -142,22 +142,27 @@ class AuxiliaryKernel:
         values = self.auxiliary[:, None] + jnp.sqrt(self.variance[:, None]) * noise
         mixture = ctx.paid_mix
         if mixture is not None:
-            weights = jnp.asarray(
-                PILOT_WEIGHTS,
-                dtype=ctx.latent_dtype,
-            )
-            components = jax.random.categorical(
-                component_key, jnp.log(weights), shape=(ctx.num_steps, ctx.num_free_particles)
-            )
-            pilot_variance = PILOT_VARIANCE_SCALE * mixture.variance
-            wide_variance = WIDE_VARIANCE_SCALE * mixture.variance
-            pilot = mixture.mean[:, None] + jnp.sqrt(pilot_variance[:, None]) * noise
-            wide = mixture.mean[:, None] + jnp.sqrt(wide_variance[:, None]) * noise
-            values = jnp.where(
-                (components == 0)[..., None],
-                values,
-                jnp.where((components == 1)[..., None], pilot, wide),
-            )
+            local = values
+
+            def draw_mixture() -> jax.Array:
+                weights = jnp.asarray(
+                    PILOT_WEIGHTS,
+                    dtype=ctx.latent_dtype,
+                )
+                components = jax.random.categorical(
+                    component_key, jnp.log(weights), shape=(ctx.num_steps, ctx.num_free_particles)
+                )
+                pilot_variance = PILOT_VARIANCE_SCALE * mixture.variance
+                wide_variance = WIDE_VARIANCE_SCALE * mixture.variance
+                pilot = mixture.mean[:, None] + jnp.sqrt(pilot_variance[:, None]) * noise
+                wide = mixture.mean[:, None] + jnp.sqrt(wide_variance[:, None]) * noise
+                return jnp.where(
+                    (components == 0)[..., None],
+                    local,
+                    jnp.where((components == 1)[..., None], pilot, wide),
+                )
+
+            values = jax.lax.cond(mixture.enabled[0], draw_mixture, lambda: local)
         values = jnp.where(self.mask[:, None], values, self.reference[:, None])
         particles = jnp.concatenate((self.reference[:, None], values), axis=1)
         return particles, self.proposal_log_density(particles)
@@ -170,26 +175,32 @@ class AuxiliaryKernel:
         mixture = self.context.paid_mix
         if mixture is None:
             return proposal
-        weights = jnp.asarray(
-            PILOT_WEIGHTS,
-            dtype=self.context.latent_dtype,
-        )
-        pilot_density = _masked_normal_log_prob(
-            particles,
-            mixture.mean[:, None],
-            PILOT_VARIANCE_SCALE * mixture.variance[:, None],
-            self.mask[:, None],
-        )
-        wide_density = _masked_normal_log_prob(
-            particles,
-            mixture.mean[:, None],
-            WIDE_VARIANCE_SCALE * mixture.variance[:, None],
-            self.mask[:, None],
-        )
-        return jax.scipy.special.logsumexp(
-            jnp.stack((proposal, pilot_density, wide_density)) + jnp.log(weights)[:, None, None],
-            axis=0,
-        )
+
+        def score_mixture() -> jax.Array:
+            weights = jnp.asarray(
+                PILOT_WEIGHTS,
+                dtype=self.context.latent_dtype,
+            )
+            pilot_density = _masked_normal_log_prob(
+                particles,
+                mixture.mean[:, None],
+                PILOT_VARIANCE_SCALE * mixture.variance[:, None],
+                self.mask[:, None],
+            )
+            wide_density = _masked_normal_log_prob(
+                particles,
+                mixture.mean[:, None],
+                WIDE_VARIANCE_SCALE * mixture.variance[:, None],
+                self.mask[:, None],
+            )
+            return jax.scipy.special.logsumexp(
+                jnp.stack((proposal, pilot_density, wide_density))
+                + jnp.log(weights)[:, None, None],
+                axis=0,
+            )
+
+        result: jax.Array = jax.lax.cond(mixture.enabled[0], score_mixture, lambda: proposal)
+        return result
 
 
 def build_auxiliary(

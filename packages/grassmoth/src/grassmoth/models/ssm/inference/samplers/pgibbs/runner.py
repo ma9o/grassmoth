@@ -12,6 +12,10 @@ import numpy as np
 from grassmoth.artifacts.immutability import freeze_fields
 from grassmoth.artifacts.sampling import FixedLatentStepSpec, ParticleGibbsSpec
 from grassmoth.models.ssm.inference.continuation import restore_state, retain_state
+from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
+    excluded_particle_diagnostics,
+    resolve_particle_diagnostic_metrics,
+)
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.samplers.sweeps import (
     compile_projected_sweeps,
@@ -44,7 +48,7 @@ class ParticleGibbsRun:
     """Retained joint draws, warmup telemetry, and frozen proposal scales."""
 
     positions: jax.Array
-    paths: jax.Array | None
+    paths: jax.Array
     observation_log_probs: jax.Array
     log_posterior: jax.Array
     phase_extra_fields: Mapping[str, Mapping[str, jax.Array]]
@@ -77,6 +81,8 @@ def run_particle_gibbs[State](
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleGibbsRun | InitializationFailure:
     """Advance chains together, retaining aligned draws only after warmup."""
+    options = sampler.algorithm
+    assert isinstance(options, ParticleGibbsSpec)
     num_chains = sampler.num_chains
     initial_key, key = jax.random.split(key)
     with inference_phase(
@@ -165,6 +171,12 @@ def run_particle_gibbs[State](
             wall_clock=wall_clock,
             label="pgibbs",
             prepare_program=prepare_program,
+            excluded_history=excluded_particle_diagnostics(
+                resolve_particle_diagnostic_metrics(
+                    diagnostic_metrics_all=options.diagnostic_metrics_all,
+                    diagnostic_metrics=(),
+                )
+            ),
         )
     run = run_sweeps(
         plan, initial, clock=clock, logger=logger, wall_clock=wall_clock, label="pgibbs"
@@ -180,7 +192,7 @@ def run_particle_gibbs[State](
     }
     return ParticleGibbsRun(
         positions=run.history.posterior["positions"],
-        paths=run.history.posterior["paths"] if sampler.retain_latent_paths else None,
+        paths=run.history.posterior["paths"],
         observation_log_probs=run.history.posterior["observation_log_probs"],
         log_posterior=jnp.concatenate(
             (run.history.warmup["log_posterior"], run.history.posterior["log_posterior"]), axis=1

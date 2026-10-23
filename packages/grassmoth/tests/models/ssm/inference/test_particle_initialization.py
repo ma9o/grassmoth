@@ -10,10 +10,12 @@ import pytest
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec
-from grassmoth.artifacts.reports.posterior_diagnostics import ParticleSamplerDiagnostics
+from grassmoth.artifacts.reports.posterior_diagnostics import (
+    GaussianInitializationDiagnostics,
+    ParticleSamplerDiagnostics,
+)
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
-    LapsInitializationSpec,
     MarginalParticleGibbsSpec,
     SamplerSpec,
 )
@@ -21,13 +23,6 @@ from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.problem import build_particle_problem
 from grassmoth.models.ssm.inference.types import MCMCPosterior
-from grassmoth.models.ssm.inference.warmup import laps_ensemble
-from grassmoth.models.ssm.inference.warmup.initialization import (
-    ParticleInitialization,
-    prepare_laps_initialization,
-)
-from grassmoth.models.ssm.inference.warmup.laps_ensemble import run_laps_ensemble
-from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
 from grassmoth_test_support.inference import (
     compile_fit_fixture,
@@ -36,14 +31,14 @@ from grassmoth_test_support.inference import (
 from grassmoth_test_support.interval_particle import gaussian_interval_case
 from packages.grassmoth.tests.models.ssm.compile.test_exact_state_space import _model, _problem
 
-"""Exact joint LAPS initialization and its paired handoff to production sampling."""
+"""The exact centred initialization chart and its handoff to production sampling."""
 
 
 pytestmark = pytest.mark.inference(concern="warmup")
 
 
 @pytest.mark.parametrize("nonlinear", [False, True])
-def test_laps_parameterization_preserves_exact_density_and_directional_gradients(nonlinear):
+def test_initialization_chart_preserves_exact_density_and_directional_gradients(nonlinear):
     if nonlinear:
         prepared, panel = nonlinear_fit_fixture()
         target = build_particle_problem(
@@ -78,7 +73,7 @@ def test_laps_parameterization_preserves_exact_density_and_directional_gradients
     np.testing.assert_allclose(gradient @ direction, finite_difference, rtol=0.02, atol=2e-3)
 
 
-def test_laps_parameterization_excludes_fixed_states_and_replays_static_and_accumulated_states():
+def test_initialization_chart_excludes_fixed_states_and_replays_static_and_accumulated_states():
     model = _model()
     driver_spec = next(item for item in model.constructs if item.name == "driver")
     driver_spec = driver_spec.revised(
@@ -115,82 +110,9 @@ def test_laps_parameterization_excludes_fixed_states_and_replays_static_and_accu
     assert path[2, driver] == values[2, driver]
 
 
-def test_laps_ensemble_recovers_analytic_joint_moments_with_paired_paths():
-    target, mean, covariance = gaussian_interval_case()
-    result = prepare_laps_initialization(
-        target,
-        spec=LapsInitializationSpec(
-            ensemble_size=1024, num_unadjusted_steps=2000, num_adjusted_steps=80
-        ),
-        key=jax.random.key(312),
-        num_chains=1024,
-        compute_budget=COMPUTE_BUDGET,
-    )
-    assert isinstance(result, ParticleInitialization)
-    joint = np.concatenate((result.positions, result.paths[:, :, 0]), axis=1)
-    whitened = np.linalg.solve(np.linalg.cholesky(covariance), (joint - mean).T).T
-    np.testing.assert_allclose(whitened.mean(axis=0), 0, atol=0.15)
-    np.testing.assert_allclose(np.cov(whitened, rowvar=False), np.eye(mean.size), atol=0.2)
-    from grassmoth.artifacts.reports.posterior_diagnostics import (
-        LapsInitializationDiagnostics,
-    )
-
-    assert isinstance(result.diagnostics, LapsInitializationDiagnostics)
-    assert result.diagnostics.adjusted_acceptance > 0.1
-    assert np.linalg.eigvalsh(np.asarray(result.parameter_chol @ result.parameter_chol.T)).min() > 0
-
-
-def test_nonfinite_laps_initialization_returns_a_failure_without_substitution():
-    result = run_laps_ensemble(
-        lambda point: jnp.asarray(jnp.nan) + jnp.sum(point),
-        dimension=2,
-        scientific_dimension=2,
-        key=jax.random.key(41),
-        spec=LapsInitializationSpec(ensemble_size=8, num_unadjusted_steps=10, num_adjusted_steps=1),
-        compute_budget=COMPUTE_BUDGET,
-    )
-    assert isinstance(result, InitializationFailure)
-    assert "non-finite" in result.message
-
-
-def test_laps_batch_width_preserves_members_and_global_adaptation(monkeypatch):
-    execute = laps_ensemble._execute
-    spec = LapsInitializationSpec(
-        ensemble_size=17, num_unadjusted_steps=20, num_adjusted_steps=3, steps_per_sample=2
-    )
-
-    def run():
-        return run_laps_ensemble(
-            lambda point: -0.5 * jnp.sum((point - jnp.array([0.3, -0.7, 1.2])) ** 2),
-            dimension=3,
-            scientific_dimension=3,
-            key=jax.random.key(718),
-            spec=spec,
-            compute_budget=COMPUTE_BUDGET,
-        )
-
-    full = run()
-
-    def bounded(function, initial, budget, *, max_batch_size):
-        return execute(function, initial, budget, max_batch_size=min(4, max_batch_size))
-
-    monkeypatch.setattr(laps_ensemble, "_execute", bounded)
-    batched = run()
-    assert isinstance(full, laps_ensemble.LapsEnsemble)
-    assert isinstance(batched, laps_ensemble.LapsEnsemble)
-    assert batched.positions.shape == (17, 3)
-    np.testing.assert_allclose(batched.positions, full.positions, rtol=2e-4, atol=2e-4)
-    np.testing.assert_allclose(
-        batched.diagnostics.adjusted_acceptance,
-        full.diagnostics.adjusted_acceptance,
-        rtol=2e-4,
-    )
-    assert batched.diagnostics.unadjusted_steps == full.diagnostics.unadjusted_steps
-
-
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize("leaf", ["amala", "amala_plus"])
-def test_production_fit_consumes_laps_package(leaf):
+def test_production_fit_consumes_gaussian_initialization(leaf):
     prepared, panel = nonlinear_fit_fixture()
     result = fit(
         prepared.prior_runtime_bundle,
@@ -202,12 +124,8 @@ def test_production_fit_consumes_laps_package(leaf):
             num_chains=2,
             num_particles=4,
             seed=7,
-            retain_latent_paths=leaf == "amala_plus",
             algorithm=MarginalParticleGibbsSpec(
                 diagnostic_metrics_all=leaf == "amala_plus",
-                initialization=LapsInitializationSpec(
-                    ensemble_size=128, num_unadjusted_steps=1000, num_adjusted_steps=20
-                ),
                 dsmc=DsmcSpec(drift=leaf),
             ),
         ),
@@ -231,17 +149,9 @@ def test_production_fit_consumes_laps_package(leaf):
     else:
         assert evidence.dsmc_weights is None
         assert not any(key.startswith("dsmc_weight_") for key in retained)
-    from grassmoth.artifacts.reports.posterior_diagnostics import (
-        LapsInitializationDiagnostics,
-    )
-
-    assert isinstance(evidence.initialization, LapsInitializationDiagnostics)
-    assert evidence.initialization.ensemble_size == 128
+    assert isinstance(evidence.initialization, GaussianInitializationDiagnostics)
+    assert evidence.initialization.scale == 0.1
     assert evidence.parameter_preconditioned
-    if leaf == "amala_plus":
-        assert result.draws.latent_paths is not None
-        assert result.draws.latent_paths.shape == (6, len(panel.times), 1)
-    else:
-        assert result.draws.latent_paths is None
-    assert result.diagnostics.latent_posterior_summary is not None
+    assert result.draws.latent_paths is not None
+    assert result.draws.latent_paths.shape == (6, len(panel.times), 1)
     assert np.isfinite(result.diagnostics.observation_log_probs).all()

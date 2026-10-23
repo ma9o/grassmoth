@@ -21,6 +21,7 @@ from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     ADAPTATION_WINDOW,
     adapt_scales,
     initialize_adaptation,
+    latent_adaptation,
 )
 from grassmoth.models.ssm.inference.samplers.sweeps import run_sweeps
 from grassmoth_test_support.compute import COMPUTE_BUDGET, prepare_program
@@ -151,8 +152,8 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     monkeypatch.setattr(jax.stages.Compiled, "__call__", execute)
     monkeypatch.setattr(sweeps, "compiled_memory", memory)
     budget = ComputeBudget(
-        # History (384) plus one transferred block (240) fit; two full histories do not.
-        memory=AcceleratorMemoryBudget(host_bytes=700, device_bytes=300_000)
+        # History (384) plus one transferred block (1200) fit on the host.
+        memory=AcceleratorMemoryBudget(host_bytes=2000, device_bytes=300_000)
         if accelerator
         else SharedMemoryBudget(available_bytes=300_000)
     )
@@ -197,7 +198,7 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
 
 
 def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
-    spec = DsmcSpec()
+    spec = latent_adaptation(DsmcSpec())
     state = initialize_adaptation(jnp.ones((2, 3)))
     rng = np.random.default_rng(91)
     proposed = rng.integers(0, 2, (ADAPTATION_WINDOW + 8, 2, 3)).astype(bool)

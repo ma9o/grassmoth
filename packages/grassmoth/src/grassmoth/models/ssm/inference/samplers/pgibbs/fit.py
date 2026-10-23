@@ -22,6 +22,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     ParticleGibbsDiagnostics,
 )
 from grassmoth.artifacts.sampling import MetropolisHastingsSpec, ParticleGibbsSpec
+from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
@@ -88,7 +89,7 @@ def fit_particle_gibbs(
     """Initialize paired starts, then retain only exact blocked PG updates."""
     options = sampler.algorithm
     assert isinstance(options, ParticleGibbsSpec)
-    trace_key, laps_key, sample_key = jax.random.split(jax.random.key(sampler.seed), 3)
+    trace_key, initialization_key, sample_key = jax.random.split(jax.random.key(sampler.seed), 3)
     with inference_phase(
         "pgibbs", "building_target", clock=clock, logger=logger, wall_clock=wall_clock
     ):
@@ -109,19 +110,16 @@ def fit_particle_gibbs(
             initialization = prepare_particle_initialization(
                 target,
                 spec=options.initialization,
-                key=laps_key,
+                key=initialization_key,
                 num_chains=sampler.num_chains,
                 compute_budget=compute_budget,
             )
     if isinstance(initialization, InitializationFailure):
         return initialization
-    paid_mix = (
-        None
-        if not options.dsmc.pilot_mixture
-        else PaidMixture(
-            initialization.pilot_mean,
-            initialization.pilot_proposal_variance,
-        )
+    paid_mix = PaidMixture(
+        initialization.pilot_mean,
+        initialization.pilot_proposal_variance,
+        scalar_operand(value=options.dsmc.pilot_mixture),
     )
 
     def sample[State](
@@ -229,9 +227,7 @@ def fit_particle_gibbs(
     return MCMCPosterior.from_run(
         draws=JointPosteriorDraws(
             parameters=mcmc.get_samples(),
-            latent_paths=None
-            if run.paths is None
-            else run.paths.reshape((-1, *run.paths.shape[2:])),
+            latent_paths=run.paths.reshape((-1, *run.paths.shape[2:])),
             state_ids=tuple(state.id for state in panel.compiled_dynamical_model.states),
         ),
         diagnostics=ProductionDiagnostics(
@@ -240,9 +236,7 @@ def fit_particle_gibbs(
             observation_log_probs=run.observation_log_probs,
             compiled_step=run.compiled_step,
             public_sites=tuple(sorted(problem.public_sites)),
-            latent_chains=None
-            if run.paths is None
-            else LatentChainEvidence(
+            latent_chains=LatentChainEvidence(
                 paths=np.asarray(run.paths),
                 free_mask=np.asarray(free_mask),
                 states=tuple(

@@ -18,7 +18,6 @@ COMPUTE_BUDGET = ComputeBudget(
 def compile_program[Result](
     function: Callable[..., Result],
     *args: object,
-    static_tree: object = None,
     **kwargs: object,
 ) -> PreparedProgram[Result]:
     """Compile directly using the library's local JAX compiler."""

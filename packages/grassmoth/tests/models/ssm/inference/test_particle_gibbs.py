@@ -18,7 +18,6 @@ from grassmoth.artifacts.sampling import (
     ConditionalNutsSpec,
     DsmcSpec,
     FixedLatentStepSpec,
-    LapsInitializationSpec,
     MetropolisHastingsSpec,
     ParticleGibbsSpec,
     SamplerSpec,
@@ -126,7 +125,9 @@ def test_blocked_pg_preserves_exact_joint_interval_target(method):
         num_particles=8,
         num_warmup=0,
         paid_mix=PaidMixture(
-            jnp.asarray(mean[1:, None]), jnp.asarray(np.diag(covariance)[1:, None])
+            jnp.asarray(mean[1:, None]),
+            jnp.asarray(np.diag(covariance)[1:, None]),
+            jnp.asarray([True]),
         ),
     )
     reference_key, init_key, step_key = jax.random.split(jax.random.key(518), 3)
@@ -145,8 +146,8 @@ def test_blocked_pg_preserves_exact_joint_interval_target(method):
     assert float(jnp.mean(info["parameter_accepted"])) > 0.1
 
 
-@pytest.mark.parametrize(("method", "retain_paths"), [("mh", False), ("nuts", True)])
-def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method, retain_paths):
+@pytest.mark.parametrize("method", ["mh", "nuts"])
+def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method):
     prepared, panel = nonlinear_fit_fixture()
     result = fit(
         prepared.prior_runtime_bundle,
@@ -158,15 +159,11 @@ def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method, retain_p
                 if method == "mh"
                 else ConditionalNutsSpec(max_tree_depth=3, initial_step_size=0.01),
                 dsmc=DsmcSpec(),
-                initialization=LapsInitializationSpec(
-                    ensemble_size=32, num_unadjusted_steps=100, num_adjusted_steps=5
-                ),
             ),
             num_warmup=5,
             num_samples_per_chain=4,
             num_chains=2,
             num_particles=4,
-            retain_latent_paths=retain_paths,
         ),
         compute_budget=COMPUTE_BUDGET,
         reparam=None,
@@ -179,7 +176,7 @@ def test_pg_fit_preserves_nonlinear_model_and_frozen_adaptation(method, retain_p
     assert isinstance(result, MCMCPosterior)
     assert result.evidence.method == "pgibbs"
     assert result.draws.describe().n_draws == 8
-    assert (result.draws.latent_paths is not None) == retain_paths
+    assert result.draws.latent_paths is not None
     assert np.isfinite(result.diagnostics.observation_log_probs).all()
     diagnostics = result.diagnostics.sampler_diagnostics
     assert isinstance(diagnostics, ParticleGibbsDiagnostics)

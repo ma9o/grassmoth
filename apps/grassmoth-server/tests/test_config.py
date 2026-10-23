@@ -9,7 +9,7 @@ from grassmoth.artifacts.sampling import (
     AdaptedLatentStepSpec,
     DsmcSpec,
     FixedLatentStepSpec,
-    LapsInitializationSpec,
+    GaussianInitializationSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     SamplerSpec,
@@ -55,7 +55,6 @@ class TestSamplerSpec:
         assert SamplerSpec.model_validate_json(encoded) == result
         assert options.param_step_size == 0.02
         assert options.param_target_accept == 0.35
-        assert result.retain_latent_paths is True
 
     def test_public_overrides_resolve_without_mutating_defaults(self, monkeypatch):
         from grassmoth_server import config as config_module
@@ -174,10 +173,7 @@ FULL_CONFIG = textwrap.dedent("""\
           param_target_accept: 0.4
           adaptation_rate: 0.03
           initialization:
-            kind: laps
-            ensemble_size: 256
-            num_unadjusted_steps: 1000
-            num_adjusted_steps: 20
+            scale: 0.25
 """)
 
 
@@ -247,10 +243,9 @@ class TestLoadConfig:
         assert cfg.inference.sampler.algorithm.param_step_size_max == 0.7
         assert cfg.inference.sampler.algorithm.param_target_accept == 0.4
         assert cfg.inference.sampler.algorithm.adaptation_rate == 0.03
-        assert isinstance(cfg.inference.sampler.algorithm.initialization, LapsInitializationSpec)
-        assert cfg.inference.sampler.algorithm.initialization.ensemble_size == 256
-        assert cfg.inference.sampler.algorithm.initialization.num_unadjusted_steps == 1000
-        assert cfg.inference.sampler.algorithm.initialization.num_adjusted_steps == 20
+        assert cfg.inference.sampler.algorithm.initialization == GaussianInitializationSpec(
+            scale=0.25
+        )
         assert cfg.llm.embedded.max_tokens == 4096
         assert cfg.llm.embedded.reasoning_effort == "low"
 
@@ -270,8 +265,7 @@ class TestLoadConfig:
         sampler = cfg.inference.sampler
         assert sampler.num_warmup == 500
         assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
-        assert isinstance(sampler.algorithm.initialization, LapsInitializationSpec)
-        assert sampler.algorithm.initialization.ensemble_size == 256
+        assert sampler.algorithm.initialization == GaussianInitializationSpec(scale=0.25)
 
         load_config.cache_clear()
 

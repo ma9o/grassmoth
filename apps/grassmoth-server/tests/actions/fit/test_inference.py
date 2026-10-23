@@ -25,7 +25,7 @@ from grassmoth.models.ssm.inference.types import JointPosteriorDraws
 from grassmoth.models.ssm.preparation import panel as runtime_module
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.actions.fit.runtime import fit_runtime
-from grassmoth_server.compute.compilation_cache import compile_staged, prepare_program
+from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
 from grassmoth_server_test_support.model import load_study_model_fixture
 from grassmoth_test_support.inference import (
     bind_panel_fixture,
@@ -121,7 +121,7 @@ def test_fit_model_logs_runtime_summary_and_diagnostic_boundaries(monkeypatch, c
             clock=time.monotonic,
             logger=logging.getLogger(__name__),
             wall_clock=lambda: datetime.now(UTC),
-            compiler=compile_staged,
+            compiler=compile_program,
             prepare_program=prepare_program,
         )
 
@@ -241,7 +241,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             clock=time.monotonic,
             logger=logging.getLogger(__name__),
             wall_clock=lambda: datetime.now(UTC),
-            compiler=compile_staged,
+            compiler=compile_program,
             prepare_program=prepare_program,
             compute_loo_diagnostics=True,
             previous=previous,
