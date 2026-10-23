@@ -114,7 +114,7 @@ def _update_array_digest(digest: HASH, label: str, value: ArrayLike) -> None:
 def _prior_predictive_latent_cache_key(
     dynamics: DynamicsSpec,
     vf_params: object,
-    samples: Mapping[str, jnp.ndarray],
+    samples: Mapping[str, jnp.ndarray | np.ndarray],
     times: jnp.ndarray,
     rng_key: jax.Array,
 ) -> str:
@@ -155,7 +155,7 @@ def _cache_latents(key: str, latents: jax.Array) -> None:
 
 
 def _predictive_max_rates(
-    compiled: CompiledDynamics, samples: Mapping[str, jnp.ndarray]
+    compiled: CompiledDynamics, samples: Mapping[str, jnp.ndarray | np.ndarray]
 ) -> jnp.ndarray:
     """Read the fastest declared relaxation rate per draw from coefficient metadata."""
     n_draws = int(next(iter(samples.values())).shape[0])
@@ -276,7 +276,7 @@ _simulate_model_predictive_draws = cast(
 
 def _simulate_vector_field_predictive_latents(
     compiled_dynamical_model: CompiledDynamicalModel,
-    samples: Mapping[str, jnp.ndarray],
+    samples: Mapping[str, jnp.ndarray | np.ndarray],
     times: jnp.ndarray,
     *,
     compute_budget: ComputeBudget,
@@ -326,7 +326,7 @@ def _simulate_vector_field_predictive_latents(
 
 def sample_predictive_emissions(
     compiled_dynamical_model: CompiledDynamicalModel,
-    samples: Mapping[str, jnp.ndarray],
+    samples: Mapping[str, jnp.ndarray | np.ndarray],
     linear_predictors: jnp.ndarray,
     times: jnp.ndarray,
     *,
@@ -362,7 +362,7 @@ def sample_predictive_emissions(
 
 def simulate_predictive_draws(
     compiled_dynamical_model: CompiledDynamicalModel,
-    samples: Mapping[str, jnp.ndarray],
+    samples: Mapping[str, jnp.ndarray | np.ndarray],
     times: jnp.ndarray,
     *,
     compute_budget: ComputeBudget,

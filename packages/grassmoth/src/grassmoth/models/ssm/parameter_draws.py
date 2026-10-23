@@ -15,12 +15,14 @@ from grassmoth.models.ssm.parameterization import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from numpy.typing import NDArray
+
     from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
 
 
 def assemble_parameter_draws(
     compiled_dynamical_model: CompiledDynamicalModel,
-    parameters: Mapping[str, jnp.ndarray],
+    parameters: Mapping[str, jnp.ndarray | NDArray],
     *,
     count: int,
 ) -> dict[str, jnp.ndarray]:

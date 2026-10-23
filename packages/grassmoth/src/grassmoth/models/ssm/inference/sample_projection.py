@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Set
 
-    import jax.numpy as jnp
     from numpyro.primitives import Message
 
 
@@ -49,8 +48,8 @@ def _trace_public_sites(
     return frozenset(shapes)
 
 
-def _filter_public_samples(
-    samples: Mapping[str, jnp.ndarray], public_sites: Set[str]
-) -> dict[str, jnp.ndarray]:
+def _filter_public_samples[Sample](
+    samples: Mapping[str, Sample], public_sites: Set[str]
+) -> dict[str, Sample]:
     """Drop internal handler sites, keeping only original model outputs."""
     return {name: values for name, values in samples.items() if name in public_sites}

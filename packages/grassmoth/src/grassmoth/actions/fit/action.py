@@ -292,8 +292,6 @@ def inference_report(
         )
 
     def render() -> InferenceReport:
-        import jax.numpy as jnp
-
         from grassmoth.artifacts.probability.serialization import empirical_atoms
         from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
         from grassmoth.models.ssm.inference.diagnostics.plots import (
@@ -313,8 +311,8 @@ def inference_report(
             for identity in layouts
         }
         count = next(iter(atoms.values())).shape[0]
-        samples: dict[str, jnp.ndarray] = {
-            element: jnp.asarray(atoms[identity][:, layout.parameter_columns[element]])
+        samples: dict[str, np.ndarray] = {
+            element: np.asarray(atoms[identity][:, layout.parameter_columns[element]])
             for identity, layout in layouts.items()
             for _, elements in layout.parameters
             for element in elements
@@ -370,10 +368,10 @@ def inference_report(
                         num_samples=count // chains,
                         backend=metadata.engine.method,
                     ),
-                    observation_log_probs=jnp.asarray(evidence.observation_log_probs.values)
+                    observation_log_probs=np.asarray(evidence.observation_log_probs.values)
                     if evidence.observation_log_probs is not None
-                    else jnp.empty((chains, count // chains, 0)),
-                    exact_observation_rows=jnp.asarray(evidence.exact_observation_rows.values)
+                    else np.empty((chains, count // chains, 0)),
+                    exact_observation_rows=np.asarray(evidence.exact_observation_rows.values)
                     if evidence.exact_observation_rows is not None
                     else None,
                 ),
@@ -388,7 +386,7 @@ def inference_report(
             if evidence.observation_log_probs is not None:
                 assert evidence.observed_rows is not None
                 loo = posterior.get_loo_diagnostics(
-                    observed_rows=jnp.asarray(evidence.observed_rows.values)
+                    observed_rows=np.asarray(evidence.observed_rows.values)
                 )
 
         from grassmoth.study.projections.priors import quantity_prior_densities

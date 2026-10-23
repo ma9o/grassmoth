@@ -110,11 +110,11 @@ class ProductionDiagnostics:
     mcmc: TrajectoryMCMCResult
     checkpoint: SamplerCheckpoint | None = None
     parameterization: JointParameterizationRecord | None = None
-    observation_log_probs: jnp.ndarray
+    observation_log_probs: jnp.ndarray | NDArray
     latent_chains: LatentChainEvidence | None = None
     compiled_step: Compiled | None = None
     public_sites: tuple[str, ...] | None = None
-    exact_observation_rows: jnp.ndarray | None = None
+    exact_observation_rows: jnp.ndarray | NDArray | None = None
     sampler_diagnostics: ParticleSamplerDiagnostics | NutsDADiagnostics | None = None
     phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]] | None = None
     warmup_complete_log_posterior_history: jnp.ndarray | None = None
@@ -140,7 +140,7 @@ class ProductionDiagnostics:
 class JointPosteriorDraws:
     """Aligned parameter and latent-trajectory draws; the leading axis identifies one joint draw."""
 
-    parameters: Mapping[str, jnp.ndarray]
+    parameters: Mapping[str, jnp.ndarray | NDArray]
     latent_paths: jnp.ndarray | None = None
     state_ids: tuple[ConstructId, ...] = ()
 
@@ -210,7 +210,7 @@ class MCMCPosterior:
             final_latent_delta=final_latent_delta,
         )
 
-    def get_samples(self) -> Mapping[str, jnp.ndarray]:
+    def get_samples(self) -> Mapping[str, jnp.ndarray | NDArray]:
         """Return parameter draws aligned with the retained latent trajectories."""
         return self.draws.parameters
 
@@ -298,7 +298,7 @@ class MCMCPosterior:
         return _build_trace_data(samples, references), _build_rank_histograms(samples, references)
 
     def get_loo_diagnostics(
-        self, *, observed_rows: jnp.ndarray
+        self, *, observed_rows: jnp.ndarray | NDArray
     ) -> tuple[LOODiagnostics, tuple[ParetoKPoint, ...]] | None:
         """PSIS leave-one-measurement-row-out from the joint particle posterior.
 

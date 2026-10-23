@@ -59,13 +59,13 @@ def _clip_scale(
 class TrajectoryMCMCResult:
     """MCMC-compatible view of particle posterior samples."""
 
-    chain_samples: Mapping[str, jnp.ndarray]
+    chain_samples: Mapping[str, jnp.ndarray | NDArray]
     chain_extra_fields: Mapping[str, jax.Array | NDArray]
     num_chains: int
     num_samples: int
     backend: str = "marginal_particle_gibbs"
 
-    def get_samples(self, *, group_by_chain: bool = False) -> Mapping[str, jnp.ndarray]:
+    def get_samples(self, *, group_by_chain: bool = False) -> Mapping[str, jnp.ndarray | NDArray]:
         """Return parameter draws, preserving chain axes when requested and flattening them otherwise."""
         if group_by_chain:
             return self.chain_samples

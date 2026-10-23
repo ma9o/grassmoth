@@ -31,8 +31,8 @@ HIST_PADDING_DEFAULT = 0.5
 
 
 def sample_coordinates(
-    samples: Mapping[str, jnp.ndarray], *, sample_dims: int
-) -> Iterator[tuple[ParameterCoordinate, jnp.ndarray]]:
+    samples: Mapping[str, jnp.ndarray | NDArray], *, sample_dims: int
+) -> Iterator[tuple[ParameterCoordinate, jnp.ndarray | NDArray]]:
     """Yield scalar event coordinates while preserving the requested leading sampling dimensions."""
     for name, values in samples.items():
         for indices in np.ndindex(values.shape[sample_dims:]):
@@ -41,7 +41,7 @@ def sample_coordinates(
 
 
 def build_trace_data(
-    chain_samples: Mapping[str, jnp.ndarray], references: ParameterReferences
+    chain_samples: Mapping[str, jnp.ndarray | NDArray], references: ParameterReferences
 ) -> tuple[TraceSeries, ...]:
     """Keep every draw; auxiliary coordinates have an explicit None binding."""
     traces = []
@@ -52,14 +52,16 @@ def build_trace_data(
             traces.append(
                 TraceSeries(
                     subject=subject,
-                    chains=tuple(tuple(float(v) for v in chain) for chain in values),
+                    chains=tuple(tuple(float(v) for v in chain) for chain in np.asarray(values)),
                 )
             )
     return tuple(traces)
 
 
 def build_rank_histograms(
-    chain_samples: Mapping[str, jnp.ndarray], references: ParameterReferences, n_bins: int = 20
+    chain_samples: Mapping[str, jnp.ndarray | NDArray],
+    references: ParameterReferences,
+    n_bins: int = 20,
 ) -> tuple[RankHistogram, ...]:
     """Build per-chain pooled-rank histograms for coordinates with scientific parameter references."""
     from arviz_stats.base.array import array_stats
@@ -106,7 +108,7 @@ def _density_histogram(values: NDArray, n_bins: int) -> DensityCurve:
 
 
 def param_marginal(
-    parameter: str, subject: ParameterRef, values: jnp.ndarray, n_bins: int = 50
+    parameter: str, subject: ParameterRef, values: jnp.ndarray | NDArray, n_bins: int = 50
 ) -> PosteriorMarginal:
     """Summarize scalar posterior draws with a density histogram, moments, and a 94% HDI."""
     from arviz_stats.base.array import array_stats
@@ -142,7 +144,7 @@ def build_energy_diagnostics(energy: jnp.ndarray | NDArray, n_bins: int = 40) ->
 
 
 def compute_posterior_marginals(
-    samples: Mapping[str, jnp.ndarray], references: ParameterReferences, n_bins: int = 50
+    samples: Mapping[str, jnp.ndarray | NDArray], references: ParameterReferences, n_bins: int = 50
 ) -> tuple[PosteriorMarginal, ...]:
     """Build posterior marginals for the sampled coordinates that have scientific parameter owners."""
     return tuple(

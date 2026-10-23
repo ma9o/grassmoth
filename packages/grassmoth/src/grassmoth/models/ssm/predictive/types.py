@@ -13,6 +13,8 @@ from grassmoth.artifacts.immutability import freeze_fields
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from numpy.typing import NDArray
+
 
 @jax.tree_util.register_dataclass
 @dataclass(frozen=True)
@@ -51,7 +53,7 @@ class PredictiveDraws:
     parameter draws at persistence or resimulation boundaries.
     """
 
-    parameters: Mapping[str, jax.Array]
+    parameters: Mapping[str, jax.Array | NDArray]
     trajectory: PredictiveTrajectory
     reference: PredictiveTrajectory | None = None
 
