@@ -35,7 +35,6 @@ from grassmoth.artifacts.sampling import TwistedParticleAGradSpec
 from grassmoth.models.ssm.inference.samplers.particle.contract import ParticleSmootherResult
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     _masked_normal_log_prob,
-    multinomial,
 )
 from grassmoth.models.ssm.inference.samplers.particle.twist import (
     GaussianTwist,
@@ -53,29 +52,45 @@ from grassmoth.models.ssm.inference.tracing import (
 )
 
 if TYPE_CHECKING:
+    from jax.typing import DTypeLike
+
     from grassmoth.artifacts.sampling import GuidedPathSpec
     from grassmoth.models.ssm.inference.samplers.particle.contract import SmootherContext
     from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 
 
-def conditional_killing(key: jax.Array, logits: jax.Array) -> jax.Array:
+class _KillingNoise(NamedTuple):
+    survival: jax.Array
+    replacement: jax.Array
+    rotation: jax.Array
+
+
+def _killing_noise(key: jax.Array, count: int, dtype: DTypeLike) -> _KillingNoise:
+    survival, replacement, rotation = jax.random.split(key, 3)
+    return _KillingNoise(
+        jax.random.uniform(survival, (count,), dtype=dtype),
+        jax.random.uniform(replacement, (count,), dtype=dtype),
+        jax.random.gumbel(rotation, (count,), dtype=dtype),
+    )
+
+
+def _killing(logits: jax.Array, noise: _KillingNoise) -> jax.Array:
     """Killing with cyclic conditioning on ancestor[0] = 0.
 
     Karppinen, Singh & Vihola's conditional resampling, as used by the paper:
     https://github.com/AdrienCorenflos/particle_mala/blob/main/gradient_csmc/utils/resamplings.py
     The random rotation is essential; simply pinning ordinary killing is invalid.
     """
-    survival_key, replacement_key, rotation_key = jax.random.split(key, 3)
     count = logits.size
     survival = jnp.exp(logits - jnp.max(logits))
-    indices = jnp.where(
-        jax.random.uniform(survival_key, (count,)) < survival,
-        jnp.arange(count),
-        multinomial(replacement_key, logits, count),
+    cumulative = jnp.cumsum(jax.nn.softmax(logits))
+    replacements = jnp.minimum(
+        jnp.sum(cumulative[None, :] <= noise.replacement[:, None], axis=-1), count - 1
     )
+    indices = jnp.where(noise.survival < survival, jnp.arange(count), replacements)
     rotation_mass = ((1.0 - survival) / count).at[0].set(0.0)
     rotation_mass = rotation_mass.at[0].set(1.0 - jnp.sum(rotation_mass))
-    rotation = jax.random.categorical(rotation_key, jnp.log(rotation_mass))
+    rotation = jnp.argmax(jnp.log(rotation_mass) + noise.rotation)
     return jnp.roll(indices, -rotation).at[0].set(0).astype(jnp.int32)
 
 
@@ -94,10 +109,13 @@ class _ProposalGeometry(NamedTuple):
     log_normalizer: jax.Array
 
     def center(self, prior_mean: jax.Array, mask: jax.Array) -> jax.Array:
-        return jnp.where(mask, prior_mean, 0.0) @ self.mean_map.T + self.shift
+        return (
+            jnp.sum(jnp.where(mask, prior_mean, 0.0)[..., None, :] * self.mean_map, axis=-1)
+            + self.shift
+        )
 
     def log_density(self, difference: jax.Array, mask: jax.Array) -> jax.Array:
-        whitened = jnp.where(mask, difference, 0.0) @ self.whiten.T
+        whitened = jnp.sum(jnp.where(mask, difference, 0.0)[..., None, :] * self.whiten, axis=-1)
         return self.log_normalizer - 0.5 * jnp.sum(whitened**2, axis=-1)
 
 
@@ -182,11 +200,16 @@ def _guided_step(
     count = spec.num_particles
     variance = ctx.amala_delta / 2
     aux_key, first_key, forward_key, backward_key = jax.random.split(key, 4)
+    noise_factors = jax.vmap(
+        lambda bound: target.prepare_noise_factors(bound, target.observations)
+    )(ctx.contexts)
 
     def observations(value: jax.Array, index: jax.Array | int) -> jax.Array:
         return jax.vmap(
-            lambda bound: target.observation_increment(bound, value, index, target.observations)
-        )(ctx.contexts).astype(ctx.traj_dtype)
+            lambda bound, factors: target.observation_increment_with_noise(
+                bound, factors, value, index, target.observations
+            )
+        )(ctx.contexts, noise_factors).astype(ctx.traj_dtype)
 
     def observe(value: jax.Array, index: jax.Array | int) -> tuple[jax.Array, jax.Array]:
         if spec.kappa == 0:
@@ -237,12 +260,11 @@ def _guided_step(
         return observed, density
 
     def transition(previous: jax.Array, current: jax.Array, index: jax.Array) -> jax.Array:
-        return jnp.asarray(
-            jax.vmap(lambda bound: target.transition_log_prob(bound, previous, current, index))(
-                ctx.contexts
-            ),
-            dtype=ctx.traj_dtype,
-        )
+        return jax.vmap(
+            lambda bound, factors: target.transition_log_prob_with_noise(
+                bound, factors, previous, current, index
+            )
+        )(ctx.contexts, noise_factors).astype(ctx.traj_dtype)
 
     initial_geometry = jax.tree.map(lambda value: value[0], geometry)
     first_center = initial_geometry.center(initial_mean, mask[0])
@@ -252,8 +274,13 @@ def _guided_step(
             jnp.where(
                 mask[0],
                 first_center
-                + jax.random.normal(first_key, (count - 1, dimension), reference.dtype)
-                @ initial_geometry.chol.T,
+                + jnp.sum(
+                    jax.random.normal(first_key, (count - 1, dimension), reference.dtype)[
+                        :, None, :
+                    ]
+                    * initial_geometry.chol,
+                    axis=-1,
+                ),
                 reference[0],
             ),
         )
@@ -283,21 +310,24 @@ def _guided_step(
 
     def forward(
         carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
-        inputs: tuple[jax.Array, jax.Array, _ProposalGeometry],
+        inputs: tuple[jax.Array, tuple[_KillingNoise, jax.Array], _ProposalGeometry],
     ) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array], tuple[jax.Array, ...]]:
         previous, weights, scores, previous_twists = carry
-        index, step_key, proposal = inputs
-        resample_key, proposal_key = jax.random.split(step_key)
-        ancestors = conditional_killing(resample_key, weights)
+        index, draws, proposal = inputs
+        killing_noise, noise = draws
+        ancestors = _killing(weights, killing_noise)
         parents = previous[ancestors]
         parent_scores = scores[ancestors]
         means = jax.vmap(lambda value: target.transition_moments(guide, value, index)[0])(parents)
         centers = proposal.center(means, mask[index])
-        noise = jax.random.normal(proposal_key, (count - 1, dimension), reference.dtype)
         current = jnp.concatenate(
             (
                 reference[index, None],
-                jnp.where(mask[index], centers[1:] + noise @ proposal.chol.T, reference[index]),
+                jnp.where(
+                    mask[index],
+                    centers[1:] + jnp.sum(noise[:, None, :] * proposal.chol, axis=-1),
+                    reference[index],
+                ),
             )
         )
         observed, auxiliary_factors = local_factors(current, index)
@@ -325,17 +355,28 @@ def _guided_step(
             current_twists,
             ancestors,
             centers,
+            observed,
         )
 
-    _, (tail, tail_weights, tail_scores, tail_twists, ancestors, centers) = jax.lax.scan(
-        forward,
-        (first, first_weights, first_scores, first_twists),
-        (
-            jnp.arange(1, steps),
-            jax.random.split(forward_key, steps - 1),
-            jax.tree.map(lambda value: value[1:], geometry),
-        ),
+    def forward_noise(step_key: jax.Array) -> tuple[_KillingNoise, jax.Array]:
+        resample_key, proposal_key = jax.random.split(step_key)
+        return (
+            _killing_noise(resample_key, count, reference.dtype),
+            jax.random.normal(proposal_key, (count - 1, dimension), reference.dtype),
+        )
+
+    _, (tail, tail_weights, tail_scores, tail_twists, ancestors, centers, tail_observed) = (
+        jax.lax.scan(
+            forward,
+            (first, first_weights, first_scores, first_twists),
+            (
+                jnp.arange(1, steps),
+                jax.vmap(forward_noise)(jax.random.split(forward_key, steps - 1)),
+                jax.tree.map(lambda value: value[1:], geometry),
+            ),
+        )
     )
+    observation_bank = jnp.concatenate((first_observed[None], tail_observed))
     bank = jnp.concatenate((first[None], tail))
     weights = jnp.concatenate((first_weights[None], tail_weights))
     scores = jnp.concatenate((first_scores[None], tail_scores))
@@ -347,17 +388,22 @@ def _guided_step(
         carry: tuple[jax.Array, jax.Array], inputs: tuple[jax.Array, jax.Array]
     ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
         following, suffix = carry
-        index, step_key = inputs
+        index, gumbels = inputs
         links = jax.vmap(lambda value: transition(value, following, index + 1))(bank[index])
         logits = backward_weights[index] + logsumexp(scores[index] + links + suffix, axis=-1)
-        pick = jax.random.categorical(step_key, logits).astype(jnp.int32)
+        pick = jnp.argmax(logits + gumbels).astype(jnp.int32)
         value = bank[index, pick]
-        return (value, suffix + links[pick] + observations(value, index)), pick
+        return (value, suffix + links[pick] + observation_bank[index, pick]), pick
 
     (initial_selected, suffix), earlier = jax.lax.scan(
         backward,
-        (bank[-1, last], observations(bank[-1, last], steps - 1)),
-        (jnp.arange(steps - 2, -1, -1), jax.random.split(earlier_key, steps - 1)),
+        (bank[-1, last], observation_bank[-1, last]),
+        (
+            jnp.arange(steps - 2, -1, -1),
+            jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=reference.dtype))(
+                jax.random.split(earlier_key, steps - 1)
+            ),
+        ),
     )
     picks = jnp.concatenate((earlier[::-1], last[None]))
     path = bank[jnp.arange(steps), picks]

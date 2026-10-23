@@ -27,9 +27,9 @@ class GaussianTwist(NamedTuple):
 
     def log_density(self, value: jax.Array, index: jax.Array | int) -> jax.Array:
         """Evaluate the same information factor in forward and backward weights."""
-        return -0.5 * jnp.einsum("...i,ij,...j->...", value, self.precision[index], value) + (
-            value @ self.shift[index]
-        )
+        return -0.5 * jnp.sum(
+            value[..., :, None] * self.precision[index] * value[..., None, :], axis=(-2, -1)
+        ) + jnp.sum(value * self.shift[index], axis=-1)
 
 
 def symmetric(matrix: jax.Array) -> jax.Array:

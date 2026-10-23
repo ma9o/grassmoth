@@ -97,6 +97,13 @@ class HeterogeneousObservation(dsx.ObservationModel):
         """Map latent states to observation predictors through loadings and manifest intercepts."""
         return self.measurement.lambda_mat @ state + self.measurement.manifest_means
 
+    def density_groups(self) -> tuple[LawGroup, ...]:
+        """Bind the already-owned channel grouping to this context's numerical laws."""
+        return tuple(
+            LawGroup(indices, tuple(self.laws[index] for index in indices))
+            for indices in self.group_indices
+        )
+
     def at_predictor(self, predictor: jax.Array) -> _ObservationDistribution:
         """Use the same observation law with cached predictors and interval projections."""
         return _ObservationDistribution(predictor, self)
@@ -119,10 +126,7 @@ class _ObservationDistribution(dist.Distribution):
         self._predictor = predictor
         self._laws = observation.laws
         self._measurement = observation.measurement
-        self._groups = tuple(
-            LawGroup(indices, tuple(observation.laws[index] for index in indices))
-            for indices in observation.group_indices
-        )
+        self._groups = observation.density_groups()
         super().__init__(
             batch_shape=(),
             event_shape=(int(self._measurement.lambda_mat.shape[0]),),

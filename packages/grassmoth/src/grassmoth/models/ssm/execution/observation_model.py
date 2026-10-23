@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
@@ -25,6 +25,7 @@ from grassmoth.models.ssm.execution.observation_operator import compile_observat
 
 if TYPE_CHECKING:
     from grassmoth.models.ssm.execution.contracts import ObservationLaws
+    from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
     from grassmoth.models.ssm.execution.observation_dispatch import PointObservationSampler
     from grassmoth.models.ssm.execution.observation_operator import ObservationOperator
     from grassmoth.models.ssm.preparation.observations import ObservationSupportRuntime
@@ -88,6 +89,48 @@ def grouped_density(
         (_group_density(group, y, eta, R, mask) for group in groups),
         jnp.zeros((), dtype=y.dtype),
     )
+
+
+def prepare_grouped_noise(
+    groups: tuple[LawGroup, ...], covariance: jax.Array, observations: jax.Array
+) -> tuple[GaussianNoiseFactors, ...]:
+    """Prepare each Gaussian group's noise for every recorded missingness pattern."""
+
+    def prepare(group: LawGroup) -> GaussianNoiseFactors:
+        indices = jnp.asarray(group.indices, dtype=jnp.int32)
+        return jax.vmap(
+            lambda mask: emissions.prepare_gaussian_block_noise(
+                covariance[jnp.ix_(indices, indices)], mask[indices]
+            )
+        )(~jnp.isnan(observations))
+
+    return tuple(prepare(group) for group in groups if isinstance(group.laws[0], NormalLawSpec))
+
+
+def grouped_density_with_noise(
+    groups: tuple[LawGroup, ...],
+    y: jax.Array,
+    eta: jax.Array,
+    covariance: jax.Array,
+    noise: tuple[GaussianNoiseFactors, ...],
+) -> jax.Array:
+    """Use fixed Gaussian factors and the ordinary evaluator for all other laws."""
+    observed = ~jnp.isnan(y)
+    filled = jnp.nan_to_num(y, nan=0.0)
+    factors = iter(noise)
+    total = jnp.zeros((), dtype=eta.dtype)
+    for group in groups:
+        if isinstance(group.laws[0], NormalLawSpec):
+            indices = jnp.asarray(group.indices, dtype=jnp.int32)
+            law = cast(
+                "NormalLawSpec[jax.Array]",
+                group.evaluate(eta, jnp.sqrt(jnp.diag(covariance)), mask=observed),
+            )
+            residual = jnp.where(observed[indices], filled[indices] - law.loc, 0.0)
+            total = total + next(factors).log_prob(residual)
+        else:
+            total = total + _group_density(group, filled, eta, covariance, observed)
+    return total
 
 
 def grouped_response(

@@ -16,7 +16,12 @@ from grassmoth.models.ssm.compile.state_space import (
     SequentialRecurrences,
 )
 from grassmoth.models.ssm.execution.affine import compose_affine_maps
+from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
 from grassmoth.models.ssm.execution.innovations import GaussianPathMap
+from grassmoth.models.ssm.execution.observation_model import (
+    grouped_density_with_noise,
+    prepare_grouped_noise,
+)
 from grassmoth.models.ssm.inference.targets.gaussian_reference import (
     GaussianReference,
     GaussianReferenceBridge,
@@ -46,6 +51,15 @@ type ParticleContext = tuple[dsx.DynamicalModel, jax.Array, jax.Array]
 def identity_state(_context: ParticleContext, state: jax.Array) -> jax.Array:
     """Leave a supplied state unchanged when evaluating the exact model factors."""
     return state
+
+
+@jax.tree_util.register_dataclass
+@dataclass(frozen=True, eq=False)
+class ParticleNoiseFactors:
+    """Exact noise factors for one fixed parameter context and its observation grid."""
+
+    transitions: GaussianNoiseFactors
+    observations: tuple[GaussianNoiseFactors, ...]
 
 
 @dataclass(frozen=True, eq=False)
@@ -315,10 +329,94 @@ class ParticleTarget:
         # The declared Gaussian embeds its factor on precisely these stochastic
         # coordinates. Reusing it avoids rebuilding the full-state covariance
         # and differentiating through a second Cholesky decomposition.
-        return dist.MultivariateNormal(
-            distribution.mean[indices],
-            scale_tril=distribution.scale_tril[jnp.ix_(indices, indices)],
-        ).log_prob(state[indices])
+        factors = GaussianNoiseFactors.from_cholesky(
+            distribution.scale_tril[jnp.ix_(indices, indices)]
+        )
+        return factors.log_prob(state[indices] - distribution.mean[indices])
+
+    def prepare_noise_factors(
+        self, context: ParticleContext, observations: jax.Array
+    ) -> ParticleNoiseFactors:
+        """Factor exact noise once for this sweep's fixed parameters and masks.
+
+        The compiled additive diffusion is an array, so its Euler-Maruyama
+        covariance depends on parameters and time intervals, never on the state.
+        Nonlinear state-dependent means remain in the scoring methods below.
+        """
+        initial = self.initial_moments(context)[0]
+        indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
+
+        def transition(index: jax.Array) -> GaussianNoiseFactors:
+            distribution = cast(
+                "dist.MultivariateNormal", self._transition_distribution(context, initial, index)
+            )
+            return GaussianNoiseFactors.from_cholesky(
+                jnp.asarray(distribution.scale_tril)[jnp.ix_(indices, indices)]
+            )
+
+        transitions = jax.vmap(transition)(jnp.arange(1, context[1].size))
+        # The unused origin row also makes a traced length-zero scan well shaped.
+        transitions = jax.tree.map(
+            lambda value: jnp.concatenate((jnp.zeros((1, *value.shape[1:]), value.dtype), value)),
+            transitions,
+        )
+        model = cast("HeterogeneousObservation", self.dynamical_model(context).observation_model)
+        return ParticleNoiseFactors(
+            transitions,
+            prepare_grouped_noise(
+                model.density_groups(),
+                model.measurement.manifest_cov,
+                self._point_observations(observations),
+            ),
+        )
+
+    def transition_log_prob_with_noise(
+        self,
+        context: ParticleContext,
+        noise: ParticleNoiseFactors,
+        previous: jax.Array,
+        current: jax.Array,
+        index: jax.Array | int,
+    ) -> jax.Array:
+        """Score the exact nonlinear transition using this context's prepared noise."""
+        current = self.project_state(context, current)
+
+        def exact() -> jax.Array:
+            indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
+            mean = self._transition_distribution(context, previous, index).mean
+            return noise.transitions.at(index).log_prob(current[indices] - mean[indices])
+
+        return (
+            exact()
+            if self.bridge is None
+            else self.bridge.combine(
+                exact,
+                self.bridge.reference.transition_log_prob(previous, current, jnp.asarray(index)),
+            )
+        )
+
+    def observation_increment_with_noise(
+        self,
+        context: ParticleContext,
+        noise: ParticleNoiseFactors,
+        state: jax.Array,
+        index: jax.Array | int,
+        observations: jax.Array,
+    ) -> jax.Array:
+        """Score exact point laws and nonlinear predictors with prepared Gaussian noise."""
+        model = cast("HeterogeneousObservation", self.dynamical_model(context).observation_model)
+        predictor = model.linear_predictor(self.project_state(context, state))
+
+        def exact() -> jax.Array:
+            return grouped_density_with_noise(
+                model.density_groups(),
+                self._point_observations(observations)[index],
+                predictor,
+                model.measurement.manifest_cov,
+                tuple(factor.at(index) for factor in noise.observations),
+            ).astype(predictor.dtype)
+
+        return exact() if self.bridge is None else self.bridge.observation(exact)
 
     def _transition_distribution(self, context, previous, index):
         times = context[1]
@@ -506,12 +604,7 @@ class ParticleTarget:
         observations: jax.Array,
     ) -> jax.Array:
         """Score point factors at one leaf; interval factors belong to enclosing tree nodes."""
-        if self.intervals is not None:
-            observations = jnp.where(
-                self.intervals.operator.point_like_mask(jnp.dtype(bool))[None, :],
-                observations,
-                jnp.nan,
-            )
+        observations = self._point_observations(observations)
         distribution = self.dynamical_model(context).observation_model(
             self.project_state(context, state), None, context[1][index]
         )
@@ -520,6 +613,17 @@ class ParticleTarget:
             return jnp.sum(distribution.log_prob(observations[index]))
 
         return exact() if self.bridge is None else self.bridge.observation(exact)
+
+    def _point_observations(self, observations: jax.Array) -> jax.Array:
+        return (
+            observations
+            if self.intervals is None
+            else jnp.where(
+                self.intervals.operator.point_like_mask(jnp.dtype(bool))[None, :],
+                observations,
+                jnp.nan,
+            )
+        )
 
     def observation_log_probs(self, context, path, observations):
         """Evaluate the observation log likelihood at each time along a latent path."""
