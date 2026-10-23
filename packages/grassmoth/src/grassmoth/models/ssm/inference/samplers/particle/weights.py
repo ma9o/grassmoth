@@ -33,8 +33,12 @@ def weight_statistics(logits: jax.Array) -> dict[ParticleWeightMetric, jax.Array
     centered before reduction so additive offsets cannot inflate their variance.
     Undefined distributions produce nonfinite measurements, never uniform weights.
     """
-    # Keep diagnostic primitives inline: outlining the same helper in sampling
-    # and diagnostic branches makes JAX's helper sharing depend on prior traces.
+    # Workaround for JAX: revert this log-softmax and the entropy mask below to
+    # jax.nn.log_softmax and jnp.where once JAX gives equivalent lowerings one persistent
+    # cache key. JAX shares an outlined helper only between call sites holding the same
+    # trace, so these diagnostics and the sampling branch shared or duplicated it
+    # depending on what the process had traced before, and a warm worker recompiled
+    # the same sweep.
     shifted = logits - jax.lax.stop_gradient(jnp.max(logits, axis=-1, keepdims=True))
     log_probs = shifted - jnp.log(jnp.sum(jnp.exp(shifted), axis=-1, keepdims=True))
     probabilities = jnp.exp(log_probs)
