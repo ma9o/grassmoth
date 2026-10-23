@@ -1,3 +1,5 @@
+- DO NOT USE WORKTREES. DO YOUR WORK ON MASTER UNLESS SPECIFIED
+
 - Add tests only when necessary to cover broad behavior; this repo's test suite is already costly.
 
 - Before running tests, follow the [test selection guide](docs/guides/agentic_integration_testing.md#choosing-tests-for-a-change). Before integration testing, starting services, health checks, or manual pipeline runs, read and follow [docs/guides/agentic_integration_testing.md](docs/guides/agentic_integration_testing.md).
