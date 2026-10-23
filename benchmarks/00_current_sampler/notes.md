@@ -135,7 +135,7 @@ latent particles; the four chains, 2,000 warmup sweeps, 4,000 retained draws per
 chain, seed 19 and complete A0 algorithm are unchanged. This does not change the
 ladder's declared 128-particle schedule or authorize C1–C3.
 
-The [request](13-fit-C0-A0-256-particles.json) runs through HTTP in study
+The [submitted request](../../scratchpad/benchmarks/stage00-c0-256-a10-20261022/13-fit-C0-A0-256-particles.json) ran through HTTP in study
 `BENCH00C0256_20261022`, served at `http://localhost:19400`. Its fit call is
 `call:1ec2ffc7d6673a9b767aefd66ddadf1bbd575df3de24c58e7b259ebac1c2b0c9`.
 C0's model artifact is `cfba07b77d22cf5e2f17180e253021f90a383e96`; the selected
@@ -188,6 +188,25 @@ an additional GPU fit.
 Decision: increasing to 256 improves both paths' bulk ESS but does not clear C0's
 production gate. C1–C3 and later stages remain blocked. No additional fits ran,
 and the ladder's declared schedule remains unchanged.
+
+## 2026-10-22 aMALA+ CPU compilation investigation
+
+At the user's request, four CPU compile-only HTTP probes used the same C0 inputs,
+four chains and 256 particles, with zero warmup and draws. Full profiles, requests,
+responses, limitations and proposed owner changes are in the
+[scratchpad notes](../../scratchpad/benchmarks/c0-amala-plus-cpu-compile-20261022/notes.md).
+
+The cold `amala_plus` sweep compilation took 192.8 seconds and compiled four node
+batch widths with XLA memory estimates of 107.89, 99.53, 50.09 and 25.37 GiB before
+the separate availability check rejected it. The `drift: none` control compiled
+in 18.2 seconds with a 6.28 GiB estimate. Pairwise seam-gradient calculations
+dominate the aMALA+ graph. A warm executable cache still left 145.8 seconds of
+sweep compilation, including repeated frontend preparation; a same-worker control
+repeat also missed the staged graph cache with unchanged source.
+
+These are instrumented CPU measurements of one-sweep blocks, not the production
+25-sweep blocks or a convergence result. No sampler code changed, no GPU cost was
+incurred, and C0's production gate and later-stage status are unchanged.
 
 ## 2026-10-22 C0 with parameter self-preconditioning
 
@@ -248,3 +267,264 @@ Decision: parameter self-preconditioning is implemented; this C0 run does not
 clear the latent convergence gate or establish an efficiency benefit. No C1–C3,
 C6 or additional GPU fits were launched. The ladder's 128-particle schedule remains
 unchanged.
+
+## 2026-10-22 C0 diagnostics retention failure and fix
+
+The [all-diagnostics request](../../scratchpad/benchmarks/c0-all-diagnostics-20261022-01/00-fit-C0.json)
+repeated the self-preconditioned C0 configuration with all diagnostic groups
+enabled in study `C0SELFPRECONDITION_20261022`. Call
+`call:4d4e4f8909b04f0cc371f57239084ffb865bdc98655cf85e917dade8d2b57cc6`
+completed sampling but failed during report assembly. The
+[runner log](../../scratchpad/benchmarks/c0-all-diagnostics-20261022-01/modal-latest.log)
+records 16,000 retained draws followed by SIGKILL, exit 137, consistent with host
+memory exhaustion. No scientific result or diagnostic payload was saved. Its
+automatic retry was stopped; the
+[reconciled cost](../../scratchpad/benchmarks/c0-all-diagnostics-20261022-01/billing-reconciliation.json)
+was $0.52418051. This attempt provides no convergence result.
+
+The fix in the shared checkout removes repeated encoding in the
+[fit action](../../packages/grassmoth/src/grassmoth/actions/fit/action.py), shares
+already immutable storage at the
+[ownership boundary](../../packages/grassmoth/src/grassmoth/artifacts/immutability.py),
+and keeps restored telemetry on the host during reporting. No diagnostic fields
+or histories are removed. A bounded
+[allocation check](../../scratchpad/diagnostics-memory-fix-20261022/allocation-profile.json)
+with 64 MiB of telemetry and three report owners reduced additional peak
+allocation from 192 MiB to about 3.4 KiB; this is not a full C0 memory measurement.
+
+Nine focused ownership, reporting and continuation checks passed, as did root
+lint. A short CPU fit through HTTP in `DIAGNOSTICSMEMORYFIX_20261022`, call
+`call:be839c117ddeb83119525673b6e28559c6b12af302d04402c7ef7344d96dbebe`,
+[saved all three diagnostic groups and all eight weight metrics](../../scratchpad/diagnostics-memory-fix-20261022/http-validation.json),
+including lossless warmup and sampling histories with shared repeated buffers.
+This smaller fit checks execution only. The full C0 GPU run has not been
+repeated with the fix, so C0 and later-stage decisions remain unchanged.
+
+## 2026-10-22 C0 diagnostic run, 512 warmup and 512 samples
+
+At the user's request, the [short run](../../scratchpad/benchmarks/c0-diagnostics-512-20261022/00-fit-C0.json)
+used 512 warmup sweeps and 512 retained draws per chain. The C0 model, all 2,049
+readings per channel, four chains, 256 particles, seed 19, A10 selection and
+proposal settings match the preceding all-diagnostics attempt. It used the
+shared checkout with the diagnostics memory fix and the existing 32 GiB host
+allocation. All diagnostic groups were enabled.
+
+The action succeeded in study `C0SELFPRECONDITION_20261022`, call
+`call:c0957cce2a15bf4b760d98964d9b02ab26fcf30ffc881d02dbd9478e8a9ad98f`,
+with journal commit `8c4b1162b40b0f830ea88ebae5ea405ef3c56bed`. The
+[validation](../../scratchpad/benchmarks/c0-diagnostics-512-20261022/validation.json)
+confirms all 2,048 retained draws and all eight weight histories at 4,108 tree
+nodes plus terminal selection. Each warmup and sampling history has shape
+`(4, 512, 4109)`; the combined history has shape `(4, 1024, 4109)`.
+Repeated chain and sampling-phase views share their wire buffers. The saved
+response is 1,222,379,923 bytes. Reporting and publication completed without a
+memory failure at these requested counts.
+
+The [production report](../../scratchpad/benchmarks/c0-diagnostics-512-20261022/summary.json)
+records the following chain measurements:
+
+| Quantity | Bulk ESS | Tail ESS | Maximum R̂ |
+| --- | ---: | ---: | ---: |
+| Input effect | 200.7 | 261.2 | 1.0232 |
+| Latent x, worst across coordinates | 38.2 | 21.7 | 1.0825 |
+| Latent y, worst across coordinates | 13.7 | 24.3 | 1.2160 |
+
+Parameter acceptance was 0.401, latent update fraction 0.623 and coordinate
+frozen fraction 0.688. The lowest mean pair-weight ESS fraction occurred at the
+first merge level: the node spanning indices `[58, 60)` averaged ESS 51.7 out of
+65,536 candidates, a fraction of 0.000789. Other first-level nodes show similar
+concentration. Terminal weights were uniform, with ESS 256 of 256, and no tree
+weight summary recorded nonfinite measurements. These findings point toward
+early merge proposal mismatch as an investigation target; this short run does
+not establish its cause or a remedy. The complete
+[sampler diagnostics](../../scratchpad/benchmarks/c0-diagnostics-512-20261022/sampler-diagnostics.json)
+retain each node's reported measurements.
+
+Sweep compilation took 49.7 seconds, warmup 68.0 seconds and sampling 67.7 seconds;
+numerical duration was 199.2 seconds. Actual hardware was `gpu:NVIDIA A10:0`.
+Runtime source digest:
+`7ce5dd286fab3ea0fbe78adfa052e1f12562f930948523ff5e5f350142bad722`.
+The GPU app `ap-CQ69eFVKq7g98PoaU2xqIS` is stopped, and the
+[billing reconciliation](../../scratchpad/benchmarks/c0-diagnostics-512-20261022/billing-reconciliation.json)
+reports $0.15554454, including result egress.
+
+Decision: diagnostic retention succeeded at the requested counts. This is a
+short diagnostic run, with failed convergence checks, and does not replace a
+full-schedule C0 result. No later cases were run.
+
+## 2026-10-22 C0 aMALA+ retry after gradient reuse
+
+The user requested a full-schedule C0 retry with `amala_plus` after gradient reuse
+was promoted to master in `a52d656a`. The [request](14-fit-C0-amala-plus.json)
+uses 128 particles, four chains, 2,000 warmup sweeps and 4,000 retained draws per
+chain, seed 19, all diagnostics enabled, and one A10 with a 3,600-second limit
+and a $2 per-fit cap. The only request-setting change from the declared A0
+policy is `drift: amala_plus`; current master includes parameter adaptation.
+
+The new study is `C0AMALAPLUS_20261022`, served from the shared master checkout
+at `http://localhost:19600`. Existing diagnostics-retention edits are retained
+in the source patch. Model editing, seed-721 simulation and fit submission use
+the public HTTP actions. The fit call is `call:c1256d77b2e187ae52ea7c3208ce32e0ea15cf7f0b81c907af13c1dd5508fda5`.
+Full requests, source manifest, source patch, logs and results are retained in
+`scratchpad/benchmarks/c0-amala-plus-a10-20261022/`. The fit is running; later
+cases remain blocked pending its production convergence report.
+
+The user stopped the run during warmup. Sweep compilation succeeded in 187.4
+seconds; the last logged warmup progress was 626/2,000 sweeps. No retained draws
+or convergence result were produced. Modal App `ap-rZQ2AXOa6rR98SpaKbQOz9` is
+confirmed stopped with zero containers, and this run's local stack is stopped.
+The initial billing report attributes $0.17344567 to the app; billing may lag.
+This stopped attempt does not change C0's decision or unblock later cases.
+
+## 2026-10-22 C0 latent-step adaptation × pilot mixture
+
+The user approved a four-arm diagnostic comparison after the short C0 run.
+The [declaration](../../scratchpad/benchmarks/c0-step-pilot-factorial-20261022/experiment.json)
+pins the original C0 model and simulation, four chains, 256 particles, seed 19,
+512 warmup sweeps and 512 retained draws per chain. The factors are adaptive
+latent steps versus fixed `delta: 0.01`, crossed with the fixed pilot mixture
+enabled or disabled. All arms use random-walk parameter proposals, no latent
+drift, one latent coordinate block, Gaussian initialization at scale 0.1 and all
+diagnostics. Each fit ran concurrently on its own A10 with 32 GiB host memory,
+through HTTP in `C0SELFPRECONDITION_20261022` from the shared checkout.
+
+All four actions succeeded and retained complete diagnostic histories. Their
+runtime source digest is identical:
+`9845181cf413321ada74ad749d208edf37275940d3d09d4bb3f1b679fae8e528`.
+The adaptive/pilot control reproduced the preceding seed-19 chain diagnostics
+exactly. The [comparison](../../scratchpad/benchmarks/c0-step-pilot-factorial-20261022/comparison-primary.json)
+reads the production reports without recomputing their chain diagnostics:
+
+| Latent step | Pilot | x bulk ESS | y bulk ESS | Movement RMS | Lowest first-merge mean weight ESS | Scales at cap 10 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Adaptive | On | 38.2 | 13.7 | 0.0369 | 51.7 | 80.5% |
+| Adaptive | Off | 61.6 | 29.0 | 0.0383 | 69.1 | 92.1% |
+| Fixed 0.01 | On | 20.5 | 20.3 | 0.0314 | 9,991.6 | 0% |
+| Fixed 0.01 | Off | 14.6 | 15.3 | 0.0316 | 14,037.5 | 0% |
+
+Each first merge scores 65,536 pairs assembled from 256 particles per side;
+categorical weight ESS does not count independent trajectories. Fixing the
+small step improves these weight measurements greatly but does not consistently
+improve chain mixing. Disabling the pilot does not prevent scale saturation.
+All input-effect means are between 0.602 and 0.605, with overlapping intervals.
+Every short-run convergence report fails. These results do not establish a
+production remedy or change the full-schedule C0 gate.
+
+Primary fit calls, in table order:
+
+- `call:ff7c6cce63a668426c017f555f362a437468aeb3e020fa5354cae3848532c188`
+- `call:a819e3a6199926a1a1312eafe3dd376906a47f7bd2cbea7722b4519a470c3906`
+- `call:53e67d41b0ee3f211b75fb6a77418aca3b53cfad1032c3f9b8e459120cf02283`
+- `call:6a3b5f06d521a19ed209b3f3596f596be4f9b680672926ad99180ac254d5490f`
+
+Complete responses, scalar summaries, source patch and lossless-retention checks
+are retained per arm under `scratchpad/benchmarks/c0-step-pilot-factorial-20261022/`.
+The four GPU apps are stopped. The
+[primary billing reconciliation](../../scratchpad/benchmarks/c0-step-pilot-factorial-20261022/billing-primary-reconciliation.json)
+reports $0.58192606 total, with every fit below its $2 cap.
+
+The predeclared follow-up repeated the adaptive pilot-on/off contrast with seed
+20 on separate GPUs. Both actions succeeded with the same source digest and
+complete diagnostics. The seed-19 improvement did not reproduce:
+
+| Seed | Pilot | x bulk ESS | y bulk ESS | x maximum R̂ | y maximum R̂ |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 19 | On | 38.2 | 13.7 | 1.0825 | 1.2160 |
+| 19 | Off | 61.6 | 29.0 | 1.0634 | 1.1085 |
+| 20 | On | 62.5 | 28.6 | 1.0630 | 1.1120 |
+| 20 | Off | 58.3 | 18.7 | 1.0701 | 1.1650 |
+
+The seed-20 calls are
+`call:9d6662fc560780bde81aeec50c26448b349091c978e9288f9652c1c1c9811bc0`
+and `call:bb99f1038d9d62017fc846651fcf84990dae4c18b120c913752373983d0afb4d`;
+their journal commits are `ef88a879270d066c628f6acd3feb1660959cb8fd` and
+`bbfa404893848e9d6e1d5b96dae78a27a0b5d39c`. Seed-20 scale saturation was 84.6%
+with the pilot and 90.3% without it. Both convergence reports fail.
+
+The [complete comparison](../../scratchpad/benchmarks/c0-step-pilot-factorial-20261022/comparison.json)
+retains both seeds, native phase durations and the production findings. Numerical
+timings include unequal compilation-cache reuse, so they are not a controlled
+cold-compilation comparison. No chain diagnostics were recomputed by the caller.
+All six GPU apps are stopped; the
+[final billing reconciliation](../../scratchpad/benchmarks/c0-step-pilot-factorial-20261022/billing-reconciliation.json)
+reports $0.86224803 total, with each fit below $2.
+
+Decision: neither fixed `delta: 0.01` nor pilot removal provides a reproducible
+mixing remedy in these runs. Low merge-weight ESS alone does not establish the
+cause of slow MCMC mixing, and the pilot alone does not explain scale saturation.
+The short-run findings do not select a production policy or change C0's gate.
+No other experimental families or later benchmark cases were launched here.
+
+## 2026-10-23 C0 latent-path branch: Kalman path move and smoother-marginal proposal
+
+The user approved testing two dynamics-aware latent proposals against today's
+sampler on C0. Per-frequency analysis of the earlier C0 draws showed the failure
+sits in the smooth path components: periods above about 64 steps refreshed 5–14%
+per sweep against about 40% for short wiggles. The dSMC paper (§4) and both
+auxiliary-sampler papers name this regime as the weakness of time-separable
+proposals.
+
+Each arm ran from its own checkout, server and study at the full schedule: 128
+particles, four chains, 2,000 warmup and 4,000 retained draws, seed 19, one A10.
+All three checkouts are `a52d656a` plus the diagnostics memory fix used by the
+2026-10-22 factorial. Diagnostics: production checks plus `particle_identity` and
+`parameter_movement`. The `particle_weights` histories were omitted because they
+would make each response about 3 GB at this schedule. Each study replayed
+the seed-721 simulation; all ten arrays match the 2026-10-22 C0 data exactly.
+Patches, declaration, requests, responses and analysis are in
+`scratchpad/latent-proposals-20261023/`.
+
+- **Base (A0):** unchanged. Study `LATENT_BASE_20261023`, call
+  `call:3fb79e74d205c9066b133602c22894a39fa2d1a467f9027fb08b70c50be7ce34`.
+- **Kalman:** A0 plus an auxiliary Kalman path move after every sweep
+  ([Corenflos and Särkkä](https://arxiv.org/abs/2303.00301), Algorithm 2, sampled
+  parallel in time). It draws u ~ N(x, δ/2), proposes from a Gaussian path model
+  conditioned on u, and accepts against the exact target.
+  - The Gaussian model expands the exact transitions and point densities around a
+    path. It is built at initialization, rebuilt every 100 warmup sweeps at each
+    chain's window-mean parameters, and frozen for the retained draws.
+  - δ adapts during warmup towards 25% acceptance.
+  - Study `LATENT_KALMAN_20261023`, call
+    `call:5e422cdb76e0a11ab3c1567dfd22bca7ac5aef50a94aba34246ba7f297028bbf`.
+- **Marginals:** the fixed pilot holds Gaussian-smoother marginals built at
+  initialization ([dSMC §4.1](https://arxiv.org/abs/2202.02264)), as the 80%
+  mixture component. The latent step is fixed at the cap, δ = 10; with an adapted δ
+  the auxiliary factor vetoes non-local particles and δ collapses.
+  - Study `LATENT_MARGINALS_20261023`, call
+    `call:5bc3ef32003226a1e6ce1206891c633bd77649ec20d8af4167105e60f8a4e8cb`.
+
+| Arm | Production gate | x bulk / tail ESS | y bulk / tail ESS | Max latent R̂ | Input-effect bulk ESS |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Base | **fails** | 434 / 333 | 194 / 268 | 1.037 | 1,779 |
+| Kalman | **passes** | 12,105 / 11,775 | 12,210 / 11,984 | 1.001 | 1,899 |
+| Marginals | **fails** (x tail) | 501 / 369 | 1,246 / 998 | 1.010 | 1,848 |
+
+Input-effect means: 0.602, 0.599 and 0.602, all with SD about 0.088.
+
+Per-sweep refresh of the path's frequency components (smoothest band → wiggliest
+band), from the retained paths:
+
+| Arm | x | y |
+| --- | --- | --- |
+| Base | 0.08 → 0.35 | 0.05 → 0.35 |
+| Kalman | 0.93 → 0.95 | 0.93 → 0.95 |
+| Marginals | 0.30 → 0.38 | 0.29 → 0.41 |
+
+- **Kalman move:** retained acceptance was 0.92–0.93 in every chain, with δ at its
+  1e4 cap. Each move is effectively an independent draw from a near-exact proposal.
+- **Timings:** sweep compilation took 49 s (base), 56 s (Kalman) and 44 s (marginals).
+  Warmup took 61, 66 and 60 s, and sampling 121, 130 and 121 s. The marginals arm
+  also spent 11 s building the smoother at initialization.
+- **Cost:** Modal billing reports $0.54 for the three fits, $0.17–$0.19 each.
+
+Proposed decision: the Kalman path move passes C0 at about 7% extra sweep time,
+with 28–63× the worst-coordinate ESS. The smoother-marginal proposal helps
+smooth modes about 4–6× but still fails x's tail ESS.
+
+Before the Kalman move joins the policy:
+- **User decision:** whether its Gaussian model may be rebuilt every sweep at the
+  current parameters. AGENTS.md and the model assumptions allow linearization only
+  at initialization; this run froze it after warmup.
+- **Framework work:** tests, lint and the fit chart. The move still rejects
+  intervals, replay, exact readings on free coordinates and tempering, which
+  FRANCE1940V2 needs.
