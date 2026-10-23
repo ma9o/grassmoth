@@ -13,7 +13,12 @@ sum and psi_t. Summing label mixtures independently at each time would be wrong.
 The single Gaussian proposal guide is built at the ensemble's mean unconstrained
 parameter, symmetrically in the labels. The auxiliary drift is an observation-only
 mixture score, common to every label. Consequently the final label law does not
-contain an auxiliary factor. Twisting linearizes only at u; exact nonlinear
+contain an auxiliary factor. For twisted kappa=1, the local proposal and future
+twist share a Gaussian approximation of the readings times the actual auxiliary
+law, in information form.
+The observation score and Hessian are batched once at u, with noise factors reused.
+Kappa=0 and ordinary aGRAD retain their unshifted-auxiliary guide.
+Twisting linearizes only at u; exact nonlinear
 transition means are used in proposals and true densities in every weight.
 Poor Gaussian look-ahead and separated modes can slow mixing, never alter its target.
 
@@ -52,6 +57,8 @@ from grassmoth.models.ssm.inference.tracing import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from jax.typing import DTypeLike
 
     from grassmoth.artifacts.sampling import GuidedPathSpec
@@ -121,33 +128,82 @@ class _ProposalGeometry(NamedTuple):
 
 def _proposal_geometry(
     covariance: jax.Array,
-    auxiliary: jax.Array,
-    variance: jax.Array,
+    local: GaussianTwist,
     mask: jax.Array,
     precision: jax.Array,
     shift: jax.Array,
 ) -> _ProposalGeometry:
-    identity = jnp.eye(auxiliary.size, dtype=auxiliary.dtype)
+    identity = jnp.eye(local.shift.size, dtype=local.shift.dtype)
     prior_precision = jnp.linalg.solve(_free_covariance(covariance, mask), identity)
-    posterior_precision = prior_precision + jnp.diag(mask / variance) + precision
+    posterior_precision = prior_precision + local.precision + precision
     posterior_covariance = symmetric(jnp.linalg.solve(posterior_precision, identity))
     chol = jnp.linalg.cholesky(posterior_covariance)
     return _ProposalGeometry(
         posterior_covariance @ prior_precision,
-        posterior_covariance @ (jnp.where(mask, auxiliary / variance, 0.0) + shift),
+        posterior_covariance @ (local.shift + shift),
         chol,
         jax.scipy.linalg.solve_triangular(chol, identity, lower=True),
         -0.5 * jnp.sum(mask) * jnp.log(2.0 * jnp.pi) - jnp.sum(jnp.log(jnp.diag(chol))),
     )
 
 
+def _unshifted_information(
+    auxiliary: jax.Array, variance: jax.Array, mask: jax.Array
+) -> GaussianTwist:
+    return GaussianTwist(
+        jax.vmap(jnp.diag)(mask / variance[:, None]),
+        jnp.where(mask, auxiliary / variance[:, None], 0.0),
+    )
+
+
+def _guided_information(
+    observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
+    auxiliary: jax.Array,
+    variance: jax.Array,
+    mask: jax.Array,
+) -> GaussianTwist:
+    """Approximate readings times the actual auxiliary law, held fixed at u.
+
+    For score g and Hessian H at u, the auxiliary mean's local affine map is
+    B = I + v H, c = v (g - H u). Its information is B.T B / v and
+    B.T (u - c) / v, including when B vanishes. The reading factor uses
+    the positive-semidefinite part of -H and retains its score at u.
+    A Gaussian observation factor gives its exact product. Curvature clipping,
+    nonlinear score extrapolation and separated modes can cost mixing; the
+    exact particle corrections still use the true nonlinear model.
+    """
+
+    def point(value: jax.Array, v: jax.Array, free: jax.Array, index: jax.Array) -> GaussianTwist:
+        def score(state: jax.Array) -> tuple[jax.Array, jax.Array]:
+            gradient = observe(state, index)[1]
+            return gradient, gradient
+
+        hessian, gradient = jax.jacfwd(score, has_aux=True)(value)
+        hessian = symmetric(jnp.asarray(hessian)) * free[:, None] * free[None, :]
+        gradient = jnp.where(free, jnp.asarray(gradient), 0.0)
+        matrix = jnp.diag(free.astype(value.dtype)) + v * hessian
+        residual = jnp.where(free, value - v * gradient + v * (hessian @ value), 0.0)
+        auxiliary_precision = symmetric(matrix.T @ matrix / v)
+        auxiliary_shift = matrix.T @ residual / v
+        eigenvalues, eigenvectors = jnp.linalg.eigh(-hessian)
+        observed_precision = symmetric(
+            (eigenvectors * jnp.maximum(eigenvalues, 0.0)) @ eigenvectors.T
+        )
+        observed_shift = gradient + observed_precision @ value
+        return GaussianTwist(
+            auxiliary_precision + observed_precision, auxiliary_shift + observed_shift
+        )
+
+    return jax.vmap(point)(auxiliary, variance, mask, jnp.arange(auxiliary.shape[0]))
+
+
 def _build_twist(
     target: ParticleTarget,
     guide: ParticleContext,
     auxiliary: jax.Array,
-    variance: jax.Array,
     mask: jax.Array,
     spec: GuidedPathSpec,
+    information: GaussianTwist,
 ) -> tuple[GaussianTwist, jax.Array]:
     """Batch all guide geometry over time before the sequential particle filter.
 
@@ -179,9 +235,7 @@ def _build_twist(
         return matrix, offset, _free_covariance(covariance, mask[index])
 
     matrices, offsets, covariances = jax.vmap(affine)(auxiliary[:-1], jnp.arange(1, steps))
-    return future_information(
-        matrices, offsets, covariances, auxiliary, variance, mask
-    ), covariances
+    return future_information(matrices, offsets, covariances, information), covariances
 
 
 def _guided_step(
@@ -233,14 +287,17 @@ def _guided_step(
         ),
         reference,
     )
-    twist, transition_covariances = _build_twist(target, guide, auxiliary, variance, mask, spec)
+    if isinstance(spec, TwistedParticleAGradSpec) and spec.kappa == 1:
+        information = _guided_information(observe, auxiliary, variance, mask)
+    else:
+        information = _unshifted_information(auxiliary, variance, mask)
+    twist, transition_covariances = _build_twist(target, guide, auxiliary, mask, spec, information)
     initial_mean, initial_covariance = target.initial_moments(guide)
     # Proposal solves and Cholesky factors are independent of the particle ancestors.
     # Prepare them in parallel over time, outside both sequential particle scans.
     geometry = jax.vmap(_proposal_geometry)(
         jnp.concatenate((initial_covariance[None], transition_covariances)),
-        auxiliary,
-        variance,
+        information,
         mask,
         twist.precision,
         twist.shift,

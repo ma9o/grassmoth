@@ -1,4 +1,4 @@
-"""Gaussian future-auxiliary information for exact twisted particle proposals.
+"""Gaussian information for exact twisted particle proposals.
 
 The associative filtering operator is Särkkä & García-Fernández (2019),
 https://arxiv.org/abs/1905.13002, Lemmas 7–8. Only the proposal uses this
@@ -20,7 +20,7 @@ class _InformationElement(NamedTuple):
 
 
 class GaussianTwist(NamedTuple):
-    """Unnormalized future information, with a unit twist at the final time."""
+    """An unnormalized Gaussian factor in precision and information-vector form."""
 
     precision: jax.Array
     shift: jax.Array
@@ -79,19 +79,17 @@ def future_information(
     matrices: jax.Array,
     offsets: jax.Array,
     covariances: jax.Array,
-    auxiliary: jax.Array,
-    variance: jax.Array,
-    mask: jax.Array,
+    information: GaussianTwist,
 ) -> GaussianTwist:
-    """Integrate future pseudo-observations in logarithmic parallel depth."""
-    steps, dimension = auxiliary.shape
-    zero_precision = jnp.zeros((1, dimension, dimension), dtype=auxiliary.dtype)
-    zero_shift = jnp.zeros((1, dimension), dtype=auxiliary.dtype)
+    """Integrate future factors in logarithmic depth, including zero information."""
+    steps, dimension = information.shift.shape
+    zero_precision = jnp.zeros((1, dimension, dimension), dtype=information.shift.dtype)
+    zero_shift = jnp.zeros((1, dimension), dtype=information.shift.dtype)
     if steps == 1:
         return GaussianTwist(zero_precision, zero_shift)
-    precision = jax.vmap(jnp.diag)(mask[1:] / variance[1:, None])
-    shift = jnp.where(mask[1:], auxiliary[1:] / variance[1:, None], 0.0)
-    elements = jax.vmap(_element)(matrices, offsets, covariances, precision, shift)
+    elements = jax.vmap(_element)(
+        matrices, offsets, covariances, information.precision[1:], information.shift[1:]
+    )
     reverse = jax.tree.map(lambda value: value[::-1], elements)
     suffix = jax.lax.associative_scan(
         jax.vmap(lambda later, earlier: _combine(earlier, later)), reverse

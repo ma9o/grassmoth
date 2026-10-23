@@ -16,7 +16,7 @@ from grassmoth.artifacts.sampling import ParticleAGradSpec, TwistedParticleAGrad
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import guided_step, trace_guided_step
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
-from grassmoth.models.ssm.inference.samplers.particle.twist import future_information
+from grassmoth.models.ssm.inference.samplers.particle.twist import GaussianTwist, future_information
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 from grassmoth.models.ssm.inference.tracing import SequentialSmootherTraceRecord, TracedResult
 from grassmoth_test_support.interval_particle import interval_target
@@ -282,10 +282,13 @@ def test_parallel_twist_matches_dense_correlated_gaussian_future_law():
     variance = np.array([0.2, 0.4, 0.3, 0.5])
     mask = np.array([[True, True], [True, False], [True, True], [False, True]])
     twist = jax.jit(future_information)(
-        *(
-            jnp.asarray(value)
-            for value in (matrices, offsets, covariances, auxiliary, variance, mask)
-        )
+        jnp.asarray(matrices),
+        jnp.asarray(offsets),
+        jnp.asarray(covariances),
+        GaussianTwist(
+            jax.vmap(jnp.diag)(jnp.asarray(mask / variance[:, None])),
+            jnp.asarray(np.where(mask, auxiliary / variance[:, None], 0.0)),
+        ),
     )
     # Assemble the full future observation law independently of the information scan.
     for index in range(3):
