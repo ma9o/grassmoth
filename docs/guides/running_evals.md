@@ -19,13 +19,13 @@ journal entry, not an input artifact. Save the concrete request bodies with the 
 
 ```bash
 curl -sS "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit" \
-  -X POST -H 'Content-Type: application/json' \
+  -X POST -H 'Content-Type: application/json' -H 'Accept: application/json' \
   --data-binary @scratchpad/benchmarks/RUN/04-fit-C0-A0.json \
-  -o scratchpad/benchmarks/RUN/fit.msgpack
+  | jq '{call_id, status, messages}'
 ```
 
 Poll the returned call ID as the skill describes; POST and polling responses
-are MessagePack. The server retains the scientific result and execution log.
+use JSON when requested with `Accept: application/json`. The server retains the scientific result and execution log.
 Record the study workspace, call IDs, outcomes and proposed decision in the
 stage's `notes.md`, and retain billing evidence with the run outputs.
 

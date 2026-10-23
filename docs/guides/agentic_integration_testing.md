@@ -241,7 +241,7 @@ curl -s -X POST http://localhost:8100/api/upload \
 
 curl -s -X POST http://localhost:8100/api/studies/$WORKSPACE_ID/edit_question \
   -H 'Content-Type: application/json' \
-  -o /tmp/action.msgpack \
+  -H 'Accept: application/json' \
   -d "{\"action\":\"edit_question\",\"input\":{\"question\":{\"text\":\"$QUESTION\"}}}"
 ```
 
@@ -261,14 +261,7 @@ curl -s http://localhost:8100/api/studies/$WORKSPACE_ID/timeline > /tmp/study-ti
 ACTION=$(jq -r '.running[0].action' /tmp/study-timeline.json)
 CALL_ID=$(jq -r '.running[0].call_id' /tmp/study-timeline.json)
 curl -s "http://localhost:8100/api/studies/$WORKSPACE_ID/$ACTION/$CALL_ID" \
-  -o /tmp/action.msgpack
-uv run --directory apps/grassmoth-server python - <<'PY'
-from pathlib import Path
-from pprint import pprint
-from grassmoth_server.study.persistence.codec import unpack_result
-result = unpack_result(Path('/tmp/action.msgpack').read_bytes())
-pprint({key: value for key, value in result.items() if key != 'body'})
-PY
+  -H 'Accept: application/json' | jq 'del(.body)'
 
 # The viewer uses the same GET route for saved results and execution logs.
 ```
