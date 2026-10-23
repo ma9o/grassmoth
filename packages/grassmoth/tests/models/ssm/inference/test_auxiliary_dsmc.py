@@ -31,7 +31,16 @@ def _context(target, method, *, mixture=False, count=4):
     path = jnp.linspace(-0.2, 0.4, target.times.size + 1)[1:, None]
     static = build_smoother_setup(
         target,
-        DsmcSpec(num_particles=count, drift=method),
+        DsmcSpec(
+            num_particles=count,
+            method=(
+                "particle_rwm"
+                if (method) == "none"
+                else "particle_amala"
+                if (method) == "amala"
+                else "particle_amala_plus"
+            ),
+        ),
         num_parameter_particles=2,
         free_mask=target.independent_mask,
         paid_mix=PaidMixture(jnp.zeros_like(path), jnp.ones_like(path), jnp.asarray([mixture])),
@@ -228,7 +237,17 @@ def test_conditional_tree_preserves_analytic_posterior(interval, parameter_count
     before = jnp.asarray(
         (means[labels] + rng.normal(size=(size, len(mean))) @ conditional_chol.T)[..., None]
     )
-    spec = DsmcSpec(num_particles=4, drift=drift, pilot_mixture=mixture)
+    spec = DsmcSpec(
+        num_particles=4,
+        method=(
+            "particle_rwm"
+            if (drift) == "none"
+            else "particle_amala"
+            if (drift) == "amala"
+            else "particle_amala_plus"
+        ),
+        pilot_mixture=mixture,
+    )
     setup = build_smoother_setup(
         target,
         spec,
@@ -417,7 +436,16 @@ def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, s
     times = np.arange(float(steps))
     target = interval_target(times, np.full((steps, 1), 0.2), times[:, None], ("last",))
     reference = jnp.linspace(-0.2, 0.3, steps)[:, None]
-    options = DsmcSpec(num_particles=5, drift=method)
+    options = DsmcSpec(
+        num_particles=5,
+        method=(
+            "particle_rwm"
+            if (method) == "none"
+            else "particle_amala"
+            if (method) == "amala"
+            else "particle_amala_plus"
+        ),
+    )
     setup = build_smoother_setup(
         target,
         options,
@@ -480,7 +508,7 @@ def test_dsmc_batching_preserves_nonlocal_mixture_transition(
     method, kappa, steps, interval, monkeypatch
 ):
     from grassmoth.artifacts.probability.families import DistributionFamily
-    from grassmoth.models.ssm.inference.samplers.particle import dsmc
+    from grassmoth.models.ssm.inference.samplers.particle import weights
     from grassmoth.models.ssm.inference.samplers.particle.dsmc import trace_step
 
     times = np.arange(float(steps))
@@ -516,20 +544,20 @@ def test_dsmc_batching_preserves_nonlocal_mixture_transition(
     )
 
     reductions = []
-    original = dsmc.weight_statistics
+    original = weights.weight_statistics
 
     def observed_weight_work(logits):
         jax.debug.callback(lambda: reductions.append(True))
         return original(logits)
 
-    monkeypatch.setattr(dsmc, "weight_statistics", observed_weight_work)
+    monkeypatch.setattr(weights, "weight_statistics", observed_weight_work)
     disabled = jax.jit(
         lambda enabled: trace_step(ctx._replace(diagnostic_weights=enabled), key, path, None)
     )(jnp.asarray([False]))
     jax.effects_barrier()
     assert not reductions
     for name, values in disabled.result.diagnostics.items():
-        if name.startswith("dsmc_weight_"):
+        if name.startswith("particle_weight_"):
             np.testing.assert_array_equal(values, jnp.zeros_like(values))
     np.testing.assert_array_equal(disabled.result.origin_path, parallel.result.origin_path)
     np.testing.assert_allclose(disabled.result.latent_path, parallel.result.latent_path)

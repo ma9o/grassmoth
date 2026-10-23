@@ -8,7 +8,13 @@ import numpy as np
 import pytest
 
 from grassmoth.artifacts.continuation import SamplerCheckpoint
-from grassmoth.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec, SamplerSpec
+from grassmoth.artifacts.sampling import (
+    DsmcSpec,
+    MarginalParticleGibbsSpec,
+    ParticleAGradSpec,
+    SamplerSpec,
+    TwistedParticleAGradSpec,
+)
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.types import MCMCPosterior
 from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
@@ -19,12 +25,25 @@ from grassmoth_test_support.inference import nonlinear_fit_fixture
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
-@pytest.mark.parametrize("companion", ["none", "centred_and_scale_noncentred_mh", "centred_nuts"])
+@pytest.mark.parametrize(
+    ("companion", "path_type"),
+    [
+        ("none", DsmcSpec),
+        ("centred_and_scale_noncentred_mh", DsmcSpec),
+        ("centred_nuts", DsmcSpec),
+        ("none", ParticleAGradSpec),
+        ("none", TwistedParticleAGradSpec),
+    ],
+)
 @pytest.mark.inference(concern="warmup")
-def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(companion):
+def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(
+    companion, path_type
+):
     prepared, panel = nonlinear_fit_fixture()
     settings = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(companion=companion, dsmc=DsmcSpec(num_particles=4)),
+        algorithm=MarginalParticleGibbsSpec(
+            companion=companion, path_update=path_type(num_particles=4)
+        ),
         num_warmup=40,
         num_samples_per_chain=4,
         num_chains=2,

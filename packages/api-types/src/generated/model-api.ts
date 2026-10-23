@@ -620,8 +620,6 @@ export interface components {
              */
             readonly interpretation: "prior_predictive";
         };
-        /** @enum {string} */
-        readonly AuxiliaryDrift: "none" | "amala" | "amala_plus";
         /**
          * BernoulliLogitsLawSpec[Expression]
          * @description The BernoulliLogits conditional law.
@@ -1449,16 +1447,16 @@ export interface components {
          */
         readonly "DsmcSpec-Input": {
             /**
+             * @description Auxiliary law for conditional dSMC. particle_rwm (kappa 0) centres the auxiliary point on the current state. particle_amala (Algorithm 3) drifts it along the gradient of the local prior and observation terms; particle_amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & Särkkä (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4). (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly method: "particle_amala" | "particle_amala_plus" | "particle_rwm";
+            /**
              * Num Particles
              * @description Particles per sweep, including the current path. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & Särkkä 2022, section 4).
              * @default 64
              */
             readonly num_particles?: number;
-            /**
-             * @description Gradient information in the auxiliary point. none (kappa 0, Particle-RWM) centres it on the current state. amala (kappa 1, Algorithm 3) drifts it along the gradient of the local prior and observation terms; amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & Särkkä (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4).
-             * @default none
-             */
-            readonly drift?: components["schemas"]["AuxiliaryDrift"];
             /** @description Per-time-step scale: adapted towards a movement target, or fixed. */
             readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
             /**
@@ -1484,16 +1482,16 @@ export interface components {
          */
         readonly "DsmcSpec-Output": {
             /**
+             * @description Auxiliary law for conditional dSMC. particle_rwm (kappa 0) centres the auxiliary point on the current state. particle_amala (Algorithm 3) drifts it along the gradient of the local prior and observation terms; particle_amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & Särkkä (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4). (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly method: "particle_amala" | "particle_amala_plus" | "particle_rwm";
+            /**
              * Num Particles
              * @description Particles per sweep, including the current path. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & Särkkä 2022, section 4).
              * @default 64
              */
             readonly num_particles: number;
-            /**
-             * @description Gradient information in the auxiliary point. none (kappa 0, Particle-RWM) centres it on the current state. amala (kappa 1, Algorithm 3) drifts it along the gradient of the local prior and observation terms; amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & Särkkä (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4).
-             * @default none
-             */
-            readonly drift: components["schemas"]["AuxiliaryDrift"];
             /** @description Per-time-step scale: adapted towards a movement target, or fixed. */
             readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
             /**
@@ -1517,6 +1515,11 @@ export interface components {
          *     their reference probability is not that move's rejection probability.
          */
         readonly DsmcWeightDiagnostics: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "dsmc";
             readonly phase: components["schemas"]["DiagnosticPhase"];
             /** Tree */
             readonly tree: readonly components["schemas"]["DsmcNodeWeightDiagnostics"][];
@@ -5284,10 +5287,10 @@ export interface components {
         };
         /**
          * MarginalParticleGibbsSpec
-         * @description Marginalized parameter ensemble and conditional dSMC trajectory updates.
+         * @description Marginalized parameter ensemble and exact conditional trajectory updates.
          *
          *     m-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around
-         *     a shared auxiliary point, runs conditional dSMC against the posterior mixture over
+         *     a shared auxiliary point, runs conditional SMC against the posterior mixture over
          *     them and selects a parameter together with the new path. Parameter moves are thus
          *     marginalized over paths, as in PMMH, instead of conditioned on one. The proposal
          *     covariance starts from the initializer and is re-estimated at the end of each
@@ -5310,8 +5313,8 @@ export interface components {
              * @default null
              */
             readonly tempering?: components["schemas"]["GaussianReferenceTemperingSpec-Input"] | null;
-            /** @description Path update. */
-            readonly dsmc?: components["schemas"]["DsmcSpec-Input"];
+            /** @description Exact path update. */
+            readonly path_update?: components["schemas"]["PathUpdateSpec-Input"];
             /**
              * Parameter Proposal
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
@@ -5347,10 +5350,10 @@ export interface components {
         };
         /**
          * MarginalParticleGibbsSpec
-         * @description Marginalized parameter ensemble and conditional dSMC trajectory updates.
+         * @description Marginalized parameter ensemble and exact conditional trajectory updates.
          *
          *     m-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around
-         *     a shared auxiliary point, runs conditional dSMC against the posterior mixture over
+         *     a shared auxiliary point, runs conditional SMC against the posterior mixture over
          *     them and selects a parameter together with the new path. Parameter moves are thus
          *     marginalized over paths, as in PMMH, instead of conditioned on one. The proposal
          *     covariance starts from the initializer and is re-estimated at the end of each
@@ -5373,8 +5376,8 @@ export interface components {
              * @default null
              */
             readonly tempering: components["schemas"]["GaussianReferenceTemperingSpec-Output"] | null;
-            /** @description Path update. */
-            readonly dsmc: components["schemas"]["DsmcSpec-Output"];
+            /** @description Exact path update. */
+            readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
             /**
              * Parameter Proposal
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
@@ -6293,6 +6296,66 @@ export interface components {
              */
             readonly status: "passed" | "failed" | "not_evaluated";
         };
+        /**
+         * ParticleAGradSpec
+         * @description Sequential conditional SMC with exact Gaussian transition-informed proposals.
+         *
+         *     Particle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary
+         *     variable in the weights. Parameter labels remain marginalized. Strong future
+         *     information or multiple modes can reduce mixing; the target stays exact.
+         */
+        readonly "ParticleAGradSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "particle_agrad";
+            /**
+             * Num Particles
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @default 64
+             */
+            readonly num_particles?: number;
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
+            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
+            /**
+             * Kappa
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @default 1
+             * @enum {integer}
+             */
+            readonly kappa?: 0 | 1;
+        };
+        /**
+         * ParticleAGradSpec
+         * @description Sequential conditional SMC with exact Gaussian transition-informed proposals.
+         *
+         *     Particle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary
+         *     variable in the weights. Parameter labels remain marginalized. Strong future
+         *     information or multiple modes can reduce mixing; the target stays exact.
+         */
+        readonly "ParticleAGradSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "particle_agrad";
+            /**
+             * Num Particles
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @default 64
+             */
+            readonly num_particles: number;
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
+            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
+            /**
+             * Kappa
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @default 1
+             * @enum {integer}
+             */
+            readonly kappa: 0 | 1;
+        };
         /** @enum {string} */
         readonly ParticleDiagnosticMetric: "particle_identity" | "parameter_movement" | "particle_weights";
         readonly ParticleDiagnosticMetrics: readonly components["schemas"]["ParticleDiagnosticMetric"][];
@@ -6368,7 +6431,7 @@ export interface components {
              */
             readonly amala_grad_norm_max: number | null;
             readonly initialization: components["schemas"]["InitializationDiagnostics"];
-            readonly dsmc_weights: components["schemas"]["DsmcWeightDiagnostics"] | null;
+            readonly path_weights: components["schemas"]["PathWeightDiagnostics"] | null;
             /** @default null */
             readonly tempering: components["schemas"]["TemperingDiagnostics"] | null;
         };
@@ -6432,6 +6495,9 @@ export interface components {
             /** Nonfinite Fraction */
             readonly nonfinite_fraction: number;
         };
+        readonly "PathUpdateSpec-Input": components["schemas"]["DsmcSpec-Input"] | components["schemas"]["ParticleAGradSpec-Input"] | components["schemas"]["TwistedParticleAGradSpec-Input"];
+        readonly "PathUpdateSpec-Output": components["schemas"]["DsmcSpec-Output"] | components["schemas"]["ParticleAGradSpec-Output"] | components["schemas"]["TwistedParticleAGradSpec-Output"];
+        readonly PathWeightDiagnostics: components["schemas"]["DsmcWeightDiagnostics"] | components["schemas"]["SequentialWeightDiagnostics"];
         /**
          * PersistenceTransformSpec
          * @description Map persistence p to -log(p) divided by its explicit interval in days.
@@ -7140,6 +7206,20 @@ export interface components {
             readonly source_columns: readonly string[];
         };
         /**
+         * SequentialWeightDiagnostics
+         * @description Conditional-filter weights in time order, including final path selection.
+         */
+        readonly SequentialWeightDiagnostics: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "sequential";
+            readonly phase: components["schemas"]["DiagnosticPhase"];
+            /** Filters */
+            readonly filters: readonly components["schemas"]["ParticleWeightDiagnostics"][];
+        };
+        /**
          * SimulateInput[GitOid]
          * @description Generate histories from a selected model and an explicit simulation design.
          */
@@ -7816,6 +7896,68 @@ export interface components {
              * @enum {string}
              */
             readonly kind: "transferred";
+        };
+        /**
+         * TwistedParticleAGradSpec
+         * @description Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.
+         *
+         *     A parallel backward information scan guides a sequential conditional filter.
+         *     Proposals combine exact nonlinear transition means with the approximate twist;
+         *     their normalized densities and twist ratios are paid in full. Poor local fits
+         *     and multiple modes cost efficiency, never change the target (section 4.4).
+         */
+        readonly "TwistedParticleAGradSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "twisted_particle_agrad";
+            /**
+             * Num Particles
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @default 64
+             */
+            readonly num_particles?: number;
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
+            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
+            /**
+             * Kappa
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @default 1
+             * @enum {integer}
+             */
+            readonly kappa?: 0 | 1;
+        };
+        /**
+         * TwistedParticleAGradSpec
+         * @description Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.
+         *
+         *     A parallel backward information scan guides a sequential conditional filter.
+         *     Proposals combine exact nonlinear transition means with the approximate twist;
+         *     their normalized densities and twist ratios are paid in full. Poor local fits
+         *     and multiple modes cost efficiency, never change the target (section 4.4).
+         */
+        readonly "TwistedParticleAGradSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "twisted_particle_agrad";
+            /**
+             * Num Particles
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @default 64
+             */
+            readonly num_particles: number;
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
+            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
+            /**
+             * Kappa
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @default 1
+             * @enum {integer}
+             */
+            readonly kappa: 0 | 1;
         };
         /**
          * UnknownLawProvenance

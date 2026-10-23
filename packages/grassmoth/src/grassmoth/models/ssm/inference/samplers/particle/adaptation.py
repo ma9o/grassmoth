@@ -7,7 +7,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
-from grassmoth.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
+from grassmoth.artifacts.sampling import FixedLatentStepSpec, PathUpdateSpec
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.mcmc_state import _clip_scale
 
@@ -21,7 +21,7 @@ DELTA_MIN = 1e-5
 DELTA_MAX = 10.0
 
 
-def initial_delta(spec: DsmcSpec) -> float:
+def initial_delta(spec: PathUpdateSpec) -> float:
     """Resolve the assigned fixed scale or the adaptation starting value."""
     return (
         spec.latent_step.delta
@@ -37,7 +37,7 @@ class LatentAdaptation(NamedTuple):
     target: jax.Array
 
 
-def latent_adaptation(spec: DsmcSpec) -> LatentAdaptation:
+def latent_adaptation(spec: PathUpdateSpec) -> LatentAdaptation:
     """Resolve the authored scale policy before tracing any transitions."""
     return LatentAdaptation(
         enabled=scalar_operand(value=not isinstance(spec.latent_step, FixedLatentStepSpec)),

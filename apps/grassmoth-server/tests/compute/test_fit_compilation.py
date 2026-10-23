@@ -102,7 +102,7 @@ def test_particle_fit_settings_reuse_jax_executable_and_preserve_transitions(tmp
                 initialization.pilot_proposal_variance,
                 scalar_operand(value=fixed),
             ),
-            dsmc=DsmcSpec(num_particles=4, latent_step=FixedLatentStepSpec())
+            path_update=DsmcSpec(num_particles=4, latent_step=FixedLatentStepSpec())
             if fixed
             else DsmcSpec(num_particles=4),
         )

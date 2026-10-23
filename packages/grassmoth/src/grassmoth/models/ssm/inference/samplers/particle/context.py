@@ -126,8 +126,7 @@ def build_smoother_context(
 
         return jax.vmap(_one_context)(contexts).astype(traj_dtype)
 
-    def _score_labels(path: jnp.ndarray) -> TrajectoryLabelScores:
-        trajectory_log_probs = _trajectory_log_probs(path)
+    def _label_scores_from_densities(trajectory_log_probs: jnp.ndarray) -> TrajectoryLabelScores:
         # The Barker correction belongs only to the label law. Preserve the
         # uncorrected exact densities for the selected chain state's caches.
         return TrajectoryLabelScores(
@@ -135,6 +134,9 @@ def build_smoother_context(
             trajectory_log_probs,
             parameter_log_priors + trajectory_log_probs,
         )
+
+    def _score_labels(path: jnp.ndarray) -> TrajectoryLabelScores:
+        return _label_scores_from_densities(_trajectory_log_probs(path))
 
     return SmootherContext(
         contexts=contexts,
@@ -156,6 +158,7 @@ def build_smoother_context(
         transition_next_value_grad_by_param=_transition_next_value_grad_by_param,
         pairwise_transition_log_probs=_pairwise_transition_log_probs,
         score_labels=_score_labels,
+        label_scores_from_densities=_label_scores_from_densities,
         intervals=static.intervals,
         diagnostic_weights=static.diagnostic_weights,
     )

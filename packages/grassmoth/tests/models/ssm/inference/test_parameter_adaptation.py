@@ -84,7 +84,7 @@ def test_adapted_particle_kernel_recovers_correlated_unequal_scale_gaussian(prop
     assert isinstance(initialization, ParticleInitialization)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        dsmc=DsmcSpec(num_particles=4),
+        path_update=DsmcSpec(num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.02,
         parameter_preconditioner_chol=initialization.parameter_chol,

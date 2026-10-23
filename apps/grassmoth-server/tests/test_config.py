@@ -45,11 +45,12 @@ class TestSamplerSpec:
         options = result.algorithm
         assert isinstance(options, MarginalParticleGibbsSpec)
         assert options.n_parameter_particles == 2
-        assert options.dsmc.num_particles == 64
-        assert options.dsmc.drift == "none"
-        assert options.dsmc.pilot_mixture is True
-        assert options.dsmc.latent_block_coords == 1
-        assert options.dsmc.latent_step == AdaptedLatentStepSpec(target=0.5)
+        assert options.path_update.num_particles == 64
+        assert isinstance(options.path_update, DsmcSpec)
+        assert options.path_update.drift == "none"
+        assert options.path_update.pilot_mixture is True
+        assert options.path_update.latent_block_coords == 1
+        assert options.path_update.latent_step == AdaptedLatentStepSpec(target=0.5)
         assert options.parameter_proposal == "random_walk"
         encoded = result.model_dump_json()
         assert SamplerSpec.model_validate_json(encoded) == result
@@ -64,7 +65,7 @@ class TestSamplerSpec:
             num_chains=2,
             seed=3,
             algorithm=MarginalParticleGibbsSpec(
-                dsmc=DsmcSpec(num_particles=8, latent_step=FixedLatentStepSpec(delta=0.31))
+                path_update=DsmcSpec(num_particles=8, latent_step=FixedLatentStepSpec(delta=0.31))
             ),
         )
         config = _make_pipeline_config()
@@ -94,7 +95,7 @@ class TestSamplerSpec:
         ) == (0, 30, 4, 0, 90)
         assert resolved.algorithm is configured.algorithm
         assert isinstance(resolved.algorithm, MarginalParticleGibbsSpec)
-        assert resolved.algorithm.dsmc.latent_step == FixedLatentStepSpec(delta=0.31)
+        assert resolved.algorithm.path_update.latent_step == FixedLatentStepSpec(delta=0.31)
         assert (
             configured.num_warmup,
             configured.num_samples_per_chain,
@@ -156,12 +157,12 @@ FULL_CONFIG = textwrap.dedent("""\
         algorithm:
           method: mpgibbs
           n_parameter_particles: 3
-          dsmc:
+          path_update:
             num_particles: 24
             latent_step:
               kind: fixed
               delta: 0.29
-            drift: amala
+            method: particle_amala
           param_target_accept: 0.4
           initialization:
             scale: 0.25
@@ -225,10 +226,13 @@ class TestLoadConfig:
         assert cfg.inference.sampler.seed == 123
         assert cfg.inference.compute_loo_diagnostics is False
         assert isinstance(cfg.inference.sampler.algorithm, MarginalParticleGibbsSpec)
-        assert cfg.inference.sampler.algorithm.dsmc.num_particles == 24
+        assert cfg.inference.sampler.algorithm.path_update.num_particles == 24
         assert cfg.inference.sampler.algorithm.n_parameter_particles == 3
-        assert cfg.inference.sampler.algorithm.dsmc.latent_step == FixedLatentStepSpec(delta=0.29)
-        assert cfg.inference.sampler.algorithm.dsmc.drift == "amala"
+        assert cfg.inference.sampler.algorithm.path_update.latent_step == FixedLatentStepSpec(
+            delta=0.29
+        )
+        assert isinstance(cfg.inference.sampler.algorithm.path_update, DsmcSpec)
+        assert cfg.inference.sampler.algorithm.path_update.drift == "amala"
         assert cfg.inference.sampler.algorithm.param_target_accept == 0.4
         assert cfg.inference.sampler.algorithm.initialization == GaussianInitializationSpec(
             scale=0.25

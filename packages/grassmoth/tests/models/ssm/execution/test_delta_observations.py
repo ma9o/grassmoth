@@ -425,7 +425,7 @@ def _conditioned_initial_state(problem):
     runtime = problem.runtime
     kernel = build_marginal_particle_gibbs_kernel(
         runtime,
-        dsmc=DsmcSpec(num_particles=4),
+        path_update=DsmcSpec(num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=problem.exact_constraints,
@@ -496,7 +496,17 @@ def test_conditioned_smoother_traces_with_missing_and_observed_coordinates(point
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
         paid_mix=PaidMixture(path, jnp.ones_like(path), jnp.asarray([True])),
-        dsmc=DsmcSpec(num_particles=4, drift=proposal, latent_block_coords=1),
+        path_update=DsmcSpec(
+            num_particles=4,
+            method=(
+                "particle_rwm"
+                if (proposal) == "none"
+                else "particle_amala"
+                if (proposal) == "amala"
+                else "particle_amala_plus"
+            ),
+            latent_block_coords=1,
+        ),
     )
     shape, _ = jax.eval_shape(kernel.step_fn, state, jax.random.key(1))
     assert shape.latent_trajectory.shape == (3, 2)
@@ -514,7 +524,17 @@ def test_particle_updates_keep_exact_readings_and_move_missing_states(point_prob
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
         paid_mix=PaidMixture(path, jnp.ones_like(path), jnp.asarray([True])),
-        dsmc=DsmcSpec(num_particles=16, drift=proposal, latent_block_coords=1),
+        path_update=DsmcSpec(
+            num_particles=16,
+            method=(
+                "particle_rwm"
+                if (proposal) == "none"
+                else "particle_amala"
+                if (proposal) == "amala"
+                else "particle_amala_plus"
+            ),
+            latent_block_coords=1,
+        ),
     )
     step = jax.jit(kernel.step_fn)
     missing_values = []

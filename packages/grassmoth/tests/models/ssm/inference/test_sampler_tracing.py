@@ -27,7 +27,7 @@ def test_particle_trace_records_the_same_transition_and_selected_path(
     joint = jnp.linspace(-0.2, 0.3, steps + 1)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        dsmc=DsmcSpec(num_particles=8),
+        path_update=DsmcSpec(num_particles=8),
         num_parameter_particles=labels,
         param_step_size=0.3,
         parameter_proposal=proposal,

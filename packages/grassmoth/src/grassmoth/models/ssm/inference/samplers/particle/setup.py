@@ -1,4 +1,4 @@
-"""Compile the shared conditional dSMC target for one or several parameter labels."""
+"""Compile the shared conditional particle target for one or several parameter labels."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 
+from grassmoth.artifacts.sampling import DsmcSpec
 from grassmoth.models.ssm.inference.samplers.particle.contract import SmootherSetup
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
     build_particle_diagnostic_flags,
@@ -15,7 +16,7 @@ from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
 if TYPE_CHECKING:
     from collections.abc import Collection
 
-    from grassmoth.artifacts.sampling import DsmcSpec, ParticleDiagnosticMetric
+    from grassmoth.artifacts.sampling import ParticleDiagnosticMetric, PathUpdateSpec
     from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
     from grassmoth.models.ssm.inference.targets.particle import (
         ParticleContext,
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 
 def build_smoother_setup(
     target: ParticleTarget,
-    spec: DsmcSpec,
+    spec: PathUpdateSpec,
     *,
     num_parameter_particles: int,
     free_mask: jax.Array,
@@ -52,8 +53,8 @@ def build_smoother_setup(
         latent_free_mask=free_mask,
         num_particles=spec.num_particles,
         num_parameter_particles=num_parameter_particles,
-        drift=spec.drift,
-        latent_block_coords=spec.latent_block_coords,
+        drift=spec.drift if isinstance(spec, DsmcSpec) else "none",
+        latent_block_coords=spec.latent_block_coords if isinstance(spec, DsmcSpec) else "all",
         paid_mix=paid_mix,
         transition_initial_log_prob_fn=local_target.initial_log_prob,
         transition_value_grad_fn=local_target._transition_value_and_grad,

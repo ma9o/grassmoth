@@ -20,15 +20,15 @@
         "method": "mpgibbs",
         "n_parameter_particles": 2,
         "tempering": null,
-        "dsmc": {
+        "path_update": {
           "num_particles": 128,
-          "drift": "amala_plus",
           "latent_step": {
             "kind": "adapted",
             "target": 0.5
           },
           "latent_block_coords": 1,
-          "pilot_mixture": true
+          "pilot_mixture": true,
+          "method": "particle_amala_plus"
         },
         "parameter_proposal": "random_walk",
         "diagnostic_metrics": [

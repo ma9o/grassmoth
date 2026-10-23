@@ -12,6 +12,13 @@ from grassmoth.artifacts.sampling import LatentBlockSize
 FloatScalar = Float[Array, ""]
 
 
+def multinomial(key: jax.Array, logits: jax.Array, count: int) -> jax.Array:
+    """Draw by inverse CDF, with linear storage instead of a count-by-category Gumbel array."""
+    cumulative = jnp.cumsum(jax.nn.softmax(logits))
+    uniforms = jax.random.uniform(key, (count,), dtype=cumulative.dtype)
+    return jnp.minimum(jnp.searchsorted(cumulative, uniforms, side="right"), logits.size - 1)
+
+
 def coordinate_proposal_mask(
     key: jax.Array, free_mask: jax.Array, block_coords: LatentBlockSize
 ) -> jax.Array:

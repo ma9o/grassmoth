@@ -14,7 +14,7 @@ from grassmoth.artifacts.model.likelihood import (
     StudentTLawSpec,
 )
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import NutsDASpec, SamplerSpec
+from grassmoth.artifacts.sampling import DsmcSpec, NutsDASpec, SamplerSpec
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.compile.state_space import SequentialRecurrences
 
@@ -48,6 +48,20 @@ def validate_sampler_support(
             "Exact inference currently requires Gaussian latent diffusion for every state."
         )
     if isinstance(sampler.algorithm, NutsDASpec):
+        return None
+    if not isinstance(sampler.algorithm.path_update, DsmcSpec):
+        if sampler.algorithm.tempering is not None:
+            return ObservationPreflightFailure.rejected(
+                "Sequential guided path updates do not support tempering."
+            )
+        if compiled.state_space.requires_replay:
+            return ObservationPreflightFailure.rejected(
+                "Sequential guided path updates do not yet support deterministic recurrence replay."
+            )
+        if any(indicator.support.support_kind == "interval" for indicator in compiled.observations):
+            return ObservationPreflightFailure.rejected(
+                "Sequential guided path updates do not yet support interval observations."
+            )
         return None
     unsupported = tuple(
         ", ".join(compiled.states[index].name for index in stage.indices)

@@ -39,9 +39,9 @@ inference:
     algorithm:
       method: mpgibbs
       n_parameter_particles: 2
-      dsmc:
+      path_update:
         num_particles: 64
-        drift: none
+        method: particle_rwm
         latent_block_coords: 1
         latent_step:
           kind: adapted

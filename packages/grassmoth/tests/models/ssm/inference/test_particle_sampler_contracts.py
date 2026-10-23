@@ -12,11 +12,14 @@ from pydantic import ValidationError
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
     FixedLatentStepSpec,
+    GaussianReferenceTemperingSpec,
     MarginalParticleGibbsSpec,
+    ParticleAGradSpec,
     SamplerSpec,
+    TwistedParticleAGradSpec,
 )
 from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
-from grassmoth.models.ssm.compile.state_space import StateSpace
+from grassmoth.models.ssm.compile.state_space import AdditiveRecurrences, StateSpace
 from grassmoth.models.ssm.inference.samplers.mpgibbs import runner
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
@@ -26,12 +29,61 @@ from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitial
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
 from grassmoth.models.ssm.preparation.binding import BoundPanel
+from grassmoth.models.ssm.preparation.preflight import validate_sampler_support
 from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
 
 """Particle configuration and initialization contracts without compiling a sampler."""
 
 
 pytestmark = pytest.mark.contract
+
+
+@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
+@pytest.mark.parametrize("unsupported", ["interval", "replay", "tempering"])
+def test_guided_preflight_rejects_unsupported_models_before_compute(
+    monkeypatch, spec_type, unsupported
+):
+    from grassmoth.models.ssm import compiled_access
+
+    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
+    compiled = Mock(
+        spec=CompiledDynamicalModel,
+        state_space=StateSpace(
+            2,
+            (),
+            (0, 1),
+            (0,) if unsupported == "replay" else (0, 1),
+            (),
+            (AdditiveRecurrences((1,)),) if unsupported == "replay" else (),
+        ),
+        observations=(
+            Mock(support=Mock(support_kind="interval" if unsupported == "interval" else "point")),
+        ),
+    )
+    sampler = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(
+            path_update=spec_type(),
+            tempering=GaussianReferenceTemperingSpec() if unsupported == "tempering" else None,
+        )
+    )
+    failure = validate_sampler_support(compiled, sampler)
+    assert failure is not None
+    assert unsupported in failure.message
+
+
+@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
+def test_guided_configuration_roundtrip_and_continuation_identity(spec_type):
+    sampler = SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=spec_type(kappa=1)))
+    assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
+    assert sampler.kernel_identity != SamplerSpec().kernel_identity
+    assert (
+        sampler.kernel_identity
+        != SamplerSpec(
+            algorithm=MarginalParticleGibbsSpec(path_update=spec_type(kappa=0))
+        ).kernel_identity
+    )
+    with pytest.raises(ValidationError, match="latent_block_coords"):
+        spec_type.model_validate({"latent_block_coords": 1})
 
 
 @pytest.mark.parametrize(
@@ -63,7 +115,11 @@ def test_dsmc_boundary_owns_discrete_choices_and_scale_policy(settings):
     ],
 )
 def test_sampler_boundary_rejects_unknown_modes(field):
-    raw = {"dsmc": {field: "bogus"}} if field == "drift" else {field: "bogus"}
+    raw = (
+        {"path_update": {"method": "particle_rwm", field: "bogus"}}
+        if field == "drift"
+        else {field: "bogus"}
+    )
     with pytest.raises(ValidationError, match=field):
         MarginalParticleGibbsSpec.model_validate(raw)
 
@@ -111,7 +167,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         exact_constraints=None,
         initial_param_step_size=jnp.asarray([0.01]),
         initial_parameter_chol=jnp.eye(1),
-        dsmc=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.1)),
+        path_update=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.1)),
         min_scale=jnp.asarray([1e-6]),
         max_scale=jnp.asarray([1.0]),
     )

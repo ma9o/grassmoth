@@ -1,4 +1,4 @@
-"""Shared categorical weight measurements and their persisted DSMC projection."""
+"""Shared categorical weight measurements and tree or sequential projections."""
 
 from __future__ import annotations
 
@@ -14,12 +14,16 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     ParticleWeightDiagnostics,
     ParticleWeightMetric,
     ParticleWeightSummary,
+    SequentialWeightDiagnostics,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from grassmoth.artifacts.reports.posterior_diagnostics import DiagnosticPhase
+    from grassmoth.artifacts.reports.posterior_diagnostics import (
+        DiagnosticPhase,
+        PathWeightDiagnostics,
+    )
 
 
 def weight_statistics(logits: jax.Array) -> dict[ParticleWeightMetric, jax.Array]:
@@ -65,13 +69,30 @@ def weight_history_fields(
     }
 
 
-def summarize_dsmc_weights(
+def requested_weight_statistics(
+    logits: jax.Array, *, enabled: jax.Array | bool
+) -> dict[ParticleWeightMetric, jax.Array]:
+    """Skip all diagnostic reductions when weight measurements are disabled."""
+    result: dict[ParticleWeightMetric, jax.Array] = jax.lax.cond(
+        jnp.reshape(enabled, ()),
+        weight_statistics,
+        lambda values: {
+            metric: jnp.zeros(values.shape[:-1], dtype=values.dtype)
+            for metric in ParticleWeightMetric
+        },
+        logits,
+    )
+    return result
+
+
+def summarize_particle_weights(
     history: Mapping[str, jax.Array],
     *,
     num_steps: int,
     num_particles: int,
     phase: DiagnosticPhase,
-) -> DsmcWeightDiagnostics:
+    sequential: bool,
+) -> PathWeightDiagnostics:
     """Project native chain/sweep/node histories once for both particle sampler families."""
 
     def finite_scalar(value: np.floating) -> float | None:
@@ -105,6 +126,10 @@ def summarize_dsmc_weights(
             metrics={metric: values[index] for metric, values in summaries.items()},
         )
 
+    if sequential:
+        return SequentialWeightDiagnostics(
+            phase=phase, filters=tuple(weights(index, num_particles) for index in range(num_steps))
+        )
     nodes = tuple(
         (level, start, min(start + (1 << level), num_steps))
         for level in range((num_steps - 1).bit_length() + 1)

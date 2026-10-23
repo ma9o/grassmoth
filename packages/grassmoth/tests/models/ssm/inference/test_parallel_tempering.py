@@ -60,7 +60,7 @@ def _reference(target):
 def _local_kernel(target):
     return build_marginal_particle_gibbs_kernel(
         target,
-        dsmc=DsmcSpec(num_particles=4),
+        path_update=DsmcSpec(num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.4,
         parameter_proposal="pseudo_langevin",

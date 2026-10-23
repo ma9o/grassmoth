@@ -19,7 +19,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     MCMCEvidence,
     ParticleSamplerDiagnostics,
 )
-from grassmoth.artifacts.sampling import MarginalParticleGibbsSpec
+from grassmoth.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import (
     frozen_particle_tuning,
@@ -46,7 +46,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
     ReplicaExchangeKernel,
 )
 from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
-from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_dsmc_weights
+from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_particle_weights
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.types import (
     JointPosteriorDraws,
@@ -104,7 +104,7 @@ def fit_marginal_particle_gibbs(
         sampler.num_samples_per_chain,
         int(observations.shape[0]),
         int(observations.shape[1]) if observations.ndim >= 2 else 0,
-        options.dsmc.num_particles,
+        options.path_update.num_particles,
         options.n_parameter_particles,
     )
 
@@ -152,10 +152,14 @@ def fit_marginal_particle_gibbs(
             )
     if isinstance(initialization, InitializationFailure):
         return initialization
-    paid_mix = PaidMixture(
-        initialization.pilot_mean,
-        initialization.pilot_proposal_variance,
-        scalar_operand(value=options.dsmc.pilot_mixture),
+    paid_mix = (
+        PaidMixture(
+            initialization.pilot_mean,
+            initialization.pilot_proposal_variance,
+            scalar_operand(value=options.path_update.pilot_mixture),
+        )
+        if isinstance(options.path_update, DsmcSpec)
+        else None
     )
 
     phase_t0 = clock()
@@ -176,7 +180,7 @@ def fit_marginal_particle_gibbs(
             if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
             else initialization.paths[0],
             diagnostic_metrics=options.diagnostic_metrics,
-            dsmc=options.dsmc,
+            path_update=options.path_update,
         )
 
     kernel = make_kernel(bundle.runtime)
@@ -297,7 +301,9 @@ def fit_marginal_particle_gibbs(
         if options.parameter_proposal == "random_walk"
         else "m_pgibbs_pseudo_langevin",
         mcmc_phase_seconds=float(mcmc_phase_seconds),
-        drift=kernel.dsmc.drift,
+        drift=kernel.path_update.drift
+        if isinstance(kernel.path_update, DsmcSpec)
+        else ("observation" if kernel.path_update.kappa else "none"),
         diagnostic_metrics=kernel.diagnostic_metrics,
         param_target_accept=float(kernel.target_accept[0]),
         parameter_preconditioned=bool(kernel.preconditioned),
@@ -305,18 +311,21 @@ def fit_marginal_particle_gibbs(
         parameter_accept_rate=float(jnp.mean(summary_extra_fields["parameter_accept_prob"])),
         latent_update_fraction=float(jnp.mean(summary_extra_fields["latent_accept_prob"])),
         latent_frozen_fraction=float(jnp.mean(summary_extra_fields["latent_frozen_frac"])),
-        latent_block_coords=kernel.dsmc.latent_block_coords,
+        latent_block_coords=kernel.path_update.latent_block_coords
+        if isinstance(kernel.path_update, DsmcSpec)
+        else "all",
         initial_param_step_size=jax.device_get(run_result.initial_param_step_size).tolist(),
         final_param_step_size=jax.device_get(run_result.final_param_step_size).tolist(),
         chain_post_warmup_complete_log_posterior_mean=jax.device_get(
             run_result.post_warmup_complete_log_posterior_mean
         ).tolist(),
         initialization=initialization.diagnostics,
-        dsmc_weights=summarize_dsmc_weights(
+        path_weights=summarize_particle_weights(
             summary_extra_fields,
             num_steps=len(bundle.runtime.times),
-            num_particles=options.dsmc.num_particles,
+            num_particles=options.path_update.num_particles,
             phase=diagnostic_summary_phase,
+            sequential=not isinstance(options.path_update, DsmcSpec),
         )
         if "particle_weights" in kernel.diagnostic_metrics
         else None,

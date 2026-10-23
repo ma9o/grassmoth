@@ -134,13 +134,13 @@ New studies initialize their local bare repository on first use. On a fresh chec
 
 ```bash
 git clone --mirror data/HEALTHDEMO/study/history.bundle data/HEALTHDEMO/study/history.git
-git --git-dir=data/HEALTHDEMO/study/history.git config grassmoth.format 29
+git --git-dir=data/HEALTHDEMO/study/history.git config grassmoth.format 30
 ```
 
 #### Storage format
 
 The [storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/git_objects.py)
-requires format 29. Start a new study or restore a format-29 bundle. The application
+requires format 30. Start a new study or restore a format-30 bundle. The application
 reads only this format and does not perform automatic migrations.
 
 ### Local stack
@@ -184,8 +184,8 @@ Use `local` to fit on this machine; the other
 [hardware enum values](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py)
 select Modal GPUs. Select `inference.sampler.algorithm: {method: nuts_da}` for
 joint parameter/state NUTS. The particle sampler is `method: mpgibbs`; its
-`companion` adds conditional MH or NUTS parameter moves, and its `dsmc` settings
-are in the [sampler contract](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
+`companion` adds conditional MH or NUTS parameter moves, and its `path_update` settings
+select Particle-RWM, aMALA, aMALA+, aGRAD or twisted aGRAD in the [sampler contract](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
 The [Modal compute adapter](../../apps/grassmoth-server/src/grassmoth_server/actions/fit/remote.py)
 uses the installed Modal credentials, creates an ephemeral
 `grassmoth-server` app with the current source, and reuses

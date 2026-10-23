@@ -17,7 +17,9 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
     MarginalParticleGibbsSpec,
+    ParticleAGradSpec,
     SamplerSpec,
+    TwistedParticleAGradSpec,
 )
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
@@ -111,7 +113,7 @@ def test_initialization_chart_excludes_fixed_states_and_replays_static_and_accum
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize("leaf", ["amala", "amala_plus"])
+@pytest.mark.parametrize("leaf", ["amala", "amala_plus", "agrad", "twisted"])
 def test_production_fit_consumes_gaussian_initialization(leaf):
     prepared, panel = nonlinear_fit_fixture()
     result = fit(
@@ -125,9 +127,24 @@ def test_production_fit_consumes_gaussian_initialization(leaf):
             seed=7,
             algorithm=MarginalParticleGibbsSpec(
                 diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights")
-                if leaf == "amala_plus"
+                if leaf != "amala"
                 else (),
-                dsmc=DsmcSpec(num_particles=4, drift=leaf),
+                path_update=ParticleAGradSpec(num_particles=4)
+                if leaf == "agrad"
+                else (
+                    TwistedParticleAGradSpec(num_particles=4)
+                    if leaf == "twisted"
+                    else DsmcSpec(
+                        num_particles=4,
+                        method=(
+                            "particle_rwm"
+                            if (leaf) == "none"
+                            else "particle_amala"
+                            if (leaf) == "amala"
+                            else "particle_amala_plus"
+                        ),
+                    )
+                ),
             ),
         ),
         reparam=None,
@@ -143,13 +160,19 @@ def test_production_fit_consumes_gaussian_initialization(leaf):
     assert result.diagnostics.phase_extra_fields is not None
     retained = result.diagnostics.phase_extra_fields["post_warmup"]
     if leaf == "amala_plus":
-        assert evidence.dsmc_weights is not None
-        assert evidence.dsmc_weights.phase == "post_warmup"
-        assert evidence.dsmc_weights.terminal.candidates == 4
-        assert retained["dsmc_weight_ess"].shape == (2, 3, len(evidence.dsmc_weights.tree) + 1)
+        assert evidence.path_weights is not None
+        assert evidence.path_weights.kind == "dsmc"
+        assert evidence.path_weights.phase == "post_warmup"
+        assert evidence.path_weights.terminal.candidates == 4
+        assert retained["particle_weight_ess"].shape == (2, 3, len(evidence.path_weights.tree) + 1)
+    elif leaf in ("agrad", "twisted"):
+        assert evidence.path_weights is not None
+        assert evidence.path_weights.kind == "sequential"
+        assert len(evidence.path_weights.filters) == len(panel.times)
+        assert retained["particle_weight_ess"].shape == (2, 3, len(panel.times))
     else:
-        assert evidence.dsmc_weights is None
-        assert not any(key.startswith("dsmc_weight_") for key in retained)
+        assert evidence.path_weights is None
+        assert not any(key.startswith("particle_weight_") for key in retained)
     assert isinstance(evidence.initialization, GaussianInitializationDiagnostics)
     assert evidence.initialization.scale == 0.1
     assert evidence.parameter_preconditioned

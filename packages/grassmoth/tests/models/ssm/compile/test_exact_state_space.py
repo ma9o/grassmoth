@@ -198,7 +198,7 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        dsmc=DsmcSpec(num_particles=4, drift="amala_plus", latent_block_coords=1),
+        path_update=DsmcSpec(num_particles=4, method="particle_amala_plus", latent_block_coords=1),
     )
     after, info = jax.jit(kernel.step_fn)(
         _initial(target, coordinates, kernel=kernel), jax.random.key(4)
@@ -237,7 +237,7 @@ def test_parameter_free_model_moves_paths_and_replays_static_and_accumulated_sta
         target,
         num_parameter_particles=2,
         exact_constraints=problem.exact_constraints,
-        dsmc=DsmcSpec(
+        path_update=DsmcSpec(
             num_particles=8, latent_step=FixedLatentStepSpec(delta=0.1), pilot_mixture=False
         ),
     )
@@ -275,7 +275,7 @@ def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        dsmc=DsmcSpec(num_particles=4, drift="amala_plus", latent_block_coords=1),
+        path_update=DsmcSpec(num_particles=4, method="particle_amala_plus", latent_block_coords=1),
     )
     after, info = jax.jit(kernel.step_fn)(_initial(target, path, kernel=kernel), jax.random.key(6))
     np.testing.assert_array_equal(after.latent_trajectory[:, input_index], path[:, input_index])
@@ -332,7 +332,7 @@ def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="pseudo_langevin",
-        dsmc=DsmcSpec(num_particles=4, drift="amala_plus", latent_block_coords=1),
+        path_update=DsmcSpec(num_particles=4, method="particle_amala_plus", latent_block_coords=1),
     )
 
     def chain(key):
@@ -591,7 +591,16 @@ def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(metho
         num_parameter_particles=2,
         param_step_size=0.1,
         parameter_proposal="random_walk",
-        dsmc=DsmcSpec(num_particles=9, drift=method),
+        path_update=DsmcSpec(
+            num_particles=9,
+            method=(
+                "particle_rwm"
+                if (method) == "none"
+                else "particle_amala"
+                if (method) == "amala"
+                else "particle_amala_plus"
+            ),
+        ),
     )
 
     def draw_and_step(key):
@@ -652,7 +661,7 @@ def test_parallel_accumulator_preserves_an_exact_random_initial_value():
     target = problem.runtime
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        dsmc=DsmcSpec(num_particles=4),
+        path_update=DsmcSpec(num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=target.exact_constraints,

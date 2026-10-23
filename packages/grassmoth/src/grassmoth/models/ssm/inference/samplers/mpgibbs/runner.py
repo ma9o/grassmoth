@@ -17,7 +17,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     ReplicaSwapCounts,
     TemperingDiagnostics,
 )
-from grassmoth.artifacts.sampling import FixedLatentStepSpec
+from grassmoth.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import restore_state, retain_state
 from grassmoth.models.ssm.inference.mcmc_state import (
@@ -258,7 +258,7 @@ def run_marginal_particle_gibbs(
             f"{chain_initial_latents.shape[0]} with num_chains={num_chains}."
         )
 
-    initial_latent_delta_value = initial_delta(kernel.dsmc)
+    initial_latent_delta_value = initial_delta(kernel.path_update)
     initial_latent_delta = jnp.full(
         (num_steps,),
         jnp.asarray(initial_latent_delta_value, dtype=observations.dtype),
@@ -311,7 +311,7 @@ def run_marginal_particle_gibbs(
     warmup_attempts = jnp.zeros_like(swap_attempted)
     warmup_rejections = jnp.zeros(swap_attempted.shape, dtype=betas.dtype)
     warmup_steps = scalar_operand(value=num_warmup, dtype=jnp.int32)
-    scale_adaptation = latent_adaptation(kernel.dsmc)
+    scale_adaptation = latent_adaptation(kernel.path_update)
     runtime_adaptation_rate = scalar_operand(value=adaptation_rate)
     ladder_interval = scalar_operand(
         value=1 if tempering is None else tempering.spec.adaptation_interval, dtype=jnp.int32
@@ -336,7 +336,7 @@ def run_marginal_particle_gibbs(
     )
     if continuation is not None and num_warmup == 0:
         initial = restore_state(initial, continuation.native_state)
-        scale = kernel.dsmc.latent_step
+        scale = kernel.path_update.latent_step
         if isinstance(scale, FixedLatentStepSpec):
             delta = jnp.full_like(initial.chains.latent_delta, scale.delta)
             initial = initial._replace(
@@ -588,7 +588,11 @@ def run_marginal_particle_gibbs(
             initial,
             num_warmup=num_warmup,
             num_samples=num_samples,
-            max_batch_size=max(kernel.dsmc.num_particles, (1 << (num_steps - 1).bit_length()) // 2),
+            max_batch_size=max(
+                kernel.path_update.num_particles, (1 << (num_steps - 1).bit_length()) // 2
+            )
+            if isinstance(kernel.path_update, DsmcSpec)
+            else 1,
             budget=compute_budget,
             target=target,
             path_dtype=states.latent_trajectory.dtype,

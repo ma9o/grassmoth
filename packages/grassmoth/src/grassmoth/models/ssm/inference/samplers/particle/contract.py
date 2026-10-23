@@ -125,5 +125,6 @@ class SmootherContext(NamedTuple):
     transition_next_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
     pairwise_transition_log_probs: Callable[..., jnp.ndarray]
     score_labels: Callable[[jnp.ndarray], TrajectoryLabelScores]
+    label_scores_from_densities: Callable[[jnp.ndarray], TrajectoryLabelScores]
     intervals: ParticleIntervalObservations | None
     diagnostic_weights: jnp.ndarray | bool

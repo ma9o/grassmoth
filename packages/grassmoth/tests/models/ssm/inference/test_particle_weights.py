@@ -13,7 +13,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     ParticleWeightMetric,
 )
 from grassmoth.models.ssm.inference.samplers.particle.weights import (
-    summarize_dsmc_weights,
+    summarize_particle_weights,
     weight_statistics,
 )
 
@@ -72,7 +72,10 @@ def test_weight_payload_preserves_nodes_aggregates_and_nonfinite_evidence():
     }
     ess_key = ParticleWeightMetric.ESS.history_key
     history[ess_key] = history[ess_key].at[0, 0, 0].set(jnp.nan)
-    result = summarize_dsmc_weights(history, num_steps=5, num_particles=8, phase="post_warmup")
+    result = summarize_particle_weights(
+        history, num_steps=5, num_particles=8, phase="post_warmup", sequential=False
+    )
+    assert result.kind == "dsmc"
     assert [(node.level, node.start, node.stop) for node in result.tree] == [
         (0, 0, 1),
         (0, 1, 2),

@@ -1934,17 +1934,6 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "AuxiliaryDrift": {
-        "enum": [
-          "none",
-          "amala",
-          "amala_plus"
-        ],
-        "type": "string",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "BernoulliLogitsLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
         "description": "The BernoulliLogits conditional law.",
@@ -4734,17 +4723,23 @@
         "additionalProperties": false,
         "description": "Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.\n\nEach sweep refreshes an auxiliary point near the current path, draws candidates\naround it at every time step, and selects a new path through the conditional dSMC\ntree (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, Algorithm 4), whose depth grows with log T.\nThe auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).",
         "properties": {
+          "method": {
+            "default": "particle_rwm",
+            "description": "Auxiliary law for conditional dSMC. particle_rwm (kappa 0) centres the auxiliary point on the current state. particle_amala (Algorithm 3) drifts it along the gradient of the local prior and observation terms; particle_amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & S\u00e4rkk\u00e4 (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4).",
+            "enum": [
+              "particle_rwm",
+              "particle_amala",
+              "particle_amala_plus"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
           "num_particles": {
             "default": 64,
             "description": "Particles per sweep, including the current path. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, section 4).",
             "minimum": 2,
             "title": "Num Particles",
             "type": "integer"
-          },
-          "drift": {
-            "$ref": "#/components/schemas/AuxiliaryDrift",
-            "default": "none",
-            "description": "Gradient information in the auxiliary point. none (kappa 0, Particle-RWM) centres it on the current state. amala (kappa 1, Algorithm 3) drifts it along the gradient of the local prior and observation terms; amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & S\u00e4rkk\u00e4 (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4)."
           },
           "latent_step": {
             "$ref": "#/components/schemas/LatentStepSpec-Input",
@@ -4772,17 +4767,23 @@
         "additionalProperties": false,
         "description": "Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.\n\nEach sweep refreshes an auxiliary point near the current path, draws candidates\naround it at every time step, and selects a new path through the conditional dSMC\ntree (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, Algorithm 4), whose depth grows with log T.\nThe auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).",
         "properties": {
+          "method": {
+            "default": "particle_rwm",
+            "description": "Auxiliary law for conditional dSMC. particle_rwm (kappa 0) centres the auxiliary point on the current state. particle_amala (Algorithm 3) drifts it along the gradient of the local prior and observation terms; particle_amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & S\u00e4rkk\u00e4 (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4).",
+            "enum": [
+              "particle_rwm",
+              "particle_amala",
+              "particle_amala_plus"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
           "num_particles": {
             "default": 64,
             "description": "Particles per sweep, including the current path. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, section 4).",
             "minimum": 2,
             "title": "Num Particles",
             "type": "integer"
-          },
-          "drift": {
-            "$ref": "#/components/schemas/AuxiliaryDrift",
-            "default": "none",
-            "description": "Gradient information in the auxiliary point. none (kappa 0, Particle-RWM) centres it on the current state. amala (kappa 1, Algorithm 3) drifts it along the gradient of the local prior and observation terms; amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & S\u00e4rkk\u00e4 (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4)."
           },
           "latent_step": {
             "$ref": "#/components/schemas/LatentStepSpec-Output",
@@ -4801,8 +4802,8 @@
           }
         },
         "required": [
+          "method",
           "num_particles",
-          "drift",
           "latent_step",
           "latent_block_coords",
           "pilot_mixture"
@@ -4817,6 +4818,12 @@
         "additionalProperties": false,
         "description": "dSMC tree and terminal weight diagnostics.\n\nTree nodes are ordered by increasing level, then start time. Terminal weights\ninclude the exact full-path correction and precede the modified Gibbs move;\ntheir reference probability is not that move's rejection probability.",
         "properties": {
+          "kind": {
+            "const": "dsmc",
+            "default": "dsmc",
+            "title": "Kind",
+            "type": "string"
+          },
           "phase": {
             "$ref": "#/components/schemas/DiagnosticPhase"
           },
@@ -4832,6 +4839,7 @@
           }
         },
         "required": [
+          "kind",
           "phase",
           "tree",
           "terminal"
@@ -18717,7 +18725,7 @@
       },
       "MarginalParticleGibbsSpec-Input": {
         "additionalProperties": false,
-        "description": "Marginalized parameter ensemble and conditional dSMC trajectory updates.\n\nm-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around\na shared auxiliary point, runs conditional dSMC against the posterior mixture over\nthem and selects a parameter together with the new path. Parameter moves are thus\nmarginalized over paths, as in PMMH, instead of conditioned on one. The proposal\ncovariance starts from the initializer and is re-estimated at the end of each\nwarmup window (section 3.4).",
+        "description": "Marginalized parameter ensemble and exact conditional trajectory updates.\n\nm-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around\na shared auxiliary point, runs conditional SMC against the posterior mixture over\nthem and selects a parameter together with the new path. Parameter moves are thus\nmarginalized over paths, as in PMMH, instead of conditioned on one. The proposal\ncovariance starts from the initializer and is re-estimated at the end of each\nwarmup window (section 3.4).",
         "properties": {
           "method": {
             "const": "mpgibbs",
@@ -18744,9 +18752,9 @@
             "default": null,
             "description": "Gaussian-reference parallel tempering; null runs the exact posterior alone."
           },
-          "dsmc": {
-            "$ref": "#/components/schemas/DsmcSpec-Input",
-            "description": "Path update."
+          "path_update": {
+            "$ref": "#/components/schemas/PathUpdateSpec-Input",
+            "description": "Exact path update."
           },
           "parameter_proposal": {
             "default": "random_walk",
@@ -18797,7 +18805,7 @@
       },
       "MarginalParticleGibbsSpec-Output": {
         "additionalProperties": false,
-        "description": "Marginalized parameter ensemble and conditional dSMC trajectory updates.\n\nm-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around\na shared auxiliary point, runs conditional dSMC against the posterior mixture over\nthem and selects a parameter together with the new path. Parameter moves are thus\nmarginalized over paths, as in PMMH, instead of conditioned on one. The proposal\ncovariance starts from the initializer and is re-estimated at the end of each\nwarmup window (section 3.4).",
+        "description": "Marginalized parameter ensemble and exact conditional trajectory updates.\n\nm-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around\na shared auxiliary point, runs conditional SMC against the posterior mixture over\nthem and selects a parameter together with the new path. Parameter moves are thus\nmarginalized over paths, as in PMMH, instead of conditioned on one. The proposal\ncovariance starts from the initializer and is re-estimated at the end of each\nwarmup window (section 3.4).",
         "properties": {
           "method": {
             "const": "mpgibbs",
@@ -18824,9 +18832,9 @@
             "default": null,
             "description": "Gaussian-reference parallel tempering; null runs the exact posterior alone."
           },
-          "dsmc": {
-            "$ref": "#/components/schemas/DsmcSpec-Output",
-            "description": "Path update."
+          "path_update": {
+            "$ref": "#/components/schemas/PathUpdateSpec-Output",
+            "description": "Exact path update."
           },
           "parameter_proposal": {
             "default": "random_walk",
@@ -18873,7 +18881,7 @@
           "method",
           "n_parameter_particles",
           "tempering",
-          "dsmc",
+          "path_update",
           "parameter_proposal",
           "companion",
           "diagnostic_metrics",
@@ -21820,6 +21828,88 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "ParticleAGradSpec-Input": {
+        "additionalProperties": false,
+        "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nParticle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary\nvariable in the weights. Parameter labels remain marginalized. Strong future\ninformation or multiple modes can reduce mixing; the target stays exact.",
+        "properties": {
+          "method": {
+            "const": "particle_agrad",
+            "default": "particle_agrad",
+            "title": "Method",
+            "type": "string"
+          },
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Input",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+          },
+          "kappa": {
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Kappa",
+            "type": "integer"
+          }
+        },
+        "title": "ParticleAGradSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ParticleAGradSpec-Output": {
+        "additionalProperties": false,
+        "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nParticle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary\nvariable in the weights. Parameter labels remain marginalized. Strong future\ninformation or multiple modes can reduce mixing; the target stays exact.",
+        "properties": {
+          "method": {
+            "const": "particle_agrad",
+            "default": "particle_agrad",
+            "title": "Method",
+            "type": "string"
+          },
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Output",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+          },
+          "kappa": {
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Kappa",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "num_particles",
+          "latent_step",
+          "kappa"
+        ],
+        "title": "ParticleAGradSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "ParticleDiagnosticMetric": {
         "enum": [
           "particle_identity",
@@ -22005,10 +22095,10 @@
           "initialization": {
             "$ref": "#/components/schemas/InitializationDiagnostics"
           },
-          "dsmc_weights": {
+          "path_weights": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/DsmcWeightDiagnostics"
+                "$ref": "#/components/schemas/PathWeightDiagnostics"
               },
               {
                 "type": "null"
@@ -22051,7 +22141,7 @@
           "amala_grad_norm_mean",
           "amala_grad_norm_max",
           "initialization",
-          "dsmc_weights",
+          "path_weights",
           "tempering"
         ],
         "title": "ParticleSamplerDiagnostics",
@@ -22209,6 +22299,78 @@
         ],
         "title": "ParticleWeightSummary",
         "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "PathUpdateSpec-Input": {
+        "discriminator": {
+          "mapping": {
+            "particle_agrad": "#/components/schemas/ParticleAGradSpec-Input",
+            "particle_amala": "#/components/schemas/DsmcSpec-Input",
+            "particle_amala_plus": "#/components/schemas/DsmcSpec-Input",
+            "particle_rwm": "#/components/schemas/DsmcSpec-Input",
+            "twisted_particle_agrad": "#/components/schemas/TwistedParticleAGradSpec-Input"
+          },
+          "propertyName": "method"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DsmcSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/ParticleAGradSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/TwistedParticleAGradSpec-Input"
+          }
+        ],
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PathUpdateSpec-Output": {
+        "discriminator": {
+          "mapping": {
+            "particle_agrad": "#/components/schemas/ParticleAGradSpec-Output",
+            "particle_amala": "#/components/schemas/DsmcSpec-Output",
+            "particle_amala_plus": "#/components/schemas/DsmcSpec-Output",
+            "particle_rwm": "#/components/schemas/DsmcSpec-Output",
+            "twisted_particle_agrad": "#/components/schemas/TwistedParticleAGradSpec-Output"
+          },
+          "propertyName": "method"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DsmcSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/ParticleAGradSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/TwistedParticleAGradSpec-Output"
+          }
+        ],
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PathWeightDiagnostics": {
+        "discriminator": {
+          "mapping": {
+            "dsmc": "#/components/schemas/DsmcWeightDiagnostics",
+            "sequential": "#/components/schemas/SequentialWeightDiagnostics"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/DsmcWeightDiagnostics"
+          },
+          {
+            "$ref": "#/components/schemas/SequentialWeightDiagnostics"
+          }
+        ],
         "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
         "x-concern": "scientific_model"
@@ -24176,6 +24338,38 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "SequentialWeightDiagnostics": {
+        "additionalProperties": false,
+        "description": "Conditional-filter weights in time order, including final path selection.",
+        "properties": {
+          "kind": {
+            "const": "sequential",
+            "default": "sequential",
+            "title": "Kind",
+            "type": "string"
+          },
+          "phase": {
+            "$ref": "#/components/schemas/DiagnosticPhase"
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/ParticleWeightDiagnostics"
+            },
+            "title": "Filters",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "phase",
+          "filters"
+        ],
+        "title": "SequentialWeightDiagnostics",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "SimulateInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
         "description": "Generate histories from a selected model and an explicit simulation design.",
@@ -25984,6 +26178,88 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.continuation",
         "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "TwistedParticleAGradSpec-Input": {
+        "additionalProperties": false,
+        "description": "Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.\n\nA parallel backward information scan guides a sequential conditional filter.\nProposals combine exact nonlinear transition means with the approximate twist;\ntheir normalized densities and twist ratios are paid in full. Poor local fits\nand multiple modes cost efficiency, never change the target (section 4.4).",
+        "properties": {
+          "method": {
+            "const": "twisted_particle_agrad",
+            "default": "twisted_particle_agrad",
+            "title": "Method",
+            "type": "string"
+          },
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Input",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+          },
+          "kappa": {
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Kappa",
+            "type": "integer"
+          }
+        },
+        "title": "TwistedParticleAGradSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "TwistedParticleAGradSpec-Output": {
+        "additionalProperties": false,
+        "description": "Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.\n\nA parallel backward information scan guides a sequential conditional filter.\nProposals combine exact nonlinear transition means with the approximate twist;\ntheir normalized densities and twist ratios are paid in full. Poor local fits\nand multiple modes cost efficiency, never change the target (section 4.4).",
+        "properties": {
+          "method": {
+            "const": "twisted_particle_agrad",
+            "default": "twisted_particle_agrad",
+            "title": "Method",
+            "type": "string"
+          },
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Output",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+          },
+          "kappa": {
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Kappa",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "num_particles",
+          "latent_step",
+          "kappa"
+        ],
+        "title": "TwistedParticleAGradSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "UnknownLawProvenance": {

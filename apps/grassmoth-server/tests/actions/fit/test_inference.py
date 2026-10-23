@@ -201,9 +201,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             tuning=JointTuning(parameterization=CentredParameterizationRecord()),
         )
         telemetry = {
-            "dsmc_weight_ess": jnp.arange(2 * count * 3, dtype=jnp.float32).reshape(2, count, 3)
+            "particle_weight_ess": jnp.arange(2 * count * 3, dtype=jnp.float32).reshape(2, count, 3)
             + offset,
-            "dsmc_weight_entropy": jnp.full((2, count, 3), offset, dtype=jnp.float32),
+            "particle_weight_entropy": jnp.full((2, count, 3), offset, dtype=jnp.float32),
         }
         return MCMCPosterior.from_run(
             draws=JointPosteriorDraws(parameters, paths),

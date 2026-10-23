@@ -327,10 +327,10 @@ class ParticleWeightMetric(StrEnum):
     def history_key(self) -> str:
         """Native history field with axes chain, sweep, and weight stage.
 
-        Stages are real tree nodes in level order, followed by terminal selection.
-        The matching node coordinates belong to DsmcWeightDiagnostics.
+        Stages are tree nodes followed by terminal selection for dSMC, or
+        filter times for sequential updates. The report owns their coordinates.
         """
-        return f"dsmc_weight_{self.value}"
+        return f"particle_weight_{self.value}"
 
 
 class ParticleWeightSummary(Value):
@@ -377,9 +377,23 @@ class DsmcWeightDiagnostics(Value):
     their reference probability is not that move's rejection probability.
     """
 
+    kind: Literal["dsmc"] = "dsmc"
     phase: DiagnosticPhase
     tree: tuple[DsmcNodeWeightDiagnostics, ...]
     terminal: ParticleWeightDiagnostics
+
+
+class SequentialWeightDiagnostics(Value):
+    """Conditional-filter weights in time order, including final path selection."""
+
+    kind: Literal["sequential"] = "sequential"
+    phase: DiagnosticPhase
+    filters: tuple[ParticleWeightDiagnostics, ...]
+
+
+type PathWeightDiagnostics = Annotated[
+    DsmcWeightDiagnostics | SequentialWeightDiagnostics, Field(discriminator="kind")
+]
 
 
 class ReplicaSwapCounts(Value):
@@ -423,5 +437,5 @@ class ParticleSamplerDiagnostics(Value):
     amala_grad_norm_mean: float | None = None
     amala_grad_norm_max: float | None = None
     initialization: InitializationDiagnostics
-    dsmc_weights: DsmcWeightDiagnostics | None
+    path_weights: PathWeightDiagnostics | None
     tempering: TemperingDiagnostics | None = None

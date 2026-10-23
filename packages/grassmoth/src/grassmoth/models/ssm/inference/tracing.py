@@ -54,9 +54,23 @@ class ParameterProposalTraceRecord:
 
 @jax.tree_util.register_dataclass
 @dataclass(frozen=True)
+class SequentialSmootherTraceRecord:
+    """Sequential filter banks, their actual parent proposals, and backward selection."""
+
+    auxiliary: jax.Array
+    particles: jax.Array
+    proposal_centers: jax.Array  # noqa: F841, RUF100 - Explicit trace consumers inspect filter genealogy outside production source.
+    ancestors: jax.Array  # noqa: F841, RUF100 - Explicit trace consumers inspect filter genealogy outside production source.
+    filter_log_weights: jax.Array  # noqa: F841, RUF100 - Explicit trace consumers inspect filter genealogy outside production source.
+    terminal_selection: CategoricalTraceRecord  # noqa: F841, RUF100 - Explicit trace consumers inspect terminal selection outside production source.
+    selected_particles: jax.Array  # noqa: F841, RUF100 - Explicit trace consumers inspect filter genealogy outside production source.
+
+
+@jax.tree_util.register_dataclass
+@dataclass(frozen=True)
 class MarginalParticleTraceRecord:
     """A joint transition composed of its parameter proposal, smoother and final label draw."""
 
     parameters: ParameterProposalTraceRecord
-    smoother: SmootherTraceRecord
+    smoother: SmootherTraceRecord | SequentialSmootherTraceRecord
     label_selection: CategoricalTraceRecord  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.

@@ -283,6 +283,21 @@ class DsmcSpec(Value):
     The auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).
     """
 
+    method: Literal["particle_rwm", "particle_amala", "particle_amala_plus"] = Field(
+        default="particle_rwm",
+        description=(
+            "Auxiliary law for conditional dSMC. particle_rwm (kappa 0) centres the auxiliary "
+            "point on the current state. particle_amala (Algorithm 3) drifts it along the "
+            "gradient of the local prior and observation terms; particle_amala_plus (Algorithm "
+            "5) adds the next transition. With gradients the scale need only shrink like "
+            "D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & "
+            "Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and "
+            "twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & "
+            "Särkkä (2025) found gradient and plain proposals equally efficient per second "
+            "(section 4.1), with gradients more robust to sticky dynamics and very informative "
+            "observations (section 4.4)."
+        ),
+    )
     num_particles: int = Field(
         default=64,
         ge=2,
@@ -290,21 +305,6 @@ class DsmcSpec(Value):
             "Particles per sweep, including the current path. More particles give each time "
             "step more candidates, but each dSMC merge scores N x N candidate pairs, so memory "
             "and work per merge grow as N^2 (Corenflos, Chopin & Särkkä 2022, section 4)."
-        ),
-    )
-    drift: AuxiliaryDrift = Field(
-        default="none",
-        description=(
-            "Gradient information in the auxiliary point. none (kappa 0, Particle-RWM) "
-            "centres it on the current state. amala (kappa 1, Algorithm 3) drifts it along "
-            "the gradient of the local prior and observation terms; amala_plus (Algorithm 5) "
-            "adds the next transition. With gradients the scale need only shrink like "
-            "D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & "
-            "Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and "
-            "twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & "
-            "Särkkä (2025) found gradient and plain proposals equally efficient per second "
-            "(section 4.1), with gradients more robust to sticky dynamics and very informative "
-            "observations (section 4.4)."
         ),
     )
     latent_step: LatentStepSpec = Field(
@@ -338,12 +338,80 @@ class DsmcSpec(Value):
         ),
     )
 
+    @property
+    def drift(self) -> AuxiliaryDrift:
+        """The named auxiliary method owns its drift; dSMC owns path assembly."""
+        match self.method:
+            case "particle_rwm":
+                return "none"
+            case "particle_amala":
+                return "amala"
+            case "particle_amala_plus":
+                return "amala_plus"
+
+
+_GUIDED_PARTICLES = (
+    "Particles per sweep, including the current path. Each extends a parent chosen at the "
+    "previous time, so work grows linearly in particles and times, and the filter's depth "
+    "grows linearly with the number of times (Corenflos & Finke 2024, section 4.7)."
+)
+_GUIDED_STEP = (
+    "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep "
+    "proposals near the current path; large ones let the dynamics dominate, approaching "
+    "conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+)
+_GUIDED_KAPPA = (
+    "1 shifts the auxiliary point along the gradient of the observation densities, mixed "
+    "over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is "
+    "a Langevin step on the observation term: for a Gaussian reading it overshoots once the "
+    "scale exceeds four times that reading's variance."
+)
+
+
+class ParticleAGradSpec(Value):
+    """Sequential conditional SMC with exact Gaussian transition-informed proposals.
+
+    Particle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary
+    variable in the weights. Parameter labels remain marginalized. Strong future
+    information or multiple modes can reduce mixing; the target stays exact.
+    """
+
+    method: Literal["particle_agrad"] = "particle_agrad"
+    num_particles: int = Field(default=64, ge=2, description=_GUIDED_PARTICLES)
+    latent_step: LatentStepSpec = Field(
+        default_factory=AdaptedLatentStepSpec, description=_GUIDED_STEP
+    )
+    kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
+
+
+class TwistedParticleAGradSpec(Value):
+    """Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.
+
+    A parallel backward information scan guides a sequential conditional filter.
+    Proposals combine exact nonlinear transition means with the approximate twist;
+    their normalized densities and twist ratios are paid in full. Poor local fits
+    and multiple modes cost efficiency, never change the target (section 4.4).
+    """
+
+    method: Literal["twisted_particle_agrad"] = "twisted_particle_agrad"
+    num_particles: int = Field(default=64, ge=2, description=_GUIDED_PARTICLES)
+    latent_step: LatentStepSpec = Field(
+        default_factory=AdaptedLatentStepSpec, description=_GUIDED_STEP
+    )
+    kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
+
+
+type GuidedPathSpec = ParticleAGradSpec | TwistedParticleAGradSpec
+type PathUpdateSpec = Annotated[
+    DsmcSpec | ParticleAGradSpec | TwistedParticleAGradSpec, Field(discriminator="method")
+]
+
 
 class MarginalParticleGibbsSpec(Value):
-    """Marginalized parameter ensemble and conditional dSMC trajectory updates.
+    """Marginalized parameter ensemble and exact conditional trajectory updates.
 
     m-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around
-    a shared auxiliary point, runs conditional dSMC against the posterior mixture over
+    a shared auxiliary point, runs conditional SMC against the posterior mixture over
     them and selects a parameter together with the new path. Parameter moves are thus
     marginalized over paths, as in PMMH, instead of conditioned on one. The proposal
     covariance starts from the initializer and is re-estimated at the end of each
@@ -364,7 +432,7 @@ class MarginalParticleGibbsSpec(Value):
         default=None,
         description="Gaussian-reference parallel tempering; null runs the exact posterior alone.",
     )
-    dsmc: DsmcSpec = Field(default_factory=DsmcSpec, description="Path update.")
+    path_update: PathUpdateSpec = Field(default_factory=DsmcSpec, description="Exact path update.")
     parameter_proposal: Literal["random_walk", "pseudo_langevin"] = Field(
         default="random_walk",
         description=(
@@ -501,6 +569,8 @@ class SamplerSpec(Value):
             return (algorithm.method, algorithm.trajectory.kind, algorithm.parameterization)
         return (
             algorithm.method,
+            algorithm.path_update.method,
+            0 if isinstance(algorithm.path_update, DsmcSpec) else algorithm.path_update.kappa,
             algorithm.parameter_proposal,
             algorithm.companion,
             1 if algorithm.tempering is None else algorithm.tempering.num_temperatures,

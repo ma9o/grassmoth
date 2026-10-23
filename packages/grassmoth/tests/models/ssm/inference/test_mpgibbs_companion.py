@@ -204,7 +204,7 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, 
     assert isinstance(initialization, ParticleInitialization)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        dsmc=DsmcSpec(num_particles=4),
+        path_update=DsmcSpec(num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.02,
         parameter_preconditioner_chol=initialization.parameter_chol,

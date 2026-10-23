@@ -39,7 +39,7 @@ import jax
 import jax.numpy as jnp
 from jax import random
 
-from grassmoth.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec
+from grassmoth.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec, PathUpdateSpec
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.compile.state_space import AdditiveRecurrences, ParallelRecurrences
 from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCState, _clip_scale
@@ -53,6 +53,7 @@ from grassmoth.models.ssm.inference.samplers.particle.dsmc import step as dsmc_s
 from grassmoth.models.ssm.inference.samplers.particle.dsmc import (
     trace_step as dsmc_trace_step,
 )
+from grassmoth.models.ssm.inference.samplers.particle.guided import guided_step, trace_guided_step
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     _masked_mean,
     _select_pytree,
@@ -110,7 +111,7 @@ class MarginalParticleGibbsKernel(NamedTuple):
     max_scale: jax.Array
     preconditioned: bool
     initial_parameter_chol: jax.Array
-    dsmc: DsmcSpec
+    path_update: PathUpdateSpec
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...]
     exact_constraints: ExactStateConstraints | None
 
@@ -127,7 +128,7 @@ def build_marginal_particle_gibbs_kernel(
     parameter_proposal: Literal[
         "random_walk", "pseudo_langevin"
     ] = _DEFAULT_OPTIONS.parameter_proposal,
-    dsmc: DsmcSpec = _DEFAULT_OPTIONS.dsmc,
+    path_update: PathUpdateSpec = _DEFAULT_OPTIONS.path_update,
     paid_mix: PaidMixture | None = None,
     parameter_reference_path: jnp.ndarray | None = None,
     exact_constraints: ExactStateConstraints | None = None,
@@ -245,7 +246,7 @@ def build_marginal_particle_gibbs_kernel(
 
     static = build_smoother_setup(
         target,
-        dsmc,
+        path_update,
         num_parameter_particles=num_parameter_particles,
         free_mask=latent_free_mask,
         paid_mix=paid_mix,
@@ -300,14 +301,20 @@ def build_marginal_particle_gibbs_kernel(
                 )
             )
 
-        with jax.named_scope("dsmc_smoother_full"):
-            smoother = (dsmc_trace_step if record_trace else dsmc_step)(
-                ctx,
-                block_key,
-                x_ref,
-                root_correction if target.state_space.requires_replay else None,
-                batch_size=batch_size,
-            )
+        with jax.named_scope("particle_smoother_full"):
+            if isinstance(path_update, DsmcSpec):
+                smoother = (dsmc_trace_step if record_trace else dsmc_step)(
+                    ctx,
+                    block_key,
+                    x_ref,
+                    root_correction if target.state_space.requires_replay else None,
+                    batch_size=batch_size,
+                )
+            else:
+                guide = target.context(jnp.mean(parameter_particles, axis=0), runtime_times)
+                smoother = (trace_guided_step if record_trace else guided_step)(
+                    target, ctx, guide, path_update, block_key, x_ref
+                )
             smoother_result = smoother.result if isinstance(smoother, TracedResult) else smoother
 
         with jax.named_scope("postprocess"):
@@ -370,7 +377,7 @@ def build_marginal_particle_gibbs_kernel(
             )
 
             def particle_identity() -> dict[str, jax.Array]:
-                particle_ids = jnp.arange(dsmc.num_particles, dtype=origin_path.dtype)
+                particle_ids = jnp.arange(path_update.num_particles, dtype=origin_path.dtype)
                 return {
                     "selected_particle_per_t": origin_path.astype(jnp.float32),
                     "reference_path_hit_rate": jnp.mean((origin_path == 0).astype(jnp.float32)),
@@ -449,7 +456,7 @@ def build_marginal_particle_gibbs_kernel(
         )
         if parameter_preconditioner_chol is None
         else jnp.asarray(parameter_preconditioner_chol, dtype=target.initial_position.dtype),
-        dsmc=dsmc,
+        path_update=path_update,
         diagnostic_metrics=diagnostic_metrics,
         exact_constraints=exact_constraints,
     )

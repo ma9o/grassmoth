@@ -39,10 +39,11 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
     _normalize_log_probs,
     _observation_log_probs_by_param,
     coordinate_proposal_mask,
+    multinomial,
 )
 from grassmoth.models.ssm.inference.samplers.particle.weights import (
+    requested_weight_statistics,
     weight_history_fields,
-    weight_statistics,
 )
 from grassmoth.models.ssm.inference.targets.intervals import (
     IntervalTreeLevelRuntime,
@@ -81,12 +82,6 @@ type _CombinedSegment = tuple[
 ]
 
 
-def _multinomial(key: jax.Array, logits: jax.Array, count: int) -> jax.Array:
-    cumulative = jnp.cumsum(jax.nn.softmax(logits))
-    uniforms = jax.random.uniform(key, (count,), dtype=cumulative.dtype)
-    return jnp.minimum(jnp.searchsorted(cumulative, uniforms, side="right"), logits.size - 1)
-
-
 def _forced_move(key: jax.Array, logits: jax.Array) -> jax.Array:
     """Modified Gibbs selection starting at the retained reference (index zero)."""
     proposal_key, accept_key = jax.random.split(key)
@@ -95,7 +90,7 @@ def _forced_move(key: jax.Array, logits: jax.Array) -> jax.Array:
     other_mass = jax.scipy.special.logsumexp(other)
 
     def move() -> jax.Array:
-        proposed = _multinomial(proposal_key, other, 1)[0]
+        proposed = multinomial(proposal_key, other, 1)[0]
         reverse_mass = jax.scipy.special.logsumexp(jnp.where(indices == proposed, -jnp.inf, logits))
         log_acceptance = jnp.minimum(0.0, other_mass - reverse_mass)
         accepted = jnp.log(jax.random.uniform(accept_key, dtype=logits.dtype)) < log_acceptance
@@ -137,16 +132,7 @@ def _step(
     )
 
     def measure_weights(logits: jax.Array) -> dict[ParticleWeightMetric, jax.Array]:
-        result: dict[ParticleWeightMetric, jax.Array] = jax.lax.cond(
-            jnp.reshape(ctx.diagnostic_weights, ()),
-            weight_statistics,
-            lambda values: {
-                metric: jnp.zeros(values.shape[:-1], dtype=values.dtype)
-                for metric in ParticleWeightMetric
-            },
-            logits,
-        )
-        return result
+        return requested_weight_statistics(logits, enabled=ctx.diagnostic_weights)
 
     count = ctx.num_free_particles + 1
     steps = ctx.num_steps
@@ -298,7 +284,7 @@ def _step(
     ) -> _CombinedSegment:
         logits, joint, transition = join(left, right, seam, width, emission)
         selected = jnp.concatenate(
-            (jnp.zeros(1, dtype=jnp.int32), _multinomial(draw_key, logits.reshape(-1), count - 1))
+            (jnp.zeros(1, dtype=jnp.int32), multinomial(draw_key, logits.reshape(-1), count - 1))
         )
         li, ri = selected // count, selected % count
         stats = left.statistics[li]

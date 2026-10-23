@@ -197,7 +197,16 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
         paid_mix=PaidMixture(
             jnp.zeros((len(mean) - 1, 1)), jnp.ones((len(mean) - 1, 1)), jnp.asarray([True])
         ),
-        dsmc=DsmcSpec(num_particles=12, drift=method if kappa else "none"),
+        path_update=DsmcSpec(
+            num_particles=12,
+            method=(
+                "particle_rwm"
+                if (method if kappa else "none") == "none"
+                else "particle_amala"
+                if (method if kappa else "none") == "amala"
+                else "particle_amala_plus"
+            ),
+        ),
     )
     # Replicate chains to resolve the weakly identified offset/path direction
     # without loosening the analytic moment tolerances.
@@ -253,7 +262,17 @@ def test_reusable_tree_levels_preserve_joint_posterior_with_padding(method, kapp
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        dsmc=DsmcSpec(num_particles=4, drift=method if kappa else "none", pilot_mixture=False),
+        path_update=DsmcSpec(
+            num_particles=4,
+            method=(
+                "particle_rwm"
+                if (method if kappa else "none") == "none"
+                else "particle_amala"
+                if (method if kappa else "none") == "amala"
+                else "particle_amala_plus"
+            ),
+            pilot_mixture=False,
+        ),
     )
 
     def advance(point, key):
