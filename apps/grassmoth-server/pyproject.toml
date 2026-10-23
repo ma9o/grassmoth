@@ -39,3 +39,7 @@ grassmoth-sweep = "grassmoth_server.study.sweep:sweep_cli"
 [build-system]
 requires = ["uv_build>=0.12.21,<0.13.0"]
 build-backend = "uv_build"
+
+# Notebooks import their support code as `notebooks.support.*` from this app root.
+[tool.marimo.runtime]
+pythonpath = ["."]
