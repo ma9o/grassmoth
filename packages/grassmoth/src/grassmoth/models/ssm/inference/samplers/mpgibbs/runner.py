@@ -320,7 +320,7 @@ def run_marginal_particle_gibbs(
         states,
         key
         if continuation is None
-        else jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values)),
+        else jax.random.wrap_key_data(jax.device_put(continuation.random_key.values)),
         jnp.asarray(0),
         betas,
         initialize_adaptation(states.latent_delta),

@@ -108,7 +108,7 @@ def fit_marginal_particle_gibbs(
         options.n_parameter_particles,
     )
 
-    base_key = random.PRNGKey(sampler.seed)
+    base_key = random.key(sampler.seed)
     trace_key, initialization_key, sampling_key = random.split(base_key, 3)
 
     phase_t0 = clock()
@@ -174,7 +174,7 @@ def fit_marginal_particle_gibbs(
             parameter_preconditioner_chol=initialization.parameter_chol,
             parameter_proposal=options.parameter_proposal,
             paid_mix=paid_mix,
-            parameter_reference_path=jnp.asarray(
+            parameter_reference_path=jax.device_put(
                 continuation.tuning.parameter_reference_path.values
             )
             if continuation is not None and isinstance(continuation.tuning, ParticleTuning)

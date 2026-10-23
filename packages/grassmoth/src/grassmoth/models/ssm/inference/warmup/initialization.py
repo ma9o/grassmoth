@@ -114,10 +114,10 @@ def continued_particle_initialization(checkpoint: SamplerCheckpoint) -> Particle
             diagnostics=ContinuedInitializationDiagnostics(reused_tuning=False),
         )
     return ParticleInitialization(
-        positions=jnp.asarray(checkpoint.parameters.values),
-        paths=jnp.asarray(checkpoint.paths.values),
-        parameter_chol=jnp.asarray(tuning.parameter_chol.values),
-        pilot_mean=jnp.asarray(tuning.pilot_mean.values),
-        pilot_variance=jnp.asarray(tuning.pilot_variance.values),
+        positions=jax.device_put(checkpoint.parameters.values),
+        paths=jax.device_put(checkpoint.paths.values),
+        parameter_chol=jax.device_put(tuning.parameter_chol.values),
+        pilot_mean=jax.device_put(tuning.pilot_mean.values),
+        pilot_variance=jax.device_put(tuning.pilot_variance.values),
         diagnostics=ContinuedInitializationDiagnostics(reused_tuning=True),
     )
