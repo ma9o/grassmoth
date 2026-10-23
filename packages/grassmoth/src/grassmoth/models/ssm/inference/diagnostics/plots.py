@@ -128,7 +128,7 @@ def param_marginal(
     )
 
 
-def build_energy_diagnostics(energy: jnp.ndarray, n_bins: int = 40) -> EnergyDiagnostics:
+def build_energy_diagnostics(energy: jnp.ndarray | NDArray, n_bins: int = 40) -> EnergyDiagnostics:
     """Summarize per-chain energy and consecutive energy changes, including each chain's BFMI."""
     from arviz_stats.base.array import array_stats
 

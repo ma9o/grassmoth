@@ -275,7 +275,7 @@ class MCMCPosterior:
             energy = energy.reshape(mcmc.num_chains, -1)
 
         def average(name: str) -> float | None:
-            return float(jnp.mean(extra[name])) if name in extra else None
+            return float(np.mean(np.asarray(extra[name]))) if name in extra else None
 
         return ChainDiagnostics(
             num_chains=int(mcmc.num_chains),
@@ -284,10 +284,14 @@ class MCMCPosterior:
             per_latent=latent_chain_diagnostics(self.diagnostics.latent_chains)
             if self.diagnostics.latent_chains is not None
             else None,
-            num_divergences=int(jnp.sum(extra["diverging"])) if "diverging" in extra else None,
+            num_divergences=int(np.sum(np.asarray(extra["diverging"])))
+            if "diverging" in extra
+            else None,
             divergence_rate=average("diverging"),
             tree_depth_mean=average("tree_depth"),
-            tree_depth_max=int(jnp.max(extra["tree_depth"])) if "tree_depth" in extra else None,
+            tree_depth_max=int(np.max(np.asarray(extra["tree_depth"])))
+            if "tree_depth" in extra
+            else None,
             accept_prob_mean=average("accept_prob"),
             latent_accept_prob_mean=average("latent_accept_prob"),
             parameter_accept_prob_mean=average("parameter_accept_prob"),

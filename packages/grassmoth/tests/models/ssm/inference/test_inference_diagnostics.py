@@ -1,5 +1,7 @@
 """Scientific identities, retained draws, and sampler evidence in diagnostic reports."""
 
+from dataclasses import replace
+
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -136,6 +138,28 @@ def test_mcmc_report_preserves_coordinate_metrics_chains_and_sampler_statistics(
         assert hist.expected_per_bin == 64 / n_bins
         assert len(hist.chains) == 2
         assert all(len(row) == n_bins and min(row) >= 0 and sum(row) == 64 for row in hist.chains)
+
+
+@pytest.mark.inference(concern="sampling")
+def test_saved_host_telemetry_is_shared_and_gives_the_same_diagnostics(particle_posterior):
+    from grassmoth.artifacts.arrays import NumericalArray
+
+    native = particle_posterior.diagnostics.mcmc
+    retained = {
+        name: NumericalArray.from_numpy(np.asarray(values))
+        for name, values in native.chain_extra_fields.items()
+    }
+    mcmc = replace(
+        native, chain_extra_fields={name: value.values for name, value in retained.items()}
+    )
+    for name, values in mcmc.chain_extra_fields.items():
+        assert values is retained[name].values
+        assert not values.flags.writeable
+    host = replace(
+        particle_posterior, diagnostics=replace(particle_posterior.diagnostics, mcmc=mcmc)
+    )
+    refs = references([("alpha", ()), ("beta", (0,)), ("beta", (1,)), ("sigma", ())])
+    assert host.get_mcmc_diagnostics(refs) == particle_posterior.get_mcmc_diagnostics(refs)
 
 
 @pytest.mark.inference(concern="sampling")

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from blackjax.adaptation.step_size import DualAveragingAdaptationState
+    from numpy.typing import NDArray
 
     from grassmoth.models.ssm.inference.targets.particle import ParticleContext
 
@@ -59,7 +60,7 @@ class TrajectoryMCMCResult:
     """MCMC-compatible view of particle posterior samples."""
 
     chain_samples: Mapping[str, jnp.ndarray]
-    chain_extra_fields: Mapping[str, jnp.ndarray]
+    chain_extra_fields: Mapping[str, jax.Array | NDArray]
     num_chains: int
     num_samples: int
     backend: str = "marginal_particle_gibbs"
@@ -73,7 +74,9 @@ class TrajectoryMCMCResult:
             for name, values in self.chain_samples.items()
         }
 
-    def get_extra_fields(self, *, group_by_chain: bool = False) -> Mapping[str, jnp.ndarray]:
+    def get_extra_fields(
+        self, *, group_by_chain: bool = False
+    ) -> Mapping[str, jax.Array | NDArray]:
         """Return sampler diagnostics with separate or flattened chain and draw axes."""
         if group_by_chain:
             return self.chain_extra_fields

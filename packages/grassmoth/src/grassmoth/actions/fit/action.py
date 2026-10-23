@@ -31,6 +31,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from datetime import datetime
 
+    import jax
+
     from grassmoth.artifacts.continuation import SamplerCheckpoint
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.model.question import QuestionSpec
@@ -109,11 +111,20 @@ def _fit(
             else result.diagnostics.parameterization,
         )
 
+    encoded_arrays: dict[int, tuple[object, NumericalArray]] = {}
+
+    def encode(values: jax.Array | np.ndarray) -> NumericalArray:
+        # Keep the source alive so its identity cannot be reused within this fit.
+        identity = id(values)
+        retained = encoded_arrays.get(identity)
+        if retained is None:
+            retained = (values, NumericalArray.from_numpy(np.asarray(values)))
+            encoded_arrays[identity] = retained
+        return retained[1]
+
     if isinstance(result, UnretainedRun):
         phase_fields = {
-            phase: {
-                name: NumericalArray.from_numpy(np.asarray(value)) for name, value in fields.items()
-            }
+            phase: {name: encode(value) for name, value in fields.items()}
             for phase, fields in result.phase_extra_fields.items()
         }
         if previous is not None:
@@ -143,8 +154,8 @@ def _fit(
         )
     native = result.diagnostics
 
-    def retain(values: object | None) -> NumericalArray | None:
-        return NumericalArray.from_numpy(np.asarray(values)) if values is not None else None
+    def retain(values: jax.Array | np.ndarray | None) -> NumericalArray | None:
+        return encode(values) if values is not None else None
 
     conditioned, identity = condition_model(
         selection.dynamical_model_spec,
@@ -170,7 +181,7 @@ def _fit(
         if native.latent_chains is not None
         else None,
         chain_extra_fields={
-            name: NumericalArray.from_numpy(np.asarray(values))
+            name: encode(values)
             for name, values in native.mcmc.get_extra_fields(group_by_chain=True).items()
         },
         observation_log_probs=retain(native.observation_log_probs)
@@ -181,10 +192,7 @@ def _fit(
         else None,
         exact_observation_rows=retain(native.exact_observation_rows),
         phase_extra_fields={
-            phase: {
-                name: NumericalArray.from_numpy(np.asarray(values))
-                for name, values in buffers.items()
-            }
+            phase: {name: encode(values) for name, values in buffers.items()}
             for phase, buffers in (native.phase_extra_fields or {}).items()
         },
         warmup_complete_log_posterior_history=retain(native.warmup_complete_log_posterior_history),
@@ -321,7 +329,7 @@ def inference_report(
             for element in elements
         }
         marginals = compute_posterior_marginals(samples, references)
-        extra = {name: jnp.asarray(ref.values) for name, ref in evidence.chain_extra_fields.items()}
+        extra = {name: ref.values for name, ref in evidence.chain_extra_fields.items()}
         diagnostics = None
         traces, ranks, loo = (), (), None
         layout = layouts[metadata.distribution]

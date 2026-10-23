@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import fields
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
@@ -24,6 +24,12 @@ def freeze(value: object) -> object:
     if isinstance(value, np.ndarray):
         if value.dtype.hasobject:
             raise TypeError("Owned NumPy buffers require a non-object dtype")
+        storage: object = value
+        while isinstance(storage, np.ndarray):
+            # NumPy's base annotation omits the bytes backing an owned array.
+            storage = cast("object", storage.base)
+        if isinstance(storage, bytes):
+            return value
         return np.frombuffer(value.tobytes(order="C"), dtype=value.dtype).reshape(value.shape)
     return value
 

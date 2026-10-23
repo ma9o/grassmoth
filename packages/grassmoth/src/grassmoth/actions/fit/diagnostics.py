@@ -60,9 +60,7 @@ def segment_diagnostics(
                 chain_samples={
                     name: values.reshape(chains, count) for name, values in parameters.items()
                 },
-                chain_extra_fields={
-                    name: jnp.asarray(value.values) for name, value in extra.items()
-                },
+                chain_extra_fields={name: value.values for name, value in extra.items()},
                 num_chains=chains,
                 num_samples=count,
                 backend=engine.method,

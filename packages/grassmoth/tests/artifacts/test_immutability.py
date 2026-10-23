@@ -40,3 +40,27 @@ def test_nested_collections_and_strided_buffers_are_detached(dtype) -> None:
 def test_object_arrays_cannot_claim_immutable_storage() -> None:
     with pytest.raises(TypeError, match="non-object dtype"):
         freeze(np.array([{"mutable": []}], dtype=object))
+
+
+def test_immutable_storage_is_shared_across_repeated_owners_and_strided_views() -> None:
+    original = freeze(np.arange(24, dtype=np.float32).reshape(4, 6))
+    assert isinstance(original, np.ndarray)
+    view = original[::-1, ::2]
+    retained = freeze({"full": original, "view": view})
+    assert isinstance(retained, MappingProxyType)
+    assert retained["full"] is original
+    assert retained["view"] is view
+    assert np.shares_memory(retained["full"], retained["view"])
+    with pytest.raises(ValueError, match="WRITEABLE"):
+        retained["view"].setflags(write=True)
+
+
+def test_read_only_view_of_mutable_storage_is_still_detached() -> None:
+    builder = np.arange(8, dtype=np.float32)
+    view = builder[::2]
+    view.setflags(write=False)
+    retained = freeze(view)
+    assert isinstance(retained, np.ndarray)
+    builder[:] = -1
+    np.testing.assert_array_equal(retained, [0, 2, 4, 6])
+    assert not np.shares_memory(retained, builder)

@@ -200,6 +200,11 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             native_state=(),
             tuning=JointTuning(parameterization=CentredParameterizationRecord()),
         )
+        telemetry = {
+            "dsmc_weight_ess": jnp.arange(2 * count * 3, dtype=jnp.float32).reshape(2, count, 3)
+            + offset,
+            "dsmc_weight_entropy": jnp.full((2, count, 3), offset, dtype=jnp.float32),
+        }
         return MCMCPosterior.from_run(
             draws=JointPosteriorDraws(parameters, paths),
             diagnostics=ProductionDiagnostics(
@@ -209,11 +214,12 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
                         name: values.reshape(2, count, *values.shape[1:])
                         for name, values in parameters.items()
                     },
-                    chain_extra_fields={},
+                    chain_extra_fields=telemetry,
                     num_chains=2,
                     num_samples=count,
                 ),
                 observation_log_probs=jnp.full((2, count, 2), offset),
+                phase_extra_fields={"post_warmup": telemetry},
             ),
         )
 
@@ -263,6 +269,19 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         )
 
     first = execute(posterior(2, 1), 2)
+    for name, retained in first.evidence.chain_extra_fields.items():
+        assert retained is first.evidence.phase_extra_fields["post_warmup"][name]
+        np.testing.assert_array_equal(
+            retained.values, posterior(2, 1).diagnostics.mcmc.chain_extra_fields[name]
+        )
+
+    from grassmoth_server.study.persistence.codec import pack_result, unpack_result
+
+    restored = FitOutput.model_validate(unpack_result(pack_result(output(first))))
+    for name, retained in restored.inference.evidence.chain_extra_fields.items():
+        assert (
+            retained.npy is restored.inference.evidence.phase_extra_fields["post_warmup"][name].npy
+        )
     first = replace(
         first,
         evidence=first.evidence.revised(
@@ -278,6 +297,17 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     new = empirical_atoms(standalone.dynamical_model_spec.distributions[identity]).reshape(2, 1, -1)
     atoms = empirical_atoms(combined.dynamical_model_spec.distributions[identity]).reshape(2, 3, -1)
     np.testing.assert_array_equal(atoms, np.concatenate((old, new), axis=1))
+    for name, retained in combined.evidence.chain_extra_fields.items():
+        np.testing.assert_array_equal(
+            retained.values,
+            np.concatenate(
+                (
+                    first.evidence.chain_extra_fields[name].values,
+                    standalone.evidence.chain_extra_fields[name].values,
+                ),
+                axis=1,
+            ),
+        )
     assert combined.metadata.num_samples_total == 6
     assert combined.metadata.segments[-1].diagnostics == segment_diagnostics
     assert [(segment.start, segment.stop) for segment in combined.metadata.segments] == [
@@ -289,7 +319,6 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     )
     from grassmoth.artifacts.sampling import InferenceHardware
     from grassmoth_server.actions.fit import remote
-    from grassmoth_server.study.persistence.codec import unpack_result
 
     def dispatch_without_history_buffers(payload, *, hardware):
         assert hardware is InferenceHardware.L40S
