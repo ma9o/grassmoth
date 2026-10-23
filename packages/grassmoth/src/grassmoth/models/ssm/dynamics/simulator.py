@@ -23,6 +23,8 @@ from grassmoth.models.ssm.dynamics.vector_field import VectorFieldArgs
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from jax.typing import ArrayLike
+
     from grassmoth.models.ssm.dynamics.intervention import Intervention
     from grassmoth.models.ssm.dynamics.vector_field import VectorField
 
@@ -139,6 +141,18 @@ def simulate(
     )
 
 
+def _stochastic_drift(
+    t: ArrayLike, y: Array, runtime: dsx.StochasticContinuousTimeStateEvolution
+) -> Array:
+    return runtime.total_drift(x=y, u=None, t=jnp.asarray(t))
+
+
+def _stochastic_diffusion(
+    t: ArrayLike, y: Array, runtime: dsx.StochasticContinuousTimeStateEvolution
+) -> Array:
+    return runtime.diffusion.as_matrix(x=y, u=None, t=jnp.asarray(t), state_dim=y.shape[-1])
+
+
 def simulate_model_path(
     dynamical_model: dsx.DynamicalModel,
     initial_state: Array,
@@ -199,13 +213,8 @@ def simulate_model_path(
         )
         adjoint = dfx.RecursiveCheckpointAdjoint()
 
-    def drift_at(t, y, runtime):
-        return runtime.total_drift(x=y, u=None, t=t)
-
-    ode_term = dfx.ODETerm(drift_at)
-    diffusion_term = dfx.ControlTerm(
-        lambda t, y, a: a.diffusion.as_matrix(x=y, u=None, t=t, state_dim=n_latent), brownian
-    )
+    ode_term = dfx.ODETerm(_stochastic_drift)
+    diffusion_term = dfx.ControlTerm(_stochastic_diffusion, brownian)
     term = dfx.MultiTerm(ode_term, diffusion_term)
     solver = dfx.Heun()
     dt0 = (
