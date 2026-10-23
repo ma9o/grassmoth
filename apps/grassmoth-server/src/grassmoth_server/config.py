@@ -170,3 +170,4 @@ def configure_jax_persistent_cache() -> None:
     Path(cache_dir).mkdir(parents=True, exist_ok=True)
     if not jax.config.values.get("jax_compilation_cache_dir"):
         jax.config.update("jax_compilation_cache_dir", cache_dir)
+    jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
