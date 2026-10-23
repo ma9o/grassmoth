@@ -15,10 +15,10 @@ from grassmoth.artifacts.joint_parameterization import (
     MixedParameterizationRecord,
     NonCentredParameterizationRecord,
 )
-from grassmoth.compute.programs import ProgramCompiler, compile_jit
 
 if TYPE_CHECKING:
     from grassmoth.artifacts.sampling import JointParameterization
+    from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.inference.targets.particle import (
         ParticleContext,
         ParticleTarget,
@@ -209,7 +209,7 @@ def build_joint_coordinates(
     target: ParticleTarget,
     parameterization: JointParameterization = "centred",
     *,
-    compiler: ProgramCompiler = compile_jit,
+    compiler: ProgramCompiler,
 ) -> JointCoordinates:
     """Freeze the policy; parameter-dependent innovation maps bind at each evaluation."""
     position = target.initial_position

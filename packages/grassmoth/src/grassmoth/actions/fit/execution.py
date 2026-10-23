@@ -144,7 +144,7 @@ def fit_model(
 
     inputs = compile_ssm_inputs_from_model(selection)
     prep_t0 = clock()
-    prepared = prepare_fit(inputs, data_for_model, time_origin=time_origin)
+    prepared = prepare_fit(inputs, data_for_model, time_origin=time_origin, compiler=compiler)
     if not isinstance(prepared, PreparedFit):
         return ModelFitFailure(
             error=prepared.message, duration_seconds=_fit_elapsed_seconds(t0, clock)

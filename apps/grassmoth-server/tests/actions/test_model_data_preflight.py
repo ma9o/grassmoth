@@ -77,7 +77,9 @@ def test_noisy_interval_summary_passes_fit_admission_and_dispatches(monkeypatch)
     inputs = compile_fit_fixture(dynamical_model_spec)
     from grassmoth.models.ssm.preparation.panel import PreparedFit, prepare_fit
 
-    prepared = prepare_fit(inputs, panel, time_origin=panel_metadata().time_origin)
+    prepared = prepare_fit(
+        inputs, panel, time_origin=panel_metadata().time_origin, compiler=compile_program
+    )
     assert isinstance(prepared, PreparedFit)
     assert prepared.inputs is inputs
     assert prepared.panel.compiled_dynamical_model is inputs.compiled_dynamical_model

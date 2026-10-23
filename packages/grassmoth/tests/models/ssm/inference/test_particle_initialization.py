@@ -49,10 +49,11 @@ def test_initialization_chart_preserves_exact_density_and_directional_gradients(
             scheme="euler_maruyama",
             trace_key=jax.random.key(7),
             reparam=None,
+            compiler=compile_program,
         ).runtime
     else:
         target, _, _ = gaussian_interval_case()
-    parameterization = build_joint_coordinates(target)
+    parameterization = build_joint_coordinates(target, compiler=compile_program)
     point = jnp.linspace(-0.4, 0.5, parameterization.dimension)
 
     def native_coordinates(q):
@@ -102,7 +103,7 @@ def test_initialization_chart_excludes_fixed_states_and_replays_static_and_accum
     target = problem.runtime
     assert target.exact_constraints is not None
     values = target.exact_constraints.values
-    parameterization = build_joint_coordinates(target)
+    parameterization = build_joint_coordinates(target, compiler=compile_program)
     _, path = jax.jit(parameterization.decode)(jnp.linspace(-0.5, 0.5, parameterization.dimension))
     assert parameterization.dimension == target.initial_position.size + int(
         jnp.sum(target.independent_mask & jnp.isnan(values))

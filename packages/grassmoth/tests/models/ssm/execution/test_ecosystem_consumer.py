@@ -15,6 +15,7 @@ from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.models.ssm.dynamics.vector_field import StructuralDrift
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from grassmoth.models.ssm.inference.problem import build_particle_problem
+from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
 from grassmoth_test_support.model import construct_named, load_model_fixture
 
@@ -67,6 +68,7 @@ def test_nonlinear_mixed_missing_irregular_exact_densities(intervals):
         scheme="euler_maruyama",
         trace_key=jax.random.key(7),
         reparam=None,
+        compiler=compile_program,
     )
     runtime = problem.runtime
     times, observations = panel.times, panel.observations

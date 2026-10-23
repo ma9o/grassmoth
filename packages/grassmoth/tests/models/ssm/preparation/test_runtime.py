@@ -576,6 +576,7 @@ class TestPrepareModelRuntime:
                 ),
                 time_origin=datetime(2024, 1, 1, tzinfo=UTC),
                 compiled_dynamical_model=inputs.compiled_dynamical_model,
+                compiler=compile_program,
             )
 
         assert isinstance(runtime, BoundPanel)
@@ -636,6 +637,7 @@ class TestPrepareModelRuntime:
             ),
             time_origin=datetime(2024, 1, 1, tzinfo=UTC),
             compiled_dynamical_model=inputs.compiled_dynamical_model,
+            compiler=compile_program,
         )
 
         assert isinstance(runtime, BoundPanel)
@@ -683,6 +685,7 @@ class TestPrepareModelRuntime:
             ),
             time_origin=datetime(2024, 1, 1, tzinfo=UTC),
             compiled_dynamical_model=model.compiled_dynamical_model,
+            compiler=compile_program,
         )
 
         from grassmoth.models.ssm.predictive.simulation import generate_simulation_batch

@@ -272,6 +272,7 @@ class TestInferenceTracing:
             model.prior_runtime_bundle,
             bind_panel_fixture(model.compiled_dynamical_model, observations, times),
             random.PRNGKey(0),
+            compiler=compile_program,
         )
 
         assert "vf_0_p0" in site_info

@@ -17,6 +17,7 @@ from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.dynamics.intervention import Intervention
 from grassmoth.models.ssm.inference import problem as problem_module
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
+from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.dynamics import potential_term
 from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
 from grassmoth_test_support.model import load_model_fixture
@@ -66,6 +67,7 @@ def runtime(monkeypatch):
         scheme="euler_maruyama",
         trace_key=jax.random.key(0),
         reparam=None,
+        compiler=compile_program,
     ).runtime
 
 

@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from grassmoth.artifacts.observations.dataset import ObservationDataset
+    from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.compile.inputs import CompilationFailure, FitCompilationResult
 
 
@@ -32,6 +33,7 @@ def prepare_fit(
     observations: ObservationDataset,
     *,
     time_origin: datetime,
+    compiler: ProgramCompiler,
 ) -> PreparedFit | CompilationFailure | PanelPreparationFailure:
     """Forward compilation failures or bind the resolved fitting inputs once."""
     if not isinstance(inputs, CompiledFitInputs):
@@ -40,6 +42,7 @@ def prepare_fit(
         observations,
         compiled_dynamical_model=inputs.compiled_dynamical_model,
         time_origin=time_origin,
+        compiler=compiler,
     )
     if isinstance(panel, PanelPreparationFailure):
         return panel

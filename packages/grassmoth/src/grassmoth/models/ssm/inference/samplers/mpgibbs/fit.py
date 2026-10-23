@@ -216,6 +216,7 @@ def fit_marginal_particle_gibbs(
             options.companion,
             diffusion_mask=diffusion_scale_mask(bundle.runtime, priors),
             parameter_gradient=kernel.parameter_gradient_fn,
+            compiler=compiler,
         )
     )
     run_result = run_marginal_particle_gibbs(
@@ -256,6 +257,7 @@ def fit_marginal_particle_gibbs(
         run_result.starting_values,
         bundle=bundle,
         compiled_dynamical_model=panel.compiled_dynamical_model,
+        compiler=compiler,
     )
     if sampler.num_samples_per_chain == 0:
         return UnretainedRun.completed(
@@ -278,6 +280,7 @@ def fit_marginal_particle_gibbs(
         bundle=bundle,
         num_chains=sampler.num_chains,
         num_samples=sampler.num_samples_per_chain,
+        compiler=compiler,
     )
     mcmc = build_pmcmc_mcmc_result(
         chain_samples=grouped_public_samples,

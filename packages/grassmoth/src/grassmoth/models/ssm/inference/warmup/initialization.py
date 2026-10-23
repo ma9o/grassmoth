@@ -15,7 +15,6 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     GaussianInitializationDiagnostics,
 )
 from grassmoth.compute.batching import compiled_memory
-from grassmoth.compute.programs import ProgramCompiler, compile_jit
 from grassmoth.models.ssm.inference.joint_coordinates import (
     CentredParameterization,
     JointChart,
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.reports.posterior_diagnostics import InitializationDiagnostics
     from grassmoth.artifacts.sampling import GaussianInitializationSpec
     from grassmoth.compute.budget import ComputeBudget
+    from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 
 
@@ -56,7 +56,7 @@ def prepare_particle_initialization(
     key: jax.Array,
     num_chains: int,
     compute_budget: ComputeBudget,
-    compiler: ProgramCompiler = compile_jit,
+    compiler: ProgramCompiler,
 ) -> ParticleInitialization | InitializationFailure:
     """Select explicit starting geometry without changing the retained target."""
     coordinates = build_joint_coordinates(target, "centred", compiler=compiler)

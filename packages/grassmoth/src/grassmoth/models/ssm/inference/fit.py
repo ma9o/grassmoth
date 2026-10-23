@@ -77,6 +77,7 @@ def fit(
             wall_clock=wall_clock,
             continuation=continuation,
             prepare_program=prepare_program,
+            compiler=compiler,
         )
     from grassmoth.models.ssm.inference.samplers.mpgibbs.fit import (
         fit_marginal_particle_gibbs,

@@ -15,6 +15,7 @@ from grassmoth.models.ssm.inference.reparameterization import Strategy, _minimal
 from grassmoth.models.ssm.parameter_draws import assemble_parameter_draws
 from grassmoth.models.ssm.preparation.observations import ObservationSupportRuntime
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
+from grassmoth_test_support.compute import compile_program
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -256,7 +257,10 @@ def bind_panel_fixture(
         time_origin=origin,
     )
     panel = bind_panel(
-        dataset, compiled_dynamical_model=compiled_dynamical_model, time_origin=origin
+        dataset,
+        compiled_dynamical_model=compiled_dynamical_model,
+        time_origin=origin,
+        compiler=compile_program,
     )
     assert isinstance(panel, BoundPanel), panel
     return panel

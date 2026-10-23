@@ -49,7 +49,7 @@ if TYPE_CHECKING:
     from jax.stages import Compiled
 
     from grassmoth.compute.budget import ComputeBudget
-    from grassmoth.compute.programs import ProgramPreparer
+    from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
     from grassmoth.models.ssm.inference.joint_coordinates import JointChart
     from grassmoth.models.ssm.inference.reparameterization import Strategy
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
@@ -105,6 +105,7 @@ def run_nuts_da(
     target: ParticleTarget,
     *,
     prepare_program: ProgramPreparer,
+    compiler: ProgramCompiler,
     sampler: SamplerSpec,
     compute_budget: ComputeBudget,
     key: jax.Array,
@@ -121,7 +122,7 @@ def run_nuts_da(
     """
     options = sampler.algorithm
     assert isinstance(options, NutsDASpec)
-    coordinates = build_joint_coordinates(target, options.parameterization)
+    coordinates = build_joint_coordinates(target, options.parameterization, compiler=compiler)
     parameterization_record = coordinates.record
     if continuation is not None and sampler.num_warmup == 0:
         tuning = continuation.tuning
@@ -134,7 +135,7 @@ def run_nuts_da(
             )
     # Preserve identical scientific starts across parameterizations, including the original
     # affine default. A fully fixed model retains one independent normal auxiliary.
-    centred = build_joint_coordinates(target)
+    centred = build_joint_coordinates(target, compiler=compiler)
     scientific_start = centred.decode(
         jnp.zeros(max(1, centred.dimension), dtype=target.initial_position.dtype)
     )
@@ -202,9 +203,10 @@ def run_nuts_da(
         )
         if continuation is not None:
             key = jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values))
-        states = jax.jit(jax.vmap(initialize_chain, in_axes=(0, 0, None)))(
-            starts, jax.random.split(key, sampler.num_chains), chart
-        )
+        chain_keys = jax.random.split(key, sampler.num_chains)
+        states = compiler(
+            jax.vmap(initialize_chain, in_axes=(0, 0, None)), starts, chain_keys, chart
+        ).call(starts, chain_keys, chart)
         if continuation is not None and sampler.num_warmup == 0:
             states = restore_state(states, continuation.native_state)
 
@@ -214,9 +216,9 @@ def run_nuts_da(
             def evaluate(point: jax.Array, runtime_chart: JointChart) -> jax.Array:
                 return potential(runtime_chart)(point)
 
-            energy, gradient = jax.jit(jax.vmap(jax.value_and_grad(evaluate), in_axes=(0, None)))(
-                states.z, chart
-            )
+            energy, gradient = compiler(
+                jax.vmap(jax.value_and_grad(evaluate), in_axes=(0, None)), states.z, chart
+            ).call(states.z, chart)
             states = states._replace(potential_energy=energy, z_grad=gradient)
         jax.block_until_ready(states)
     if not all(
@@ -326,6 +328,7 @@ def fit_nuts_da(
     panel: BoundPanel,
     *,
     prepare_program: ProgramPreparer,
+    compiler: ProgramCompiler,
     compute_budget: ComputeBudget,
     sampler: SamplerSpec,
     reparam: Strategy | None,
@@ -345,6 +348,7 @@ def fit_nuts_da(
             scheme=LATENT_TRANSITION_EULER_MARUYAMA,
             trace_key=trace_key,
             reparam=reparam,
+            compiler=compiler,
         )
     started = clock()
     run = run_nuts_da(
@@ -357,6 +361,7 @@ def fit_nuts_da(
         wall_clock=wall_clock,
         continuation=continuation,
         prepare_program=prepare_program,
+        compiler=compiler,
     )
     if isinstance(run, InitializationFailure):
         return run
@@ -377,6 +382,7 @@ def fit_nuts_da(
             bundle=bundle,
             num_chains=sampler.num_chains,
             num_samples=sampler.num_samples_per_chain,
+            compiler=compiler,
         ),
         chain_extra_fields=extra,
         num_chains=sampler.num_chains,

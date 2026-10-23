@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol
 
 import jax
 import jax.numpy as jnp
@@ -53,11 +53,3 @@ class ProgramPreparer(Protocol):
     ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
         """Prepare operands and shapes without executing the numerical computation."""
         ...
-
-
-def compile_jit[Result](
-    function: Callable[..., Result], *args: object, **kwargs: object
-) -> PreparedProgram[Result]:
-    """Compile a numerical program directly through the JAX executable cache."""
-    executable = jax.jit(function).lower(*args, **kwargs).compile()
-    return PreparedProgram(executable, cast("Callable[..., Result]", executable))

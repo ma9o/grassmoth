@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
     from grassmoth.artifacts.identity import IndicatorId
+    from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.compile.inputs import (
         CompiledDynamicalModel,
     )
@@ -198,6 +199,7 @@ def bind_panel(
     *,
     compiled_dynamical_model: CompiledDynamicalModel,
     time_origin: datetime,
+    compiler: ProgramCompiler,
 ) -> BoundPanel | PanelPreparationFailure:
     """Own compatibility once, retaining the exact identity-bearing input rows."""
     observation_selection = observations.select(
@@ -258,7 +260,7 @@ def bind_panel(
         response = input_values[
             :, jnp.asarray([item.state_index for item in compiled_dynamical_model.observations])
         ]
-        expected, _ = jax.jit(operator.project_response_trajectory)(response)
+        expected, _ = compiler(operator.project_response_trajectory, response).call(response)
         recorded_values, expected_values = np.asarray(values), np.asarray(expected)
         for channel in channels:
             recorded = recorded_values[:, channel]

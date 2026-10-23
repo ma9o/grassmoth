@@ -80,6 +80,7 @@ def test_adapted_particle_kernel_recovers_correlated_unequal_scale_gaussian(prop
         key=jax.random.key(15),
         num_chains=4,
         compute_budget=COMPUTE_BUDGET,
+        compiler=compile_program,
     )
     assert isinstance(initialization, ParticleInitialization)
     kernel = build_marginal_particle_gibbs_kernel(

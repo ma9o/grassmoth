@@ -13,6 +13,7 @@ from grassmoth.artifacts.observations.dataset import (
 )
 from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
 from grassmoth.models.ssm.preparation.binding import PanelPreparationFailure, bind_panel
+from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import one_state_gaussian_model
 
@@ -87,7 +88,10 @@ def test_fit_rejects_changed_definitions_before_projecting_observations(changes,
 
     monkeypatch.setattr(runtime, "project_observation_data", unexpected)
     result = bind_panel(
-        dataset, compiled_dynamical_model=compiled_dynamical_model, time_origin=_ORIGIN
+        dataset,
+        compiled_dynamical_model=compiled_dynamical_model,
+        time_origin=_ORIGIN,
+        compiler=compile_program,
     )
     assert isinstance(result, PanelPreparationFailure)
     assert result.message == mismatch.message

@@ -22,7 +22,7 @@ from grassmoth.models.ssm.inference.conditioning import compile_exact_state_cons
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReference
-from grassmoth_test_support.compute import prepare_program
+from grassmoth_test_support.compute import compile_program, prepare_program
 from grassmoth_test_support.interval_particle import gaussian_interval_case, interval_target
 from grassmoth_test_support.observation import observation_laws
 from packages.grassmoth.tests.models.ssm.compile.test_exact_state_space import _model, _problem
@@ -38,11 +38,13 @@ PARAMETERIZATIONS = ("centred", "non_centred", "mixed")
 def test_runtime_charts_preserve_each_fits_scientific_start_and_density(parameterization_name):
     with jax.enable_x64():
         target = _correlated_target()
-        first = build_joint_coordinates(target, parameterization_name)
+        first = build_joint_coordinates(target, parameterization_name, compiler=compile_program)
         other_target = replace(
             target, parameters=replace(target.parameters, initial_position=jnp.array([0.7]))
         )
-        second = build_joint_coordinates(other_target, parameterization_name)
+        second = build_joint_coordinates(
+            other_target, parameterization_name, compiler=compile_program
+        )
         dynamic = jax.jit(
             jax.value_and_grad(lambda point, chart: first.bind(chart).log_density(point))
         )
@@ -55,7 +57,7 @@ def test_runtime_charts_preserve_each_fits_scientific_start_and_density(paramete
             bound = first.bind(coordinates.chart)
             np.testing.assert_array_equal(bound.parameter_center, coordinates.parameter_center)
             assert bound.record == coordinates.record
-            centred = build_joint_coordinates(coordinates.target)
+            centred = build_joint_coordinates(coordinates.target, compiler=compile_program)
             start = centred.decode(jnp.zeros(centred.dimension))
             np.testing.assert_array_equal(bound.encode(*start), coordinates.encode(*start))
 
@@ -192,7 +194,9 @@ def test_correlated_parameter_dependent_parameterization_keeps_exact_and_interva
     parameterization_name,
 ):
     target = _correlated_target()
-    parameterization = build_joint_coordinates(target, parameterization_name)
+    parameterization = build_joint_coordinates(
+        target, parameterization_name, compiler=compile_program
+    )
     point = jnp.linspace(-0.3, 0.4, parameterization.dimension)
 
     def scientific(q):
@@ -224,7 +228,10 @@ def test_correlated_parameter_dependent_parameterization_keeps_exact_and_interva
     assert (
         abs(
             float(
-                build_joint_coordinates(changed, parameterization_name).log_density(point) - value
+                build_joint_coordinates(
+                    changed, parameterization_name, compiler=compile_program
+                ).log_density(point)
+                - value
             )
         )
         > 0.01
@@ -271,7 +278,9 @@ def test_static_and_accumulator_replay_have_no_extra_noise_or_centred_drivers(
     observed = problem.runtime.observations.at[2, total_column].set(0.2)
     _, problem = _problem(_model(), observed)
     target = problem.runtime
-    parameterization = build_joint_coordinates(target, parameterization_name)
+    parameterization = build_joint_coordinates(
+        target, parameterization_name, compiler=compile_program
+    )
     point = jnp.linspace(-0.2, 0.3, parameterization.dimension)
     parameters, path = parameterization.decode(point)
     np.testing.assert_allclose(parameterization.encode(parameters, path), point, atol=2e-6)
@@ -312,7 +321,9 @@ def test_decoded_analytic_posterior_matches_in_all_parameterizations(
     fixture, parameterization_name
 ):
     target, expected_mean, expected_covariance = fixture()
-    parameterization = build_joint_coordinates(target, parameterization_name)
+    parameterization = build_joint_coordinates(
+        target, parameterization_name, compiler=compile_program
+    )
     zero = jnp.zeros(parameterization.dimension)
     # This control is Gaussian in each affine parameterization: integration is analytic,
     # without a sampler, adaptation, stochastic tolerance or production fit.
@@ -350,7 +361,7 @@ def test_scientific_tempering_reference_gets_the_same_parameterization_jacobian(
     parameterization_name, beta
 ):
     target = _correlated_target()
-    affine = build_joint_coordinates(target)
+    affine = build_joint_coordinates(target, compiler=compile_program)
     _, anchor = affine.decode(jnp.zeros(affine.dimension))
     reference = GaussianReference(
         jnp.zeros(1),
@@ -361,7 +372,9 @@ def test_scientific_tempering_reference_gets_the_same_parameterization_jacobian(
         affine.free_mask,
     )
     target = target.at_temperature(reference, jnp.asarray(beta))
-    parameterization = build_joint_coordinates(target, parameterization_name)
+    parameterization = build_joint_coordinates(
+        target, parameterization_name, compiler=compile_program
+    )
     point = jnp.linspace(-0.2, 0.3, parameterization.dimension)
 
     def scientific(q):
@@ -429,7 +442,7 @@ def test_direct_scoring_float64_identity_preserves_support_and_tempering(
                 return arrays, times, static.astype(jnp.float64).at[static_indices].set(parameters)
 
             target = replace(target, context=reference_context)
-        affine = build_joint_coordinates(target)
+        affine = build_joint_coordinates(target, compiler=compile_program)
         _, anchor = affine.decode(jnp.zeros(affine.dimension))
         reference = GaussianReference(
             target.initial_position,
@@ -440,7 +453,9 @@ def test_direct_scoring_float64_identity_preserves_support_and_tempering(
             affine.free_mask,
         )
         target = target.at_temperature(reference, jnp.asarray(beta))
-        coordinates = build_joint_coordinates(target, parameterization_name)
+        coordinates = build_joint_coordinates(
+            target, parameterization_name, compiler=compile_program
+        )
         point = jnp.linspace(-0.2, 0.3, coordinates.dimension)
 
         def scientific_density(native):
@@ -583,7 +598,7 @@ def test_zero_warmup_rejects_changed_parameterization_or_mask_before_kernel_exec
     from grassmoth_test_support.compute import COMPUTE_BUDGET
 
     target = _correlated_target()
-    coordinates = build_joint_coordinates(target, "mixed")
+    coordinates = build_joint_coordinates(target, "mixed", compiler=compile_program)
     parameters, path = coordinates.decode(jnp.zeros(coordinates.dimension))
     settings = SamplerSpec(
         algorithm=NutsDASpec(parameterization="mixed"),
@@ -613,5 +628,6 @@ def test_zero_warmup_rejects_changed_parameterization_or_mask_before_kernel_exec
             prepare_program=prepare_program,
             logger=logging.getLogger(__name__),
             wall_clock=lambda: datetime.now(UTC),
+            compiler=compile_program,
         )
         assert isinstance(result, InitializationFailure)

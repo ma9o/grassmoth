@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 
     import jax.numpy as jnp
 
+    from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
     from grassmoth.models.ssm.inference.problem import ParticleProblem
 
@@ -40,13 +41,14 @@ def extract_grouped_public_samples(
     bundle: ParticleProblem,
     num_chains: int,
     num_samples: int,
+    compiler: ProgramCompiler,
 ) -> dict[str, jnp.ndarray]:
     """Project retained particle samples into the native posterior representation."""
     flat_positions = grouped_positions.reshape(
         (num_chains * num_samples, bundle.runtime.initial_position.size)
     )
     public_samples = extract_constrained_samples(
-        flat_positions, bundle.runtime.parameters, bundle.public_sites
+        flat_positions, bundle.runtime.parameters, bundle.public_sites, compiler=compiler
     )
     return {
         name: values.reshape((num_chains, num_samples, *values.shape[1:]))
@@ -59,10 +61,11 @@ def project_initialization(
     *,
     bundle: ParticleProblem,
     compiled_dynamical_model: CompiledDynamicalModel,
+    compiler: ProgramCompiler,
 ) -> dict[str, jnp.ndarray]:
     """Retain delivered starts in the same scientific coordinates as posterior laws."""
     samples = extract_constrained_samples(
-        values["positions"], bundle.runtime.parameters, bundle.public_sites
+        values["positions"], bundle.runtime.parameters, bundle.public_sites, compiler=compiler
     )
     return {
         **values,

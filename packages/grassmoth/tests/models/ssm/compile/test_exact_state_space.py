@@ -138,6 +138,7 @@ def _problem(model, observations=None):
         scheme="euler_maruyama",
         trace_key=jax.random.key(2),
         reparam=None,
+        compiler=compile_program,
     )
 
 
@@ -538,6 +539,7 @@ def test_staged_replay_matches_sequential_path_density_and_gradients():
         scheme="euler_maruyama",
         trace_key=jax.random.key(2),
         reparam=None,
+        compiler=compile_program,
     ).runtime
     free = np.nonzero(np.asarray(target.independent_mask))
     observed_states = jnp.array([o.state_index for o in compiled.observations])
@@ -738,6 +740,7 @@ def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients
         scheme="euler_maruyama",
         trace_key=jax.random.key(2),
         reparam=None,
+        compiler=compile_program,
     )
     target = problem.runtime
     local = target.tree_target()

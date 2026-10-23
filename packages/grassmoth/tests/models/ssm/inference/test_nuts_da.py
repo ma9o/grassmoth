@@ -53,6 +53,7 @@ def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(
         prepare_program=prepare_program,
         logger=logging.getLogger(__name__),
         wall_clock=lambda: datetime.now(UTC),
+        compiler=compile_program,
     )
     assert isinstance(run, NutsDARun)
     assert run.paths is not None
@@ -141,6 +142,7 @@ def test_continuation_matches_uninterrupted_random_stream_and_tuning(
             prepare_program=prepare_program,
             logger=logging.getLogger(__name__),
             wall_clock=lambda: datetime.now(UTC),
+            compiler=compile_program,
         )
 
     full = run(settings)
@@ -224,12 +226,13 @@ def test_compile_only_executes_neither_sweep(monkeypatch, parameterization):
         prepare_program=prepare_program,
         logger=logging.getLogger(__name__),
         wall_clock=lambda: datetime.now(UTC),
+        compiler=compile_program,
     )
     assert isinstance(run, NutsDARun)
     assert run.positions.shape[:2] == (2, 0)
     from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 
-    centred = build_joint_coordinates(target)
+    centred = build_joint_coordinates(target, compiler=compile_program)
     parameters, paths = centred.decode(jnp.zeros(centred.dimension))
     np.testing.assert_allclose(
         run.checkpoint.parameters.values,

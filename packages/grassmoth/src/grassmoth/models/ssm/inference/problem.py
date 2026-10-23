@@ -11,7 +11,6 @@ import jax.numpy as jnp
 import numpy as np
 
 from grassmoth.artifacts.immutability import freeze_fields
-from grassmoth.compute.programs import ProgramCompiler, compile_jit
 from grassmoth.models.ssm.compile.interval_tree import compile_interval_tree
 from grassmoth.models.ssm.compile.observation_partition import compile_observation_partition
 from grassmoth.models.ssm.compile.point_readings import compile_point_reading_mask
@@ -31,6 +30,7 @@ from grassmoth.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYA
 if TYPE_CHECKING:
     import jax
 
+    from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.inference.parameter_tracing import SiteInfo
     from grassmoth.models.ssm.inference.reparameterization import Strategy
     from grassmoth.models.ssm.inference.targets.particle import ParticleContext
@@ -59,7 +59,7 @@ def build_particle_problem(
     scheme: str,
     trace_key: jax.Array,
     reparam: Strategy | None,
-    compiler: ProgramCompiler = compile_jit,
+    compiler: ProgramCompiler,
 ) -> ParticleProblem:
     """Prepare the parameter transform and the exact discrete model for sampling."""
     observations, times = panel.observations, panel.times

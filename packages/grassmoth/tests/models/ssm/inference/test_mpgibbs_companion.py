@@ -59,7 +59,7 @@ def test_companion_choice_identifies_the_kernel_and_excludes_tempering():
 def test_companion_proposals_are_reversible_with_exact_ratios_and_refreshed_state(name):
     with jax.enable_x64():
         target = _correlated_target()
-        coordinates = build_joint_coordinates(target, "non_centred")
+        coordinates = build_joint_coordinates(target, "non_centred", compiler=compile_program)
         position, path = coordinates.decode(jnp.linspace(-0.3, 0.4, coordinates.dimension))
         initial = _initialize_chain_state(
             position,
@@ -75,7 +75,7 @@ def test_companion_proposals_are_reversible_with_exact_ratios_and_refreshed_stat
             initial_latent_trajectory=path,
             exact_constraints=target.exact_constraints,
         )
-        propose = jax.jit(build_companion_proposal(target, name, jnp.sin))
+        propose = jax.jit(build_companion_proposal(target, name, jnp.sin, compiler=compile_program))
         proposed, ratio = propose(initial, position + 0.04)
         returned, reverse = propose(proposed, position)
         np.testing.assert_allclose(ratio + reverse, 0, atol=1e-9)
@@ -115,7 +115,8 @@ def test_centred_nuts_preserves_the_joint_posterior_and_freezes_its_adaptation()
     target, mean, covariance = gaussian_interval_case()
     warmup, retained = 250, 1500
     nuts = build_conditional_nuts(
-        target, build_companion_proposal(target, "centred_mh", jnp.zeros_like)
+        target,
+        build_companion_proposal(target, "centred_mh", jnp.zeros_like, compiler=compile_program),
     )
     center = jnp.asarray(mean)
     loading = jnp.asarray(covariance[1:, 0] / covariance[0, 0])
@@ -192,6 +193,7 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, 
             "centred_and_scale_noncentred_mh",
             diffusion_mask=jnp.zeros(1, dtype=bool),
             parameter_gradient=jnp.zeros_like,
+            compiler=compile_program,
         ).moves
     ] == ["centred_mh"]
     initialization = prepare_particle_initialization(
@@ -200,6 +202,7 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, 
         key=jax.random.key(3),
         num_chains=2,
         compute_budget=COMPUTE_BUDGET,
+        compiler=compile_program,
     )
     assert isinstance(initialization, ParticleInitialization)
     kernel = build_marginal_particle_gibbs_kernel(
@@ -218,6 +221,7 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, 
             companion,
             diffusion_mask=jnp.ones(1, dtype=bool),
             parameter_gradient=kernel.parameter_gradient_fn,
+            compiler=compile_program,
         ),
         compiler=compile_program,
         prepare_program=prepare_program,

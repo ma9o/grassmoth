@@ -30,6 +30,7 @@ from grassmoth.models.ssm.parameterization import (
     process_sites,
 )
 from grassmoth.models.ssm.priors import resolve_site_priors
+from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_fit_fixture,
@@ -243,6 +244,7 @@ class TestSiteRegistry:
             simple_model.prior_runtime_bundle,
             bind_panel_fixture(simple_model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
+            compiler=compile_program,
         )
         _assert_registry_matches_trace(registry, site_info)
 
@@ -258,6 +260,7 @@ class TestSiteRegistry:
             dag_model.prior_runtime_bundle,
             bind_panel_fixture(dag_model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
+            compiler=compile_program,
         )
         _assert_registry_matches_trace(registry, site_info)
 
@@ -274,6 +277,7 @@ class TestSiteRegistry:
             model.prior_runtime_bundle,
             bind_panel_fixture(model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
+            compiler=compile_program,
         )
 
         _assert_registry_matches_trace(registry, site_info)
@@ -373,6 +377,7 @@ class TestSiteRegistry:
             model.prior_runtime_bundle,
             bind_panel_fixture(model.compiled_dynamical_model, obs, times),
             random.PRNGKey(0),
+            compiler=compile_program,
         )
         _assert_registry_matches_trace(registry, site_info)
         assert site_info["static_state_sd_free"].shape == (1,)

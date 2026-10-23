@@ -39,7 +39,7 @@ from grassmoth.models.structure import (
     selected_indicators,
     selected_state_ids,
 )
-from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program
 from grassmoth_test_support.fixtures import model_fixture_json
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import (
@@ -320,6 +320,7 @@ def test_unsupported_delta_constraints_fail_before_parameter_initialization(
             scheme="euler_maruyama",
             trace_key=jax.random.key(0),
             reparam=None,
+            compiler=compile_program,
         )
 
 
@@ -418,6 +419,7 @@ def point_problem(exact_model):
         scheme="euler_maruyama",
         trace_key=jax.random.key(0),
         reparam=None,
+        compiler=compile_program,
     )
 
 

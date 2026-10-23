@@ -34,6 +34,7 @@ from grassmoth.models.ssm.inference.reparameterization import (
     _minimal_reparam,
 )
 from grassmoth.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
+from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.inference import (
     MinimalReparam,
     bind_panel_fixture,
@@ -510,9 +511,12 @@ class TestAutoReparamSSM:
             bind_panel_fixture(model.compiled_dynamical_model, observations, times),
             jax.random.PRNGKey(0),
             AutoReparam(centered=0.0),
+            compiler=compile_program,
         )
         particles = jnp.stack([parameters.initial_position, parameters.initial_position + 0.05])
-        samples = extract_constrained_samples(particles, parameters, public_sites)
+        samples = extract_constrained_samples(
+            particles, parameters, public_sites, compiler=compile_program
+        )
 
         assert "vf_0_p0" in samples
         assert "diffusion_diag_free" in samples
@@ -539,6 +543,7 @@ class TestAutoReparamSSM:
             scheme=LATENT_TRANSITION_EULER_MARUYAMA,
             trace_key=jax.random.PRNGKey(0),
             reparam=AutoReparam(centered=0.0),
+            compiler=compile_program,
         )
         context = bundle.runtime.context(bundle.runtime.initial_position, times)
 

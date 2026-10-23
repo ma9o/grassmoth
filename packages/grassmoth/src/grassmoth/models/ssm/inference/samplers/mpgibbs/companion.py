@@ -28,6 +28,7 @@ if TYPE_CHECKING:
 
     from blackjax.adaptation.step_size import DualAveragingAdaptationState
 
+    from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCState
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
     from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
@@ -162,11 +163,15 @@ def build_companion_proposal(
     target: ParticleTarget,
     name: CompanionMoveName,
     parameter_gradient: Callable[[jax.Array], jax.Array],
+    *,
+    compiler: ProgramCompiler,
 ) -> CompanionProposal:
     """Map a state and proposed parameters to the proposed state and exact log ratio."""
     observations, times = target.observations, target.times
     coordinates = (
-        build_joint_coordinates(target, "non_centred") if name == "scale_noncentred_mh" else None
+        build_joint_coordinates(target, "non_centred", compiler=compiler)
+        if name == "scale_noncentred_mh"
+        else None
     )
 
     def propose(
@@ -266,9 +271,10 @@ def build_companion_kernel(
     *,
     diffusion_mask: jax.Array,
     parameter_gradient: Callable[[jax.Array], jax.Array],
+    compiler: ProgramCompiler,
 ) -> CompanionKernel:
     """Order the centred move first; a scale move without diffusion coordinates is omitted."""
-    centred = build_companion_proposal(target, "centred_mh", parameter_gradient)
+    centred = build_companion_proposal(target, "centred_mh", parameter_gradient, compiler=compiler)
     if companion == "centred_nuts":
         return CompanionKernel((), build_conditional_nuts(target, centred))
     moves = (
@@ -280,7 +286,9 @@ def build_companion_kernel(
             CompanionMove(
                 "scale_noncentred_mh",
                 diffusion_mask,
-                build_companion_proposal(target, "scale_noncentred_mh", parameter_gradient),
+                build_companion_proposal(
+                    target, "scale_noncentred_mh", parameter_gradient, compiler=compiler
+                ),
             ),
         )
     return CompanionKernel(moves, None)

@@ -30,7 +30,7 @@ from grassmoth.models.ssm.preparation.binding import (
 )
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
 from grassmoth.models.structure import StructuralSelection
-from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program
 from grassmoth_test_support.inference import (
     compile_model_fixture,
     parameter_draws,
@@ -115,7 +115,10 @@ def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_re
     )
     panel = ObservationDataset.from_frame(rows, variables, time_origin=_ORIGIN)
     bound = bind_panel(
-        panel, compiled_dynamical_model=compiled_dynamical_model, time_origin=_ORIGIN
+        panel,
+        compiled_dynamical_model=compiled_dynamical_model,
+        time_origin=_ORIGIN,
+        compiler=compile_program,
     )
     assert isinstance(bound, BoundPanel), bound
     np.testing.assert_array_equal(bound.times, [0, 0.5, 1, 2, 2.5, 3])
@@ -132,7 +135,10 @@ def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_re
         time_origin=_ORIGIN,
     )
     failure = bind_panel(
-        contradictory, compiled_dynamical_model=compiled_dynamical_model, time_origin=_ORIGIN
+        contradictory,
+        compiled_dynamical_model=compiled_dynamical_model,
+        time_origin=_ORIGIN,
+        compiler=compile_program,
     )
     assert isinstance(failure, PanelPreparationFailure)
     assert "conflict with its deterministic trajectory law" in failure.message
@@ -178,7 +184,11 @@ def test_unmeasured_model_inputs_drive_both_simulation_arms_and_survive_conditio
         times=jnp.array([0.0, 1.0]),
         time_origin=_ORIGIN,
     )
-    restored = DynamicalModelSpec.model_validate_json(conditioned.model_dump_json())
+    # Metadata JSON retains array references; the complete transport includes the
+    # empirical atoms needed to materialize the conditioned law.
+    restored = DynamicalModelSpec.model_validate(
+        conditioned.model_dump(context={"binary_arrays": True})
+    )
     fitted = compile_model_fixture(restored)
     assert restored.time_points == (0.0, 1.0)
     assert fitted.input_trajectories[0].layout.time_origin == _ORIGIN

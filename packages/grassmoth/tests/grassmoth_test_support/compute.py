@@ -8,7 +8,7 @@ from jax.stages import Compiled
 
 from grassmoth.compute.batching import compiled_memory
 from grassmoth.compute.budget import ComputeBudget, MemoryDemand, SharedMemoryBudget
-from grassmoth.compute.programs import PreparedProgram, compile_jit
+from grassmoth.compute.programs import PreparedProgram
 
 COMPUTE_BUDGET = ComputeBudget(
     memory=SharedMemoryBudget(available_bytes=256 * 1024**2),
@@ -20,8 +20,9 @@ def compile_program[Result](
     *args: object,
     **kwargs: object,
 ) -> PreparedProgram[Result]:
-    """Compile directly using the library's local JAX compiler."""
-    return compile_jit(function, *args, **kwargs)
+    """Supply a direct JAX compiler explicitly to numerical library tests."""
+    executable = jax.jit(function).lower(*args, **kwargs).compile()
+    return PreparedProgram(executable, cast("Callable[..., Result]", executable))
 
 
 def prepare_program[Result](

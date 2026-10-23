@@ -13,18 +13,17 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from grassmoth.models.ssm.inference.reparameterization import Strategy
-    from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
-    from grassmoth.models.ssm.preparation.binding import BoundPanel
+    from collections.abc import Callable
 
-import functools
+    from grassmoth.compute.programs import ProgramCompiler
+    from grassmoth.models.ssm.inference.reparameterization import Strategy
+    from grassmoth.models.ssm.preparation.binding import BoundPanel
 
 import jax
 import jax.numpy as jnp
 import numpyro.distributions as dist
 from numpyro import handlers
 
-from grassmoth.compute.programs import ProgramCompiler, compile_jit
 from grassmoth.models.ssm.constants import INTERNAL_DIAGNOSTIC_SITES
 from grassmoth.models.ssm.inference.parameter_transform import (
     ParameterTransform,
@@ -35,6 +34,7 @@ from grassmoth.models.ssm.inference.sample_projection import (
     _filter_public_samples,
     _trace_public_sites,
 )
+from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
 
 
 @dataclass(frozen=True)
@@ -50,6 +50,27 @@ class SiteInfoEntry:
 type SiteInfo = Mapping[str, SiteInfoEntry]
 
 
+def _prior_model(priors: PriorRuntimeBundle, panel: BoundPanel) -> Callable[[], None]:
+    """Replay native laws with numerical leaves capturable as runtime operands.
+
+    A scalar captured by JAX becomes a literal. Retain a one-element operand and
+    restore its native shape inside replay, including posterior reconstruction.
+    """
+    leaves, structure = jax.tree.flatten(dict(priors.priors))
+    arrays = tuple(jnp.asarray(value) for value in leaves)
+    operands = tuple(value.reshape(-1) for value in arrays)
+    shapes = tuple(value.shape for value in arrays)
+
+    def model() -> None:
+        laws = jax.tree.unflatten(
+            structure,
+            tuple(value.reshape(shape) for value, shape in zip(operands, shapes, strict=True)),
+        )
+        numpyro_model(panel, PriorRuntimeBundle(priors.registry, laws), likelihood_backend=None)
+
+    return model
+
+
 # ---------------------------------------------------------------------------
 # Model tracing
 # ---------------------------------------------------------------------------
@@ -61,7 +82,7 @@ def _discover_sites(
     rng_key: jax.Array,
     reparam: Strategy | None = None,
     *,
-    compiler: ProgramCompiler = compile_jit,
+    compiler: ProgramCompiler,
 ) -> SiteInfo:
     """Trace model once to discover sample sites (names, shapes, transforms).
 
@@ -70,7 +91,7 @@ def _discover_sites(
     likelihood; the particle target owns the exact joint likelihood used by
     initialization and sampling.
     """
-    model_fn = functools.partial(numpyro_model, panel, priors, likelihood_backend=None)
+    model_fn = _prior_model(priors, panel)
     if reparam is not None:
         model_fn = handlers.reparam(model_fn, config=reparam)
 
@@ -109,10 +130,10 @@ def prepare_model_parameters(
     trace_key: jax.Array,
     reparam: Strategy | None,
     *,
-    compiler: ProgramCompiler = compile_jit,
+    compiler: ProgramCompiler,
 ) -> tuple[ParameterTransform, SiteInfo, frozenset[str]]:
     """Use NumPyro's prior replay and transformations for every inference path."""
-    prior_model = functools.partial(numpyro_model, panel, priors, likelihood_backend=None)
+    prior_model = _prior_model(priors, panel)
     site_info = _discover_sites(priors, panel, trace_key, reparam=reparam, compiler=compiler)
     public_sites = _trace_public_sites(prior_model) if reparam is not None else frozenset(site_info)
     if reparam is not None:
@@ -130,11 +151,12 @@ def extract_constrained_samples(
     particles: jnp.ndarray,
     parameters: ParameterTransform,
     public_sites: Set[str],
+    *,
+    compiler: ProgramCompiler,
 ) -> dict[str, jnp.ndarray]:
     """Replay the prior program and retain its authored parameter/deterministic sites."""
-    constrained: dict[str, jnp.ndarray] = jax.jit(
-        lambda positions: _filter_public_samples(
-            jax.vmap(parameters.constrain)(positions), public_sites
-        )
-    )(particles)
-    return constrained
+
+    def project(positions: jax.Array) -> dict[str, jax.Array]:
+        return _filter_public_samples(jax.vmap(parameters.constrain)(positions), public_sites)
+
+    return compiler(project, particles).call(particles)
