@@ -1,0 +1,47 @@
+{
+  "action": "fit",
+  "input": {
+    "target": {
+      "kind": "new",
+      "dynamical_model_spec_ref": "7dc2b7c096396de89c7ef0bb0e43fee7f513500c",
+      "data_ref": {
+        "revision": "5404bfdf6ab077ba91403cb1c35b61a886f094ab",
+        "replicate_index": 0
+      }
+    },
+    "settings": {
+      "num_warmup": 2000,
+      "num_samples_per_chain": 4000,
+      "num_chains": 4,
+      "seed": 19,
+      "hardware": "A10",
+      "time_limit_seconds": 3600,
+      "algorithm": {
+        "method": "mpgibbs",
+        "n_parameter_particles": 2,
+        "tempering": null,
+        "path_update": {
+          "method": "twisted_particle_agrad",
+          "num_particles": 128,
+          "latent_step": {
+            "kind": "adapted",
+            "target": 0.5
+          },
+          "kappa": 1
+        },
+        "parameter_proposal": "random_walk",
+        "diagnostic_metrics": [
+          "parameter_movement",
+          "particle_identity"
+        ],
+        "param_target_accept": 0.35,
+        "adaptation_scheme": "simple",
+        "initialization": {
+          "scale": 0.1
+        },
+        "companion": "none"
+      }
+    },
+    "repeat": 0
+  }
+}

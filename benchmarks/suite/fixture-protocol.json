@@ -1,0 +1,104 @@
+{
+  "registered_before_any_new_study_action": true,
+  "code_commit": "7e7062e8b85abc76943fefb56308766ef80cc428",
+  "workspace": "SUITE_20261024",
+  "truth_seed_all_cases": 721,
+  "prior_bank_seed": 722,
+  "prior_bank_replicates": 9,
+  "mode_prior_seed": 723,
+  "mode_prior_replicates": 128,
+  "fit_seed": 19,
+  "start": "2020-01-01",
+  "ordinary_horizon": "16d",
+  "ordinary_clock": "675s",
+  "nl": {
+    "probe_seed": 20261024,
+    "probes_per_transition": 64,
+    "perturbation": "a=z+0.2*xi in x only, xi independent standard Normal; identical probe array reused across candidates and paths",
+    "statistic": "median over probes of abs(m_x(z)-m_x(a)-J_m_x(a)*(z-a))/(0.45*sqrt(dt))",
+    "threshold": 1.0,
+    "minimum_fraction_of_times_strictly_above_threshold": 0.1,
+    "required_paths": "truth and at least 5 of 9 prior paths",
+    "cubic_candidates_in_order": [
+      100.0,
+      300.0,
+      1000.0,
+      3000.0
+    ],
+    "selection": "first candidate meeting unchanged bar; no seed or threshold selection from results",
+    "c0_control_quartic": 0.03,
+    "target": "exact Euler-Maruyama nonlinear polynomial mean; public simulations use native Diffrax as documented",
+    "finite_checks": "all saved trajectories and exact one-step means at paths and probes finite; report native checks and transition Jacobian distributions"
+  },
+  "obs": {
+    "x_normal_variance": 0.0016,
+    "x_poisson_rate": "exp(log(25)+x)",
+    "y_normal_variance": 0.16,
+    "y_keep": "indices divisible by 32, including both endpoints",
+    "all_stochastic_channels_missing": "6 <= model day < 8",
+    "known_input": "retain at every grid point"
+  },
+  "prior": {
+    "sigma_x": 0.45,
+    "sigma_y": 0.0225,
+    "reading_clock": "675s",
+    "fit_grid_intervals": 4096,
+    "grid_construction": "recorded readings retain original timestamps; exact known-input readings also at each 337.5-second midpoint; measurement_clock stays 675s because Duration only accepts integer seconds"
+  },
+  "param": {
+    "x_reading_sds_truth": [
+      0.2,
+      0.2
+    ],
+    "x_reading_sd_priors": "independent HalfNormal(scale=0.4)",
+    "diffusion_priors": "independent HalfNormal(scale=0.8)",
+    "cross_effect_prior": "Normal(loc=0, scale=0.5)",
+    "input_effect_prior": "Normal(loc=0, scale=1)",
+    "loadings": "fixed +1",
+    "intercepts": "fixed 0"
+  },
+  "hd": {
+    "order": [
+      "x",
+      "z2",
+      "z3",
+      "z4",
+      "z5",
+      "z6",
+      "z7",
+      "y"
+    ],
+    "never_read": [
+      "z3",
+      "z6"
+    ],
+    "chain_weights": 0.35,
+    "new_state_diffusion": 0.4,
+    "new_state_initial_sd": 0.4,
+    "new_state_decay": 0.6,
+    "new_state_quartic": 0.03,
+    "reading_sd": 0.2
+  },
+  "mode": {
+    "horizon": "2d",
+    "intrinsic_x_drift": "4*x - 4*x^3",
+    "x_diffusion": 1.0,
+    "x_initial_sd": 0.4,
+    "input_x_effect": "0.1*u*x",
+    "x_y_effect": "0.35*x^2",
+    "x_readings": "none; latent x is interior to u -> x -> y",
+    "y_readings": "C0 Normal, dense",
+    "well_neighborhoods": "x <= -0.5 and x >= 0.5",
+    "event": "at least one completed opposite-neighborhood visit in days [0.5,2], after a well has been established",
+    "prior_probability_required": [
+      0.2,
+      0.8
+    ],
+    "uncertainty": "Wilson 95% interval, finite bank",
+    "posterior_requirement": "full-target evidence of separated mass, not symmetry alone; if unavailable cheaply, mark untested and do not write scorecard request"
+  },
+  "no_scorecard_or_hd_timing_submissions": true,
+  "cpu_refusal_checks": "only C7/C8 local zero-warmup zero-draw fit requests, to exercise native preflight; no retained inference",
+  "batch_budget_usd": 10,
+  "expected_this_round_gpu_cost_usd": 0
+}

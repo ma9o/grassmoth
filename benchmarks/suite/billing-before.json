@@ -1,0 +1,44 @@
+[
+  {
+    "object_id": "ap-5Y7ocDP2Gr280efl0Zik1s",
+    "description": "grassmoth-server",
+    "environment": "main",
+    "interval_start": "2026-10-24T00:00:00",
+    "cost": "0.13199784"
+  },
+  {
+    "object_id": "ap-G3A99BVrtIqOJKhKFXXFoU",
+    "description": "grassmoth-server",
+    "environment": "main",
+    "interval_start": "2026-10-24T00:00:00",
+    "cost": "0.11753106"
+  },
+  {
+    "object_id": "ap-W2wydIFyJwB5LyhCM7141C",
+    "description": "grassmoth-server",
+    "environment": "main",
+    "interval_start": "2026-10-24T00:00:00",
+    "cost": "0.12620196"
+  },
+  {
+    "object_id": "ap-XdrNM5MpjO96jUdWgRMe2B",
+    "description": "grassmoth-server",
+    "environment": "main",
+    "interval_start": "2026-10-24T00:00:00",
+    "cost": "0.12148536"
+  },
+  {
+    "object_id": "ap-lseQQT6ElzIydHauq1QEKF",
+    "description": "grassmoth-server",
+    "environment": "main",
+    "interval_start": "2026-10-24T00:00:00",
+    "cost": "0.12524428"
+  },
+  {
+    "object_id": "ap-smh9ADUK6Rz2Fyp1G0Hyt8",
+    "description": "grassmoth-server",
+    "environment": "main",
+    "interval_start": "2026-10-24T00:00:00",
+    "cost": "0.11869098"
+  }
+]
