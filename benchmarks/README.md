@@ -55,6 +55,13 @@ so:
 - A smaller run may check that code executes or measure time per sweep. Its
   numbers are never stage results.
 - A run below the schedule doesn't count, whatever it shows.
+- **The retained-draw schedule is a ceiling.** A fit may declare
+  `stop_when_converged`. The production convergence check then runs only at
+  multiples of `checkpoint_draws`, never before `min_draws` per chain, and
+  sampling stops at the first pass. Warmup is unchanged. Report the stopping
+  draw, the passing checkpoint and the time to reach it, and label comparisons
+  with fixed-length runs. A passing checkpoint is a finite-chain diagnostic, not
+  a guarantee against optional-stopping bias.
 
 ## Cases
 

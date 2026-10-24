@@ -55,6 +55,24 @@ class FitRuntime(Value):
     )
 
 
+class ConvergenceCheckpointReport(Value):
+    """The passing native production check that ended this execution's retained phase."""
+
+    draws: int = Field(ge=1, description="New retained draws per chain at the declared checkpoint.")
+    report: ConvergenceReport
+
+
+class ConvergenceStoppingReport(Value):
+    """Actual stopping point and its passing evidence for an opted-in execution."""
+
+    retained_draws: int = Field(
+        ge=0, description="Actual newly retained draws per chain in this segment."
+    )
+    checkpoint: ConvergenceCheckpointReport | None = Field(
+        description="Null when no eligible checkpoint passed, including zero-draw execution."
+    )
+
+
 class FitSegment(Value):
     """One execution's retained draw interval within every combined chain."""
 
@@ -70,6 +88,7 @@ class FitSegment(Value):
         description="Production convergence assessment for this segment, before combining chains."
     )
     parameterization: JointParameterizationRecord | None = None
+    convergence_stopping: ConvergenceStoppingReport | None = None
 
 
 class InferenceMetadata(Value):

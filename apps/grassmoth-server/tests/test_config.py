@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from grassmoth.artifacts.sampling import (
     AdaptedLatentStepSpec,
+    ConvergenceStoppingSpec,
     DsmcSpec,
     FixedLatentStepSpec,
     GaussianInitializationSpec,
@@ -116,6 +117,23 @@ class TestSamplerSpec:
         )
         with pytest.raises(ValidationError, match="frozen"):
             resolved.seed = 8  # ty: ignore[invalid-assignment] -- Exercise runtime rejection of a frozen field.
+
+    def test_convergence_stopping_is_opt_in_for_each_execution(self):
+        policy = ConvergenceStoppingSpec(checkpoint_draws=100, min_draws=250)
+        previous = SamplerSpec(num_samples_per_chain=1000, stop_when_converged=policy)
+        for data in ({}, {"stop_when_converged": None}):
+            resolved = resolve_sampler_spec(FitSettingsSpec.model_validate(data), previous)
+            assert resolved.stop_when_converged is None
+            assert resolved.num_samples_per_chain == 1000
+        request = FitSettingsSpec.model_validate(
+            {"stop_when_converged": {"checkpoint_draws": 100, "min_draws": 250}}
+        )
+        resolved = resolve_sampler_spec(request, previous)
+        assert resolved.stop_when_converged == policy
+        assert (
+            SamplerSpec.model_validate_json(resolved.model_dump_json()).stop_when_converged
+            == policy
+        )
 
     def test_custom_chains_and_seed(self):
         result = InferenceConfig(sampler=SamplerSpec(num_chains=8, seed=42)).sampler

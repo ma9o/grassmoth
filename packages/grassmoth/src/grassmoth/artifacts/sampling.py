@@ -510,6 +510,22 @@ type InferenceAlgorithmSpec = Annotated[
 ]
 
 
+class ConvergenceStoppingSpec(Value):
+    """Declared retained-draw checkpoints for the native production convergence gate."""
+
+    checkpoint_draws: int = Field(
+        ge=1,
+        description="Check after each multiple of this many newly retained draws per chain.",
+    )
+    min_draws: int = Field(
+        ge=1,
+        description=(
+            "Minimum newly retained draws per chain before a passing checkpoint may stop this "
+            "execution. The requested sample count remains the ceiling."
+        ),
+    )
+
+
 class SamplerSpec(Value):
     """Fully resolved controls for exact joint state and parameter inference."""
 
@@ -540,6 +556,15 @@ class SamplerSpec(Value):
             "Independent chains, which the convergence checks compare: rank-normalized R-hat, "
             "and bulk and tail ESS of at least 100 per chain. Vehtari et al. (2021) recommend "
             "at least four. Tempering runs one ladder per chain."
+        ),
+    )
+    stop_when_converged: ConvergenceStoppingSpec | None = Field(
+        default=None,
+        description=(
+            "Optional production convergence checks at declared retained-draw checkpoints. "
+            "Warmup is unchanged; the first passing checkpoint at or above min_draws stops "
+            "sampling. None retains the full requested count. Each continued execution checks "
+            "only its newly retained draws."
         ),
     )
     seed: int = Field(

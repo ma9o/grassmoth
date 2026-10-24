@@ -29,7 +29,10 @@ from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from grassmoth.models.ssm.inference.problem import build_particle_problem
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.samplers.sweeps import (
+    ConvergenceCheckpoint,
+    RetainedConvergenceCheck,
     compile_projected_sweeps,
+    retained_convergence_check,
     run_sweeps,
 )
 from grassmoth.models.ssm.inference.types import (
@@ -68,6 +71,8 @@ class NutsDARun:
     final_step_size: jax.Array
     compiled_step: Compiled
     checkpoint: SamplerCheckpoint
+    retained_draws: int
+    stopping_checkpoint: ConvergenceCheckpoint | None
 
     def __post_init__(self) -> None:
         """Own immutable phase mappings without changing the numerical buffers."""
@@ -113,6 +118,7 @@ def run_nuts_da(
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
     continuation: SamplerCheckpoint | None = None,
+    convergence: RetainedConvergenceCheck | None = None,
 ) -> NutsDARun | InitializationFailure:
     """Advance independent chains together, then retain only post-adaptation joint draws.
 
@@ -290,6 +296,7 @@ def run_nuts_da(
         logger=logger,
         wall_clock=wall_clock,
         label="nuts_da",
+        convergence=convergence,
     )
     states, next_key, _ = run.state
     last_parameters, last_paths = jax.vmap(coordinates.decode)(states.z)
@@ -302,6 +309,8 @@ def run_nuts_da(
         for name, value in posterior.items()
     }
     return NutsDARun(
+        retained_draws=run.retained_draws,
+        stopping_checkpoint=run.stopping_checkpoint,
         positions=run.history.posterior["positions"],
         paths=run.history.posterior["paths"],
         observation_log_probs=run.history.posterior["observation_log_probs"],
@@ -353,6 +362,15 @@ def fit_nuts_da(
     started = clock()
     run = run_nuts_da(
         bundle.runtime,
+        convergence=retained_convergence_check(
+            sampler.stop_when_converged,
+            bundle=bundle,
+            compiled_dynamical_model=panel.compiled_dynamical_model,
+            free_mask=bundle.runtime.independent_mask
+            if bundle.exact_constraints is None
+            else bundle.runtime.independent_mask & bundle.exact_constraints.free_mask,
+            compiler=compiler,
+        ),
         sampler=sampler,
         compute_budget=compute_budget,
         key=sampling_key,
@@ -381,12 +399,12 @@ def fit_nuts_da(
             run.positions,
             bundle=bundle,
             num_chains=sampler.num_chains,
-            num_samples=sampler.num_samples_per_chain,
+            num_samples=run.retained_draws,
             compiler=compiler,
         ),
         chain_extra_fields=extra,
         num_chains=sampler.num_chains,
-        num_samples=sampler.num_samples_per_chain,
+        num_samples=run.retained_draws,
         backend="nuts_da",
     )
     free_mask = bundle.runtime.independent_mask
@@ -399,6 +417,7 @@ def fit_nuts_da(
             state_ids=tuple(state.id for state in panel.compiled_dynamical_model.states),
         ),
         diagnostics=ProductionDiagnostics(
+            stopping_checkpoint=run.stopping_checkpoint,
             checkpoint=run.checkpoint,
             parameterization=parameterization_record,
             mcmc=mcmc,

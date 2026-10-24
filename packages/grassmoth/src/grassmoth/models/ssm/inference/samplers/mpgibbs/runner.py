@@ -52,6 +52,8 @@ from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
 from grassmoth.models.ssm.inference.samplers.particle.math import _masked_mean
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.samplers.sweeps import (
+    ConvergenceCheckpoint,
+    RetainedConvergenceCheck,
     compile_projected_sweeps,
     run_sweeps,
 )
@@ -112,6 +114,8 @@ class ParticleChainResult:
     random_key: jax.Array
     last_parameters: jax.Array
     last_paths: jax.Array
+    retained_draws: int
+    stopping_checkpoint: ConvergenceCheckpoint | None
     tempering: TemperingDiagnostics | None = None
 
     @property
@@ -242,6 +246,7 @@ def run_marginal_particle_gibbs(
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
     continuation: SamplerCheckpoint | None = None,
+    convergence: RetainedConvergenceCheck | None = None,
 ) -> ParticleChainResult:
     """Run marginalized Particle Gibbs chains from paired starts."""
     assert companion is None or tempering is None, "The sampler spec owns this exclusion"
@@ -663,7 +668,13 @@ def run_marginal_particle_gibbs(
             excluded_history=excluded_particle_diagnostics(kernel.diagnostic_metrics),
         )
     run = run_sweeps(
-        plan, initial, clock=clock, logger=logger, wall_clock=wall_clock, label="mpgibbs"
+        plan,
+        initial,
+        clock=clock,
+        logger=logger,
+        wall_clock=wall_clock,
+        label="mpgibbs",
+        convergence=convergence,
     )
     final = run.state
     draw_fields = frozenset(("positions", "paths", "observation_log_probs", "log_posterior"))
@@ -684,6 +695,8 @@ def run_marginal_particle_gibbs(
             "paths": initial.chains.latent_trajectory[cold_indices],
             "log_joint": initial.chains.complete_log_posterior[cold_indices],
         },
+        retained_draws=run.retained_draws,
+        stopping_checkpoint=run.stopping_checkpoint,
         grouped_positions=run.history.posterior["positions"],
         observation_log_probs=run.history.posterior["observation_log_probs"],
         chain_extra_fields=posterior_extra,

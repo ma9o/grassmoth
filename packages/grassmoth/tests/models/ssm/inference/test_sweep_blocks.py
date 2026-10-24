@@ -9,7 +9,9 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.artifacts.sampling import DsmcSpec
+from grassmoth.artifacts.reports.checks import Evaluated, NumericCriterionEvidence
+from grassmoth.artifacts.reports.posterior_diagnostics import ConvergenceReport
+from grassmoth.artifacts.sampling import ConvergenceStoppingSpec, DsmcSpec
 from grassmoth.compute.budget import (
     AcceleratorMemoryBudget,
     ComputeBudget,
@@ -121,6 +123,99 @@ def test_block_boundaries_and_padding_preserve_key_stream_and_phase_outputs(
     )
     np.testing.assert_allclose(run.state[1], reference[1], atol=1e-6)
     assert "paths" not in run.history.warmup
+    assert run.retained_draws == samples
+    assert run.stopping_checkpoint is None
+
+
+@pytest.mark.parametrize(
+    ("interval", "minimum", "passing_at", "ceiling", "expected", "checkpoints"),
+    [
+        (7, 10, 7, 32, 14, [7, 14]),
+        (7, 7, 21, 32, 21, [7, 14, 21]),
+        (7, 7, 35, 32, 32, [7, 14, 21, 28]),
+        (7, 40, 7, 32, 32, [7, 14, 21, 28]),
+        (7, 7, 28, 28, 28, [7, 14, 21, 28]),
+        (7, 7, 7, 0, 0, []),
+    ],
+)
+def test_declared_checkpoints_preserve_prefix_and_never_exceed_ceiling(
+    interval, minimum, passing_at, ceiling, expected, checkpoints
+):
+    initial = _Carry(jax.random.key(791), jnp.zeros((3, 4)))
+    plan = sweeps.compile_sweeps(
+        _factory,
+        initial,
+        num_warmup=11,
+        num_samples=ceiling,
+        max_batch_size=1,
+        budget=COMPUTE_BUDGET,
+        prepare_program=prepare_program,
+    )
+    observed = []
+
+    def evaluate(history):
+        count = history["paths"].shape[1]
+        observed.append(count)
+        return ConvergenceReport(
+            findings=(
+                Evaluated(
+                    code="test_gate",
+                    subject="recorded_parameter_chains",
+                    outcome="passed" if count >= passing_at else "failed",
+                    evidence=NumericCriterionEvidence(criterion="test", value=1.0),
+                ),
+            )
+        )
+
+    def execute(current_plan, convergence_check=None):
+        return run_sweeps(
+            current_plan,
+            initial,
+            convergence=convergence_check,
+            clock=monotonic,
+            label="test",
+            logger=logging.getLogger(__name__),
+            wall_clock=lambda: datetime.now(UTC),
+        )
+
+    full = execute(plan)
+    stopped = execute(
+        plan,
+        sweeps.RetainedConvergenceCheck(  # noqa: CORE001 -- Synthetic scheduling test composes a validated policy and callback, not compiled model evidence.
+            settings=ConvergenceStoppingSpec(checkpoint_draws=interval, min_draws=minimum),
+            evaluate=evaluate,
+        ),
+    )
+    assert observed == checkpoints
+    assert stopped.retained_draws == expected
+    for name, value in stopped.history.warmup.items():
+        np.testing.assert_array_equal(value, full.history.warmup[name])
+    for name, value in stopped.history.posterior.items():
+        np.testing.assert_array_equal(value, full.history.posterior[name][:, :expected])
+    eligible_pass = (
+        bool(checkpoints) and expected >= max(minimum, passing_at) and expected % interval == 0
+    )
+    if eligible_pass:
+        assert stopped.stopping_checkpoint is not None
+        assert stopped.stopping_checkpoint.draws == expected
+        assert stopped.stopping_checkpoint.report.status == "passed"
+    else:
+        assert stopped.stopping_checkpoint is None
+    # Same last transition and random stream as a fit whose requested count is this prefix.
+    prefix_plan = sweeps.compile_sweeps(
+        _factory,
+        initial,
+        num_warmup=11,
+        num_samples=expected,
+        max_batch_size=1,
+        budget=COMPUTE_BUDGET,
+        prepare_program=prepare_program,
+    )
+    prefix = execute(prefix_plan)
+    np.testing.assert_array_equal(stopped.state.state, prefix.state.state)
+    np.testing.assert_array_equal(
+        jax.random.key_data(stopped.state.key), jax.random.key_data(prefix.state.key)
+    )
 
 
 @pytest.mark.parametrize("accelerator", [False, True])

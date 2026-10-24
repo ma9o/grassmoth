@@ -141,7 +141,12 @@ if TYPE_CHECKING:
     from grassmoth.models.ssm.preparation.binding import BoundPanel
 
 
-def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_evidence(monkeypatch):
+@pytest.mark.parametrize(
+    ("schedule_multiplier", "passing_checkpoint"), [(1, None), (10, True), (1, True), (1, False)]
+)
+def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_evidence(
+    monkeypatch, schedule_multiplier, passing_checkpoint
+):
     from grassmoth.actions.contracts.bodies import FitOutput
     from grassmoth.actions.fit.action import _fit as fit
     from grassmoth.artifacts.reports.posterior_diagnostics import ChainDiagnostics
@@ -180,7 +185,39 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         tuple(item.observation for item in panel.compiled_dynamical_model.observations),
         time_origin=panel.time_origin,
     )
-    settings = SamplerSpec(num_chains=2, num_warmup=0, num_samples_per_chain=2, hardware="local")
+    from grassmoth.artifacts.identity import ConstructRef
+    from grassmoth.artifacts.reports.posterior_diagnostics import LatentDiagnostics
+    from grassmoth.artifacts.sampling import ConvergenceStoppingSpec
+    from grassmoth.models.ssm.inference.samplers.sweeps import ConvergenceCheckpoint
+
+    passing_report = chain_convergence(
+        ChainDiagnostics(
+            num_chains=2,
+            num_samples_per_chain=1000,
+            per_parameter=(),
+            per_latent=(
+                LatentDiagnostics(
+                    subject=ConstructRef(id=model.constructs[0].id),
+                    label="state",
+                    coordinates=1,
+                    r_hat=1.0,
+                    ess_bulk=1000,
+                    ess_tail=1000,
+                    mcse_mean=0.0,
+                ),
+            ),
+        )
+    )
+    assert passing_report.status == "passed"
+    settings = SamplerSpec(
+        num_chains=2,
+        num_warmup=0,
+        num_samples_per_chain=2,
+        hardware="local",
+        stop_when_converged=None
+        if passing_checkpoint is None
+        else ConvergenceStoppingSpec(checkpoint_draws=1, min_draws=1),
+    )
 
     def posterior(count, offset):
         parameters = {
@@ -209,6 +246,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             draws=JointPosteriorDraws(parameters, paths),
             diagnostics=ProductionDiagnostics(
                 checkpoint=checkpoint,
+                stopping_checkpoint=ConvergenceCheckpoint(count, passing_report)
+                if passing_checkpoint
+                else None,
                 mcmc=TrajectoryMCMCResult(
                     chain_samples={
                         name: values.reshape(2, count, *values.shape[1:])
@@ -235,7 +275,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             selection=StructuralSelection(model, None),
             data_for_model=dataset,
             time_origin=panel.time_origin,
-            sampler=settings.revised(num_samples_per_chain=count),
+            sampler=settings.revised(num_samples_per_chain=count * schedule_multiplier),
             budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
             runtime=fit_runtime(settings),
             clock=time.monotonic,
@@ -268,7 +308,21 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             ),
         )
 
+    def assert_stopping(segment, count):
+        stopping = segment.convergence_stopping
+        if passing_checkpoint is None:
+            assert stopping is None
+        else:
+            assert stopping.retained_draws == count
+            if passing_checkpoint and count:
+                assert stopping.checkpoint.draws == count
+                assert stopping.checkpoint.report == passing_report
+            else:
+                assert stopping.checkpoint is None
+
     first = execute(posterior(2, 1), 2)
+    assert first.metadata.segments[0].settings.num_samples_per_chain == 2 * schedule_multiplier
+    assert_stopping(first.metadata.segments[0], 2)
     for name, retained in first.evidence.chain_extra_fields.items():
         assert retained is first.evidence.phase_extra_fields["post_warmup"][name]
         np.testing.assert_array_equal(
@@ -278,6 +332,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 
     restored = FitOutput.model_validate(unpack_result(pack_result(output(first))))
+    assert_stopping(restored.inference.core.inference_metadata.segments[0], 2)
     for name, retained in restored.inference.evidence.chain_extra_fields.items():
         assert (
             retained.npy is restored.inference.evidence.phase_extra_fields["post_warmup"][name].npy
@@ -308,6 +363,8 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
                 axis=1,
             ),
         )
+    assert combined.metadata.segments[-1].settings.num_samples_per_chain == schedule_multiplier
+    assert_stopping(combined.metadata.segments[-1], 1)
     assert combined.metadata.num_samples_total == 6
     assert combined.metadata.segments[-1].diagnostics == segment_diagnostics
     assert [(segment.start, segment.stop) for segment in combined.metadata.segments] == [
@@ -318,9 +375,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         combined.evidence.observation_log_probs.values[0, :, 0], [1, 1, 5]
     )
     from grassmoth.artifacts.sampling import InferenceHardware
-    from grassmoth_server.actions.contracts.identity import CallId
     from grassmoth_server.actions.fit import remote
-    from grassmoth_server.compute.analysis_cache import AnalysisCall
 
     def dispatch_without_history_buffers(payload, *, hardware):
         assert hardware is InferenceHardware.L40S
@@ -331,6 +386,8 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     monkeypatch.setattr(remote, "_dispatch_fit", dispatch_without_history_buffers)
 
     from grassmoth.artifacts.model.question import QuestionSpec
+    from grassmoth_server.actions.contracts.identity import CallId
+    from grassmoth_server.compute.analysis_cache import AnalysisCall
 
     def remotely(count, previous):
         return remote.fit_on_modal(
@@ -338,7 +395,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             selection=StructuralSelection(model, None),
             data_for_model=dataset,
             time_origin=panel.time_origin,
-            sampler=settings.revised(num_samples_per_chain=count),
+            sampler=settings.revised(num_samples_per_chain=count * schedule_multiplier),
             question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
             compute_loo_diagnostics=True,
             analysis_call=AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64)),
@@ -367,6 +424,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         0,
         output(combined),
     )
+    assert_stopping(zero.metadata.segments[-1], 0)
     assert zero.dynamical_model_spec is None
     assert zero.metadata.num_samples_total == 6
     assert zero.metadata.segments[-1].start == zero.metadata.segments[-1].stop == 3

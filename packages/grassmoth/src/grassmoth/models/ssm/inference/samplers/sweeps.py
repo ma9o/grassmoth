@@ -5,12 +5,14 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 from dataclasses import dataclass, replace
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
 import numpy as np
 
+from grassmoth.artifacts.identity import ConstructRef, ParameterRef
 from grassmoth.artifacts.immutability import freeze_fields
 from grassmoth.compute.batching import compiled_memory
 from grassmoth.compute.budget import NO_MEMORY_DEMAND, MemoryDemand
@@ -34,9 +36,14 @@ if TYPE_CHECKING:
 
     from jax.stages import Compiled
     from jax.typing import DTypeLike
+    from numpy.typing import NDArray
 
+    from grassmoth.artifacts.reports.posterior_diagnostics import ConvergenceReport
+    from grassmoth.artifacts.sampling import ConvergenceStoppingSpec
     from grassmoth.compute.budget import ComputeBudget
-    from grassmoth.compute.programs import ProgramPreparer
+    from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
+    from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
+    from grassmoth.models.ssm.inference.problem import ParticleProblem
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 
 
@@ -60,6 +67,95 @@ class SweepRun[Carry]:
     history: SweepHistory
     first_step_seconds: float
     sampling_loop_seconds: float
+    retained_draws: int
+    stopping_checkpoint: ConvergenceCheckpoint | None
+
+
+@dataclass(frozen=True)
+class ConvergenceCheckpoint:
+    """The first eligible passing checkpoint, counted within this execution."""
+
+    draws: int
+    report: ConvergenceReport
+
+
+@dataclass(frozen=True)
+class RetainedConvergenceCheck:
+    """A declared policy and its native production measurement on retained buffers."""
+
+    settings: ConvergenceStoppingSpec
+    evaluate: Callable[[Mapping[str, NDArray]], ConvergenceReport]
+
+
+def retained_convergence_check(
+    settings: ConvergenceStoppingSpec | None,
+    *,
+    bundle: ParticleProblem,
+    compiled_dynamical_model: CompiledDynamicalModel,
+    free_mask: jax.Array,
+    compiler: ProgramCompiler,
+) -> RetainedConvergenceCheck | None:
+    """Compose the existing public projection, native chain estimators and production gate."""
+    if settings is None:
+        return None
+    from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
+    from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
+    from grassmoth.models.ssm.inference.extraction import extract_grouped_public_samples
+    from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
+    from grassmoth.models.ssm.inference.types import (
+        JointPosteriorDraws,
+        MCMCPosterior,
+        ProductionDiagnostics,
+    )
+
+    references = MappingProxyType(
+        {
+            **{
+                coordinate: (
+                    binding.elements[element],
+                    ParameterRef(parameter_id=binding.parameter_id, element_id=element),
+                )
+                for binding in compiled_dynamical_model.bindings
+                for element, coordinate in binding.coordinates.items()
+            },
+            **dict.fromkeys(compiled_dynamical_model.auxiliary_coordinates),
+        }
+    )
+    states = tuple(
+        (ConstructRef(id=state.id), state.name) for state in compiled_dynamical_model.states
+    )
+    mask = np.asarray(free_mask)
+
+    def evaluate(history: Mapping[str, NDArray]) -> ConvergenceReport:
+        chains, draws = history["positions"].shape[:2]
+        samples = extract_grouped_public_samples(
+            jnp.asarray(history["positions"]),
+            bundle=bundle,
+            num_chains=chains,
+            num_samples=draws,
+            compiler=compiler,
+        )
+        mcmc = TrajectoryMCMCResult(
+            chain_samples=samples,
+            chain_extra_fields={},
+            num_chains=chains,
+            num_samples=draws,
+            backend="convergence_checkpoint",
+        )
+        posterior = MCMCPosterior.from_run(
+            draws=JointPosteriorDraws(parameters=mcmc.get_samples()),
+            diagnostics=ProductionDiagnostics(
+                mcmc=mcmc,
+                public_sites=tuple(sorted(bundle.public_sites)),
+                observation_log_probs=np.empty((chains, draws, 0)),
+                latent_chains=LatentChainEvidence(
+                    paths=history["paths"], free_mask=mask, states=states
+                ),
+            ),
+        )
+        return chain_convergence(posterior.get_inference_diagnostics(references))
+
+    return RetainedConvergenceCheck(settings=settings, evaluate=evaluate)
 
 
 def compile_sweeps[Carry](
@@ -249,6 +345,7 @@ def run_sweeps[Carry](
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
     label: str,
+    convergence: RetainedConvergenceCheck | None = None,
 ) -> SweepRun[Carry]:
     """Keep only requested phase outputs; padded block slots execute no transition."""
     state: Carry = initial
@@ -256,6 +353,8 @@ def run_sweeps[Carry](
     first_step_seconds = 0.0
     completed = 0
     histories: list[dict[str, jax.Array]] = []
+    stopping_checkpoint = None
+    retained_draws = 0
     for stage, phase in (("warmup", plan.warmup), ("sampling", plan.posterior)):
         # Assemble directly in the final chain-major layout. Each live block is
         # copied once; no retained chunks or full-history concatenation coexist.
@@ -269,6 +368,7 @@ def run_sweeps[Carry](
             name: np.empty((shape.shape[0], phase.steps, *shape.shape[1:]), dtype=shape.dtype)
             for name, shape in shapes.items()
         }
+        phase_draws = 0
         if isinstance(phase, CompiledSweepPhase):
             phase_started = clock()
             with inference_phase(
@@ -284,6 +384,9 @@ def run_sweeps[Carry](
                 remaining = phase.steps
                 while remaining:
                     count = 1 if completed == 0 else min(SWEEP_BLOCK_SIZE, remaining)
+                    if stage == "sampling" and convergence is not None:
+                        interval = convergence.settings.checkpoint_draws
+                        count = min(count, interval - phase_draws % interval)
                     transition: tuple[Carry, dict[str, jax.Array]] = phase.executable(
                         phase.arguments, state, jnp.asarray(count), jnp.asarray(stage == "sampling")
                     )
@@ -304,6 +407,7 @@ def run_sweeps[Carry](
                     del transition, block, host_block
                     completed += count
                     remaining -= count
+                    phase_draws += count
                     if completed == 1:
                         first_step_seconds = clock() - started
                     log_inference_event(
@@ -316,13 +420,46 @@ def run_sweeps[Carry](
                         total=phase.steps,
                         elapsed_seconds=clock() - phase_started,
                     )
+                    if (
+                        stage == "sampling"
+                        and convergence is not None
+                        and phase_draws % convergence.settings.checkpoint_draws == 0
+                    ):
+                        report = convergence.evaluate(
+                            MappingProxyType(
+                                {name: value[:, :phase_draws] for name, value in buffers.items()}
+                            )
+                        )
+                        log_inference_event(
+                            label,
+                            stage,
+                            "convergence_checkpoint",
+                            logger=logger,
+                            wall_clock=wall_clock,
+                            completed=phase_draws,
+                            total=phase.steps,
+                            convergence_status=report.status,
+                        )
+                        if (
+                            phase_draws >= convergence.settings.min_draws
+                            and report.status == "passed"
+                        ):
+                            stopping_checkpoint = ConvergenceCheckpoint(phase_draws, report)
+                            break
         else:
             log_inference_event(
                 label, stage, "skipped", logger=logger, wall_clock=wall_clock, total=0
             )
-        history = {name: jnp.asarray(value) for name, value in buffers.items()}
+        history = {name: jnp.asarray(value[:, :phase_draws]) for name, value in buffers.items()}
+        if stage == "sampling":
+            retained_draws = phase_draws
         histories.append(history)
         del buffers
     return SweepRun(
-        state, SweepHistory(histories[0], histories[1]), first_step_seconds, clock() - started
+        state,
+        SweepHistory(histories[0], histories[1]),
+        first_step_seconds,
+        clock() - started,
+        retained_draws,
+        stopping_checkpoint,
     )

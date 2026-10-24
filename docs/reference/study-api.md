@@ -278,6 +278,7 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit"
       }
     },
     "settings": {
+      "stop_when_converged": null,
       "hardware": "local",
       "time_limit_seconds": null,
       "algorithm": null,

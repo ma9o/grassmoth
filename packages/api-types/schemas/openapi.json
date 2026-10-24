@@ -3679,6 +3679,30 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "ConvergenceCheckpointReport": {
+        "additionalProperties": false,
+        "description": "The passing native production check that ended this execution's retained phase.",
+        "properties": {
+          "draws": {
+            "description": "New retained draws per chain at the declared checkpoint.",
+            "minimum": 1,
+            "title": "Draws",
+            "type": "integer"
+          },
+          "report": {
+            "$ref": "#/components/schemas/ConvergenceReport"
+          }
+        },
+        "required": [
+          "draws",
+          "report"
+        ],
+        "title": "ConvergenceCheckpointReport",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.inference",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "ConvergenceReport": {
         "additionalProperties": false,
         "description": "Recorded-chain criteria cover parameters and independent latent coordinates.",
@@ -3736,6 +3760,65 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "ConvergenceStoppingReport": {
+        "additionalProperties": false,
+        "description": "Actual stopping point and its passing evidence for an opted-in execution.",
+        "properties": {
+          "retained_draws": {
+            "description": "Actual newly retained draws per chain in this segment.",
+            "minimum": 0,
+            "title": "Retained Draws",
+            "type": "integer"
+          },
+          "checkpoint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConvergenceCheckpointReport"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when no eligible checkpoint passed, including zero-draw execution."
+          }
+        },
+        "required": [
+          "retained_draws",
+          "checkpoint"
+        ],
+        "title": "ConvergenceStoppingReport",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.inference",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "ConvergenceStoppingSpec": {
+        "additionalProperties": false,
+        "description": "Declared retained-draw checkpoints for the native production convergence gate.",
+        "properties": {
+          "checkpoint_draws": {
+            "description": "Check after each multiple of this many newly retained draws per chain.",
+            "minimum": 1,
+            "title": "Checkpoint Draws",
+            "type": "integer"
+          },
+          "min_draws": {
+            "description": "Minimum newly retained draws per chain before a passing checkpoint may stop this execution. The requested sample count remains the ceiling.",
+            "minimum": 1,
+            "title": "Min Draws",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "checkpoint_draws",
+          "min_draws"
+        ],
+        "title": "ConvergenceStoppingSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "ConvergenceSubject": {
@@ -16121,6 +16204,17 @@
               }
             ],
             "default": null
+          },
+          "convergence_stopping": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConvergenceStoppingReport"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           }
         },
         "required": [
@@ -16131,7 +16225,8 @@
           "phases",
           "diagnostics",
           "convergence",
-          "parameterization"
+          "parameterization",
+          "convergence_stopping"
         ],
         "title": "FitSegment",
         "type": "object",
@@ -16141,8 +16236,20 @@
       },
       "FitSettingsSpec-Input": {
         "additionalProperties": false,
-        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's.",
+        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's, except convergence stopping,\nwhich is opt-in for each execution.",
         "properties": {
+          "stop_when_converged": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConvergenceStoppingSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Opt in for this execution only; absent/null keeps the fixed schedule, including continuations."
+          },
           "hardware": {
             "anyOf": [
               {
@@ -16239,8 +16346,20 @@
       },
       "FitSettingsSpec-Output": {
         "additionalProperties": false,
-        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's.",
+        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's, except convergence stopping,\nwhich is opt-in for each execution.",
         "properties": {
+          "stop_when_converged": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConvergenceStoppingSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Opt in for this execution only; absent/null keeps the fixed schedule, including continuations."
+          },
           "hardware": {
             "anyOf": [
               {
@@ -16330,6 +16449,7 @@
           }
         },
         "required": [
+          "stop_when_converged",
           "hardware",
           "time_limit_seconds",
           "algorithm",
@@ -24437,6 +24557,18 @@
             "title": "Num Chains",
             "type": "integer"
           },
+          "stop_when_converged": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConvergenceStoppingSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Optional production convergence checks at declared retained-draw checkpoints. Warmup is unchanged; the first passing checkpoint at or above min_draws stops sampling. None retains the full requested count. Each continued execution checks only its newly retained draws."
+          },
           "seed": {
             "default": 0,
             "description": "Seeds initialization and sampling; another seed is an independent replicate.",
@@ -24465,6 +24597,7 @@
           "num_warmup",
           "num_samples_per_chain",
           "num_chains",
+          "stop_when_converged",
           "seed",
           "hardware",
           "time_limit_seconds",

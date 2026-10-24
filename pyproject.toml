@@ -63,7 +63,7 @@ fix = true
 [tool.ruff.lint]
 preview = true
 explicit-preview-rules = true
-external = ["V", "ERR", "ANN", "FIELD"]
+external = ["V", "ERR", "ANN", "FIELD", "CORE"]
 select = [
     "E",      # pycodestyle errors
     "W",      # pycodestyle warnings

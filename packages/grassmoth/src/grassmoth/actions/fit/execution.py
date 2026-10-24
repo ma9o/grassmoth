@@ -10,6 +10,7 @@ import jax.numpy as jnp
 from grassmoth.artifacts.base import Value
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.compile.observation_windows import compile_observation_scan
+from grassmoth.models.ssm.inference.types import UnretainedRun
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.preparation.panel import PreparedFit, prepare_fit
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
@@ -24,7 +25,7 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.compute.budget import ComputeBudget
     from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
-    from grassmoth.models.ssm.inference.types import MCMCPosterior, UnretainedRun
+    from grassmoth.models.ssm.inference.types import MCMCPosterior
     from grassmoth.models.ssm.preparation.binding import BoundPanel
     from grassmoth.models.structure import StructuralSelection
 
@@ -195,7 +196,9 @@ def fit_model(
 
     logger.info(
         "Retaining native posterior and sampler telemetry: n_samples=%d",
-        sampler.num_chains * sampler.num_samples_per_chain,
+        0
+        if isinstance(result, UnretainedRun)
+        else result.diagnostics.mcmc.num_chains * result.diagnostics.mcmc.num_samples,
     )
     return FittedModelResult(
         duration_seconds=_fit_elapsed_seconds(t0, clock), result=result, panel=panel

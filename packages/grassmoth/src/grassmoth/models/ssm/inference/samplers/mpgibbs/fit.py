@@ -48,6 +48,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
 from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_particle_weights
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
+from grassmoth.models.ssm.inference.samplers.sweeps import retained_convergence_check
 from grassmoth.models.ssm.inference.types import (
     JointPosteriorDraws,
     MCMCPosterior,
@@ -228,6 +229,15 @@ def fit_marginal_particle_gibbs(
         num_chains=sampler.num_chains,
         key=sampling_key,
         initialization=initialization,
+        convergence=retained_convergence_check(
+            sampler.stop_when_converged,
+            bundle=bundle,
+            compiled_dynamical_model=panel.compiled_dynamical_model,
+            free_mask=bundle.runtime.state_density_mask
+            if bundle.exact_constraints is None
+            else bundle.runtime.state_density_mask & bundle.exact_constraints.free_mask,
+            compiler=compiler,
+        ),
         adaptation_scheme=options.adaptation_scheme,
         tempering=tempering,
         companion=companion,
@@ -279,14 +289,14 @@ def fit_marginal_particle_gibbs(
         run_result.grouped_positions,
         bundle=bundle,
         num_chains=sampler.num_chains,
-        num_samples=sampler.num_samples_per_chain,
+        num_samples=run_result.retained_draws,
         compiler=compiler,
     )
     mcmc = build_pmcmc_mcmc_result(
         chain_samples=grouped_public_samples,
         chain_extra_fields=run_result.chain_extra_fields,
         num_chains=sampler.num_chains,
-        num_samples=sampler.num_samples_per_chain,
+        num_samples=run_result.retained_draws,
         backend="marginal_particle_gibbs",
     )
     chain_extra_fields = run_result.chain_extra_fields
@@ -353,6 +363,7 @@ def fit_marginal_particle_gibbs(
         amala_grad_norm_max=float(jnp.max(summary_extra_fields["amala_grad_norm_max"])),
     )
     diagnostics = ProductionDiagnostics(
+        stopping_checkpoint=run_result.stopping_checkpoint,
         checkpoint=checkpoint,
         compiled_step=run_result.compiled_step,
         mcmc=mcmc,

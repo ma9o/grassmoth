@@ -15,6 +15,8 @@ from grassmoth.artifacts.arrays import ArrayVector, NumericalArray
 from grassmoth.artifacts.identity import ConstructRef, ParameterRef
 from grassmoth.artifacts.model.parameter import ParameterCoordinate
 from grassmoth.artifacts.reports.inference import (
+    ConvergenceCheckpointReport,
+    ConvergenceStoppingReport,
     FitSegment,
     InferenceEvidence,
     InferenceMetadata,
@@ -100,12 +102,26 @@ def _fit(
     )
 
     def segment(diagnostics: ChainDiagnostics | None) -> FitSegment:
+        retained_draws = (
+            0 if isinstance(result, UnretainedRun) else result.diagnostics.mcmc.num_samples
+        )
+        checkpoint = (
+            None if isinstance(result, UnretainedRun) else result.diagnostics.stopping_checkpoint
+        )
         return FitSegment(
             diagnostics=diagnostics,
             convergence=chain_convergence(diagnostics),
             start=old_count,
-            stop=old_count + sampler.num_samples_per_chain,
+            stop=old_count + retained_draws,
             settings=sampler,
+            convergence_stopping=ConvergenceStoppingReport(
+                retained_draws=retained_draws,
+                checkpoint=None
+                if checkpoint is None
+                else ConvergenceCheckpointReport(draws=checkpoint.draws, report=checkpoint.report),
+            )
+            if sampler.stop_when_converged is not None
+            else None,
             runtime=runtime,
             phases=tuple(phases),
             parameterization=result.parameterization
@@ -235,7 +251,7 @@ def _fit(
         combined = np.concatenate(
             (
                 old.reshape(chains, old_count, -1),
-                new.reshape(chains, sampler.num_samples_per_chain, -1),
+                new.reshape(chains, native.mcmc.num_samples, -1),
             ),
             axis=1,
         )

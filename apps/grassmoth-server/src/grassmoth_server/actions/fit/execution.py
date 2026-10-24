@@ -26,6 +26,7 @@ def resolve_sampler_spec(
 
     configured = get_config().inference.sampler if previous is None else previous
     return SamplerSpec(
+        stop_when_converged=settings.stop_when_converged,
         num_warmup=configured.num_warmup if settings.num_warmup is None else settings.num_warmup,
         num_samples_per_chain=configured.num_samples_per_chain
         if settings.num_samples_per_chain is None
