@@ -21,7 +21,10 @@ from grassmoth_server.compute.resources import HOST_MEMORY_ALLOCATION_ENV
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 
 if TYPE_CHECKING:
+    from collections.abc import Iterator
     from datetime import datetime
+
+    import modal
 
     from grassmoth.public import (
         InferenceHardware,
@@ -35,6 +38,7 @@ _FIT_CPU_CORES = 8
 _FIT_HOST_MEMORY_MIB = 32768
 FIT_CACHE_VOLUME_ENV = "GRASSMOTH_FIT_CACHE_VOLUME"
 _RESULT_HEADER_BYTES = 8 + hashlib.sha256().digest_size
+_RESULT_CHUNK_BYTES = 8 * 1024**2
 
 
 @dataclass(frozen=True)
@@ -121,7 +125,26 @@ def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
     return FitComputeResult(output=pack_result(result))
 
 
-def _fit_gpu(payload: FitComputeInput) -> bytes:
+def _claim_fit_attempt(attempt: modal.Dict) -> None:
+    """Fence platform crash redelivery before any expensive computation starts.
+
+    Modal reschedules crashed containers independently of ``retries=0``. The
+    durable, atomic claim outlives a killed runner and stays claimed through
+    result delivery; a replacement reports failure instead of repeating a fit.
+    """
+    if not attempt.put("started", True, skip_if_exists=True):
+        raise RuntimeError("Modal fit runner was interrupted; refusing to repeat the fit")
+
+
+def _result_chunks(frame: bytes) -> Iterator[bytes]:
+    """Bound each SDK upload, which otherwise copies the full return per part."""
+    for start in range(0, len(frame), _RESULT_CHUNK_BYTES):
+        yield frame[start : start + _RESULT_CHUNK_BYTES]
+
+
+def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
+    _claim_fit_attempt(attempt)
+
     import jax
     import modal
 
@@ -135,7 +158,10 @@ def _fit_gpu(payload: FitComputeInput) -> bytes:
     logging.getLogger(__name__).info("Fit compute devices: %s", jax.devices())
     volume = modal.Volume.from_name(os.environ[FIT_CACHE_VOLUME_ENV])
     with local_compilation_cache(Path("/cache/jax-bundles"), commit=volume.commit):
-        return encode_fit_result(execute_fit_compute(payload))
+        result = execute_fit_compute(payload)
+        frame = encode_fit_result(result)
+        del result
+    yield from _result_chunks(frame)
 
 
 def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> FitComputeResult:
@@ -176,11 +202,17 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
         timeout=payload.sampler.time_limit_seconds,
         startup_timeout=payload.sampler.time_limit_seconds,
         scaledown_window=2,
-        retries=0,
-        volumes={"/cache": modal.Volume.from_name(cache_volume, create_if_missing=True)},
+        # Modal generators do not support a retries option. Crash redelivery is
+        # independently fenced by the per-dispatch claim before computation.
+        volumes={
+            "/cache": modal.Volume.from_name(cache_volume, create_if_missing=True),
+        },
     )(_fit_gpu)
-    with app.run():
-        return decode_fit_result(remote_fit.remote(payload))
+    with modal.Dict.ephemeral() as attempt, app.run():
+        frame = io.BytesIO()
+        for chunk in remote_fit.remote_gen(payload, attempt):
+            frame.write(chunk)
+        return decode_fit_result(frame.getvalue())
 
 
 def fit_on_modal(
