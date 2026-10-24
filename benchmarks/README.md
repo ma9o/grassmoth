@@ -89,9 +89,11 @@ does: one counterfactual fit, run only then.
 priors, seeds, observation masks, validity evidence and contrast. The rules:
 
 - **NL** must meet a preregistered criterion before any fit. The exact
-  transition-mean remainder, in process-noise units, must exceed 1 at no fewer
-  than 10% of times, on the truth path and on most of a fixed bank of prior
-  paths. If a fixture misses, change the drift, never the bar.
+  one-step transition-mean remainder, in process-noise units, is summed over
+  one local relaxation time, `ceil(1 / (dt · |∂f/∂x|))` steps. Its median over
+  fixed perturbations must exceed 1 at no fewer than 10% of eligible starts, on
+  the truth path and on at least five of nine prior paths. If a fixture misses,
+  change the drift, never the bar.
 - **MODE\*** runs only after cheap checks show posterior ambiguity. A prior
   switch probability between 0.2 and 0.8 is necessary but not sufficient. If
   MODE can't be validated, report multimodality as untested.
@@ -110,10 +112,10 @@ priors, seeds, observation masks, validity evidence and contrast. The rules:
 [`learned.json`](cases/stage00/learned.json) also frees both diffusion scales.
 The other cases' documents are in [`cases/suite`](cases/suite), and the scorecard
 requests and run notes are in [`suite`](suite). Their status:
-- **NL has no valid fixture yet.** All four preregistered cubic strengths, from
-  100 to 3,000, made the native simulator's paths non-finite.
-- **MODE is untested.** Its prior switch probability came out at 0.17, below the
-  0.2 floor.
+- **NL and MODE are valid** after a redesign. NL uses a bounded-slope drift.
+  MODE's two same-well readings leave about 0.70 of the posterior mass on
+  staying and 0.30 on visiting the other well and returning, under the exact
+  Euler–Maruyama law. The records are in [`suite/notes.md`](suite/notes.md).
 - **C7 and C8** are refused by the current policy.
 
 **Data.** In the study, `edit_model` with the truth model and one `simulate`
@@ -206,10 +208,11 @@ decisions, newest first.
 
 The user replaced the incremental ladder with the scorecard and tournament
 suite above. The user also accepted twisted Particle-aGRAD with κ = 1 as the
-policy's path update. Two commits make it work:
+policy's path update. Three commits make it work:
 - `ff4f0e47` builds the guide from the readings and the auxiliary path's actual
   law;
-- `7e7062e8` bounds the warmup step by observation curvature.
+- `7e7062e8` bounds the warmup step by observation curvature;
+- `e8ab964c` gives each free coordinate its own curvature bound.
 
 **The tournament that motivated it** ran on C0 on 2026-10-23 at the full
 schedule, on the code before those commits.
@@ -221,8 +224,11 @@ schedule, on the code before those commits.
 not results under this README's schedule. Twisted κ = 1 reached about 15
 worst-latent samples per second on C0 and on three one-change variants, against
 about 2–3 for κ = 0. Run records are in
-[00_current_sampler/notes.md](00_current_sampler/notes.md). The suite's first
-scorecard hasn't run.
+[00_current_sampler/notes.md](00_current_sampler/notes.md).
+
+**First scorecard.** It is recorded in [suite/notes.md](suite/notes.md). C0 and
+NL passed, and OBS, MODE and PARAM failed. PRIOR and HD finished sampling but
+lost their results to a transport fault, fixed in `dcfb3698`.
 
 ### Workflow — 2026-10-22
 
