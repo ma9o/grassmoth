@@ -314,10 +314,8 @@
             "kind": "binary",
             "operator": "multiply",
             "left": {
-              "kind": "coefficient",
-              "role": "weight",
-              "value": "parameter:2366c82cffc90e7355265181c33534a4faaa36e0e668c4fe9560b8f949819491",
-              "construct_ids": []
+              "kind": "literal",
+              "value": 0.7
             },
             "right": {
               "kind": "state",
@@ -388,21 +386,8 @@
       }
     }
   },
-  "parameters": {
-    "parameter:2366c82cffc90e7355265181c33534a4faaa36e0e668c4fe9560b8f949819491": {
-      "name": "input_effect",
-      "description": "Input effect",
-      "distribution": "distribution:tiny-beta"
-    }
-  },
+  "parameters": {},
   "distributions": {
-    "distribution:tiny-beta": {
-      "distribution": "Normal",
-      "params": {
-        "loc": 0.0,
-        "scale": 1.0
-      }
-    },
     "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1": {
       "distribution": "Delta",
       "params": {

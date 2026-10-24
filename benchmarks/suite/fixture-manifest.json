@@ -56,12 +56,12 @@
       "simulation": "63b237e7f85c3f2b5433ab49e92270809fd310ed"
     },
     "MODE": {
-      "truth": "2fa68a2ff6d49546dcdacdf73e7d685f6c7cedf1",
-      "fit": "99942f9c609fdb2ebf836f86fe3b38e42588b1a4",
-      "simulation": "b703367a5348a674e2f1bc52eb5977d96abc2993",
-      "replicate_index": 0,
-      "prepared": "baf173e7481368dfd5a5809fe6391757ee4644c5",
-      "prepared_empty_y": "f5d7eb7637f9bf6c3402e8b935a8829748bb00b2"
+      "workspace": "SUITE_FIX_A_CANDIDATE",
+      "question": "25fcabacd809853105713cf0b00a82c0fb23bc8d",
+      "truth": "e9be3640949e45a2ff001ab41dee5aa0b9ee8d97",
+      "fit": "17812d5cc35ee54d4c75a9c17cc0473f259e51e1",
+      "prepared": "0a2bd6454d214b089e64d947a7c5703819ffc538",
+      "replicate_index": 0
     },
     "NL-q300": {
       "truth": "925ea68ad1f8a2c3b105e7fafea5b31a11354865",
@@ -106,6 +106,14 @@
       "fit": "e0dd457ed9bbe2a0e40352807ba9a1b53ebc8ac5",
       "simulation": "f34ab84184bdd2d3e286ac698fd4161293aeed76",
       "prior_bank": "33bb3874472856bcd6d600e69d53d04fb7681506"
+    },
+    "MODE-prior-driven-effect": {
+      "truth": "2fa68a2ff6d49546dcdacdf73e7d685f6c7cedf1",
+      "fit": "99942f9c609fdb2ebf836f86fe3b38e42588b1a4",
+      "simulation": "b703367a5348a674e2f1bc52eb5977d96abc2993",
+      "replicate_index": 0,
+      "prepared": "baf173e7481368dfd5a5809fe6391757ee4644c5",
+      "prepared_empty_y": "f5d7eb7637f9bf6c3402e8b935a8829748bb00b2"
     }
   },
   "no_scorecard_or_hd_timing_submitted": false,
@@ -191,5 +199,15 @@
     "PRIOR": "infrastructure_error_no_verdict",
     "PARAM": "failed"
   },
-  "scorecard_report": "../../scratchpad/suite-scorecard-20261024/findings.md"
+  "scorecard_report": "../../scratchpad/suite-scorecard-20261024/findings.md",
+  "mode_fixture_repair": {
+    "record": "../../scratchpad/suite-fixes-a-20261024/findings.md",
+    "change": "Fix downstream input effect to literal 0.7; no learned nuisance parameter.",
+    "x_law_unchanged": true,
+    "exact_EM_boundary_gate_unchanged": true,
+    "prepared_workspace_on_modal_volume": "grassmoth-suite-fixes-a-20261024:/candidate/data/SUITE_FIX_A_CANDIDATE",
+    "full_request_unrun": true,
+    "zero_draw_public_preflight": "passed",
+    "prior_scorecard_results_belong_to": "MODE-prior-driven-effect"
+  }
 }
