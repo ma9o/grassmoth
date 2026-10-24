@@ -212,6 +212,7 @@ def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
             jnp.asarray(accepted[index]),
             jnp.asarray(proposed[index]),
             ADAPTATION_WINDOW + 4,
+            jnp.full_like(state.delta, 10.0),
         )
         end = min(index + 1, ADAPTATION_WINDOW + 4)
         start = max(0, end - ADAPTATION_WINDOW)

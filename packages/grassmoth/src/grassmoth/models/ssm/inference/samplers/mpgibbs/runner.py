@@ -17,7 +17,12 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     ReplicaSwapCounts,
     TemperingDiagnostics,
 )
-from grassmoth.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
+from grassmoth.artifacts.sampling import (
+    DsmcSpec,
+    FixedLatentStepSpec,
+    ParticleAGradSpec,
+    TwistedParticleAGradSpec,
+)
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import restore_state, retain_state
 from grassmoth.models.ssm.inference.mcmc_state import (
@@ -33,8 +38,10 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
     adapt_temperature_ladder,
 )
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
+    DELTA_MAX,
     DsmcAdaptation,
     adapt_scales,
+    guided_delta_limit,
     initial_delta,
     initialize_adaptation,
     latent_adaptation,
@@ -263,26 +270,45 @@ def run_marginal_particle_gibbs(
         (num_steps,),
         jnp.asarray(initial_latent_delta_value, dtype=observations.dtype),
     )
+    curvature_limited = (
+        num_warmup > 0
+        and isinstance(kernel.path_update, (ParticleAGradSpec, TwistedParticleAGradSpec))
+        and kernel.path_update.kappa == 1
+        and not isinstance(kernel.path_update.latent_step, FixedLatentStepSpec)
+    )
+    latent_free_mask = (
+        target.independent_mask
+        if kernel.exact_constraints is None
+        else target.independent_mask & kernel.exact_constraints.free_mask
+    )
+
+    def initialize_chain(position: jax.Array, path: jax.Array) -> TrajectoryMCMCState:
+        state = _initialize_chain_state(
+            position,
+            observations=observations,
+            times=times,
+            target=target,
+            parameter_gradient_fn=kernel.parameter_gradient_fn,
+            initial_latent_delta=initial_latent_delta,
+            exact_constraints=kernel.exact_constraints,
+            param_step_size=kernel.initial_param_step_size[0],
+            parameter_chol=kernel.initial_parameter_chol,
+            param_min_scale=kernel.min_scale[0],
+            param_max_scale=kernel.max_scale[0],
+            initial_latent_trajectory=path,
+        )
+        if curvature_limited:
+            maximum = guided_delta_limit(
+                target, state.latent_context, state.latent_trajectory, latent_free_mask
+            )
+            state = state._replace(latent_delta=jnp.minimum(state.latent_delta, maximum / 4))
+        return state
+
     with inference_phase(
         "mpgibbs", "initializing_chains", clock=clock, logger=logger, wall_clock=wall_clock
     ):
         initialize = compiler(
-            jax.vmap(
-                lambda position, path: _initialize_chain_state(
-                    position,
-                    observations=observations,
-                    times=times,
-                    target=target,
-                    parameter_gradient_fn=kernel.parameter_gradient_fn,
-                    initial_latent_delta=initial_latent_delta,
-                    exact_constraints=kernel.exact_constraints,
-                    param_step_size=kernel.initial_param_step_size[0],
-                    parameter_chol=kernel.initial_parameter_chol,
-                    param_min_scale=kernel.min_scale[0],
-                    param_max_scale=kernel.max_scale[0],
-                    initial_latent_trajectory=path,
-                )
-            ),
+            jax.vmap(initialize_chain),
             chain_init_positions,
             chain_initial_latents,
         )
@@ -460,12 +486,22 @@ def run_marginal_particle_gibbs(
                 )
 
             def adapt(updated: TrajectoryMCMCState) -> _Population:
+                maximum = (
+                    jax.vmap(
+                        lambda state: guided_delta_limit(
+                            target, state.latent_context, state.latent_trajectory, latent_free_mask
+                        )
+                    )(updated)
+                    if curvature_limited
+                    else jnp.full_like(updated.latent_delta, DELTA_MAX)
+                )
                 tuning = adapt_scales(
                     current.adaptation,
                     scale_adaptation,
                     info["latent_accepted"],
                     info["latent_proposed"],
                     warmup_steps[0],
+                    maximum,
                 )
                 updated = updated._replace(latent_delta=tuning.delta)
                 param_step_size, param_da = adapt_steps(
