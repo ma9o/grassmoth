@@ -84,6 +84,7 @@ does: one counterfactual fit, run only then.
 | OBS | Tight dense and Poisson readings on x, sparse noisy readings on y, and one window with no readings | Remove the limiting channel |
 | PRIOR | 4,096 intervals over the same span, and one small positive diffusion | Restore that diffusion at the fine grid |
 | PARAM | Learned diffusion scales, cross effect and reading noise, with two independent indicators on x | Fix the implicated parameter group |
+| TAIL | StudentT readings on both paths, sharing one learned degrees of freedom | C0's Gaussian readings at matched central precision |
 
 **What each case pins and checks.** Each declaration pins its model, data,
 priors, seeds, observation masks, validity evidence and contrast. The rules:
@@ -98,6 +99,12 @@ priors, seeds, observation masks, validity evidence and contrast. The rules:
   switch probability between 0.2 and 0.8 is necessary but not sufficient. If
   MODE can't be validated, report multimodality as untested.
 - **HD** first gets a timing-only probe at the full chain and particle counts.
+- **TAIL** must meet its
+  [preregistration](cases/suite/TAIL/preregistration.json) before any fit. On
+  the truth path, each channel needs 2–20% of its readings where the log density
+  is convex, at least half near the centre, and at least three near the largest
+  convex curvature. The same data must show both curvature signs on at least six
+  of nine prior paths.
 - **C7** (an interval-mean reading channel) and **C8** (observed deterministic
   stages) are CPU checks. They confirm what the current policy supports or
   refuses.
@@ -116,6 +123,8 @@ requests and run notes are in [`suite`](suite). Their status:
   MODE's two same-well readings leave about 0.70 of the posterior mass on
   staying and 0.30 on visiting the other well and returning, under the exact
   Euler–Maruyama law. The records are in [`suite/notes.md`](suite/notes.md).
+- **TAIL is blocked** before data generation. Master's execution check refuses
+  a literal degrees of freedom, and a fixed value has no other spelling.
 - **C7 and C8** are refused by the current policy.
 
 **Data.** In the study, `edit_model` with the truth model and one `simulate`
@@ -203,6 +212,23 @@ scientific limits.
 Run records go in the run folder's `notes.md`: date, study workspace, the calls'
 IDs, outcome per case and the proposed decision. This section keeps the current
 decisions, newest first.
+
+### Second scorecard — 2026-10-24
+
+This scorecard ran on master `4572dc7b` at the full schedule, with early
+stopping at 1,000-draw checkpoints. It is recorded in
+[suite/notes.md](suite/notes.md).
+- **Passed:** C0 and NL at 1,000 draws per chain; OBS and HD at 2,000.
+- **Failed at the 4,000-draw ceiling:**
+  - MODE: x and y ESS, while every chain switches between both histories;
+  - PRIOR: y ESS only;
+  - PARAM: all six parameters, and y.
+
+The latent step stays as it is. Its rule is documented in `_curvature_limits`
+in [adaptation.py](../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/adaptation.py),
+and the matrix-step and dynamics-floor experiment was not adopted. Each
+failing case gets one change at a time. A change must be derived from that rule
+or from saved evidence, predict its effect, and be tested on at least two seeds.
 
 ### Suite — 2026-10-24
 

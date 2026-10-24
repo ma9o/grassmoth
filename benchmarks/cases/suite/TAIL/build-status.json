@@ -1,0 +1,24 @@
+{
+  "status": "blocked_before_data_generation",
+  "code_commit": "4572dc7bba9c40221e7480a83eb353e7c5c9fd74",
+  "validity_gate": "not_evaluated",
+  "data_seed": 721,
+  "prior_bank_seeds": [
+    7301,
+    7302,
+    7303,
+    7304,
+    7305,
+    7306,
+    7307,
+    7308,
+    7309
+  ],
+  "fit_requests_written": false,
+  "fits_run": 0,
+  "literal_df_error": "y.likelihood.degrees_of_freedom requires a prior parameter",
+  "delta_df_error": "model-spec priors must have strictly positive variance; represent a fixed value with a literal coefficient",
+  "rejected_simulate_call": "call:1a75c3530f23d347939280a6707c57cdc88dafb15c69741790bbfeb09bc13614",
+  "evidence": "scratchpad/suite-scorecard-2-20261024/TAIL-blocker.md",
+  "disposition": "Pane 5.2: report TAIL blocked and finish the suite. Capability fix deferred to pane 5.2."
+}

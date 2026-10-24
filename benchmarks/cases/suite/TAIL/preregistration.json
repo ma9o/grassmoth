@@ -1,0 +1,89 @@
+{
+  "case": "TAIL",
+  "source_preregistration": "scratchpad/step-theory-20261024/round-2-codex.md section 1",
+  "code_commit": "4572dc7bba9c40221e7480a83eb353e7c5c9fd74",
+  "base_case": "C0",
+  "unchanged": "dynamics, grid, masks, known input, input-effect truth/prior, initial states and diffusion scales",
+  "reading_channels": [
+    "indicator:x",
+    "indicator:y"
+  ],
+  "truth_df": 5,
+  "shared_learned_df": true,
+  "df_prior": {
+    "distribution": "LogNormal",
+    "loc": 1.6094379124341003,
+    "scale": 0.25
+  },
+  "fixed_scale": 0.21908902300206645,
+  "scale_rule": "0.2 * sqrt(6/5), matching central curvature rather than marginal variance",
+  "simulation": {
+    "start": "2020-01-01",
+    "horizon": "16d",
+    "interventions": []
+  },
+  "data_seed": 721,
+  "prior_bank_seeds": [
+    7301,
+    7302,
+    7303,
+    7304,
+    7305,
+    7306,
+    7307,
+    7308,
+    7309
+  ],
+  "replicates_per_seed": 1,
+  "fit_seeds": [
+    19,
+    29
+  ],
+  "truth_path_gate_each_channel": {
+    "convex_fraction_r_squared_gt_df_scale_squared": {
+      "min": 0.02,
+      "max": 0.2
+    },
+    "central_fraction_r_squared_le_df_scale_squared_over_4": {
+      "min": 0.5
+    },
+    "count_ratio_r_squared_over_df_scale_squared_in_2_to_4": {
+      "min": 3
+    }
+  },
+  "prior_bank_gate": {
+    "fixed_truth_observations_for_every_prior_path": true,
+    "use_each_paths_parameter_draws": true,
+    "finite_native_factors_and_derivatives_all_nine": true,
+    "minimum_passing_paths": 6,
+    "passing_path_each_channel": {
+      "convex_fraction_min": 0.02,
+      "concave_fraction_min": 0.1
+    }
+  },
+  "report_outside_gate": [
+    "positive eigenvalues of summed observation Hessian on free coordinates",
+    "mixture-Hessian discrepancy"
+  ],
+  "no_outlier_edits": true,
+  "no_seed_search": true,
+  "no_threshold_changes": true,
+  "schedule": {
+    "num_warmup": 2000,
+    "num_samples_per_chain": 4000,
+    "num_chains": 4,
+    "latent_particles": 128,
+    "hardware": "A10",
+    "time_limit_seconds": 3600,
+    "stop_when_converged": {
+      "checkpoint_draws": 1000,
+      "min_draws": 1000
+    }
+  },
+  "diagnostic_metrics": [
+    "parameter_movement",
+    "particle_identity",
+    "frequency_refresh",
+    "regional_movement"
+  ]
+}

@@ -47,3 +47,29 @@ Requests: [C0](fit-C0-twisted-k1.json), [HD](fit-HD-twisted-k1.json), [OBS](fit-
 Review before spend. Run C0 first; stop GPU work if it fails. Then run valid independent cases on separate A10s, with HD full fit after timing. Reserve actual spend plus outstanding jobs, overhead and retries against $10 and $2/fit. Five $2 reservations plus timing already exceed the batch allowance: use waves, never a reduced scorecard schedule. Do not label the resulting partial coverage a completed suite while NL remains invalid.
 
 Validation: root lint passed (7/7 tasks), scratch public-boundary lint passed, native fixture actions and saved-data assertions passed for the five valid cases. C7/C8 were CPU refusal checks only. The browser viewer remained at “Reading the journal…” and browser captures timed out; UI rendering is unverified. The full report records the safe stale-stack restart, persisted Temporal recovery and all failed draft attempts.
+
+## Second scorecard
+
+**Four native passes (C0, NL, OBS, HD); three convergence failures (MODE, PRIOR, PARAM). All seven statistical results are retained.** [Full report](../../scratchpad/suite-scorecard-2-20261024/findings.md) contains stopping checkpoints, ESS and ESS/second, R-hat, parameter truth coverage, native frequency/regional movement, freezing, timings, costs and saved-evidence localization.
+
+The server and fit workers ran master `4572dc7b`. Requests preserve the existing schedule/policy and seed 19, adding only early stopping and the two native movement reports. MODE keeps its own 900-second limit, as pane 5.2 confirmed. [Exact request audit](../../scratchpad/suite-scorecard-2-20261024/request-audit.json), [calls and provenance](../../scratchpad/suite-scorecard-2-20261024/scorecard-manifest.json).
+
+| Case | Native verdict | Retained draws/chain | GPU | Fit app, including host resources |
+|---|---|---:|---:|---:|
+| C0 | passed | 1000 | $0.15461125 | $0.25506090 |
+| NL | passed | 1000 | $0.14727794 | $0.24352920 |
+| MODE | failed | 4000 | $0.05530872 | $0.09034894 |
+| HD | passed | 2000 | $0.29945626 | $0.50038737 |
+| OBS | passed | 2000 | $0.20288886 | $0.33644607 |
+| PRIOR | failed | 4000 | $0.57690077 | $0.95732784 |
+| PARAM | failed | 4000 | $0.29822205 | $0.49730924 |
+
+Total **GPU $1.76890255 / $10; all-in $3.84615101** including the HD timing probe, CPU services/analysis and failed pre-allocation submissions. All owned apps are stopped and no reservation remains. [Billing reconciliation](../../scratchpad/suite-scorecard-2-20261024/cost-reconciliation.json).
+
+No free coordinate was completely frozen in any fit. MODE explores both preregistered histories but fails x/y ESS; PRIOR fails only y ESS; PARAM fails all six parameter ESS checks and y bulk ESS. Localization uses saved evidence on Modal CPU, with no new GPU contrast after failure.
+
+Comparison with the **first fixed-length scorecard**: C0/NL remain passes, OBS now passes, and HD/PRIOR now retain results (HD passes; PRIOR fails statistically). MODE and PARAM remain failures; MODE also uses the repaired fixture without its prior-driven input-effect parameter. Different stopping lengths change timing amortization, and these are not controlled one-change causal comparisons.
+
+**TAIL is blocked before data generation.** Pinned master refuses literal StudentT df=5 and also refuses its exact Delta-parameter representation. Pane 5.2 chose to record the blocker and finish the suite. No seed search, gate change or TAIL fit occurred. [Declaration/build status](../cases/suite/TAIL/build-status.json), [execution-owner evidence](../../scratchpad/suite-scorecard-2-20261024/TAIL-blocker.md).
+
+Saved results remain on one Modal Volume; no result bodies were downloaded locally or baked into analysis images. All numerical analysis and checks ran on Modal CPU. No sampler/library changes, commits or README edits. [Volume audit and handoff](../../scratchpad/suite-scorecard-2-20261024/handoff.md).

@@ -1,0 +1,462 @@
+{
+  "constructs": {
+    "construct:y": {
+      "name": "y",
+      "description": "Nonlinear stochastic state y",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.35,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-y": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:y"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:y"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:y": {
+          "observation": {
+            "name": "y",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "StudentT",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:y"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.21908902300206645,
+                "construct_ids": []
+              },
+              "df": {
+                "kind": "coefficient",
+                "role": "degrees_of_freedom",
+                "value": "parameter:832daa5b640b20d33cbefbc6fcba3aaf01846c0a8f71c4e828c24ab25abff052",
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Preregistered TAIL StudentT reading; central curvature matches C0 at df=5; one shared learned df, fixed scale."
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:u": {
+      "name": "u",
+      "description": "Assigned input",
+      "role": "exogenous",
+      "temporal_status": "time_varying",
+      "indicators": {
+        "indicator:u": {
+          "observation": {
+            "name": "u",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Delta",
+              "v": {
+                "kind": "state",
+                "construct_id": "construct:u"
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      },
+      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1"
+    },
+    "construct:x": {
+      "name": "x",
+      "description": "Nonlinear stochastic state x",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.45,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-x": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:x"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:x"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:x": {
+          "observation": {
+            "name": "x",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "StudentT",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:x"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.21908902300206645,
+                "construct_ids": []
+              },
+              "df": {
+                "kind": "coefficient",
+                "role": "degrees_of_freedom",
+                "value": "parameter:832daa5b640b20d33cbefbc6fcba3aaf01846c0a8f71c4e828c24ab25abff052",
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Preregistered TAIL StudentT reading; central curvature matches C0 at df=5; one shared learned df, fixed scale."
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    }
+  },
+  "edges": {
+    "edge:u-y": {
+      "cause": "construct:u",
+      "effect": "construct:y",
+      "description": "Declared benchmark causal relation",
+      "mechanisms": {
+        "mechanism:u-y": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": "parameter:2366c82cffc90e7355265181c33534a4faaa36e0e668c4fe9560b8f949819491",
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:u"
+            }
+          }
+        }
+      }
+    },
+    "edge:u-x": {
+      "cause": "construct:u",
+      "effect": "construct:x",
+      "description": "Declared benchmark causal relation",
+      "mechanisms": {
+        "mechanism:u-x": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.5,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:u"
+            }
+          }
+        }
+      }
+    },
+    "edge:x-y": {
+      "cause": "construct:x",
+      "effect": "construct:y",
+      "description": "Declared benchmark causal relation",
+      "mechanisms": {
+        "mechanism:x-y": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.35,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:x"
+            }
+          }
+        }
+      }
+    }
+  },
+  "parameters": {
+    "parameter:2366c82cffc90e7355265181c33534a4faaa36e0e668c4fe9560b8f949819491": {
+      "name": "input_effect",
+      "description": "Input effect",
+      "distribution": "distribution:tiny-beta"
+    },
+    "parameter:832daa5b640b20d33cbefbc6fcba3aaf01846c0a8f71c4e828c24ab25abff052": {
+      "name": "measurement_tail_df",
+      "description": "Shared StudentT degrees of freedom for x and y readings",
+      "distribution": "distribution:measurement_tail_df"
+    }
+  },
+  "distributions": {
+    "distribution:tiny-beta": {
+      "distribution": "Normal",
+      "params": {
+        "loc": 0.0,
+        "scale": 1.0
+      }
+    },
+    "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1": {
+      "distribution": "Delta",
+      "params": {
+        "v": {
+          "array": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            1.0
+          ],
+          "dtype": "float32"
+        },
+        "event_dim": 1
+      }
+    },
+    "distribution:measurement_tail_df": {
+      "distribution": "LogNormal",
+      "params": {
+        "loc": 1.6094379124341003,
+        "scale": 0.25
+      }
+    }
+  },
+  "law_layouts": {
+    "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1": {
+      "parameters": [],
+      "constructs": [
+        "construct:u"
+      ],
+      "time_points": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0,
+        13.0,
+        14.0,
+        15.0,
+        16.0
+      ],
+      "time_origin": "relative",
+      "labels": {}
+    }
+  },
+  "measurement_clock": "675s"
+}
