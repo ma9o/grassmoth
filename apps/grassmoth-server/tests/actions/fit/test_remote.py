@@ -9,6 +9,7 @@ import pytest
 
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.sampling import InferenceHardware, NutsDASpec, SamplerSpec
+from grassmoth_server.actions.contracts.identity import CallId
 from grassmoth_server.actions.fit.remote import (
     FIT_CACHE_VOLUME_ENV,
     FitComputeInput,
@@ -19,14 +20,17 @@ from grassmoth_server.actions.fit.remote import (
     decode_fit_result,
     encode_fit_result,
 )
+from grassmoth_server.compute.analysis_cache import ANALYSIS_CACHE_VOLUME_ENV, AnalysisCall
 from grassmoth_test_support.helpers import fixture_entity_id
 
 pytestmark = pytest.mark.contract
+_ANALYSIS_CALL = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
 
 
 @pytest.fixture(autouse=True)
 def isolated_cache_volume(monkeypatch):
     monkeypatch.setenv(FIT_CACHE_VOLUME_ENV, "test-fit-cache")
+    monkeypatch.setenv(ANALYSIS_CACHE_VOLUME_ENV, "test-fit-analysis")
     volume = Mock()
     monkeypatch.setattr(modal.Volume, "from_name", volume)
     return volume
@@ -65,6 +69,7 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
         time_origin=datetime(2024, 1, 1, tzinfo=UTC),
         sampler=SamplerSpec(algorithm=NutsDASpec(), num_chains=4, time_limit_seconds=time_limit),
         compute_loo_diagnostics=False,
+        analysis_call=_ANALYSIS_CALL,
     )
     expected = FitComputeResult(b"complete-fit")
     remote = Mock()
@@ -91,9 +96,11 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     )
     assert app.function.call_args.kwargs["volumes"] == {
         "/cache": isolated_cache_volume.return_value,
+        "/analysis-cache": isolated_cache_volume.return_value,
     }
-    assert isolated_cache_volume.call_count == 1
+    assert isolated_cache_volume.call_count == 2
     isolated_cache_volume.assert_any_call("test-fit-cache", create_if_missing=True)
+    isolated_cache_volume.assert_any_call("test-fit-analysis", create_if_missing=True)
     remote.remote_gen.assert_called_once_with(payload, isolated_attempt)
     remote.remote.assert_not_called()
     remote.spawn.assert_not_called()
@@ -108,6 +115,7 @@ def test_modal_timeout_propagates_without_another_call(monkeypatch, isolated_att
         datetime.now(UTC),
         SamplerSpec(),
         False,
+        _ANALYSIS_CALL,
     )
     function = Mock(remote_gen=Mock(side_effect=modal.exception.FunctionTimeoutError("expired")))
     app = Mock()
@@ -160,6 +168,7 @@ def test_interrupted_result_stream_does_not_decode_partial_output(monkeypatch):
         datetime.now(UTC),
         SamplerSpec(),
         False,
+        _ANALYSIS_CALL,
     )
     with pytest.raises(RuntimeError, match="runner interrupted"):
         _dispatch_fit(payload, hardware=InferenceHardware.L40S)

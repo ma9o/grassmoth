@@ -17,6 +17,13 @@ from grassmoth.public import (
     ObservationDataset,
     SamplerCheckpoint,
 )
+from grassmoth_server.compute.analysis_cache import (
+    ANALYSIS_CACHE_ROOT,
+    ANALYSIS_CACHE_VOLUME_ENV,
+    AnalysisCall,
+    analysis_cache_volume,
+    cache_fit_result,
+)
 from grassmoth_server.compute.resources import HOST_MEMORY_ALLOCATION_ENV
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 
@@ -52,6 +59,7 @@ class FitComputeInput:
     time_origin: datetime
     sampler: SamplerSpec
     compute_loo_diagnostics: bool
+    analysis_call: AnalysisCall
     continuation: bytes | None = None
     previous: bytes | None = None
 
@@ -159,6 +167,8 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
     volume = modal.Volume.from_name(os.environ[FIT_CACHE_VOLUME_ENV])
     with local_compilation_cache(Path("/cache/jax-bundles"), commit=volume.commit):
         result = execute_fit_compute(payload)
+        cache_fit_result(ANALYSIS_CACHE_ROOT, payload.analysis_call, result.output)
+        modal.Volume.from_name(analysis_cache_volume()).commit()
         frame = encode_fit_result(result)
         del result
     yield from _result_chunks(frame)
@@ -174,6 +184,7 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
     # and ships their current source; no deployed production function is replaced.
     app = modal.App("grassmoth-server")
     cache_volume = os.environ.get(FIT_CACHE_VOLUME_ENV, "grassmoth-fit-cache")
+    results_volume = analysis_cache_volume()
     remote_fit = app.function(
         image=gpu_image,
         # Function environment overrides image defaults without adding a build
@@ -186,6 +197,7 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
             "XLA_PYTHON_CLIENT_PREALLOCATE": "true",
             "XLA_PYTHON_CLIENT_MEM_FRACTION": "0.90",
             FIT_CACHE_VOLUME_ENV: cache_volume,
+            ANALYSIS_CACHE_VOLUME_ENV: results_volume,
             "JAX_COMPILATION_CACHE_DIR": "/tmp/grassmoth-jax",
             "JAX_ENABLE_COMPILATION_CACHE": "true",
             "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": str(FIT_CACHE_MIN_COMPILE_SECONDS),
@@ -206,6 +218,9 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
         # independently fenced by the per-dispatch claim before computation.
         volumes={
             "/cache": modal.Volume.from_name(cache_volume, create_if_missing=True),
+            str(ANALYSIS_CACHE_ROOT): modal.Volume.from_name(
+                results_volume, create_if_missing=True
+            ),
         },
     )(_fit_gpu)
     with modal.Dict.ephemeral() as attempt, app.run():
@@ -224,6 +239,7 @@ def fit_on_modal(
     sampler: SamplerSpec,
     question: QuestionSpec,
     compute_loo_diagnostics: bool,
+    analysis_call: AnalysisCall,
     continuation: SamplerCheckpoint | None = None,
     previous: FitOutput | None = None,
 ) -> FitOutput:
@@ -250,6 +266,7 @@ def fit_on_modal(
             time_origin=time_origin,
             sampler=sampler,
             compute_loo_diagnostics=compute_loo_diagnostics,
+            analysis_call=analysis_call,
             continuation=None if continuation is None else pack_result(continuation),
             previous=None if compute_previous is None else pack_result(compute_previous),
         ),

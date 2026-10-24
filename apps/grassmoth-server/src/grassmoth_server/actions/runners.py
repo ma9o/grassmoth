@@ -20,6 +20,7 @@ from grassmoth_server.actions.contracts.requests import (
     FitRequest,
     ModelDiffRequest,
     SimulateRequest,
+    call_identity,
 )
 from grassmoth_server.actions.errors import ModelFitError
 from grassmoth_server.actions.fit.selection import fit_source, prior_fit
@@ -28,7 +29,7 @@ from grassmoth_server.study.records import Applied
 
 if TYPE_CHECKING:
     from grassmoth.public import GitOid
-    from grassmoth_server.actions.contracts.identity import ArtifactId
+    from grassmoth_server.actions.contracts.identity import ArtifactId, CallId
     from grassmoth_server.actions.contracts.inputs import SimulateInput
     from grassmoth_server.study.state import StudyState
 
@@ -37,15 +38,17 @@ async def _run_fit(
     store: ArtifactStore,
     pins: dict[ArtifactId, GitOid],
     request: FitInput[GitOid],
+    call_id: CallId,
 ) -> Applied[GitOid]:
     """Keep continuation loading, compute and publication off the activity event loop."""
-    return await asyncio.to_thread(_fit_selected, store, pins, request)
+    return await asyncio.to_thread(_fit_selected, store, pins, request, call_id)
 
 
 def _fit_selected(
     store: ArtifactStore,
     pins: dict[ArtifactId, GitOid],
     request: FitInput[GitOid],
+    call_id: CallId,
 ) -> Applied[GitOid]:
     from grassmoth_server.actions.fit.action import run_fit
     from grassmoth_server.actions.fit.execution import resolve_sampler_spec
@@ -89,8 +92,13 @@ def _fit_selected(
     config = get_config().inference
     if sampler.hardware != InferenceHardware.LOCAL:
         from grassmoth_server.actions.fit.remote import fit_on_modal
+        from grassmoth_server.compute.analysis_cache import AnalysisCall
 
-        compute_fit = partial(fit_on_modal, sampler.hardware)
+        compute_fit = partial(
+            fit_on_modal,
+            sampler.hardware,
+            analysis_call=AnalysisCall(workspace_id=store.workspace_id, call_id=call_id),
+        )
     else:
         compute_fit = run_fit
     result = compute_fit(
@@ -161,6 +169,7 @@ async def run_action_locally(
             store,
             pins,
             request.input,
+            call_identity(request),
         )
     return await _run_simulate(store, pins, request.input)
 

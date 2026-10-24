@@ -34,6 +34,7 @@ dependencies = [
 ]
 
 [project.scripts]
+grassmoth-server = "grassmoth_server.compute.analysis:main"
 grassmoth-publish = "grassmoth_server.study.publish:main"
 grassmoth-sweep = "grassmoth_server.study.sweep:sweep_cli"
 

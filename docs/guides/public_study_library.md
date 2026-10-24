@@ -51,3 +51,32 @@ entry points may use internals, but helpers imported by non-test callers are
 checked even when they live in tests. Import checks constrain dependencies;
 reviewing an experiment still establishes whether it delegates scientific work
 to the actions.
+
+## Analyze cached fit results
+
+The [CPU analysis helper](../../apps/grassmoth-server/src/grassmoth_server/compute/analysis.py)
+runs a script beside a fit result already cached on Modal:
+
+```bash
+uv run grassmoth-server analyze --workspace STUDY --call call:HASH -- analysis.py
+```
+
+The script receives the verified MessagePack body path as its first argument and
+in `GRASSMOTH_RESULT_PATH`; subsequent command arguments follow it. Its output and
+exit status return to the caller. Only the script and call metadata are sent from
+the local machine. Results belong on the Volume, never in an image.
+
+The [cache owner](../../apps/grassmoth-server/src/grassmoth_server/compute/analysis_cache.py)
+keeps the remote fit output by content hash. The study journal still owns whether
+the call was published. For continuations, earlier phase traces remain in the
+study; the cache contains the current container's output. Missing or expired
+entries fail explicitly, without uploading a local result.
+
+Deploy the [daily retention job](../../apps/grassmoth-server/src/grassmoth_server/compute/analysis_deployment.py)
+with the service environment:
+
+```bash
+uv run modal deploy apps/grassmoth-server/src/grassmoth_server/compute/analysis_deployment.py
+```
+
+The cache owner defines its fourteen-day retention policy and Volume selection.

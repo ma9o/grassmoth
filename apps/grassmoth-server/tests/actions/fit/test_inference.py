@@ -318,7 +318,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         combined.evidence.observation_log_probs.values[0, :, 0], [1, 1, 5]
     )
     from grassmoth.artifacts.sampling import InferenceHardware
+    from grassmoth_server.actions.contracts.identity import CallId
     from grassmoth_server.actions.fit import remote
+    from grassmoth_server.compute.analysis_cache import AnalysisCall
 
     def dispatch_without_history_buffers(payload, *, hardware):
         assert hardware is InferenceHardware.L40S
@@ -339,6 +341,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             sampler=settings.revised(num_samples_per_chain=count),
             question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
             compute_loo_diagnostics=True,
+            analysis_call=AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64)),
             previous=previous,
         )
 

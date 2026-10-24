@@ -11,6 +11,7 @@ from grassmoth.actions.contracts.bodies import EditModelOutput
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.sampling import InferenceHardware
+from grassmoth_server.actions.contracts.identity import CallId
 from grassmoth_server.actions.contracts.inputs import FitInput, NewFitTarget
 from grassmoth_server.actions.contracts.requests import EditModelRequest, FitRequest
 from grassmoth_server.actions.contracts.settings import FitSettingsSpec
@@ -281,6 +282,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
                 ),
                 settings=FitSettingsSpec(),
             ),
+            CallId("call:" + "a" * 64),
         )
     )
     assert effects.effects.produced[0].derived_from == pins
