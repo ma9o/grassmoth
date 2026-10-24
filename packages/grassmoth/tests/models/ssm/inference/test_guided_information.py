@@ -28,7 +28,7 @@ def test_non_gaussian_guidance_matches_true_local_score_and_has_psd_precision(ki
         return jnp.zeros(2), jax.grad(log_likelihood)(value)
 
     information = _guided_information(
-        observe, auxiliary[None], jnp.array([variance]), jnp.ones((1, 1), bool)
+        observe, auxiliary[None], jnp.array([[variance]]), jnp.ones((1, 1), bool)
     )
 
     def exact_joint(value):
@@ -41,14 +41,14 @@ def test_non_gaussian_guidance_matches_true_local_score_and_has_psd_precision(ki
     assert np.linalg.eigvalsh(information.precision[0]).min() >= 0
 
 
-@pytest.mark.parametrize("delta", [0.04, 0.08, 0.12, 0.16])
+@pytest.mark.parametrize("delta", [0.04, 0.08, 0.12, 0.16, [0.04, 0.32, 0.09]])
 def test_guidance_matches_exact_correlated_gaussian_product_with_fixed_coordinate(delta):
     covariance = np.array([[0.04, 0.01, 0.004], [0.01, 0.06, -0.002], [0.004, -0.002, 0.05]])
     precision = np.linalg.inv(covariance)
     reading = np.array([0.6, -0.3, 0.1])
     auxiliary = np.array([0.15, -0.4, 0.2])
     mask = np.array([True, True, False])
-    variance = delta / 2
+    variance = np.broadcast_to(np.asarray(delta) / 2, auxiliary.shape)
 
     def observe(value, index):
         del index
@@ -56,14 +56,17 @@ def test_guidance_matches_exact_correlated_gaussian_product_with_fixed_coordinat
 
     product = jax.jit(
         lambda: _guided_information(
-            observe, jnp.asarray(auxiliary[None]), jnp.array([variance]), jnp.asarray(mask[None])
+            observe,
+            jnp.asarray(auxiliary[None]),
+            jnp.asarray(variance[None]),
+            jnp.asarray(mask[None]),
         )
     )()
 
     def exact(value):
         score = -precision @ (value - reading)
         result = norm.logpdf(
-            auxiliary[mask], (value + variance * score)[mask], np.sqrt(variance)
+            auxiliary[mask], (value + variance * score)[mask], np.sqrt(variance[mask])
         ).sum()
         return result + multivariate_normal.logpdf(reading, value, covariance)
 
@@ -89,7 +92,7 @@ def test_zero_auxiliary_information_is_finite_and_readings_remain(steps):
         return jnp.zeros(2), (reading - value) / variance
 
     product = _guided_information(
-        observe, auxiliary, jnp.full(steps, variance), jnp.ones((steps, 1), bool)
+        observe, auxiliary, jnp.full((steps, 1), variance), jnp.ones((steps, 1), bool)
     )
     np.testing.assert_allclose(product.precision, np.full((steps, 1, 1), 1 / variance))
     np.testing.assert_allclose(product.shift, np.full((steps, 1), 0.7 / variance))

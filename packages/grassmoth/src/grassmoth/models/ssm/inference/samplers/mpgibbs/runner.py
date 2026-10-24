@@ -197,6 +197,7 @@ class _Population(NamedTuple):
     warmup_rejections: jax.Array
     ladder_frozen_at: jax.Array
     companions: CompanionTuning | None
+    latent_geometry: jax.Array
 
 
 # Gain of the simple step-size scheme; a fixed property of warmup, not a setting.
@@ -271,8 +272,7 @@ def run_marginal_particle_gibbs(
         jnp.asarray(initial_latent_delta_value, dtype=observations.dtype),
     )
     curvature_limited = (
-        num_warmup > 0
-        and isinstance(kernel.path_update, (ParticleAGradSpec, TwistedParticleAGradSpec))
+        isinstance(kernel.path_update, (ParticleAGradSpec, TwistedParticleAGradSpec))
         and kernel.path_update.kappa == 1
         and not isinstance(kernel.path_update.latent_step, FixedLatentStepSpec)
     )
@@ -282,7 +282,9 @@ def run_marginal_particle_gibbs(
         else target.independent_mask & kernel.exact_constraints.free_mask
     )
 
-    def initialize_chain(position: jax.Array, path: jax.Array) -> TrajectoryMCMCState:
+    def initialize_chain(
+        position: jax.Array, path: jax.Array
+    ) -> tuple[TrajectoryMCMCState, jax.Array]:
         state = _initialize_chain_state(
             position,
             observations=observations,
@@ -297,12 +299,14 @@ def run_marginal_particle_gibbs(
             param_max_scale=kernel.max_scale[0],
             initial_latent_trajectory=path,
         )
+        geometry = jnp.ones_like(path)
         if curvature_limited:
-            maximum = guided_delta_limit(
+            geometry = guided_delta_limit(
                 target, state.latent_context, state.latent_trajectory, latent_free_mask
             )
-            state = state._replace(latent_delta=jnp.minimum(state.latent_delta, maximum / 4))
-        return state
+            # The public per-time scale is the movement multiplier in (0, 1].
+            state = state._replace(latent_delta=jnp.full_like(state.latent_delta, 0.25))
+        return state, geometry
 
     with inference_phase(
         "mpgibbs", "initializing_chains", clock=clock, logger=logger, wall_clock=wall_clock
@@ -312,7 +316,7 @@ def run_marginal_particle_gibbs(
             chain_init_positions,
             chain_initial_latents,
         )
-        states = initialize.call(chain_init_positions, chain_initial_latents)
+        states, latent_geometry = initialize.call(chain_init_positions, chain_initial_latents)
         jax.block_until_ready(states)
     nonfinite_chains = [
         chain_idx
@@ -330,6 +334,7 @@ def run_marginal_particle_gibbs(
     cold_indices = jnp.arange(num_chains) * levels
     replicas = num_chains * levels
     states = jax.tree.map(lambda value: jnp.repeat(value, levels, axis=0), states)
+    latent_geometry = jnp.repeat(latent_geometry, levels, axis=0)
     if tempering is not None:
         states = tempering.rebind(states, betas)
     swap_accepted = jnp.zeros((num_chains, levels - 1), dtype=jnp.int32)
@@ -359,6 +364,7 @@ def run_marginal_particle_gibbs(
         None
         if companion is None
         else _initial_companion_tuning(companion, states, key, num_warmup, compiler),
+        latent_geometry,
     )
     if continuation is not None and num_warmup == 0:
         initial = restore_state(initial, continuation.native_state)
@@ -380,16 +386,28 @@ def run_marginal_particle_gibbs(
         ) -> tuple[_Population, dict[str, jax.Array]]:
             next_key, step_key = random.split(current.random_key)
             keys = random.split(step_key, replicas)
+            # The frozen metric is shared by every label/candidate in the update.
+            # Keep its scalar controller in the state and saved response; expand
+            # only the kernel operand, then restore it before companion moves.
+            kernel_states = (
+                current.chains._replace(
+                    latent_delta=current.chains.latent_delta[..., None] * current.latent_geometry
+                )
+                if curvature_limited
+                else current.chains
+            )
             if tempering is None:
                 updated, info = jax.vmap(
                     lambda state, draw_key: kernel.step_fn(state, draw_key, batch_size=batch_size)
-                )(current.chains, keys)
+                )(kernel_states, keys)
                 empty = jnp.zeros((num_chains, 0), dtype=jnp.int32)
                 exchange = ExchangeRecord(empty, empty, empty.astype(current.betas.dtype))
             else:
                 updated, info, exchange = tempering.step(
-                    current.chains, keys, current.betas, current.iteration, batch_size=batch_size
+                    kernel_states, keys, current.betas, current.iteration, batch_size=batch_size
                 )
+            if curvature_limited:
+                updated = updated._replace(latent_delta=current.chains.latent_delta)
             moved_companions = current.companions
             companion_accepted = None
             companion_record: dict[str, jax.Array] = {}
@@ -486,14 +504,17 @@ def run_marginal_particle_gibbs(
                 )
 
             def adapt(updated: TrajectoryMCMCState) -> _Population:
-                maximum = (
+                geometry = (
                     jax.vmap(
                         lambda state: guided_delta_limit(
                             target, state.latent_context, state.latent_trajectory, latent_free_mask
                         )
                     )(updated)
                     if curvature_limited
-                    else jnp.full_like(updated.latent_delta, DELTA_MAX)
+                    else current.latent_geometry
+                )
+                maximum = jnp.full_like(
+                    updated.latent_delta, 1.0 if curvature_limited else DELTA_MAX
                 )
                 tuning = adapt_scales(
                     current.adaptation,
@@ -572,6 +593,7 @@ def run_marginal_particle_gibbs(
                     random_key=next_key,
                     iteration=current.iteration + 1,
                     adaptation=tuning,
+                    latent_geometry=geometry,
                     parameter_covariance=covariance,
                     companions=companions,
                 )

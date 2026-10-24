@@ -124,8 +124,8 @@ The current policy is MPGibbs with these settings:
   warmup windows;
 - twisted Particle-aGRAD path updates with κ = 1 and 128 particles.
 
-The latent step adapts in warmup under an observation-curvature bound and
-freezes before the retained draws. The `fit` requests pin every setting.
+The latent step adapts in warmup under a per-coordinate observation-curvature
+bound and freezes before the retained draws. The `fit` requests pin every setting.
 
 Tournament candidates include:
 - dSMC with Particle-RWM;

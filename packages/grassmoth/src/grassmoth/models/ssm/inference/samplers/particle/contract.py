@@ -116,7 +116,7 @@ class SmootherContext(NamedTuple):
     obs_increment_fn: ObservationIncrementLogProbRuntimeFn
     runtime_observations: jnp.ndarray
     latent_free_mask: jnp.ndarray
-    amala_delta: Float[Array, " T"]
+    amala_delta: Float[Array, " T"] | Float[Array, "T D"]
     drift: AuxiliaryDrift
     latent_block_coords: LatentBlockSize
     paid_mix: PaidMixture | None

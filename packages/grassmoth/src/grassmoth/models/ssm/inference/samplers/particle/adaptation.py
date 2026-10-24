@@ -31,18 +31,21 @@ def _curvature_limits(
     path: jax.Array,
     free_mask: jax.Array,
 ) -> jax.Array:
-    """Bound the local auxiliary Jacobian's departure from identity by one.
+    """Diagonal steps bounding the local auxiliary Jacobian by row curvature.
 
     Curvature is measured at the latest warmup state, never recomputed to
     change a retained transition's step. Missing factors have zero curvature.
-    Absolute eigenvalues also control locally nonconcave observation factors;
-    this is a local efficiency heuristic, not a global stability guarantee.
+    Absolute row sums majorize both signs of the symmetric Hessian. Thus the
+    scaled Hessian has spectral radius at most one, while a tight independent
+    channel cannot throttle another coordinate. This is a local efficiency
+    heuristic, not a global stability guarantee; cross-coordinate coupling can
+    make the diagonal bound conservative.
     """
 
     def at_time(state: jax.Array, free: jax.Array, index: jax.Array) -> jax.Array:
         hessian = jax.hessian(observe)(state, index)
         hessian = (hessian + hessian.T) * 0.5 * free[:, None] * free[None, :]
-        curvature = jnp.max(jnp.abs(jnp.linalg.eigvalsh(hessian)))
+        curvature = jnp.sum(jnp.abs(hessian), axis=-1)
         return 2.0 / jnp.maximum(curvature, 2.0 / DELTA_MAX)
 
     return jax.vmap(at_time)(path, free_mask, jnp.arange(path.shape[0]))

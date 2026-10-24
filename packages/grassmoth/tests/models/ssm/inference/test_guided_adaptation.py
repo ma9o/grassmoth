@@ -28,7 +28,8 @@ def test_gaussian_noise_scaling_multichannel_and_pinned_coordinates(variance):
         return -0.5 * (present[index] * value[0] ** 2 + 100 * value[1] ** 2) / variance
 
     bound = jax.jit(_curvature_limits, static_argnums=0)(observe, path, mask)
-    np.testing.assert_allclose(bound, [variance, 2 * variance, 10], rtol=2e-6)
+    np.testing.assert_allclose(bound[:, 0], [variance, 2 * variance, 10], rtol=2e-6)
+    np.testing.assert_array_equal(bound[:, 1], np.full(3, 10))
 
 
 @pytest.mark.parametrize("kind", ["poisson", "nonconcave"])
@@ -45,7 +46,7 @@ def test_non_gaussian_limits_follow_current_warmup_state(kind):
 
     actual = _curvature_limits(observe, path, jnp.ones_like(path, bool))
     expected = [2.0, 2 / np.e] if kind == "poisson" else [1.0, 0.5]
-    np.testing.assert_allclose(actual, expected, rtol=2e-6)
+    np.testing.assert_allclose(actual[:, 0], expected, rtol=2e-6)
 
 
 @pytest.mark.parametrize("spec", [ParticleAGradSpec(kappa=1), TwistedParticleAGradSpec(kappa=1)])
@@ -60,7 +61,7 @@ def test_controller_obeys_changing_parameter_scale_and_freezes(spec):
             jnp.zeros((2, 1)),
             jnp.ones((2, 1), bool),
         )
-        result = adapt_scales(state, settings, jnp.ones(2), jnp.ones(2), 500, limit)
+        result = adapt_scales(state, settings, jnp.ones(2), jnp.ones(2), 500, limit[:, 0])
         return result, result.delta
 
     final, deltas = jax.jit(
@@ -155,8 +156,9 @@ def test_runner_initializes_inside_curvature_window_and_keeps_fixed_assignment(f
         np.testing.assert_allclose(result.initial_latent_delta, 0.003, rtol=1e-6)
         np.testing.assert_array_equal(result.initial_latent_delta, result.final_latent_delta)
     else:
-        assert (np.asarray(result.initial_latent_delta) < 0.000051).all()
-        assert (np.asarray(result.final_latent_delta) <= 0.000201).all()
+        assert result.initial_latent_delta.shape == result.final_latent_delta.shape == (1, 2)
+        np.testing.assert_allclose(result.initial_latent_delta, 0.25)
+        assert (np.asarray(result.final_latent_delta) <= 1).all()
         assert (
             np.asarray(result.final_latent_delta) > np.asarray(result.initial_latent_delta)
         ).all()
@@ -197,5 +199,112 @@ def test_target_limit_tracks_parameter_noise_and_missing_readings():
     )
     for theta in [-0.5, 0.5]:
         np.testing.assert_allclose(
-            evaluate(theta), [0.08 * np.exp(2 * theta), 10.0, 0.08 * np.exp(2 * theta)], rtol=3e-6
+            evaluate(theta)[:, 0],
+            [0.08 * np.exp(2 * theta), 10.0, 0.08 * np.exp(2 * theta)],
+            rtol=3e-6,
         )
+
+
+def test_diagonal_curvature_separates_tight_weak_and_missing_directions():
+    path = jnp.zeros((2, 3))
+    mask = jnp.array([[True, True, False], [True, True, False]])
+    precision = jnp.array([[625.0, 2.0, 0.0], [2.0, 6.25, 0.0], [0.0, 0.0, 1e8]])
+
+    def observe(value, index):
+        return jnp.where(index == 0, -0.5 * value @ precision @ value, 0.0)
+
+    steps = jax.jit(_curvature_limits, static_argnums=0)(observe, path, mask)
+    np.testing.assert_allclose(steps[0], [2 / 627, 2 / 8.25, 10], rtol=2e-6)
+    np.testing.assert_array_equal(steps[1], np.full(3, 10))
+    scaled = np.sqrt(steps[0, :2] / 2)
+    assert np.linalg.eigvalsh(scaled[:, None] * precision[:2, :2] * scaled[None, :]).max() <= 1
+    assert steps[0, 1] > 70 * steps[0, 0]
+
+
+@pytest.mark.inference(concern="sampling")
+def test_state_dependent_metric_freezes_and_continues_without_recalibration():
+    import logging
+    import time
+    from datetime import UTC, datetime
+
+    from grassmoth.artifacts.arrays import NumericalArray
+    from grassmoth.artifacts.continuation import SamplerCheckpoint
+    from grassmoth.artifacts.probability.families import DistributionFamily
+    from grassmoth.artifacts.sampling import (
+        GaussianInitializationSpec,
+        MarginalParticleGibbsSpec,
+        SamplerSpec,
+    )
+    from grassmoth.models.ssm.inference.continuation import frozen_particle_tuning
+    from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
+        build_marginal_particle_gibbs_kernel,
+    )
+    from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import run_marginal_particle_gibbs
+    from grassmoth.models.ssm.inference.warmup.initialization import (
+        ParticleInitialization,
+        prepare_particle_initialization,
+    )
+    from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+    from grassmoth_test_support.interval_particle import interval_target
+
+    times = np.arange(3.0)
+    target = interval_target(
+        times,
+        np.array([[1.0], [4.0], [2.0]]),
+        times[:, None],
+        ("last",),
+        families=(DistributionFamily.POISSON,),
+    )
+    initialization = prepare_particle_initialization(
+        target,
+        spec=GaussianInitializationSpec(),
+        key=jax.random.key(22),
+        num_chains=1,
+        compute_budget=COMPUTE_BUDGET,
+        compiler=compile_program,
+    )
+    assert isinstance(initialization, ParticleInitialization)
+    spec = TwistedParticleAGradSpec(num_particles=8, kappa=1)
+    kernel = build_marginal_particle_gibbs_kernel(
+        target,
+        path_update=spec,
+        num_parameter_particles=2,
+        exact_constraints=target.exact_constraints,
+    )
+
+    def run(warmup, draws, continuation=None):
+        return run_marginal_particle_gibbs(
+            target,
+            kernel=kernel,
+            compiler=compile_program,
+            prepare_program=prepare_program,
+            num_warmup=warmup,
+            num_samples=draws,
+            num_chains=1,
+            key=jax.random.key(31),
+            initialization=initialization,
+            compute_budget=COMPUTE_BUDGET,
+            clock=time.monotonic,
+            wall_clock=lambda: datetime.now(UTC),
+            logger=logging.getLogger(__name__),
+            continuation=continuation,
+        )
+
+    full = run(120, 4)
+    prefix = run(120, 2)
+    checkpoint = SamplerCheckpoint(
+        settings=SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=spec)),
+        parameters=NumericalArray.from_numpy(np.asarray(prefix.last_parameters)),
+        paths=NumericalArray.from_numpy(np.asarray(prefix.last_paths)),
+        random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(prefix.random_key))),
+        native_state=prefix.final_state,
+        tuning=frozen_particle_tuning(initialization, None),
+    )
+    continued = run(0, 2, checkpoint)
+    np.testing.assert_array_equal(full.latent_paths[:, 2:], continued.latent_paths)
+    np.testing.assert_array_equal(full.grouped_positions[:, 2:], continued.grouped_positions)
+    np.testing.assert_array_equal(prefix.final_latent_delta, continued.final_latent_delta)
+    # The final native leaf owns the warmup metric; neither a new current path
+    # nor the resumed initialization may replace it during retained sampling.
+    np.testing.assert_array_equal(prefix.final_state[-1].values, continued.final_state[-1].values)
+    assert continued.final_latent_delta.shape == (1, 3)

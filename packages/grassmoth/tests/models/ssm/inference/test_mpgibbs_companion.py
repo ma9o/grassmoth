@@ -16,6 +16,7 @@ from grassmoth.artifacts.sampling import (
     GaussianReferenceTemperingSpec,
     MarginalParticleGibbsSpec,
     SamplerSpec,
+    TwistedParticleAGradSpec,
 )
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
@@ -178,13 +179,23 @@ def test_centred_nuts_preserves_the_joint_posterior_and_freezes_its_adaptation()
 
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize(
-    ("companion", "moves"),
+    ("companion", "moves", "path_update"),
     [
-        ("centred_and_scale_noncentred_mh", ("centred_mh", "scale_noncentred_mh")),
-        ("centred_nuts", ("centred_nuts",)),
+        (
+            "centred_and_scale_noncentred_mh",
+            ("centred_mh", "scale_noncentred_mh"),
+            DsmcSpec(num_particles=4),
+        ),
+        ("centred_mh", ("centred_mh",), TwistedParticleAGradSpec(num_particles=4)),
+        (
+            "centred_and_scale_noncentred_mh",
+            ("centred_mh", "scale_noncentred_mh"),
+            TwistedParticleAGradSpec(num_particles=4),
+        ),
+        ("centred_nuts", ("centred_nuts",), DsmcSpec(num_particles=4)),
     ],
 )
-def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, moves):
+def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, moves, path_update):
     target = _correlated_target()
     assert [
         move.name
@@ -207,7 +218,7 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, 
     assert isinstance(initialization, ParticleInitialization)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=DsmcSpec(num_particles=4),
+        path_update=path_update,
         num_parameter_particles=2,
         param_step_size=0.02,
         parameter_preconditioner_chol=initialization.parameter_chol,
@@ -250,6 +261,8 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, 
     if companion == "centred_nuts":
         assert result.chain_extra_fields["diverging"].shape == (2, 20)
         assert np.all(np.asarray(result.chain_extra_fields["tree_depth"]) >= 1)
+        return
+    if len(moves) == 1:
         return
     assert not np.array_equal(
         result.warmup_chain_extra_fields["centred_mh_step_size"],

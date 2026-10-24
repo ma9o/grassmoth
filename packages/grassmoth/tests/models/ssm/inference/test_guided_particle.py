@@ -179,7 +179,11 @@ def test_guided_updates_preserve_path_and_label_posterior(
         labels,
         jnp.zeros(2),
         reference=starts[0],
-        delta=jnp.full((steps,), 0.55),
+        delta=(
+            jnp.broadcast_to(jnp.array([0.12, 0.9]), (steps, dimension))
+            if dimension == 2 and kappa == 1
+            else jnp.full((steps,), 0.55)
+        ),
         trajectory_dtype=starts.dtype,
     )
     guide = target.context(jnp.mean(labels, axis=0), target.times)

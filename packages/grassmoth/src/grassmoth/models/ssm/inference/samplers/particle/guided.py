@@ -151,8 +151,8 @@ def _unshifted_information(
     auxiliary: jax.Array, variance: jax.Array, mask: jax.Array
 ) -> GaussianTwist:
     return GaussianTwist(
-        jax.vmap(jnp.diag)(mask / variance[:, None]),
-        jnp.where(mask, auxiliary / variance[:, None], 0.0),
+        jax.vmap(jnp.diag)(mask / variance),
+        jnp.where(mask, auxiliary / variance, 0.0),
     )
 
 
@@ -165,8 +165,8 @@ def _guided_information(
     """Approximate readings times the actual auxiliary law, held fixed at u.
 
     For score g and Hessian H at u, the auxiliary mean's local affine map is
-    B = I + v H, c = v (g - H u). Its information is B.T B / v and
-    B.T (u - c) / v, including when B vanishes. The reading factor uses
+    B = I + diag(v) H, c = v * (g - H u). Its information is
+    B.T diag(1/v) B and B.T ((u - c) / v), including when B vanishes. The reading factor uses
     the positive-semidefinite part of -H and retains its score at u.
     A Gaussian observation factor gives its exact product. Curvature clipping,
     nonlinear score extrapolation and separated modes can cost mixing; the
@@ -181,10 +181,10 @@ def _guided_information(
         hessian, gradient = jax.jacfwd(score, has_aux=True)(value)
         hessian = symmetric(jnp.asarray(hessian)) * free[:, None] * free[None, :]
         gradient = jnp.where(free, jnp.asarray(gradient), 0.0)
-        matrix = jnp.diag(free.astype(value.dtype)) + v * hessian
+        matrix = jnp.diag(free.astype(value.dtype)) + v[:, None] * hessian
         residual = jnp.where(free, value - v * gradient + v * (hessian @ value), 0.0)
-        auxiliary_precision = symmetric(matrix.T @ matrix / v)
-        auxiliary_shift = matrix.T @ residual / v
+        auxiliary_precision = symmetric(matrix.T @ (matrix / v[:, None]))
+        auxiliary_shift = matrix.T @ (residual / v)
         eigenvalues, eigenvectors = jnp.linalg.eigh(-hessian)
         observed_precision = symmetric(
             (eigenvectors * jnp.maximum(eigenvalues, 0.0)) @ eigenvectors.T
@@ -252,7 +252,7 @@ def _guided_step(
     mask = ctx.latent_free_mask
     steps, dimension = reference.shape
     count = spec.num_particles
-    variance = ctx.amala_delta / 2
+    variance = jnp.broadcast_to(ctx.amala_delta.reshape((steps, -1)), reference.shape) / 2
     aux_key, first_key, forward_key, backward_key = jax.random.split(key, 4)
     noise_factors = jax.vmap(
         lambda bound: target.prepare_noise_factors(bound, target.observations)
@@ -280,11 +280,8 @@ def _guided_step(
     auxiliary = jnp.where(
         mask,
         reference
-        + variance[:, None] * gradients
-        + (
-            jnp.sqrt(variance[:, None])
-            * jax.random.normal(aux_key, reference.shape, reference.dtype)
-        ),
+        + variance * gradients
+        + (jnp.sqrt(variance) * jax.random.normal(aux_key, reference.shape, reference.dtype)),
         reference,
     )
     if isinstance(spec, TwistedParticleAGradSpec) and spec.kappa == 1:
