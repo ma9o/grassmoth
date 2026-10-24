@@ -528,3 +528,88 @@ Before the Kalman move joins the policy:
 - **Framework work:** tests, lint and the fit chart. The move still rejects
   intervals, replay, exact readings on free coordinates and tempering, which
   FRANCE1940V2 needs.
+
+## 2026-10-23 — C0 aGRAD comparison: timing exceeds the approved cap
+
+Source: `4ed4c79205dbbaeb9d0cd1cdfb9cba5addcd95e4`. The standard stack was
+restarted on that commit. Fresh format-30 study `C0GUIDED_20261023` replayed
+the stage's question, truth model, seed-721 simulation and C0 model using the
+[public study actions](../../.agents/skills/grassmoth-study-api/SKILL.md).
+The run declaration, resolved requests, saved responses, Modal logs and billing
+reports are in `scratchpad/benchmarks/c0-guided-20261023/`.
+
+- Question: `5401314a4279b968937cabbcbb296cc2fd9914e4`.
+- Truth model: `6c3548a436e0e7d81f202880a600e1cb52b6944d`.
+- Simulation: `36e7d2a9d3ffbb3a6c97acddcd08a1d62c5e3e5f`, replicate 0.
+- C0 model: `366c5db2fe534fbef7fc6fd217cbc6b0e73b30bb`.
+
+Requests 15–19 declare A0 and both new methods at κ = 0 and 1. A0's request
+differs from request 04 by omitting `particle_weights`; all five retain
+`particle_identity`, `parameter_movement` and production diagnostics. Their full
+schedule remains 128 particles, four chains, 2,000 warmup sweeps and 4,000
+retained draws per chain, seed 19, A10, and a 3,600-second limit.
+
+Requests 20–21 are timing probes only: 64 warmup and 64 retained sweeps per
+chain, with the full particle and chain counts and κ = 1. They ran concurrently
+on separate A10s and completed successfully. Both record numerical source digest
+`7379d048cdd4507b386f66d05d3ec18a5facda399c88361e1de845d108ef137e`.
+
+| Timing probe | Sweep compilation | Warmup, 64 sweeps | Sampling, 64 sweeps | Total execution | Projected full execution | Actual Modal cost |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Particle-aGRAD, κ = 1 | 8.27 s | 58.58 s | 56.68 s | 132.24 s | 5,389.93 s (89.83 min) | $0.09074948 |
+| Twisted Particle-aGRAD, κ = 1 | 13.52 s | 59.02 s | 59.15 s | 141.26 s | 5,564.53 s (92.74 min) | $0.09352754 |
+
+Projection keeps the measured non-sweep execution time and scales the two sweep
+phases to 2,000 and 4,000 respectively. It is a timing estimate, not a completed
+full-schedule fit. All recorded phase intervals and runtime settings are in
+`timing-summary.json`; `billing-after-timing.json` records **$0.18427702 total**.
+
+- Particle-aGRAD timing call:
+  `call:9fbafb259163ed002407e5cd2a00fa769201f383de6020eb6256360da38344ea`;
+  Modal app `ap-IoTzBxS9aiLC2xCkwUsyvq`.
+- Twisted Particle-aGRAD timing call:
+  `call:f6fb611398d6bee4bc99ad2c0d96b1e425c21e34170c7f80a98b771f24cefd7e`;
+  Modal app `ap-YJuwfejpehVdxQAFnVsbf1`.
+
+The timing estimates exceed the brief's 3,600-second/$2 cap. The user chose to
+investigate optimizations first, and the five full arms have **not been submitted**.
+A0 and both κ = 0 arms therefore have no new full-fit measurements. The two short probes
+are not stage results: they establish no full-schedule gate, ESS comparison,
+frequency-refresh comparison or agreement between passing arms.
+
+The optimization investigation and isolated prototype are recorded in
+[`scratchpad/guided-optimization-findings.md`](../../scratchpad/guided-optimization-findings.md).
+Its kernel timings are not stage results. The main-checkout sampler, benchmark
+README and full schedule are unchanged. No C1 work or commit was performed.
+
+Validation: `bun run lint` passed (7 tasks); the saved-draw analysis script passed
+`lint:public`. Its DCT-II transform was checked numerically against the previous
+C0 frequency-refresh formula. No new tests were needed for request declarations.
+
+## 2026-10-23 — C0 guided comparison on optimized master
+
+At the user's approval, resumed `C0GUIDED_20261023` on master `b076b7ad` (including early inlining from `9108f6a2`). Requests **15–19** used their saved settings and exact C0/simulation revisions: **128 particles, four chains, 2,000 warmup, 4,000 retained draws per chain, seed 19, separate A10s**, a 3,600-second limit and $2 cap per fit. All had production checks plus `particle_identity` and `parameter_movement`; no timing runs were repeated. No schedule was reduced. The shared worker/API were restarted after verifying zero active actions; no other agent's run was killed.
+
+**Both κ=0 methods pass; A0 and both κ=1 methods fail production convergence.** All five actions completed and retained the full draws. Detailed phase timings, input-effect summaries, per-arm bulk/tail ESS per total execution second, frequency-band refresh, mean agreement, raw results and billing are in the [run report](../../scratchpad/c0-guided-resume-20261023/findings.md) and [machine-readable comparison](../../scratchpad/c0-guided-resume-20261023/comparison.json).
+
+| Arm | Gate | x bulk/tail ESS | y bulk/tail ESS | Largest latent R̂ | Total numerical execution | Worst-latent bulk ESS/s | Cost |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A0 | failed | 460/463 | 181/298 | 1.0276 | 342.65 s | 0.527 | $0.22070 |
+| aGRAD κ=0 | passed | 1427/1058 | 2200/2333 | 1.0030 | 677.28 s | 2.106 | $0.39590 |
+| aGRAD κ=1 | failed | 32/62 | 30/63 | 1.1113 | 748.61 s | 0.041 | $0.43485 |
+| Twisted κ=0 | passed | 1851/1373 | 2850/2154 | 1.0033 | 684.77 s | 2.703 | $0.41329 |
+| Twisted κ=1 | failed | 0/0 | 0/0 | unavailable | 766.60 s | 0.000 | $0.43345 |
+
+A0 fails y ESS. Both κ=1 methods fail latent convergence; twisted κ=1 triggers the frozen-coordinate failure (zero worst ESS, unavailable R̂). The κ=0 arms' input-effect means differ by 0.000187, only 0.068 combined MCSE, and their mean trajectories agree on the conservative saved worst-coordinate MCSE scale. Smoothest-band refresh is about 0.80–0.85 for κ=0, versus 0.046–0.078 for A0 and 0.0066–0.0078 for κ=1.
+
+**Proposed decision:** prefer twisted Particle-aGRAD κ=0 as the C0 candidate: about 28% better worst-latent bulk and tail ESS per recorded execution second than ordinary aGRAD κ=0. Acceptance into the policy and C1 remain the user's decisions; this run stops at C0. One seed/history does not establish a general ranking.
+
+Total actual Modal charge: **$1.89819050**. All five apps stopped, each below $2. ESS/s includes initialization, compilation, warmup and sampling; the report also gives complete action wall times and wall-time ESS/s. The large saved-result read caused shared API child exits; a temporary read-only single-worker API retrieved the original results without code changes or refits, then was stopped.
+
+| Request | Call ID |
+| --- | --- |
+| 15 · A0 | `call:9256398a18f3c6521a4ab0cf41c3791c9419a2a0f23e89d3554a94ba29c6d23a` |
+| 16 · aGRAD κ=0 | `call:3ea493b6d3c557ee0cddb487fbba1c94bdb3d11b85ac2d24de19262de075d2ab` |
+| 17 · aGRAD κ=1 | `call:e0e2dfc6ae1d636e981b64f3875bcdad967d9d64c3a463988b1cd6b5e5cb98da` |
+| 18 · Twisted κ=0 | `call:614c9782d0e5f6a09b0d1ffd9b39e110f15de9aa542ee070aaf3762e3f678785` |
+| 19 · Twisted κ=1 | `call:b31e8479dcbea4b3dbb60b632323c839f07aa0b59fead6521cf7d95eb2affb37` |
