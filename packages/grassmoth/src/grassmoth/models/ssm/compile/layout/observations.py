@@ -12,6 +12,7 @@ from grassmoth.artifacts.model.likelihood import OBSERVATION_FAMILY_SPECS, Categ
 from grassmoth.artifacts.model.parameter import SiteKind, SupportClass
 from grassmoth.artifacts.model.semantics import indicator_requires_observation_intercept
 from grassmoth.artifacts.probability.families import DistributionFamily
+from grassmoth.models.parameters import execution_parameters
 from grassmoth.models.ssm.compile.layout.axes import (
     diffusion_families,
     n_observations,
@@ -201,4 +202,8 @@ def likelihood_sites(selection: StructuralSelection) -> tuple[SiteDescriptor, ..
                 prior_field=meaning.quantity.value,
             )
         )
-    return tuple(sites)
+    sampled_quantities = {
+        selection.dynamical_model_spec.parameter_context(parameter.id).quantity
+        for parameter in execution_parameters(selection)
+    }
+    return tuple(site for site in sites if site.site_kind in sampled_quantities)

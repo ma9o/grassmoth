@@ -581,7 +581,7 @@ def test_student_innovation_tail_is_explicit_and_shared_through_completion():
             ),
         )
     )
-    with pytest.raises(ValueError, match="degrees_of_freedom requires a prior parameter"):
+    with pytest.raises(ValueError, match="degrees_of_freedom requires an explicit coefficient"):
         compile_model_fixture(candidate)
     completed = _student_innovation_model()
     assert completed.parameter(parameter.id) == parameter

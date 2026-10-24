@@ -20,7 +20,6 @@ from grassmoth.models.ssm.compile.layout.states import (
 from grassmoth.models.ssm.compile.layout.static_factors import static_scale_block
 
 if TYPE_CHECKING:
-    from grassmoth.artifacts.identity import ParameterId
     from grassmoth.models.ssm.structure.blocks import (
         DiffusionBlockSpec,
         ManifestCholBlockSpec,
@@ -68,10 +67,6 @@ def _require_execution_choices(selection: StructuralSelection) -> None:
     validate_execution_structure(selection)
     dynamical_model_spec = selection.dynamical_model_spec
 
-    def require_hyperparameter(coefficient: float | ParameterId | None, label: str) -> None:
-        if not isinstance(coefficient, str):
-            raise IncompleteModelError(f"{label} requires a prior parameter")
-
     for identity in state_ids(selection):
         construct = dynamical_model_spec.get_construct(identity)
         if construct.role == "exogenous":
@@ -91,10 +86,12 @@ def _require_execution_choices(selection: StructuralSelection) -> None:
             raise IncompleteModelError(
                 f"Construct {construct.name!r} requires an innovation distribution"
             )
-        if construct.innovation_family == DistributionFamily.STUDENT_T:
-            require_hyperparameter(
-                construct.coefficient("process_degrees_of_freedom"),
-                f"{construct.name}.process_degrees_of_freedom",
+        if (
+            construct.innovation_family == DistributionFamily.STUDENT_T
+            and construct.coefficient("process_degrees_of_freedom") is None
+        ):
+            raise IncompleteModelError(
+                f"{construct.name}.process_degrees_of_freedom requires an explicit coefficient"
             )
     for indicator in observed_indicators(selection):
         likelihood = indicator.likelihood
@@ -108,8 +105,3 @@ def _require_execution_choices(selection: StructuralSelection) -> None:
             raise IncompleteModelError(
                 f"Indicator {indicator.observation.name!r} requires explicit measurement coefficients: {missing}"
             )
-        for operand in terms.auxiliary:
-            if operand.role != "observation_scale":
-                require_hyperparameter(
-                    operand.value, f"{indicator.observation.name}.likelihood.{operand.role}"
-                )
