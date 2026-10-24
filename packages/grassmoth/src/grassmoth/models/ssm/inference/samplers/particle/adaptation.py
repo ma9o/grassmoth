@@ -31,15 +31,18 @@ def _curvature_limits(
     path: jax.Array,
     free_mask: jax.Array,
 ) -> jax.Array:
-    """Diagonal steps bounding the local auxiliary Jacobian by row curvature.
+    """Diagonal warmup limits from the auxiliary's local information.
 
-    Curvature is measured at the latest warmup state, never recomputed to
-    change a retained transition's step. Missing factors have zero curvature.
-    Absolute row sums majorize both signs of the symmetric Hessian. Thus the
-    scaled Hessian has spectral radius at most one, while a tight independent
-    channel cannot throttle another coordinate. This is a local efficiency
-    heuristic, not a global stability guarantee; cross-coordinate coupling can
-    make the diagonal bound conservative.
+    For a scalar affine score with Hessian H, the auxiliary variance A = delta/2
+    adds K = (1 + A*H)**2 / A of information about the current path. A = 1/|H|
+    cancels it for H < 0, where delta is 2R for a Gaussian reading of variance
+    R, and minimizes it to 4*H for H > 0. Where H vanishes, K = 1/A has no
+    finite minimizer; the cap and the movement multiplier are heuristics.
+    Absolute row sums extend the scalar rule conservatively to coupled
+    coordinates, and one tight channel cannot throttle another coordinate.
+    Curvature is measured at the latest warmup state and frozen before the
+    retained draws. This local rule bounds neither nonlinear nor label-mixture
+    curvature.
     """
 
     def at_time(state: jax.Array, free: jax.Array, index: jax.Array) -> jax.Array:
