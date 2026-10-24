@@ -123,8 +123,9 @@ requests and run notes are in [`suite`](suite). Their status:
   MODE's two same-well readings leave about 0.70 of the posterior mass on
   staying and 0.30 on visiting the other well and returning, under the exact
   Euler–Maruyama law. The records are in [`suite/notes.md`](suite/notes.md).
-- **TAIL is blocked** before data generation. Master's execution check refuses
-  a literal degrees of freedom, and a fixed value has no other spelling.
+- **TAIL is valid, and both of its fits fail.** About a quarter of the
+  latent time points never move in retention; see
+  [suite/notes.md](suite/notes.md).
 - **C7 and C8** are refused by the current policy.
 
 **Data.** In the study, `edit_model` with the truth model and one `simulate`

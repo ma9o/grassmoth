@@ -1,7 +1,7 @@
 {
-  "status": "blocked_before_data_generation",
-  "code_commit": "4572dc7bba9c40221e7480a83eb353e7c5c9fd74",
-  "validity_gate": "not_evaluated",
+  "status": "valid_two_fits_failed_native_convergence",
+  "code_commit": "362bb0be58b0a88278baf6a921019f2185add482",
+  "validity_gate": "passed",
   "data_seed": 721,
   "prior_bank_seeds": [
     7301,
@@ -14,11 +14,88 @@
     7308,
     7309
   ],
-  "fit_requests_written": false,
-  "fits_run": 0,
-  "literal_df_error": "y.likelihood.degrees_of_freedom requires a prior parameter",
-  "delta_df_error": "model-spec priors must have strictly positive variance; represent a fixed value with a literal coefficient",
-  "rejected_simulate_call": "call:1a75c3530f23d347939280a6707c57cdc88dafb15c69741790bbfeb09bc13614",
-  "evidence": "scratchpad/suite-scorecard-2-20261024/TAIL-blocker.md",
-  "disposition": "Pane 5.2: report TAIL blocked and finish the suite. Capability fix deferred to pane 5.2."
+  "truth_gate_pass": true,
+  "prior_paths_passing": 8,
+  "prior_paths_required": 6,
+  "all_native_factors_derivatives_finite": true,
+  "fit_requests_written": true,
+  "fit_seeds": [
+    19,
+    29
+  ],
+  "time_limit_seconds": 1800,
+  "time_limit_authorization": "Pane 5.2 approved 1800 seconds per fit in Codex's question UI; the full schedule is unchanged.",
+  "volume": "grassmoth-suite-scorecard-2-20261024",
+  "volume_prefix": "failing-cases-20261024/TAIL",
+  "registry": {
+    "truth": "4052244c91d4ac0b66d30a098a7fd2c1b38213f6",
+    "fit": "ac8e2f80271dd96c1023bbbbe4509cf578dff554",
+    "TAIL-truth-seed721": {
+      "revision": "1217e93bee69897b8aa6f13560b71fd54b5e40e3",
+      "call_id": "call:f8d11bce803a0805678bcf991e5e5c3ccc81091ea87c3ad283b6128a856e480a"
+    },
+    "TAIL-prior-seed7301": {
+      "revision": "a80dc49547563250023bc3b64ccc16272d5bdbe9",
+      "call_id": "call:b12d2ef9cf4ce577b2ebb7973d17be046a354e164220ccee638b4d906a7e6d58"
+    },
+    "TAIL-prior-seed7302": {
+      "revision": "1559dbe108734519f5beb529b6998bb44ccf5efd",
+      "call_id": "call:91aabccc82cbf4e974014f5cbb1ab432e213a1dfb03f2bbab37fcc98ecc24b9f"
+    },
+    "TAIL-prior-seed7303": {
+      "revision": "7f9d467b184acf6757220443e9c6a9d8078d77c2",
+      "call_id": "call:279d8d3517f069fb3f50b7645dff130b5c24e8caf78d5ffe57537ae3517b81c9"
+    },
+    "TAIL-prior-seed7304": {
+      "revision": "29a97f33a87f12c4ddffa4b7181a3725782208c7",
+      "call_id": "call:686435f5f993970c6a79bb6d81f210e6adff5a098be4892cd31b2bedc9b3f620"
+    },
+    "TAIL-prior-seed7305": {
+      "revision": "93222b196c17a3fd75a07a4fd7f52b6d2f834ce4",
+      "call_id": "call:0f6fc46d67b40c98b4995f3b362e651e9552796204a628dad96da6f02881f698"
+    },
+    "TAIL-prior-seed7306": {
+      "revision": "8652d2f5b52cefb6c8a37073db51ed0684ada302",
+      "call_id": "call:780ee48347097f3c99d43934a4d824339fe50a5a2a558cc79e7d8bb8263f5695"
+    },
+    "TAIL-prior-seed7307": {
+      "revision": "42fe54bc24c545f8ea0ca8f8743f06d96c13a064",
+      "call_id": "call:87e3abd437adaca77f12e463858215162d255739b46c309c38de6f2b2297e6c9"
+    },
+    "TAIL-prior-seed7308": {
+      "revision": "bd5dc0f439b1b3e1dc3a58ecfee7b2f398d5ad7f",
+      "call_id": "call:58d8bdc2d1af0f18f4767a3ba993d0c349d4f3aec1681ab95f8cf21935ef59f4"
+    },
+    "TAIL-prior-seed7309": {
+      "revision": "7415901cdb47f5f53b61d835ead1ca3fd7ee7c51",
+      "call_id": "call:61009831a3355227935b0e6435a112ac3b4826fde9ce05f19dcd0a13339781a7"
+    }
+  },
+  "evidence": "scratchpad/failing-cases-20261024/TAIL/validity.json",
+  "fit_requests": {
+    "19": "benchmarks/suite/fit-TAIL-twisted-k1-seed19.json",
+    "29": "benchmarks/suite/fit-TAIL-twisted-k1-seed29.json"
+  },
+  "fits_run": 2,
+  "fit_results": {
+    "19": {
+      "call_id": "call:4774e2040417b1414408efe2cafb4b5e86a3982150856238561a21375208eee2",
+      "app_id": "ap-xAiavLK6s3ghQShQ2vkDq9",
+      "journal_commit": "1b598b23a0ef144a2caedbc1d19af4aa0a1a8418",
+      "native_verdict": "failed",
+      "draws_per_chain": 4000,
+      "stopping_checkpoint": null
+    },
+    "29": {
+      "call_id": "call:1500a7e54c89c4ddb00ae6861d0ae3cb32452e3bbbbc680fe1499327043a78c0",
+      "app_id": "ap-MTDuOcwDQJWbGehBrXFgkK",
+      "journal_commit": "c86e2f8367dc87308051478c0a064d1df8881793",
+      "native_verdict": "failed",
+      "draws_per_chain": 4000,
+      "stopping_checkpoint": null
+    }
+  },
+  "fit_evidence": "scratchpad/failing-cases-20261024/TAIL/fit-summary.json",
+  "findings": "scratchpad/failing-cases-20261024/findings.md",
+  "gpu_cost_usd": "0.56650028"
 }

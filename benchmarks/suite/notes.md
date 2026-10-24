@@ -73,3 +73,24 @@ Comparison with the **first fixed-length scorecard**: C0/NL remain passes, OBS n
 **TAIL is blocked before data generation.** Pinned master refuses literal StudentT df=5 and also refuses its exact Delta-parameter representation. Pane 5.2 chose to record the blocker and finish the suite. No seed search, gate change or TAIL fit occurred. [Declaration/build status](../cases/suite/TAIL/build-status.json), [execution-owner evidence](../../scratchpad/suite-scorecard-2-20261024/TAIL-blocker.md).
 
 Saved results remain on one Modal Volume; no result bodies were downloaded locally or baked into analysis images. All numerical analysis and checks ran on Modal CPU. No sampler/library changes, commits or README edits. [Volume audit and handoff](../../scratchpad/suite-scorecard-2-20261024/handoff.md).
+
+## TAIL — 2026-10-24
+
+**Valid fixture; both fits fail with frozen latent coordinates.** The fixture was built on master `362bb0be`, which accepts the truth's literal df = 5, through the public actions with the unchanged [preregistration](../cases/suite/TAIL/preregistration.json).
+
+**Validity gate on the truth path:**
+
+| Channel | Convex readings | Central readings | Readings near the largest convex curvature |
+|---|---:|---:|---:|
+| x | 7.6% | 68.1% | 41 |
+| y | 6.9% | 70.2% | 36 |
+
+8 of 9 prior paths pass, against 6 required.
+
+**Fits.** Seeds 19 and 29 used the second scorecard's policy, schedule and early stopping, with an 1,800-second limit that pane 5.2 approved. Both reached the 4,000-draw ceiling and failed the native check:
+- x and y ESS are 0, with no R̂ available;
+- about 550 of each construct's 2,049 chain-time coordinates stay exactly unchanged through retention;
+- the lowest-band refresh is 0.15–0.20;
+- the input effect passes at both seeds, and df passes at seed 29 only (R̂ 1.10 at seed 19).
+
+Requests: [seed 19](fit-TAIL-twisted-k1-seed19.json), [seed 29](fit-TAIL-twisted-k1-seed29.json), [build status](../cases/suite/TAIL/build-status.json). GPU $0.57.
