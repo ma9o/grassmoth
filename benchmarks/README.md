@@ -1,36 +1,29 @@
-# Incremental inference benchmarks
+# Inference benchmarks
 
-This is the only README under `benchmarks/`. It owns the ladder, the cases, the
-compute schedule and every stage's decision. Benchmarks run as one study through
-the server's public actions ([Running](#running)). Agents don't edit this file.
-Each stage folder holds the JSON request bodies it sends and a `notes.md` for run
-records and observations; [Decisions](#decisions) keeps each stage's current
-decision.
+This is the only README under `benchmarks/`. It owns the suite, the compute
+schedule and the current decisions. Benchmarks run as studies through the
+server's public actions ([Running](#running)). Agents don't edit this file.
+Each run folder holds the JSON request bodies it sends and a `notes.md` for run
+records and observations; [Decisions](#decisions) keeps the current decisions.
 
-## How the ladder works
+## Scorecard and tournament
 
-The ladder builds one sampler policy a step at a time, so every result can be
-attributed to one change.
+One suite serves two purposes:
 
-1. **A stage starts from its parent's accepted policy and changes one thing.**
-   A sampler stage compares the parent policy with the parent policy plus one
-   capability, on the same cases, seeds and schedule. A model stage runs the
-   accepted policy on cases that each add one difficulty to a case that passed.
-2. **Nothing runs on top of a failure.** Cases run in the listed order, control
-   first. The first case where no arm passes production convergence stops the
-   stage, and later cases and stages wait until that failure is diagnosed and
-   fixed. The fix becomes the next comparison, even when it isn't the next
-   planned stage.
-3. **Accepted choices carry forward and are not re-tested.** Later stages don't
-   cross an accepted choice with its alternatives. A few passed cases stay as
-   regression checks. An earlier choice is reopened only when a later failure
-   points to it.
-4. **Each fit tunes itself.** Warmup adapts every step size and preconditioner
-   for that fit and freezes them before the retained draws. What carries forward
-   is the adaptation procedure, never values estimated on another case.
+- A **scorecard** runs one pinned inference configuration across the
+  [cases](#cases).
+- A **tournament** compares the current policy with a declared change on the
+  case that motivated it. Both sides use the same model, data, seeds and full
+  compute schedule.
 
-The result is the value of each addition on top of the ones before it, in this
-order. It is not a search for the best combination of all methods.
+A configuration joins the policy only if it wins its tournament and the
+scorecard does not regress. Previously passing cases must still pass, with no
+material loss of efficiency or posterior agreement under the comparison's
+predeclared criteria. Close or noisy rankings need a targeted confirmation run.
+
+Accepted choices carry forward. They are reopened only when new evidence
+calls for it. What carries forward is the adaptation procedure: every fit learns
+its own warmup values and freezes them before the retained draws.
 
 ## Compute schedule
 
@@ -65,82 +58,99 @@ so:
 
 ## Cases
 
-All cases share one model family: two nonlinear stochastic paths with cubic
-drift, a known alternating input and Normal readings, over 16 days on a
-2,048-interval grid. Each case differs from its parent in one declared way.
+**The control.** C0 has two nonlinear stochastic paths with cubic drift and a
+known alternating input. Both paths get a Normal reading at every interval,
+over 16 days on a 2,048-interval grid. Diffusion scales are fixed, and one
+input effect is unknown.
 
-| Case | Parent | Change | Stages |
-| --- | --- | --- | --- |
-| C0 | — | Control: fixed diffusion scales, one unknown input effect, a reading at every interval | 00, then regression everywhere |
-| C1 | C0 | Learn both diffusion scales; same truth and readings | 00, 02 |
-| C2 | C0 | Keep every 32nd reading of both paths plus the endpoints; the input stays fully known | 00 |
-| C3 | C1 | Apply C2's thinning | 00, 02 |
-| C4 | C3 | Twice the intervals (4,096) at the same span, readings, priors and input | 03 |
-| C5 | C1 | σy 0.35 → 0.0225 with regenerated readings; this also changes signal-to-noise | 03 |
-| C6 | C0 | Also learn the cross effect, at its existing truth; same readings | 03 |
-| C7 | C0 | Add one interval-mean reading channel | 03 |
-| C8 | C0 | Add observed deterministic stages: nonlinear between stages, affine within, no feedback into the paths | 03 |
-| France | — | FRANCE1940V2's pinned model and observations | 04 |
+**The other cases.** Each changes C0 in declared ways and may combine
+difficulties. Per-construct and per-time diagnostics locate a failure. When
+they and CPU kernel traces can't attribute it, the case's conditional contrast
+does: one counterfactual fit, run only then.
 
-C0–C3's model documents are in [`cases/stage00`](cases/stage00):
+| Case | Difficulty | Conditional contrast |
+| --- | --- | --- |
+| C0 | Control | Last comparable passing policy |
+| NL | Strong smooth single-well drift on x, measured before fitting | Moderate strength on the same nonlinearity scale |
+| MODE\* | Small fixture with demonstrated competing posterior well histories | Informative readings in the ambiguous window |
+| HD | Eight coupled states, two never read, fixed couplings | Restore their readings at the same dimension |
+| OBS | Tight dense and Poisson readings on x, sparse noisy readings on y, and one window with no readings | Remove the limiting channel |
+| PRIOR | 4,096 intervals over the same span, and one small positive diffusion | Restore that diffusion at the fine grid |
+| PARAM | Learned diffusion scales, cross effect and reading noise, with two independent indicators on x | Fix the implicated parameter group |
+
+**What each case pins and checks.** Each declaration pins its model, data,
+priors, seeds, observation masks, validity evidence and contrast. The rules:
+
+- **NL** must meet a preregistered criterion before any fit. The exact
+  transition-mean remainder, in process-noise units, must exceed 1 at no fewer
+  than 10% of times, on the truth path and on most of a fixed bank of prior
+  paths. If a fixture misses, change the drift, never the bar.
+- **MODE\*** runs only after cheap checks show posterior ambiguity. A prior
+  switch probability between 0.2 and 0.8 is necessary but not sufficient. If
+  MODE can't be validated, report multimodality as untested.
+- **HD** first gets a timing-only probe at the full chain and particle counts.
+- **C7** (an interval-mean reading channel) and **C8** (observed deterministic
+  stages) are CPU checks. They confirm what the current policy supports or
+  refuses.
+- **France** is the end-to-end study, run after the cases covering its
+  difficulties pass.
+- **Untested interactions stay explicit**, such as learned diffusion under
+  sparse readings.
+
+**Model documents.** C0's are in [`cases/stage00`](cases/stage00):
 [`truth.json`](cases/stage00/truth.json) sets every coefficient,
 [`fixed.json`](cases/stage00/fixed.json) frees only the input effect and
-[`learned.json`](cases/stage00/learned.json) also frees both diffusion scales;
-nothing else differs. The other cases still need theirs.
+[`learned.json`](cases/stage00/learned.json) also frees both diffusion scales.
+The other cases' documents are in [`cases/suite`](cases/suite), and the scorecard
+requests and run notes are in [`suite`](suite). Their status:
+- **NL has no valid fixture yet.** All four preregistered cubic strengths, from
+  100 to 3,000, made the native simulator's paths non-finite.
+- **MODE is untested.** Its prior switch probability came out at 0.17, below the
+  0.2 floor.
+- **C7 and C8** are refused by the current policy.
 
-In the study, `edit_model` with the truth model and one `simulate` (seed 721,
-16 days on a 675-second clock) give the shared history. C0 and C1 fit that
-`simulate` result directly. No action thins a simulation, so C2 and C3 fit
-readings uploaded through `prepare_data`: the same simulated values, keeping
-every 32nd reading of both paths plus the endpoints, and every input reading. A
-`simulate` option for an observation schedule would change the HTTP contract,
+**Data.** In the study, `edit_model` with the truth model and one `simulate`
+(seed 721, 16 days on a 675-second clock) give C0's history. No action thins a
+simulation, so sparse or missing channels are uploaded through `prepare_data`.
+A `simulate` option for an observation schedule would change the HTTP contract,
 which needs the user's approval.
 
-## Stages
+## Policy
 
-| Stage | Parent | Change tested | Cases, in order | Arms |
-| --- | --- | --- | --- | --- |
-| 00 Current sampler | — | None: find where today's sampler first fails | C0, C1, C2, C3 | A0 |
-| 01 Parameter adaptation | 00 | Accepted into A0 without a comparison | — | — |
-| 02 Companion moves | 01 | Extra parameter moves after each sweep | C1, C3 | A0, A1, A2 |
-| 03 Model stress | 02 | One added difficulty per case | C4, C5, C6, C7, C8 | A0 |
-| 04 Real study | 03 | The real study | France | A0 |
+The current policy is MPGibbs with these settings:
+- two parameter particles;
+- random-walk parameter proposals;
+- Gaussian initialization at scale 0.1, with its proposal covariance adapted in
+  warmup windows;
+- twisted Particle-aGRAD path updates with κ = 1 and 128 particles.
 
-- **A0** is the parent's accepted policy. In stage 00 that is today's sampler:
-  MPGibbs with dSMC, two parameter particles, one latent path redrawn per sweep,
-  random-walk parameter proposals, Gaussian initialization at scale 0.1 with its
-  proposal covariance adapted in warmup windows, an adapted latent step, no aMALA
-  and no companion. The stage's `fit` requests pin every setting.
-- **A1** adds a centred MH move on the parameters after each sweep.
-- **A2** follows A1's move with a scale-only non-centred MH move: the diffusion
-  scales change while the path is rebuilt from fixed innovations. A2 − A1 is the
-  value of the non-centred move, including its cost.
+The latent step adapts in warmup under an observation-curvature bound and
+freezes before the retained draws. The `fit` requests pin every setting.
 
-Each companion adapts its own step size during warmup. A1 and A2 set the MPGibbs
-`companion` setting, owned by the
-[sampler spec](../packages/grassmoth/src/grassmoth/artifacts/sampling.py), to
-`centred_mh` and `centred_and_scale_noncentred_mh`. The moves' exactness checks
-are in
-[`test_mpgibbs_companion.py`](../packages/grassmoth/tests/models/ssm/inference/test_mpgibbs_companion.py).
-Stage 04 starts with a short timing run at the schedule's particle and chain
-counts to size the wall limit, then runs the full fit.
-
-**Latent-path branch.** When paths stop mixing under the current policy, such as
-one path barely moving under the shared step or both stuck along the grid, the
-next comparison is the current dSMC proposal against a changed one, on the case
-that showed it. A C5 failure alone doesn't qualify, because C5 also changes
-signal-to-noise. An accepted change joins the policy, and the ladder resumes
-where it stopped.
+Tournament candidates include:
+- dSMC with Particle-RWM;
+- Particle-aGRAD;
+- κ = 0;
+- the MPGibbs `companion` moves, `centred_mh` and
+  `centred_and_scale_noncentred_mh`, owned by the
+  [sampler spec](../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
+  Their exactness checks are in
+  [`test_mpgibbs_companion.py`](../packages/grassmoth/tests/models/ssm/inference/test_mpgibbs_companion.py).
 
 ## Judging
 
 - A case passes when the library's
   [production convergence check](../packages/grassmoth/src/grassmoth/models/ssm/inference/diagnostics/convergence.py)
   passes. Finishing, acceptance rates and jump sizes don't count.
-- Arms that both pass are compared on effective samples per total execution
-  second, including initialization, compilation and warmup, and must agree with
-  each other.
-- Rejected, timed-out and errored fits are reported as such, not as sampling results.
+- Arms that both pass are compared on bulk and tail effective samples per total
+  execution second, including initialization, compilation and warmup. Their
+  posteriors must agree within Monte Carlo uncertainty.
+- Per-construct and per-time diagnostics locate failures. Saved evidence and CPU
+  kernel traces come before conditional contrasts or more GPU work. Forward
+  ESS, particle movement and smooth-mode refresh never replace the production
+  check.
+- Rejected, timed-out, errored, refused, invalid and unrun cases are reported as
+  such, not as sampling results.
 - Truth recovery is reported, not gated: each case is one simulated history.
 - NUTS runs only as a declared diagnostic, at most once per case, when no arm of
   that case converges at the schedule. It isn't a reference fit.
@@ -159,8 +169,14 @@ keeps a fit running if the caller stops, and shows the study in the viewer at
 - **Each case is a model revision** made by `edit_model`. Its data comes from
   `simulate`, or from `prepare_data` for thinned readings.
 - **Each arm is a `fit`** carrying the schedule, `hardware: "A10"` and the time
-  limit. Arms of the same case run at the same time on separate GPUs; cases
-  follow the ladder order and stop at the first failure.
+  limit. Arms of the same case run at the same time on separate GPUs.
+- **A scorecard runs C0 first.** If C0 fails, no further GPU fits run.
+  Otherwise the independent, valid cases run concurrently on separate A10s,
+  preserving their preparation and initialization dependencies.
+- **Reserve costs before launching.** Count each fit against the run's total
+  budget and the $2-per-fit limit, including overhead and retries. Launch in
+  waves when the reservations don't fit, and never shorten the schedule to fit a
+  budget.
 - **Every run must have diagnostics enabled,** including timing checks and
   repeats.
 - **Identical requests return the saved result,** success or failure. Use
@@ -175,9 +191,31 @@ scientific limits.
 
 ## Decisions
 
-Run records go in the stage folder's `notes.md`: date, study workspace, the calls'
-IDs, outcome per case and the proposed decision. This section keeps each stage's
-current decision.
+Run records go in the run folder's `notes.md`: date, study workspace, the calls'
+IDs, outcome per case and the proposed decision. This section keeps the current
+decisions, newest first.
+
+### Suite — 2026-10-24
+
+The user replaced the incremental ladder with the scorecard and tournament
+suite above. The user also accepted twisted Particle-aGRAD with κ = 1 as the
+policy's path update. Two commits make it work:
+- `ff4f0e47` builds the guide from the readings and the auxiliary path's actual
+  law;
+- `7e7062e8` bounds the warmup step by observation curvature.
+
+**The tournament that motivated it** ran on C0 on 2026-10-23 at the full
+schedule, on the code before those commits.
+- The dSMC policy failed on y's effective sample size, at 181 against 400.
+- Both κ = 0 guided methods passed.
+- Both κ = 1 methods failed when their step adapted to the cap.
+
+**Diagnostic fits after the fixes.** These used a shorter schedule, so they are
+not results under this README's schedule. Twisted κ = 1 reached about 15
+worst-latent samples per second on C0 and on three one-change variants, against
+about 2–3 for κ = 0. Run records are in
+[00_current_sampler/notes.md](00_current_sampler/notes.md). The suite's first
+scorecard hasn't run.
 
 ### Workflow — 2026-10-22
 
@@ -188,7 +226,7 @@ C0 runs it made stand. In the same change this folder moves out of the library t
 a top-level `benchmarks/`: the study needs the server running, and the folder
 holds no code, so it isn't a package.
 
-### 00 — blocked at C0
+### 00 — blocked at C0, superseded by the suite on 2026-10-24
 
 At the full schedule on an A10, C0 fails only on latent effective sample size:
 worst-coordinate bulk ESS 338 for x and 230 for y against the required 400. Every
@@ -206,5 +244,3 @@ always on since 868ef169, into the policy and dropped the fixed-versus-adapted
 comparison. The one C0 comparison, run on 2026-10-22 at 256 particles, failed in
 both arms with mixed ESS changes ([notes](00_current_sampler/notes.md)). C6 moved
 to stage 03.
-
-### 02–04 — not started

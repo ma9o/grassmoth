@@ -1,0 +1,1350 @@
+{
+  "constructs": {
+    "construct:y": {
+      "name": "y",
+      "description": "Nonlinear stochastic state y",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.35,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-y": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:y"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:y"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:y": {
+          "observation": {
+            "name": "y",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:y"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:u": {
+      "name": "u",
+      "description": "Assigned input",
+      "role": "exogenous",
+      "temporal_status": "time_varying",
+      "indicators": {
+        "indicator:u": {
+          "observation": {
+            "name": "u",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Delta",
+              "v": {
+                "kind": "state",
+                "construct_id": "construct:u"
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      },
+      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1"
+    },
+    "construct:x": {
+      "name": "x",
+      "description": "Nonlinear stochastic state x",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.45,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-x": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:x"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:x"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:x": {
+          "observation": {
+            "name": "x",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:x"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:z2": {
+      "name": "z2",
+      "description": "Nonlinear stochastic state x",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.4,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-z2": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:z2"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:z2"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:z2": {
+          "observation": {
+            "name": "z2",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:z2"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:z3": {
+      "name": "z3",
+      "description": "Nonlinear stochastic state x",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.4,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-z3": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:z3"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:z3"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:z3": {
+          "observation": {
+            "name": "z3",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:z3"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:z4": {
+      "name": "z4",
+      "description": "Nonlinear stochastic state x",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.4,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-z4": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:z4"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:z4"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:z4": {
+          "observation": {
+            "name": "z4",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:z4"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:z5": {
+      "name": "z5",
+      "description": "Nonlinear stochastic state x",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.4,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-z5": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:z5"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:z5"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:z5": {
+          "observation": {
+            "name": "z5",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:z5"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:z6": {
+      "name": "z6",
+      "description": "Nonlinear stochastic state x",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.4,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-z6": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:z6"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:z6"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:z6": {
+          "observation": {
+            "name": "z6",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:z6"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    },
+    "construct:z7": {
+      "name": "z7",
+      "description": "Nonlinear stochastic state x",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": 0.4,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 0.4,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-z7": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": 0.6,
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:z7"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.03,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:z7"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:z7": {
+          "observation": {
+            "name": "z7",
+            "measurement_dtype": "continuous",
+            "aggregation": "last",
+            "observation_window": "675s",
+            "categorical_levels": null
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Normal",
+              "loc": {
+                "kind": "state",
+                "construct_id": "construct:z7"
+              },
+              "scale": {
+                "kind": "coefficient",
+                "role": "observation_scale",
+                "value": 0.2,
+                "construct_ids": []
+              }
+            },
+            "standardized": false,
+            "reasoning": "Declared benchmark observation law"
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    }
+  },
+  "edges": {
+    "edge:u-y": {
+      "cause": "construct:u",
+      "effect": "construct:y",
+      "description": "Declared benchmark causal relation",
+      "mechanisms": {
+        "mechanism:u-y": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": "parameter:2366c82cffc90e7355265181c33534a4faaa36e0e668c4fe9560b8f949819491",
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:u"
+            }
+          }
+        }
+      }
+    },
+    "edge:u-x": {
+      "cause": "construct:u",
+      "effect": "construct:x",
+      "description": "Declared benchmark causal relation",
+      "mechanisms": {
+        "mechanism:u-x": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.5,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:u"
+            }
+          }
+        }
+      }
+    },
+    "edge:x-z2": {
+      "cause": "construct:x",
+      "effect": "construct:z2",
+      "description": "Fixed suite chain coupling",
+      "mechanisms": {
+        "mechanism:x-z2": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.35,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:x"
+            }
+          }
+        }
+      }
+    },
+    "edge:z2-z3": {
+      "cause": "construct:z2",
+      "effect": "construct:z3",
+      "description": "Fixed suite chain coupling",
+      "mechanisms": {
+        "mechanism:z2-z3": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.35,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:z2"
+            }
+          }
+        }
+      }
+    },
+    "edge:z3-z4": {
+      "cause": "construct:z3",
+      "effect": "construct:z4",
+      "description": "Fixed suite chain coupling",
+      "mechanisms": {
+        "mechanism:z3-z4": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.35,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:z3"
+            }
+          }
+        }
+      }
+    },
+    "edge:z4-z5": {
+      "cause": "construct:z4",
+      "effect": "construct:z5",
+      "description": "Fixed suite chain coupling",
+      "mechanisms": {
+        "mechanism:z4-z5": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.35,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:z4"
+            }
+          }
+        }
+      }
+    },
+    "edge:z5-z6": {
+      "cause": "construct:z5",
+      "effect": "construct:z6",
+      "description": "Fixed suite chain coupling",
+      "mechanisms": {
+        "mechanism:z5-z6": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.35,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:z5"
+            }
+          }
+        }
+      }
+    },
+    "edge:z6-z7": {
+      "cause": "construct:z6",
+      "effect": "construct:z7",
+      "description": "Fixed suite chain coupling",
+      "mechanisms": {
+        "mechanism:z6-z7": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.35,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:z6"
+            }
+          }
+        }
+      }
+    },
+    "edge:z7-y": {
+      "cause": "construct:z7",
+      "effect": "construct:y",
+      "description": "Fixed suite chain coupling",
+      "mechanisms": {
+        "mechanism:z7-y": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+              "kind": "coefficient",
+              "role": "weight",
+              "value": 0.35,
+              "construct_ids": []
+            },
+            "right": {
+              "kind": "state",
+              "construct_id": "construct:z7"
+            }
+          }
+        }
+      }
+    }
+  },
+  "parameters": {
+    "parameter:2366c82cffc90e7355265181c33534a4faaa36e0e668c4fe9560b8f949819491": {
+      "name": "input_effect",
+      "description": "Input effect",
+      "distribution": "distribution:tiny-beta"
+    }
+  },
+  "distributions": {
+    "distribution:tiny-beta": {
+      "distribution": "Normal",
+      "params": {
+        "loc": 0.0,
+        "scale": 1.0
+      }
+    },
+    "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1": {
+      "distribution": "Delta",
+      "params": {
+        "v": {
+          "array": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            -1.0,
+            1.0
+          ],
+          "dtype": "float32"
+        },
+        "event_dim": 1
+      }
+    }
+  },
+  "law_layouts": {
+    "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1": {
+      "parameters": [],
+      "constructs": [
+        "construct:u"
+      ],
+      "time_points": [
+        0.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        5.0,
+        6.0,
+        7.0,
+        8.0,
+        9.0,
+        10.0,
+        11.0,
+        12.0,
+        13.0,
+        14.0,
+        15.0,
+        16.0
+      ],
+      "time_origin": "relative",
+      "labels": {}
+    }
+  },
+  "measurement_clock": "675s"
+}
