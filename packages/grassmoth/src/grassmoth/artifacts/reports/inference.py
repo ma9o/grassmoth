@@ -29,6 +29,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     RankHistogram,
     TraceSeries,
 )
+from grassmoth.artifacts.reports.scorecard import FrequencyRefresh, RegionalMovement
 from grassmoth.artifacts.sampling import SamplerSpec
 
 
@@ -129,6 +130,8 @@ class InferenceReportCore(Value):
     prior_densities: Mapping[ParameterId, DensityCurve] = Field(
         description="Input laws evaluated on the quantity scale of the posterior summaries."
     )
+    frequency_refresh: tuple[FrequencyRefresh, ...] = ()
+    regional_movement: tuple[RegionalMovement, ...] = ()
 
 
 class InferenceReportDetail(Value):

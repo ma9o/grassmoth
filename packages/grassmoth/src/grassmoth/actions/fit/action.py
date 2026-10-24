@@ -22,6 +22,7 @@ from grassmoth.artifacts.reports.inference import (
     InferenceReportCore,
     InferenceReportDetail,
 )
+from grassmoth.artifacts.sampling import MarginalParticleGibbsSpec
 from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
 from grassmoth.models.ssm.inference.samplers.progress import capture_phases
 from grassmoth.models.ssm.inference.types import UnretainedRun
@@ -39,6 +40,7 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.observations.dataset import ObservationDataset
     from grassmoth.artifacts.reports.inference import FitRuntime
     from grassmoth.artifacts.reports.posterior_diagnostics import ChainDiagnostics
+    from grassmoth.artifacts.reports.scorecard import MovementWindow
     from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.compute.budget import ComputeBudget
     from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
@@ -189,6 +191,10 @@ def _fit(
         else None,
         observed_rows=retain(np.any(np.isfinite(fitted.panel.observations), axis=1))
         if compute_loo_diagnostics
+        or (
+            isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
+            and "regional_movement" in sampler.algorithm.diagnostic_metrics
+        )
         else None,
         exact_observation_rows=retain(native.exact_observation_rows),
         phase_extra_fields={
@@ -276,6 +282,7 @@ def inference_report(
     input_model: DynamicalModelSpec,
     evidence: InferenceEvidence,
     metadata: InferenceMetadata,
+    windows: tuple[MovementWindow, ...],
 ) -> InferenceReport:
     """Compute exact-chain diagnostics from this fit's atoms and native telemetry."""
     if metadata.distribution is None:
@@ -396,6 +403,21 @@ def inference_report(
         layout = layouts[metadata.distribution]
         atoms_value = NumericalArray.from_numpy(atoms[metadata.distribution])
         chain_size = count // metadata.num_chains
+        from grassmoth.models.ssm.inference.diagnostics.scorecard import (
+            frequency_refresh,
+            regional_movement,
+        )
+
+        metrics = frozenset(
+            metric
+            for segment in metadata.segments[-1:]
+            if isinstance(segment.settings.algorithm, MarginalParticleGibbsSpec)
+            for metric in segment.settings.algorithm.diagnostic_metrics
+        )
+        labels = {
+            identity: dynamical_model_spec.get_construct(identity).name
+            for identity in layout.constructs
+        }
         return InferenceReport(
             evidence=evidence,
             core=InferenceReportCore(
@@ -405,6 +427,27 @@ def inference_report(
                 loo_diagnostics=loo[0] if loo is not None else None,
                 posterior_marginals=marginals,
                 prior_densities=priors,
+                frequency_refresh=frequency_refresh(
+                    atoms[metadata.distribution], layout, labels, metadata.num_chains
+                )
+                if "frequency_refresh" in metrics
+                else (),
+                regional_movement=regional_movement(
+                    atoms[metadata.distribution],
+                    layout,
+                    labels,
+                    metadata.num_chains,
+                    free_mask=np.asarray(evidence.latent_free_mask.values),
+                    final_delta=np.asarray(evidence.final_latent_delta.values)
+                    if evidence.final_latent_delta is not None
+                    else None,
+                    windows=windows,
+                    observed_rows=np.asarray(evidence.observed_rows.values),
+                )
+                if "regional_movement" in metrics
+                and evidence.latent_free_mask is not None
+                and evidence.observed_rows is not None
+                else (),
             ),
             detail=InferenceReportDetail(
                 trace_data=tuple(
@@ -449,6 +492,7 @@ def fit(
 ) -> FitOutput | ModelFitFailure:
     """Compute a complete fit from owned inputs and explicit execution dependencies."""
     from grassmoth.actions.checks import fit_check_report
+    from grassmoth.artifacts.reports.scorecard import MovementWindow
 
     result = _fit(
         selection=selection,
@@ -480,6 +524,14 @@ def fit(
             selection.dynamical_model_spec,
             result.evidence,
             result.metadata,
+            tuple(
+                MovementWindow(
+                    name=name,
+                    start_day=query.start_day(time_origin),
+                    end_day=query.end_day(time_origin),
+                )
+                for name, query in question.queries.items()
+            ),
         )
     )
     return FitOutput(

@@ -182,6 +182,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
                             ),
                             retained,
                             inference_metadata(dynamical_model_spec),
+                            windows=(),
                         )
                     )
                 },

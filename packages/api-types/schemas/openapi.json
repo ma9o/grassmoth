@@ -16553,6 +16553,76 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "FrequencyRefresh": {
+        "additionalProperties": false,
+        "description": "Frequency-localized movement for one construct's complete retained trajectory.",
+        "properties": {
+          "subject": {
+            "$ref": "#/components/schemas/ConstructRef-Output"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "bands": {
+            "items": {
+              "$ref": "#/components/schemas/FrequencyRefreshBand"
+            },
+            "title": "Bands",
+            "type": "array"
+          }
+        },
+        "required": [
+          "subject",
+          "label",
+          "bands"
+        ],
+        "title": "FrequencyRefresh",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.scorecard",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "FrequencyRefreshBand": {
+        "additionalProperties": false,
+        "description": "Median squared adjacent-draw jump divided by twice pooled mode variance.",
+        "properties": {
+          "start_mode": {
+            "description": "Inclusive orthonormal DCT-II mode index.",
+            "minimum": 0,
+            "title": "Start Mode",
+            "type": "integer"
+          },
+          "stop_mode": {
+            "description": "Exclusive orthonormal DCT-II mode index.",
+            "exclusiveMinimum": 0,
+            "title": "Stop Mode",
+            "type": "integer"
+          },
+          "median_refresh": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null without two retained draws per chain; zero for constant modes.",
+            "title": "Median Refresh"
+          }
+        },
+        "required": [
+          "start_mode",
+          "stop_mode",
+          "median_refresh"
+        ],
+        "title": "FrequencyRefreshBand",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.scorecard",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "FrozenSamplerTuning": {
         "discriminator": {
           "mapping": {
@@ -17664,6 +17734,22 @@
             },
             "title": "Prior Densities",
             "type": "object"
+          },
+          "frequency_refresh": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FrequencyRefresh"
+            },
+            "title": "Frequency Refresh",
+            "type": "array"
+          },
+          "regional_movement": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RegionalMovement"
+            },
+            "title": "Regional Movement",
+            "type": "array"
           }
         },
         "required": [
@@ -17672,7 +17758,9 @@
           "convergence",
           "loo_diagnostics",
           "posterior_marginals",
-          "prior_densities"
+          "prior_densities",
+          "frequency_refresh",
+          "regional_movement"
         ],
         "title": "InferenceReportCore",
         "type": "object",
@@ -18820,7 +18908,7 @@
           "diagnostic_metrics": {
             "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
             "default": [],
-            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
+            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
           },
           "param_target_accept": {
             "default": 0.35,
@@ -18900,7 +18988,7 @@
           "diagnostic_metrics": {
             "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
             "default": [],
-            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
+            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
           },
           "param_target_accept": {
             "default": 0.35,
@@ -19532,6 +19620,107 @@
         "x-python-module": "grassmoth_server.study.snapshot",
         "x-layer": "read_models",
         "x-concern": "read_models"
+      },
+      "MovementQuantiles": {
+        "additionalProperties": false,
+        "description": "Minimum, median and maximum across selected time coordinates or native delta values.",
+        "properties": {
+          "minimum": {
+            "title": "Minimum",
+            "type": "number"
+          },
+          "median": {
+            "title": "Median",
+            "type": "number"
+          },
+          "maximum": {
+            "title": "Maximum",
+            "type": "number"
+          }
+        },
+        "required": [
+          "minimum",
+          "median",
+          "maximum"
+        ],
+        "title": "MovementQuantiles",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.scorecard",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "MovementRegion": {
+        "additionalProperties": false,
+        "description": "Refresh and final native delta on independent coordinates in one window.\n\nFor adapted kappa=1, delta is the frozen scalar multiplier of the coordinate\ngeometry; these are not the effective per-coordinate step sizes.",
+        "properties": {
+          "window": {
+            "$ref": "#/components/schemas/MovementWindow"
+          },
+          "coordinates": {
+            "minimum": 0,
+            "title": "Coordinates",
+            "type": "integer"
+          },
+          "refresh_quantiles": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MovementQuantiles"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delta_quantiles": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MovementQuantiles"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "window",
+          "coordinates",
+          "refresh_quantiles",
+          "delta_quantiles"
+        ],
+        "title": "MovementRegion",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.scorecard",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "MovementWindow": {
+        "additionalProperties": false,
+        "description": "An existing question's half-open window expressed in retained model days.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "start_day": {
+            "title": "Start Day",
+            "type": "number"
+          },
+          "end_day": {
+            "title": "End Day",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "start_day",
+          "end_day"
+        ],
+        "title": "MovementWindow",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.scorecard",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
       },
       "NegativeBinomial2LawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
@@ -21960,7 +22149,9 @@
         "enum": [
           "particle_identity",
           "parameter_movement",
-          "particle_weights"
+          "particle_weights",
+          "frequency_refresh",
+          "regional_movement"
         ],
         "type": "string",
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -23626,6 +23817,59 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "ReadingMovement": {
+        "additionalProperties": false,
+        "description": "Pooled movement at free grid coordinates with or without any prepared reading.",
+        "properties": {
+          "has_readings": {
+            "title": "Has Readings",
+            "type": "boolean"
+          },
+          "coordinates": {
+            "minimum": 0,
+            "title": "Coordinates",
+            "type": "integer"
+          },
+          "stretches": {
+            "description": "Contiguous stretches on the retained time grid.",
+            "minimum": 0,
+            "title": "Stretches",
+            "type": "integer"
+          },
+          "refresh_quantiles": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MovementQuantiles"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "delta_quantiles": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MovementQuantiles"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "has_readings",
+          "coordinates",
+          "stretches",
+          "refresh_quantiles",
+          "delta_quantiles"
+        ],
+        "title": "ReadingMovement",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.scorecard",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "RecordDependency": {
         "additionalProperties": false,
         "description": "A journal dependency linking a call argument to the attempt that first published its input.",
@@ -23754,6 +23998,52 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.observations.preparation",
         "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "RegionalMovement": {
+        "additionalProperties": false,
+        "description": "Declared windows and the slowest independent time coordinates of one construct.",
+        "properties": {
+          "subject": {
+            "$ref": "#/components/schemas/ConstructRef-Output"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "regions": {
+            "items": {
+              "$ref": "#/components/schemas/MovementRegion"
+            },
+            "title": "Regions",
+            "type": "array"
+          },
+          "reading_coverage": {
+            "items": {
+              "$ref": "#/components/schemas/ReadingMovement"
+            },
+            "title": "Reading Coverage",
+            "type": "array"
+          },
+          "worst_times": {
+            "items": {
+              "$ref": "#/components/schemas/WorstTimeMovement"
+            },
+            "title": "Worst Times",
+            "type": "array"
+          }
+        },
+        "required": [
+          "subject",
+          "label",
+          "regions",
+          "reading_coverage",
+          "worst_times"
+        ],
+        "title": "RegionalMovement",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.scorecard",
+        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "Rejected": {
@@ -24135,7 +24425,7 @@
           },
           "num_samples_per_chain": {
             "default": 1000,
-            "description": "Draws retained per chain after warmup; a continued fit appends them to its chains. Zero returns checks without a conditioned model.",
+            "description": "Requested retained draws per chain after warmup, or a ceiling when stop_when_converged is set. A continued fit appends its actual retained draws. Zero returns checks without a conditioned model.",
             "minimum": 0,
             "title": "Num Samples Per Chain",
             "type": "integer"
@@ -26381,6 +26671,35 @@
         "type": "string",
         "x-python-module": "grassmoth.artifacts.observations.expressions",
         "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "WorstTimeMovement": {
+        "additionalProperties": false,
+        "description": "An independent time coordinate ordered by its retained-draw refresh ratio.",
+        "properties": {
+          "time_index": {
+            "minimum": 0,
+            "title": "Time Index",
+            "type": "integer"
+          },
+          "time_day": {
+            "title": "Time Day",
+            "type": "number"
+          },
+          "refresh": {
+            "title": "Refresh",
+            "type": "number"
+          }
+        },
+        "required": [
+          "time_index",
+          "time_day",
+          "refresh"
+        ],
+        "title": "WorstTimeMovement",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.scorecard",
+        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "_ModelEntities-Input": {

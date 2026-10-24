@@ -92,6 +92,7 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
                                 ),
                                 result,
                                 inference_metadata(dynamical_model_spec),
+                                windows=(),
                             )
                         )
                     },

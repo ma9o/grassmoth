@@ -71,6 +71,8 @@ const fit: InferenceReportCore = {
   inference_diagnostics: null,
   convergence: { findings: [], checked: 0, status: "not_evaluated", messages: [], warnings: [] },
   loo_diagnostics: null,
+  frequency_refresh: [],
+  regional_movement: [],
   posterior_marginals: [decay, diffusion].map((parameter) => ({
     parameter: parameter.name,
     subject: {

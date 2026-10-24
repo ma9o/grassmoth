@@ -4598,6 +4598,38 @@ export interface components {
              */
             readonly steps: number;
         };
+        /**
+         * FrequencyRefresh
+         * @description Frequency-localized movement for one construct's complete retained trajectory.
+         */
+        readonly FrequencyRefresh: {
+            readonly subject: components["schemas"]["ConstructRef-Output"];
+            /** Label */
+            readonly label: string;
+            /** Bands */
+            readonly bands: readonly components["schemas"]["FrequencyRefreshBand"][];
+        };
+        /**
+         * FrequencyRefreshBand
+         * @description Median squared adjacent-draw jump divided by twice pooled mode variance.
+         */
+        readonly FrequencyRefreshBand: {
+            /**
+             * Start Mode
+             * @description Inclusive orthonormal DCT-II mode index.
+             */
+            readonly start_mode: number;
+            /**
+             * Stop Mode
+             * @description Exclusive orthonormal DCT-II mode index.
+             */
+            readonly stop_mode: number;
+            /**
+             * Median Refresh
+             * @description Null without two retained draws per chain; zero for constant modes.
+             */
+            readonly median_refresh: number | null;
+        };
         readonly FrozenSamplerTuning: components["schemas"]["JointTuning"] | components["schemas"]["ParticleTuning"] | components["schemas"]["TransferredTuning"];
         /**
          * GammaLawSpec[Expression]
@@ -4978,6 +5010,16 @@ export interface components {
              * @description Input laws evaluated on the quantity scale of the posterior summaries.
              */
             readonly prior_densities: Readonly<Partial<Record<components["schemas"]["ParameterId-Output"], components["schemas"]["DensityCurve"]>>>;
+            /**
+             * Frequency Refresh
+             * @default []
+             */
+            readonly frequency_refresh: readonly components["schemas"]["FrequencyRefresh"][];
+            /**
+             * Regional Movement
+             * @default []
+             */
+            readonly regional_movement: readonly components["schemas"]["RegionalMovement"][];
         };
         /**
          * InferenceReportDetail
@@ -5314,7 +5356,7 @@ export interface components {
              */
             readonly companion?: components["schemas"]["CompanionMoves"];
             /**
-             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
+             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
              * @default []
              */
             readonly diagnostic_metrics?: components["schemas"]["ParticleDiagnosticMetrics"];
@@ -5377,7 +5419,7 @@ export interface components {
              */
             readonly companion: components["schemas"]["CompanionMoves"];
             /**
-             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
+             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
              * @default []
              */
             readonly diagnostic_metrics: components["schemas"]["ParticleDiagnosticMetrics"];
@@ -5609,6 +5651,44 @@ export interface components {
             readonly question_checks: components["schemas"]["QuestionCheckReport"] | null;
             /** @default null */
             readonly simulation: components["schemas"]["SimulationReport"] | null;
+        };
+        /**
+         * MovementQuantiles
+         * @description Minimum, median and maximum across selected time coordinates or native delta values.
+         */
+        readonly MovementQuantiles: {
+            /** Minimum */
+            readonly minimum: number;
+            /** Median */
+            readonly median: number;
+            /** Maximum */
+            readonly maximum: number;
+        };
+        /**
+         * MovementRegion
+         * @description Refresh and final native delta on independent coordinates in one window.
+         *
+         *     For adapted kappa=1, delta is the frozen scalar multiplier of the coordinate
+         *     geometry; these are not the effective per-coordinate step sizes.
+         */
+        readonly MovementRegion: {
+            readonly window: components["schemas"]["MovementWindow"];
+            /** Coordinates */
+            readonly coordinates: number;
+            readonly refresh_quantiles: components["schemas"]["MovementQuantiles"] | null;
+            readonly delta_quantiles: components["schemas"]["MovementQuantiles"] | null;
+        };
+        /**
+         * MovementWindow
+         * @description An existing question's half-open window expressed in retained model days.
+         */
+        readonly MovementWindow: {
+            /** Name */
+            readonly name: string;
+            /** Start Day */
+            readonly start_day: number;
+            /** End Day */
+            readonly end_day: number;
         };
         /**
          * NegativeBinomial2LawSpec[Expression]
@@ -6343,7 +6423,7 @@ export interface components {
             readonly kappa: 0 | 1;
         };
         /** @enum {string} */
-        readonly ParticleDiagnosticMetric: "particle_identity" | "parameter_movement" | "particle_weights";
+        readonly ParticleDiagnosticMetric: "particle_identity" | "parameter_movement" | "particle_weights" | "frequency_refresh" | "regional_movement";
         readonly ParticleDiagnosticMetrics: readonly components["schemas"]["ParticleDiagnosticMetric"][];
         /**
          * ParticleSamplerDiagnostics
@@ -6878,6 +6958,23 @@ export interface components {
             readonly chains: readonly (readonly number[])[];
         };
         /**
+         * ReadingMovement
+         * @description Pooled movement at free grid coordinates with or without any prepared reading.
+         */
+        readonly ReadingMovement: {
+            /** Has Readings */
+            readonly has_readings: boolean;
+            /** Coordinates */
+            readonly coordinates: number;
+            /**
+             * Stretches
+             * @description Contiguous stretches on the retained time grid.
+             */
+            readonly stretches: number;
+            readonly refresh_quantiles: components["schemas"]["MovementQuantiles"] | null;
+            readonly delta_quantiles: components["schemas"]["MovementQuantiles"] | null;
+        };
+        /**
          * RecordDependency
          * @description A journal dependency linking a call argument to the attempt that first published its input.
          */
@@ -6951,6 +7048,21 @@ export interface components {
             readonly support_start_column: string;
             /** Support End Column */
             readonly support_end_column: string;
+        };
+        /**
+         * RegionalMovement
+         * @description Declared windows and the slowest independent time coordinates of one construct.
+         */
+        readonly RegionalMovement: {
+            readonly subject: components["schemas"]["ConstructRef-Output"];
+            /** Label */
+            readonly label: string;
+            /** Regions */
+            readonly regions: readonly components["schemas"]["MovementRegion"][];
+            /** Reading Coverage */
+            readonly reading_coverage: readonly components["schemas"]["ReadingMovement"][];
+            /** Worst Times */
+            readonly worst_times: readonly components["schemas"]["WorstTimeMovement"][];
         };
         /**
          * Rejected
@@ -7089,7 +7201,7 @@ export interface components {
             readonly num_warmup: number;
             /**
              * Num Samples Per Chain
-             * @description Draws retained per chain after warmup; a continued fit appends them to its chains. Zero returns checks without a conditioned model.
+             * @description Requested retained draws per chain after warmup, or a ceiling when stop_when_converged is set. A continued fit appends its actual retained draws. Zero returns checks without a conditioned model.
              * @default 1000
              */
             readonly num_samples_per_chain: number;
@@ -7977,6 +8089,18 @@ export interface components {
         };
         /** @description Deterministic support-window expression that returns one scalar per window. Use Python-like syntax over source_columns with arithmetic, comparisons, if/else, and helper functions such as any(), sum(), mean(), std(), first(), last(), count_true(), count_non_null(), lower(), contains(), and contains_any(). Use None for missing values. */
         readonly WindowExpression: string;
+        /**
+         * WorstTimeMovement
+         * @description An independent time coordinate ordered by its retained-draw refresh ratio.
+         */
+        readonly WorstTimeMovement: {
+            /** Time Index */
+            readonly time_index: number;
+            /** Time Day */
+            readonly time_day: number;
+            /** Refresh */
+            readonly refresh: number;
+        };
     };
     responses: never;
     parameters: never;

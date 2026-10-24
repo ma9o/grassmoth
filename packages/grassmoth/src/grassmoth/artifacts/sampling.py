@@ -46,7 +46,11 @@ type CompanionMoves = Literal[
 type LatentBlockSize = Literal[1, 2, "all"]
 type JointParameterization = Literal["centred", "non_centred", "mixed"]
 type ParticleDiagnosticMetric = Literal[
-    "particle_identity", "parameter_movement", "particle_weights"
+    "particle_identity",
+    "parameter_movement",
+    "particle_weights",
+    "frequency_refresh",
+    "regional_movement",
 ]
 
 
@@ -465,7 +469,9 @@ class MarginalParticleGibbsSpec(Value):
             "Optional traces to record: particle_identity (the selected particle per time "
             "step, reference-path hit rate and distinct selected particles), "
             "parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, "
-            "entropy and spread per tree node). They cost memory and output size, and no "
+            "entropy and spread per tree node). frequency_refresh summarizes retained "
+            "path movement in DCT bands; regional_movement summarizes movement and frozen "
+            "step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no "
             "convergence check reads them; they explain a failing sampler."
         ),
     )
@@ -522,8 +528,9 @@ class SamplerSpec(Value):
         default=1000,
         ge=0,
         description=(
-            "Draws retained per chain after warmup; a continued fit appends them to its "
-            "chains. Zero returns checks without a conditioned model."
+            "Requested retained draws per chain after warmup, or a ceiling when "
+            "stop_when_converged is set. A continued fit appends its actual retained draws. "
+            "Zero returns checks without a conditioned model."
         ),
     )
     num_chains: int = Field(
