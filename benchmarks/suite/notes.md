@@ -94,3 +94,31 @@ Saved results remain on one Modal Volume; no result bodies were downloaded local
 - the input effect passes at both seeds, and df passes at seed 29 only (R̂ 1.10 at seed 19).
 
 Requests: [seed 19](fit-TAIL-twisted-k1-seed19.json), [seed 29](fit-TAIL-twisted-k1-seed29.json), [build status](../cases/suite/TAIL/build-status.json). GPU $0.57.
+
+## Diagnoses of the failing cases — 2026-10-24
+
+**Method.** These come from the second scorecard's saved retained states, measured on Modal CPU with paired single-sweep kernel traces at keys 19 and 29. No sampler change was made.
+
+**The step rule.** For κ = 1, the auxiliary adds K = (1 + A·H)²/A of information about the current path. The per-coordinate step cancels it for concave readings, which is the 2R step for Gaussian ones, and minimizes it for convex ones; see `_curvature_limits` in [adaptation.py](../../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/adaptation.py). On C0, a fixed-step sweep peaks at 2R: δ = R, 2R, 3R and 4R give 9.2, 15.8, 12.8 and 9.2 worst-latent ESS per second.
+
+**PRIOR (y fails).**
+- Leftover auxiliary memory at the unread half-step times is 0.6%, so it isn't the cause.
+- The twist linearizes y's nearly deterministic dynamics at the noisy auxiliary path, up to 119 process SDs from the path.
+- The filter's minimum ESS over time falls to 1.4–18 of 128.
+- As a diagnostic only, anchoring the twist at the current path raises the minimum ESS to about 128 and multiplies y's level movement by 8.7. That anchor isn't valid as a production move.
+
+**MODE (x and y fail).** Two mechanisms:
+- **Leftover memory.** At unread times the auxiliary keeps about 80% of y's level: its precision is 51 against a target precision of 12. Raising the unread variance 100-fold raises level jumps about 40-fold.
+- **The twist anchor.** Its errors reach 206 process SDs.
+
+Histories switch about every 10 draws, but within a history y's level has a lag-1 correlation of 0.98.
+
+**PARAM (all six parameters fail).**
+- The particle filter is healthy: minimum ESS at least 127.7 of 128.
+- The step's one-label curvature agrees with the mixture's, so that lead is ruled out.
+- σ_y sits in a narrow funnel with the path. Moving it ±10% costs 12–27 log-density units, and a naive non-centred move costs 22–40.
+- The effect parameters' disagreement between chains is unexplained.
+
+**TAIL.** The failure is recorded above. Its mechanism hasn't been diagnosed yet.
+
+**Where the second half of the study lives.** The second scorecard and TAIL ran on a Modal-hosted copy of `SUITE_20261024`, keeping the local machine free. Their journal and results are on the Modal volume `grassmoth-suite-scorecard-2-20261024`, at `data/SUITE_20261024/study/history.git`. The local study holds the fixtures and the first scorecard; merging the two is in progress.
