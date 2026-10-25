@@ -1,41 +1,36 @@
 """Exact backward, bounded-window replay and ancestral path selection."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Literal, cast
+from collections.abc import Callable
+from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
+from jax.typing import DTypeLike
 
+from grassmoth.models.ssm.inference.samplers.particle.contract import SmootherContext
 from grassmoth.models.ssm.inference.samplers.particle.math import _masked_normal_log_prob
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from jax.typing import DTypeLike
-
-    from grassmoth.models.ssm.inference.samplers.particle.contract import SmootherContext
-    from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
-    from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
+from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
+from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
+from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
 
 type PathSelector = Literal["backward", "window_replay", "ancestral"]
 
 
 def _window_backward(
     memory: SequentialObservationRuntime,
-    bank: jax.Array,
-    weights: jax.Array,
-    scores: jax.Array,
-    last: jax.Array,
-    key: jax.Array,
-    auxiliary: jax.Array,
-    variance: jax.Array,
-    mask: jax.Array,
+    bank: Float[Array, "T P R"],
+    weights: Float[Array, "T P"],
+    scores: Float[Array, "T P K"],
+    last: Int[Array, ""],
+    key: PRNGKeyArray,
+    auxiliary: Float[Array, "T D"],
+    variance: Float[Array, "T D"],
+    mask: Bool[Array, "T D"],
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
     transition: Callable[[jax.Array, jax.Array, jax.Array], jax.Array],
     unroll: int,
-) -> jax.Array:
+) -> Int[Array, " T"]:
     """Pay all crossing windows and auxiliary factors before reusing an exact suffix.
 
     The compiler's window span bounds the replay. Beyond it, every label's future
@@ -128,30 +123,32 @@ def select_path(
     target: ParticleTarget,
     ctx: SmootherContext,
     memory: SequentialObservationRuntime,
-    memory_bank: jax.Array,
-    bank: jax.Array,
-    backward_weights: jax.Array,
-    scores: jax.Array,
-    observation_bank: jax.Array,
-    ancestors: jax.Array,
-    last: jax.Array,
-    earlier_key: jax.Array,
-    auxiliary: jax.Array,
-    variance: jax.Array,
-    mask: jax.Array,
+    memory_bank: Float[Array, "T P R"],
+    bank: Float[Array, "T P D"],
+    backward_weights: Float[Array, "T P"],
+    scores: Float[Array, "T P K"],
+    observation_bank: Float[Array, "T P K"],
+    ancestors: Int[Array, "T-1 P"],
+    last: Int[Array, ""],
+    earlier_key: PRNGKeyArray,
+    auxiliary: Float[Array, "T D"],
+    variance: Float[Array, "T D"],
+    mask: Bool[Array, "T D"],
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
     transition: Callable[[jax.Array, jax.Array, jax.Array], jax.Array],
-    log_precisions: jax.Array | None,
+    log_precisions: Float[Array, "T M"] | None,
     reference_dtype: DTypeLike,
     unroll: int,
-) -> tuple[jax.Array, jax.Array, jax.Array]:
+) -> tuple[Float[Array, "T D"], Int[Array, " T"], Float[Array, " K"]]:
     """Recover a path with the selector authorized by the compiled memory support."""
     steps, count, _ = bank.shape
     if selector != "backward":
         if selector == "ancestral":
             # The exact conditional filter's genealogy is valid even when a deterministic
             # stage feeds nonlinear later drift. No suffix splices or quadratic replay.
-            def ancestor(pick: jax.Array, row: jax.Array) -> tuple[jax.Array, jax.Array]:
+            def ancestor(
+                pick: Int[Array, ""], row: Int[Array, " P"]
+            ) -> tuple[Int[Array, ""], Int[Array, ""]]:
                 parent = row[pick]
                 return parent, parent
 

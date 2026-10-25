@@ -11,31 +11,25 @@ The centred NUTS move targets the centred move's conditional with one NUTS
 transition, which adapts its own step and diagonal mass in warmup.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Literal, NamedTuple, cast
+from collections.abc import Callable, Mapping
+from typing import Literal, NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
-from blackjax.adaptation.step_size import dual_averaging_adaptation
+from blackjax.adaptation.step_size import DualAveragingAdaptationState, dual_averaging_adaptation
 from numpyro.infer.hmc import HMCState, hmc
 
 from grassmoth.artifacts.model.parameter import SiteKind
+from grassmoth.compute.programs import ProgramCompiler
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
-
-if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
-
-    from blackjax.adaptation.step_size import DualAveragingAdaptationState
-
-    from grassmoth.compute.programs import ProgramCompiler
-    from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCState
-    from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
-    from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
+from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCState, trajectory_state
+from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
+from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
+from grassmoth.models.ssm.shapes import Array, Bool, Float, PRNGKeyArray
 
 type CompanionMoveName = Literal["centred_mh", "scale_noncentred_mh"]
 type CompanionProposal = Callable[
-    [TrajectoryMCMCState, jax.Array], tuple[TrajectoryMCMCState, jax.Array]
+    [TrajectoryMCMCState, Float[Array, " U"]], tuple[TrajectoryMCMCState, Float[Array, ""]]
 ]
 
 
@@ -43,18 +37,26 @@ class CompanionMove(NamedTuple):
     """One exact proposal map over the masked unconstrained parameter coordinates."""
 
     name: CompanionMoveName
-    mask: jax.Array
+    mask: Bool[Array, " U"]
     propose: CompanionProposal
 
 
 class ConditionalNuts(NamedTuple):
     """NUTS on every parameter at the current stochastic path, adapting itself in warmup."""
 
-    initialize: Callable[[TrajectoryMCMCState, jax.Array, int], HMCState]
+    initialize: Callable[[TrajectoryMCMCState, PRNGKeyArray, int], HMCState]
     step: Callable[
-        [TrajectoryMCMCState, HMCState, jax.Array],
+        [TrajectoryMCMCState, HMCState, PRNGKeyArray],
         tuple[TrajectoryMCMCState, HMCState, Mapping[str, jax.Array]],
     ]
+
+
+class CompanionTuning(NamedTuple):
+    """Per-chain Metropolis step scalars and NUTS state, adapted during warmup and frozen after."""
+
+    step_size: Float[Array, "*batch N"]
+    dual_averaging: DualAveragingAdaptationState
+    nuts: HMCState | None
 
 
 class CompanionKernel(NamedTuple):
@@ -64,7 +66,7 @@ class CompanionKernel(NamedTuple):
     nuts: ConditionalNuts | None
 
     def initial_tuning(
-        self, states: TrajectoryMCMCState, key: jax.Array, num_warmup: int
+        self, states: TrajectoryMCMCState, key: PRNGKeyArray, num_warmup: int
     ) -> CompanionTuning:
         """Start each Metropolis move from its chain's sweep step, and NUTS at its chain's state."""
         steps = jnp.repeat(states.param_step_size[:, None], len(self.moves), axis=1)
@@ -80,7 +82,7 @@ class CompanionKernel(NamedTuple):
         )
 
     def step(
-        self, state: TrajectoryMCMCState, tuning: CompanionTuning, key: jax.Array
+        self, state: TrajectoryMCMCState, tuning: CompanionTuning, key: PRNGKeyArray
     ) -> tuple[TrajectoryMCMCState, CompanionTuning, jax.Array, dict[str, jax.Array]]:
         """Apply every move once; return Metropolis acceptance indicators and per-move records."""
         accepted: list[jax.Array] = []
@@ -108,8 +110,8 @@ class CompanionKernel(NamedTuple):
 
 
 def _metropolis(
-    move: CompanionMove, state: TrajectoryMCMCState, step_size: jax.Array, key: jax.Array
-) -> tuple[TrajectoryMCMCState, jax.Array, jax.Array]:
+    move: CompanionMove, state: TrajectoryMCMCState, step_size: Float[Array, ""], key: PRNGKeyArray
+) -> tuple[TrajectoryMCMCState, Float[Array, ""], Float[Array, ""]]:
     proposal_key, accept_key = jax.random.split(key)
     noise = jax.random.normal(proposal_key, state.position.shape, state.position.dtype)
     # step_size uses the sweep's convention: proposal variance 4 * step * Sigma.
@@ -128,22 +130,16 @@ def _metropolis(
     )
 
 
-class CompanionTuning(NamedTuple):
-    """Per-chain Metropolis step scalars and NUTS state, adapted during warmup and frozen after."""
-
-    step_size: jax.Array
-    dual_averaging: DualAveragingAdaptationState
-    nuts: HMCState | None
-
-
-def restarted_dual_averaging(step_size: jax.Array) -> DualAveragingAdaptationState:
+def restarted_dual_averaging(step_size: Float[Array, " *shape"]) -> DualAveragingAdaptationState:
     """Start dual averaging at each step scalar, whatever the batch shape."""
     initialize = dual_averaging_adaptation(target=0.0)[0]
     flat = jax.vmap(initialize)(step_size.reshape(-1))
     return jax.tree.map(lambda value: value.reshape(step_size.shape), flat)
 
 
-def diffusion_scale_mask(target: ParticleTarget, priors: PriorRuntimeBundle) -> jax.Array:
+def diffusion_scale_mask(
+    target: ParticleTarget, priors: PriorRuntimeBundle
+) -> Bool[Array, " {target.initial_position.size}"]:
     """Select the unconstrained coordinates the diffusion-scale sites depend on."""
     sites = tuple(
         site.name for site in priors.registry if site.site_kind == SiteKind.DIFFUSION_DIAG
@@ -151,7 +147,7 @@ def diffusion_scale_mask(target: ParticleTarget, priors: PriorRuntimeBundle) -> 
     if not sites:
         return jnp.zeros(target.initial_position.shape, dtype=bool)
 
-    def scales(position: jax.Array) -> jax.Array:
+    def scales(position: Float[Array, " U"]) -> Float[Array, " N"]:
         values = target.parameters.constrain(position)
         return jnp.concatenate(tuple(jnp.ravel(values[name]) for name in sites))
 
@@ -162,7 +158,7 @@ def diffusion_scale_mask(target: ParticleTarget, priors: PriorRuntimeBundle) -> 
 def build_companion_proposal(
     target: ParticleTarget,
     name: CompanionMoveName,
-    parameter_gradient: Callable[[jax.Array], jax.Array],
+    parameter_gradient: Callable[[Float[Array, " U"]], Float[Array, " U"]],
     *,
     compiler: ProgramCompiler,
 ) -> CompanionProposal:
@@ -175,8 +171,8 @@ def build_companion_proposal(
     )
 
     def propose(
-        state: TrajectoryMCMCState, position: jax.Array
-    ) -> tuple[TrajectoryMCMCState, jax.Array]:
+        state: TrajectoryMCMCState, position: Float[Array, " {state.position.shape[-1]}"]
+    ) -> tuple[TrajectoryMCMCState, Float[Array, ""]]:
         context = target.context(position, times)
         if coordinates is None:
             path = target.replay_path(context, state.latent_trajectory)
@@ -200,13 +196,17 @@ def build_companion_proposal(
             complete, trajectory = target.log_posterior_from_context(
                 position, context, path, observations
             )
-        return state._replace(
+        return trajectory_state(
             position=position,
             parameter_gradient=parameter_gradient(position),
             latent_context=context,
             latent_trajectory=path,
             complete_log_posterior=complete.astype(state.complete_log_posterior.dtype),
             trajectory_log_prob=trajectory.astype(state.trajectory_log_prob.dtype),
+            latent_delta=state.latent_delta,
+            param_step_size=state.param_step_size,
+            parameter_chol=state.parameter_chol,
+            param_da=state.param_da,
         ), log_ratio
 
     return propose
@@ -215,15 +215,16 @@ def build_companion_proposal(
 def build_conditional_nuts(target: ParticleTarget, rebuild: CompanionProposal) -> ConditionalNuts:
     """Refresh NUTS at the sweep's parameters and path, then rebuild the state where it lands."""
 
-    def potential(path: jax.Array) -> Callable[[jax.Array], jax.Array]:
+    def potential(path: Float[Array, "T D"]) -> Callable[[Float[Array, " U"]], Float[Array, ""]]:
         # The path density replays deterministic coordinates under each position.
-        return lambda position: (
-            -target.log_posterior(position, path, target.observations, target.times)
-        )
+        def energy(position: Float[Array, f" {target.initial_position.size}"]) -> Float[Array, ""]:
+            return -target.log_posterior(position, path, target.observations, target.times)
+
+        return energy
 
     initialize_hmc, sample_hmc = hmc(potential_fn_gen=potential, algo="NUTS")
 
-    def initialize(state: TrajectoryMCMCState, key: jax.Array, num_warmup: int) -> HMCState:
+    def initialize(state: TrajectoryMCMCState, key: PRNGKeyArray, num_warmup: int) -> HMCState:
         return initialize_hmc(
             state.position,
             num_warmup=num_warmup,
@@ -236,7 +237,7 @@ def build_conditional_nuts(target: ParticleTarget, rebuild: CompanionProposal) -
         )
 
     def step(
-        state: TrajectoryMCMCState, nuts: HMCState, key: jax.Array
+        state: TrajectoryMCMCState, nuts: HMCState, key: PRNGKeyArray
     ) -> tuple[TrajectoryMCMCState, HMCState, Mapping[str, jax.Array]]:
         path = state.latent_trajectory
         # The sweep moved the parameters and the path since the last transition.
@@ -269,8 +270,8 @@ def build_companion_kernel(
     target: ParticleTarget,
     companion: Literal["centred_mh", "centred_and_scale_noncentred_mh", "centred_nuts"],
     *,
-    diffusion_mask: jax.Array,
-    parameter_gradient: Callable[[jax.Array], jax.Array],
+    diffusion_mask: Bool[Array, " {target.initial_position.size}"],
+    parameter_gradient: Callable[[Float[Array, " U"]], Float[Array, " U"]],
     compiler: ProgramCompiler,
 ) -> CompanionKernel:
     """Order the centred move first; a scale move without diffusion coordinates is omitted."""

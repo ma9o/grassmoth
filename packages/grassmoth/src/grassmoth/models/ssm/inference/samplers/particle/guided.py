@@ -32,19 +32,29 @@ ancestors. This keeps exact replay linear in time, at the cost of possible early
 genealogical degeneracy; near-uniform weights do not guarantee movement.
 """
 
-from __future__ import annotations
-
 from types import MappingProxyType
-from typing import TYPE_CHECKING, NamedTuple
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
+from jax.typing import DTypeLike
 
-from grassmoth.artifacts.sampling import TwistedParticleAGradSpec
-from grassmoth.models.ssm.inference.samplers.particle.contract import ParticleSmootherResult
-from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import build_guide
-from grassmoth.models.ssm.inference.samplers.particle.guided_selection import select_path
+from grassmoth.artifacts.sampling import GuidedPathSpec, TwistedParticleAGradSpec
+from grassmoth.models.ssm.inference.samplers.particle.contract import (
+    ParticleSmootherResult,
+    SmootherContext,
+)
+from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import (
+    GuideGeometry,
+    _ProposalGeometry,
+    build_guide,
+)
+from grassmoth.models.ssm.inference.samplers.particle.guided_information import InformationRule
+from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
+    PathSelector,
+    select_path,
+)
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     _masked_normal_log_prob,
 )
@@ -52,6 +62,7 @@ from grassmoth.models.ssm.inference.samplers.particle.weights import (
     requested_weight_statistics,
     weight_history_fields,
 )
+from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth.models.ssm.inference.targets.sequential import (
     sequential_observations,
 )
@@ -60,19 +71,7 @@ from grassmoth.models.ssm.inference.tracing import (
     SequentialSmootherTraceRecord,
     TracedResult,
 )
-
-if TYPE_CHECKING:
-    from jax.typing import DTypeLike
-
-    from grassmoth.artifacts.sampling import GuidedPathSpec
-    from grassmoth.models.ssm.inference.samplers.particle.contract import SmootherContext
-    from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import (
-        GuideGeometry,
-        _ProposalGeometry,
-    )
-    from grassmoth.models.ssm.inference.samplers.particle.guided_information import InformationRule
-    from grassmoth.models.ssm.inference.samplers.particle.guided_selection import PathSelector
-    from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
+from grassmoth.models.ssm.shapes import Array, Float, Int, PRNGKeyArray
 
 
 class _KillingNoise(NamedTuple):
@@ -81,7 +80,7 @@ class _KillingNoise(NamedTuple):
     rotation: jax.Array
 
 
-def _killing_noise(key: jax.Array, count: int, dtype: DTypeLike) -> _KillingNoise:
+def _killing_noise(key: PRNGKeyArray, count: int, dtype: DTypeLike) -> _KillingNoise:
     survival, replacement, rotation = jax.random.split(key, 3)
     return _KillingNoise(
         jax.random.uniform(survival, (count,), dtype=dtype),
@@ -90,7 +89,7 @@ def _killing_noise(key: jax.Array, count: int, dtype: DTypeLike) -> _KillingNois
     )
 
 
-def _killing(logits: jax.Array, noise: _KillingNoise) -> jax.Array:
+def _killing(logits: Float[Array, " P"], noise: _KillingNoise) -> Int[Array, " P"]:
     """Killing with cyclic conditioning on ancestor[0] = 0.
 
     Karppinen, Singh & Vihola's conditional resampling, as used by the paper:
@@ -134,11 +133,11 @@ def _guided_step(
     ctx: SmootherContext,
     guide: ParticleContext,
     spec: GuidedPathSpec,
-    key: jax.Array,
-    reference: jax.Array,
+    key: PRNGKeyArray,
+    reference: Float[Array, "T D"],
     *,
     record_trace: bool = False,
-    log_precisions: jax.Array | None = None,
+    log_precisions: Float[Array, "T M"] | None = None,
 ) -> ParticleSmootherResult | TracedResult[ParticleSmootherResult, SequentialSmootherTraceRecord]:
     """Run an exact conditional filter, selecting paths by their compiled memory."""
     mask = ctx.latent_free_mask
@@ -149,13 +148,15 @@ def _guided_step(
     memory = sequential_observations(target, ctx.contexts, guide, log_precisions)
     reference_memory = memory.path(reference)
 
-    def observe(value: jax.Array, index: jax.Array | int) -> tuple[jax.Array, jax.Array]:
+    def observe(
+        value: Float[Array, " R"], index: Int[Array, ""] | int
+    ) -> tuple[Float[Array, " K"], Float[Array, " D"]]:
         if spec.kappa == 0:
             return memory.log_probs(value, jnp.asarray(index)).astype(
                 ctx.traj_dtype
             ), jnp.zeros_like(memory.state(value))
 
-        def mixture(state: jax.Array) -> tuple[jax.Array, jax.Array]:
+        def mixture(state: Float[Array, " D"]) -> tuple[Float[Array, ""], Float[Array, " K"]]:
             current = memory.replace_current(value, state, jnp.asarray(index))
             per_label = memory.log_probs(current, jnp.asarray(index)).astype(ctx.traj_dtype)
             return logsumexp(ctx.initial_label_log_probs + per_label), per_label
@@ -187,7 +188,9 @@ def _guided_step(
     )
     initial_mean = target.initial_moments(guide)[0]
 
-    def local_factors(particles: jax.Array, index: jax.Array | int) -> tuple[jax.Array, jax.Array]:
+    def local_factors(
+        particles: Float[Array, "P R"], index: Int[Array, ""] | int
+    ) -> tuple[Float[Array, "P K"], Float[Array, " P"]]:
         # The conditioned particle is the reference: reuse its observation and score.
         observed, scores = jax.vmap(observe, in_axes=(0, None))(particles[1:], index)
         observed = jnp.concatenate((reference_observed[index, None], observed))
@@ -200,7 +203,9 @@ def _guided_step(
         )
         return observed, density
 
-    def transition(previous: jax.Array, current: jax.Array, index: jax.Array) -> jax.Array:
+    def transition(
+        previous: Float[Array, " R"], current: Float[Array, " R"], index: Int[Array, ""]
+    ) -> Float[Array, " K"]:
         return memory.transition_log_probs(previous, current, index).astype(ctx.traj_dtype)
 
     initial_geometry = jax.tree.map(lambda value: value[0], geometry)
@@ -227,9 +232,24 @@ def _guided_step(
     )
 
     def forward(
-        carry: tuple[jax.Array, jax.Array, jax.Array, jax.Array],
-        inputs: tuple[jax.Array, tuple[_KillingNoise, jax.Array], _ProposalGeometry],
-    ) -> tuple[tuple[jax.Array, jax.Array, jax.Array, jax.Array], tuple[jax.Array, ...]]:
+        carry: tuple[
+            Float[Array, "P R"], Float[Array, " P"], Float[Array, "P K"], Float[Array, " P"]
+        ],
+        inputs: tuple[
+            Int[Array, ""], tuple[_KillingNoise, Float[Array, "P-1 D"]], _ProposalGeometry
+        ],
+    ) -> tuple[
+        tuple[Float[Array, "P R"], Float[Array, " P"], Float[Array, "P K"], Float[Array, " P"]],
+        tuple[
+            Float[Array, "P R"],
+            Float[Array, " P"],
+            Float[Array, "P K"],
+            Float[Array, " P"],
+            Int[Array, " P"],
+            Float[Array, "P D"],
+            Float[Array, "P K"],
+        ],
+    ]:
         previous, weights, scores, previous_twists = carry
         index, draws, proposal = inputs
         killing_noise, noise = draws
@@ -268,7 +288,7 @@ def _guided_step(
             observed,
         )
 
-    def forward_noise(step_key: jax.Array) -> tuple[_KillingNoise, jax.Array]:
+    def forward_noise(step_key: PRNGKeyArray) -> tuple[_KillingNoise, Float[Array, "N D"]]:
         resample_key, proposal_key = jax.random.split(step_key)
         return (
             _killing_noise(resample_key, count, reference.dtype),
@@ -358,10 +378,10 @@ def guided_step(
     ctx: SmootherContext,
     guide: ParticleContext,
     spec: GuidedPathSpec,
-    key: jax.Array,
-    reference: jax.Array,
+    key: PRNGKeyArray,
+    reference: Float[Array, "T D"],
     *,
-    log_precisions: jax.Array | None = None,
+    log_precisions: Float[Array, "T M"] | None = None,
 ) -> ParticleSmootherResult:
     """Advance the guided filter without retaining its proposal trace."""
     result = _guided_step(target, ctx, guide, spec, key, reference, log_precisions=log_precisions)
@@ -374,10 +394,10 @@ def trace_guided_step(
     ctx: SmootherContext,
     guide: ParticleContext,
     spec: GuidedPathSpec,
-    key: jax.Array,
-    reference: jax.Array,
+    key: PRNGKeyArray,
+    reference: Float[Array, "T D"],
     *,
-    log_precisions: jax.Array | None = None,
+    log_precisions: Float[Array, "T M"] | None = None,
 ) -> TracedResult[ParticleSmootherResult, SequentialSmootherTraceRecord]:
     """Record the same guided update, including its conditional filter genealogy."""
     result = _guided_step(

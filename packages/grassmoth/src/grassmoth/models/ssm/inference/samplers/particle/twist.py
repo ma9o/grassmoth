@@ -10,6 +10,8 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
+from grassmoth.models.ssm.shapes import Array, Float, Int
+
 
 class _InformationElement(NamedTuple):
     matrix: jax.Array
@@ -25,24 +27,26 @@ class GaussianTwist(NamedTuple):
     precision: jax.Array
     shift: jax.Array
 
-    def log_density(self, value: jax.Array, index: jax.Array | int) -> jax.Array:
+    def log_density(
+        self, value: Float[Array, "*batch {self.shift.shape[-1]}"], index: Int[Array, ""] | int
+    ) -> Float[Array, " *batch"]:
         """Evaluate the same information factor in forward and backward weights."""
         return -0.5 * jnp.sum(
             value[..., :, None] * self.precision[index] * value[..., None, :], axis=(-2, -1)
         ) + jnp.sum(value * self.shift[index], axis=-1)
 
 
-def symmetric(matrix: jax.Array) -> jax.Array:
+def symmetric(matrix: Float[Array, "*batch N N"]) -> Float[Array, "*batch N N"]:
     """Remove antisymmetric roundoff from a covariance or precision matrix."""
     return 0.5 * (matrix + jnp.swapaxes(matrix, -1, -2))
 
 
 def _element(
-    matrix: jax.Array,
-    offset: jax.Array,
-    covariance: jax.Array,
-    precision: jax.Array,
-    shift: jax.Array,
+    matrix: Float[Array, "N N"],
+    offset: Float[Array, " N"],
+    covariance: Float[Array, "N N"],
+    precision: Float[Array, "N N"],
+    shift: Float[Array, " N"],
 ) -> _InformationElement:
     identity = jnp.eye(covariance.shape[-1], dtype=covariance.dtype)
     forward = identity + covariance @ precision
@@ -76,9 +80,9 @@ def _combine(earlier: _InformationElement, later: _InformationElement) -> _Infor
 
 
 def future_information(
-    matrices: jax.Array,
-    offsets: jax.Array,
-    covariances: jax.Array,
+    matrices: Float[Array, "{information.shift.shape[0]-1} N N"],
+    offsets: Float[Array, "{information.shift.shape[0]-1} N"],
+    covariances: Float[Array, "{information.shift.shape[0]-1} N N"],
     information: GaussianTwist,
 ) -> GaussianTwist:
     """Integrate future factors in logarithmic depth, including zero information."""

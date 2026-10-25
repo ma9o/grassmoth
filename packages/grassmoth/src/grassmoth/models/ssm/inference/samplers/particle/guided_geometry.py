@@ -5,15 +5,15 @@ transition and auxiliary factors. Sampling and normalized proposal density
 share the same covariance factor and affine mean map.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from collections.abc import Callable
+from typing import Literal, NamedTuple
 
 import jax
 import jax.numpy as jnp
 
-from grassmoth.artifacts.sampling import TwistedParticleAGradSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec, TwistedParticleAGradSpec
 from grassmoth.models.ssm.inference.samplers.particle.guided_information import (
+    InformationRule,
     memory_information,
     point_information,
 )
@@ -22,20 +22,16 @@ from grassmoth.models.ssm.inference.samplers.particle.twist import (
     future_information,
     symmetric,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from grassmoth.artifacts.sampling import GuidedPathSpec
-    from grassmoth.models.ssm.inference.samplers.particle.guided_information import InformationRule
-    from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
-    from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
-
+from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
+from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
+from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
 
 type GuideGeometry = Literal["point", "memory"]
 
 
-def _free_covariance(covariance: jax.Array, mask: jax.Array) -> jax.Array:
+def _free_covariance(
+    covariance: Float[Array, "D D"], mask: Bool[Array, " D"]
+) -> Float[Array, "D D"]:
     """Embed the free marginal with unit dummy coordinates of zero log-density cost."""
     return covariance * mask[:, None] * mask[None, :] + jnp.diag((~mask).astype(covariance.dtype))
 
@@ -50,7 +46,9 @@ class _ProposalGeometry(NamedTuple):
     log_normalizer: jax.Array
     parent_map: jax.Array
 
-    def center(self, prior_mean: jax.Array, mask: jax.Array) -> jax.Array:
+    def center(
+        self, prior_mean: Float[Array, "*batch D"], mask: Bool[Array, " D"]
+    ) -> Float[Array, "*batch D"]:
         return (
             jnp.sum(jnp.where(mask, prior_mean, 0.0)[..., None, :] * self.mean_map, axis=-1)
             + self.shift
@@ -58,12 +56,12 @@ class _ProposalGeometry(NamedTuple):
 
     def initial_particles(
         self,
-        center: jax.Array,
-        key: jax.Array,
-        reference: jax.Array,
-        mask: jax.Array,
+        center: Float[Array, " D"],
+        key: PRNGKeyArray,
+        reference: Float[Array, "T D"],
+        mask: Bool[Array, "T D"],
         count: int,
-    ) -> jax.Array:
+    ) -> Float[Array, "{count} D"]:
         """Draw the initial bank, preserving the filter's original evaluation order."""
         dimension = reference.shape[1]
         return jnp.concatenate(
@@ -84,12 +82,12 @@ class _ProposalGeometry(NamedTuple):
 
     def next_particles(
         self,
-        centers: jax.Array,
-        noise: jax.Array,
-        reference: jax.Array,
-        mask: jax.Array,
-        index: jax.Array,
-    ) -> jax.Array:
+        centers: Float[Array, "P D"],
+        noise: Float[Array, "P-1 D"],
+        reference: Float[Array, "T D"],
+        mask: Bool[Array, "T D"],
+        index: Int[Array, ""],
+    ) -> Float[Array, "P D"]:
         """Draw a forward bank with the factor also used by log_density."""
         return jnp.concatenate(
             (
@@ -102,17 +100,19 @@ class _ProposalGeometry(NamedTuple):
             )
         )
 
-    def log_density(self, difference: jax.Array, mask: jax.Array) -> jax.Array:
+    def log_density(
+        self, difference: Float[Array, "*batch D"], mask: Bool[Array, " D"]
+    ) -> Float[Array, " *batch"]:
         whitened = jnp.sum(jnp.where(mask, difference, 0.0)[..., None, :] * self.whiten, axis=-1)
         return self.log_normalizer - 0.5 * jnp.sum(whitened**2, axis=-1)
 
 
 def _proposal_geometry(
-    covariance: jax.Array,
+    covariance: Float[Array, "D D"],
     local: GaussianTwist,
-    mask: jax.Array,
-    precision: jax.Array,
-    shift: jax.Array,
+    mask: Bool[Array, " D"],
+    precision: Float[Array, "D D"],
+    shift: Float[Array, " D"],
 ) -> _ProposalGeometry:
     identity = jnp.eye(local.shift.size, dtype=local.shift.dtype)
     prior_precision = jnp.linalg.solve(_free_covariance(covariance, mask), identity)
@@ -132,11 +132,11 @@ def _proposal_geometry(
 def _build_twist(
     target: ParticleTarget,
     guide: ParticleContext,
-    auxiliary: jax.Array,
-    mask: jax.Array,
+    auxiliary: Float[Array, "T D"],
+    mask: Bool[Array, "T D"],
     spec: GuidedPathSpec,
     information: GaussianTwist,
-) -> tuple[GaussianTwist, jax.Array]:
+) -> tuple[GaussianTwist, Float[Array, "T-1 D D"]]:
     """Batch all guide geometry over time before the sequential particle filter.
 
     Supported models have additive Gaussian diffusion. Its covariance depends on
@@ -175,10 +175,10 @@ def _memory_guide(
     guide: ParticleContext,
     memory: SequentialObservationRuntime,
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
-    label_log_probs: jax.Array,
-    auxiliary: jax.Array,
-    variance: jax.Array,
-    mask: jax.Array,
+    label_log_probs: Float[Array, " K"],
+    auxiliary: Float[Array, "T D"],
+    variance: Float[Array, "T D"],
+    mask: Bool[Array, "T D"],
     spec: GuidedPathSpec,
     rule: InformationRule,
 ) -> tuple[GaussianTwist, _ProposalGeometry]:
@@ -233,13 +233,13 @@ def _memory_guide(
     covariances = jnp.concatenate((target.initial_moments(guide)[1][None], covariances))
 
     def geometry(
-        covariance: jax.Array,
-        parent: jax.Array,
-        innovation: jax.Array,
-        offset: jax.Array,
+        covariance: Float[Array, "D D"],
+        parent: Float[Array, "R R"],
+        innovation: Float[Array, "R D"],
+        offset: Float[Array, " R"],
         local: GaussianTwist,
         future: GaussianTwist,
-        free: jax.Array,
+        free: Bool[Array, " D"],
     ) -> _ProposalGeometry:
         precision = local.precision + future.precision
         shift = local.shift + future.shift
@@ -265,10 +265,10 @@ def build_guide(
     guide: ParticleContext,
     memory: SequentialObservationRuntime,
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
-    label_log_probs: jax.Array,
-    auxiliary: jax.Array,
-    variance: jax.Array,
-    mask: jax.Array,
+    label_log_probs: Float[Array, " K"],
+    auxiliary: Float[Array, "T D"],
+    variance: Float[Array, "T D"],
+    mask: Bool[Array, "T D"],
     spec: GuidedPathSpec,
 ) -> tuple[GaussianTwist, _ProposalGeometry]:
     """Build proposal generation and its normalized density from a fixed guide."""

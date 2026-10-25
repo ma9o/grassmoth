@@ -5,14 +5,14 @@ from collections.abc import Callable
 import jax
 import jax.numpy as jnp
 from jax.typing import DTypeLike
-from jaxtyping import Array, Float, Int
 
 from grassmoth.artifacts.sampling import LatentBlockSize
+from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
 
-FloatScalar = Float[Array, ""]
 
-
-def multinomial(key: jax.Array, logits: jax.Array, count: int) -> jax.Array:
+def multinomial(
+    key: PRNGKeyArray, logits: Float[Array, " P"], count: int
+) -> Int[Array, " {count}"]:
     """Draw by inverse CDF, with linear storage instead of a count-by-category Gumbel array."""
     cumulative = jnp.cumsum(jax.nn.softmax(logits))
     uniforms = jax.random.uniform(key, (count,), dtype=cumulative.dtype)
@@ -20,8 +20,8 @@ def multinomial(key: jax.Array, logits: jax.Array, count: int) -> jax.Array:
 
 
 def coordinate_proposal_mask(
-    key: jax.Array, free_mask: jax.Array, block_coords: LatentBlockSize
-) -> jax.Array:
+    key: PRNGKeyArray, free_mask: Bool[Array, "T D"], block_coords: LatentBlockSize
+) -> Bool[Array, "T D"]:
     """Choose only coordinates with independent, unobserved values to propose."""
     dimension = free_mask.shape[-1]
     if block_coords == "all" or block_coords >= dimension:
@@ -33,12 +33,12 @@ def coordinate_proposal_mask(
 
 def _value_and_grad_by_param[Context](
     contexts: Context,
-    particle: jax.Array,
+    particle: Float[Array, " D"],
     log_prob_fn: Callable[[Context, jax.Array], jax.Array],
     *,
     value_dtype: DTypeLike,
     grad_dtype: DTypeLike,
-) -> tuple[jax.Array, jax.Array]:
+) -> tuple[Float[Array, " K"], Float[Array, "K D"]]:
     """Differentiate the explicit particle argument and batch over parameter contexts."""
     evaluate: Callable[[Context, jax.Array], tuple[jax.Array, jax.Array]] = jax.value_and_grad(
         log_prob_fn, argnums=1
@@ -51,8 +51,11 @@ def _value_and_grad_by_param[Context](
 
 
 def _masked_normal_log_prob(
-    values: jax.Array, mean: jax.Array, variance: jax.Array, free_mask: jax.Array
-) -> jax.Array:
+    values: Float[Array, "*#batch D"],
+    mean: Float[Array, "*#batch D"],
+    variance: Float[Array, "*#batch #D"],
+    free_mask: Bool[Array, "*#batch D"],
+) -> Float[Array, " *batch"]:
     """Density with respect to the free coordinates, including its normalization."""
     per_coordinate = -0.5 * (
         jnp.log(2.0 * jnp.pi * variance) + jnp.square(values - mean) / variance
@@ -68,8 +71,8 @@ def _masked_mean(values: jax.Array, mask: jax.Array, *, axis: int | None = None)
 
 
 def _normalize_log_probs(
-    logits: Float[Array, "*shape"], *, axis: int = -1
-) -> Float[Array, "*shape"]:
+    logits: Float[Array, " *shape"], *, axis: int = -1
+) -> Float[Array, " *shape"]:
     # Nonfinite densities have zero numerical support, never NaN selection mass.
     logits = jnp.where(jnp.isfinite(logits), logits, -jnp.inf)
     normalizer = jax.scipy.special.logsumexp(logits, axis=axis, keepdims=True)
@@ -97,5 +100,5 @@ def _observation_log_probs_by_param(
     return jnp.swapaxes(jax.vmap(_one_param)(contexts), 0, 1)
 
 
-def _select_pytree(ensemble, index: Int[Array, "..."]):
+def _select_pytree(ensemble, index: Int[Array, " ..."]):
     return jax.tree_util.tree_map(lambda leaf: leaf[index], ensemble)

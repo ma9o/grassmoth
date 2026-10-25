@@ -1,16 +1,20 @@
 """Run structured particle kernels with Dynestyx parameter/model interpretations."""
 
-from __future__ import annotations
-
+import logging
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal, NamedTuple
+from typing import Literal, NamedTuple
 
 import jax
 import jax.numpy as jnp
 import jax.random as random
-from blackjax.adaptation.step_size import dual_averaging_adaptation
+from blackjax.adaptation.step_size import DualAveragingAdaptationState, dual_averaging_adaptation
+from jax.stages import Compiled
 
+from grassmoth.artifacts.arrays import NumericalArray
+from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.immutability import freeze_fields
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     ParticleWeightMetric,
@@ -23,15 +27,25 @@ from grassmoth.artifacts.sampling import (
     ParticleAGradSpec,
     TwistedParticleAGradSpec,
 )
-from grassmoth.compute.programs import scalar_operand
+from grassmoth.compute.budget import ComputeBudget
+from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer, scalar_operand
+from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
 from grassmoth.models.ssm.inference.continuation import restore_state, retain_state
 from grassmoth.models.ssm.inference.mcmc_state import (
     TrajectoryMCMCState,
     _adapt_scale,
     _clip_dual_averaging_state,
     _clip_scale,
+    trajectory_state,
 )
-from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import restarted_dual_averaging
+from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
+    CompanionKernel,
+    CompanionTuning,
+    restarted_dual_averaging,
+)
+from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
+    MarginalParticleGibbsKernel,
+)
 from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
     ExchangeRecord,
     ReplicaExchangeKernel,
@@ -57,35 +71,15 @@ from grassmoth.models.ssm.inference.samplers.sweeps import (
     compile_projected_sweeps,
     run_sweeps,
 )
+from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
+from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
 from grassmoth.models.ssm.inference.warmup.parameter_adaptation import (
     ParameterCovariance,
     adapt_parameter_covariance,
     covariance_windows,
     initialize_parameter_covariance,
 )
-
-if TYPE_CHECKING:
-    import logging
-    from collections.abc import Callable, Mapping
-    from datetime import datetime
-
-    from blackjax.adaptation.step_size import DualAveragingAdaptationState
-    from jax.stages import Compiled
-
-    from grassmoth.artifacts.arrays import NumericalArray
-    from grassmoth.artifacts.continuation import SamplerCheckpoint
-    from grassmoth.compute.budget import ComputeBudget
-    from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
-    from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
-    from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
-        CompanionKernel,
-        CompanionTuning,
-    )
-    from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
-        MarginalParticleGibbsKernel,
-    )
-    from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
-    from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
+from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -140,18 +134,18 @@ class ParticleChainResult:
 
 
 def _initialize_chain_state(
-    init_position: jnp.ndarray,
+    init_position: Float[Array, " U"],
     *,
-    observations: jnp.ndarray,
-    times: jnp.ndarray,
+    observations: Float[Array, "T M"],
+    times: Float[Array, " T"],
     target: ParticleTarget,
-    parameter_gradient_fn: Callable[[jax.Array], jax.Array],
-    initial_latent_delta: jnp.ndarray,
-    param_step_size: float | jax.Array,
-    parameter_chol: jax.Array,
-    param_min_scale: float | jax.Array,
-    param_max_scale: float | jax.Array,
-    initial_latent_trajectory: jnp.ndarray,
+    parameter_gradient_fn: Callable[[Float[Array, " U"]], Float[Array, " U"]],
+    initial_latent_delta: Float[Array, " T"] | Float[Array, "T D"],
+    param_step_size: float | Float[Array, ""],
+    parameter_chol: Float[Array, "U U"],
+    param_min_scale: float | Float[Array, ""],
+    param_max_scale: float | Float[Array, ""],
+    initial_latent_trajectory: Float[Array, "T D"],
     exact_constraints: ExactStateConstraints | None = None,
 ) -> TrajectoryMCMCState:
     context = target.context(init_position, times)
@@ -174,7 +168,7 @@ def _initialize_chain_state(
         max_scale=param_max_scale,
     )
     da_init, _da_update, _ = dual_averaging_adaptation(target=0.0)
-    return TrajectoryMCMCState(
+    return trajectory_state(
         position=init_position,
         parameter_gradient=parameter_gradient_fn(init_position),
         latent_context=context,
@@ -211,7 +205,7 @@ ADAPTATION_RATE = 0.05
 def _initial_companion_tuning(
     companion: CompanionKernel,
     states: TrajectoryMCMCState,
-    key: jax.Array,
+    key: PRNGKeyArray,
     num_warmup: int,
     compiler: ProgramCompiler,
 ) -> CompanionTuning:
@@ -234,7 +228,7 @@ def run_marginal_particle_gibbs(
     num_warmup: int,
     num_samples: int,
     num_chains: int,
-    key: jax.Array,
+    key: PRNGKeyArray,
     adaptation_rate: float = ADAPTATION_RATE,
     initialization: ParticleInitialization,
     compute_budget: ComputeBudget,
@@ -288,8 +282,8 @@ def run_marginal_particle_gibbs(
     )
 
     def initialize_chain(
-        position: jax.Array, path: jax.Array
-    ) -> tuple[TrajectoryMCMCState, jax.Array]:
+        position: Float[Array, " U"], path: Float[Array, "T D"]
+    ) -> tuple[TrajectoryMCMCState, Float[Array, "T D"]]:
         state = _initialize_chain_state(
             position,
             observations=observations,

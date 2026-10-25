@@ -16,8 +16,12 @@ Axis        Meaning
 ``M``       manifest / observation dimension (``n_manifest``)
 ``T``       number of timesteps on the observation grid
 ``P``       number of latent particles (``num_particles``)
+``Q``       particles in the other bank of a pairwise transition calculation
 ``K``       number of parameter particles (``num_parameter_particles``)
+``R``       augmented state dimension, including carried observation/recurrence memory
 ``C``       number of categorical / ordinal response levels
+``B``       independent chains in a population
+``W``       warmup covariance windows
 ``U``       length of an unconstrained parameter vector
 ``N``       neutral dimension for generic helpers agnostic to whether the axis
             is latent (D), manifest (M), or other — a square covariance side or
@@ -35,9 +39,12 @@ Conventions
 - The vmap rule: annotate the shape a function sees *at its own boundary*. Under
   ``jax.vmap`` that is the reduced rank — a helper mapped over particles sees
   ``Float[Array, " D"]``, not ``Float[Array, "P D"]``.
-- Pytree boundaries (the per-parameter ``context`` / batched ``contexts``,
-  smoother closures, and ``dict[str, Array]`` sample bundles) are documented in
-  prose, not shape-checked: annotate them ``Any``.
+- Record and callable boundaries retain their concrete types. Annotate array
+  arguments and results where they are unpacked. NamedTuple fields alone do not
+  enforce relationships between array shapes; use a typed constructor boundary.
+  The import hook checks dataclass fields together in their generated initializer.
+- Broadcastable leading axes use ``*#batch``; ordinary ``*batch`` requires the
+  same leading shape. Each chain is checked at the per-chain boundary under vmap.
 
 Runtime checking is opt-in per module via the ``--jaxtyping-packages`` pytest
 flag in ``pyproject.toml``. Instrumented modules must NOT use
@@ -47,9 +54,9 @@ relocating them into ``TYPE_CHECKING``. For jitted code the checks fire at trace
 time, so they are effectively free shape assertions on the numerical core.
 """
 
-from jaxtyping import Array, Float, Int
+from jaxtyping import Array, Bool, Float, Int, PRNGKeyArray
 
 FloatScalar = Float[Array, ""]
 """A floating-point scalar (rank-0 array)."""
 
-__all__ = ["Array", "Float", "FloatScalar", "Int"]
+__all__ = ["Array", "Bool", "Float", "FloatScalar", "Int", "PRNGKeyArray"]

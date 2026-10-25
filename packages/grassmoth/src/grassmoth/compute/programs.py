@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 import jax
 import jax.numpy as jnp
@@ -35,6 +35,7 @@ class PreparedProgram[Result]:
     call: Callable[..., Result]
 
 
+@runtime_checkable
 class ProgramCompiler(Protocol):
     """Compile a pure function under an explicitly supplied execution policy."""
 
@@ -45,6 +46,7 @@ class ProgramCompiler(Protocol):
         ...
 
 
+@runtime_checkable
 class ProgramPreparer(Protocol):
     """Prepare a JAX program and expose its sizing evidence."""
 

@@ -1,9 +1,6 @@
 """Owned starts and proposal geometry for exact particle samplers."""
 
-from __future__ import annotations
-
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 import jax
 import jax.numpy as jnp
@@ -13,36 +10,37 @@ from grassmoth.artifacts.continuation import ParticleTuning, SamplerCheckpoint
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     ContinuedInitializationDiagnostics,
     GaussianInitializationDiagnostics,
+    InitializationDiagnostics,
 )
+from grassmoth.artifacts.sampling import GaussianInitializationSpec
 from grassmoth.compute.batching import compiled_memory
+from grassmoth.compute.budget import ComputeBudget
+from grassmoth.compute.programs import ProgramCompiler
 from grassmoth.models.ssm.inference.joint_coordinates import (
     CentredParameterization,
     JointChart,
     build_joint_coordinates,
 )
+from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
-
-if TYPE_CHECKING:
-    from grassmoth.artifacts.reports.posterior_diagnostics import InitializationDiagnostics
-    from grassmoth.artifacts.sampling import GaussianInitializationSpec
-    from grassmoth.compute.budget import ComputeBudget
-    from grassmoth.compute.programs import ProgramCompiler
-    from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
+from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
 
 
 @dataclass(frozen=True)
 class ParticleInitialization:
     """Paired chain starts and frozen proposal moments in the production coordinates."""
 
-    positions: jax.Array
-    paths: jax.Array
-    parameter_chol: jax.Array
-    pilot_mean: jax.Array
-    pilot_variance: jax.Array
+    positions: Float[Array, "B U"]
+    paths: Float[Array, "B T D"]
+    parameter_chol: Float[Array, "U U"]
+    pilot_mean: Float[Array, "T D"]
+    pilot_variance: Float[Array, "T D"]
     diagnostics: InitializationDiagnostics
 
     @property
-    def pilot_proposal_variance(self) -> jax.Array:
+    def pilot_proposal_variance(
+        self,
+    ) -> Float[Array, "{self.pilot_mean.shape[0]} {self.pilot_mean.shape[1]}"]:
         """Fixed path proposal spread across chain starts and observation times."""
         temporal_variance = jnp.var(self.pilot_mean, axis=0)
         variance_floor = 1e-6 * (1.0 + temporal_variance)
@@ -53,7 +51,7 @@ def prepare_particle_initialization(
     target: ParticleTarget,
     *,
     spec: GaussianInitializationSpec,
-    key: jax.Array,
+    key: PRNGKeyArray,
     num_chains: int,
     compute_budget: ComputeBudget,
     compiler: ProgramCompiler,
@@ -63,8 +61,14 @@ def prepare_particle_initialization(
     assert isinstance(coordinates.parameterization, CentredParameterization)
 
     def draw(
-        chart: JointChart, draw_key: jax.Array
-    ) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
+        chart: JointChart, draw_key: PRNGKeyArray
+    ) -> tuple[
+        Float[Array, "B U"],
+        Float[Array, "B T D"],
+        Float[Array, "U U"],
+        Float[Array, "T D"],
+        Float[Array, "T D"],
+    ]:
         points = spec.scale * jax.random.normal(
             draw_key, (num_chains, max(1, coordinates.dimension))
         )

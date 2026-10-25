@@ -1,8 +1,7 @@
 """Warmup-only path scales, with observation-curvature limits for guided drift."""
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, NamedTuple
+from collections.abc import Callable
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -10,12 +9,9 @@ import jax.numpy as jnp
 from grassmoth.artifacts.sampling import FixedLatentStepSpec, PathUpdateSpec
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.mcmc_state import _clip_scale
+from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
+from grassmoth.models.ssm.shapes import Array, Bool, Float, Int
 
 INITIAL_DELTA = 0.01
 ADAPTATION_WINDOW = 100
@@ -28,10 +24,10 @@ DELTA_MAX = 10.0
 
 
 def _curvature_limits(
-    observe: Callable[[jax.Array, jax.Array], jax.Array],
-    path: jax.Array,
-    free_mask: jax.Array,
-) -> jax.Array:
+    observe: Callable[[Float[Array, " D"], Int[Array, ""]], Float[Array, ""]],
+    path: Float[Array, "T D"],
+    free_mask: Bool[Array, "T D"],
+) -> Float[Array, "T D"]:
     """Diagonal warmup limits from the auxiliary's local information.
 
     For a scalar affine score with Hessian H, the auxiliary variance A = delta/2
@@ -46,7 +42,9 @@ def _curvature_limits(
     curvature.
     """
 
-    def at_time(state: jax.Array, free: jax.Array, index: jax.Array) -> jax.Array:
+    def at_time(
+        state: Float[Array, " D"], free: Bool[Array, " D"], index: Int[Array, ""]
+    ) -> Float[Array, " D"]:
         hessian = jax.hessian(observe)(state, index)
         hessian = (hessian + hessian.T) * 0.5 * free[:, None] * free[None, :]
         curvature = jnp.sum(jnp.abs(hessian), axis=-1)
@@ -58,9 +56,9 @@ def _curvature_limits(
 def guided_delta_limit(
     target: ParticleTarget,
     context: ParticleContext,
-    path: jax.Array,
-    free_mask: jax.Array,
-) -> jax.Array:
+    path: Float[Array, "T D"],
+    free_mask: Bool[Array, "T D"],
+) -> Float[Array, "T D"]:
     """Calibrate warmup limits from the exact observation factor at its parameters."""
     memory = sequential_observations(
         target, jax.tree.map(lambda value: value[None], context), context
@@ -87,8 +85,8 @@ def initial_delta(spec: PathUpdateSpec) -> float:
 class LatentAdaptation(NamedTuple):
     """Runtime scale-adaptation controls, independent of the proposal structure."""
 
-    enabled: jax.Array
-    target: jax.Array
+    enabled: Bool[Array, "1"]
+    target: Float[Array, "1"]
 
 
 def latent_adaptation(spec: PathUpdateSpec) -> LatentAdaptation:
@@ -106,15 +104,15 @@ def latent_adaptation(spec: PathUpdateSpec) -> LatentAdaptation:
 class DsmcAdaptation(NamedTuple):
     """Per-time scales and the recent accepted/proposed movement counts."""
 
-    delta: jax.Array
-    accepted: jax.Array
-    proposed: jax.Array
-    iteration: jax.Array
-    accepted_total: jax.Array
-    proposed_total: jax.Array
+    delta: Float[Array, "*batch T"]
+    accepted: Float[Array, "*batch 100 T"]
+    proposed: Float[Array, "*batch 100 T"]
+    iteration: Int[Array, ""]
+    accepted_total: Float[Array, "*batch T"]
+    proposed_total: Float[Array, "*batch T"]
 
 
-def initialize_adaptation(delta: jax.Array) -> DsmcAdaptation:
+def initialize_adaptation(delta: Float[Array, "*batch T"]) -> DsmcAdaptation:
     """Initialize one scale vector or a batch of scale vectors."""
     shape = (*delta.shape[:-1], ADAPTATION_WINDOW, delta.shape[-1])
     window = jnp.zeros(shape, dtype=delta.dtype)
@@ -127,10 +125,10 @@ def initialize_adaptation(delta: jax.Array) -> DsmcAdaptation:
 def adapt_scales(
     state: DsmcAdaptation,
     settings: LatentAdaptation,
-    accepted: jax.Array,
-    proposed: jax.Array,
-    num_warmup: int | jax.Array,
-    maximum: jax.Array,
+    accepted: Float[Array, "*batch T"],
+    proposed: Bool[Array, "*batch T"] | Float[Array, "*batch T"],
+    num_warmup: int | Int[Array, ""],
+    maximum: Float[Array, "*batch T"],
 ) -> DsmcAdaptation:
     """Adapt only proposed coordinates; freeze scales and windows after warmup."""
     target = settings.target[0]

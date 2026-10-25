@@ -1,48 +1,76 @@
 """Offline joint-kernel state."""
 
-from __future__ import annotations
-
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, NamedTuple
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
+from blackjax.adaptation.step_size import DualAveragingAdaptationState
 
 from grassmoth.artifacts.immutability import freeze_fields
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-    from blackjax.adaptation.step_size import DualAveragingAdaptationState
-    from numpy.typing import NDArray
-
-    from grassmoth.models.ssm.inference.targets.particle import ParticleContext
+from grassmoth.models.ssm.inference.targets.particle import ParticleContext
+from grassmoth.models.ssm.shapes import Array, Float
 
 
 class TrajectoryMCMCState(NamedTuple):
     """Joint position and context carried between offline kernel calls."""
 
-    position: jnp.ndarray
+    position: Float[Array, "*batch U"]
     # Fixed-pilot parameter oracle at this position and this replica's target.
-    parameter_gradient: jnp.ndarray
+    parameter_gradient: Float[Array, "*batch U"]
     latent_context: ParticleContext  # noqa: F841, RUF100 - Retained state inspection in notebooks reads the bound context; Vulture checks src separately.
-    latent_trajectory: jnp.ndarray
-    trajectory_log_prob: jnp.ndarray
-    complete_log_posterior: jnp.ndarray
-    latent_delta: jnp.ndarray
-    param_step_size: jnp.ndarray
-    parameter_chol: jax.Array
+    latent_trajectory: Float[Array, "*batch T D"]
+    trajectory_log_prob: Float[Array, "*batch"]
+    complete_log_posterior: Float[Array, "*batch"]
+    latent_delta: Float[Array, "*batch T"] | Float[Array, "*batch T D"]
+    param_step_size: Float[Array, "*batch"]
+    parameter_chol: Float[Array, "*batch U U"]
     # BlackJAX dual-averaging state. Carried but not updated when
     # adaptation_scheme == "simple"; evolves only during warmup otherwise.
     param_da: DualAveragingAdaptationState
 
 
-def _clip_scale(
-    scale: jnp.ndarray,
+def trajectory_state(
     *,
-    min_scale: float | jax.Array | None,
-    max_scale: float | jax.Array | None,
-) -> jnp.ndarray:
+    position: Float[Array, " U"],
+    parameter_gradient: Float[Array, " U"],
+    latent_context: ParticleContext,
+    latent_trajectory: Float[Array, "T D"],
+    trajectory_log_prob: Float[Array, ""],
+    complete_log_posterior: Float[Array, ""],
+    latent_delta: Float[Array, " T"] | Float[Array, "T D"],
+    param_step_size: Float[Array, ""],
+    parameter_chol: Float[Array, "U U"],
+    param_da: DualAveragingAdaptationState,
+) -> TrajectoryMCMCState:
+    """Construct one chain, binding parameter, path and tuning axes together.
+
+    The test import hook checks these arguments in one shape context. NamedTuple
+    field annotations alone do not check their relationships. Under vmap this
+    constructor sees one chain; JAX batches the completed record afterwards.
+    """
+    return TrajectoryMCMCState(
+        position,
+        parameter_gradient,
+        latent_context,
+        latent_trajectory,
+        trajectory_log_prob,
+        complete_log_posterior,
+        latent_delta,
+        param_step_size,
+        parameter_chol,
+        param_da,
+    )
+
+
+def _clip_scale(
+    scale: Float[Array, " *shape"],
+    *,
+    min_scale: float | Float[Array, " *#shape"] | None,
+    max_scale: float | Float[Array, " *#shape"] | None,
+) -> Float[Array, " *shape"]:
     clipped = scale
     if min_scale is not None:
         min_value = jnp.nextafter(
@@ -59,13 +87,15 @@ def _clip_scale(
 class TrajectoryMCMCResult:
     """MCMC-compatible view of particle posterior samples."""
 
-    chain_samples: Mapping[str, jnp.ndarray | NDArray]
-    chain_extra_fields: Mapping[str, jax.Array | NDArray]
+    chain_samples: Mapping[str, jnp.ndarray | np.ndarray[tuple[int, ...], np.dtype[np.generic]]]
+    chain_extra_fields: Mapping[str, jax.Array | np.ndarray[tuple[int, ...], np.dtype[np.generic]]]
     num_chains: int
     num_samples: int
     backend: str = "marginal_particle_gibbs"
 
-    def get_samples(self, *, group_by_chain: bool = False) -> Mapping[str, jnp.ndarray | NDArray]:
+    def get_samples(
+        self, *, group_by_chain: bool = False
+    ) -> Mapping[str, jnp.ndarray | np.ndarray[tuple[int, ...], np.dtype[np.generic]]]:
         """Return parameter draws, preserving chain axes when requested and flattening them otherwise."""
         if group_by_chain:
             return self.chain_samples
@@ -76,7 +106,7 @@ class TrajectoryMCMCResult:
 
     def get_extra_fields(
         self, *, group_by_chain: bool = False
-    ) -> Mapping[str, jax.Array | NDArray]:
+    ) -> Mapping[str, jax.Array | np.ndarray[tuple[int, ...], np.dtype[np.generic]]]:
         """Return sampler diagnostics with separate or flattened chain and draw axes."""
         if group_by_chain:
             return self.chain_extra_fields
@@ -91,14 +121,14 @@ class TrajectoryMCMCResult:
 
 
 def _adapt_scale(
-    scale: jnp.ndarray,
+    scale: Float[Array, " *shape"],
     *,
-    accepted: jnp.ndarray,
-    target_accept: float | jax.Array,
-    adaptation_rate: float | jax.Array,
-    min_scale: float | jax.Array = 1e-6,
-    max_scale: float | jax.Array = 1e3,
-) -> jnp.ndarray:
+    accepted: Float[Array, " *shape"],
+    target_accept: float | Float[Array, ""],
+    adaptation_rate: float | Float[Array, ""],
+    min_scale: float | Float[Array, ""] = 1e-6,
+    max_scale: float | Float[Array, ""] = 1e3,
+) -> Float[Array, " *shape"]:
     """Simple exponential step-size adaptation on per-step binary accept."""
     dtype = scale.dtype
     accepted_arr = jnp.asarray(accepted, dtype=dtype)
@@ -113,8 +143,8 @@ def _adapt_scale(
 def _clip_dual_averaging_state(
     da_state: DualAveragingAdaptationState,
     *,
-    min_scale: float | jax.Array | None,
-    max_scale: float | jax.Array | None,
+    min_scale: float | Float[Array, " *shape"] | None,
+    max_scale: float | Float[Array, " *shape"] | None,
 ) -> DualAveragingAdaptationState:
     if min_scale is None and max_scale is None:
         return da_state

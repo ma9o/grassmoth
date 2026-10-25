@@ -2,6 +2,7 @@
 
 import jax
 import jax.numpy as jnp
+import jaxtyping
 import numpy as np
 import pytest
 from scipy.stats import multivariate_normal, norm
@@ -10,6 +11,16 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_information import 
 from grassmoth.models.ssm.inference.samplers.particle.twist import GaussianTwist, future_information
 
 pytestmark = pytest.mark.inference(concern="sampling")
+
+
+def test_observation_gradient_cannot_broadcast_over_state_coordinates():
+    def observe(value, index):
+        return jnp.zeros(2), jnp.ones(1)
+
+    with pytest.raises(jaxtyping.TypeCheckError, match="return"):
+        _guided_information(
+            observe, jnp.zeros((3, 2)), jnp.ones((3, 2)), jnp.ones((3, 2), dtype=bool)
+        )
 
 
 @pytest.mark.parametrize("kind", ["poisson", "nonconcave"])

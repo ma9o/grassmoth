@@ -5,26 +5,22 @@ Point and augmented-memory geometry share the information choice, but retain
 their coordinate-specific algebra and operation order.
 """
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Literal
+from collections.abc import Callable
+from typing import Literal
 
 import jax
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
 
 from grassmoth.models.ssm.inference.samplers.particle.twist import GaussianTwist, symmetric
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
+from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
+from grassmoth.models.ssm.shapes import Array, Bool, Float, Int
 
 type InformationRule = Literal["unshifted", "actual_law"]
 
 
 def _unshifted_information(
-    auxiliary: jax.Array, variance: jax.Array, mask: jax.Array
+    auxiliary: Float[Array, "T D"], variance: Float[Array, "T D"], mask: Bool[Array, "T D"]
 ) -> GaussianTwist:
     return GaussianTwist(
         jax.vmap(jnp.diag)(mask / variance),
@@ -34,9 +30,9 @@ def _unshifted_information(
 
 def _guided_information(
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
-    auxiliary: jax.Array,
-    variance: jax.Array,
-    mask: jax.Array,
+    auxiliary: Float[Array, "T D"],
+    variance: Float[Array, "T D"],
+    mask: Bool[Array, "T D"],
 ) -> GaussianTwist:
     """Approximate readings times the actual auxiliary law, held fixed at u.
 
@@ -49,8 +45,13 @@ def _guided_information(
     exact particle corrections still use the true nonlinear model.
     """
 
-    def point(value: jax.Array, v: jax.Array, free: jax.Array, index: jax.Array) -> GaussianTwist:
-        def score(state: jax.Array) -> tuple[jax.Array, jax.Array]:
+    def point(
+        value: Float[Array, " D"],
+        v: Float[Array, " D"],
+        free: Bool[Array, " D"],
+        index: Int[Array, ""],
+    ) -> GaussianTwist:
+        def score(state: Float[Array, " D"]) -> tuple[Float[Array, " D"], Float[Array, " D"]]:
             gradient = observe(state, index)[1]
             return gradient, gradient
 
@@ -77,17 +78,21 @@ def memory_information(
     rule: InformationRule,
     memory: SequentialObservationRuntime,
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
-    label_log_probs: jax.Array,
-    points: jax.Array,
-    variance: jax.Array,
-    mask: jax.Array,
-    augmented_mask: jax.Array,
+    label_log_probs: Float[Array, " K"],
+    points: Float[Array, "T R"],
+    variance: Float[Array, "T D"],
+    mask: Bool[Array, "T D"],
+    augmented_mask: Bool[Array, "T R"],
 ) -> GaussianTwist:
     """Apply the information rule in carried coordinates, without adding process noise."""
     steps, dimension = mask.shape
 
     def information_at(
-        value: jax.Array, v: jax.Array, free: jax.Array, active: jax.Array, index: jax.Array
+        value: Float[Array, " R"],
+        v: Float[Array, " D"],
+        free: Bool[Array, " D"],
+        active: Bool[Array, " R"],
+        index: Int[Array, ""],
     ) -> GaussianTwist:
         if rule == "unshifted":
             precision = jnp.zeros((memory.dimension, memory.dimension), value.dtype)
@@ -124,9 +129,9 @@ def memory_information(
 def point_information(
     rule: InformationRule,
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
-    auxiliary: jax.Array,
-    variance: jax.Array,
-    mask: jax.Array,
+    auxiliary: Float[Array, "T D"],
+    variance: Float[Array, "T D"],
+    mask: Bool[Array, "T D"],
 ) -> GaussianTwist:
     """Apply the same information choice in independent point coordinates."""
     if rule == "actual_law":

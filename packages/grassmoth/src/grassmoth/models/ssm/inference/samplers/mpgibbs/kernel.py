@@ -35,9 +35,8 @@ rescales it whenever ``Sigma`` is re-estimated, keeping the average variance.
 #     without the Gibbs bit" (arXiv:2505.04611): the collapsed M-ensemble parameter
 #     proposal (§3.1 pseudo-Langevin) and Barker label-selection weights live here.
 
-from __future__ import annotations
-
-from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol
+from collections.abc import Callable
+from typing import Literal, NamedTuple, Protocol
 
 import jax
 import jax.numpy as jnp
@@ -47,16 +46,25 @@ from jax.scipy.linalg import solve_triangular
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
     MarginalParticleGibbsSpec,
+    ParticleDiagnosticMetric,
     PathUpdateSpec,
 )
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.compile.state_space import AdditiveRecurrences, ParallelRecurrences
-from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCState, _clip_scale
+from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
+from grassmoth.models.ssm.inference.mcmc_state import (
+    TrajectoryMCMCState,
+    _clip_scale,
+    trajectory_state,
+)
 from grassmoth.models.ssm.inference.samplers.mpgibbs.augmentation import (
     ConditionalPathScores,
     PrecisionPathUpdate,
     begin_path_update,
     finish_path_update,
+)
+from grassmoth.models.ssm.inference.samplers.particle.contract import (
+    PaidMixture,
 )
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
     build_particle_diagnostic_flags,
@@ -71,23 +79,14 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
     _select_pytree,
 )
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
+from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 from grassmoth.models.ssm.inference.tracing import (
     CategoricalTraceRecord,
     MarginalParticleTraceRecord,
     ParameterProposalTraceRecord,
     TracedResult,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from grassmoth.artifacts.sampling import ParticleDiagnosticMetric
-    from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
-    from grassmoth.models.ssm.inference.samplers.particle.contract import (
-        PaidMixture,
-    )
-    from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
-
+from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
 
 _DEFAULT_OPTIONS = MarginalParticleGibbsSpec()
 # Warmup adapts the step from here; fits always run warmup, so these are not settings.
@@ -97,7 +96,9 @@ PARAM_STEP_SIZE_MAX = 1e3
 type MarginalParticleStepResult = tuple[TrajectoryMCMCState, dict[str, jnp.ndarray]]
 
 
-def _bounded_parameter_drift(gradient: jax.Array, chol: jax.Array, scale: jax.Array) -> jax.Array:
+def _bounded_parameter_drift(
+    gradient: Float[Array, "*batch U"], chol: Float[Array, "U U"], scale: Float[Array, ""]
+) -> Float[Array, "*batch U"]:
     """Unit-ball drift in whitened half-proposal coordinates, without norm overflow.
 
     An undefined pilot score defines zero drift, not zero target density. This is
@@ -124,7 +125,7 @@ class MarginalParticleGibbsKernel(NamedTuple):
     """Callable joint kernel and static metadata."""
 
     step_fn: MarginalParticleStep
-    parameter_gradient_fn: Callable[[jnp.ndarray], jnp.ndarray]
+    parameter_gradient_fn: Callable[[Float[Array, " U"]], Float[Array, " U"]]
     trace_step_fn: Callable[  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.
         [TrajectoryMCMCState, jnp.ndarray],
         TracedResult[MarginalParticleStepResult, MarginalParticleTraceRecord],
@@ -149,13 +150,13 @@ def build_marginal_particle_gibbs_kernel(
     target_accept: float | None = None,
     min_scale: float = PARAM_STEP_SIZE_MIN,
     max_scale: float = PARAM_STEP_SIZE_MAX,
-    parameter_preconditioner_chol: jnp.ndarray | None = None,
+    parameter_preconditioner_chol: Float[Array, "U U"] | None = None,
     parameter_proposal: Literal[
         "random_walk", "pseudo_langevin"
     ] = _DEFAULT_OPTIONS.parameter_proposal,
     path_update: PathUpdateSpec = _DEFAULT_OPTIONS.path_update,
     paid_mix: PaidMixture | None = None,
-    parameter_reference_path: jnp.ndarray | None = None,
+    parameter_reference_path: Float[Array, "T D"] | None = None,
     exact_constraints: ExactStateConstraints | None = None,
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...] = _DEFAULT_OPTIONS.diagnostic_metrics,
 ) -> MarginalParticleGibbsKernel:
@@ -196,7 +197,7 @@ def build_marginal_particle_gibbs_kernel(
         else exact_constraints.free_mask & target.independent_mask
     )
 
-    def _theta_logpost_grad(z: jnp.ndarray) -> jnp.ndarray:
+    def _theta_logpost_grad(z: Float[Array, " U"]) -> Float[Array, " U"]:
         # q(u | theta) uses a theta-only oracle, fixed for every kernel call.
         # Conditioning this oracle on the current path invalidates the label correction.
         if not use_gradient_drift:
@@ -208,12 +209,12 @@ def build_marginal_particle_gibbs_kernel(
         return jnp.where(jnp.all(jnp.isfinite(gradient)), gradient, 0.0)
 
     def _propose_parameter_ensemble(
-        current_position: jnp.ndarray,
-        current_gradient: jnp.ndarray,
-        key: jnp.ndarray,
-        step_size: jnp.ndarray,
-        chol: jax.Array,
-    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        current_position: Float[Array, " U"],
+        current_gradient: Float[Array, " U"],
+        key: PRNGKeyArray,
+        step_size: Float[Array, ""],
+        chol: Float[Array, "U U"],
+    ) -> tuple[Float[Array, "K U"], Float[Array, " K"], Float[Array, " U"], Float[Array, "K U"]]:
         dim = int(current_position.shape[0])
         step = jnp.asarray(step_size, dtype=current_position.dtype)
         proposal_scale = jnp.sqrt(jnp.asarray(2.0, dtype=current_position.dtype) * step)
@@ -438,13 +439,17 @@ def build_marginal_particle_gibbs_kernel(
             )
 
         result = (
-            state._replace(
+            trajectory_state(
                 position=next_position,
                 parameter_gradient=parameter_gradients[selected_label],
                 latent_context=next_context,
                 latent_trajectory=latent_path,
                 trajectory_log_prob=next_traj_lp,
                 complete_log_posterior=next_complete,
+                latent_delta=state.latent_delta,
+                param_step_size=state.param_step_size,
+                parameter_chol=state.parameter_chol,
+                param_da=state.param_da,
             ),
             step_info,
         )

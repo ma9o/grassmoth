@@ -2,30 +2,26 @@
 
 # References: see dsmc.py and ../mpgibbs/kernel.py for algorithm provenance.
 
-from __future__ import annotations
-
 from collections.abc import Callable, Mapping
-from typing import TYPE_CHECKING, NamedTuple, Protocol
+from typing import NamedTuple, Protocol
 
 import jax.numpy as jnp
+from jax.typing import DTypeLike
 
+from grassmoth.artifacts.sampling import AuxiliaryDrift, LatentBlockSize
+from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext
+from grassmoth.models.ssm.shapes import Array, Bool, Float, Int
 
-if TYPE_CHECKING:
-    from jax.typing import DTypeLike
-    from jaxtyping import Array, Float
-
-    from grassmoth.artifacts.sampling import AuxiliaryDrift, LatentBlockSize
-    from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
-
-
-type ParticleContextRuntimeFn = Callable[[jnp.ndarray, jnp.ndarray], ParticleContext]
+type ParticleContextRuntimeFn = Callable[[Float[Array, " U"], Float[Array, " T"]], ParticleContext]
 type ObservationIncrementLogProbRuntimeFn = Callable[
-    [ParticleContext, jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray
+    [ParticleContext, Float[Array, " D"], Int[Array, ""], Float[Array, "T M"]], Float[Array, ""]
 ]
-type TrajectoryLogProbRuntimeFn = Callable[[ParticleContext, jnp.ndarray, jnp.ndarray], jnp.ndarray]
+type TrajectoryLogProbRuntimeFn = Callable[
+    [ParticleContext, Float[Array, "T D"], Float[Array, "T M"]], Float[Array, ""]
+]
 type TransitionLogProbFn = Callable[
-    [ParticleContext, jnp.ndarray, jnp.ndarray, jnp.ndarray], jnp.ndarray
+    [ParticleContext, Float[Array, "P D"], Float[Array, "Q D"], Int[Array, ""]], Float[Array, "P Q"]
 ]
 
 
@@ -35,12 +31,12 @@ class TransitionValueGradFn(Protocol):
     def __call__(
         self,
         context: ParticleContext,
-        previous: jnp.ndarray,
-        current: jnp.ndarray,
-        index: jnp.ndarray | int,
+        previous: Float[Array, " D"],
+        current: Float[Array, " D"],
+        index: Int[Array, ""] | int,
         *,
         current_gradient: bool,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+    ) -> tuple[Float[Array, ""], Float[Array, " D"]]:
         """Evaluate the declared transition and its requested state gradient."""
         ...
 
@@ -66,8 +62,8 @@ class ParticleSmootherResult(NamedTuple):
 
     latent_path: Float[Array, "T D"]
     label_scores: TrajectoryLabelScores
-    origin_path: jnp.ndarray
-    proposal_mask: jnp.ndarray
+    origin_path: Int[Array, " T"]
+    proposal_mask: Bool[Array, "T D"]
     diagnostics: Mapping[str, jnp.ndarray]
 
 
@@ -78,9 +74,9 @@ class SmootherSetup(NamedTuple):
     log_prior_unc_fn: Callable[[jnp.ndarray], jnp.ndarray]
     obs_increment_fn: ObservationIncrementLogProbRuntimeFn
     trajectory_log_prob_fn: TrajectoryLogProbRuntimeFn
-    runtime_observations: jnp.ndarray
-    runtime_times: jnp.ndarray
-    latent_free_mask: jnp.ndarray
+    runtime_observations: Float[Array, "T M"]
+    runtime_times: Float[Array, " T"]
+    latent_free_mask: Bool[Array, "T D"]
     num_particles: int
     num_parameter_particles: int
     drift: AuxiliaryDrift
@@ -107,7 +103,7 @@ class SmootherContext(NamedTuple):
     """
 
     contexts: ParticleContext
-    guide_position: Float[Array, " D"]
+    guide_position: Float[Array, " U"]
     initial_label_log_probs: Float[Array, " K"]
     num_steps: int
     num_free_particles: int
@@ -115,17 +111,27 @@ class SmootherContext(NamedTuple):
     latent_dtype: DTypeLike
     traj_dtype: DTypeLike
     obs_increment_fn: ObservationIncrementLogProbRuntimeFn
-    runtime_observations: jnp.ndarray
-    latent_free_mask: jnp.ndarray
+    runtime_observations: Float[Array, "T M"]
+    latent_free_mask: Bool[Array, "T D"]
     amala_delta: Float[Array, " T"] | Float[Array, "T D"]
     drift: AuxiliaryDrift
     latent_block_coords: LatentBlockSize
     paid_mix: PaidMixture | None
-    initial_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
-    transition_current_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
-    transition_next_value_grad_by_param: Callable[..., tuple[jnp.ndarray, jnp.ndarray]]
-    pairwise_transition_log_probs: Callable[..., jnp.ndarray]
-    score_labels: Callable[[jnp.ndarray], TrajectoryLabelScores]
-    label_scores_from_densities: Callable[[jnp.ndarray], TrajectoryLabelScores]
+    initial_value_grad_by_param: Callable[
+        [Float[Array, " D"]], tuple[Float[Array, " K"], Float[Array, "K D"]]
+    ]
+    transition_current_value_grad_by_param: Callable[
+        [Float[Array, " D"], Float[Array, " D"], Int[Array, ""]],
+        tuple[Float[Array, " K"], Float[Array, "K D"]],
+    ]
+    transition_next_value_grad_by_param: Callable[
+        [Float[Array, " D"], Float[Array, " D"], Int[Array, ""]],
+        tuple[Float[Array, " K"], Float[Array, "K D"]],
+    ]
+    pairwise_transition_log_probs: Callable[
+        [Float[Array, "P D"], Float[Array, "Q D"], Int[Array, ""]], Float[Array, "P Q K"]
+    ]
+    score_labels: Callable[[Float[Array, "T D"]], TrajectoryLabelScores]
+    label_scores_from_densities: Callable[[Float[Array, " K"]], TrajectoryLabelScores]
     intervals: ParticleIntervalObservations | None
     diagnostic_weights: jnp.ndarray | bool

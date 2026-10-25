@@ -12,17 +12,19 @@ import jax.numpy as jnp
 from jax.scipy.linalg import solve_triangular
 from numpyro.infer.hmc_util import build_adaptation_schedule
 
+from grassmoth.models.ssm.shapes import Array, Bool, Float, Int
+
 
 class ParameterCovariance(NamedTuple):
     """Within-chain Welford moments in the initializer's whitened coordinates."""
 
-    reference_chol: jax.Array
-    sample_count: jax.Array
-    mean: jax.Array
-    m2: jax.Array
+    reference_chol: Float[Array, "U U"]
+    sample_count: Int[Array, ""]
+    mean: Float[Array, "B U"]
+    m2: Float[Array, "B U U"]
 
 
-def covariance_windows(num_warmup: int) -> jax.Array:
+def covariance_windows(num_warmup: int) -> Int[Array, "W 2"]:
     """Exclude the initial and terminal step-size-only buffers from covariance learning."""
     windows = tuple(build_adaptation_schedule(num_warmup))[1:-1]
     return jnp.asarray(
@@ -30,7 +32,9 @@ def covariance_windows(num_warmup: int) -> jax.Array:
     ).reshape((-1, 2))
 
 
-def initialize_parameter_covariance(positions: jax.Array, chol: jax.Array) -> ParameterCovariance:
+def initialize_parameter_covariance(
+    positions: Float[Array, "B U"], chol: Float[Array, "U U"]
+) -> ParameterCovariance:
     """Start one moment accumulator per cold chain, with a shared reference geometry."""
     chains, dimension = positions.shape
     return ParameterCovariance(
@@ -43,11 +47,11 @@ def initialize_parameter_covariance(positions: jax.Array, chol: jax.Array) -> Pa
 
 def adapt_parameter_covariance(
     state: ParameterCovariance,
-    positions: jax.Array,
-    chol: jax.Array,
-    iteration: jax.Array,
-    windows: jax.Array,
-) -> tuple[ParameterCovariance, jax.Array, jax.Array]:
+    positions: Float[Array, "B U"],
+    chol: Float[Array, "U U"],
+    iteration: Int[Array, ""],
+    windows: Int[Array, "W 2"],
+) -> tuple[ParameterCovariance, Float[Array, "U U"], Bool[Array, ""]]:
     """Count every selected state, replace geometry at window ends, and reset moments.
 
     Averaging within-chain covariance excludes between-chain mean dispersion.
