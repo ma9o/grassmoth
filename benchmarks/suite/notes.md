@@ -122,3 +122,18 @@ Histories switch about every 10 draws, but within a history y's level has a lag-
 **TAIL.** The failure is recorded above. Its mechanism hasn't been diagnosed yet.
 
 **Where the second half of the study lives.** The second scorecard and TAIL ran on a Modal-hosted copy of `SUITE_20261024`, keeping the local machine free. Their journal and results are on the Modal volume `grassmoth-suite-scorecard-2-20261024`, at `data/SUITE_20261024/study/history.git`. The local study holds the fixtures and the first scorecard. The two copies can't be merged by fetching refs. Attempts are numbered refs (`refs/attempts/<n>`), and the volume copy kept numbering from its fork point, so its later attempts collide with the local ones. A merge would have to renumber and re-parent the volume's attempt chain. Until a tool does that, the volume copy is the record for the second scorecard, TAIL and the PARAM screen.
+
+## Anchor check and PARAM companion screen — 2026-10-25
+
+**Smoothed twist anchor: not adopted.**
+- **What was tested:** linearizing the dynamics at a u-only path, from three fixed Gaussian smoothing passes, instead of at the raw auxiliary path. It ran as paired single-sweep CPU traces at saved states, keys 19 and 29, against a rule declared in advance.
+- **PRIOR passed at both keys.** Minimum filter ESS rose from 4.5 and 11.5 to 128, and y's level movement rose 3.3–7.1-fold.
+- **MODE failed.** The smoother lands between the two wells, with transition errors up to thousands of process SDs.
+- **C0 dipped.** Level-jump ratios of 0.86 and 0.76 fell below the 0.90 tolerance.
+- **TAIL partly responded.** 85–93% of its frozen coordinates moved, but the minimum filter ESS stayed at 1. Most frozen readings are central, not in the tails.
+
+**PARAM companion screen.** This is a mechanism check, not a suite result.
+- **Design:** the existing exact `centred_nuts` companion against the policy, at 200 warmup and 200 draws, 4 chains, seeds 19 and 29. Requests: [policy 19](screen-PARAM-policy-seed19.json), [policy 29](screen-PARAM-policy-seed29.json), [NUTS 19](screen-PARAM-nuts-seed19.json), [NUTS 29](screen-PARAM-nuts-seed29.json).
+- **The effects and both reading SDs mix:** lag-1 correlation falls from 0.97–0.99 to 0.03–0.31, with 3.6–550× larger jumps.
+- **σ_y stays slow** (lag-1 0.94–0.95), and σ_x is mixed.
+- **Cost:** GPU $0.14.
