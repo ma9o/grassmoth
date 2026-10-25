@@ -166,3 +166,21 @@ Requests: [policy 19](tournament-PARAM-policy-seed19.json), [policy 29](tourname
 - **Anchor v2** (a u-only smoother with a bounded line search) fails its preregistered rule. PRIOR passes all six checks, but MODE's minimum ESS ratio is 0.92 at key 19, and one C0 bootstrap lower bound is 0.898 against 0.90. It is not adopted.
 - **TAIL.** After the anchor, the remaining collapse comes from the gap between the guide and the exact StudentT × auxiliary factor (median 23–26 log units).
 - **NegativeBinomial2.** The float32 guide failure reproduces in 12 of 108 extreme scalar cases. All of France's restricted annual-grid probes stay finite.
+
+## PARAM on regenerated data — 2026-10-25
+
+**Regeneration.** After the `simulate` fix (`9986d2fe`), PARAM's history was regenerated with the same truth, seed 721 and reading clock. The old saved result would otherwise have been returned, so a fresh call was forced through an unchanged model revision. The new data revision is `34e8b5a9`, in the volume copy of `SUITE_20261024`.
+
+**Innovation check.** The innovations standardized under the fit's Euler–Maruyama law now look right:
+
+| | SD | Lag-1 correlation |
+|---|---|---|
+| Before the fix | 0.30 | 0.94 |
+| After the fix | 0.98–1.00 | about 0.01 |
+
+**Short screen.** This compared the random walk against random walk + `centred_nuts`: 200 warmup and 200 draws, seeds 19 and 29, with the data revision as the only change from the earlier screen.
+- **The effects and both reading SDs** mix with the companion: lag-1 correlations fall from 0.89–0.99 to 0.13–0.33, and jumps grow 3–1,370 times.
+- **σ_x and σ_y** stay slow in both arms, at lag-1 0.91–0.94.
+- **Truth recovery:** every truth now lies inside the companion's marginal intervals. The joint truth sits at the 58–74% radius rank, against the 99th percentile on the old data. The earlier misses came from the generation defect.
+
+These short runs are not convergence verdicts. GPU cost was $0.12.
