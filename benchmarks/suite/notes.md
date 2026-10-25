@@ -137,3 +137,32 @@ Histories switch about every 10 draws, but within a history y's level has a lag-
 - **The effects and both reading SDs mix:** lag-1 correlation falls from 0.97–0.99 to 0.03–0.31, with 3.6–550× larger jumps.
 - **σ_y stays slow** (lag-1 0.94–0.95), and σ_x is mixed.
 - **Cost:** GPU $0.14.
+
+## PARAM tournament — 2026-10-25
+
+**The `centred_nuts` companion passes PARAM's native gate at both seeds, and the policy alone fails both.**
+
+**Setup.** Master `d3589088`, full schedule, early stopping at 1,000-draw checkpoints, one A10 per fit. Within a seed, the only difference between arms is the companion.
+
+| Arm | Seed 19 | Seed 29 | Numerical seconds |
+|---|---|---|---:|
+| Policy | failed at the 4,000 ceiling | failed at the 4,000 ceiling | 849, 853 |
+| Policy + `centred_nuts` | **passed** at 4,000 | **passed** at 4,000 | 936, 918 |
+
+**What changed with the companion.**
+
+| Parameter | Bulk ESS, companion (seeds 19, 29) | Bulk ESS, policy alone | R̂, companion |
+|---|---|---|---|
+| Input and cross effects | 8,685–9,363 | 5–204 | below 1.001 |
+| Both reading SDs | 9,728–10,362 | — | — |
+| σ_x | 963–970 | — | ≤ 1.0065 |
+| σ_y (limiting) | 461, 450 | — | ≤ 1.0065 |
+
+The companion adds 7.5–10.3% to the numerical time. GPU cost was $1.28 for the four fits.
+
+Requests: [policy 19](tournament-PARAM-policy-seed19.json), [policy 29](tournament-PARAM-policy-seed29.json), [companion 19](tournament-PARAM-nuts-seed19.json), [companion 29](tournament-PARAM-nuts-seed29.json).
+
+**Same round, on CPU.**
+- **Anchor v2** (a u-only smoother with a bounded line search) fails its preregistered rule. PRIOR passes all six checks, but MODE's minimum ESS ratio is 0.92 at key 19, and one C0 bootstrap lower bound is 0.898 against 0.90. It is not adopted.
+- **TAIL.** After the anchor, the remaining collapse comes from the gap between the guide and the exact StudentT × auxiliary factor (median 23–26 log units).
+- **NegativeBinomial2.** The float32 guide failure reproduces in 12 of 108 extreme scalar cases. All of France's restricted annual-grid probes stay finite.
