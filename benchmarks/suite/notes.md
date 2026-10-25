@@ -184,3 +184,10 @@ Requests: [policy 19](tournament-PARAM-policy-seed19.json), [policy 29](tourname
 - **Truth recovery:** every truth now lies inside the companion's marginal intervals. The joint truth sits at the 58–74% radius rank, against the 99th percentile on the old data. The earlier misses came from the generation defect.
 
 These short runs are not convergence verdicts. GPU cost was $0.12.
+
+**Third arm: pseudo-Langevin.** This used master `b11c87e6`, with the fix that bounds its drift and rejects invalid candidates, on the same regenerated data and schedule; the time limit was 450 s.
+- Both seeds now run cleanly, with finite and moving chains.
+- It doesn't improve on the random walk. The effects' lag-1 correlations are 0.98–0.99, and their mean squared jumps are 0.08–0.74× the random walk's.
+- Of the three parameter moves, only `centred_nuts` mixes PARAM's effects and reading SDs at this schedule. The process scales stay slow under all three.
+
+GPU cost was $0.06.
