@@ -476,6 +476,7 @@ def _guided_step(
     reference: jax.Array,
     *,
     record_trace: bool = False,
+    log_precisions: jax.Array | None = None,
 ) -> ParticleSmootherResult | TracedResult[ParticleSmootherResult, SequentialSmootherTraceRecord]:
     """Run an exact conditional filter, selecting paths by their compiled memory."""
     mask = ctx.latent_free_mask
@@ -483,7 +484,7 @@ def _guided_step(
     count = spec.num_particles
     variance = jnp.broadcast_to(ctx.amala_delta.reshape((steps, -1)), reference.shape) / 2
     aux_key, first_key, forward_key, backward_key = jax.random.split(key, 4)
-    memory = sequential_observations(target, ctx.contexts, guide)
+    memory = sequential_observations(target, ctx.contexts, guide, log_precisions)
     reference_memory = memory.path(reference)
 
     def observe(value: jax.Array, index: jax.Array | int) -> tuple[jax.Array, jax.Array]:
@@ -695,9 +696,12 @@ def _guided_step(
                 transition,
             )
         path = bank[jnp.arange(steps), picks]
-        trajectory_scores = jax.vmap(
-            lambda bound: target.path_log_prob(bound, path, target.observations)
-        )(ctx.contexts)
+        if log_precisions is None:
+            trajectory_scores = jax.vmap(
+                lambda bound: target.path_log_prob(bound, path, target.observations)
+            )(ctx.contexts)
+        else:
+            trajectory_scores = memory.path_log_probs(path)
     else:
 
         def backward(
@@ -770,9 +774,11 @@ def guided_step(
     spec: GuidedPathSpec,
     key: jax.Array,
     reference: jax.Array,
+    *,
+    log_precisions: jax.Array | None = None,
 ) -> ParticleSmootherResult:
     """Advance the guided filter without retaining its proposal trace."""
-    result = _guided_step(target, ctx, guide, spec, key, reference)
+    result = _guided_step(target, ctx, guide, spec, key, reference, log_precisions=log_precisions)
     assert not isinstance(result, TracedResult)
     return result
 
@@ -784,8 +790,12 @@ def trace_guided_step(
     spec: GuidedPathSpec,
     key: jax.Array,
     reference: jax.Array,
+    *,
+    log_precisions: jax.Array | None = None,
 ) -> TracedResult[ParticleSmootherResult, SequentialSmootherTraceRecord]:
     """Record the same guided update, including its conditional filter genealogy."""
-    result = _guided_step(target, ctx, guide, spec, key, reference, record_trace=True)
+    result = _guided_step(
+        target, ctx, guide, spec, key, reference, record_trace=True, log_precisions=log_precisions
+    )
     assert isinstance(result, TracedResult)
     return result

@@ -53,6 +53,7 @@ class WindowMemoryRuntime:
         statistics: jax.Array,
         observations: jax.Array,
         index: jax.Array,
+        log_precision: jax.Array | None = None,
     ) -> jax.Array:
         """Emit each recorded window once, preserving its joint channel law."""
         slots = self.emission_slots[index]
@@ -81,7 +82,11 @@ class WindowMemoryRuntime:
             mask = jnp.zeros_like(response, dtype=bool).at[channels].set(slots >= 0)
             mask = mask & jnp.isfinite(observations[index])
             score = prepare_mean_density(
-                groups, jnp.nan_to_num(observations[index]), model.measurement.manifest_cov, mask
+                groups,
+                jnp.nan_to_num(observations[index]),
+                model.measurement.manifest_cov,
+                mask,
+                log_precision,
             )
             return score(means)
 
@@ -126,6 +131,7 @@ class SequentialObservationRuntime:
     guide: ParticleContext
     noise: ParticleNoiseFactors
     windows: WindowMemoryRuntime | None
+    log_precisions: jax.Array | None = None
 
     @property
     def replay_shape(self) -> tuple[int, int]:
@@ -253,7 +259,12 @@ class SequentialObservationRuntime:
         states = self.replayed_states(value)[:-1]
         point = jax.vmap(
             lambda context, noise, state: self.target.observation_increment_with_noise(
-                context, noise, state, index, self.target.observations
+                context,
+                noise,
+                state,
+                index,
+                self.target.observations,
+                None if self.log_precisions is None else self.log_precisions[index],
             )
         )(self.contexts, self.noise, states)
         if self.windows is None:
@@ -264,6 +275,7 @@ class SequentialObservationRuntime:
             value[self.model_dimension :].reshape(self.windows.shape),
             self.target.observations,
             index,
+            None if self.log_precisions is None else self.log_precisions[index],
         )
 
     def path(self, states: jax.Array) -> jax.Array:
@@ -278,9 +290,23 @@ class SequentialObservationRuntime:
         _, tail = jax.lax.scan(step, first, (states[1:], jnp.arange(1, len(states))))
         return jnp.concatenate((first[None], tail))
 
+    def path_log_probs(self, states: jax.Array) -> jax.Array:
+        """Rescore a complete path with this runtime's exact conditional factors."""
+        values = self.path(states)
+        return (
+            self.initial_log_probs(values[0])
+            + jax.vmap(self.transition_log_probs)(
+                values[:-1], values[1:], jnp.arange(1, len(states))
+            ).sum(axis=0)
+            + jax.vmap(self.log_probs)(values, jnp.arange(len(states))).sum(axis=0)
+        )
+
 
 def sequential_observations(
-    target: ParticleTarget, contexts: ParticleContext, guide: ParticleContext
+    target: ParticleTarget,
+    contexts: ParticleContext,
+    guide: ParticleContext,
+    log_precisions: jax.Array | None = None,
 ) -> SequentialObservationRuntime:
     """Bind exact per-label emissions and their fixed window schedule once per sweep."""
     noise = jax.vmap(lambda context: target.prepare_noise_factors(context, target.observations))(
@@ -293,4 +319,5 @@ def sequential_observations(
         guide,
         noise,
         None if target.intervals is None else _window_memory(target.intervals, labels),
+        log_precisions,
     )

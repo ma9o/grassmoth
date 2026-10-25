@@ -25,6 +25,8 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from jax.typing import DTypeLike
 
     from grassmoth.models.ssm.inference.targets.particle import ParticleContext
@@ -38,6 +40,7 @@ def build_smoother_context(
     reference: jnp.ndarray,
     delta: jnp.ndarray,
     trajectory_dtype: DTypeLike,
+    label_factor: Callable[[ParticleContext], jax.Array] | None = None,
 ) -> SmootherContext:
     """Assemble per-step latent contexts and shared smoother helper closures."""
     latent_context_runtime_fn = static.latent_context_runtime_fn
@@ -79,6 +82,12 @@ def build_smoother_context(
         guide_position = jnp.sum(
             jnp.where(active[:, None], parameter_particles, 0.0), axis=0
         ) / jnp.sum(active)
+
+        if label_factor is not None:
+            factors = jax.vmap(label_factor)(contexts)
+            parameter_log_priors = parameter_log_priors + factors
+            parameter_log_probs = parameter_log_probs + factors
+            initial_label_log_probs = _normalize_log_probs(parameter_log_probs)
 
     def _initial_value_grad_by_param(particle0: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         return _value_and_grad_by_param(

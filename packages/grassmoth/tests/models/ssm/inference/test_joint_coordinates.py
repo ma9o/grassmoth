@@ -36,30 +36,25 @@ PARAMETERIZATIONS = ("centred", "non_centred", "mixed")
 
 @pytest.mark.parametrize("parameterization_name", PARAMETERIZATIONS)
 def test_runtime_charts_preserve_each_fits_scientific_start_and_density(parameterization_name):
-    with jax.enable_x64():
-        target = _correlated_target()
-        first = build_joint_coordinates(target, parameterization_name, compiler=compile_program)
-        other_target = replace(
-            target, parameters=replace(target.parameters, initial_position=jnp.array([0.7]))
-        )
-        second = build_joint_coordinates(
-            other_target, parameterization_name, compiler=compile_program
-        )
-        dynamic = jax.jit(
-            jax.value_and_grad(lambda point, chart: first.bind(chart).log_density(point))
-        )
-        for coordinates in (first, second):
-            point = jnp.linspace(-0.2, 0.3, coordinates.dimension)
-            expected = jax.jit(jax.value_and_grad(coordinates.log_density))(point)
-            measured = dynamic(point, coordinates.chart)
-            for actual, reference in zip(measured, expected, strict=True):
-                np.testing.assert_allclose(actual, reference, atol=1e-10, rtol=1e-10)
-            bound = first.bind(coordinates.chart)
-            np.testing.assert_array_equal(bound.parameter_center, coordinates.parameter_center)
-            assert bound.record == coordinates.record
-            centred = build_joint_coordinates(coordinates.target, compiler=compile_program)
-            start = centred.decode(jnp.zeros(centred.dimension))
-            np.testing.assert_array_equal(bound.encode(*start), coordinates.encode(*start))
+    target = _correlated_target()
+    first = build_joint_coordinates(target, parameterization_name, compiler=compile_program)
+    other_target = replace(
+        target, parameters=replace(target.parameters, initial_position=jnp.array([0.7]))
+    )
+    second = build_joint_coordinates(other_target, parameterization_name, compiler=compile_program)
+    dynamic = jax.jit(jax.value_and_grad(lambda point, chart: first.bind(chart).log_density(point)))
+    for coordinates in (first, second):
+        point = jnp.linspace(-0.2, 0.3, coordinates.dimension)
+        expected = jax.jit(jax.value_and_grad(coordinates.log_density))(point)
+        measured = dynamic(point, coordinates.chart)
+        for actual, reference in zip(measured, expected, strict=True):
+            np.testing.assert_allclose(actual, reference, atol=3e-6, rtol=3e-6)
+        bound = first.bind(coordinates.chart)
+        np.testing.assert_array_equal(bound.parameter_center, coordinates.parameter_center)
+        assert bound.record == coordinates.record
+        centred = build_joint_coordinates(coordinates.target, compiler=compile_program)
+        start = centred.decode(jnp.zeros(centred.dimension))
+        np.testing.assert_array_equal(bound.encode(*start), coordinates.encode(*start))
 
 
 def _direct_constraints(value):
@@ -403,78 +398,34 @@ def test_scientific_tempering_reference_gets_the_same_parameterization_jacobian(
         ("mixed", 1.0, "static_replay"),
     ],
 )
-def test_direct_scoring_float64_identity_preserves_support_and_tempering(
+def test_direct_scoring_identity_preserves_support_and_tempering(
     parameterization_name, beta, support
 ):
-    with jax.enable_x64():
-        target = (
-            _correlated_target() if support == "pinned_interval" else _problem(_model())[1].runtime
-        )
-        # Panel binding intentionally stores float32. Lift the reference inputs
-        # before tracing so fixed/static values are not rounded by that storage.
-        target = replace(
-            target,
-            observations=target.observations.astype(jnp.float64),
-            times=target.times.astype(jnp.float64),
-            exact_constraints=None
-            if target.exact_constraints is None
-            else replace(
-                target.exact_constraints, values=target.exact_constraints.values.astype(jnp.float64)
-            ),
-        )
-        if support == "static_replay":
-            # This all-fixed model has no scientific parameter tensors, so its
-            # compiler uses float32 storage. Lift those constants and bind its
-            # sole sampled static state directly in the reference precision.
-            context = target.context
-            static_indices = jnp.asarray(target.state_space.static)
+    target = _correlated_target() if support == "pinned_interval" else _problem(_model())[1].runtime
+    affine = build_joint_coordinates(target, compiler=compile_program)
+    _, anchor = affine.decode(jnp.zeros(affine.dimension))
+    reference = GaussianReference(
+        target.initial_position,
+        jnp.eye(target.initial_position.size),
+        anchor,
+        jnp.zeros((*anchor.shape, anchor.shape[-1])),
+        jnp.broadcast_to(jnp.eye(anchor.shape[-1]), (*anchor.shape, anchor.shape[-1])),
+        affine.free_mask,
+    )
+    target = target.at_temperature(reference, jnp.asarray(beta))
+    coordinates = build_joint_coordinates(target, parameterization_name, compiler=compile_program)
+    point = jnp.linspace(-0.2, 0.3, coordinates.dimension)
 
-            def reference_context(parameters, times):
-                arrays, _, static = context(parameters, times)
-                arrays = jax.tree.map(
-                    lambda x: (
-                        x.astype(jnp.float64)
-                        if eqx.is_array(x) and jnp.issubdtype(x.dtype, jnp.floating)
-                        else x
-                    ),
-                    arrays,
-                )
-                return arrays, times, static.astype(jnp.float64).at[static_indices].set(parameters)
+    def scientific_density(native):
+        parameters, values = coordinates._unpack(native)
+        context = target.context(parameters, target.times)
+        path, logdet = coordinates._path(context, values)
+        return target.log_posterior(parameters, path, target.observations, target.times) + logdet
 
-            target = replace(target, context=reference_context)
-        affine = build_joint_coordinates(target, compiler=compile_program)
-        _, anchor = affine.decode(jnp.zeros(affine.dimension))
-        reference = GaussianReference(
-            target.initial_position,
-            jnp.eye(target.initial_position.size),
-            anchor,
-            jnp.zeros((*anchor.shape, anchor.shape[-1])),
-            jnp.broadcast_to(jnp.eye(anchor.shape[-1]), (*anchor.shape, anchor.shape[-1])),
-            affine.free_mask,
-        )
-        target = target.at_temperature(reference, jnp.asarray(beta))
-        coordinates = build_joint_coordinates(
-            target, parameterization_name, compiler=compile_program
-        )
-        point = jnp.linspace(-0.2, 0.3, coordinates.dimension)
-
-        def scientific_density(native):
-            parameters, values = coordinates._unpack(native)
-            context = target.context(parameters, target.times)
-            path, logdet = coordinates._path(context, values)
-            return (
-                target.log_posterior(parameters, path, target.observations, target.times) + logdet
-            )
-
-        measured = jax.jit(jax.value_and_grad(coordinates.log_density))(point)
-        expected = jax.jit(jax.value_and_grad(scientific_density))(point)
-        for actual, reference_value, tolerance in zip(
-            measured, expected, (1e-10, 1e-9), strict=True
-        ):
-            assert actual.dtype == jnp.float64
-            assert (
-                np.max(np.abs(actual - reference_value) / (1 + np.abs(reference_value))) < tolerance
-            )
+    measured = jax.jit(jax.value_and_grad(coordinates.log_density))(point)
+    expected = jax.jit(jax.value_and_grad(scientific_density))(point)
+    for actual, reference_value in zip(measured, expected, strict=True):
+        np.testing.assert_allclose(actual, reference_value, rtol=3e-6, atol=3e-6)
 
 
 @pytest.mark.parametrize("centred_initial", [False, True])
@@ -507,37 +458,34 @@ def test_tiny_diffusion_scores_native_innovations_without_subtracting_rounded_st
 
 
 def test_direct_scoring_keeps_correlated_static_initial_marginal_and_its_gradient():
-    with jax.enable_x64():
-        coordinates = jnp.array([[0.0, 0.7], [0.0, -0.4]])
+    coordinates = jnp.array([[0.0, 0.7], [0.0, -0.4]])
 
-        def scores(static):
-            mapping = GaussianPathMap(
-                jnp.array([0.1, -0.2]),
-                lambda previous, _index: jnp.array([static, jnp.sin(previous[1]) + static]),
-                jnp.array([[[4.0, 1.0], [1.0, 2.0]], [[0.0, 0.0], [0.0, 0.25]]]),
-                jnp.array([[True, True], [False, True]]),
-                jnp.array([[False, True], [False, True]]),
-                jnp.array([[False, True], [False, True]]),
-                jnp.array([[static, jnp.nan], [static, jnp.nan]]),
-            )
-            path, logdet = mapping.decode(coordinates)
-            transformed = mapping.transformed_log_prob(coordinates, path)
-            expected = dist.Normal(0.1, 2.0).log_prob(static) + jnp.sum(
-                dist.Normal(0.0, 1.0).log_prob(coordinates[:, 1])
-            )
-            scientific = (
-                dist.MultivariateNormal(mapping.initial_mean, mapping.covariances[0]).log_prob(
-                    path[0]
-                )
-                + dist.Normal(jnp.sin(path[0, 1]) + static, 0.5).log_prob(path[1, 1])
-                + logdet
-            )
-            return jnp.stack((transformed, expected, scientific))
+    def scores(static):
+        mapping = GaussianPathMap(
+            jnp.array([0.1, -0.2]),
+            lambda previous, _index: jnp.array([static, jnp.sin(previous[1]) + static]),
+            jnp.array([[[4.0, 1.0], [1.0, 2.0]], [[0.0, 0.0], [0.0, 0.25]]]),
+            jnp.array([[True, True], [False, True]]),
+            jnp.array([[False, True], [False, True]]),
+            jnp.array([[False, True], [False, True]]),
+            jnp.array([[static, jnp.nan], [static, jnp.nan]]),
+        )
+        path, logdet = mapping.decode(coordinates)
+        transformed = mapping.transformed_log_prob(coordinates, path)
+        expected = dist.Normal(0.1, 2.0).log_prob(static) + jnp.sum(
+            dist.Normal(0.0, 1.0).log_prob(coordinates[:, 1])
+        )
+        scientific = (
+            dist.MultivariateNormal(mapping.initial_mean, mapping.covariances[0]).log_prob(path[0])
+            + dist.Normal(jnp.sin(path[0, 1]) + static, 0.5).log_prob(path[1, 1])
+            + logdet
+        )
+        return jnp.stack((transformed, expected, scientific))
 
-        values = jax.jit(scores)(jnp.asarray(0.8))
-        derivatives = jax.jit(jax.jacfwd(scores))(jnp.asarray(0.8))
-        np.testing.assert_allclose(values, jnp.repeat(values[1], 3), rtol=1e-10, atol=1e-10)
-        np.testing.assert_allclose(derivatives, jnp.repeat(derivatives[1], 3), rtol=1e-9, atol=1e-9)
+    values = jax.jit(scores)(jnp.asarray(0.8))
+    derivatives = jax.jit(jax.jacfwd(scores))(jnp.asarray(0.8))
+    np.testing.assert_allclose(values, jnp.repeat(values[1], 3), rtol=3e-6, atol=3e-6)
+    np.testing.assert_allclose(derivatives, jnp.repeat(derivatives[1], 3), rtol=3e-6, atol=3e-6)
 
 
 def test_compiler_mask_tracks_available_direct_multi_state_readings_only():

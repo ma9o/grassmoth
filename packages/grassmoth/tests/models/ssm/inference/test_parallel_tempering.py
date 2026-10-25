@@ -24,7 +24,6 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
     adapt_temperature_ladder,
     exchange_permutation,
 )
-from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReferenceBridge
 from grassmoth.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
 from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
@@ -93,18 +92,6 @@ def test_bridge_scores_and_gradients_include_interval_likelihood_once(beta):
     expected_value, expected_gradient = jax.value_and_grad(expected)(joint)
     np.testing.assert_allclose(actual_value, expected_value, rtol=2e-6)
     np.testing.assert_allclose(actual_gradient, expected_gradient, atol=2e-5)
-    with jax.enable_x64():
-        exact_value = jnp.asarray(2.123456789, dtype=jnp.float64)
-        reference_value = jnp.asarray(-0.2, dtype=jnp.float32)
-        bridge = GaussianReferenceBridge(reference, jnp.asarray(beta))
-        mixed = jax.jit(lambda: bridge.combine(lambda: exact_value, reference_value))()
-        assert mixed.dtype == jnp.float64
-        np.testing.assert_allclose(
-            mixed,
-            beta * exact_value + (1 - beta) * reference_value.astype(jnp.float64),
-            rtol=0,
-            atol=1e-12,
-        )
 
 
 @pytest.mark.inference(concern="warmup")
@@ -227,11 +214,6 @@ def test_exchange_ratio_uses_reference_and_adaptation_keeps_strict_endpoints():
     assert adapted[-1] == 0
     assert np.all(np.diff(adapted) < 0)
     assert abs(adapted[1] - adapted[2]) < abs(betas[1] - betas[2])
-    with jax.enable_x64():
-        mixed = adapt_temperature_ladder(
-            betas.astype(jnp.float32), jnp.ones((1, 3), dtype=jnp.float64), jnp.full((1, 3), 50)
-        )
-        assert mixed.dtype == jnp.float32
 
 
 @pytest.mark.inference(concern="recovery")

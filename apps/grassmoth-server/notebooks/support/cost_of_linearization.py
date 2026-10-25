@@ -61,8 +61,6 @@ from scipy import stats as sstats
 
 type GridShape = tuple[int, int, int]
 
-jax.config.update("jax_enable_x64", True)
-
 # ── Calibration palette (self-contained; shared convention across the SBC-style notebooks) ──
 C_UNIFORM = "#111827"  # the uniform target / reference
 C_PASS = "#059669"  # calibrated — green

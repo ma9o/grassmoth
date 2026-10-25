@@ -416,6 +416,7 @@ class ParticleTarget:
         state: jax.Array,
         index: jax.Array | int,
         observations: jax.Array,
+        log_precision: jax.Array | None = None,
     ) -> jax.Array:
         """Score exact point laws and nonlinear predictors with prepared Gaussian noise."""
         model = cast("HeterogeneousObservation", self.dynamical_model(context).observation_model)
@@ -428,6 +429,7 @@ class ParticleTarget:
                 predictor,
                 model.measurement.manifest_cov,
                 tuple(factor.at(index) for factor in noise.observations),
+                log_precision,
             ).astype(predictor.dtype)
 
         return exact() if self.bridge is None else self.bridge.observation(exact)

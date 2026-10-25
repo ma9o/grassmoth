@@ -58,56 +58,53 @@ def test_companion_choice_identifies_the_kernel_and_excludes_tempering():
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize("name", ["centred_mh", "scale_noncentred_mh"])
 def test_companion_proposals_are_reversible_with_exact_ratios_and_refreshed_state(name):
-    with jax.enable_x64():
-        target = _correlated_target()
-        coordinates = build_joint_coordinates(target, "non_centred", compiler=compile_program)
-        position, path = coordinates.decode(jnp.linspace(-0.3, 0.4, coordinates.dimension))
-        initial = _initialize_chain_state(
-            position,
-            observations=target.observations,
-            times=target.times,
-            target=target,
-            parameter_gradient_fn=jnp.sin,
-            initial_latent_delta=jnp.full(target.times.shape, 0.01),
-            param_step_size=0.02,
-            parameter_chol=jnp.eye(position.size),
-            param_min_scale=1e-6,
-            param_max_scale=1e3,
-            initial_latent_trajectory=path,
-            exact_constraints=target.exact_constraints,
-        )
-        propose = jax.jit(build_companion_proposal(target, name, jnp.sin, compiler=compile_program))
-        proposed, ratio = propose(initial, position + 0.04)
-        returned, reverse = propose(proposed, position)
-        np.testing.assert_allclose(ratio + reverse, 0, atol=1e-9)
-        np.testing.assert_allclose(returned.latent_trajectory, initial.latent_trajectory, atol=1e-9)
-        assert proposed.latent_trajectory[1, 0] == 0.3
-        np.testing.assert_allclose(proposed.parameter_gradient, jnp.sin(proposed.position))
-        exact = target.log_posterior(
-            proposed.position, proposed.latent_trajectory, target.observations, target.times
-        )
-        np.testing.assert_allclose(proposed.complete_log_posterior, exact, atol=1e-9)
-        if name == "centred_mh":
-            np.testing.assert_array_equal(proposed.latent_trajectory, initial.latent_trajectory)
-            np.testing.assert_allclose(ratio, exact - initial.complete_log_posterior, atol=1e-9)
-            return
+    target = _correlated_target()
+    coordinates = build_joint_coordinates(target, "non_centred", compiler=compile_program)
+    position, path = coordinates.decode(jnp.linspace(-0.3, 0.4, coordinates.dimension))
+    initial = _initialize_chain_state(
+        position,
+        observations=target.observations,
+        times=target.times,
+        target=target,
+        parameter_gradient_fn=jnp.sin,
+        initial_latent_delta=jnp.full(target.times.shape, 0.01),
+        param_step_size=0.02,
+        parameter_chol=jnp.eye(position.size),
+        param_min_scale=1e-6,
+        param_max_scale=1e3,
+        initial_latent_trajectory=path,
+        exact_constraints=target.exact_constraints,
+    )
+    propose = jax.jit(build_companion_proposal(target, name, jnp.sin, compiler=compile_program))
+    proposed, ratio = propose(initial, position + 0.04)
+    returned, reverse = propose(proposed, position)
+    np.testing.assert_allclose(ratio + reverse, 0, atol=1e-5)
+    np.testing.assert_allclose(returned.latent_trajectory, initial.latent_trajectory, atol=1e-5)
+    assert proposed.latent_trajectory[1, 0] == 0.3
+    np.testing.assert_allclose(proposed.parameter_gradient, jnp.sin(proposed.position))
+    exact = target.log_posterior(
+        proposed.position, proposed.latent_trajectory, target.observations, target.times
+    )
+    np.testing.assert_allclose(proposed.complete_log_posterior, exact, atol=1e-5)
+    if name == "centred_mh":
+        np.testing.assert_array_equal(proposed.latent_trajectory, initial.latent_trajectory)
+        np.testing.assert_allclose(ratio, exact - initial.complete_log_posterior, atol=1e-5)
+        return
 
-        def scientific(point):
-            parameters, trajectory = coordinates.decode(point)
-            return jnp.concatenate((parameters, trajectory.ravel()[coordinates.free_indices]))
+    def scientific(point):
+        parameters, trajectory = coordinates.decode(point)
+        return jnp.concatenate((parameters, trajectory.ravel()[coordinates.free_indices]))
 
-        old_point = coordinates.encode(initial.position, initial.latent_trajectory)
-        new_point = coordinates.encode(proposed.position, proposed.latent_trajectory)
-        _, old_jacobian = jnp.linalg.slogdet(jax.jacfwd(scientific)(old_point))
-        _, new_jacobian = jnp.linalg.slogdet(jax.jacfwd(scientific)(new_point))
-        np.testing.assert_allclose(
-            ratio,
-            exact - initial.complete_log_posterior + new_jacobian - old_jacobian,
-            atol=1e-9,
-        )
-        np.testing.assert_allclose(
-            old_point[position.size :], new_point[position.size :], atol=1e-9
-        )
+    old_point = coordinates.encode(initial.position, initial.latent_trajectory)
+    new_point = coordinates.encode(proposed.position, proposed.latent_trajectory)
+    _, old_jacobian = jnp.linalg.slogdet(jax.jacfwd(scientific)(old_point))
+    _, new_jacobian = jnp.linalg.slogdet(jax.jacfwd(scientific)(new_point))
+    np.testing.assert_allclose(
+        ratio,
+        exact - initial.complete_log_posterior + new_jacobian - old_jacobian,
+        atol=1e-5,
+    )
+    np.testing.assert_allclose(old_point[position.size :], new_point[position.size :], atol=1e-5)
 
 
 @pytest.mark.inference(concern="sampling")

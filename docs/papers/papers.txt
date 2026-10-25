@@ -22,7 +22,7 @@
 
 2606.16985  dynestyx
 
-2606.05692v1 epicf
+2606.05692	epicf
 
 2507.12547 open-world-cognition
 

@@ -222,7 +222,8 @@ def test_diagonal_curvature_separates_tight_weak_and_missing_directions():
 
 
 @pytest.mark.inference(concern="sampling")
-def test_state_dependent_metric_freezes_and_continues_without_recalibration():
+@pytest.mark.parametrize("family", ["poisson", "student_t"])
+def test_state_dependent_metric_freezes_and_continues_without_recalibration(family):
     import logging
     import time
     from datetime import UTC, datetime
@@ -253,7 +254,7 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration():
         np.array([[1.0], [4.0], [2.0]]),
         times[:, None],
         ("last",),
-        families=(DistributionFamily.POISSON,),
+        families=(DistributionFamily(family),),
     )
     initialization = prepare_particle_initialization(
         target,

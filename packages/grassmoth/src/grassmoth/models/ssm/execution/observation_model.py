@@ -13,6 +13,7 @@ from grassmoth.artifacts.model.likelihood import (
     CategoricalLawSpec,
     NormalLawSpec,
     OrderedLogisticLawSpec,
+    StudentTLawSpec,
 )
 from grassmoth.models.ssm.execution import emissions
 from grassmoth.models.ssm.execution.observation_distributions import (
@@ -67,14 +68,34 @@ def _group_density(
     R: jax.Array,
     mask: jax.Array,
     responses: jax.Array | None = None,
+    log_precision: jax.Array | None = None,
 ) -> jax.Array:
     indices = jnp.asarray(group.indices)
     law = group.evaluate(predictors, jnp.sqrt(jnp.diag(R)), responses, mask)
+    if isinstance(law, StudentTLawSpec) and log_precision is not None:
+        return precision_normal_log_prob(law, y[indices], mask[indices], log_precision[indices])
     if isinstance(law, NormalLawSpec):
         return emissions.gaussian_block_log_prob(
             y[indices], law.loc, R[jnp.ix_(indices, indices)], mask[indices]
         )
     return masked_law_log_prob(law, y[indices], mask[indices])
+
+
+def precision_normal_log_prob(
+    law: StudentTLawSpec[jax.Array],
+    y: jax.Array,
+    mask: jax.Array,
+    log_precision: jax.Array,
+) -> jax.Array:
+    """Conditional scalar Gaussian factors, without materializing tiny precisions.
+
+    These independent factors never join the native correlated Normal blocks.
+    The StudentT scale is a scale parameter, including when its variance is undefined.
+    """
+    log_inverse_scale = 0.5 * log_precision - jnp.log(law.scale)
+    residual = jnp.where(mask, y - law.loc, 0.0) * jnp.exp(log_inverse_scale)
+    density = log_inverse_scale - 0.5 * (jnp.log(2 * jnp.pi) + residual**2)
+    return jnp.sum(jnp.where(mask, density, 0.0))
 
 
 def grouped_density(
@@ -113,6 +134,7 @@ def grouped_density_with_noise(
     eta: jax.Array,
     covariance: jax.Array,
     noise: tuple[GaussianNoiseFactors, ...],
+    log_precision: jax.Array | None = None,
 ) -> jax.Array:
     """Use fixed Gaussian factors and the ordinary evaluator for all other laws."""
     observed = ~jnp.isnan(y)
@@ -129,7 +151,9 @@ def grouped_density_with_noise(
             residual = jnp.where(observed[indices], filled[indices] - law.loc, 0.0)
             total = total + next(factors).log_prob(residual)
         else:
-            total = total + _group_density(group, filled, eta, covariance, observed)
+            total = total + _group_density(
+                group, filled, eta, covariance, observed, log_precision=log_precision
+            )
     return total
 
 
@@ -154,11 +178,19 @@ def grouped_response(
 
 
 def prepare_mean_density(
-    groups: tuple[LawGroup, ...], y: jax.Array, R: jax.Array, mask: jax.Array
+    groups: tuple[LawGroup, ...],
+    y: jax.Array,
+    R: jax.Array,
+    mask: jax.Array,
+    log_precision: jax.Array | None = None,
 ) -> ResponseFn:
     """Bind each interval law before mapping across candidate response means."""
 
     def bind(group: LawGroup) -> ResponseFn:
+        if isinstance(group.laws[0], StudentTLawSpec) and log_precision is not None:
+            return lambda means: _group_density(
+                group, y, jnp.zeros_like(means), R, mask, means, log_precision
+            )
         if isinstance(group.laws[0], NormalLawSpec):
             return lambda means: _group_density(group, y, jnp.zeros_like(means), R, mask, means)
         indices = jnp.asarray(group.indices)

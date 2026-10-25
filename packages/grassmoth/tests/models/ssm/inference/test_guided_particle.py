@@ -237,8 +237,8 @@ def test_guided_filter_keeps_zero_mass_candidates_out_of_selected_path(monkeypat
     monkeypatch.setattr(
         ParticleTarget,
         "observation_increment_with_noise",
-        lambda self, context, _noise, state, index, observations: bounded_observation(
-            self, context, state, index, observations
+        lambda self, context, _noise, state, index, observations, _log_precision=None: (
+            bounded_observation(self, context, state, index, observations)
         ),
     )
     times = np.arange(3.0)

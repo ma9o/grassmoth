@@ -97,22 +97,13 @@ class GaussianReferenceBridge:
 
     def combine(self, exact: Callable[[], jax.Array], reference: jax.Array) -> jax.Array:
         """Interpolate log densities without evaluating the exact target at beta zero."""
-        # NumPyro's empty-parameter prior and a model's path can have different
-        # precisions. Resolve the common result type while tracing, so endpoint
-        # branches agree without downcasting the exact cold density.
-        dtype = jnp.result_type(jax.eval_shape(exact).dtype, reference.dtype, self.beta.dtype)
-        reference = reference.astype(dtype)
-
-        def exact_density() -> jax.Array:
-            return jnp.asarray(exact(), dtype=dtype)
-
         result: jax.Array = jax.lax.cond(
             self.beta == 0,
             lambda: reference,
             lambda: jax.lax.cond(
                 self.beta == 1,
-                exact_density,
-                lambda: self.beta * exact_density() + (1 - self.beta) * reference,
+                exact,
+                lambda: self.beta * exact() + (1 - self.beta) * reference,
             ),
         )
         return result
