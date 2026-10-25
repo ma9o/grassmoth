@@ -115,13 +115,14 @@ def test_block_boundaries_and_padding_preserve_key_stream_and_phase_outputs(
         for name, expected in records.items():
             assert isinstance(actual[name], jax.Array)
             assert actual[name].dtype == expected.dtype
+            # Keys match bitwise; blocked and plain scans may round float32 differently.
             np.testing.assert_allclose(
-                actual[name], np.asarray(expected).swapaxes(0, 1), rtol=1e-6, atol=1e-6
+                actual[name], np.asarray(expected).swapaxes(0, 1), rtol=1e-5, atol=1e-5
             )
     np.testing.assert_array_equal(
         jax.random.key_data(run.state[0]), jax.random.key_data(reference[0])
     )
-    np.testing.assert_allclose(run.state[1], reference[1], atol=1e-6)
+    np.testing.assert_allclose(run.state[1], reference[1], atol=1e-5)
     assert "paths" not in run.history.warmup
     assert run.retained_draws == samples
     assert run.stopping_checkpoint is None

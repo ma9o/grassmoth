@@ -52,7 +52,7 @@ def test_compile_observation_operator_keeps_point_support_without_interval_summa
     assert operator.requires_interval_summary_handling is False
     assert operator.interval_summary_indices == ()
     np.testing.assert_array_equal(
-        np.asarray(operator.point_like_mask(jnp.float32)),
+        np.asarray(operator.point_like_mask(jnp.dtype(jnp.float32))),
         np.array([1.0], dtype=np.float32),
     )
 
