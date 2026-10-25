@@ -18,7 +18,7 @@ from grassmoth.models.ssm.execution.dynamical_model import (
     build_dynamical_model,
 )
 from grassmoth.models.ssm.execution.parameters import assemble_model_matrices
-from grassmoth.models.ssm.inference.samplers.particle.guided import _guided_information
+from grassmoth.models.ssm.inference.samplers.particle.guided_information import _guided_information
 from grassmoth.models.ssm.predictive.registry_runtime import simulate_predictive_draws
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_test_support.compute import COMPUTE_BUDGET

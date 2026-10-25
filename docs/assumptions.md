@@ -26,15 +26,15 @@ The [fit chart](assets/action-flows/fit.svg) owns the execution order. Experimen
 | Piece | Kind | Paper reference | Owner | Evidence | Tests | Limits |
 | --- | --- | --- | --- | --- | --- | --- |
 | Parameter ensemble of two labels, with Barker label choice | Paper | [C25][c25] §3 | [kernel] | — | [t-particle] | One random-walk candidate per sweep is slow for many correlated parameters |
-| Guided conditional filter: killing resampling, backward selection | Paper | [CF24][cf24] §4.1, §4.4 | [guided] | `4ed4c792` | [t-particle] | Separated modes |
+| Guided conditional filter: killing resampling, backward selection | Paper | [CF24][cf24] §4.1, §4.4 | [guided], [guided-selection] | `4ed4c792` | [t-particle] | Separated modes |
 | Path update under the label mixture, with prefix and suffix label densities | Adapted | [CF24][cf24] fixes θ; [C25][c25] uses a bootstrap filter | [guided] | `4ed4c792` | [t-particle] | Label-dependent geometry shares one guide |
-| Guide from the readings times the auxiliary's actual law | Ours | Replaces [CF24][cf24] §4.4's unshifted pseudo-observation | [guided] | `ff4f0e47` | [t-information] | Clipped convex curvature; a poor Gaussian fit to a reading |
-| Twist that linearizes nonlinear dynamics at the auxiliary path | Adapted | [CF24][cf24] §4.4 assumes affine Gaussian transitions | [twist], [guided] | `4ed4c792` | [t-information] | An auxiliary path far from the posterior, as with a small diffusion |
+| Guide from the readings times the auxiliary's actual law | Ours | Replaces [CF24][cf24] §4.4's unshifted pseudo-observation | [guided-information] | `ff4f0e47` | [t-information] | Clipped convex curvature; a poor Gaussian fit to a reading |
+| Twist that linearizes nonlinear dynamics at the auxiliary path | Adapted | [CF24][cf24] §4.4 assumes affine Gaussian transitions | [twist], [guided-geometry] | `4ed4c792` | [t-information] | An auxiliary path far from the posterior, as with a small diffusion |
 | Per-coordinate curvature step limit, 2R for a Gaussian reading | Ours | [CF24][cf24] §5.2 adapts one step per time to a movement target | [adaptation], [runner] | `7e7062e8`, `e8ab964c`, `4572dc7b` | [t-adaptation] | Unread coordinates use the unit-dependent cap δ = 10; convex readings keep memory |
 | Warmup movement controller below that limit, frozen before the retained draws | Adapted | Corenflos & Särkkä (2025), per-time adaptation | [adaptation] | `e5d9e87b` | [t-adaptation] | Counts any change as movement |
-| Interval readings: per-label window statistics, bounded backward replay | Adapted | [CF24][cf24] assumes per-time potentials | [sequential], [guided] | `b66f40b8` | [t-windows], [t-interval] | Long or heavily overlapping windows |
-| Deterministic recurrence stages: exact per-label replay, ancestral tracing | Adapted | Plain particle Gibbs path selection (Andrieu, Doucet & Holenstein 2010) | [sequential], [guided] | `5f4484d7` | [t-recurrences] | Weaker movement at early times |
-| StudentT precision augmentation, with the final label drawn from the marginal | Adapted | Scale mixtures (Carlin, Polson & Stoffer 1992), with an ordered partial collapse ([van Dyk & Park][vdp]; [Hosszejni][hosszejni] on degrees of freedom) | [student], [kernel] | `52807ada` | [t-student], [t-student-kernel] | Ambiguous outliers switch only through precision updates |
+| Interval readings: per-label window statistics, bounded backward replay | Adapted | [CF24][cf24] assumes per-time potentials | [sequential], [guided-selection] | `b66f40b8` | [t-windows], [t-interval] | Long or heavily overlapping windows |
+| Deterministic recurrence stages: exact per-label replay, ancestral tracing | Adapted | Plain particle Gibbs path selection (Andrieu, Doucet & Holenstein 2010) | [sequential], [guided-selection] | `5f4484d7` | [t-recurrences] | Weaker movement at early times |
+| StudentT precision augmentation, with the final label drawn from the marginal | Adapted | Scale mixtures (Carlin, Polson & Stoffer 1992), with an ordered partial collapse ([van Dyk & Park][vdp]; [Hosszejni][hosszejni] on degrees of freedom) | [student], [augmentation], [kernel] | `52807ada` | [t-student], [t-student-kernel] | Ambiguous outliers switch only through precision updates |
 | Parameter proposal covariance adapted in warmup | Adapted | [C25][c25] §3.4 allows it; its experiments fix Σ = I | [parameter-adaptation] | `868ef169` | [t-parameter-adaptation] | Poor covariance estimates |
 | Bounded pseudo-Langevin drift; invalid candidates get zero label mass | Ours | [C25][c25] §3.1's unbounded drift | [kernel], [context] | `b11c87e6` | [t-langevin] | Its fixed pilot direction goes stale; it gave no gain over the random walk on PARAM |
 | Companion moves after each sweep: `centred_mh`, scale non-centred, `centred_nuts` | Adapted | [C25][c25] has no conditional parameter move; Papaspiliopoulos, Roberts & Sköld (2007); Hoffman & Gelman (2014) | [companion] | `4d424e46`, `e31cb285` | [t-companion] | Scales pinned by the path still move slowly |
@@ -60,6 +60,10 @@ The [fit chart](assets/action-flows/fit.svg) owns the execution order. Experimen
 [syed]: https://arxiv.org/abs/1905.02939
 [kernel]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/kernel.py
 [guided]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided.py
+[guided-information]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided_information.py
+[guided-geometry]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided_geometry.py
+[guided-selection]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided_selection.py
+[augmentation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/augmentation.py
 [twist]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/twist.py
 [adaptation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/adaptation.py
 [context]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/context.py

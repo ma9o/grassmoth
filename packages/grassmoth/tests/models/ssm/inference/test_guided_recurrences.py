@@ -24,10 +24,10 @@ from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservat
 from grassmoth.models.ssm.execution.supported_normal import SupportedNormal
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import (
-    _memory_guide,
     guided_step,
     trace_guided_step,
 )
+from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import _memory_guide
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth_test_support.interval_particle import interval_target
@@ -188,6 +188,7 @@ def test_recurrence_guide_matches_dense_gaussian_conditioning(steps, random_init
             jnp.full(auxiliary.shape, variance),
             target.independent_mask,
             TwistedParticleAGradSpec(kappa=1),
+            "actual_law",
         )
     )()
     coordinates = np.full((steps, 3), 73.0)

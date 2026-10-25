@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 from scipy.stats import multivariate_normal, norm
 
-from grassmoth.models.ssm.inference.samplers.particle.guided import _guided_information
+from grassmoth.models.ssm.inference.samplers.particle.guided_information import _guided_information
 from grassmoth.models.ssm.inference.samplers.particle.twist import GaussianTwist, future_information
 
 pytestmark = pytest.mark.inference(concern="sampling")

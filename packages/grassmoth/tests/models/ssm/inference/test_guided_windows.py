@@ -16,11 +16,11 @@ from grassmoth.artifacts.sampling import ParticleAGradSpec, TwistedParticleAGrad
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import guided_delta_limit
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import (
-    _memory_guide,
-    _window_backward,
     guided_step,
     trace_guided_step,
 )
+from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import _memory_guide
+from grassmoth.models.ssm.inference.samplers.particle.guided_selection import _window_backward
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth_test_support.interval_particle import interval_target
@@ -65,6 +65,7 @@ def test_memory_guide_matches_dense_auxiliary_conditioning(variance):
             variances,
             mask,
             TwistedParticleAGradSpec(kappa=1),
+            "actual_law",
         )
     )()
     design = np.array([0.25, 0.5, 0.25])
