@@ -59,6 +59,7 @@
   Change a contract only when the user approves that specific change. If a task seems to need one, stop and ask. Never widen a surface or loosen a rule to make a check pass.
 
 - Budget GPU benchmarks carefully: a B200 on Modal costs $6/hour.
+- Never switch GPU computation to float64; GPU work stays in float32.
 - Analyze saved fit results through `grassmoth-server analyze --workspace <study> --call <id> -- script.py`; keep results on its Modal Volume and never put results into images.
 - Run independent GPU benchmark scenarios concurrently on separate GPUs. Do not serialize them on one L40S; isolate each scenario's GPU so timing comparisons remain meaningful, and preserve shared initialization dependencies.
 
