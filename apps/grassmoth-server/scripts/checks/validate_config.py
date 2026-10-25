@@ -7,6 +7,10 @@ checks actually run) and has not silently disabled them via
 ``from __future__ import annotations``. ``--fix`` auto-syncs that list so it
 never needs hand-editing.
 
+The required MPGibbs boundaries below must retain shape annotations even if a
+module would otherwise disappear from the discovered import-hook list. This is
+a coverage requirement, not an inventory of untyped code.
+
 Usage::
 
     uv run python scripts/checks/validate_config.py
@@ -52,6 +56,182 @@ _JAXTYPING_TYPES = frozenset(
     }
 )
 _SHAPES_MODULE = "grassmoth.models.ssm.shapes"
+
+# (module below inference, qualified function or record, required annotation slots).
+# ``return`` denotes the return annotation; the other slots are parameter names.
+_REQUIRED_SHAPE_BOUNDARIES = (
+    (
+        "warmup.initialization",
+        "ParticleInitialization",
+        (
+            "positions",
+            "paths",
+            "parameter_chol",
+            "pilot_mean",
+            "pilot_variance",
+        ),
+    ),
+    ("warmup.initialization", "prepare_particle_initialization.draw", ("draw_key", "return")),
+    (
+        "mcmc_state",
+        "trajectory_state",
+        (
+            "position",
+            "parameter_gradient",
+            "latent_trajectory",
+            "trajectory_log_prob",
+            "complete_log_posterior",
+            "latent_delta",
+            "param_step_size",
+            "parameter_chol",
+        ),
+    ),
+    (
+        "samplers.mpgibbs.runner",
+        "_initialize_chain_state",
+        (
+            "init_position",
+            "observations",
+            "times",
+            "initial_latent_delta",
+            "parameter_gradient_fn",
+            "parameter_chol",
+            "initial_latent_trajectory",
+        ),
+    ),
+    (
+        "samplers.mpgibbs.kernel",
+        "_bounded_parameter_drift",
+        (
+            "gradient",
+            "chol",
+            "scale",
+            "return",
+        ),
+    ),
+    (
+        "samplers.mpgibbs.kernel",
+        "build_marginal_particle_gibbs_kernel._theta_logpost_grad",
+        (
+            "z",
+            "return",
+        ),
+    ),
+    ("samplers.mpgibbs.companion", "build_companion_proposal.propose", ("position", "return")),
+    ("samplers.mpgibbs.companion", "build_conditional_nuts.potential", ("path", "return")),
+    (
+        "samplers.mpgibbs.companion",
+        "build_conditional_nuts.potential.energy",
+        ("position", "return"),
+    ),
+    ("samplers.mpgibbs.companion", "build_conditional_nuts.step", ("key",)),
+    (
+        "samplers.particle.context",
+        "build_smoother_context",
+        (
+            "parameter_particles",
+            "label_correction",
+            "reference",
+            "delta",
+        ),
+    ),
+    ("samplers.particle.guided", "guided_step", ("key", "reference", "log_precisions")),
+    ("samplers.particle.guided", "trace_guided_step", ("key", "reference", "log_precisions")),
+    ("samplers.particle.twist", "future_information", ("matrices", "offsets", "covariances")),
+    (
+        "samplers.particle.adaptation",
+        "_curvature_limits",
+        ("observe", "path", "free_mask", "return"),
+    ),
+    ("samplers.particle.adaptation", "guided_delta_limit", ("path", "free_mask", "return")),
+    ("samplers.particle.adaptation", "initialize_adaptation", ("delta",)),
+    ("samplers.particle.adaptation", "adapt_scales", ("accepted", "proposed", "maximum")),
+    ("warmup.parameter_adaptation", "initialize_parameter_covariance", ("positions", "chol")),
+    (
+        "warmup.parameter_adaptation",
+        "adapt_parameter_covariance",
+        (
+            "positions",
+            "chol",
+            "iteration",
+            "windows",
+            "return",
+        ),
+    ),
+)
+
+
+def _function_signatures(tree: ast.AST, prefix: str = "") -> dict[str, dict[str, ast.expr | None]]:
+    """Index nested call signatures and record fields without conflating names."""
+    signatures: dict[str, dict[str, ast.expr | None]] = {}
+    for node in ast.iter_child_nodes(tree):
+        name = prefix
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            name = f"{prefix}.{node.name}" if prefix else node.name
+        if isinstance(node, ast.ClassDef):
+            signatures[name] = {
+                field.target.id: field.annotation
+                for field in node.body
+                if isinstance(field, ast.AnnAssign) and isinstance(field.target, ast.Name)
+            }
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+            args = node.args
+            signatures[name] = {
+                arg.arg: arg.annotation
+                for arg in (
+                    *args.posonlyargs,
+                    *args.args,
+                    *args.kwonlyargs,
+                    args.vararg,
+                    args.kwarg,
+                )
+                if arg is not None
+            } | {"return": node.returns}
+        signatures.update(_function_signatures(node, name))
+    return signatures
+
+
+def _missing_shape_slots(
+    tree: ast.Module, function: str, slots: tuple[str, ...]
+) -> tuple[str, ...]:
+    """Require actual dtype/shape annotations, not a bare Array or a quoted hint."""
+    shape_names = {
+        alias.asname or alias.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ImportFrom) and node.module in (_SHAPES_MODULE, "jaxtyping")
+        for alias in node.names
+        if alias.name in _JAXTYPING_TYPES - {"Array", "ArrayLike"}
+    }
+    signature = _function_signatures(tree).get(function, {})
+    return tuple(
+        slot
+        for slot in slots
+        if (annotation := signature.get(slot)) is None
+        or not any(
+            isinstance(node, ast.Name) and node.id in shape_names for node in ast.walk(annotation)
+        )
+    )
+
+
+def _validate_required_shape_boundaries(repo_root: Path) -> list[str]:
+    """Keep critical state, gradient, transition and warmup boundaries instrumentable."""
+    source = repo_root / "packages/grassmoth/src"
+    trees: dict[str, ast.Module] = {}
+    errors = []
+    for relative_module, function, slots in _REQUIRED_SHAPE_BOUNDARIES:
+        module = f"grassmoth.models.ssm.inference.{relative_module}"
+        if module not in trees:
+            path = source.joinpath(*module.split(".")).with_suffix(".py")
+            if not path.is_file():
+                errors.append(f"{module}: required shape boundary module is missing")
+                continue
+            trees[module] = ast.parse(path.read_text(encoding="utf-8"))
+        missing = _missing_shape_slots(trees[module], function, slots)
+        if missing:
+            errors.append(
+                f"{module}.{function}: required shape annotations missing for {', '.join(missing)}"
+            )
+    return errors
 
 
 def _path_to_module(py_path: Path, src_root: Path) -> str:
@@ -174,6 +354,7 @@ def validate_jaxtyping_wiring(repo_root: Path) -> tuple[list[str], list[str]]:
         "which makes its jaxtyping shape checks silently no-op"
         for module in sorted(future_disabled & wired)
     ]
+    errors += _validate_required_shape_boundaries(repo_root)
     notes = [
         f"{module}: listed in --jaxtyping-packages but has no runtime-checkable "
         "jaxtyping annotations; `bun run lint:fix` will drop it"
