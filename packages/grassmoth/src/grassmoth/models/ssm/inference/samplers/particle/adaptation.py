@@ -10,6 +10,7 @@ import jax.numpy as jnp
 from grassmoth.artifacts.sampling import FixedLatentStepSpec, PathUpdateSpec
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.mcmc_state import _clip_scale
+from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -61,11 +62,12 @@ def guided_delta_limit(
     free_mask: jax.Array,
 ) -> jax.Array:
     """Calibrate warmup limits from the exact observation factor at its parameters."""
-    factors = target.prepare_noise_factors(context, target.observations)
+    memory = sequential_observations(target, jax.tree.map(lambda value: value[None], context))
+    reference = memory.path(path)
     return _curvature_limits(
-        lambda state, index: target.observation_increment_with_noise(
-            context, factors, state, index, target.observations
-        ),
+        lambda state, index: memory.log_probs(
+            memory.replace_current(reference[index], state, index), index
+        )[0],
         path,
         free_mask,
     )

@@ -23,8 +23,10 @@ transition means are used in proposals and true densities in every weight.
 Poor Gaussian look-ahead and separated modes can slow mixing, never alter its target.
 
 With the supported additive diffusion, proposal factorizations are batched over
-time and shared across particles. Prefix label laws are normalized as they advance;
-the selected backward suffix supplies the final exact densities without a path rescore.
+time and shared across particles. Prefix label laws are normalized as they advance.
+For point readings, the selected backward suffix supplies the final exact densities.
+Interval readings replay windows crossing each splice, including their auxiliary
+factors, then rescore the selected path once for its final label law.
 """
 
 from __future__ import annotations
@@ -49,6 +51,10 @@ from grassmoth.models.ssm.inference.samplers.particle.twist import (
 from grassmoth.models.ssm.inference.samplers.particle.weights import (
     requested_weight_statistics,
     weight_history_fields,
+)
+from grassmoth.models.ssm.inference.targets.sequential import (
+    SequentialObservationRuntime,
+    sequential_observations,
 )
 from grassmoth.models.ssm.inference.tracing import (
     CategoricalTraceRecord,
@@ -114,6 +120,7 @@ class _ProposalGeometry(NamedTuple):
     chol: jax.Array
     whiten: jax.Array
     log_normalizer: jax.Array
+    parent_map: jax.Array
 
     def center(self, prior_mean: jax.Array, mask: jax.Array) -> jax.Array:
         return (
@@ -144,6 +151,7 @@ def _proposal_geometry(
         chol,
         jax.scipy.linalg.solve_triangular(chol, identity, lower=True),
         -0.5 * jnp.sum(mask) * jnp.log(2.0 * jnp.pi) - jnp.sum(jnp.log(jnp.diag(chol))),
+        jnp.zeros_like(covariance),
     )
 
 
@@ -238,6 +246,224 @@ def _build_twist(
     return future_information(matrices, offsets, covariances, information), covariances
 
 
+def _window_guide(
+    target: ParticleTarget,
+    guide: ParticleContext,
+    memory: SequentialObservationRuntime,
+    observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
+    label_log_probs: jax.Array,
+    auxiliary: jax.Array,
+    variance: jax.Array,
+    mask: jax.Array,
+    spec: GuidedPathSpec,
+) -> tuple[GaussianTwist, _ProposalGeometry]:
+    """Build a singular augmented guide at u, sampling only independent coordinates.
+
+    Window statistics inherit the state's innovation, including its cross-covariance.
+    Their exact nonlinear updates remain in every correction. Long windows, nonlinear
+    responses, clipped curvature and separated modes can reduce proposal efficiency.
+    """
+    points = memory.path(auxiliary)
+    steps, dimension = auxiliary.shape
+    augmented_mask = jnp.concatenate(
+        (mask, jnp.ones((steps, memory.dimension - dimension), dtype=bool)), axis=-1
+    )
+
+    def information_at(
+        value: jax.Array, v: jax.Array, free: jax.Array, active: jax.Array, index: jax.Array
+    ) -> GaussianTwist:
+        if not isinstance(spec, TwistedParticleAGradSpec) or spec.kappa == 0:
+            precision = jnp.zeros((memory.dimension, memory.dimension), value.dtype)
+            precision = precision.at[:dimension, :dimension].set(jnp.diag(free / v))
+            return GaussianTwist(
+                precision,
+                jnp.zeros_like(value)
+                .at[:dimension]
+                .set(jnp.where(free, value[:dimension] / v, 0.0)),
+            )
+
+        def reading(state):
+            return logsumexp(label_log_probs + memory.log_probs(state, index))
+
+        hessian = symmetric(jax.hessian(reading)(value)) * active[:, None] * active[None, :]
+        gradient = jnp.where(active, jax.grad(reading)(value), 0.0)
+        eigenvalues, eigenvectors = jnp.linalg.eigh(-hessian)
+        observed = symmetric((eigenvectors * jnp.maximum(eigenvalues, 0.0)) @ eigenvectors.T)
+
+        def auxiliary_mean(state):
+            return memory.state(state) + v * observe(state, index)[1]
+
+        mean = auxiliary_mean(value)
+        matrix = jax.jacfwd(auxiliary_mean)(value) * free[:, None] * active[None, :]
+        residual = jnp.where(free, memory.state(value) - mean + matrix @ value, 0.0)
+        return GaussianTwist(
+            symmetric(matrix.T @ (matrix / v[:, None])) + observed,
+            matrix.T @ (residual / v) + gradient + observed @ value,
+        )
+
+    information = jax.vmap(information_at)(
+        points, variance, mask, augmented_mask, jnp.arange(steps)
+    )
+
+    def affine(previous, current, index):
+        parent, innovation = jax.jacfwd(memory.advance, argnums=(0, 1))(previous, current, index)
+        parent = parent * augmented_mask[index - 1][None, :]
+        innovation = innovation * mask[index][None, :]
+        offset = memory.advance(previous, current, index) - parent @ previous - innovation @ current
+
+        def moments(value):
+            mean, covariance = target.transition_moments(guide, memory.state(value), index)
+            return mean, (mean, covariance)
+
+        matrix, (mean, covariance) = jax.jacfwd(moments, has_aux=True)(previous)
+        matrix = matrix * augmented_mask[index - 1][None, :]
+        transition = parent + innovation @ matrix
+        shift = offset + innovation @ (mean - matrix @ previous)
+        noise = innovation @ covariance @ innovation.T
+        return parent, innovation, offset, covariance, transition, shift, noise
+
+    parents, innovations, offsets, covariances, matrices, shifts, noises = jax.vmap(affine)(
+        points[:-1], auxiliary[1:], jnp.arange(1, steps)
+    )
+    if isinstance(spec, TwistedParticleAGradSpec):
+        twist = future_information(matrices, shifts, noises, information)
+    else:
+        twist = GaussianTwist(
+            jnp.zeros_like(information.precision), jnp.zeros_like(information.shift)
+        )
+    first_innovation = jax.jacfwd(memory.initial)(auxiliary[0]) * mask[0][None, :]
+    innovations = jnp.concatenate((first_innovation[None], innovations))
+    parents = jnp.concatenate(
+        (jnp.zeros((1, memory.dimension, memory.dimension), points.dtype), parents)
+    )
+    offsets = jnp.concatenate(((points[0] - first_innovation @ auxiliary[0])[None], offsets))
+    covariances = jnp.concatenate((target.initial_moments(guide)[1][None], covariances))
+
+    def geometry(
+        covariance: jax.Array,
+        parent: jax.Array,
+        innovation: jax.Array,
+        offset: jax.Array,
+        local: GaussianTwist,
+        future: GaussianTwist,
+        free: jax.Array,
+    ) -> _ProposalGeometry:
+        precision = local.precision + future.precision
+        shift = local.shift + future.shift
+        pulled = GaussianTwist(
+            symmetric(innovation.T @ precision @ innovation),
+            innovation.T @ (shift - precision @ offset),
+        )
+        result = _proposal_geometry(
+            covariance, pulled, free, jnp.zeros_like(covariance), jnp.zeros(dimension)
+        )
+        posterior = result.chol @ result.chol.T
+        return result._replace(parent_map=-posterior @ innovation.T @ precision @ parent)
+
+    return twist, jax.vmap(geometry)(
+        covariances, parents, innovations, offsets, information, twist, mask
+    )
+
+
+def _window_backward(
+    memory: SequentialObservationRuntime,
+    bank: jax.Array,
+    weights: jax.Array,
+    scores: jax.Array,
+    last: jax.Array,
+    key: jax.Array,
+    auxiliary: jax.Array,
+    variance: jax.Array,
+    mask: jax.Array,
+    observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
+    transition: Callable[[jax.Array, jax.Array, jax.Array], jax.Array],
+) -> jax.Array:
+    """Pay all crossing windows and auxiliary factors before reusing an exact suffix.
+
+    The compiler's window span bounds the replay. Beyond it, every label's future
+    factors are independent of this prefix; their cached sums remain inside the
+    label mixture. No approximation or finite-lag truncation enters these weights.
+    """
+    window = memory.windows
+    assert window is not None
+    steps, count, _ = bank.shape
+    states = memory.state(bank)
+    path = jnp.zeros_like(states[:, 0]).at[-1].set(states[-1, last])
+    suffix = jnp.zeros((steps + 1, scores.shape[-1]), dtype=scores.dtype)
+
+    def backward(carry, inputs):
+        selected, suffix_scores = carry
+        index, gumbels = inputs
+        stop = window.replay_stops[index]
+
+        def replay(carry, offset):
+            previous, label_sum, auxiliary_sum = carry
+            time = jnp.minimum(index + 1 + offset, steps - 1)
+
+            def active():
+                current = jax.vmap(memory.advance, in_axes=(0, None, None))(
+                    previous, selected[time], time
+                )
+                observed, gradients = jax.vmap(observe, in_axes=(0, None))(current, time)
+                density = _masked_normal_log_prob(
+                    auxiliary[time],
+                    selected[time] + variance[time] * gradients,
+                    variance[time],
+                    mask[time],
+                )
+                factors = observed + jax.vmap(transition, in_axes=(0, None, None))(
+                    memory.state(previous), selected[time], time
+                )
+                return (current, label_sum + factors, auxiliary_sum + density), factors
+
+            return jax.lax.cond(
+                index + 1 + offset <= stop,
+                active,
+                lambda: (carry, jnp.zeros_like(label_sum)),
+            )
+
+        (_, label_sum, auxiliary_sum), factors = jax.lax.scan(
+            replay,
+            (bank[index], jnp.zeros_like(scores[index]), jnp.zeros_like(weights[index])),
+            jnp.arange(window.max_replay),
+        )
+        logits = (
+            weights[index]
+            + auxiliary_sum
+            + logsumexp(scores[index] + label_sum + suffix_scores[stop + 1], axis=-1)
+        )
+        pick = jnp.argmax(logits + gumbels).astype(jnp.int32)
+
+        def replace_suffix(carry, offset):
+            total, stored = carry
+            time = jnp.minimum(index + 1 + offset, steps - 1)
+
+            def active():
+                updated = total + factors[offset, pick]
+                return updated, stored.at[time].set(updated)
+
+            return jax.lax.cond(index + 1 + offset <= stop, active, lambda: carry), None
+
+        (_, suffix_scores), _ = jax.lax.scan(
+            replace_suffix,
+            (suffix_scores[stop + 1], suffix_scores),
+            jnp.arange(window.max_replay - 1, -1, -1),
+        )
+        return (selected.at[index].set(states[index, pick]), suffix_scores), pick
+
+    _, picks = jax.lax.scan(
+        backward,
+        (path, suffix),
+        (
+            jnp.arange(steps - 2, -1, -1),
+            jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=states.dtype))(
+                jax.random.split(key, steps - 1)
+            ),
+        ),
+    )
+    return jnp.concatenate((picks[::-1], last[None]))
+
+
 def _guided_step(
     target: ParticleTarget,
     ctx: SmootherContext,
@@ -254,29 +480,24 @@ def _guided_step(
     count = spec.num_particles
     variance = jnp.broadcast_to(ctx.amala_delta.reshape((steps, -1)), reference.shape) / 2
     aux_key, first_key, forward_key, backward_key = jax.random.split(key, 4)
-    noise_factors = jax.vmap(
-        lambda bound: target.prepare_noise_factors(bound, target.observations)
-    )(ctx.contexts)
-
-    def observations(value: jax.Array, index: jax.Array | int) -> jax.Array:
-        return jax.vmap(
-            lambda bound, factors: target.observation_increment_with_noise(
-                bound, factors, value, index, target.observations
-            )
-        )(ctx.contexts, noise_factors).astype(ctx.traj_dtype)
+    memory = sequential_observations(target, ctx.contexts)
+    reference_memory = memory.path(reference)
 
     def observe(value: jax.Array, index: jax.Array | int) -> tuple[jax.Array, jax.Array]:
         if spec.kappa == 0:
-            return observations(value, index), jnp.zeros_like(value)
+            return memory.log_probs(value, jnp.asarray(index)).astype(
+                ctx.traj_dtype
+            ), jnp.zeros_like(memory.state(value))
 
         def mixture(state: jax.Array) -> tuple[jax.Array, jax.Array]:
-            per_label = observations(state, index)
+            current = memory.replace_current(value, state, jnp.asarray(index))
+            per_label = memory.log_probs(current, jnp.asarray(index)).astype(ctx.traj_dtype)
             return logsumexp(ctx.initial_label_log_probs + per_label), per_label
 
-        (_, per_label), gradient = jax.value_and_grad(mixture, has_aux=True)(value)
+        (_, per_label), gradient = jax.value_and_grad(mixture, has_aux=True)(memory.state(value))
         return jnp.asarray(per_label), jnp.asarray(gradient)
 
-    reference_observed, gradients = jax.vmap(observe)(reference, jnp.arange(steps))
+    reference_observed, gradients = jax.vmap(observe)(reference_memory, jnp.arange(steps))
     auxiliary = jnp.where(
         mask,
         reference
@@ -284,21 +505,34 @@ def _guided_step(
         + (jnp.sqrt(variance) * jax.random.normal(aux_key, reference.shape, reference.dtype)),
         reference,
     )
-    if isinstance(spec, TwistedParticleAGradSpec) and spec.kappa == 1:
-        information = _guided_information(observe, auxiliary, variance, mask)
+    if memory.windows is not None:
+        twist, geometry = _window_guide(
+            target,
+            guide,
+            memory,
+            observe,
+            ctx.initial_label_log_probs,
+            auxiliary,
+            variance,
+            mask,
+            spec,
+        )
     else:
-        information = _unshifted_information(auxiliary, variance, mask)
-    twist, transition_covariances = _build_twist(target, guide, auxiliary, mask, spec, information)
-    initial_mean, initial_covariance = target.initial_moments(guide)
-    # Proposal solves and Cholesky factors are independent of the particle ancestors.
-    # Prepare them in parallel over time, outside both sequential particle scans.
-    geometry = jax.vmap(_proposal_geometry)(
-        jnp.concatenate((initial_covariance[None], transition_covariances)),
-        information,
-        mask,
-        twist.precision,
-        twist.shift,
-    )
+        if isinstance(spec, TwistedParticleAGradSpec) and spec.kappa == 1:
+            information = _guided_information(observe, auxiliary, variance, mask)
+        else:
+            information = _unshifted_information(auxiliary, variance, mask)
+        twist, transition_covariances = _build_twist(
+            target, guide, auxiliary, mask, spec, information
+        )
+        geometry = jax.vmap(_proposal_geometry)(
+            jnp.concatenate((target.initial_moments(guide)[1][None], transition_covariances)),
+            information,
+            mask,
+            twist.precision,
+            twist.shift,
+        )
+    initial_mean = target.initial_moments(guide)[0]
 
     def local_factors(particles: jax.Array, index: jax.Array | int) -> tuple[jax.Array, jax.Array]:
         # The conditioned particle is the reference: reuse its observation and score.
@@ -307,7 +541,7 @@ def _guided_step(
         scores = jnp.concatenate((gradients[index, None], scores))
         density = _masked_normal_log_prob(
             auxiliary[index],
-            particles + variance[index] * scores,
+            memory.state(particles) + variance[index] * scores,
             variance[index],
             mask[index],
         )
@@ -318,7 +552,7 @@ def _guided_step(
             lambda bound, factors: target.transition_log_prob_with_noise(
                 bound, factors, previous, current, index
             )
-        )(ctx.contexts, noise_factors).astype(ctx.traj_dtype)
+        )(ctx.contexts, memory.noise).astype(ctx.traj_dtype)
 
     initial_geometry = jax.tree.map(lambda value: value[0], geometry)
     first_center = initial_geometry.center(initial_mean, mask[0])
@@ -339,7 +573,8 @@ def _guided_step(
             ),
         )
     )
-    first_observed, first_auxiliary = local_factors(first, 0)
+    first_memory = jax.vmap(memory.initial)(first)
+    first_observed, first_auxiliary = local_factors(first_memory, 0)
     first_scores = (
         ctx.initial_label_log_probs
         + jax.vmap(
@@ -354,7 +589,7 @@ def _guided_step(
     first_scores = (
         first_scores - jnp.where(jnp.isneginf(first_normalizer), 0.0, first_normalizer)[:, None]
     )
-    first_twists = twist.log_density(first, 0)
+    first_twists = twist.log_density(first_memory, 0)
     first_weights = (
         first_normalizer
         + first_auxiliary
@@ -372,8 +607,10 @@ def _guided_step(
         ancestors = _killing(weights, killing_noise)
         parents = previous[ancestors]
         parent_scores = scores[ancestors]
-        means = jax.vmap(lambda value: target.transition_moments(guide, value, index)[0])(parents)
-        centers = proposal.center(means, mask[index])
+        means = jax.vmap(
+            lambda value: target.transition_moments(guide, memory.state(value), index)[0]
+        )(parents)
+        centers = proposal.center(means, mask[index]) + parents @ proposal.parent_map.T
         current = jnp.concatenate(
             (
                 reference[index, None],
@@ -384,17 +621,18 @@ def _guided_step(
                 ),
             )
         )
-        observed, auxiliary_factors = local_factors(current, index)
+        current_memory = jax.vmap(memory.advance, in_axes=(0, 0, None))(parents, current, index)
+        observed, auxiliary_factors = local_factors(current_memory, index)
         next_scores = (
             parent_scores
-            + jax.vmap(transition, in_axes=(0, 0, None))(parents, current, index)
+            + jax.vmap(transition, in_axes=(0, 0, None))(memory.state(parents), current, index)
             + observed
         )
         # Normalized prefix label laws remove repeated prefix reductions and avoid
         # subtracting two increasingly large log densities as the time grid grows.
         increment = logsumexp(next_scores, axis=-1)
         next_scores = next_scores - jnp.where(jnp.isneginf(increment), 0.0, increment)[:, None]
-        current_twists = twist.log_density(current, index)
+        current_twists = twist.log_density(current_memory, index)
         next_weights: jax.Array = (
             increment
             + auxiliary_factors
@@ -402,8 +640,8 @@ def _guided_step(
             - previous_twists[ancestors]
             - proposal.log_density(current - centers, mask[index])
         )
-        return (current, next_weights, next_scores, current_twists), (
-            current,
+        return (current_memory, next_weights, next_scores, current_twists), (
+            current_memory,
             next_weights,
             next_scores,
             current_twists,
@@ -422,7 +660,7 @@ def _guided_step(
     _, (tail, tail_weights, tail_scores, tail_twists, ancestors, centers, tail_observed) = (
         jax.lax.scan(
             forward,
-            (first, first_weights, first_scores, first_twists),
+            (first_memory, first_weights, first_scores, first_twists),
             (
                 jnp.arange(1, steps),
                 jax.vmap(forward_noise)(jax.random.split(forward_key, steps - 1)),
@@ -431,41 +669,62 @@ def _guided_step(
         )
     )
     observation_bank = jnp.concatenate((first_observed[None], tail_observed))
-    bank = jnp.concatenate((first[None], tail))
+    memory_bank = jnp.concatenate((first_memory[None], tail))
+    bank = memory.state(memory_bank)
     weights = jnp.concatenate((first_weights[None], tail_weights))
     scores = jnp.concatenate((first_scores[None], tail_scores))
     backward_weights = weights - jnp.concatenate((first_twists[None], tail_twists))
     terminal_key, earlier_key = jax.random.split(backward_key)
     last = jax.random.categorical(terminal_key, weights[-1]).astype(jnp.int32)
 
-    def backward(
-        carry: tuple[jax.Array, jax.Array], inputs: tuple[jax.Array, jax.Array]
-    ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
-        following, suffix = carry
-        index, gumbels = inputs
-        links = jax.vmap(lambda value: transition(value, following, index + 1))(bank[index])
-        logits = backward_weights[index] + logsumexp(scores[index] + links + suffix, axis=-1)
-        pick = jnp.argmax(logits + gumbels).astype(jnp.int32)
-        value = bank[index, pick]
-        return (value, suffix + links[pick] + observation_bank[index, pick]), pick
+    if memory.windows is not None:
+        picks = _window_backward(
+            memory,
+            memory_bank,
+            backward_weights,
+            scores,
+            last,
+            earlier_key,
+            auxiliary,
+            variance,
+            mask,
+            observe,
+            transition,
+        )
+        path = bank[jnp.arange(steps), picks]
+        trajectory_scores = jax.vmap(
+            lambda bound: target.path_log_prob(bound, path, target.observations)
+        )(ctx.contexts)
+    else:
 
-    (initial_selected, suffix), earlier = jax.lax.scan(
-        backward,
-        (bank[-1, last], observation_bank[-1, last]),
-        (
-            jnp.arange(steps - 2, -1, -1),
-            jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=reference.dtype))(
-                jax.random.split(earlier_key, steps - 1)
+        def backward(
+            carry: tuple[jax.Array, jax.Array], inputs: tuple[jax.Array, jax.Array]
+        ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
+            following, suffix = carry
+            index, gumbels = inputs
+            links = jax.vmap(lambda value: transition(value, following, index + 1))(bank[index])
+            logits = backward_weights[index] + logsumexp(scores[index] + links + suffix, axis=-1)
+            pick = jnp.argmax(logits + gumbels).astype(jnp.int32)
+            value = bank[index, pick]
+            return (value, suffix + links[pick] + observation_bank[index, pick]), pick
+
+        (initial_selected, suffix), earlier = jax.lax.scan(
+            backward,
+            (bank[-1, last], observation_bank[-1, last]),
+            (
+                jnp.arange(steps - 2, -1, -1),
+                jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=reference.dtype))(
+                    jax.random.split(earlier_key, steps - 1)
+                ),
             ),
-        ),
-    )
-    picks = jnp.concatenate((earlier[::-1], last[None]))
-    path = bank[jnp.arange(steps), picks]
-    # The backward suffix already contains every selected exact observation and
-    # transition factor. Only the initial density remains; do not rescore the path.
-    trajectory_scores = suffix + jax.vmap(
-        lambda bound: target.initial_log_prob(bound, initial_selected)
-    )(ctx.contexts)
+        )
+        picks = jnp.concatenate((earlier[::-1], last[None]))
+        path = bank[jnp.arange(steps), picks]
+        # The backward suffix already contains every selected exact observation and
+        # transition factor. Only the initial density remains; do not rescore the path.
+        trajectory_scores = suffix + jax.vmap(
+            lambda bound: target.initial_log_prob(bound, initial_selected)
+        )(ctx.contexts)
     norms = jnp.linalg.norm(jnp.where(mask, gradients, 0.0), axis=-1)
     measurements = weight_history_fields(
         (requested_weight_statistics(weights, enabled=ctx.diagnostic_weights),)

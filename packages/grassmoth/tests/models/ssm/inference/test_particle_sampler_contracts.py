@@ -39,7 +39,7 @@ pytestmark = pytest.mark.contract
 
 
 @pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
-@pytest.mark.parametrize("unsupported", ["interval", "replay", "tempering"])
+@pytest.mark.parametrize("unsupported", ["replay", "tempering"])
 def test_guided_preflight_rejects_unsupported_models_before_compute(
     monkeypatch, spec_type, unsupported
 ):
@@ -69,6 +69,20 @@ def test_guided_preflight_rejects_unsupported_models_before_compute(
     failure = validate_sampler_support(compiled, sampler)
     assert failure is not None
     assert unsupported in failure.message
+
+
+@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
+def test_guided_preflight_accepts_interval_readings(monkeypatch, spec_type):
+    from grassmoth.models.ssm import compiled_access
+
+    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
+    compiled = Mock(
+        spec=CompiledDynamicalModel,
+        state_space=StateSpace(1, (), (0,), (0,), (), ()),
+        observations=(Mock(support=Mock(support_kind="interval")),),
+    )
+    sampler = SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=spec_type()))
+    assert validate_sampler_support(compiled, sampler) is None
 
 
 @pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])

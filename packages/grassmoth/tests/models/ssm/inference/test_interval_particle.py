@@ -20,6 +20,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.targets.intervals import gather_interval_statistics
+from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth_test_support.interval_particle import (
     gaussian_interval_case,
     initialize_interval_chain,
@@ -150,6 +151,21 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
     # Two parameter labels, two distinct paths, and seven real leaves exercise
     # label-dependent responses, slot reuse, overlapping windows, and padding.
     contexts = jax.vmap(lambda z: target.context(z, target.times))(jnp.array([[0.15], [-0.4]]))
+    sequential = sequential_observations(target, contexts)
+    memory = sequential.path(path)
+    emitted = jax.vmap(sequential.log_probs)(memory, jnp.arange(len(times)))
+    expected_labels = jax.vmap(
+        lambda bound: target.observation_log_probs(bound, path, target.observations)
+    )(contexts)
+    np.testing.assert_allclose(emitted.T, expected_labels, atol=2e-5)
+    current_scores = jax.vmap(
+        lambda state, carried, index: jax.grad(
+            lambda value: sequential.log_probs(
+                sequential.replace_current(carried, value, index), index
+            )[0]
+        )(state)
+    )(path, memory, jnp.arange(len(times)))
+    np.testing.assert_allclose(current_scores, current_gradient, atol=2e-5)
     bank = jnp.stack([path, path + 0.6], axis=1)
     total = _interval_tree_score(intervals, contexts, bank)
     reference = jax.vmap(

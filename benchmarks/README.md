@@ -126,7 +126,10 @@ requests and run notes are in [`suite`](suite). Their status:
 - **TAIL is valid, and both of its fits fail.** About a quarter of the
   latent time points never move in retention; see
   [suite/notes.md](suite/notes.md).
-- **C7 and C8** are refused by the current policy.
+- **C7** passes a zero-sweep public fit with its interval-mean channel intact;
+  this checks admission and compilation, not convergence. **C8** remains refused
+  by the current policy; supported model limits are in
+  [the model assumptions](../docs/assumptions.md#model-class).
 
 **Data.** In the study, `edit_model` with the truth model and one `simulate`
 (seed 721, 16 days on a 675-second clock) give C0's history. No action thins a

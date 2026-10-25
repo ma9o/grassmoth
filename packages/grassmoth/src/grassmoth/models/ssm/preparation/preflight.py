@@ -58,10 +58,6 @@ def validate_sampler_support(
             return ObservationPreflightFailure.rejected(
                 "Sequential guided path updates do not yet support deterministic recurrence replay."
             )
-        if any(indicator.support.support_kind == "interval" for indicator in compiled.observations):
-            return ObservationPreflightFailure.rejected(
-                "Sequential guided path updates do not yet support interval observations."
-            )
         return None
     unsupported = tuple(
         ", ".join(compiled.states[index].name for index in stage.indices)
