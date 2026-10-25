@@ -7,11 +7,13 @@ orchestration over posterior draws live in the counterfactual package.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 import diffrax as dfx
 import dynestyx as dsx
 import equinox as eqx
+import jax
 import jax.numpy as jnp
 import jax.random as random
 import numpyro.distributions as dist
@@ -37,7 +39,7 @@ class ProcessNoise(eqx.Module):
 
 
 class BrownianTreeSpec(eqx.Module):
-    """Virtual Brownian tree with an optional fixed solver step size."""
+    """Virtual Brownian tree with an optional maximum solver step size."""
 
     step_size: float | Array | None = None
     """``None`` selects ``(t1 - t0) / 200``."""
@@ -45,7 +47,7 @@ class BrownianTreeSpec(eqx.Module):
 
 
 class IndexedBrownianSpec(eqx.Module):
-    """Replayable integer-step Brownian increments on an explicit fixed grid."""
+    """Replayable Brownian increments with a maximum solver step size."""
 
     step_size: float | Array
 
@@ -61,28 +63,108 @@ class SimulationConfig(eqx.Module):
     rtol: float = 1e-4
     atol: float = 1e-6
     max_steps: int = 4096
+    """Maximum ODE steps, or additional SDE steps beyond the prepared intervals."""
     brownian: BrownianTreeSpec | IndexedBrownianSpec = eqx.field(default_factory=BrownianTreeSpec)
 
 
-class _IndexedBrownianPath(dfx.AbstractBrownianPath[Array | dfx.BrownianIncrement]):
-    """Fast deterministic Brownian increments for a fixed-step forward solve.
+@jax.tree_util.register_dataclass
+@dataclass(frozen=True)
+class _PreparedSteps:
+    """Prepared intervals subdivided at a fixed maximum step, independently of state.
 
-    Every solver interval is keyed by its integer step index rather than the
-    floating-point bit patterns of its endpoints. This has the fixed-step speed
-    of ``UnsafeBrownianPath`` while making the same seed and schedule replay the
-    same increments across process restarts.
+    Each prepared interval is subdivided evenly so no substep exceeds the limit.
+    Its final substep lands on the exact right endpoint; the next interval
+    restarts the substep index. Both solver and Brownian path use this schedule.
     """
 
-    # Diffrax declares these through Equinox AbstractVar. Ty currently models
-    # AbstractVar as a class variable even though Diffrax requires instance fields.
-    t0: Array  # pyright: ignore[reportIncompatibleVariableOverride] - Diffrax AbstractVar requires an instance field. # ty: ignore[invalid-attribute-override] - Diffrax requires instance fields; ty treats Equinox AbstractVar as a class variable.
-    t1: Array  # pyright: ignore[reportIncompatibleVariableOverride] - Diffrax AbstractVar requires an instance field. # ty: ignore[invalid-attribute-override] - Diffrax requires instance fields; ty treats Equinox AbstractVar as a class variable.
+    times: Array
+    step_size: Array
+
+    def substeps(self, interval: Array) -> Array:
+        """Number of equal substeps needed to respect the resolution limit."""
+        width = self.times[interval + 1] - self.times[interval]
+        return jnp.ceil(width / self.step_size)
+
+    @property
+    def minimum_step(self) -> Array:
+        """Smallest scheduled step, bounding the Brownian tree's tolerance."""
+        return jnp.min(jnp.diff(self.times) / self.substeps(jnp.arange(self.times.size - 1)))
+
+    def endpoint(self, interval: Array, substep: Array) -> Array:
+        """End an equal substep, preserving the exact prepared boundary."""
+        left = self.times[interval]
+        right = self.times[interval + 1]
+        count = self.substeps(interval)
+        return jnp.where(substep >= count, right, left + (right - left) * (substep / count))
+
+    def increment_key(self, key: Array, start: Array) -> Array:
+        """Identify an actual solver interval by prepared interval and local substep."""
+        interval = jnp.searchsorted(self.times, start, side="right") - 1
+        width = self.times[interval + 1] - self.times[interval]
+        substep = jnp.rint((start - self.times[interval]) / width * self.substeps(interval)).astype(
+            jnp.int32
+        )
+        return random.fold_in(random.fold_in(key, interval), substep)
+
+
+class _PreparedStepController(dfx.AbstractStepSizeController[tuple[Array, Array], None]):
+    """Always accept Heun steps on the prepared schedule, with no path-dependent adaptation."""
+
+    steps: _PreparedSteps
+
+    @override  # noqa: V105 - Diffrax invokes this step-controller protocol hook.
+    def wrap(self, direction):
+        del direction  # Prepared simulation times increase by construction.
+        return self
+
+    @override
+    def init(self, terms, t0, t1, y0, dt0, args, func, error_order):
+        del terms, t0, t1, y0, dt0, args, func, error_order
+        interval, substep = jnp.asarray(0), jnp.asarray(1)
+        return self.steps.endpoint(interval, substep), (interval, substep)
+
+    @override  # noqa: V105 - Diffrax invokes this step-controller protocol hook.
+    def adapt_step_size(
+        self, t0, t1, y0, y1_candidate, args, y_error, error_order, controller_state
+    ):
+        del t0, y0, y1_candidate, args, y_error, error_order
+        interval, substep = controller_state
+        completed = t1 == self.steps.times[interval + 1]
+        interval = jnp.minimum(interval + completed, self.steps.times.size - 2)
+        substep = jnp.where(completed, 1, substep + 1)
+        endpoint = self.steps.endpoint(interval, substep)
+        # Diffrax also asks for a next step after reaching the final time.
+        endpoint = jnp.where(t1 == self.steps.times[-1], t1, endpoint)
+        return True, t1, endpoint, False, (interval, substep), dfx.RESULTS.successful
+
+
+class _IndexedBrownianPath(dfx.AbstractBrownianPath[Array | dfx.BrownianIncrement]):
+    """Independent replayable increments on the solver's prepared schedule.
+
+    Integer prepared-interval and local-substep identities cannot alias when a
+    short irregular interval clips a step. Repeated evaluation and paired arms
+    reuse exactly the same increment. This path is only for the fixed schedule,
+    not arbitrary overlapping intervals or path-dependent step rejection.
+    """
+
+    steps: _PreparedSteps
     shape: tuple[int, ...] = eqx.field(static=True)
     key: Array
-    step_size: Array
     levy_area: type[dfx.BrownianIncrement] = eqx.field(  # pyright: ignore[reportIncompatibleVariableOverride] - Equinox AbstractVar is implemented by this concrete static field.
         static=True, default=dfx.BrownianIncrement, kw_only=True
     )
+
+    @property
+    @override
+    def t0(self) -> Array:  # pyright: ignore[reportIncompatibleVariableOverride] - Equinox AbstractVar permits an instance property. # ty: ignore[invalid-attribute-override] - Equinox AbstractVar permits an instance property, not a class variable.
+        """Start of the owned solver schedule."""
+        return self.steps.times[0]
+
+    @property
+    @override
+    def t1(self) -> Array:  # pyright: ignore[reportIncompatibleVariableOverride] - Equinox AbstractVar permits an instance property. # ty: ignore[invalid-attribute-override] - Equinox AbstractVar permits an instance property, not a class variable.
+        """End of the owned solver schedule."""
+        return self.steps.times[-1]
 
     @eqx.filter_jit  # noqa: V105 - required by the Diffrax AbstractBrownianPath protocol
     @override
@@ -93,8 +175,7 @@ class _IndexedBrownianPath(dfx.AbstractBrownianPath[Array | dfx.BrownianIncremen
         dtype = jnp.result_type(t0, t1)
         start = jnp.asarray(t0, dtype=dtype)
         end = jnp.asarray(t1, dtype=dtype)
-        step_index = jnp.rint((start - self.t0) / self.step_size).astype(jnp.int32)
-        increment_key = random.fold_in(self.key, step_index)
+        increment_key = self.steps.increment_key(self.key, start)
         dt = end - start
         increment = random.normal(increment_key, self.shape, dtype=dtype) * jnp.sqrt(dt)
         if use_levy:
@@ -194,20 +275,20 @@ def simulate_model_path(
 
     assert key is not None
     brownian_spec = cfg.brownian
+    step_size = (t1 - t0) / 200.0 if brownian_spec.step_size is None else brownian_spec.step_size
+    steps = _PreparedSteps(time_grid, jnp.asarray(step_size))
     if isinstance(brownian_spec, IndexedBrownianSpec):
         brownian = _IndexedBrownianPath(
-            t0=t0,
-            t1=t1,
+            steps=steps,
             shape=(n_latent,),
             key=key,
-            step_size=jnp.asarray(brownian_spec.step_size),
         )
         adjoint = dfx.ForwardMode()
     else:
         brownian = dfx.VirtualBrownianTree(
             t0=t0,
             t1=t1,
-            tol=brownian_spec.tol,
+            tol=jnp.minimum(brownian_spec.tol, steps.minimum_step / 2),
             shape=(n_latent,),
             key=key,
         )
@@ -217,19 +298,18 @@ def simulate_model_path(
     diffusion_term = dfx.ControlTerm(_stochastic_diffusion, brownian)
     term = dfx.MultiTerm(ode_term, diffusion_term)
     solver = dfx.Heun()
-    dt0 = (
-        brownian_spec.step_size if brownian_spec.step_size is not None else float((t1 - t0) / 200.0)
-    )
     solution = dfx.diffeqsolve(
         term,
         solver,
         t0=t0,
         t1=t1,
-        dt0=dt0,
+        dt0=None,
         y0=y0,
         args=evolution,
         saveat=dfx.SaveAt(ts=time_grid),
-        max_steps=cfg.max_steps,
+        stepsize_controller=_PreparedStepController(steps),
+        # Prepared intervals are mandatory work; the remaining budget bounds refinement.
+        max_steps=cfg.max_steps + time_grid.size - 1,
         throw=False,
         adjoint=adjoint,
     )

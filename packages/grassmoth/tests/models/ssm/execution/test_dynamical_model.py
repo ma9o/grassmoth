@@ -304,7 +304,12 @@ def test_indexed_sde_keeps_its_brownian_path_and_uses_dynestyx_evolution(monkeyp
             np.testing.assert_allclose(
                 terms.terms[0].vf(time, initial, settings["args"]), base_drift
             )
-        assert float(settings["dt0"]) == pytest.approx(0.01)
+        assert settings["dt0"] is None
+        controller = settings["stepsize_controller"]
+        assert isinstance(controller, simulator._PreparedStepController)
+        assert controller.steps is brownian.steps
+        np.testing.assert_array_equal(controller.steps.times, grid)
+        assert float(controller.steps.step_size) == pytest.approx(0.01)
         assert isinstance(settings["adjoint"], simulator.dfx.ForwardMode)
         return SimpleNamespace(ys=paths)
 

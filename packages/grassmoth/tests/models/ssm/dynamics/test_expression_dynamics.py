@@ -371,8 +371,10 @@ def test_solver_steps_follow_coefficient_meanings_including_fixed_rates():
     np.testing.assert_array_equal(rates, [8, 4, 16])
     steps = _predictive_sde_config(rates, 60).brownian.step_size
     assert steps is not None
-    assert steps is not None
     np.testing.assert_allclose(np.asarray(steps), 0.25 / np.asarray([8, 4, 16]))
+    # The work budget cannot coarsen a requested stability refinement.
+    fast = _predictive_sde_config(jnp.asarray(1e8), 60).brownian.step_size
+    np.testing.assert_allclose(np.asarray(fast), 2.5e-9)
     order, inverse = _predictive_draw_order(rates, 60)
     np.testing.assert_array_equal(order, [1, 0, 2])
     np.testing.assert_array_equal(rates[order][inverse], rates)

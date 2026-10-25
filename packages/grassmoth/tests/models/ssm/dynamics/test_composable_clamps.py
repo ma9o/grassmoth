@@ -20,7 +20,11 @@ from grassmoth.models.ssm.counterfactual.orchestration import (
     vmap_simulate_interventions_from_state,
 )
 from grassmoth.models.ssm.dynamics.draws import DynamicsDraws
-from grassmoth.models.ssm.dynamics.simulator import ProcessNoise
+from grassmoth.models.ssm.dynamics.simulator import (
+    IndexedBrownianSpec,
+    ProcessNoise,
+    SimulationConfig,
+)
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
 from grassmoth_test_support.dynamics import DenseLinear, reference_vector_field
 from grassmoth_test_support.inference import compile_model_fixture
@@ -296,3 +300,34 @@ def test_stochastic_paths_share_noise_before_a_noninteger_event():
     assert jnp.array_equal(baseline[:, :2], action[:, :2])
     assert action[0, 2, 0] == 3.0
     assert jnp.isfinite(action).all()
+
+
+@pytest.mark.inference(concern="simulation")
+def test_indexed_paired_arms_replay_noise_across_irregular_steps():
+    grid = jnp.array([0.0, 0.04, 0.055, 0.19, 0.35])
+    draws = DynamicsDraws(
+        reference_vector_field(n_latent=2, components=(DenseLinear(),)),
+        ({"drift": jnp.zeros((32, 2, 2)), "cint": jnp.zeros((32, 2))},),
+        n_draws=32,
+    )
+    baseline, action, _ = vmap_simulate_interventions_from_state(
+        draws,
+        jnp.zeros((32, 2)),
+        [_event(index=0, time=0.055, value=3.0)],
+        time_grid=grid,
+        noise=ProcessNoise(
+            key=jax.random.split(jax.random.key(391), 32),
+            diffusion=jnp.broadcast_to(jnp.diag(jnp.array([0.3, 0.5])), (32, 2, 2)),
+        ),
+        config=SimulationConfig(brownian=IndexedBrownianSpec(step_size=0.1)),
+    )
+    assert jnp.array_equal(baseline[:, :2], action[:, :2])
+    assert jnp.array_equal(baseline[:, :, 1], action[:, :, 1])
+    assert jnp.all(action[:, 2, 0] == 3.0)
+    assert jnp.allclose(
+        jnp.diff(baseline[:, 2:, 0], axis=1),
+        jnp.diff(action[:, 2:, 0], axis=1),
+        # Adding and subtracting noise around the shifted state rounds at its scale.
+        atol=8 * jnp.finfo(action.dtype).eps * 3.0,
+        rtol=0,
+    )

@@ -98,7 +98,7 @@ def _predictive_models(
 _SDE_CFL_SAFETY = 0.25
 _SDE_MAX_STEPS = 16384
 _LATENT_CACHE_MAX_ENTRIES = 2
-_LATENT_CACHE_ENGINE_VERSION = 3
+_LATENT_CACHE_ENGINE_VERSION = 4
 _latent_cache: OrderedDict[str, jax.Array] = OrderedDict()
 _latent_cache_lock = threading.Lock()
 
@@ -178,9 +178,9 @@ def _predictive_sde_step(max_rate: jnp.ndarray, span: float) -> jnp.ndarray:
     # Traced (not host) arithmetic: the per-draw step size stays a jnp scalar
     # so every draw reuses ONE compiled program — a host float here bakes into
     # the XLA graph as a constant and forces a retrace + recompile per draw.
-    sde_dt = jnp.minimum(span / 200.0, _SDE_CFL_SAFETY / jnp.maximum(max_rate, 1e-30))
-    # Keep the step count within the solver budget for pathologically fast draws.
-    return jnp.maximum(sde_dt, span / _SDE_MAX_STEPS)
+    # This is a maximum step. The solver also lands on every prepared time; its
+    # work budget must never enlarge this limit or skip a prepared boundary.
+    return jnp.minimum(span / 200.0, _SDE_CFL_SAFETY / jnp.maximum(max_rate, 1e-30))
 
 
 def _predictive_sde_config(max_rate: jnp.ndarray, span: float) -> SimulationConfig:
