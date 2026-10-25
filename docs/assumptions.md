@@ -8,13 +8,86 @@ These are the scientific commitments behind every result: what the model can exp
 - Indicators are observed at discrete, possibly irregular times through indicator-specific [observation laws](reference/statistical-model-spec/likelihoods.md).
 - `fit` targets this model with Euler–Maruyama transitions between consecutive prepared time points, using the true nonlinear drift and the true emission density. Interval observations use the [shared response aggregation](../packages/grassmoth/src/grassmoth/models/ssm/execution/observation_operator.py) on that grid, before applying their observation law. The [particle tree](../packages/grassmoth/src/grassmoth/models/ssm/compile/interval_tree.py) includes each interval factor once, after its complete window is available. The [compiled state support](../packages/grassmoth/src/grassmoth/models/ssm/compile/state_space.py) preserves zero process noise and fixed initial values. The dSMC path update under marginalized PGibbs requires deterministic recurrences to be affine in the deterministic coordinates; dependence on stochastic coordinates may remain nonlinear. It rejects other deterministic recurrences; joint NUTS reconstructs them sequentially through the exact model. Exact parallel prefixes reconstruct supported accumulators, including their downstream effects. With fixed state dimension, particle counts and bounded interval overlap, the dSMC trajectory update has logarithmic parallel depth; this is not a wall-time guarantee on fixed hardware. Linearizations and Gaussian approximations appear only in sampler proposals and the optional auxiliary reference below, never in the target, and every move they shape is corrected exactly against the true model, so their quality affects mixing, not the posterior; time discretization and interval quadrature remain numerical approximations.
 
-- [Particle-aGRAD and twisted Particle-aGRAD](../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided.py) provide sequential conditional-filter path updates under the same marginalized parameter ensemble. They preserve the nonlinear target, including exact point constraints, noisy interval readings and deterministic recurrences, and currently exclude coordinate blocks and tempering. Their forward pass has linear depth. Models with deterministic recurrence stages select a terminal particle and trace its ancestors, with exact per-label recurrence states and weights. This supports nonlinear stages feeding later drift without quadratic backward replay; work is linear in the number of times for fixed particle, label and memory sizes. Its cost is weaker early-time movement from genealogical degeneracy. Nearly uniform twisted weights may limit coalescence but do not guarantee movement; native particle-identity updates, frozen fractions and latent chain diagnostics must assess it. Other models retain backward selection, replaying crossing windows and exact auxiliary factors; its work is linear for bounded window spans and overlap. The twisted guide's information scan has logarithmic depth for fixed augmented dimension. Recurrences and window statistics inherit shared state innovations with no added process noise. The single Gaussian guide is shared symmetrically across the parameter ensemble; its coefficients are built at the refreshed auxiliary path, including the guide's own recurrence replay. True densities and full proposal corrections determine all weights. Strong nonlinear drift, long memory, informative future readings and separated modes can reduce mixing. These methods follow [Corenflos and Finke](https://arxiv.org/abs/2401.14868), except that twisted Particle-aGRAD with κ = 1 builds its local proposal and twist from a Gaussian approximation of the readings times the auxiliary path's actual law, not the paper's unshifted pseudo-observation; causal auxiliary scores vary the current independent coordinates with the prefix fixed. Marginalizing the auxiliary variable for Particle-mGRAD is deferred.
-- Guided MPGibbs automatically uses [StudentT precision augmentation](../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/student_precision.py): each observed point or completed window receives an independent Gamma precision conditional on the current exact reading residual. Given these precisions, the path weights, auxiliary scores and guide use the exact conditional Gaussian reading factors and the labels include their Gamma prior densities. Missing readings contribute nothing; overlapping windows keep one precision per emitted reading. The parameter ensemble and its fixed-pilot proposal remain independent of these precisions. After the conditional path update, precisions are discarded and the final parameter label is drawn from the original marginal StudentT density; optional companions and returned caches also use that marginal target. This ordered partial collapse avoids a label move conditioned on thousands of precisions when learning shared degrees of freedom, without requiring a companion ([van Dyk and Park](https://www.ma.imperial.ac.uk/~dvandyk/Research/08-jasa-pcg.pdf), [StudentT augmentation analysis](https://arxiv.org/abs/2109.01726)). Adapted κ = 1 point proposals cap their frozen base step using conditional curvature and the unordered ensemble; fixed steps remain literal, while general window/replayed geometry stays frozen. Precisions and effective caps are temporary and add no checkpoint state. dSMC remains marginal. The augmentation preserves the StudentT model for every positive degree of freedom; nonlinear dynamics, label-dependent reading geometry, nonlinear window summaries, finite ensembles and separated modes can still limit mixing.
-- The [MPGibbs parameter proposal](../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/kernel.py) uses either a symmetric random walk or a bounded pseudo-Langevin drift from a fixed construction pilot. The drift is bounded in the proposal covariance metric and its actual Gaussian asymmetry is paid in every label weight; the nonlinear target is unchanged. Undefined pilot scores define zero proposal drift, while undefined or infinite candidate densities receive zero selection mass. The pilot remains fixed through warmup, retention and continuation. Stale directions, poor covariance estimates, concentrated path conditionals and separated modes can still reduce efficiency.
-- Optional [parallel tempering](../packages/grassmoth/src/grassmoth/artifacts/sampling.py) connects the exact posterior to a [frozen Gaussian reference](../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/gaussian_reference.py), following the [geometric reference path of Syed et al.](https://arxiv.org/abs/1905.02939). The reference is Gaussian in unconstrained parameters and independent, unfixed path coordinates; deterministic states are reconstructed through the exact model. It defines auxiliary replicas, not an approximate posterior. All posterior draws, convergence diagnostics, observation likelihoods and predictions use only the exact cold replica. Reference quality and communication between replicas still limit exploration: tempering does not guarantee discovery of distant modes, and a Gaussian built from initialization may miss them.
+- The inference policy, and every piece it adds beyond its two source papers, is listed in [Inference policy](#inference-policy).
 - `simulate` and the automatic predictive checks integrate the same equation with Diffrax Heun. Stochastic solver steps end at every prepared time and subdivide further when the resolution heuristic requires it; the step budget never coarsens that schedule. Each step gets an independent Brownian increment, replayed across paired intervention arms. Stochastic readings therefore use solver endpoints. Heun and the fitted Euler–Maruyama target still carry different discretization error: fine-grid resolution checks compare standardized innovations with unit variance and zero lag-one correlation, without making the two schemes identical. Authored trajectory clamps and deterministic ODE dense output retain their interpolation semantics. <!-- cspell:ignore Heun -- proper name of the numerical method. -->
 - Missing observations are masked out of the likelihood, which assumes the missing-data mechanism is ignorable.
 - Each study is fitted on its own, with no pooling across subjects or studies. Static subject-level states ([A5](#a5-time-invariant-constructs-are-static-subject-level-states)) are therefore not random effects in the multilevel sense.
+
+### Inference policy
+
+The policy sampler is marginalized particle Gibbs ([Corenflos 2025, v4][c25]) with twisted Particle-aGRAD path updates ([Corenflos & Finke 2024, v1][cf24]). The table lists each landed piece, starting with the papers' own machinery.
+
+- **Kind** says whether a piece is paper machinery, an established method adapted here, a numerical choice, or our own change. "Beyond the paper" doesn't mean novel.
+- **Every piece keeps the exact nonlinear target.** Approximations only shape proposals, and every weight or acceptance ratio pays the true densities.
+- **Limits** says where a piece can cost mixing, never correctness.
+
+The [fit chart](assets/action-flows/fit.svg) owns the execution order. Experiments that weren't adopted are recorded in the [benchmark notes](../benchmarks/suite/notes.md).
+
+| Piece | Kind | Paper reference | Owner | Evidence | Tests | Limits |
+| --- | --- | --- | --- | --- | --- | --- |
+| Parameter ensemble of two labels, with Barker label choice | Paper | [C25][c25] §3 | [kernel] | — | [t-particle] | One random-walk candidate per sweep is slow for many correlated parameters |
+| Guided conditional filter: killing resampling, backward selection | Paper | [CF24][cf24] §4.1, §4.4 | [guided] | `4ed4c792` | [t-particle] | Separated modes |
+| Path update under the label mixture, with prefix and suffix label densities | Adapted | [CF24][cf24] fixes θ; [C25][c25] uses a bootstrap filter | [guided] | `4ed4c792` | [t-particle] | Label-dependent geometry shares one guide |
+| Guide from the readings times the auxiliary's actual law | Ours | Replaces [CF24][cf24] §4.4's unshifted pseudo-observation | [guided] | `ff4f0e47` | [t-information] | Clipped convex curvature; a poor Gaussian fit to a reading |
+| Twist that linearizes nonlinear dynamics at the auxiliary path | Adapted | [CF24][cf24] §4.4 assumes affine Gaussian transitions | [twist], [guided] | `4ed4c792` | [t-information] | An auxiliary path far from the posterior, as with a small diffusion |
+| Per-coordinate curvature step limit, 2R for a Gaussian reading | Ours | [CF24][cf24] §5.2 adapts one step per time to a movement target | [adaptation], [runner] | `7e7062e8`, `e8ab964c`, `4572dc7b` | [t-adaptation] | Unread coordinates use the unit-dependent cap δ = 10; convex readings keep memory |
+| Warmup movement controller below that limit, frozen before the retained draws | Adapted | Corenflos & Särkkä (2025), per-time adaptation | [adaptation] | `e5d9e87b` | [t-adaptation] | Counts any change as movement |
+| Interval readings: per-label window statistics, bounded backward replay | Adapted | [CF24][cf24] assumes per-time potentials | [sequential], [guided] | `b66f40b8` | [t-windows], [t-interval] | Long or heavily overlapping windows |
+| Deterministic recurrence stages: exact per-label replay, ancestral tracing | Adapted | Plain particle Gibbs path selection (Andrieu, Doucet & Holenstein 2010) | [sequential], [guided] | `5f4484d7` | [t-recurrences] | Weaker movement at early times |
+| StudentT precision augmentation, with the final label drawn from the marginal | Adapted | Scale mixtures (Carlin, Polson & Stoffer 1992), with an ordered partial collapse ([van Dyk & Park][vdp]; [Hosszejni][hosszejni] on degrees of freedom) | [student], [kernel] | `52807ada` | [t-student], [t-student-kernel] | Ambiguous outliers switch only through precision updates |
+| Parameter proposal covariance adapted in warmup | Adapted | [C25][c25] §3.4 allows it; its experiments fix Σ = I | [parameter-adaptation] | `868ef169` | [t-parameter-adaptation] | Poor covariance estimates |
+| Bounded pseudo-Langevin drift; invalid candidates get zero label mass | Ours | [C25][c25] §3.1's unbounded drift | [kernel], [context] | `b11c87e6` | [t-langevin] | Its fixed pilot direction goes stale; it gave no gain over the random walk on PARAM |
+| Companion moves after each sweep: `centred_mh`, scale non-centred, `centred_nuts` | Adapted | [C25][c25] has no conditional parameter move; Papaspiliopoulos, Roberts & Sköld (2007); Hoffman & Gelman (2014) | [companion] | `4d424e46`, `e31cb285` | [t-companion] | Scales pinned by the path still move slowly |
+| Parallel tempering to a frozen Gaussian reference, for dSMC path updates | Adapted | [Syed et al.][syed] | [tempering], [gaussian-reference] | `e5d9e87b` | [t-tempering] | Reference quality limits exploration |
+| Noise factorizations prepared once per sweep | Numerical | — | [guided], [particle-target] | `b076b7ad` | [t-particle] | None: exact for additive diffusion |
+| Early stopping at convergence checkpoints | Numerical | — | [sweeps], [runner] | `c839b0ce` | [t-stopping], [t-blocks] | A passing checkpoint is a finite-chain diagnostic |
+| Native mixing diagnostics: frequency refresh, regional movement | Numerical | — | [scorecard] | `ac5ec9e5` | [t-scorecard] | Report only; they never alter sampling |
+
+**Rules every piece above follows:**
+
+- **Shape and depth.** Guided path updates exclude coordinate blocks and tempering. Their forward pass has linear depth, and the twist's information scan has logarithmic depth for a fixed augmented dimension.
+- **One shared guide.** A single Gaussian guide is shared symmetrically across the parameter ensemble. Recurrences and window statistics inherit shared state innovations, with no added process noise.
+- **Nothing transient is saved.** Auxiliary paths, precisions and effective step caps add no checkpoint state.
+- **dSMC stays marginal.** dSMC path updates take neither the StudentT augmentation nor the guided step limits.
+- **Tempering.** All posterior draws, diagnostics and predictions use only the exact cold replica.
+
+<!-- cspell:ignore Särkkä Andrieu Doucet Holenstein Polson Stoffer Hosszejni Papaspiliopoulos Sköld Syed -- author names. -->
+
+[c25]: https://arxiv.org/abs/2505.04611v4
+[cf24]: https://arxiv.org/abs/2401.14868v1
+[vdp]: https://www.ma.imperial.ac.uk/~dvandyk/Research/08-jasa-pcg.pdf
+[hosszejni]: https://arxiv.org/abs/2109.01726
+[syed]: https://arxiv.org/abs/1905.02939
+[kernel]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/kernel.py
+[guided]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided.py
+[twist]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/twist.py
+[adaptation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/adaptation.py
+[context]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/context.py
+[runner]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/runner.py
+[companion]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/companion.py
+[tempering]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/tempering.py
+[sweeps]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/sweeps.py
+[sequential]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/sequential.py
+[student]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/student_precision.py
+[particle-target]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/particle.py
+[parameter-adaptation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/parameter_adaptation.py
+[gaussian-reference]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/gaussian_reference.py
+[scorecard]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/diagnostics/scorecard.py
+[t-particle]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_particle.py
+[t-information]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_information.py
+[t-adaptation]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_adaptation.py
+[t-windows]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_windows.py
+[t-interval]: ../packages/grassmoth/tests/models/ssm/inference/test_interval_particle.py
+[t-recurrences]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_recurrences.py
+[t-student]: ../packages/grassmoth/tests/models/ssm/inference/test_student_precision.py
+[t-student-kernel]: ../packages/grassmoth/tests/models/ssm/inference/test_student_augmented_kernel.py
+[t-parameter-adaptation]: ../packages/grassmoth/tests/models/ssm/inference/test_parameter_adaptation.py
+[t-langevin]: ../packages/grassmoth/tests/models/ssm/inference/test_parameter_langevin.py
+[t-companion]: ../packages/grassmoth/tests/models/ssm/inference/test_mpgibbs_companion.py
+[t-tempering]: ../packages/grassmoth/tests/models/ssm/inference/test_parallel_tempering.py
+[t-stopping]: ../packages/grassmoth/tests/models/ssm/inference/test_convergence_stopping.py
+[t-blocks]: ../packages/grassmoth/tests/models/ssm/inference/test_sweep_blocks.py
+[t-scorecard]: ../packages/grassmoth/tests/models/ssm/inference/test_scorecard_diagnostics.py
 
 ## Causal graph
 
