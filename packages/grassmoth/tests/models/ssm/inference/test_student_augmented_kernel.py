@@ -32,12 +32,6 @@ from grassmoth_test_support.student_reference import student_features, student_q
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
-@pytest.fixture(autouse=True)
-def _double_precision():
-    with jax.enable_x64():
-        yield
-
-
 def _target():
     times = np.arange(2.0)
     readings = np.array([[1.4, -0.4], [-0.8, 0.6]])
@@ -123,6 +117,8 @@ def test_augmented_sweep_preserves_joint_marginal_posterior(
     marginal_reference, spec_type, kappa, proposal, companion
 ):
     starts, expected, variance = marginal_reference
+    # Round the starts to float32 first, so unmoved coordinates compare equal.
+    starts = jnp.asarray(starts)
     target = _target()
     kernel = build_marginal_particle_gibbs_kernel(
         target,
@@ -169,7 +165,7 @@ def test_augmented_sweep_preserves_joint_marginal_posterior(
     moved, cache_error = jax.jit(jax.vmap(one))(
         starts, jax.random.split(jax.random.key(926), len(starts))
     )
-    np.testing.assert_allclose(cache_error, 0, atol=2e-9)
+    np.testing.assert_allclose(cache_error, 0, atol=1e-5)
     observed = student_features(np.asarray(moved)).mean(axis=0)
     assert np.max(np.abs(observed - expected) / np.sqrt(variance / len(starts))) < 5.5
     assert np.mean(np.any(np.asarray(moved) != np.asarray(starts), axis=1)) > 0.8

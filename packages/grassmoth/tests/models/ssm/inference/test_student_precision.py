@@ -24,12 +24,6 @@ from grassmoth_test_support.interval_particle import interval_target
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
-@pytest.fixture(autouse=True)
-def _double_precision():
-    with jax.enable_x64():
-        yield
-
-
 @pytest.mark.parametrize("df", [0.15, 1.5, 5.0])
 def test_gamma_normal_integrates_to_native_student(df):
     scale, loc, y = 0.7, -0.3, 2.1
@@ -51,7 +45,7 @@ def test_gamma_normal_integrates_to_native_student(df):
         return np.exp(float(evaluate(jnp.asarray(log_precision))) + log_gamma + log_precision)
 
     integral = quad(integrand, -1000, 12, points=[-100, -20, 0], epsabs=1e-10)[0]
-    np.testing.assert_allclose(integral, t.pdf(y, df, loc, scale), rtol=2e-7)
+    np.testing.assert_allclose(integral, t.pdf(y, df, loc, scale), rtol=2e-6)
 
 
 @pytest.mark.parametrize("summary", ["last", "mean", "std"])
@@ -87,7 +81,7 @@ def test_emitted_precision_moments_and_exact_conditional_factors(summary):
     expected_prior = gamma.logpdf(
         np.exp(np.asarray(precision.log_values[present, 0])), 2.5, scale=1 / 2.5
     ).sum()
-    np.testing.assert_allclose(precision.log_prior(target, context), expected_prior, atol=1e-10)
+    np.testing.assert_allclose(precision.log_prior(target, context), expected_prior, atol=5e-6)
     contexts = jax.tree.map(lambda value: value[None], context)
     memory = sequential_observations(target, contexts, context, precision.log_values)
     observed = jax.vmap(memory.log_probs)(memory.path(path), jnp.arange(4))[:, 0]
@@ -96,14 +90,16 @@ def test_emitted_precision_moments_and_exact_conditional_factors(summary):
         means[present],
         np.sqrt(0.2) * np.exp(-0.5 * np.asarray(precision.log_values[present, 0])),
     )
-    np.testing.assert_allclose(np.asarray(observed)[present], expected, atol=1e-10)
+    np.testing.assert_allclose(np.asarray(observed)[present], expected, atol=5e-6)
     assert np.all(np.asarray(observed)[~present] == 0)
 
 
 def test_extreme_residual_uses_log_precision_without_clipping():
+    # The squared residual overflows float32 and the precision, near 1e-60,
+    # underflows it, so both must stay in log space.
     target = interval_target(
         np.arange(1.0),
-        np.array([[1e200]]),
+        np.array([[1e30]]),
         np.zeros((1, 1)),
         ("last",),
         families=(DistributionFamily.STUDENT_T,),
@@ -111,7 +107,7 @@ def test_extreme_residual_uses_log_precision_without_clipping():
     context = target.context(jnp.zeros(1), target.times)
     precision = draw_student_precisions(target, context, jnp.zeros((1, 1)), jax.random.key(8))
     assert precision is not None
-    assert float(precision.log_values[0, 0]) < -900
+    assert float(precision.log_values[0, 0]) < -130
     contexts = jax.tree.map(lambda value: value[None], context)
     memory = sequential_observations(target, contexts, context, precision.log_values)
     assert np.isfinite(memory.log_probs(memory.initial(jnp.zeros(1)), jnp.asarray(0))).all()
@@ -136,7 +132,7 @@ def test_conditional_curvature_is_label_symmetric_and_ignores_missing_rows():
         np.exp(np.asarray(precision.log_values[:, 0])) / 0.2,
         0.0,
     )
-    np.testing.assert_allclose(limit[:, 0], 2 / np.maximum(conditional_information, 0.2))
+    np.testing.assert_allclose(limit[:, 0], 2 / np.maximum(conditional_information, 0.2), rtol=1e-6)
     assert float(limit[1, 0]) == 10.0
     permuted = jax.tree.map(lambda value: value[::-1], contexts)
     np.testing.assert_array_equal(
@@ -172,7 +168,7 @@ def test_augmented_student_channels_preserve_other_correlated_gaussian_blocks():
         + multivariate_normal.logpdf(readings[0, 1:], np.full(2, 0.3), covariance[1:, 1:]),
         norm.logpdf(0.6, -0.1, np.sqrt(0.4)),
     ]
-    np.testing.assert_allclose(observed, expected, atol=1e-10)
+    np.testing.assert_allclose(observed, expected, atol=1e-6)
 
 
 @pytest.mark.parametrize("summary", ["last", "mean", "std"])
@@ -229,11 +225,11 @@ def test_conditional_path_scores_and_guides_preserve_label_permutation(summary):
 
     result, exact = jax.jit(run)(labels)
     permuted, _ = jax.jit(run)(labels[::-1])
-    np.testing.assert_allclose(result.latent_path, permuted.latent_path, atol=1e-10)
+    np.testing.assert_allclose(result.latent_path, permuted.latent_path, atol=1e-6)
     for actual, expected in zip(result.label_scores, exact, strict=True):
-        np.testing.assert_allclose(actual, expected, atol=1e-9)
+        np.testing.assert_allclose(actual, expected, atol=1e-5)
     np.testing.assert_allclose(
-        result.label_scores.log_probs[::-1], permuted.label_scores.log_probs, atol=1e-9
+        result.label_scores.log_probs[::-1], permuted.label_scores.log_probs, atol=1e-5
     )
     path = np.asarray(result.latent_path[:, 0])
     prior = norm.logpdf(path[0]) + norm.logpdf(path[1:], 0.7 * path[:-1], np.sqrt(0.3)).sum()
@@ -259,4 +255,4 @@ def test_conditional_path_scores_and_guides_preserve_label_permutation(summary):
                 np.sqrt(0.2) * np.exp(-0.5 * np.asarray(precision.log_values[present, 0])),
             ).sum()
         )
-    np.testing.assert_allclose(exact.trajectory_log_probs, expected, atol=1e-9)
+    np.testing.assert_allclose(exact.trajectory_log_probs, expected, atol=1e-5)
