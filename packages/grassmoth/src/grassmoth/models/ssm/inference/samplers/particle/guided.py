@@ -27,6 +27,9 @@ time and shared across particles. Prefix label laws are normalized as they advan
 For point readings, the selected backward suffix supplies the final exact densities.
 Interval readings replay windows crossing each splice, including their auxiliary
 factors, then rescore the selected path once for its final label law.
+Models with deterministic recurrence stages instead trace the terminal particle's
+ancestors. This keeps exact replay linear in time, at the cost of possible early-time
+genealogical degeneracy; near-uniform weights do not guarantee movement.
 """
 
 from __future__ import annotations
@@ -246,7 +249,7 @@ def _build_twist(
     return future_information(matrices, offsets, covariances, information), covariances
 
 
-def _window_guide(
+def _memory_guide(
     target: ParticleTarget,
     guide: ParticleContext,
     memory: SequentialObservationRuntime,
@@ -259,9 +262,9 @@ def _window_guide(
 ) -> tuple[GaussianTwist, _ProposalGeometry]:
     """Build a singular augmented guide at u, sampling only independent coordinates.
 
-    Window statistics inherit the state's innovation, including its cross-covariance.
-    Their exact nonlinear updates remain in every correction. Long windows, nonlinear
-    responses, clipped curvature and separated modes can reduce proposal efficiency.
+    Recurrences and window statistics inherit shared state innovations with no added
+    noise. Their exact nonlinear updates remain in every correction. Long memory,
+    nonlinear responses, clipped curvature and separated modes can reduce efficiency.
     """
     points = memory.path(auxiliary)
     steps, dimension = auxiliary.shape
@@ -312,7 +315,7 @@ def _window_guide(
         offset = memory.advance(previous, current, index) - parent @ previous - innovation @ current
 
         def moments(value):
-            mean, covariance = target.transition_moments(guide, memory.state(value), index)
+            mean, covariance = memory.guide_moments(value, index)
             return mean, (mean, covariance)
 
         matrix, (mean, covariance) = jax.jacfwd(moments, has_aux=True)(previous)
@@ -411,8 +414,8 @@ def _window_backward(
                     variance[time],
                     mask[time],
                 )
-                factors = observed + jax.vmap(transition, in_axes=(0, None, None))(
-                    memory.state(previous), selected[time], time
+                factors = observed + jax.vmap(transition, in_axes=(0, 0, None))(
+                    previous, current, time
                 )
                 return (current, label_sum + factors, auxiliary_sum + density), factors
 
@@ -474,13 +477,13 @@ def _guided_step(
     *,
     record_trace: bool = False,
 ) -> ParticleSmootherResult | TracedResult[ParticleSmootherResult, SequentialSmootherTraceRecord]:
-    """Run one conditional filter and non-Markovian backward label-mixture pass."""
+    """Run an exact conditional filter, selecting paths by their compiled memory."""
     mask = ctx.latent_free_mask
     steps, dimension = reference.shape
     count = spec.num_particles
     variance = jnp.broadcast_to(ctx.amala_delta.reshape((steps, -1)), reference.shape) / 2
     aux_key, first_key, forward_key, backward_key = jax.random.split(key, 4)
-    memory = sequential_observations(target, ctx.contexts)
+    memory = sequential_observations(target, ctx.contexts, guide)
     reference_memory = memory.path(reference)
 
     def observe(value: jax.Array, index: jax.Array | int) -> tuple[jax.Array, jax.Array]:
@@ -505,8 +508,8 @@ def _guided_step(
         + (jnp.sqrt(variance) * jax.random.normal(aux_key, reference.shape, reference.dtype)),
         reference,
     )
-    if memory.windows is not None:
-        twist, geometry = _window_guide(
+    if memory.windows is not None or target.state_space.requires_replay:
+        twist, geometry = _memory_guide(
             target,
             guide,
             memory,
@@ -548,11 +551,7 @@ def _guided_step(
         return observed, density
 
     def transition(previous: jax.Array, current: jax.Array, index: jax.Array) -> jax.Array:
-        return jax.vmap(
-            lambda bound, factors: target.transition_log_prob_with_noise(
-                bound, factors, previous, current, index
-            )
-        )(ctx.contexts, memory.noise).astype(ctx.traj_dtype)
+        return memory.transition_log_probs(previous, current, index).astype(ctx.traj_dtype)
 
     initial_geometry = jax.tree.map(lambda value: value[0], geometry)
     first_center = initial_geometry.center(initial_mean, mask[0])
@@ -577,11 +576,7 @@ def _guided_step(
     first_observed, first_auxiliary = local_factors(first_memory, 0)
     first_scores = (
         ctx.initial_label_log_probs
-        + jax.vmap(
-            lambda value: jax.vmap(lambda bound: target.initial_log_prob(bound, value))(
-                ctx.contexts
-            )
-        )(first)
+        + jax.vmap(memory.initial_log_probs)(first_memory)
         + first_observed
     )
     first_normalizer = logsumexp(first_scores, axis=-1)
@@ -607,9 +602,7 @@ def _guided_step(
         ancestors = _killing(weights, killing_noise)
         parents = previous[ancestors]
         parent_scores = scores[ancestors]
-        means = jax.vmap(
-            lambda value: target.transition_moments(guide, memory.state(value), index)[0]
-        )(parents)
+        means = jax.vmap(lambda value: memory.guide_moments(value, index)[0])(parents)
         centers = proposal.center(means, mask[index]) + parents @ proposal.parent_map.T
         current = jnp.concatenate(
             (
@@ -625,7 +618,7 @@ def _guided_step(
         observed, auxiliary_factors = local_factors(current_memory, index)
         next_scores = (
             parent_scores
-            + jax.vmap(transition, in_axes=(0, 0, None))(memory.state(parents), current, index)
+            + jax.vmap(transition, in_axes=(0, 0, None))(parents, current_memory, index)
             + observed
         )
         # Normalized prefix label laws remove repeated prefix reductions and avoid
@@ -677,20 +670,30 @@ def _guided_step(
     terminal_key, earlier_key = jax.random.split(backward_key)
     last = jax.random.categorical(terminal_key, weights[-1]).astype(jnp.int32)
 
-    if memory.windows is not None:
-        picks = _window_backward(
-            memory,
-            memory_bank,
-            backward_weights,
-            scores,
-            last,
-            earlier_key,
-            auxiliary,
-            variance,
-            mask,
-            observe,
-            transition,
-        )
+    if target.state_space.recurrence or memory.windows is not None:
+        if target.state_space.recurrence:
+            # The exact conditional filter's genealogy is valid even when a deterministic
+            # stage feeds nonlinear later drift. No suffix splices or quadratic replay.
+            def ancestor(pick: jax.Array, row: jax.Array) -> tuple[jax.Array, jax.Array]:
+                parent = row[pick]
+                return parent, parent
+
+            _, earlier = jax.lax.scan(ancestor, last, ancestors, reverse=True)
+            picks = jnp.concatenate((earlier, last[None]))
+        else:
+            picks = _window_backward(
+                memory,
+                memory_bank,
+                backward_weights,
+                scores,
+                last,
+                earlier_key,
+                auxiliary,
+                variance,
+                mask,
+                observe,
+                transition,
+            )
         path = bank[jnp.arange(steps), picks]
         trajectory_scores = jax.vmap(
             lambda bound: target.path_log_prob(bound, path, target.observations)
@@ -702,15 +705,17 @@ def _guided_step(
         ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
             following, suffix = carry
             index, gumbels = inputs
-            links = jax.vmap(lambda value: transition(value, following, index + 1))(bank[index])
+            links = jax.vmap(lambda value: transition(value, following, index + 1))(
+                memory_bank[index]
+            )
             logits = backward_weights[index] + logsumexp(scores[index] + links + suffix, axis=-1)
             pick = jnp.argmax(logits + gumbels).astype(jnp.int32)
-            value = bank[index, pick]
+            value = memory_bank[index, pick]
             return (value, suffix + links[pick] + observation_bank[index, pick]), pick
 
         (initial_selected, suffix), earlier = jax.lax.scan(
             backward,
-            (bank[-1, last], observation_bank[-1, last]),
+            (memory_bank[-1, last], observation_bank[-1, last]),
             (
                 jnp.arange(steps - 2, -1, -1),
                 jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=reference.dtype))(
@@ -719,12 +724,10 @@ def _guided_step(
             ),
         )
         picks = jnp.concatenate((earlier[::-1], last[None]))
-        path = bank[jnp.arange(steps), picks]
         # The backward suffix already contains every selected exact observation and
         # transition factor. Only the initial density remains; do not rescore the path.
-        trajectory_scores = suffix + jax.vmap(
-            lambda bound: target.initial_log_prob(bound, initial_selected)
-        )(ctx.contexts)
+        trajectory_scores = suffix + memory.initial_log_probs(initial_selected)
+        path = bank[jnp.arange(steps), picks]
     norms = jnp.linalg.norm(jnp.where(mask, gradients, 0.0), axis=-1)
     measurements = weight_history_fields(
         (requested_weight_statistics(weights, enabled=ctx.diagnostic_weights),)

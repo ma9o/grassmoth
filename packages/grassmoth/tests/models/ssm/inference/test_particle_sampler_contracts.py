@@ -19,7 +19,11 @@ from grassmoth.artifacts.sampling import (
     TwistedParticleAGradSpec,
 )
 from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
-from grassmoth.models.ssm.compile.state_space import AdditiveRecurrences, StateSpace
+from grassmoth.models.ssm.compile.state_space import (
+    AdditiveRecurrences,
+    SequentialRecurrences,
+    StateSpace,
+)
 from grassmoth.models.ssm.inference.samplers.mpgibbs import runner
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
@@ -39,46 +43,34 @@ pytestmark = pytest.mark.contract
 
 
 @pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
-@pytest.mark.parametrize("unsupported", ["replay", "tempering"])
-def test_guided_preflight_rejects_unsupported_models_before_compute(
-    monkeypatch, spec_type, unsupported
+def test_guided_preflight_rejects_tempering_before_compute(monkeypatch, spec_type):
+    from grassmoth.models.ssm import compiled_access
+
+    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
+    compiled = Mock(spec=CompiledDynamicalModel)
+    sampler = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(
+            path_update=spec_type(), tempering=GaussianReferenceTemperingSpec()
+        )
+    )
+    failure = validate_sampler_support(compiled, sampler)
+    assert failure is not None
+    assert "tempering" in failure.message
+
+
+@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
+@pytest.mark.parametrize(
+    "recurrences", [(), (AdditiveRecurrences((0,)),), (SequentialRecurrences((0,)),)]
+)
+def test_guided_preflight_accepts_interval_readings_and_recurrences(
+    monkeypatch, spec_type, recurrences
 ):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
     compiled = Mock(
         spec=CompiledDynamicalModel,
-        state_space=StateSpace(
-            2,
-            (),
-            (0, 1),
-            (0,) if unsupported == "replay" else (0, 1),
-            (),
-            (AdditiveRecurrences((1,)),) if unsupported == "replay" else (),
-        ),
-        observations=(
-            Mock(support=Mock(support_kind="interval" if unsupported == "interval" else "point")),
-        ),
-    )
-    sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(
-            path_update=spec_type(),
-            tempering=GaussianReferenceTemperingSpec() if unsupported == "tempering" else None,
-        )
-    )
-    failure = validate_sampler_support(compiled, sampler)
-    assert failure is not None
-    assert unsupported in failure.message
-
-
-@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
-def test_guided_preflight_accepts_interval_readings(monkeypatch, spec_type):
-    from grassmoth.models.ssm import compiled_access
-
-    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
-    compiled = Mock(
-        spec=CompiledDynamicalModel,
-        state_space=StateSpace(1, (), (0,), (0,), (), ()),
+        state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
         observations=(Mock(support=Mock(support_kind="interval")),),
     )
     sampler = SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=spec_type()))

@@ -62,7 +62,9 @@ def guided_delta_limit(
     free_mask: jax.Array,
 ) -> jax.Array:
     """Calibrate warmup limits from the exact observation factor at its parameters."""
-    memory = sequential_observations(target, jax.tree.map(lambda value: value[None], context))
+    memory = sequential_observations(
+        target, jax.tree.map(lambda value: value[None], context), context
+    )
     reference = memory.path(path)
     return _curvature_limits(
         lambda state, index: memory.log_probs(

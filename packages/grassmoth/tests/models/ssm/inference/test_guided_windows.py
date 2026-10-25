@@ -16,8 +16,8 @@ from grassmoth.artifacts.sampling import ParticleAGradSpec, TwistedParticleAGrad
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import guided_delta_limit
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import (
+    _memory_guide,
     _window_backward,
-    _window_guide,
     guided_step,
     trace_guided_step,
 )
@@ -36,14 +36,14 @@ def _prior_covariance(steps):
 
 
 @pytest.mark.parametrize("variance", [0.15, 3.2])
-def test_window_guide_matches_dense_auxiliary_conditioning(variance):
+def test_memory_guide_matches_dense_auxiliary_conditioning(variance):
     times = np.arange(3.0)
     observed = np.array([[np.nan], [np.nan], [0.7]])
     starts = np.array([[np.nan], [np.nan], [0.0]])
     target = interval_target(times, observed, starts, ("mean",))
     context = target.context(jnp.zeros(1), target.times)
     contexts = jax.tree.map(lambda value: value[None], context)
-    memory = sequential_observations(target, contexts)
+    memory = sequential_observations(target, contexts, target.context(jnp.zeros(1), target.times))
     auxiliary = jnp.array([[0.1], [-0.2], [0.4]])
     mask = target.independent_mask
     variances = jnp.full(auxiliary.shape, variance)
@@ -55,7 +55,7 @@ def test_window_guide_matches_dense_auxiliary_conditioning(variance):
         return memory.log_probs(value, index), jax.grad(reading)(memory.state(value))
 
     _, geometry = jax.jit(
-        lambda: _window_guide(
+        lambda: _memory_guide(
             target,
             context,
             memory,
@@ -218,7 +218,7 @@ def test_window_backward_matches_full_nonlinear_augmented_density_ratios():
     contexts = jax.vmap(lambda label: target.context(label, target.times))(
         jnp.asarray(labels[:, None])
     )
-    memory = sequential_observations(target, contexts)
+    memory = sequential_observations(target, contexts, target.context(jnp.zeros(1), target.times))
     paths = np.array([[0.2, -0.3, 0.5, -0.2], [-0.2, 0.4, -0.1, 0.3], [0.6, 0.1, -0.4, 0.2]])
     design = np.array([[0, 0, 0, 0], [0, 0, 0, 0], [0.125, 0.875, 0.5, 0], [0, 0, 0.5, 0.5]])
     auxiliary = np.array([0.1, 0.3, -0.1, 0.2])
@@ -268,7 +268,9 @@ def test_window_backward_matches_full_nonlinear_augmented_density_ratios():
 
     def transition(previous, current, index):
         return jax.vmap(
-            lambda context: target.transition_log_prob(context, previous, current, index)
+            lambda context: target.transition_log_prob(
+                context, memory.state(previous), memory.state(current), index
+            )
         )(contexts)
 
     keys = jax.random.split(jax.random.key(195), 32)

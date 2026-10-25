@@ -177,6 +177,27 @@ class ParticleTarget:
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
         return self.state_density_mask.at[:, static].set(False)
 
+    def replay_initial(self, context: ParticleContext, coordinates: jax.Array) -> jax.Array:
+        """Reconstruct the origin from constrained independent coordinates and fixed values."""
+        state = jnp.where(self.independent_mask[0], coordinates, self.initial_moments(context)[0])
+        inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
+        static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
+        return state.at[inputs].set(coordinates[inputs]).at[static].set(context[2][static])
+
+    def replay_step(
+        self,
+        context: ParticleContext,
+        previous: jax.Array,
+        coordinates: jax.Array,
+        index: jax.Array,
+    ) -> jax.Array:
+        """Advance exact recurrences with their declared previous-time dependencies."""
+        mean = self._transition_distribution(context, previous, index).mean
+        state = jnp.where(self.independent_mask[index], coordinates, mean)
+        inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
+        static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
+        return state.at[inputs].set(coordinates[inputs]).at[static].set(context[2][static])
+
     def replay_path(self, context: ParticleContext, coordinates: jax.Array) -> jax.Array:
         """Reconstruct exact initial values, static quantities and deterministic recurrences."""
         if self.exact_constraints is not None:
@@ -185,18 +206,11 @@ class ParticleTarget:
         coordinates = coordinates.at[:, static].set(context[2][static])
         if not self.state_space.requires_replay:
             return coordinates
-        independent = self.independent_mask
-        initial = jnp.where(independent[0], coordinates[0], self.initial_moments(context)[0])
-        inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
-        initial = initial.at[inputs].set(coordinates[0, inputs])
-        initial = initial.at[static].set(context[2][static])
+        initial = self.replay_initial(context, coordinates[0])
         if any(isinstance(stage, SequentialRecurrences) for stage in self.state_space.recurrence):
 
             def advance(previous: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
-                mean = self._transition_distribution(context, previous, index).mean
-                current = jnp.where(independent[index], coordinates[index], mean)
-                # Inputs have no density and can change at every model grid point.
-                current = current.at[inputs].set(coordinates[index, inputs])
+                current = self.replay_step(context, previous, coordinates[index], index)
                 return current, current
 
             _, tail = jax.lax.scan(advance, initial, jnp.arange(1, self.times.size))

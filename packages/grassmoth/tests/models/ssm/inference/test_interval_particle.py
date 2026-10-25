@@ -151,7 +151,9 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
     # Two parameter labels, two distinct paths, and seven real leaves exercise
     # label-dependent responses, slot reuse, overlapping windows, and padding.
     contexts = jax.vmap(lambda z: target.context(z, target.times))(jnp.array([[0.15], [-0.4]]))
-    sequential = sequential_observations(target, contexts)
+    sequential = sequential_observations(
+        target, contexts, target.context(jnp.zeros(1), target.times)
+    )
     memory = sequential.path(path)
     emitted = jax.vmap(sequential.log_probs)(memory, jnp.arange(len(times)))
     expected_labels = jax.vmap(

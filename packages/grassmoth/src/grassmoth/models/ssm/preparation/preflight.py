@@ -54,10 +54,6 @@ def validate_sampler_support(
             return ObservationPreflightFailure.rejected(
                 "Sequential guided path updates do not support tempering."
             )
-        if compiled.state_space.requires_replay:
-            return ObservationPreflightFailure.rejected(
-                "Sequential guided path updates do not yet support deterministic recurrence replay."
-            )
         return None
     unsupported = tuple(
         ", ".join(compiled.states[index].name for index in stage.indices)

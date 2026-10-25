@@ -1,4 +1,4 @@
-"""Exact sequential emissions and bounded window memory for guided particles."""
+"""Exact label-specific recurrence and window memory for guided particles."""
 
 from __future__ import annotations
 
@@ -38,9 +38,9 @@ class WindowMemoryRuntime:
     max_replay: int
     shape: tuple[int, int, int, int]
 
-    def moments(self, contexts: ParticleContext, state: jax.Array) -> jax.Array:
+    def moments(self, contexts: ParticleContext, states: jax.Array) -> jax.Array:
         """Evaluate the authored response before any window aggregation."""
-        response = jax.vmap(self.intervals.response, in_axes=(0, None))(contexts, state)
+        response = jax.vmap(self.intervals.response)(contexts, states)
         response = response[:, jnp.asarray(self.channels, dtype=jnp.int32)]
         return jnp.stack((response, response**2) if self.shape[-1] == 2 else (response,), axis=-1)[
             :, :, None, :
@@ -49,7 +49,7 @@ class WindowMemoryRuntime:
     def log_probs(
         self,
         contexts: ParticleContext,
-        state: jax.Array,
+        states: jax.Array,
         statistics: jax.Array,
         observations: jax.Array,
         index: jax.Array,
@@ -61,7 +61,7 @@ class WindowMemoryRuntime:
             statistics, jnp.maximum(slots, 0)[None, :, None, None], axis=2
         )[:, :, 0, :]
 
-        def density(context: ParticleContext, moments: jax.Array) -> jax.Array:
+        def density(context: ParticleContext, state: jax.Array, moments: jax.Array) -> jax.Array:
             model = cast(
                 "HeterogeneousObservation",
                 self.intervals.dynamical_model(context).observation_model,
@@ -85,7 +85,7 @@ class WindowMemoryRuntime:
             )
             return score(means)
 
-        return jax.vmap(density)(contexts, selected)
+        return jax.vmap(density)(contexts, states, selected)
 
 
 def _window_memory(intervals: ParticleIntervalObservations, labels: int) -> WindowMemoryRuntime:
@@ -119,69 +119,149 @@ def _window_memory(intervals: ParticleIntervalObservations, labels: int) -> Wind
 
 @dataclass(frozen=True)
 class SequentialObservationRuntime:
-    """Point factors composed with optional deterministic window bookkeeping."""
+    """Independent coordinates composed with exact recurrence and window bookkeeping."""
 
     target: ParticleTarget
     contexts: ParticleContext
+    guide: ParticleContext
     noise: ParticleNoiseFactors
     windows: WindowMemoryRuntime | None
 
     @property
+    def replay_shape(self) -> tuple[int, int]:
+        """One reconstructed coordinate block per parameter label and shared guide."""
+        return self.contexts[1].shape[0] + 1, len(self.target.state_space.replayed_coordinates)
+
+    @property
+    def model_dimension(self) -> int:
+        """Independent coordinates plus reconstructed model memory."""
+        return self.target.state_space.size + int(np.prod(self.replay_shape))
+
+    @property
     def dimension(self) -> int:
         """Dimension of the independent state plus derived observation memory."""
-        return self.target.state_space.size + (
+        return self.model_dimension + (
             0 if self.windows is None else int(np.prod(self.windows.shape))
         )
 
     def state(self, value: jax.Array) -> jax.Array:
-        """Project the model coordinates from a particle's augmented state."""
+        """Project the coordinates whose independent entries are sampled."""
         return value[..., : self.target.state_space.size]
 
+    @property
+    def replay_contexts(self) -> ParticleContext:
+        """Bind the same independent path under every label and the shared guide."""
+        return cast(
+            "ParticleContext",
+            jax.tree.map(
+                lambda labels, guide: jnp.concatenate((labels, guide[None])),
+                self.contexts,
+                self.guide,
+            ),
+        )
+
+    def replayed_states(self, value: jax.Array) -> jax.Array:
+        """Recover exact model states for the labels followed by the guide."""
+        states = jnp.broadcast_to(
+            self.state(value), (self.replay_shape[0], self.target.state_space.size)
+        )
+        indices = jnp.asarray(self.target.state_space.replayed_coordinates, dtype=jnp.int32)
+        return states.at[:, indices].set(
+            value[self.target.state_space.size : self.model_dimension].reshape(self.replay_shape)
+        )
+
+    def guide_moments(self, value: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Evaluate the exact proposal drift on the guide's own reconstructed prefix."""
+        return self.target.transition_moments(self.guide, self.replayed_states(value)[-1], index)
+
+    def initial_log_probs(self, value: jax.Array) -> jax.Array:
+        """Score each label on its exact initial state."""
+        return jnp.asarray(
+            jax.vmap(self.target.initial_log_prob)(self.contexts, self.replayed_states(value)[:-1])
+        )
+
+    def transition_log_probs(
+        self, previous: jax.Array, current: jax.Array, index: jax.Array
+    ) -> jax.Array:
+        """Score stochastic densities with each label's deterministic prefix held fixed."""
+        return jax.vmap(self.target.transition_log_prob_with_noise, in_axes=(0, 0, 0, 0, None))(
+            self.contexts,
+            self.noise,
+            self.replayed_states(previous)[:-1],
+            self.replayed_states(current)[:-1],
+            index,
+        )
+
     def initial(self, state: jax.Array) -> jax.Array:
-        """Start every window with the canonical zero statistics."""
-        return jnp.concatenate((state, jnp.zeros(self.dimension - state.size, dtype=state.dtype)))
+        """Reconstruct each origin and start windows with the canonical zero statistics."""
+        indices = jnp.asarray(self.target.state_space.replayed_coordinates, dtype=jnp.int32)
+        replayed = jax.vmap(self.target.replay_initial, in_axes=(0, None))(
+            self.replay_contexts, state
+        )[:, indices]
+        return jnp.concatenate(
+            (
+                state,
+                replayed.reshape(-1),
+                jnp.zeros(self.dimension - self.model_dimension, dtype=state.dtype),
+            )
+        )
 
     def advance(self, previous: jax.Array, state: jax.Array, index: jax.Array) -> jax.Array:
         """Reset completed slots and integrate the next exact response segment."""
+        if self.target.state_space.requires_replay:
+            indices = jnp.asarray(self.target.state_space.replayed_coordinates, dtype=jnp.int32)
+            replayed = jax.vmap(self.target.replay_step, in_axes=(0, 0, None, None))(
+                self.replay_contexts, self.replayed_states(previous), state, index
+            )[:, indices]
+            current = jnp.concatenate((state, replayed.reshape(-1)))
+        else:
+            current = state
         if self.windows is None:
-            return state
+            return current
         window = self.windows
-        statistics = previous[self.target.state_space.size :].reshape(window.shape)
+        statistics = previous[self.model_dimension :].reshape(window.shape)
         statistics = jnp.where(window.reset[index - 1][None, ..., None], 0.0, statistics)
         statistics = (
             statistics
             + window.previous[index][None, ..., None]
-            * window.moments(self.contexts, self.state(previous))
-            + window.current[index][None, ..., None] * window.moments(self.contexts, state)
+            * window.moments(self.contexts, self.replayed_states(previous)[:-1])
+            + window.current[index][None, ..., None]
+            * window.moments(self.contexts, self.replayed_states(current)[:-1])
         )
-        return jnp.concatenate((state, statistics.reshape(-1)))
+        return jnp.concatenate((current, statistics.reshape(-1)))
 
     def replace_current(self, value: jax.Array, state: jax.Array, index: jax.Array) -> jax.Array:
         """Vary only the current response, holding all past window contributions fixed."""
-        if self.windows is None:
-            return state
-        window = self.windows
-        statistics = value[self.target.state_space.size :].reshape(window.shape)
-        difference = window.moments(self.contexts, state) - window.moments(
-            self.contexts, self.state(value)
+        indices = jnp.asarray(self.target.state_space.replayed_coordinates, dtype=jnp.int32)
+        replayed = value[self.target.state_space.size : self.model_dimension].reshape(
+            self.replay_shape
         )
+        replayed = jnp.where(self.target.independent_mask[index, indices], state[indices], replayed)
+        current = jnp.concatenate((state, replayed.reshape(-1)))
+        if self.windows is None:
+            return current
+        window = self.windows
+        statistics = value[self.model_dimension :].reshape(window.shape)
+        difference = window.moments(
+            self.contexts, self.replayed_states(current)[:-1]
+        ) - window.moments(self.contexts, self.replayed_states(value)[:-1])
         statistics = statistics + window.current[index][None, ..., None] * difference
-        return jnp.concatenate((state, statistics.reshape(-1)))
+        return jnp.concatenate((current, statistics.reshape(-1)))
 
     def log_probs(self, value: jax.Array, index: jax.Array) -> jax.Array:
         """Score exact point and completed-window factors under each parameter label."""
-        state = self.state(value)
+        states = self.replayed_states(value)[:-1]
         point = jax.vmap(
-            lambda context, noise: self.target.observation_increment_with_noise(
+            lambda context, noise, state: self.target.observation_increment_with_noise(
                 context, noise, state, index, self.target.observations
             )
-        )(self.contexts, self.noise)
+        )(self.contexts, self.noise, states)
         if self.windows is None:
             return point
         return point + self.windows.log_probs(
             self.contexts,
-            state,
-            value[self.target.state_space.size :].reshape(self.windows.shape),
+            states,
+            value[self.model_dimension :].reshape(self.windows.shape),
             self.target.observations,
             index,
         )
@@ -200,7 +280,7 @@ class SequentialObservationRuntime:
 
 
 def sequential_observations(
-    target: ParticleTarget, contexts: ParticleContext
+    target: ParticleTarget, contexts: ParticleContext, guide: ParticleContext
 ) -> SequentialObservationRuntime:
     """Bind exact per-label emissions and their fixed window schedule once per sweep."""
     noise = jax.vmap(lambda context: target.prepare_noise_factors(context, target.observations))(
@@ -210,6 +290,7 @@ def sequential_observations(
     return SequentialObservationRuntime(
         target,
         contexts,
+        guide,
         noise,
         None if target.intervals is None else _window_memory(target.intervals, labels),
     )

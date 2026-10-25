@@ -126,9 +126,10 @@ requests and run notes are in [`suite`](suite). Their status:
 - **TAIL is valid, and both of its fits fail.** About a quarter of the
   latent time points never move in retention; see
   [suite/notes.md](suite/notes.md).
-- **C7** passes a zero-sweep public fit with its interval-mean channel intact;
-  this checks admission and compilation, not convergence. **C8** remains refused
-  by the current policy; supported model limits are in
+- **C7 and C8** pass zero-sweep public fits with the interval-mean channel and
+  observed deterministic stages intact. These check admission and compilation,
+  not convergence; supported model limits and the recurrence sampler's
+  early-time movement cost are in
   [the model assumptions](../docs/assumptions.md#model-class).
 
 **Data.** In the study, `edit_model` with the truth model and one `simulate`
