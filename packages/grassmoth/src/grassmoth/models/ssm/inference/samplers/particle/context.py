@@ -63,7 +63,22 @@ def build_smoother_context(
         )
         parameter_log_priors = jax.vmap(log_prior_unc_fn)(parameter_particles)
         parameter_log_probs = (parameter_log_priors + label_correction).astype(traj_dtype)
+        active = jnp.isfinite(parameter_log_probs)
+        parameter_log_probs = jnp.where(active, parameter_log_probs, -jnp.inf)
         initial_label_log_probs = _normalize_log_probs(parameter_log_probs)
+        # A zero-mass label must not inject NaNs into shared gradients or geometry.
+        # Its stored coordinates stay unchanged; this inert context is never selected.
+        # The valid reference label guarantees a nonempty support.
+        representative = jnp.argmax(active)
+        contexts = jax.tree.map(
+            lambda leaf: jnp.where(
+                active.reshape((-1,) + (1,) * (leaf.ndim - 1)), leaf, leaf[representative]
+            ),
+            contexts,
+        )
+        guide_position = jnp.sum(
+            jnp.where(active[:, None], parameter_particles, 0.0), axis=0
+        ) / jnp.sum(active)
 
     def _initial_value_grad_by_param(particle0: jnp.ndarray) -> tuple[jnp.ndarray, jnp.ndarray]:
         return _value_and_grad_by_param(
@@ -140,6 +155,7 @@ def build_smoother_context(
 
     return SmootherContext(
         contexts=contexts,
+        guide_position=guide_position,
         initial_label_log_probs=initial_label_log_probs,
         num_steps=num_steps,
         num_free_particles=num_free_particles,

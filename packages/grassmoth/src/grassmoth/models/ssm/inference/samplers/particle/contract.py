@@ -107,6 +107,7 @@ class SmootherContext(NamedTuple):
     """
 
     contexts: ParticleContext
+    guide_position: Float[Array, " D"]
     initial_label_log_probs: Float[Array, " K"]
     num_steps: int
     num_free_particles: int

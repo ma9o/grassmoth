@@ -5,22 +5,26 @@ Corenflos (2025), "Particle Gibbs without the Gibbs bit", for directly
 evaluable SSM potentials. The parameter proposal is formed in unconstrained
 space via the auxiliary decomposition
 
-    u | theta  ~ N(theta + 2 delta Sigma g(theta), 2 delta Sigma)
+    u | theta  ~ N(theta + a L b(theta), 2 delta Sigma)
     theta' | u ~ N(u, 2 delta Sigma)
 
-where ``g`` is a fixed, parameter-only gradient oracle. The default computes
+where ``Sigma = LLᵀ``, ``a = sqrt(2 delta)`` and
+``b(theta) = v / max(1, ||v||)``, with ``v = a Lᵀg(theta)``.
+Here ``g`` is a fixed, parameter-only gradient oracle. The default computes
 the complete-data gradient on a fixed pilot path chosen at construction; it
 must not use the changing reference trajectory during the chain. ``parameter_proposal``
 selects the drift: the default ``random_walk`` sets ``g = 0`` (the symmetric special
-case), while ``pseudo_langevin`` (Corenflos 2025, §3.1) drifts the
-theta->u half by ``g`` so the two halves reproduce preconditioned MALA. The
+case), while ``pseudo_langevin`` (Corenflos 2025, §3.1) bounds the
+theta->u drift to one half-proposal standard deviation. Below that bound the
+two halves reproduce preconditioned MALA. A stale pilot, poor preconditioner or
+separated modes can still reduce mixing. The
 resulting asymmetry is corrected exactly in the Barker label-selection weights
 (identically zero in the random-walk case). The latent trajectory is updated by
 conditional SMC against the posterior mixture over the parameter ensemble.
 
 Step-size convention. ``delta`` (``param_step_size``) is the variance coefficient
 of each half, not the conventional MALA step. The combined kernel has variance
-``4 delta Sigma`` (and drift ``2 delta Sigma g`` for pseudo-Langevin), so a MALA
+``4 delta Sigma`` (and drift ``a L b`` for pseudo-Langevin), so an unbounded MALA
 step ``h`` corresponds to ``delta = h / 4``. Fits start at
 ``INITIAL_PARAM_STEP_SIZE``; warmup adapts ``delta`` within the step bounds and
 rescales it whenever ``Sigma`` is re-estimated, keeping the average variance.
@@ -38,6 +42,7 @@ from typing import TYPE_CHECKING, Literal, NamedTuple, Protocol
 import jax
 import jax.numpy as jnp
 from jax import random
+from jax.scipy.linalg import solve_triangular
 
 from grassmoth.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec, PathUpdateSpec
 from grassmoth.compute.programs import scalar_operand
@@ -83,6 +88,19 @@ INITIAL_PARAM_STEP_SIZE = 0.02
 PARAM_STEP_SIZE_MIN = 1e-6
 PARAM_STEP_SIZE_MAX = 1e3
 type MarginalParticleStepResult = tuple[TrajectoryMCMCState, dict[str, jnp.ndarray]]
+
+
+def _bounded_parameter_drift(gradient: jax.Array, chol: jax.Array, scale: jax.Array) -> jax.Array:
+    """Unit-ball drift in whitened half-proposal coordinates, without norm overflow.
+
+    An undefined pilot score defines zero drift, not zero target density. This is
+    a total parameter-only proposal oracle, used identically in both Gaussian laws.
+    """
+    whitened = scale * (gradient @ chol)
+    whitened = jnp.where(jnp.all(jnp.isfinite(whitened), axis=-1, keepdims=True), whitened, 0.0)
+    magnitude = jnp.max(jnp.abs(whitened), axis=-1, keepdims=True, initial=1.0)
+    unit = whitened / magnitude
+    return unit / jnp.maximum(1.0 / magnitude, jnp.linalg.norm(unit, axis=-1, keepdims=True))
 
 
 class MarginalParticleStep(Protocol):
@@ -179,7 +197,8 @@ def build_marginal_particle_gibbs_kernel(
         evaluate: Callable[[jnp.ndarray], jnp.ndarray] = jax.grad(
             lambda zz: target.log_posterior(zz, fixed_path, runtime_observations, runtime_times)
         )
-        return evaluate(z)
+        gradient = evaluate(z)
+        return jnp.where(jnp.all(jnp.isfinite(gradient)), gradient, 0.0)
 
     def _propose_parameter_ensemble(
         current_position: jnp.ndarray,
@@ -193,14 +212,14 @@ def build_marginal_particle_gibbs_kernel(
         proposal_scale = jnp.sqrt(jnp.asarray(2.0, dtype=current_position.dtype) * step)
         aux_key, proposal_key = random.split(key)
 
-        # Pseudo-Langevin (Corenflos 2025, §3.1): drift the θ→u half by 2·step·Σ·g(θ),
-        # with Σ = chol·cholᵀ and g the fixed parameter-only gradient oracle. The θ'←u
-        # half stays a plain Gaussian, so only u carries the drift. Combined, the two
-        # halves reproduce preconditioned MALA; random-walk is the zero-drift case.
+        # Only θ→u is drifted. Bound in the covariance metric so a poor fixed
+        # pilot cannot move u thousands of Gaussian standard deviations away.
         if use_gradient_drift:
             with jax.named_scope("propose_grad_drift"):
                 grad_ref = current_gradient
-                drift = (jnp.asarray(2.0, dtype=step.dtype) * step) * (chol @ (chol.T @ grad_ref))
+                drift = proposal_scale * (
+                    chol @ _bounded_parameter_drift(grad_ref, chol, proposal_scale)
+                )
         else:
             grad_ref = jnp.zeros_like(current_position)
             drift = jnp.zeros_like(current_position)
@@ -222,10 +241,9 @@ def build_marginal_particle_gibbs_kernel(
         proposed = u[None, :] + proposal_scale * (proposal_eps @ chol.T)
         ensemble = jnp.concatenate([current_position[None, :], proposed], axis=0)
 
-        # Barker label-prior correction Δ_l = log q(u|θˡ) − log q(θˡ|u). With the drift
-        # only in q(u|·), Δ_l = g(θˡ)·(u−θˡ) − step·‖cholᵀ g(θˡ)‖². It is identically 0
-        # in the random-walk (symmetric) case, recovering eq. (14). Added to the label
-        # prior so the marginalized-PGibbs selection stays exact under the asymmetry.
+        # Exact Barker correction log q(u|θ) − log q(θ|u), using the bounded
+        # drift at EVERY label: b·L⁻¹(u−θ)/a − ||b||²/2. Bounding only the
+        # forward drift while correcting with the raw score would change the target.
         if use_gradient_drift:
             with jax.named_scope("propose_grad_barker"):
                 grads = jnp.concatenate(
@@ -235,9 +253,11 @@ def build_marginal_particle_gibbs_kernel(
                     ],
                     axis=0,
                 )
-                whitened_sq = jnp.sum((grads @ chol) ** 2, axis=1)
-                drift_dot = jnp.sum(grads * (u[None, :] - ensemble), axis=1)
-                label_correction = drift_dot - step * whitened_sq
+                bounded = _bounded_parameter_drift(grads, chol, proposal_scale)
+                displacement = (
+                    solve_triangular(chol, (u[None, :] - ensemble).T, lower=True).T / proposal_scale
+                )
+                label_correction = jnp.sum(bounded * displacement - 0.5 * bounded**2, axis=1)
         else:
             grads = jnp.zeros_like(ensemble)
             label_correction = jnp.zeros((num_parameter_particles,), dtype=current_position.dtype)
@@ -311,7 +331,7 @@ def build_marginal_particle_gibbs_kernel(
                     batch_size=batch_size,
                 )
             else:
-                guide = target.context(jnp.mean(parameter_particles, axis=0), runtime_times)
+                guide = target.context(ctx.guide_position, runtime_times)
                 smoother = (trace_guided_step if record_trace else guided_step)(
                     target, ctx, guide, path_update, block_key, x_ref
                 )

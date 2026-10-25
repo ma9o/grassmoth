@@ -10,8 +10,8 @@ the auxiliary density, psi_t/psi_(t-1), and the complete normalized proposal.
 Backward selection uses prefix AND suffix label densities, divided by the prefix
 sum and psi_t. Summing label mixtures independently at each time would be wrong.
 
-The single Gaussian proposal guide is built at the ensemble's mean unconstrained
-parameter, symmetrically in the labels. The auxiliary drift is an observation-only
+The single Gaussian proposal guide is built at the mean unconstrained parameter
+over labels with finite corrected prior, symmetrically in the labels. The auxiliary drift is an observation-only
 mixture score, common to every label. Consequently the final label law does not
 contain an auxiliary factor. For twisted kappa=1, the local proposal and future
 twist share a Gaussian approximation of the readings times the actual auxiliary

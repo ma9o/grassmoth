@@ -70,7 +70,11 @@ def _masked_mean(values: jax.Array, mask: jax.Array, *, axis: int | None = None)
 def _normalize_log_probs(
     logits: Float[Array, "*shape"], *, axis: int = -1
 ) -> Float[Array, "*shape"]:
-    return logits - jax.scipy.special.logsumexp(logits, axis=axis, keepdims=True)
+    # Nonfinite densities have zero numerical support, never NaN selection mass.
+    logits = jnp.where(jnp.isfinite(logits), logits, -jnp.inf)
+    normalizer = jax.scipy.special.logsumexp(logits, axis=axis, keepdims=True)
+    # A zero-mass prefix has no normalized law; keep every entry at -inf.
+    return logits - jnp.where(jnp.isfinite(normalizer), normalizer, 0.0)
 
 
 def _observation_log_probs_by_param(
