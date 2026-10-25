@@ -289,6 +289,7 @@ def test_window_backward_matches_full_nonlinear_augmented_density_ratios():
                 jnp.ones((4, 1), bool),
                 observe,
                 transition,
+                unroll=1,
             )
         )
     )(keys)

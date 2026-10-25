@@ -6446,6 +6446,12 @@ export interface components {
              * @enum {integer}
              */
             readonly kappa?: 0 | 1;
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @default 8
+             */
+            readonly scan_unroll?: number;
         };
         /**
          * ParticleAGradSpec
@@ -6476,6 +6482,12 @@ export interface components {
              * @enum {integer}
              */
             readonly kappa: 0 | 1;
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @default 8
+             */
+            readonly scan_unroll: number;
         };
         /** @enum {string} */
         readonly ParticleDiagnosticMetric: "particle_identity" | "parameter_movement" | "particle_weights" | "frequency_refresh" | "regional_movement";
@@ -8085,6 +8097,12 @@ export interface components {
              * @enum {integer}
              */
             readonly kappa?: 0 | 1;
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @default 8
+             */
+            readonly scan_unroll?: number;
         };
         /**
          * TwistedParticleAGradSpec
@@ -8116,6 +8134,12 @@ export interface components {
              * @enum {integer}
              */
             readonly kappa: 0 | 1;
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @default 8
+             */
+            readonly scan_unroll: number;
         };
         /**
          * UnknownLawProvenance

@@ -284,6 +284,7 @@ def _guided_step(
                 jax.vmap(forward_noise)(jax.random.split(forward_key, steps - 1)),
                 jax.tree.map(lambda value: value[1:], geometry),
             ),
+            unroll=spec.scan_unroll,
         )
     )
     observation_bank = jnp.concatenate((first_observed[None], tail_observed))
@@ -315,6 +316,7 @@ def _guided_step(
         transition,
         log_precisions,
         reference.dtype,
+        spec.scan_unroll,
     )
     norms = jnp.linalg.norm(jnp.where(mask, gradients, 0.0), axis=-1)
     measurements = weight_history_fields(

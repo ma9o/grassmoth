@@ -34,6 +34,7 @@ def _window_backward(
     mask: jax.Array,
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
     transition: Callable[[jax.Array, jax.Array, jax.Array], jax.Array],
+    unroll: int,
 ) -> jax.Array:
     """Pay all crossing windows and auxiliary factors before reusing an exact suffix.
 
@@ -117,6 +118,7 @@ def _window_backward(
                 jax.random.split(key, steps - 1)
             ),
         ),
+        unroll=unroll,
     )
     return jnp.concatenate((picks[::-1], last[None]))
 
@@ -141,6 +143,7 @@ def select_path(
     transition: Callable[[jax.Array, jax.Array, jax.Array], jax.Array],
     log_precisions: jax.Array | None,
     reference_dtype: DTypeLike,
+    unroll: int,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
     """Recover a path with the selector authorized by the compiled memory support."""
     steps, count, _ = bank.shape
@@ -152,7 +155,7 @@ def select_path(
                 parent = row[pick]
                 return parent, parent
 
-            _, earlier = jax.lax.scan(ancestor, last, ancestors, reverse=True)
+            _, earlier = jax.lax.scan(ancestor, last, ancestors, reverse=True, unroll=unroll)
             picks = jnp.concatenate((earlier, last[None]))
         else:
             picks = _window_backward(
@@ -167,6 +170,7 @@ def select_path(
                 mask,
                 observe,
                 transition,
+                unroll,
             )
         path = bank[jnp.arange(steps), picks]
         if log_precisions is None:
@@ -199,6 +203,7 @@ def select_path(
                     jax.random.split(earlier_key, steps - 1)
                 ),
             ),
+            unroll=unroll,
         )
         picks = jnp.concatenate((earlier[::-1], last[None]))
         # The backward suffix already contains every selected exact observation and

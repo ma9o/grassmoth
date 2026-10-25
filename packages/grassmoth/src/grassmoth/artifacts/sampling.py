@@ -370,6 +370,15 @@ _GUIDED_KAPPA = (
     "a Langevin step on the observation term: for a Gaussian reading it overshoots once the "
     "scale exceeds four times that reading's variance."
 )
+# The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10,
+# with identical transitions. Retune it per device and model size.
+_GUIDED_SCAN_UNROLL = (
+    "Time steps per iteration of the forward filter and backward-selection loops. Unrolling "
+    "changes how XLA compiles these sequential loops, not the algorithm or its target. Each "
+    "step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; "
+    "unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has "
+    "little such overhead to remove. 1 disables unrolling."
+)
 
 
 class ParticleAGradSpec(Value):
@@ -386,6 +395,7 @@ class ParticleAGradSpec(Value):
         default_factory=AdaptedLatentStepSpec, description=_GUIDED_STEP
     )
     kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
+    scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
 
 
 class TwistedParticleAGradSpec(Value):
@@ -403,6 +413,7 @@ class TwistedParticleAGradSpec(Value):
         default_factory=AdaptedLatentStepSpec, description=_GUIDED_STEP
     )
     kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
+    scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
 
 
 type GuidedPathSpec = ParticleAGradSpec | TwistedParticleAGradSpec
