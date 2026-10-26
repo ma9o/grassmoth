@@ -51,7 +51,7 @@ dev = [
     "pydoclint==0.11.0", # scripts/checks/run_pydoclint.py extends its Visitor
 ]
 gpu = [
-    "jax[cuda12]; sys_platform == 'linux'",
+    "jax[cuda13]; sys_platform == 'linux'",
 ]
 
 [tool.ruff]
