@@ -1,4 +1,4 @@
-"""Exact Particle-aGRAD and twisted Particle-aGRAD under marginalized labels.
+"""Exact auxiliary and marginal gradient particle updates under marginalized labels.
 
 Corenflos & Finke (2024), https://arxiv.org/abs/2401.14868, sections 4.1/4.4;
 Corenflos (2025), https://arxiv.org/abs/2505.04611, section 3.2.
@@ -30,6 +30,13 @@ factors, then rescore the selected path once for its final label law.
 Models with deterministic recurrence stages instead trace the terminal particle's
 ancestors. This keeps exact replay linear in time, at the cost of possible early-time
 genealogical degeneracy; near-uniform weights do not guarantee movement.
+
+Particle-mGRAD retains the untwisted local proposal and integrates its auxiliary
+out of the bank weights. The observation-only auxiliary drift is common to all
+labels and depends only on the current point. Thus the non-Markovian mixture
+prefix/suffix accounting remains exact, and backward selection uses the true
+target without auxiliary factors (CF24 Appendix D.2). Point support is admitted
+before execution; intervals and recurrence are not part of this construction.
 """
 
 from types import MappingProxyType
@@ -40,7 +47,7 @@ import jax.numpy as jnp
 from jax.scipy.special import logsumexp
 from jax.typing import DTypeLike
 
-from grassmoth.artifacts.sampling import GuidedPathSpec, TwistedParticleAGradSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec, ParticleMGradSpec, TwistedParticleAGradSpec
 from grassmoth.models.ssm.inference.samplers.particle.contract import (
     ParticleSmootherResult,
     SmootherContext,
@@ -54,6 +61,10 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_information import 
 from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
     PathSelector,
     select_path,
+)
+from grassmoth.models.ssm.inference.samplers.particle.marginal import (
+    MarginalGeometry,
+    marginal_geometry,
 )
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     _masked_normal_log_prob,
@@ -187,21 +198,40 @@ def _guided_step(
         spec,
     )
     initial_mean = target.initial_moments(guide)[0]
+    marginal = (
+        jax.vmap(marginal_geometry, in_axes=(0, 0, 0, None))(geometry.chol, variance, mask, count)
+        if isinstance(spec, ParticleMGradSpec)
+        else None
+    )
 
     def local_factors(
         particles: Float[Array, "P R"], index: Int[Array, ""] | int
-    ) -> tuple[Float[Array, "P K"], Float[Array, " P"]]:
+    ) -> tuple[Float[Array, "P K"], Float[Array, "P D"]]:
         # The conditioned particle is the reference: reuse its observation and score.
         observed, scores = jax.vmap(observe, in_axes=(0, None))(particles[1:], index)
         observed = jnp.concatenate((reference_observed[index, None], observed))
         scores = jnp.concatenate((gradients[index, None], scores))
+        return observed, scores
+
+    def weight_correction(
+        particles: Float[Array, "P D"],
+        centers: Float[Array, "P D"],
+        scores: Float[Array, "P D"],
+        index: Int[Array, ""] | int,
+    ) -> Float[Array, " P"]:
+        proposal: _ProposalGeometry = jax.tree.map(lambda value: value[index], geometry)
+        if marginal is not None:
+            factors: MarginalGeometry = jax.tree.map(lambda value: value[index], marginal)
+            return factors.log_weights(
+                particles, centers - proposal.shift, scores, variance[index], mask[index]
+            )
         density = _masked_normal_log_prob(
             auxiliary[index],
-            memory.state(particles) + variance[index] * scores,
+            particles + variance[index] * scores,
             variance[index],
             mask[index],
         )
-        return observed, density
+        return density - proposal.log_density(particles - centers, mask[index])
 
     def transition(
         previous: Float[Array, " R"], current: Float[Array, " R"], index: Int[Array, ""]
@@ -212,7 +242,7 @@ def _guided_step(
     first_center = initial_geometry.center(initial_mean, mask[0])
     first = initial_geometry.initial_particles(first_center, first_key, reference, mask, count)
     first_memory = jax.vmap(memory.initial)(first)
-    first_observed, first_auxiliary = local_factors(first_memory, 0)
+    first_observed, first_gradients = local_factors(first_memory, 0)
     first_scores = (
         ctx.initial_label_log_probs
         + jax.vmap(memory.initial_log_probs)(first_memory)
@@ -226,9 +256,8 @@ def _guided_step(
     first_twists = twist.log_density(first_memory, 0)
     first_weights = (
         first_normalizer
-        + first_auxiliary
+        + weight_correction(first, jnp.broadcast_to(first_center, first.shape), first_gradients, 0)
         + first_twists
-        - initial_geometry.log_density(first - first_center, mask[0])
     )
 
     def forward(
@@ -260,7 +289,7 @@ def _guided_step(
         centers = proposal.center(means, mask[index]) + parents @ proposal.parent_map.T
         current = proposal.next_particles(centers, noise, reference, mask, index)
         current_memory = jax.vmap(memory.advance, in_axes=(0, 0, None))(parents, current, index)
-        observed, auxiliary_factors = local_factors(current_memory, index)
+        observed, current_gradients = local_factors(current_memory, index)
         next_scores = (
             parent_scores
             + jax.vmap(transition, in_axes=(0, 0, None))(parents, current_memory, index)
@@ -273,10 +302,9 @@ def _guided_step(
         current_twists = twist.log_density(current_memory, index)
         next_weights: jax.Array = (
             increment
-            + auxiliary_factors
+            + weight_correction(current, centers, current_gradients, index)
             + current_twists
             - previous_twists[ancestors]
-            - proposal.log_density(current - centers, mask[index])
         )
         return (current_memory, next_weights, next_scores, current_twists), (
             current_memory,

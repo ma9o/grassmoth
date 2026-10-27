@@ -6493,6 +6493,80 @@ export interface components {
         readonly ParticleDiagnosticMetric: "particle_identity" | "parameter_movement" | "particle_weights" | "frequency_refresh" | "regional_movement";
         readonly ParticleDiagnosticMetrics: readonly components["schemas"]["ParticleDiagnosticMetric"][];
         /**
+         * ParticleMGradSpec
+         * @description Particle-mGRAD integrates the path auxiliary out of the particle weights.
+         *
+         *     Uses the untwisted Gaussian transition-informed proposal with exact nonlinear
+         *     corrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain
+         *     marginalized. Supports point readings without deterministic recurrences;
+         *     separated path components and informative future readings can slow mixing.
+         */
+        readonly "ParticleMGradSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "particle_mgrad";
+            /**
+             * Num Particles
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @default 64
+             */
+            readonly num_particles?: number;
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
+            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
+            /**
+             * Kappa
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @default 1
+             * @enum {integer}
+             */
+            readonly kappa?: 0 | 1;
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @default 8
+             */
+            readonly scan_unroll?: number;
+        };
+        /**
+         * ParticleMGradSpec
+         * @description Particle-mGRAD integrates the path auxiliary out of the particle weights.
+         *
+         *     Uses the untwisted Gaussian transition-informed proposal with exact nonlinear
+         *     corrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain
+         *     marginalized. Supports point readings without deterministic recurrences;
+         *     separated path components and informative future readings can slow mixing.
+         */
+        readonly "ParticleMGradSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "particle_mgrad";
+            /**
+             * Num Particles
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @default 64
+             */
+            readonly num_particles: number;
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
+            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
+            /**
+             * Kappa
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @default 1
+             * @enum {integer}
+             */
+            readonly kappa: 0 | 1;
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @default 8
+             */
+            readonly scan_unroll: number;
+        };
+        /**
          * ParticleSamplerDiagnostics
          * @description Typed exact-sampler settings and transition telemetry from the native producer.
          */
@@ -6628,8 +6702,8 @@ export interface components {
             /** Nonfinite Fraction */
             readonly nonfinite_fraction: number;
         };
-        readonly "PathUpdateSpec-Input": components["schemas"]["DsmcSpec-Input"] | components["schemas"]["ParticleAGradSpec-Input"] | components["schemas"]["TwistedParticleAGradSpec-Input"];
-        readonly "PathUpdateSpec-Output": components["schemas"]["DsmcSpec-Output"] | components["schemas"]["ParticleAGradSpec-Output"] | components["schemas"]["TwistedParticleAGradSpec-Output"];
+        readonly "PathUpdateSpec-Input": components["schemas"]["DsmcSpec-Input"] | components["schemas"]["ParticleAGradSpec-Input"] | components["schemas"]["TwistedParticleAGradSpec-Input"] | components["schemas"]["ParticleMGradSpec-Input"];
+        readonly "PathUpdateSpec-Output": components["schemas"]["DsmcSpec-Output"] | components["schemas"]["ParticleAGradSpec-Output"] | components["schemas"]["TwistedParticleAGradSpec-Output"] | components["schemas"]["ParticleMGradSpec-Output"];
         readonly PathWeightDiagnostics: components["schemas"]["DsmcWeightDiagnostics"] | components["schemas"]["SequentialWeightDiagnostics"];
         /**
          * PersistenceTransformSpec

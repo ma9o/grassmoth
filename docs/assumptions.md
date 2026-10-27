@@ -23,6 +23,8 @@ The policy sampler is marginalized particle Gibbs ([Corenflos 2025, v4][c25]) wi
 
 The [fit chart](assets/action-flows/fit.svg) owns the execution order. Experiments that weren't adopted are recorded in the [benchmark notes](../benchmarks/suite/notes.md).
 
+The optional [Particle-mGRAD path update][marginal] integrates out the path auxiliary in its particle weights ([CF24][cf24] §4.2 and Appendix D.2), using an untwisted shared proposal under the exact parameter mixture. Its [admission owner][preflight] restricts this construction to point readings without deterministic recurrences. Separated mixture components and informative future readings can still limit movement; this option is not the inference policy.
+
 | Piece | Kind | Paper reference | Owner | Evidence | Tests | Limits |
 | --- | --- | --- | --- | --- | --- | --- |
 | Parameter ensemble of two labels, with Barker label choice | Paper | [C25][c25] §3 | [kernel] | — | [t-particle] | One random-walk candidate per sweep is slow for many correlated parameters |
@@ -60,6 +62,8 @@ The [fit chart](assets/action-flows/fit.svg) owns the execution order. Experimen
 [syed]: https://arxiv.org/abs/1905.02939
 [kernel]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/kernel.py
 [guided]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided.py
+[marginal]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py
+[preflight]: ../packages/grassmoth/src/grassmoth/models/ssm/preparation/preflight.py
 [guided-information]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided_information.py
 [guided-geometry]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided_geometry.py
 [guided-selection]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided_selection.py

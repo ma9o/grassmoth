@@ -191,6 +191,7 @@ export type ParetoKPoint = components["schemas"]["ParetoKPoint"];
 export type ParticleAGradSpec = components["schemas"]["ParticleAGradSpec-Output"];
 export type ParticleDiagnosticMetric = components["schemas"]["ParticleDiagnosticMetric"];
 export type ParticleDiagnosticMetrics = components["schemas"]["ParticleDiagnosticMetrics"];
+export type ParticleMGradSpec = components["schemas"]["ParticleMGradSpec-Output"];
 export type ParticleSamplerDiagnostics = components["schemas"]["ParticleSamplerDiagnostics"];
 export type ParticleTuning = components["schemas"]["ParticleTuning"];
 export type ParticleWeightDiagnostics = components["schemas"]["ParticleWeightDiagnostics"];

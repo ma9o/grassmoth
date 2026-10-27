@@ -14,7 +14,7 @@ from grassmoth.artifacts.model.likelihood import (
     StudentTLawSpec,
 )
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import DsmcSpec, NutsDASpec, SamplerSpec
+from grassmoth.artifacts.sampling import DsmcSpec, NutsDASpec, ParticleMGradSpec, SamplerSpec
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.compile.state_space import SequentialRecurrences
 
@@ -50,6 +50,13 @@ def validate_sampler_support(
     if isinstance(sampler.algorithm, NutsDASpec):
         return None
     if not isinstance(sampler.algorithm.path_update, DsmcSpec):
+        if isinstance(sampler.algorithm.path_update, ParticleMGradSpec) and (
+            compiled.state_space.recurrence
+            or any(item.support.support_kind == "interval" for item in compiled.observations)
+        ):
+            return ObservationPreflightFailure.rejected(
+                "Particle-mGRAD supports point readings without deterministic recurrences."
+            )
         if sampler.algorithm.tempering is not None:
             return ObservationPreflightFailure.rejected(
                 "Sequential guided path updates do not support tempering."

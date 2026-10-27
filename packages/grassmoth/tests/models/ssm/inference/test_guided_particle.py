@@ -12,7 +12,11 @@ import pytest
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal, norm
 
-from grassmoth.artifacts.sampling import ParticleAGradSpec, TwistedParticleAGradSpec
+from grassmoth.artifacts.sampling import (
+    ParticleAGradSpec,
+    ParticleMGradSpec,
+    TwistedParticleAGradSpec,
+)
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import guided_step, trace_guided_step
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
@@ -143,17 +147,25 @@ def _correlated_gaussian_case():
     )
 
 
-@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
 @pytest.mark.parametrize(
-    ("cubic", "kappa", "pinned", "steps", "dimension"),
+    ("spec_type", "cubic", "kappa", "pinned", "steps", "dimension"),
     [
-        (0.0, 0, False, 3, 1),
-        (0.0, 1, False, 3, 1),
-        (0.7, 0, False, 3, 1),
-        (0.7, 1, False, 3, 1),
-        (0.7, 1, True, 3, 1),
-        (0.0, 1, False, 1, 1),
-        (0.0, 1, False, 3, 2),
+        (spec_type, *case)
+        for spec_type in (ParticleAGradSpec, TwistedParticleAGradSpec)
+        for case in (
+            (0.0, 0, False, 3, 1),
+            (0.0, 1, False, 3, 1),
+            (0.7, 0, False, 3, 1),
+            (0.7, 1, False, 3, 1),
+            (0.7, 1, True, 3, 1),
+            (0.0, 1, False, 1, 1),
+            (0.0, 1, False, 3, 2),
+        )
+    ]
+    + [
+        (ParticleMGradSpec, 0.0, 0, False, 3, 2),
+        (ParticleMGradSpec, 0.0, 1, False, 3, 2),
+        (ParticleMGradSpec, 0.7, 1, True, 3, 1),
     ],
 )
 def test_guided_updates_preserve_path_and_label_posterior(

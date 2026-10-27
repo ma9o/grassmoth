@@ -22302,6 +22302,103 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "ParticleMGradSpec-Input": {
+        "additionalProperties": false,
+        "description": "Particle-mGRAD integrates the path auxiliary out of the particle weights.\n\nUses the untwisted Gaussian transition-informed proposal with exact nonlinear\ncorrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain\nmarginalized. Supports point readings without deterministic recurrences;\nseparated path components and informative future readings can slow mixing.",
+        "properties": {
+          "method": {
+            "const": "particle_mgrad",
+            "default": "particle_mgrad",
+            "title": "Method",
+            "type": "string"
+          },
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Input",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+          },
+          "kappa": {
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Kappa",
+            "type": "integer"
+          },
+          "scan_unroll": {
+            "default": 8,
+            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
+            "minimum": 1,
+            "title": "Scan Unroll",
+            "type": "integer"
+          }
+        },
+        "title": "ParticleMGradSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ParticleMGradSpec-Output": {
+        "additionalProperties": false,
+        "description": "Particle-mGRAD integrates the path auxiliary out of the particle weights.\n\nUses the untwisted Gaussian transition-informed proposal with exact nonlinear\ncorrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain\nmarginalized. Supports point readings without deterministic recurrences;\nseparated path components and informative future readings can slow mixing.",
+        "properties": {
+          "method": {
+            "const": "particle_mgrad",
+            "default": "particle_mgrad",
+            "title": "Method",
+            "type": "string"
+          },
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Output",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+          },
+          "kappa": {
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Kappa",
+            "type": "integer"
+          },
+          "scan_unroll": {
+            "default": 8,
+            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
+            "minimum": 1,
+            "title": "Scan Unroll",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "num_particles",
+          "latent_step",
+          "kappa",
+          "scan_unroll"
+        ],
+        "title": "ParticleMGradSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "ParticleSamplerDiagnostics": {
         "additionalProperties": false,
         "description": "Typed exact-sampler settings and transition telemetry from the native producer.",
@@ -22681,6 +22778,7 @@
             "particle_agrad": "#/components/schemas/ParticleAGradSpec-Input",
             "particle_amala": "#/components/schemas/DsmcSpec-Input",
             "particle_amala_plus": "#/components/schemas/DsmcSpec-Input",
+            "particle_mgrad": "#/components/schemas/ParticleMGradSpec-Input",
             "particle_rwm": "#/components/schemas/DsmcSpec-Input",
             "twisted_particle_agrad": "#/components/schemas/TwistedParticleAGradSpec-Input"
           },
@@ -22695,6 +22793,9 @@
           },
           {
             "$ref": "#/components/schemas/TwistedParticleAGradSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/ParticleMGradSpec-Input"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -22707,6 +22808,7 @@
             "particle_agrad": "#/components/schemas/ParticleAGradSpec-Output",
             "particle_amala": "#/components/schemas/DsmcSpec-Output",
             "particle_amala_plus": "#/components/schemas/DsmcSpec-Output",
+            "particle_mgrad": "#/components/schemas/ParticleMGradSpec-Output",
             "particle_rwm": "#/components/schemas/DsmcSpec-Output",
             "twisted_particle_agrad": "#/components/schemas/TwistedParticleAGradSpec-Output"
           },
@@ -22721,6 +22823,9 @@
           },
           {
             "$ref": "#/components/schemas/TwistedParticleAGradSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/ParticleMGradSpec-Output"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",

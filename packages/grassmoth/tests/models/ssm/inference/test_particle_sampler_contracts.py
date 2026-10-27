@@ -15,6 +15,7 @@ from grassmoth.artifacts.sampling import (
     GaussianReferenceTemperingSpec,
     MarginalParticleGibbsSpec,
     ParticleAGradSpec,
+    ParticleMGradSpec,
     SamplerSpec,
     TwistedParticleAGradSpec,
 )
@@ -35,6 +36,7 @@ from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
 from grassmoth.models.ssm.preparation.binding import BoundPanel
 from grassmoth.models.ssm.preparation.preflight import validate_sampler_support
 from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.interval_particle import interval_target
 
 """Particle configuration and initialization contracts without compiling a sampler."""
 
@@ -42,12 +44,18 @@ from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prep
 pytestmark = pytest.mark.contract
 
 
-@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
+@pytest.mark.parametrize(
+    "spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec, ParticleMGradSpec]
+)
 def test_guided_preflight_rejects_tempering_before_compute(monkeypatch, spec_type):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
-    compiled = Mock(spec=CompiledDynamicalModel)
+    compiled = Mock(
+        spec=CompiledDynamicalModel,
+        state_space=StateSpace(1, (), (0,), (0,), (), ()),
+        observations=(),
+    )
     sampler = SamplerSpec(
         algorithm=MarginalParticleGibbsSpec(
             path_update=spec_type(), tempering=GaussianReferenceTemperingSpec()
@@ -77,7 +85,9 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(
     assert validate_sampler_support(compiled, sampler) is None
 
 
-@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
+@pytest.mark.parametrize(
+    "spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec, ParticleMGradSpec]
+)
 def test_guided_configuration_roundtrip_and_continuation_identity(spec_type):
     sampler = SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=spec_type(kappa=1)))
     assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
@@ -90,6 +100,26 @@ def test_guided_configuration_roundtrip_and_continuation_identity(spec_type):
     )
     with pytest.raises(ValidationError, match="latent_block_coords"):
         spec_type.model_validate({"latent_block_coords": 1})
+
+
+@pytest.mark.parametrize(
+    ("support", "recurrences", "accepted"),
+    [("point", (), True), ("interval", (), False), ("point", (AdditiveRecurrences((0,)),), False)],
+)
+def test_mgrad_admission_owns_point_only_support(monkeypatch, support, recurrences, accepted):
+    from grassmoth.models.ssm import compiled_access
+
+    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
+    compiled = Mock(
+        spec=CompiledDynamicalModel,
+        state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
+        observations=(Mock(support=Mock(support_kind=support)),),
+    )
+    sampler = SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=ParticleMGradSpec()))
+    failure = validate_sampler_support(compiled, sampler)
+    assert (failure is None) == accepted
+    if failure is not None:
+        assert "Particle-mGRAD" in failure.message
 
 
 @pytest.mark.parametrize(
@@ -142,6 +172,8 @@ def test_sampler_boundary_rejects_unknown_modes(field):
 def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, invalid, error):
     positions = np.zeros((2, 1), dtype=np.float32)
     paths = np.zeros((2, 3, 1), dtype=np.float32)
+    grid = np.arange(3.0)
+    context = interval_target(grid, np.zeros((3, 1)), grid[:, None], ("last",)).context
     if invalid == "position_shape":
         positions = positions[:1]
     elif invalid == "path_shape":
@@ -157,7 +189,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         times=jnp.arange(3.0),
         initial_position=jnp.zeros(1),
         independent_mask=jnp.ones((3, 1), dtype=bool),
-        context=Mock(return_value=jnp.array(0.0)),
+        context=context,
         replay_path=lambda _context, path: path,
         initial_path=Mock(side_effect=AssertionError("Supplied paths must not be regenerated")),
         initial_moments=Mock(return_value=(jnp.zeros(1), jnp.eye(1))),

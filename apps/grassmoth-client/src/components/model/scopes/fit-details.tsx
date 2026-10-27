@@ -25,6 +25,7 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
               particle_amala: "Particle-aMALA",
               particle_amala_plus: "Particle-aMALA+",
               particle_agrad: "Particle-aGRAD",
+              particle_mgrad: "Particle-mGRAD",
               twisted_particle_agrad: "Twisted Particle-aGRAD",
             }[algorithm.path_update.method]
           : {

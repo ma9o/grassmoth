@@ -25,6 +25,7 @@ from grassmoth.artifacts.sampling import (
     DsmcSpec,
     FixedLatentStepSpec,
     ParticleAGradSpec,
+    ParticleMGradSpec,
     TwistedParticleAGradSpec,
 )
 from grassmoth.compute.budget import ComputeBudget
@@ -271,7 +272,9 @@ def run_marginal_particle_gibbs(
         jnp.asarray(initial_latent_delta_value, dtype=observations.dtype),
     )
     curvature_limited = (
-        isinstance(kernel.path_update, (ParticleAGradSpec, TwistedParticleAGradSpec))
+        isinstance(
+            kernel.path_update, (ParticleAGradSpec, TwistedParticleAGradSpec, ParticleMGradSpec)
+        )
         and kernel.path_update.kappa == 1
         and not isinstance(kernel.path_update.latent_step, FixedLatentStepSpec)
     )

@@ -416,9 +416,28 @@ class TwistedParticleAGradSpec(Value):
     scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
 
 
-type GuidedPathSpec = ParticleAGradSpec | TwistedParticleAGradSpec
+class ParticleMGradSpec(Value):
+    """Particle-mGRAD integrates the path auxiliary out of the particle weights.
+
+    Uses the untwisted Gaussian transition-informed proposal with exact nonlinear
+    corrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain
+    marginalized. Supports point readings without deterministic recurrences;
+    separated path components and informative future readings can slow mixing.
+    """
+
+    method: Literal["particle_mgrad"] = "particle_mgrad"
+    num_particles: int = Field(default=64, ge=2, description=_GUIDED_PARTICLES)
+    latent_step: LatentStepSpec = Field(
+        default_factory=AdaptedLatentStepSpec, description=_GUIDED_STEP
+    )
+    kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
+    scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
+
+
+type GuidedPathSpec = ParticleAGradSpec | TwistedParticleAGradSpec | ParticleMGradSpec
 type PathUpdateSpec = Annotated[
-    DsmcSpec | ParticleAGradSpec | TwistedParticleAGradSpec, Field(discriminator="method")
+    DsmcSpec | ParticleAGradSpec | TwistedParticleAGradSpec | ParticleMGradSpec,
+    Field(discriminator="method"),
 ]
 
 
