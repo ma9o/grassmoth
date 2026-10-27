@@ -260,6 +260,7 @@ A conditioned model, its completed checks, and self-contained inference evidence
 | `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) \| `null` | required | The combined conditioned model, or null when this fit and its parents have no retained draws. Zero-draw continuations reuse their parent's model without producing a revision. |
 | `checks` | [`FitCheckReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/inference.py) | required | Completed compatibility and question findings for the selected history. |
 | `inference` | [`InferenceReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/inference.py) | required | Run provenance, native sampler evidence, diagnostics and parameter summaries. |
+| `profile` | [`FitProfileReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/profiling.py) \| `null` | required; default `null` | Timings for this execution only when settings.profile is true. |
 
 ```bash
 curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit" -H 'Accept: application/json' -o /tmp/action.json \
@@ -279,6 +280,7 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit"
     },
     "settings": {
       "stop_when_converged": null,
+      "profile": false,
       "hardware": "local",
       "time_limit_seconds": null,
       "algorithm": null,

@@ -15,6 +15,7 @@ from grassmoth_server.compute.analysis_cache import (
     cache_fit_result,
     cached_fit_result,
     expire_analysis_cache,
+    fit_profile_directory,
 )
 
 pytestmark = pytest.mark.contract
@@ -42,10 +43,19 @@ def test_collection_removes_only_expired_aliases_and_content(tmp_path):
     )
     for path in paths:
         os.utime(path, (1, 1))
+    old_profile = fit_profile_directory(tmp_path, call)
+    old_profile.mkdir(parents=True)
+    (old_profile / "trace.json").write_text("old trace")
+    os.utime(old_profile, (1, 1))
     current = call.revised(call_id=CallId("call:" + "b" * 64))
     cache_fit_result(tmp_path, current, b"current")
+    current_profile = fit_profile_directory(tmp_path, current)
+    current_profile.mkdir(parents=True)
+    (current_profile / "trace.json").write_text("current trace")
     removed, _ = expire_analysis_cache(tmp_path, now_seconds=ANALYSIS_RETENTION_SECONDS + 2)
-    assert removed == 2
+    assert removed == 3
+    assert not old_profile.exists()
+    assert (current_profile / "trace.json").read_text() == "current trace"
     assert cached_fit_result(tmp_path, current).read_bytes() == b"current"
 
 

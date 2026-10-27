@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from functools import partial
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from grassmoth.public import InferenceHardware, StructuralSelection, TransferredTuning
@@ -90,17 +91,28 @@ def _fit_selected(
             continuation = continuation.revised(tuning=TransferredTuning())
 
     config = get_config().inference
+    from grassmoth_server.compute.analysis_cache import AnalysisCall, fit_profile_directory
+
+    analysis_call = AnalysisCall(workspace_id=store.workspace_id, call_id=call_id)
     if sampler.hardware != InferenceHardware.LOCAL:
         from grassmoth_server.actions.fit.remote import fit_on_modal
-        from grassmoth_server.compute.analysis_cache import AnalysisCall
 
         compute_fit = partial(
             fit_on_modal,
             sampler.hardware,
-            analysis_call=AnalysisCall(workspace_id=store.workspace_id, call_id=call_id),
+            analysis_call=analysis_call,
+            profile=request.settings.profile,
         )
     else:
-        compute_fit = run_fit
+        from grassmoth_server.storage.paths import cache_dir
+
+        compute_fit = partial(
+            run_fit,
+            profile=request.settings.profile,
+            profile_dir=fit_profile_directory(Path(cache_dir(store.workspace_id)), analysis_call)
+            if request.settings.profile
+            else None,
+        )
     result = compute_fit(
         selection=selection,
         data_for_model=history.observations,

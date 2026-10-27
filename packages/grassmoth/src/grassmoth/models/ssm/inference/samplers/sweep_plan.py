@@ -72,7 +72,7 @@ def sweep_block[Carry](
 ) -> Callable[[Carry, jax.Array, jax.Array], tuple[Carry, dict[str, jax.Array]]]:
     """Build a bounded block; inactive slots neither transition nor consume keys."""
 
-    def block(
+    def production_sweep(
         state: Carry, count: jax.Array, posterior: jax.Array
     ) -> tuple[Carry, dict[str, jax.Array]]:
         transition = jax.jit(step, inline=jax.Inline.JAX_EARLY)
@@ -90,4 +90,4 @@ def sweep_block[Carry](
 
         return jax.lax.scan(advance, state, jnp.arange(block_size))
 
-    return block
+    return production_sweep

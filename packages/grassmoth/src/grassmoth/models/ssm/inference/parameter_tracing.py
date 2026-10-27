@@ -156,7 +156,7 @@ def extract_constrained_samples(
 ) -> dict[str, jnp.ndarray]:
     """Replay the prior program and retain its authored parameter/deterministic sites."""
 
-    def project(positions: jax.Array) -> dict[str, jax.Array]:
+    def constrained_samples(positions: jax.Array) -> dict[str, jax.Array]:
         return _filter_public_samples(jax.vmap(parameters.constrain)(positions), public_sites)
 
-    return compiler(project, particles).call(particles)
+    return compiler(constrained_samples, particles).call(particles)

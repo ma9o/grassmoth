@@ -45,6 +45,7 @@ class ConditionalNuts(NamedTuple):
     """NUTS on every parameter at the current stochastic path, adapting itself in warmup."""
 
     initialize: Callable[[TrajectoryMCMCState, PRNGKeyArray, int], HMCState]
+    energy: Callable[[jax.Array, jax.Array], jax.Array]
     step: Callable[
         [TrajectoryMCMCState, HMCState, PRNGKeyArray],
         tuple[TrajectoryMCMCState, HMCState, Mapping[str, jax.Array]],
@@ -218,7 +219,8 @@ def build_conditional_nuts(target: ParticleTarget, rebuild: CompanionProposal) -
     def potential(path: Float[Array, "T D"]) -> Callable[[Float[Array, " U"]], Float[Array, ""]]:
         # The path density replays deterministic coordinates under each position.
         def energy(position: Float[Array, f" {target.initial_position.size}"]) -> Float[Array, ""]:
-            return -target.log_posterior(position, path, target.observations, target.times)
+            with jax.named_scope("centred_nuts_energy"):
+                return -target.log_posterior(position, path, target.observations, target.times)
 
         return energy
 
@@ -239,31 +241,36 @@ def build_conditional_nuts(target: ParticleTarget, rebuild: CompanionProposal) -
     def step(
         state: TrajectoryMCMCState, nuts: HMCState, key: PRNGKeyArray
     ) -> tuple[TrajectoryMCMCState, HMCState, Mapping[str, jax.Array]]:
-        path = state.latent_trajectory
-        # The sweep moved the parameters and the path since the last transition.
-        energy, gradient = jax.value_and_grad(potential(path))(state.position)
-        current = nuts._replace(
-            z=state.position, potential_energy=energy, z_grad=gradient, rng_key=key
-        )
-        moved = sample_hmc(current, model_args=(path,))
-        updated, _ = rebuild(state, moved.z)
-        jump = moved.z - state.position
-        return (
-            updated,
-            # The sweep's key drives the transition. The state keeps its own key,
-            # which a continued run's typed sweep keys must not replace.
-            moved._replace(rng_key=nuts.rng_key),
-            {
-                "centred_nuts_accept_prob": jnp.asarray(moved.accept_prob),
-                "centred_nuts_jump_rms": jnp.sqrt(jnp.mean(jump * jump)),
-                "centred_nuts_step_size": jnp.asarray(current.adapt_state.step_size),
-                # The chain diagnostics count divergences and tree depths under these names.
-                "diverging": jnp.asarray(moved.diverging),
-                "tree_depth": jnp.ceil(jnp.log2(moved.num_steps + 1)).astype(jnp.int32),
-            },
-        )
+        with jax.named_scope("centred_nuts_transition"):
+            path = state.latent_trajectory
+            # The sweep moved the parameters and the path since the last transition.
+            with jax.named_scope("centred_nuts_refresh_gradient"):
+                energy, gradient = jax.value_and_grad(potential(path))(state.position)
+            current = nuts._replace(
+                z=state.position, potential_energy=energy, z_grad=gradient, rng_key=key
+            )
+            with jax.named_scope("centred_nuts_tree"):
+                moved = sample_hmc(current, model_args=(path,))
+            with jax.named_scope("centred_nuts_rebuild"):
+                updated, _ = rebuild(state, moved.z)
+            jump = moved.z - state.position
+            return (
+                updated,
+                # The sweep's key drives the transition. The state keeps its own key,
+                # which a continued run's typed sweep keys must not replace.
+                moved._replace(rng_key=nuts.rng_key),
+                {
+                    "centred_nuts_num_steps": jnp.asarray(moved.num_steps),
+                    "centred_nuts_accept_prob": jnp.asarray(moved.accept_prob),
+                    "centred_nuts_jump_rms": jnp.sqrt(jnp.mean(jump * jump)),
+                    "centred_nuts_step_size": jnp.asarray(current.adapt_state.step_size),
+                    # The chain diagnostics count divergences and tree depths under these names.
+                    "diverging": jnp.asarray(moved.diverging),
+                    "tree_depth": jnp.ceil(jnp.log2(moved.num_steps + 1)).astype(jnp.int32),
+                },
+            )
 
-    return ConditionalNuts(initialize, step)
+    return ConditionalNuts(initialize, lambda position, path: potential(path)(position), step)
 
 
 def build_companion_kernel(

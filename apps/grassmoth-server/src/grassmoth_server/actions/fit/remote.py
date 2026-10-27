@@ -22,6 +22,7 @@ from grassmoth_server.compute.analysis_cache import (
     ANALYSIS_CACHE_VOLUME,
     AnalysisCall,
     cache_fit_result,
+    fit_profile_directory,
 )
 from grassmoth_server.compute.resources import HOST_MEMORY_ALLOCATION_ENV
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
@@ -59,6 +60,7 @@ class FitComputeInput:
     sampler: SamplerSpec
     compute_loo_diagnostics: bool
     analysis_call: AnalysisCall
+    profile: bool = False
     continuation: bytes | None = None
     previous: bytes | None = None
 
@@ -122,6 +124,10 @@ def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
         time_origin=payload.time_origin,
         sampler=payload.sampler,
         compute_loo_diagnostics=payload.compute_loo_diagnostics,
+        profile=payload.profile,
+        profile_dir=fit_profile_directory(ANALYSIS_CACHE_ROOT, payload.analysis_call)
+        if payload.profile
+        else None,
         continuation=SamplerCheckpoint.model_validate(unpack_result(payload.continuation))
         if payload.continuation is not None
         else None,
@@ -237,6 +243,7 @@ def fit_on_modal(
     question: QuestionSpec,
     compute_loo_diagnostics: bool,
     analysis_call: AnalysisCall,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
     previous: FitOutput | None = None,
 ) -> FitOutput:
@@ -264,6 +271,7 @@ def fit_on_modal(
             sampler=sampler,
             compute_loo_diagnostics=compute_loo_diagnostics,
             analysis_call=analysis_call,
+            profile=profile,
             continuation=None if continuation is None else pack_result(continuation),
             previous=None if compute_previous is None else pack_result(compute_previous),
         ),

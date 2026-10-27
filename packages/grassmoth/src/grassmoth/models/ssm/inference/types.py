@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.continuation import SamplerCheckpoint
     from grassmoth.artifacts.identity import ConstructId
     from grassmoth.artifacts.joint_parameterization import JointParameterizationRecord
+    from grassmoth.artifacts.reports.profiling import FitProfileReport
     from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
     from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
@@ -84,6 +85,7 @@ class UnretainedRun:
     compiled_step: Compiled
     phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]]
     parameterization: JointParameterizationRecord | None = None
+    profile: FitProfileReport | None = None
 
     @classmethod
     def completed(
@@ -93,11 +95,12 @@ class UnretainedRun:
         compiled_step: Compiled,
         phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]],
         parameterization: JointParameterizationRecord | None = None,
+        profile: FitProfileReport | None = None,
     ) -> UnretainedRun:
         """Own a completed interval whose settings retain no posterior samples."""
         if settings.num_samples_per_chain != 0:
             raise ValueError("Unretained runs require zero requested posterior samples")
-        return cls(settings, evidence, compiled_step, phase_extra_fields, parameterization)
+        return cls(settings, evidence, compiled_step, phase_extra_fields, parameterization, profile)
 
     def __post_init__(self) -> None:
         """Freeze telemetry at the execution boundary."""
@@ -111,6 +114,7 @@ class ProductionDiagnostics:
     mcmc: TrajectoryMCMCResult
     stopping_checkpoint: ConvergenceCheckpoint | None = None
     checkpoint: SamplerCheckpoint | None = None
+    profile: FitProfileReport | None = None
     parameterization: JointParameterizationRecord | None = None
     observation_log_probs: jnp.ndarray | NDArray
     latent_chains: LatentChainEvidence | None = None

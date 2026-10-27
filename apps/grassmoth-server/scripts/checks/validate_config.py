@@ -71,7 +71,11 @@ _REQUIRED_SHAPE_BOUNDARIES = (
             "pilot_variance",
         ),
     ),
-    ("warmup.initialization", "prepare_particle_initialization.draw", ("draw_key", "return")),
+    (
+        "warmup.initialization",
+        "prepare_particle_initialization.gaussian_initialization",
+        ("draw_key", "return"),
+    ),
     (
         "mcmc_state",
         "trajectory_state",

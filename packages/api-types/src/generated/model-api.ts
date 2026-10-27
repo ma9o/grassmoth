@@ -4348,6 +4348,18 @@ export interface components {
             readonly question: components["schemas"]["QuestionCheckReport"];
         };
         /**
+         * FitComponentTiming
+         * @description One independently compiled native operation; timing includes synchronization.
+         */
+        readonly FitComponentTiming: {
+            /**
+             * Component
+             * @enum {string}
+             */
+            readonly component: "full_sweep" | "parameter_move" | "path_smoother" | "nuts_companion" | "mh_companion" | "conditional_gradient";
+            readonly timing: components["schemas"]["TimingSpread"];
+        };
+        /**
          * FitInput[GitOid]
          * @description Start or continue a fit; sample counts always mean additional retained draws.
          */
@@ -4390,6 +4402,72 @@ export interface components {
             readonly checks: components["schemas"]["FitCheckReport"];
             /** @description Run provenance, native sampler evidence, diagnostics and parameter summaries. */
             readonly inference: components["schemas"]["InferenceReport"];
+            /**
+             * @description Timings for this execution only when settings.profile is true.
+             * @default null
+             */
+            readonly profile: components["schemas"]["FitProfileReport"] | null;
+        };
+        /**
+         * FitProfileReport
+         * @description Wall-clock microbenchmarks on a copied state, never used by inference.
+         *
+         *     Every operation is primed once and measured ten times at fixed state, tuning
+         *     and random keys. Full sweep uses the production executable with count one;
+         *     components are compiled separately. The path timing includes recurrence
+         *     replay at the fixed selected context. Conditional gradient is one chain's
+         *     exact conditional density and gradient, including replay. No device-trace
+         *     kernel times are used. Separately compiled parts need not sum to a full sweep.
+         */
+        readonly FitProfileReport: {
+            /**
+             * Phase
+             * @enum {string}
+             */
+            readonly phase: "after_warmup" | "after_first_sweep" | "compile_only";
+            /** Repetitions */
+            readonly repetitions: number;
+            /**
+             * Compile Seconds
+             * @description Union of production compile-request intervals, including tracing, lowering and compilation or cache load. Excludes profiling-only programs and artifact writes.
+             * @default 0
+             */
+            readonly compile_seconds: number;
+            /**
+             * Compilation
+             * @description Production compile requests, in request order.
+             * @default []
+             */
+            readonly compilation: readonly components["schemas"]["ProgramCompileReport"][];
+            /**
+             * Profiling Compilation
+             * @description Separately compiled timing probes, excluded from compile_seconds.
+             * @default []
+             */
+            readonly profiling_compilation: readonly components["schemas"]["ProgramCompileReport"][];
+            /**
+             * Device
+             * @default []
+             */
+            readonly device: readonly string[];
+            /** Chains */
+            readonly chains: number;
+            /** Time Steps */
+            readonly time_steps: number;
+            /** @default null */
+            readonly particle_dimensions: components["schemas"]["ParticleProfileDimensions"] | null;
+            /**
+             * Components
+             * @default []
+             */
+            readonly components: readonly components["schemas"]["FitComponentTiming"][];
+            /**
+             * @description Sum of parameter, path and companion timings per repetition, summarized alongside full_sweep. Other sweep bookkeeping is not part of this sum.
+             * @default null
+             */
+            readonly split_total: components["schemas"]["TimingSpread"] | null;
+            /** @default null */
+            readonly nuts: components["schemas"]["NutsProfileReport"] | null;
         };
         /** @enum {string} */
         readonly FitReliability: "not_fitted" | "converged" | "unconverged" | "unknown";
@@ -4483,7 +4561,7 @@ export interface components {
          *
          *     Each field means what the SamplerSpec field of the same name means. Null keeps the
          *     server's configured value, or the continued fit's, except convergence stopping,
-         *     which is opt-in for each execution.
+         *     which is opt-in for each execution. Profiling also applies only to this execution.
          */
         readonly "FitSettingsSpec-Input": {
             /**
@@ -4491,6 +4569,12 @@ export interface components {
              * @default null
              */
             readonly stop_when_converged?: components["schemas"]["ConvergenceStoppingSpec"] | null;
+            /**
+             * Profile
+             * @description Profile this execution only, including continuations. Time native compiled parts on frozen copies after warmup, or after the first sweep without warmup. Report named production and profiling-only compile requests with cache status; save named compiled analysis beside the cached fit after timing completes.
+             * @default false
+             */
+            readonly profile?: boolean;
             /** @default null */
             readonly hardware?: components["schemas"]["InferenceHardware"] | null;
             /**
@@ -4527,7 +4611,7 @@ export interface components {
          *
          *     Each field means what the SamplerSpec field of the same name means. Null keeps the
          *     server's configured value, or the continued fit's, except convergence stopping,
-         *     which is opt-in for each execution.
+         *     which is opt-in for each execution. Profiling also applies only to this execution.
          */
         readonly "FitSettingsSpec-Output": {
             /**
@@ -4535,6 +4619,12 @@ export interface components {
              * @default null
              */
             readonly stop_when_converged: components["schemas"]["ConvergenceStoppingSpec"] | null;
+            /**
+             * Profile
+             * @description Profile this execution only, including continuations. Time native compiled parts on frozen copies after warmup, or after the first sweep without warmup. Report named production and profiling-only compile requests with cache status; save named compiled analysis beside the cached fit after timing completes.
+             * @default false
+             */
+            readonly profile: boolean;
             /** @default null */
             readonly hardware: components["schemas"]["InferenceHardware"] | null;
             /**
@@ -6126,6 +6216,23 @@ export interface components {
             readonly trajectory: components["schemas"]["JointTrajectorySpec-Output"];
         };
         /**
+         * NutsProfileReport
+         * @description Companion work on the fixed timed state, one entry per chain.
+         */
+        readonly NutsProfileReport: {
+            /** Leapfrog Steps */
+            readonly leapfrog_steps: readonly number[];
+            /** Step Size */
+            readonly step_size: readonly number[];
+            /** Tree Depth */
+            readonly tree_depth: readonly number[];
+            /**
+             * Gradient Count Representative
+             * @description True only after this execution's warmup; otherwise the tree work is not representative of tuned sampling.
+             */
+            readonly gradient_count_representative: boolean;
+        };
+        /**
          * NutsTrajectorySpec
          * @description A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).
          */
@@ -6567,6 +6674,18 @@ export interface components {
             readonly scan_unroll: number;
         };
         /**
+         * ParticleProfileDimensions
+         * @description Particle-kernel work dimensions, including any temperature replicas.
+         */
+        readonly ParticleProfileDimensions: {
+            /** Particles */
+            readonly particles: number;
+            /** Labels */
+            readonly labels: number;
+            /** Replicas */
+            readonly replicas: number;
+        };
+        /**
          * ParticleSamplerDiagnostics
          * @description Typed exact-sampler settings and transition telemetry from the native producer.
          */
@@ -6950,6 +7069,23 @@ export interface components {
              * @description Observation definitions resolved against the clock retained in the preparation recipe.
              */
             readonly variables: readonly Domain.ObservationSpec<Domain.ObservationWindow>[];
+        };
+        /**
+         * ProgramCompileReport
+         * @description One named request, from tracing until its executable is ready; excludes dumps.
+         */
+        readonly ProgramCompileReport: {
+            /** Name */
+            readonly name: string;
+            /** Seconds */
+            readonly seconds: number;
+            /**
+             * Persistent Cache
+             * @description The server observes JAX's persistent-cache events in the compiling thread. Disabled means no configured persistent cache; not_consulted means no lookup event (for example, in-memory reuse). Unobserved is for a library-supplied compiler without this shell instrumentation.
+             * @default unobserved
+             * @enum {string}
+             */
+            readonly persistent_cache: "unobserved" | "disabled" | "not_consulted" | "miss" | "hit";
         };
         /** @description A progress event records one running attempt's step status or extraction telemetry. */
         readonly ProgressEvent: components["schemas"]["StepEvent"] | components["schemas"]["ExtractionPlanEvent"] | components["schemas"]["ExtractionWorkerEvent"] | components["schemas"]["ExtractionSnapshotEvent"];
@@ -8028,6 +8164,18 @@ export interface components {
             /** Parent Ids */
             readonly parent_ids: readonly components["schemas"]["GitOid-Output"][];
             readonly record: components["schemas"]["TimelineRecord"];
+        };
+        /**
+         * TimingSpread
+         * @description Median and full observed range of ten synchronized wall-clock repetitions.
+         */
+        readonly TimingSpread: {
+            /** Median Ms */
+            readonly median_ms: number;
+            /** Min Ms */
+            readonly min_ms: number;
+            /** Max Ms */
+            readonly max_ms: number;
         };
         /**
          * TraceLogMessage

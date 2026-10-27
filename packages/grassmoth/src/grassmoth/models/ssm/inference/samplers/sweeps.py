@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from numpy.typing import NDArray
 
     from grassmoth.artifacts.reports.posterior_diagnostics import ConvergenceReport
+    from grassmoth.artifacts.reports.profiling import FitProfileReport
     from grassmoth.artifacts.sampling import ConvergenceStoppingSpec
     from grassmoth.compute.budget import ComputeBudget
     from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
@@ -69,6 +70,7 @@ class SweepRun[Carry]:
     sampling_loop_seconds: float
     retained_draws: int
     stopping_checkpoint: ConvergenceCheckpoint | None
+    profile: FitProfileReport | None = None
 
 
 @dataclass(frozen=True)
@@ -275,7 +277,7 @@ def compile_projected_sweeps[Carry](
     """Compile independent exact observation projection while the sampler compiles."""
     block_size = SWEEP_BLOCK_SIZE
 
-    def project(position: jax.Array, path: jax.Array) -> jax.Array:
+    def observation_projection(position: jax.Array, path: jax.Array) -> jax.Array:
         return jnp.asarray(
             target.observation_log_probs(
                 target.context(position, target.times), path, target.observations
@@ -289,7 +291,7 @@ def compile_projected_sweeps[Carry](
         (block_size, num_chains, len(target.times), target.independent_mask.shape[-1]), path_dtype
     )
     compile_program, projection_arguments, shape, estimate = prepare_program(
-        jax.vmap(jax.vmap(project)), positions, paths
+        jax.vmap(jax.vmap(observation_projection)), positions, paths
     )
     transfer = shape.size * shape.dtype.itemsize
     retained = transfer // block_size * num_samples
@@ -346,6 +348,7 @@ def run_sweeps[Carry](
     logger: logging.Logger,
     label: str,
     convergence: RetainedConvergenceCheck | None = None,
+    profile: Callable[[Carry, CompiledSweepPhase], FitProfileReport] | None = None,
 ) -> SweepRun[Carry]:
     """Keep only requested phase outputs; padded block slots execute no transition."""
     state: Carry = initial
@@ -355,6 +358,14 @@ def run_sweeps[Carry](
     histories: list[dict[str, jax.Array]] = []
     stopping_checkpoint = None
     retained_draws = 0
+    profiling = None
+
+    def profile_copy(phase: CompiledSweepPhase) -> FitProfileReport:
+        assert profile is not None
+        with inference_phase(label, "profiling", clock=clock, logger=logger, wall_clock=wall_clock):
+            copied = jax.block_until_ready(jax.tree.map(jnp.copy, state))
+            return profile(copied, phase)
+
     for stage, phase in (("warmup", plan.warmup), ("sampling", plan.posterior)):
         # Assemble directly in the final chain-major layout. Each live block is
         # copied once; no retained chunks or full-history concatenation coexist.
@@ -388,7 +399,10 @@ def run_sweeps[Carry](
                         interval = convergence.settings.checkpoint_draws
                         count = min(count, interval - phase_draws % interval)
                     transition: tuple[Carry, dict[str, jax.Array]] = phase.executable(
-                        phase.arguments, state, jnp.asarray(count), jnp.asarray(stage == "sampling")
+                        phase.arguments,
+                        state,
+                        jnp.asarray(count),
+                        jnp.asarray(stage == "sampling"),
                     )
                     state, block = transition
                     if stage == "sampling" and plan.projection is not None:
@@ -410,6 +424,8 @@ def run_sweeps[Carry](
                     phase_draws += count
                     if completed == 1:
                         first_step_seconds = clock() - started
+                        if profile is not None and plan.warmup.steps == 0:
+                            profiling = profile_copy(phase)
                     log_inference_event(
                         label,
                         stage,
@@ -446,6 +462,8 @@ def run_sweeps[Carry](
                         ):
                             stopping_checkpoint = ConvergenceCheckpoint(phase_draws, report)
                             break
+            if stage == "warmup" and phase.steps and profile is not None:
+                profiling = profile_copy(phase)
         else:
             log_inference_event(
                 label, stage, "skipped", logger=logger, wall_clock=wall_clock, total=0
@@ -462,4 +480,5 @@ def run_sweeps[Carry](
         clock() - started,
         retained_draws,
         stopping_checkpoint,
+        profiling,
     )

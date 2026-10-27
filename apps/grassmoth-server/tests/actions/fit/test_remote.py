@@ -127,6 +127,42 @@ def test_modal_timeout_propagates_without_another_call(monkeypatch, isolated_att
     function.spawn.assert_not_called()
 
 
+def test_profile_flag_reaches_gpu_compute_with_a_volume_scoped_directory(monkeypatch):
+    from grassmoth_server.actions.fit import action, remote
+    from grassmoth_server.compute.analysis_cache import ANALYSIS_CACHE_ROOT, fit_profile_directory
+    from grassmoth_server_test_support.fit_cache import ORIGIN, fixture
+
+    question, selection, data = fixture()
+
+    class ReachedCompute(Exception):
+        pass
+
+    dispatch = Mock(side_effect=ReachedCompute)
+    monkeypatch.setattr(remote, "_dispatch_fit", dispatch)
+    with pytest.raises(ReachedCompute):
+        remote.fit_on_modal(
+            InferenceHardware.L40S,
+            selection=selection,
+            data_for_model=data,
+            time_origin=ORIGIN,
+            sampler=SamplerSpec(),
+            question=question,
+            compute_loo_diagnostics=False,
+            analysis_call=_ANALYSIS_CALL,
+            profile=True,
+        )
+    payload = dispatch.call_args.args[0]
+    assert payload.profile is True
+    compute = Mock(side_effect=ReachedCompute)
+    monkeypatch.setattr(action, "run_fit", compute)
+    with pytest.raises(ReachedCompute):
+        remote.execute_fit_compute(payload)
+    assert compute.call_args.kwargs["profile"] is True
+    assert compute.call_args.kwargs["profile_dir"] == fit_profile_directory(
+        ANALYSIS_CACHE_ROOT, _ANALYSIS_CALL
+    )
+
+
 def test_result_chunks_bound_sdk_uploads_and_preserve_the_transport():
     from grassmoth_server.actions.fit.remote import _RESULT_CHUNK_BYTES
 

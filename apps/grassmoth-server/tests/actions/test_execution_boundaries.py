@@ -280,7 +280,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
                     dynamical_model_spec_ref=pins["model"],
                     data_ref=DataRef[GitOid, int](revision=pins["panel"], replicate_index=0),
                 ),
-                settings=FitSettingsSpec(),
+                settings=FitSettingsSpec(profile=True),
             ),
             CallId("call:" + "a" * 64),
         )
@@ -288,11 +288,14 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     assert effects.effects.produced[0].derived_from == pins
     if hardware is InferenceHardware.LOCAL:
         local_fit.assert_called_once()
+        assert local_fit.call_args.kwargs["profile"] is True
+        assert local_fit.call_args.kwargs["profile_dir"] is not None
         modal_fit.assert_not_called()
     else:
         local_fit.assert_not_called()
         modal_fit.assert_called_once()
         assert modal_fit.call_args.args == (hardware,)
+        assert modal_fit.call_args.kwargs["profile"] is True
     assert (
         read_model(store, effects.effects.produced[0].revision).edges[0].description
         == edited.edges[0].description

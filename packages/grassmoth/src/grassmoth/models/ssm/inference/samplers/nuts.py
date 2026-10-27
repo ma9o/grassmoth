@@ -15,6 +15,7 @@ from grassmoth.artifacts.continuation import JointTuning, SamplerCheckpoint
 from grassmoth.artifacts.identity import ConstructRef
 from grassmoth.artifacts.immutability import freeze_fields
 from grassmoth.artifacts.reports.posterior_diagnostics import MCMCEvidence, NutsDADiagnostics
+from grassmoth.artifacts.reports.profiling import FitComponentTiming, FitProfileReport, TimingSpread
 from grassmoth.artifacts.sampling import (
     FixedTrajectorySpec,
     NutsDASpec,
@@ -27,6 +28,7 @@ from grassmoth.models.ssm.inference.extraction import extract_grouped_public_sam
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from grassmoth.models.ssm.inference.problem import build_particle_problem
+from grassmoth.models.ssm.inference.samplers.profiling import REPETITIONS, measure_sweep
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.samplers.sweeps import (
     ConvergenceCheckpoint,
@@ -55,6 +57,7 @@ if TYPE_CHECKING:
     from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
     from grassmoth.models.ssm.inference.joint_coordinates import JointChart
     from grassmoth.models.ssm.inference.reparameterization import Strategy
+    from grassmoth.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
     from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
     from grassmoth.models.ssm.preparation.binding import BoundPanel
@@ -73,6 +76,7 @@ class NutsDARun:
     checkpoint: SamplerCheckpoint
     retained_draws: int
     stopping_checkpoint: ConvergenceCheckpoint | None
+    profile: FitProfileReport | None = None
 
     def __post_init__(self) -> None:
         """Own immutable phase mappings without changing the numerical buffers."""
@@ -117,6 +121,7 @@ def run_nuts_da(
     clock: Callable[[], float],
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
     convergence: RetainedConvergenceCheck | None = None,
 ) -> NutsDARun | InitializationFailure:
@@ -178,7 +183,7 @@ def run_nuts_da(
         )
         return moved._replace(adapt_state=adaptation)
 
-    def initialize_chain(
+    def nuts_chain_initializer(
         point: jax.Array, chain_key: jax.Array, runtime_chart: JointChart
     ) -> HMCState:
         return initialize(
@@ -211,7 +216,7 @@ def run_nuts_da(
             key = jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values))
         chain_keys = jax.random.split(key, sampler.num_chains)
         states = compiler(
-            jax.vmap(initialize_chain, in_axes=(0, 0, None)), starts, chain_keys, chart
+            jax.vmap(nuts_chain_initializer, in_axes=(0, 0, None)), starts, chain_keys, chart
         ).call(starts, chain_keys, chart)
         if continuation is not None and sampler.num_warmup == 0:
             states = restore_state(states, continuation.native_state)
@@ -219,11 +224,13 @@ def run_nuts_da(
             # Persisted scores are caches of the current executable's density,
             # not transition identity. Rebind them at the restored native point
             # while retaining the same chart, random stream and frozen tuning.
-            def evaluate(point: jax.Array, runtime_chart: JointChart) -> jax.Array:
+            def restored_joint_gradient(point: jax.Array, runtime_chart: JointChart) -> jax.Array:
                 return potential(runtime_chart)(point)
 
             energy, gradient = compiler(
-                jax.vmap(jax.value_and_grad(evaluate), in_axes=(0, None)), states.z, chart
+                jax.vmap(jax.value_and_grad(restored_joint_gradient), in_axes=(0, None)),
+                states.z,
+                chart,
             ).call(states.z, chart)
             states = states._replace(potential_energy=energy, z_grad=gradient)
         jax.block_until_ready(states)
@@ -289,6 +296,23 @@ def run_nuts_da(
             label="nuts_da",
             prepare_program=prepare_program,
         )
+
+    def profile_state(
+        current: tuple[HMCState, jax.Array, JointChart], phase: CompiledSweepPhase
+    ) -> FitProfileReport:
+        durations = measure_sweep(current, phase, clock)
+        return FitProfileReport(
+            phase="after_warmup" if sampler.num_warmup else "after_first_sweep",
+            repetitions=REPETITIONS,
+            chains=sampler.num_chains,
+            time_steps=len(target.times),
+            components=(
+                FitComponentTiming(
+                    component="full_sweep", timing=TimingSpread.from_seconds(durations)
+                ),
+            ),
+        )
+
     run = run_sweeps(
         plan,
         (states, key, chart),
@@ -297,6 +321,7 @@ def run_nuts_da(
         wall_clock=wall_clock,
         label="nuts_da",
         convergence=convergence,
+        profile=profile_state if profile else None,
     )
     states, next_key, _ = run.state
     last_parameters, last_paths = jax.vmap(coordinates.decode)(states.z)
@@ -320,6 +345,16 @@ def run_nuts_da(
             "all": all_extra,
         },
         final_step_size=states.adapt_state.step_size,
+        profile=run.profile
+        if run.profile is not None
+        else FitProfileReport(
+            phase="compile_only",
+            repetitions=0,
+            chains=sampler.num_chains,
+            time_steps=len(target.times),
+        )
+        if profile
+        else None,
         compiled_step=plan.compiled_step,
         checkpoint=SamplerCheckpoint(
             settings=sampler,
@@ -344,6 +379,7 @@ def fit_nuts_da(
     clock: Callable[[], float],
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Fit the production exact target and expose the shared posterior/report contract."""
@@ -378,6 +414,7 @@ def fit_nuts_da(
         logger=logger,
         wall_clock=wall_clock,
         continuation=continuation,
+        profile=profile,
         prepare_program=prepare_program,
         compiler=compiler,
     )
@@ -392,6 +429,7 @@ def fit_nuts_da(
             run.compiled_step,
             run.phase_extra_fields,
             parameterization=parameterization_record,
+            profile=run.profile,
         )
     extra = run.phase_extra_fields["post_warmup"]
     mcmc = TrajectoryMCMCResult(
@@ -417,6 +455,7 @@ def fit_nuts_da(
             state_ids=tuple(state.id for state in panel.compiled_dynamical_model.states),
         ),
         diagnostics=ProductionDiagnostics(
+            profile=run.profile,
             stopping_checkpoint=run.stopping_checkpoint,
             checkpoint=run.checkpoint,
             parameterization=parameterization_record,

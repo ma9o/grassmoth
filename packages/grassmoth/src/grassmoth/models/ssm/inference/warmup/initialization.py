@@ -60,7 +60,7 @@ def prepare_particle_initialization(
     coordinates = build_joint_coordinates(target, "centred", compiler=compiler)
     assert isinstance(coordinates.parameterization, CentredParameterization)
 
-    def draw(
+    def gaussian_initialization(
         chart: JointChart, draw_key: PRNGKeyArray
     ) -> tuple[
         Float[Array, "B U"],
@@ -81,7 +81,7 @@ def prepare_particle_initialization(
             jnp.var(paths, axis=0),
         )
 
-    program = compiler(draw, coordinates.chart, key)
+    program = compiler(gaussian_initialization, coordinates.chart, key)
     if not compute_budget.capacity(compiled_memory(program.executable), limit=1):
         raise MemoryError("Gaussian initialization exceeds the numerical execution memory budget")
     positions, paths, parameter_chol, pilot_mean, pilot_variance = program.call(

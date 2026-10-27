@@ -63,6 +63,7 @@ def fit_prepared_model(
     logger: logging.Logger,
     compiler: ProgramCompiler,
     prepare_program: ProgramPreparer,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | ObservationPreflightFailure | InitializationFailure:
     """Run on resolved sampler choices and the sampler's owned initialization."""
@@ -74,6 +75,7 @@ def fit_prepared_model(
         compute_budget=budget,
         sampler=sampler,
         continuation=continuation,
+        profile=profile,
         clock=clock,
         logger=logger,
         wall_clock=wall_clock,
@@ -130,6 +132,7 @@ def fit_model(
     logger: logging.Logger,
     compiler: ProgramCompiler,
     prepare_program: ProgramPreparer,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
 ) -> FittedModelResult | ModelFitFailure:
     """Fit the selected SSM using supplied computation, timing and logging dependencies."""
@@ -176,6 +179,7 @@ def fit_model(
         prepared,
         sampler=sampler,
         continuation=continuation,
+        profile=profile,
         budget=budget,
         clock=clock,
         wall_clock=wall_clock,

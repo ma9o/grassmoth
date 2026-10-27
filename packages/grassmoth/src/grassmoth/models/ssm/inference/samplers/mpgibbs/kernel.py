@@ -36,7 +36,9 @@ rescales it whenever ``Sigma`` is re-estimated, keeping the average variance.
 #     proposal (§3.1 pseudo-Langevin) and Barker label-selection weights live here.
 
 from collections.abc import Callable
-from typing import Literal, NamedTuple, Protocol
+from dataclasses import dataclass
+from functools import partial
+from typing import Literal, NamedTuple, Protocol, cast
 
 import jax
 import jax.numpy as jnp
@@ -49,7 +51,7 @@ from grassmoth.artifacts.sampling import (
     ParticleDiagnosticMetric,
     PathUpdateSpec,
 )
-from grassmoth.compute.programs import scalar_operand
+from grassmoth.compute.programs import ProgramCompiler, scalar_operand
 from grassmoth.models.ssm.compile.state_space import AdditiveRecurrences, ParallelRecurrences
 from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
 from grassmoth.models.ssm.inference.mcmc_state import (
@@ -59,12 +61,15 @@ from grassmoth.models.ssm.inference.mcmc_state import (
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.augmentation import (
     ConditionalPathScores,
+    MarginalLabelScores,
+    PathUpdateBoundary,
     PrecisionPathUpdate,
     begin_path_update,
     finish_path_update,
 )
 from grassmoth.models.ssm.inference.samplers.particle.contract import (
     PaidMixture,
+    ParticleSmootherResult,
 )
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
     build_particle_diagnostic_flags,
@@ -79,11 +84,13 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
     _select_pytree,
 )
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
-from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
+from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth.models.ssm.inference.tracing import (
     CategoricalTraceRecord,
     MarginalParticleTraceRecord,
     ParameterProposalTraceRecord,
+    SequentialSmootherTraceRecord,
+    SmootherTraceRecord,
     TracedResult,
 )
 from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
@@ -121,9 +128,52 @@ class MarginalParticleStep(Protocol):
         ...
 
 
+class ParameterMoveInputs(NamedTuple):
+    """Native proposal and boundary shared by production and component compilation."""
+
+    particles: jax.Array
+    correction: jax.Array
+    auxiliary: jax.Array
+    gradients: jax.Array
+    boundary: PathUpdateBoundary
+    label_key: jax.Array
+
+
+class SelectedParameter(NamedTuple):
+    """The native marginal label choice, before deterministic path replay."""
+
+    label: jax.Array
+    position: jax.Array
+    context: ParticleContext
+    scores: MarginalLabelScores
+
+
+class ParticleProfilePrograms(NamedTuple):
+    """Bound compiled native parts, with every numerical output synchronized by the caller."""
+
+    parameter_move: Callable[[], tuple[jax.Array, ...]]
+    path_smoother: Callable[[], tuple[jax.Array, ...]]
+
+
+@partial(jax.tree_util.register_dataclass, data_fields=("operands",), meta_fields=("function",))
+@dataclass(frozen=True, eq=False)
+class SmootherProfileProgram[Operand]:
+    """One symbolic trace owns its function and operands, including abstract JAX leaves."""
+
+    operands: tuple[Operand, ...]
+    function: Callable[[list[Operand], jax.Array], ParticleSmootherResult]
+
+    def run(self, path: jax.Array) -> ParticleSmootherResult:
+        """Invoke the native smoother with the operands from the same symbolic trace."""
+        return self.function(list(self.operands), path)
+
+
 class MarginalParticleGibbsKernel(NamedTuple):
     """Callable joint kernel and static metadata."""
 
+    profile_parts: Callable[
+        [TrajectoryMCMCState, jax.Array, int, ProgramCompiler], ParticleProfilePrograms
+    ]
     step_fn: MarginalParticleStep
     parameter_gradient_fn: Callable[[Float[Array, " U"]], Float[Array, " U"]]
     trace_step_fn: Callable[  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.
@@ -281,21 +331,8 @@ def build_marginal_particle_gibbs_kernel(
         diagnostic_metrics=diagnostic_metrics,
     )
 
-    def _step(
-        state: TrajectoryMCMCState,
-        key: jnp.ndarray,
-        *,
-        record_trace: bool,
-        batch_size: int | None = None,
-    ) -> (
-        MarginalParticleStepResult
-        | TracedResult[MarginalParticleStepResult, MarginalParticleTraceRecord]
-    ):
+    def _prepare(state: TrajectoryMCMCState, key: jax.Array) -> ParameterMoveInputs:
         param_key, block_key, label_key = random.split(key, 3)
-        x_ref = state.latent_trajectory
-        traj_dtype = state.trajectory_log_prob.dtype
-        complete_dtype = state.complete_log_posterior.dtype
-
         with jax.named_scope("propose_parameters"):
             parameter_particles, label_correction, parameter_auxiliary, parameter_gradients = (
                 _propose_parameter_ensemble(
@@ -315,8 +352,29 @@ def build_marginal_particle_gibbs_kernel(
             boundary = begin_path_update(
                 target, static, path_update, state, parameter_particles, label_correction, block_key
             )
-            ctx = boundary.context
-            block_key = boundary.key
+        return ParameterMoveInputs(
+            parameter_particles,
+            label_correction,
+            parameter_auxiliary,
+            parameter_gradients,
+            boundary,
+            label_key,
+        )
+
+    def _smooth(
+        prepared: ParameterMoveInputs,
+        x_ref: jax.Array,
+        *,
+        record_trace: bool,
+        batch_size: int | None,
+    ) -> (
+        ParticleSmootherResult
+        | TracedResult[ParticleSmootherResult, SmootherTraceRecord]
+        | TracedResult[ParticleSmootherResult, SequentialSmootherTraceRecord]
+    ):
+        boundary = prepared.boundary
+        ctx = boundary.context
+        block_key = boundary.key
         contexts = ctx.contexts
 
         def root_correction(path: jax.Array, local_prior: jax.Array) -> jax.Array:
@@ -348,25 +406,61 @@ def build_marginal_particle_gibbs_kernel(
                     if isinstance(boundary, PrecisionPathUpdate)
                     else None,
                 )
-            smoother_result = smoother.result if isinstance(smoother, TracedResult) else smoother
+        return smoother
 
+    def _select(
+        prepared: ParameterMoveInputs, smoother: ParticleSmootherResult
+    ) -> SelectedParameter:
+        with jax.named_scope("label_selection"):
+            scores = finish_path_update(
+                prepared.boundary,
+                ConditionalPathScores(smoother.label_scores),
+                target,
+                prepared.particles,
+                prepared.correction,
+                smoother.latent_path,
+            )
+            label = random.categorical(prepared.label_key, scores.log_probs).astype(jnp.int32)
+            return SelectedParameter(
+                label,
+                prepared.particles[label],
+                _select_pytree(prepared.boundary.context.contexts, label),
+                scores,
+            )
+
+    def _step(
+        state: TrajectoryMCMCState,
+        key: jnp.ndarray,
+        *,
+        record_trace: bool,
+        batch_size: int | None = None,
+    ) -> (
+        MarginalParticleStepResult
+        | TracedResult[MarginalParticleStepResult, MarginalParticleTraceRecord]
+    ):
+        prepared = _prepare(state, key)
+        (
+            parameter_particles,
+            _label_correction,
+            parameter_auxiliary,
+            parameter_gradients,
+            boundary,
+            _,
+        ) = prepared
+        ctx = boundary.context
+        x_ref = state.latent_trajectory
+        traj_dtype = state.trajectory_log_prob.dtype
+        complete_dtype = state.complete_log_posterior.dtype
+        smoother = _smooth(prepared, x_ref, record_trace=record_trace, batch_size=batch_size)
+        smoother_result = smoother.result if isinstance(smoother, TracedResult) else smoother
         with jax.named_scope("postprocess"):
             latent_path = smoother_result.latent_path
-            scores = finish_path_update(
-                boundary,
-                ConditionalPathScores(smoother_result.label_scores),
-                target,
-                parameter_particles,
-                label_correction,
-                latent_path,
-            )
+            selected_label, next_position, next_context, scores = _select(prepared, smoother_result)
             final_label_log_probs = scores.log_probs
             origin_path = smoother_result.origin_path
             zero_scalar = jnp.asarray(0.0, dtype=traj_dtype)
-            selected_label = random.categorical(label_key, final_label_log_probs).astype(jnp.int32)
-            next_position = parameter_particles[selected_label]
-            next_context = _select_pytree(contexts, selected_label)
-            latent_path = target.replay_path(next_context, latent_path)
+            with jax.named_scope("particle_smoother_full"):
+                latent_path = target.replay_path(next_context, latent_path)
             next_traj_lp = scores.trajectory_log_probs[selected_label].astype(traj_dtype)
             next_complete = scores.log_posteriors[selected_label].astype(complete_dtype)
             latent_move = latent_path - x_ref
@@ -485,7 +579,87 @@ def build_marginal_particle_gibbs_kernel(
         assert isinstance(result, TracedResult)
         return result
 
+    def _profile_parts(
+        states: TrajectoryMCMCState, keys: jax.Array, batch_size: int, compiler: ProgramCompiler
+    ) -> ParticleProfilePrograms:
+        # Closure conversion exposes exactly the numerical operands consumed by
+        # the native smoother, including arrays captured by its density helpers.
+        # It happens while tracing, never during a timed device execution.
+        def smoother_program(
+            prepared: ParameterMoveInputs, path: jax.Array
+        ) -> SmootherProfileProgram[jax.Array]:
+            def smooth(path: jax.Array) -> ParticleSmootherResult:
+                result = _smooth(prepared, path, record_trace=False, batch_size=batch_size)
+                assert not isinstance(result, TracedResult)
+                return result
+
+            values, converted = jax.jit(smooth).trace(path).closure_convert()
+            return SmootherProfileProgram(
+                tuple(jnp.asarray(value) for value in values),
+                cast("Callable[[list[jax.Array], jax.Array], ParticleSmootherResult]", converted),
+            )
+
+        state = jax.tree.map(lambda value: value[0], states)
+        prepared = _prepare(state, keys[0])
+        draw_shape = jax.eval_shape(
+            lambda path: _smooth(prepared, path, record_trace=False, batch_size=batch_size),
+            state.latent_trajectory,
+        )
+        empty_draws = jax.tree.map(
+            lambda shape: jnp.zeros((states.position.shape[0], *shape.shape), shape.dtype),
+            draw_shape,
+        )
+
+        def profile_parameter_move(
+            state: TrajectoryMCMCState, key: jax.Array, draw: ParticleSmootherResult
+        ) -> tuple[SmootherProfileProgram[jax.Array], SelectedParameter]:
+            prepared = _prepare(state, key)
+            # This compilation owns both the operand order and the converted
+            # smoother. Retracing concrete inputs could deduplicate constants
+            # differently, so retain the function from this exact symbolic trace.
+            return smoother_program(prepared, state.latent_trajectory), _select(prepared, draw)
+
+        parameter = compiler(jax.vmap(profile_parameter_move), states, keys, empty_draws)
+        smoother, _ = parameter.call(states, keys, empty_draws)
+
+        def profile_smoother_setup(
+            smoother: SmootherProfileProgram[jax.Array], path: jax.Array
+        ) -> ParticleSmootherResult:
+            return smoother.run(path)
+
+        smooth_batch = jax.vmap(profile_smoother_setup)
+        draws = compiler(smooth_batch, smoother, states.latent_trajectory).call(
+            smoother, states.latent_trajectory
+        )
+        smoother, selected = jax.block_until_ready(parameter.call(states, keys, draws))
+
+        def profile_path_smoother(
+            smoother: SmootherProfileProgram[jax.Array], path: jax.Array, context: ParticleContext
+        ) -> tuple[ParticleSmootherResult, jax.Array]:
+            result = smoother.run(path)
+            return result, target.replay_path(context, result.latent_path)
+
+        path = compiler(
+            jax.vmap(profile_path_smoother), smoother, states.latent_trajectory, selected.context
+        )
+
+        def run_parameter() -> tuple[jax.Array, ...]:
+            return cast(
+                "tuple[jax.Array, ...]", tuple(jax.tree.leaves(parameter.call(states, keys, draws)))
+            )
+
+        def run_path() -> tuple[jax.Array, ...]:
+            return cast(
+                "tuple[jax.Array, ...]",
+                tuple(
+                    jax.tree.leaves(path.call(smoother, states.latent_trajectory, selected.context))
+                ),
+            )
+
+        return ParticleProfilePrograms(run_parameter, run_path)
+
     return MarginalParticleGibbsKernel(
+        profile_parts=_profile_parts,
         step_fn=_step_fn,
         parameter_gradient_fn=_theta_logpost_grad,
         trace_step_fn=_trace_step_fn,

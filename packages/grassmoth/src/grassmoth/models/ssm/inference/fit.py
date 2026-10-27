@@ -53,6 +53,7 @@ def fit(
     clock: Callable[[], float],
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | ObservationPreflightFailure | InitializationFailure:
     """Dispatch exact joint inference through the selected algorithm's owned settings."""
@@ -76,6 +77,7 @@ def fit(
             logger=logger,
             wall_clock=wall_clock,
             continuation=continuation,
+            profile=profile,
             prepare_program=prepare_program,
             compiler=compiler,
         )
@@ -93,6 +95,7 @@ def fit(
         logger=logger,
         wall_clock=wall_clock,
         continuation=continuation,
+        profile=profile,
         compiler=compiler,
         prepare_program=prepare_program,
     )

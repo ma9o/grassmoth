@@ -197,6 +197,7 @@ CONCERNS = {
             "artifacts.reports.prior",
             "artifacts.arrays",
             "artifacts.reports.inference",
+            "artifacts.reports.profiling",
             "artifacts.reports.posterior_diagnostics",
             "artifacts.reports.scorecard",
             "artifacts.sampling",

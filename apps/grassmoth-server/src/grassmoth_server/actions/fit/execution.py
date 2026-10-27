@@ -3,16 +3,14 @@
 from __future__ import annotations
 
 import json
-import os
 import re
-from pathlib import Path
 from typing import TYPE_CHECKING
-
-import jax
 
 from grassmoth.public import SamplerSpec
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from jax.stages import Compiled
 
     from grassmoth_server.actions.contracts.settings import FitSettingsSpec
@@ -40,8 +38,6 @@ def resolve_sampler_spec(
         algorithm=configured.algorithm if settings.algorithm is None else settings.algorithm,
     )
 
-
-_PROFILE_DIR_ENV = "GRASSMOTH_PROFILE_DIR"
 
 # HLO ops whose counts characterize the device access pattern:
 #   data movement      — transpose / copy / bitcast / reshape / broadcast /
@@ -72,39 +68,6 @@ _ACCESS_PATTERN_OPS = (
     "sort",
     "custom-call",
 )
-
-
-def resolve_profile_dir(profile_dir: str | os.PathLike[str] | None) -> Path | None:
-    """Resolve the effective profile directory, or ``None`` when profiling is off.
-
-    ``profile_dir`` takes precedence; otherwise ``GRASSMOTH_PROFILE_DIR`` is consulted.
-    The directory is created if it does not exist.
-    """
-    raw = profile_dir if profile_dir is not None else os.environ.get(_PROFILE_DIR_ENV)
-    if raw is None or str(raw) == "":
-        return None
-    path = Path(raw)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
-
-def start_trace(profile_dir: Path | None, *, label: str) -> None:
-    """Begin a ``jax.profiler`` trace into ``profile_dir / label`` (no-op if None)."""
-    if profile_dir is None:
-        return
-    options = jax.profiler.ProfileOptions()
-    options.host_tracer_level = 0
-    options.python_tracer_level = 0
-    options.include_dataset_ops = False
-    options.enable_hlo_proto = False
-    jax.profiler.start_trace(str(profile_dir / label), profiler_options=options)
-
-
-def stop_trace(profile_dir: Path | None) -> None:
-    """Stop the active ``jax.profiler`` trace (no-op if None)."""
-    if profile_dir is None:
-        return
-    jax.profiler.stop_trace()
 
 
 def _summarize_access_patterns(hlo_text: str) -> dict[str, int]:

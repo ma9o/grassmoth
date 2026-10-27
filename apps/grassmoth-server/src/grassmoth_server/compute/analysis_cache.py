@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import shutil
 import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -36,6 +37,11 @@ class AnalysisCacheEntry(Value):
     call: AnalysisCall
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     size: int = Field(ge=0)
+
+
+def fit_profile_directory(root: Path, call: AnalysisCall) -> Path:
+    """Call-scoped timing reports and compiled analysis beside cached fit bodies."""
+    return root / "profiles" / call.identity
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
@@ -82,6 +88,12 @@ def expire_analysis_cache(root: Path, *, now_seconds: float) -> tuple[int, int]:
     """Remove call aliases and content whose last cache write is over 14 days old."""
     cutoff = now_seconds - ANALYSIS_RETENTION_SECONDS
     files = size = 0
+    for profile in (root / "profiles").glob("*"):
+        if profile.stat().st_mtime < cutoff:
+            artifacts = tuple(path for path in profile.rglob("*") if path.is_file())
+            files += len(artifacts)
+            size += sum(path.stat().st_size for path in artifacts)
+            shutil.rmtree(profile)
     for folder, suffix in (("calls", "*.json"), ("results", "*.msgpack")):
         for path in (
             *tuple((root / folder).glob(suffix)),

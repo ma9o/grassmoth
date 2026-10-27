@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from functools import wraps
+from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
@@ -24,8 +25,10 @@ from grassmoth.artifacts.reports.inference import (
     InferenceReportCore,
     InferenceReportDetail,
 )
+from grassmoth.artifacts.reports.profiling import ProgramCompileReport
 from grassmoth.artifacts.sampling import MarginalParticleGibbsSpec
 from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
+from grassmoth.models.ssm.inference.samplers.profiling import compilation_seconds, log_profile
 from grassmoth.models.ssm.inference.samplers.progress import capture_phases
 from grassmoth.models.ssm.inference.types import UnretainedRun
 
@@ -33,8 +36,10 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable
     from datetime import datetime
+    from types import FunctionType
 
     import jax
+    from jax.stages import Compiled
 
     from grassmoth.artifacts.continuation import SamplerCheckpoint
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
@@ -42,10 +47,11 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.observations.dataset import ObservationDataset
     from grassmoth.artifacts.reports.inference import FitRuntime
     from grassmoth.artifacts.reports.posterior_diagnostics import ChainDiagnostics
+    from grassmoth.artifacts.reports.profiling import FitProfileReport
     from grassmoth.artifacts.reports.scorecard import MovementWindow
     from grassmoth.artifacts.sampling import SamplerSpec
-    from grassmoth.compute.budget import ComputeBudget
-    from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
+    from grassmoth.compute.budget import ComputeBudget, MemoryDemand
+    from grassmoth.compute.programs import PreparedProgram, ProgramCompiler, ProgramPreparer
     from grassmoth.models.structure import StructuralSelection
 
 
@@ -56,6 +62,7 @@ class FitResult:
     dynamical_model_spec: DynamicalModelSpec | None
     evidence: InferenceEvidence
     metadata: InferenceMetadata
+    profile: FitProfileReport | None = None
 
 
 def _fit(
@@ -72,6 +79,7 @@ def _fit(
     compiler: ProgramCompiler,
     prepare_program: ProgramPreparer,
     compute_loo_diagnostics: bool,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
     previous: FitOutput | None = None,
 ) -> FitResult | ModelFitFailure:
@@ -85,6 +93,7 @@ def _fit(
             time_origin=time_origin,
             sampler=sampler,
             continuation=continuation,
+            profile=profile,
             budget=budget,
             clock=clock,
             wall_clock=wall_clock,
@@ -95,6 +104,7 @@ def _fit(
     if isinstance(fitted, ModelFitFailure):
         return fitted
     result = fitted.result
+    profiling = result.profile if isinstance(result, UnretainedRun) else result.diagnostics.profile
     old_count = (
         0
         if previous is None
@@ -148,6 +158,7 @@ def _fit(
         if previous is not None:
             prior = previous.inference
             return FitResult(
+                profile=profiling,
                 dynamical_model_spec=None,
                 metadata=prior.core.inference_metadata.revised(
                     duration_seconds=fitted.duration_seconds,
@@ -158,6 +169,7 @@ def _fit(
                 ).with_previous_phases(prior.evidence),
             )
         return FitResult(
+            profile=profiling,
             dynamical_model_spec=None,
             metadata=InferenceMetadata(
                 distribution=None,
@@ -290,7 +302,9 @@ def _fit(
             else None,
         )
         evidence = evidence.with_previous_phases(prior_evidence)
-    return FitResult(dynamical_model_spec=conditioned, evidence=evidence, metadata=metadata)
+    return FitResult(
+        dynamical_model_spec=conditioned, evidence=evidence, metadata=metadata, profile=profiling
+    )
 
 
 def inference_report(
@@ -503,12 +517,53 @@ def fit(
     compiler: ProgramCompiler,
     prepare_program: ProgramPreparer,
     compute_loo_diagnostics: bool,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
     previous: FitOutput | None = None,
 ) -> FitOutput | ModelFitFailure:
     """Compute a complete fit from owned inputs and explicit execution dependencies."""
     from grassmoth.actions.checks import fit_check_report
     from grassmoth.artifacts.reports.scorecard import MovementWindow
+
+    compilation_intervals: list[tuple[str, float, float]] = []
+    program_counts: dict[str, int] = {}
+
+    def named_program[Result](function: Callable[..., Result]) -> Callable[..., Result]:
+        # Native call sites own descriptive names. This fit owns unique suffixes,
+        # passed to the existing compiler dependency as ordinary function names.
+        base = cast("FunctionType", function).__name__
+        number = program_counts.get(base, 0) + 1
+        program_counts[base] = number
+
+        @wraps(function)
+        def invoke(*args: object, **kwargs: object) -> Result:
+            return function(*args, **kwargs)
+
+        invoke.__name__ = base if number == 1 else f"{base}.{number}"
+        return invoke
+
+    def timed_compile[Result](
+        function: Callable[..., Result], *args: object, **kwargs: object
+    ) -> PreparedProgram[Result]:
+        started = clock()
+        named = named_program(function)
+        program = compiler(named, *args, **kwargs)
+        compilation_intervals.append((cast("FunctionType", named).__name__, started, clock()))
+        return program
+
+    def timed_prepare[Result](
+        function: Callable[..., Result], *args: object, **kwargs: object
+    ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
+        started = clock()
+        named = named_program(function)
+        compile_program, operands, shape, demand = prepare_program(named, *args, **kwargs)
+
+        def compile_timed() -> Compiled:
+            compiled = compile_program()
+            compilation_intervals.append((cast("FunctionType", named).__name__, started, clock()))
+            return compiled
+
+        return compile_timed, operands, shape, demand
 
     result = _fit(
         selection=selection,
@@ -520,10 +575,11 @@ def fit(
         clock=clock,
         wall_clock=wall_clock,
         logger=logger,
-        compiler=compiler,
-        prepare_program=prepare_program,
+        compiler=timed_compile if profile else compiler,
+        prepare_program=timed_prepare if profile else prepare_program,
         compute_loo_diagnostics=compute_loo_diagnostics,
         continuation=continuation,
+        profile=profile,
         previous=previous,
     )
     if isinstance(result, ModelFitFailure):
@@ -550,6 +606,32 @@ def fit(
             ),
         )
     )
+    profiling = (
+        None
+        if result.profile is None
+        else result.profile.revised(
+            compile_seconds=compilation_seconds(
+                tuple(
+                    (start, stop)
+                    for name, start, stop in compilation_intervals
+                    if not name.startswith("profile_")
+                )
+            ),
+            compilation=tuple(
+                ProgramCompileReport(name=name, seconds=stop - start)
+                for name, start, stop in sorted(compilation_intervals, key=lambda entry: entry[1])
+                if not name.startswith("profile_")
+            ),
+            profiling_compilation=tuple(
+                ProgramCompileReport(name=name, seconds=stop - start)
+                for name, start, stop in sorted(compilation_intervals, key=lambda entry: entry[1])
+                if name.startswith("profile_")
+            ),
+            device=runtime.devices,
+        )
+    )
+    if profiling is not None:
+        log_profile(profiling, logger)
     return FitOutput(
         dynamical_model_spec=conditioned
         if conditioned is not None
@@ -558,4 +640,5 @@ def fit(
         else None,
         checks=fit_check_report(selection, question, data_for_model),
         inference=report,
+        profile=profiling,
     )

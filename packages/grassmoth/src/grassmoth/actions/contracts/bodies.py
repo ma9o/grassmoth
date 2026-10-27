@@ -23,6 +23,7 @@ from grassmoth.artifacts.reports.data_quality import DataProfileReport
 from grassmoth.artifacts.reports.identification import IdentificationReport
 from grassmoth.artifacts.reports.inference import FitCheckReport, InferenceReport
 from grassmoth.artifacts.reports.model_checks import ModelCheckReport
+from grassmoth.artifacts.reports.profiling import FitProfileReport
 from grassmoth.artifacts.simulation import SimulationReport
 
 if TYPE_CHECKING:
@@ -140,6 +141,9 @@ class FitOutput(Value):
     )
     inference: InferenceReport = Field(
         description="Run provenance, native sampler evidence, diagnostics and parameter summaries."
+    )
+    profile: FitProfileReport | None = Field(
+        default=None, description="Timings for this execution only when settings.profile is true."
     )
 
 

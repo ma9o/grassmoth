@@ -130,11 +130,15 @@ def param_marginal(
     )
 
 
-def build_energy_diagnostics(energy: jnp.ndarray | NDArray, n_bins: int = 40) -> EnergyDiagnostics:
+def build_energy_diagnostics(
+    energy: jnp.ndarray | NDArray, n_bins: int = 40
+) -> EnergyDiagnostics | None:
     """Summarize per-chain energy and consecutive energy changes, including each chain's BFMI."""
     from arviz_stats.base.array import array_stats
 
     chains = np.atleast_2d(np.asarray(energy))
+    if chains.shape[1] < 2:
+        return None  # A single draw has no energy transitions or BFMI to report.
     transitions = np.diff(chains, axis=1)
     return EnergyDiagnostics(
         energy_hist=_density_histogram(chains.reshape(-1), n_bins),

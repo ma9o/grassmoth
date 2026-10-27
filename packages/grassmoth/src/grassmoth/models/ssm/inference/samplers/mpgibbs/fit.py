@@ -90,6 +90,7 @@ def fit_marginal_particle_gibbs(
     clock: Callable[[], float],
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Run exact particle inference with resolved choices and owned warmup outputs."""
@@ -245,6 +246,7 @@ def fit_marginal_particle_gibbs(
         logger=logger,
         wall_clock=wall_clock,
         continuation=continuation,
+        profile=profile,
         compiler=compiler,
         prepare_program=prepare_program,
     )
@@ -279,6 +281,7 @@ def fit_marginal_particle_gibbs(
                 "warmup": run_result.warmup_chain_extra_fields,
                 "post_warmup": run_result.chain_extra_fields,
             },
+            profile=run_result.profile,
         )
     mcmc_phase_seconds = clock() - phase_t0
     logger.info("phase 3/4: MCMC complete in %.1fs", mcmc_phase_seconds)
@@ -363,6 +366,7 @@ def fit_marginal_particle_gibbs(
         amala_grad_norm_max=float(jnp.max(summary_extra_fields["amala_grad_norm_max"])),
     )
     diagnostics = ProductionDiagnostics(
+        profile=run_result.profile,
         stopping_checkpoint=run_result.stopping_checkpoint,
         checkpoint=checkpoint,
         compiled_step=run_result.compiled_step,

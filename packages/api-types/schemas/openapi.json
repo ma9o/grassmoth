@@ -15823,6 +15823,36 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "FitComponentTiming": {
+        "additionalProperties": false,
+        "description": "One independently compiled native operation; timing includes synchronization.",
+        "properties": {
+          "component": {
+            "enum": [
+              "full_sweep",
+              "parameter_move",
+              "path_smoother",
+              "nuts_companion",
+              "mh_companion",
+              "conditional_gradient"
+            ],
+            "title": "Component",
+            "type": "string"
+          },
+          "timing": {
+            "$ref": "#/components/schemas/TimingSpread"
+          }
+        },
+        "required": [
+          "component",
+          "timing"
+        ],
+        "title": "FitComponentTiming",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.profiling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "FitInput_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
         "description": "Start or continue a fit; sample counts always mean additional retained draws.",
@@ -15944,18 +15974,155 @@
           "inference": {
             "$ref": "#/components/schemas/InferenceReport",
             "description": "Run provenance, native sampler evidence, diagnostics and parameter summaries."
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitProfileReport"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Timings for this execution only when settings.profile is true."
           }
         },
         "required": [
           "dynamical_model_spec",
           "checks",
-          "inference"
+          "inference",
+          "profile"
         ],
         "title": "FitOutput",
         "type": "object",
         "x-python-module": "grassmoth.actions.contracts.bodies",
         "x-layer": "transport",
         "x-concern": "api_tools"
+      },
+      "FitProfileReport": {
+        "additionalProperties": false,
+        "description": "Wall-clock microbenchmarks on a copied state, never used by inference.\n\nEvery operation is primed once and measured ten times at fixed state, tuning\nand random keys. Full sweep uses the production executable with count one;\ncomponents are compiled separately. The path timing includes recurrence\nreplay at the fixed selected context. Conditional gradient is one chain's\nexact conditional density and gradient, including replay. No device-trace\nkernel times are used. Separately compiled parts need not sum to a full sweep.",
+        "properties": {
+          "phase": {
+            "enum": [
+              "after_warmup",
+              "after_first_sweep",
+              "compile_only"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "repetitions": {
+            "minimum": 0,
+            "title": "Repetitions",
+            "type": "integer"
+          },
+          "compile_seconds": {
+            "default": 0,
+            "description": "Union of production compile-request intervals, including tracing, lowering and compilation or cache load. Excludes profiling-only programs and artifact writes.",
+            "minimum": 0,
+            "title": "Compile Seconds",
+            "type": "number"
+          },
+          "compilation": {
+            "default": [],
+            "description": "Production compile requests, in request order.",
+            "items": {
+              "$ref": "#/components/schemas/ProgramCompileReport"
+            },
+            "title": "Compilation",
+            "type": "array"
+          },
+          "profiling_compilation": {
+            "default": [],
+            "description": "Separately compiled timing probes, excluded from compile_seconds.",
+            "items": {
+              "$ref": "#/components/schemas/ProgramCompileReport"
+            },
+            "title": "Profiling Compilation",
+            "type": "array"
+          },
+          "device": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Device",
+            "type": "array"
+          },
+          "chains": {
+            "minimum": 1,
+            "title": "Chains",
+            "type": "integer"
+          },
+          "time_steps": {
+            "minimum": 1,
+            "title": "Time Steps",
+            "type": "integer"
+          },
+          "particle_dimensions": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParticleProfileDimensions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "components": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FitComponentTiming"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "split_total": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TimingSpread"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Sum of parameter, path and companion timings per repetition, summarized alongside full_sweep. Other sweep bookkeeping is not part of this sum."
+          },
+          "nuts": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NutsProfileReport"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          }
+        },
+        "required": [
+          "phase",
+          "repetitions",
+          "compile_seconds",
+          "compilation",
+          "profiling_compilation",
+          "device",
+          "chains",
+          "time_steps",
+          "particle_dimensions",
+          "components",
+          "split_total",
+          "nuts"
+        ],
+        "title": "FitProfileReport",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.profiling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
       },
       "FitReliability": {
         "enum": [
@@ -16236,7 +16403,7 @@
       },
       "FitSettingsSpec-Input": {
         "additionalProperties": false,
-        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's, except convergence stopping,\nwhich is opt-in for each execution.",
+        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's, except convergence stopping,\nwhich is opt-in for each execution. Profiling also applies only to this execution.",
         "properties": {
           "stop_when_converged": {
             "anyOf": [
@@ -16249,6 +16416,12 @@
             ],
             "default": null,
             "description": "Opt in for this execution only; absent/null keeps the fixed schedule, including continuations."
+          },
+          "profile": {
+            "default": false,
+            "description": "Profile this execution only, including continuations. Time native compiled parts on frozen copies after warmup, or after the first sweep without warmup. Report named production and profiling-only compile requests with cache status; save named compiled analysis beside the cached fit after timing completes.",
+            "title": "Profile",
+            "type": "boolean"
           },
           "hardware": {
             "anyOf": [
@@ -16346,7 +16519,7 @@
       },
       "FitSettingsSpec-Output": {
         "additionalProperties": false,
-        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's, except convergence stopping,\nwhich is opt-in for each execution.",
+        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's, except convergence stopping,\nwhich is opt-in for each execution. Profiling also applies only to this execution.",
         "properties": {
           "stop_when_converged": {
             "anyOf": [
@@ -16359,6 +16532,12 @@
             ],
             "default": null,
             "description": "Opt in for this execution only; absent/null keeps the fixed schedule, including continuations."
+          },
+          "profile": {
+            "default": false,
+            "description": "Profile this execution only, including continuations. Time native compiled parts on frozen copies after warmup, or after the first sweep without warmup. Report named production and profiling-only compile requests with cache status; save named compiled analysis beside the cached fit after timing completes.",
+            "title": "Profile",
+            "type": "boolean"
           },
           "hardware": {
             "anyOf": [
@@ -16450,6 +16629,7 @@
         },
         "required": [
           "stop_when_converged",
+          "profile",
           "hardware",
           "time_limit_seconds",
           "algorithm",
@@ -20940,6 +21120,49 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "NutsProfileReport": {
+        "additionalProperties": false,
+        "description": "Companion work on the fixed timed state, one entry per chain.",
+        "properties": {
+          "leapfrog_steps": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Leapfrog Steps",
+            "type": "array"
+          },
+          "step_size": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Step Size",
+            "type": "array"
+          },
+          "tree_depth": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Tree Depth",
+            "type": "array"
+          },
+          "gradient_count_representative": {
+            "description": "True only after this execution's warmup; otherwise the tree work is not representative of tuned sampling.",
+            "title": "Gradient Count Representative",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "leapfrog_steps",
+          "step_size",
+          "tree_depth",
+          "gradient_count_representative"
+        ],
+        "title": "NutsProfileReport",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.profiling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "NutsTrajectorySpec-Input": {
         "additionalProperties": false,
         "description": "A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).",
@@ -22399,6 +22622,37 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "ParticleProfileDimensions": {
+        "additionalProperties": false,
+        "description": "Particle-kernel work dimensions, including any temperature replicas.",
+        "properties": {
+          "particles": {
+            "minimum": 1,
+            "title": "Particles",
+            "type": "integer"
+          },
+          "labels": {
+            "minimum": 2,
+            "title": "Labels",
+            "type": "integer"
+          },
+          "replicas": {
+            "minimum": 1,
+            "title": "Replicas",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "particles",
+          "labels",
+          "replicas"
+        ],
+        "title": "ParticleProfileDimensions",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.profiling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "ParticleSamplerDiagnostics": {
         "additionalProperties": false,
         "description": "Typed exact-sampler settings and transition telemetry from the native producer.",
@@ -23684,6 +23938,44 @@
         "title": "PreparedDataMetadata",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.observations.preparation",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ProgramCompileReport": {
+        "additionalProperties": false,
+        "description": "One named request, from tracing until its executable is ready; excludes dumps.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "seconds": {
+            "minimum": 0,
+            "title": "Seconds",
+            "type": "number"
+          },
+          "persistent_cache": {
+            "default": "unobserved",
+            "description": "The server observes JAX's persistent-cache events in the compiling thread. Disabled means no configured persistent cache; not_consulted means no lookup event (for example, in-memory reuse). Unobserved is for a library-supplied compiler without this shell instrumentation.",
+            "enum": [
+              "unobserved",
+              "disabled",
+              "not_consulted",
+              "miss",
+              "hit"
+            ],
+            "title": "Persistent Cache",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "seconds",
+          "persistent_cache"
+        ],
+        "title": "ProgramCompileReport",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.profiling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -26525,6 +26817,37 @@
         "x-python-module": "grassmoth_server.actions.contracts.timeline",
         "x-layer": "transport",
         "x-concern": "api_tools"
+      },
+      "TimingSpread": {
+        "additionalProperties": false,
+        "description": "Median and full observed range of ten synchronized wall-clock repetitions.",
+        "properties": {
+          "median_ms": {
+            "minimum": 0,
+            "title": "Median Ms",
+            "type": "number"
+          },
+          "min_ms": {
+            "minimum": 0,
+            "title": "Min Ms",
+            "type": "number"
+          },
+          "max_ms": {
+            "minimum": 0,
+            "title": "Max Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "median_ms",
+          "min_ms",
+          "max_ms"
+        ],
+        "title": "TimingSpread",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.profiling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
       },
       "TraceLogMessage": {
         "additionalProperties": false,
@@ -36496,12 +36819,25 @@
           "inference": {
             "$ref": "#/components/schemas/JsonResponse_InferenceReport",
             "description": "Run provenance, native sampler evidence, diagnostics and parameter summaries."
+          },
+          "profile": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FitProfileReport"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Timings for this execution only when settings.profile is true."
           }
         },
         "required": [
           "dynamical_model_spec",
           "checks",
-          "inference"
+          "inference",
+          "profile"
         ],
         "title": "FitOutput",
         "type": "object",

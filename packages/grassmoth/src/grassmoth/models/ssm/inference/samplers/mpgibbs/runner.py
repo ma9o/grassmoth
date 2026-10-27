@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from types import MappingProxyType
-from typing import Literal, NamedTuple
+from typing import Literal, NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
@@ -20,6 +20,13 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     ParticleWeightMetric,
     ReplicaSwapCounts,
     TemperingDiagnostics,
+)
+from grassmoth.artifacts.reports.profiling import (
+    FitComponentTiming,
+    FitProfileReport,
+    NutsProfileReport,
+    ParticleProfileDimensions,
+    TimingSpread,
 )
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
@@ -65,7 +72,14 @@ from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
     excluded_particle_diagnostics,
 )
 from grassmoth.models.ssm.inference.samplers.particle.math import _masked_mean
+from grassmoth.models.ssm.inference.samplers.profiling import (
+    REPETITIONS,
+    measure,
+    measure_sweep,
+    sum_timings,
+)
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
+from grassmoth.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase
 from grassmoth.models.ssm.inference.samplers.sweeps import (
     ConvergenceCheckpoint,
     RetainedConvergenceCheck,
@@ -112,6 +126,7 @@ class ParticleChainResult:
     retained_draws: int
     stopping_checkpoint: ConvergenceCheckpoint | None
     tempering: TemperingDiagnostics | None = None
+    profile: FitProfileReport | None = None
 
     @property
     def post_warmup_complete_log_posterior_mean(self) -> jnp.ndarray:
@@ -212,8 +227,14 @@ def _initial_companion_tuning(
 ) -> CompanionTuning:
     # The NUTS warmup schedule spans this run's warmup; it is frozen when that ends.
     tuning_key = random.fold_in(key, 1)
+
+    def companion_initializer(
+        chains: TrajectoryMCMCState, draw_key: PRNGKeyArray
+    ) -> CompanionTuning:
+        return companion.initial_tuning(chains, draw_key, num_warmup)
+
     program = compiler(
-        lambda chains, draw_key: companion.initial_tuning(chains, draw_key, num_warmup),
+        companion_initializer,
         states,
         tuning_key,
     )
@@ -240,6 +261,7 @@ def run_marginal_particle_gibbs(
     clock: Callable[[], float],
     wall_clock: Callable[[], datetime],
     logger: logging.Logger,
+    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
     convergence: RetainedConvergenceCheck | None = None,
 ) -> ParticleChainResult:
@@ -284,7 +306,7 @@ def run_marginal_particle_gibbs(
         else target.independent_mask & kernel.exact_constraints.free_mask
     )
 
-    def initialize_chain(
+    def particle_chain_initializer(
         position: Float[Array, " U"], path: Float[Array, "T D"]
     ) -> tuple[TrajectoryMCMCState, Float[Array, "T D"]]:
         state = _initialize_chain_state(
@@ -314,7 +336,7 @@ def run_marginal_particle_gibbs(
         "mpgibbs", "initializing_chains", clock=clock, logger=logger, wall_clock=wall_clock
     ):
         initialize = compiler(
-            jax.vmap(initialize_chain),
+            jax.vmap(particle_chain_initializer),
             chain_init_positions,
             chain_initial_latents,
         )
@@ -663,6 +685,114 @@ def run_marginal_particle_gibbs(
             prepare_program=prepare_program,
             excluded_history=excluded_particle_diagnostics(kernel.diagnostic_metrics),
         )
+    dimensions = ParticleProfileDimensions(
+        particles=kernel.path_update.num_particles,
+        labels=kernel.num_parameter_particles,
+        replicas=replicas,
+    )
+
+    def profile_state(current: _Population, phase: CompiledSweepPhase) -> FitProfileReport:
+        full = measure_sweep(current, phase, clock)
+        _, step_key = random.split(current.random_key)
+        keys = random.split(step_key, replicas)
+        kernel_states = (
+            current.chains._replace(
+                latent_delta=current.chains.latent_delta[..., None] * current.latent_geometry
+            )
+            if curvature_limited
+            else current.chains
+        )
+        if tempering is None:
+            parts = (kernel.profile_parts(kernel_states, keys, plan.batch_size, compiler),)
+        else:
+            # Production locally updates every non-reference replica. Splitting
+            # these temperature batches is itself part of the measured split cost.
+            levels = current.betas.size
+            parts = tuple(
+                tempering.kernel_for_target(
+                    target.at_temperature(tempering.reference, beta)
+                ).profile_parts(
+                    jax.tree.map(lambda value, index=index: value[index::levels], kernel_states),
+                    keys[index::levels],
+                    plan.batch_size,
+                    compiler,
+                )
+                for index, beta in enumerate(current.betas[:-1])
+            )
+        parameter, _ = measure(lambda: tuple(part.parameter_move() for part in parts), clock)
+        path, _ = measure(lambda: tuple(part.path_smoother() for part in parts), clock)
+        rows = (
+            FitComponentTiming(component="full_sweep", timing=TimingSpread.from_seconds(full)),
+            FitComponentTiming(
+                component="parameter_move", timing=TimingSpread.from_seconds(parameter)
+            ),
+            FitComponentTiming(component="path_smoother", timing=TimingSpread.from_seconds(path)),
+        )
+        split = (parameter, path)
+        nuts_report = None
+        if companion is not None and current.companions is not None:
+            # Use the same native companion and keys as production, with frozen
+            # tuning on the copied current state. No output advances the chain.
+            companion_keys = jax.vmap(lambda key: random.fold_in(key, 1))(keys)
+            companion_step = companion.step
+
+            def profile_companion(
+                chains: TrajectoryMCMCState, tuning: CompanionTuning, draw_keys: jax.Array
+            ) -> tuple[TrajectoryMCMCState, CompanionTuning, jax.Array, dict[str, jax.Array]]:
+                return jax.vmap(companion_step)(chains, tuning, draw_keys)
+
+            transition = compiler(
+                profile_companion, current.chains, current.companions, companion_keys
+            )
+            elapsed, (_, _, _, records) = measure(
+                lambda: transition.call(current.chains, current.companions, companion_keys), clock
+            )
+            split = (*split, elapsed)
+            rows = (
+                *rows,
+                FitComponentTiming(
+                    component="nuts_companion" if companion.nuts is not None else "mh_companion",
+                    timing=TimingSpread.from_seconds(elapsed),
+                ),
+            )
+            if companion.nuts is not None:
+                position = current.chains.position[0]
+                latent_path = current.chains.latent_trajectory[0]
+                energy = companion.nuts.energy
+
+                def profile_conditional_gradient(
+                    position: jax.Array, path: jax.Array
+                ) -> tuple[jax.Array, jax.Array]:
+                    return cast(
+                        "tuple[jax.Array, jax.Array]", jax.value_and_grad(energy)(position, path)
+                    )
+
+                gradient = compiler(profile_conditional_gradient, position, latent_path)
+                elapsed_gradient, _ = measure(lambda: gradient.call(position, latent_path), clock)
+                rows = (
+                    *rows,
+                    FitComponentTiming(
+                        component="conditional_gradient",
+                        timing=TimingSpread.from_seconds(elapsed_gradient),
+                    ),
+                )
+                nuts_report = NutsProfileReport(
+                    leapfrog_steps=tuple(int(value) for value in records["centred_nuts_num_steps"]),
+                    step_size=tuple(float(value) for value in records["centred_nuts_step_size"]),
+                    tree_depth=tuple(int(value) for value in records["tree_depth"]),
+                    gradient_count_representative=num_warmup > 0,
+                )
+        return FitProfileReport(
+            phase="after_warmup" if num_warmup else "after_first_sweep",
+            repetitions=REPETITIONS,
+            chains=num_chains,
+            time_steps=num_steps,
+            particle_dimensions=dimensions,
+            components=rows,
+            split_total=sum_timings(split),
+            nuts=nuts_report,
+        )
+
     run = run_sweeps(
         plan,
         initial,
@@ -671,6 +801,7 @@ def run_marginal_particle_gibbs(
         wall_clock=wall_clock,
         label="mpgibbs",
         convergence=convergence,
+        profile=profile_state if profile else None,
     )
     final = run.state
     draw_fields = frozenset(("positions", "paths", "observation_log_probs", "log_posterior"))
@@ -709,6 +840,17 @@ def run_marginal_particle_gibbs(
         final_parameter_chol=final.chains.parameter_chol[0],
         initial_latent_delta=initial_latent_delta,
         final_latent_delta=final.chains.latent_delta[cold_indices],
+        profile=run.profile
+        if run.profile is not None
+        else FitProfileReport(
+            phase="compile_only",
+            repetitions=0,
+            chains=num_chains,
+            time_steps=num_steps,
+            particle_dimensions=dimensions,
+        )
+        if profile
+        else None,
         compiled_step=plan.compiled_step,
         first_step_seconds=run.first_step_seconds,
         sampling_loop_seconds=run.sampling_loop_seconds,

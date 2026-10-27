@@ -305,7 +305,7 @@ def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
         state = adapt_scales(
             state,
             spec,
-            jnp.asarray(accepted[index]),
+            jnp.asarray(accepted[index], dtype=state.delta.dtype),
             jnp.asarray(proposed[index]),
             ADAPTATION_WINDOW + 4,
             jnp.full_like(state.delta, 10.0),
