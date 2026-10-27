@@ -20,7 +20,7 @@ from grassmoth_server.actions.fit.remote import (
     decode_fit_result,
     encode_fit_result,
 )
-from grassmoth_server.compute.analysis_cache import ANALYSIS_CACHE_VOLUME_ENV, AnalysisCall
+from grassmoth_server.compute.analysis_cache import ANALYSIS_CACHE_VOLUME, AnalysisCall
 from grassmoth_test_support.helpers import fixture_entity_id
 
 pytestmark = pytest.mark.contract
@@ -30,7 +30,6 @@ _ANALYSIS_CALL = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" 
 @pytest.fixture(autouse=True)
 def isolated_cache_volume(monkeypatch):
     monkeypatch.setenv(FIT_CACHE_VOLUME_ENV, "test-fit-cache")
-    monkeypatch.setenv(ANALYSIS_CACHE_VOLUME_ENV, "test-fit-analysis")
     volume = Mock()
     monkeypatch.setattr(modal.Volume, "from_name", volume)
     return volume
@@ -100,7 +99,7 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     }
     assert isolated_cache_volume.call_count == 2
     isolated_cache_volume.assert_any_call("test-fit-cache", create_if_missing=True)
-    isolated_cache_volume.assert_any_call("test-fit-analysis", create_if_missing=True)
+    isolated_cache_volume.assert_any_call(ANALYSIS_CACHE_VOLUME, create_if_missing=True)
     remote.remote_gen.assert_called_once_with(payload, isolated_attempt)
     remote.remote.assert_not_called()
     remote.spawn.assert_not_called()

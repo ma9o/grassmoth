@@ -72,11 +72,10 @@ the call was published. For continuations, earlier phase traces remain in the
 study; the cache contains the current container's output. Missing or expired
 entries fail explicitly, without uploading a local result.
 
-Deploy the [daily retention job](../../apps/grassmoth-server/src/grassmoth_server/compute/analysis_deployment.py)
-with the service environment:
+Deploy the [daily retention job](../../apps/grassmoth-server/src/grassmoth_server/compute/analysis_deployment.py):
 
 ```bash
 uv run modal deploy apps/grassmoth-server/src/grassmoth_server/compute/analysis_deployment.py
 ```
 
-The cache owner defines its fourteen-day retention policy and Volume selection.
+The cache owner defines its fourteen-day retention policy and the one Volume every stack shares.

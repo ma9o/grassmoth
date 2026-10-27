@@ -14,9 +14,8 @@ from grassmoth.public import Value
 from grassmoth_server.actions.contracts.identity import CallId
 from grassmoth_server.compute.analysis_cache import (
     ANALYSIS_CACHE_ROOT,
-    ANALYSIS_CACHE_VOLUME_ENV,
+    ANALYSIS_CACHE_VOLUME,
     AnalysisCall,
-    analysis_cache_volume,
     cached_fit_result,
 )
 
@@ -58,7 +57,6 @@ def analyze_on_modal(
 
     from grassmoth_server.compute.modal_images import cpu_image
 
-    volume = analysis_cache_volume()
     app = modal.App("grassmoth-saved-fit-analysis")
     analyze = app.function(
         image=cpu_image,
@@ -66,9 +64,8 @@ def analyze_on_modal(
         memory=(32768, 32768),
         timeout=1800,
         scaledown_window=2,
-        volumes={str(ANALYSIS_CACHE_ROOT): modal.Volume.from_name(volume)},
+        volumes={str(ANALYSIS_CACHE_ROOT): modal.Volume.from_name(ANALYSIS_CACHE_VOLUME)},
         env={
-            ANALYSIS_CACHE_VOLUME_ENV: volume,
             "JAX_PLATFORMS": "cpu",
             "OPENBLAS_NUM_THREADS": "1",
             "OMP_NUM_THREADS": "1",

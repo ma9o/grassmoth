@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -13,7 +12,8 @@ from pydantic import Field
 from grassmoth.public import Value
 from grassmoth_server.actions.contracts.identity import CallId
 
-ANALYSIS_CACHE_VOLUME_ENV = "GRASSMOTH_ANALYSIS_CACHE_VOLUME"
+# Every stack caches into this one Volume, so the daily retention job collects all of it.
+ANALYSIS_CACHE_VOLUME = "grassmoth-fit-analysis"
 ANALYSIS_CACHE_ROOT = Path("/analysis-cache")
 ANALYSIS_RETENTION_SECONDS = 14 * 24 * 60 * 60
 
@@ -36,11 +36,6 @@ class AnalysisCacheEntry(Value):
     call: AnalysisCall
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     size: int = Field(ge=0)
-
-
-def analysis_cache_volume() -> str:
-    """Resolve the independently retained result cache at the deployment edge."""
-    return os.environ.get(ANALYSIS_CACHE_VOLUME_ENV, "grassmoth-fit-analysis")
 
 
 def _atomic_write(path: Path, data: bytes) -> None:
@@ -105,5 +100,5 @@ def cleanup_analysis_cache() -> tuple[int, int]:
     import modal
 
     removed = expire_analysis_cache(ANALYSIS_CACHE_ROOT, now_seconds=time.time())
-    modal.Volume.from_name(analysis_cache_volume()).commit()
+    modal.Volume.from_name(ANALYSIS_CACHE_VOLUME).commit()
     return removed

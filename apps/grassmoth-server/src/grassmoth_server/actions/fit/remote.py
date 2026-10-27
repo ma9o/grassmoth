@@ -19,9 +19,8 @@ from grassmoth.public import (
 )
 from grassmoth_server.compute.analysis_cache import (
     ANALYSIS_CACHE_ROOT,
-    ANALYSIS_CACHE_VOLUME_ENV,
+    ANALYSIS_CACHE_VOLUME,
     AnalysisCall,
-    analysis_cache_volume,
     cache_fit_result,
 )
 from grassmoth_server.compute.resources import HOST_MEMORY_ALLOCATION_ENV
@@ -168,7 +167,7 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
     with local_compilation_cache(Path("/cache/jax-bundles"), commit=volume.commit):
         result = execute_fit_compute(payload)
         cache_fit_result(ANALYSIS_CACHE_ROOT, payload.analysis_call, result.output)
-        modal.Volume.from_name(analysis_cache_volume()).commit()
+        modal.Volume.from_name(ANALYSIS_CACHE_VOLUME).commit()
         frame = encode_fit_result(result)
         del result
     yield from _result_chunks(frame)
@@ -184,7 +183,6 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
     # and ships their current source; no deployed production function is replaced.
     app = modal.App("grassmoth-server")
     cache_volume = os.environ.get(FIT_CACHE_VOLUME_ENV, "grassmoth-fit-cache")
-    results_volume = analysis_cache_volume()
     remote_fit = app.function(
         image=gpu_image,
         # Function environment overrides image defaults without adding a build
@@ -197,7 +195,6 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
             "XLA_PYTHON_CLIENT_PREALLOCATE": "true",
             "XLA_PYTHON_CLIENT_MEM_FRACTION": "0.90",
             FIT_CACHE_VOLUME_ENV: cache_volume,
-            ANALYSIS_CACHE_VOLUME_ENV: results_volume,
             "JAX_COMPILATION_CACHE_DIR": "/tmp/grassmoth-jax",
             "JAX_ENABLE_COMPILATION_CACHE": "true",
             "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": str(FIT_CACHE_MIN_COMPILE_SECONDS),
@@ -219,7 +216,7 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
         volumes={
             "/cache": modal.Volume.from_name(cache_volume, create_if_missing=True),
             str(ANALYSIS_CACHE_ROOT): modal.Volume.from_name(
-                results_volume, create_if_missing=True
+                ANALYSIS_CACHE_VOLUME, create_if_missing=True
             ),
         },
     )(_fit_gpu)
