@@ -5507,8 +5507,8 @@ export interface components {
             readonly diagnostic_metrics?: components["schemas"]["ParticleDiagnosticMetrics"];
             /**
              * Param Target Accept
-             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023), below this default.
-             * @default 0.35
+             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023).
+             * @default 0.2
              */
             readonly param_target_accept?: number;
             /**
@@ -5570,8 +5570,8 @@ export interface components {
             readonly diagnostic_metrics: components["schemas"]["ParticleDiagnosticMetrics"];
             /**
              * Param Target Accept
-             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023), below this default.
-             * @default 0.35
+             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023).
+             * @default 0.2
              */
             readonly param_target_accept: number;
             /**

@@ -505,13 +505,18 @@ class MarginalParticleGibbsSpec(Value):
             "convergence check reads them; they explain a failing sampler."
         ),
     )
+    # 0.2 sits between Barker's optimal rates for random-walk proposals and near the 18%
+    # that m-PGibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a
+    # six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD,
+    # which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of
+    # the optimal step.
     param_target_accept: float = Field(
-        default=0.35,
+        default=0.2,
         description=(
             "Target fraction of sweeps in which the parameters move to a proposed particle. "
             "Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate "
             "for random-walk proposals is about 0.27 in one dimension and 0.158 in high "
-            "dimension (Agrawal et al. 2023), below this default."
+            "dimension (Agrawal et al. 2023)."
         ),
     )
     adaptation_scheme: Literal["simple", "dual_averaging"] = Field(

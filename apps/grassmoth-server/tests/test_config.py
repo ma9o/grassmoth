@@ -55,7 +55,7 @@ class TestSamplerSpec:
         assert options.parameter_proposal == "random_walk"
         encoded = result.model_dump_json()
         assert SamplerSpec.model_validate_json(encoded) == result
-        assert options.param_target_accept == 0.35
+        assert options.param_target_accept == 0.2
 
     def test_public_overrides_resolve_without_mutating_defaults(self, monkeypatch):
         from grassmoth_server import config as config_module

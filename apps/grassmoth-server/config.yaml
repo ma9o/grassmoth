@@ -48,4 +48,4 @@ inference:
           target: 0.5
         pilot_mixture: true
       parameter_proposal: random_walk
-      param_target_accept: 0.35
+      param_target_accept: 0.2
