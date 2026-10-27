@@ -553,15 +553,14 @@ def run_marginal_particle_gibbs(
                 ) -> tuple[TrajectoryMCMCState, CompanionTuning | None]:
                     if dim == 0:
                         return chains, companion_tuning
-                    # Step sizes are variance coefficients: preserve each
-                    # proposal's average variance while changing its shape.
-                    ratio = jnp.sum(chains.parameter_chol[0] ** 2) / jnp.sum(parameter_chol**2)
+                    # Covariance estimates posterior geometry; acceptance feedback
+                    # tunes its scalar multiplier after the geometry changes.
 
                     def restart(
                         step_size: jax.Array,
                     ) -> tuple[jax.Array, DualAveragingAdaptationState]:
                         scale = _clip_scale(
-                            step_size * ratio,
+                            step_size,
                             min_scale=kernel.min_scale[0],
                             max_scale=kernel.max_scale[0],
                         )
