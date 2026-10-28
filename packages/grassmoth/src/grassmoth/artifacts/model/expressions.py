@@ -54,6 +54,7 @@ CONSTRUCT_COEFFICIENT_ROLES: frozenset[CoefficientRole] = frozenset(
         "initial_correlation",
     }
 )
+type MechanismKind = Literal["drift", "potential"]
 type BinaryOperator = Literal["add", "subtract", "multiply", "divide", "power", "maximum"]
 type ExpressionFunction = Literal[
     "exp", "sigmoid", "normal_cdf", "ordered_cutpoints", "category_logits"
@@ -380,7 +381,7 @@ def linear_coefficient(value: Expression, source: ConstructId) -> float | Parame
 
 
 def restoring_coefficients(
-    value: Expression, target: ConstructId, *, kind: Literal["drift", "potential"] = "drift"
+    value: Expression, target: ConstructId, *, kind: MechanismKind = "drift"
 ) -> tuple[CoefficientExpression, ...]:
     """Recognize restoring terms for the existing anchoring and scale checks.
 

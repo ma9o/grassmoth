@@ -1,11 +1,9 @@
 """Run structured particle kernels with Dynestyx parameter/model interpretations."""
 
-import logging
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime
 from types import MappingProxyType
-from typing import Literal, NamedTuple, cast
+from typing import NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
@@ -29,14 +27,14 @@ from grassmoth.artifacts.reports.profiling import (
     TimingSpread,
 )
 from grassmoth.artifacts.sampling import (
+    AdaptationScheme,
     DsmcSpec,
     FixedLatentStepSpec,
-    ParticleAGradSpec,
-    ParticleMGradSpec,
-    TwistedParticleAGradSpec,
+    GuidedPathSpec,
+    SamplerSpec,
 )
-from grassmoth.compute.budget import ComputeBudget
-from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer, scalar_operand
+from grassmoth.compute.context import ModelExecutionContext
+from grassmoth.compute.programs import ProgramCompiler, scalar_operand
 from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
 from grassmoth.models.ssm.inference.continuation import restore_state, retain_state
 from grassmoth.models.ssm.inference.mcmc_state import (
@@ -79,7 +77,7 @@ from grassmoth.models.ssm.inference.samplers.profiling import (
     sum_timings,
 )
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
-from grassmoth.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase
+from grassmoth.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase, SweepProgram
 from grassmoth.models.ssm.inference.samplers.sweeps import (
     ConvergenceCheckpoint,
     RetainedConvergenceCheck,
@@ -244,29 +242,24 @@ def _initial_companion_tuning(
 def run_marginal_particle_gibbs(
     target: ParticleTarget,
     *,
-    compiler: ProgramCompiler,
-    prepare_program: ProgramPreparer,
     kernel: MarginalParticleGibbsKernel,
-    num_warmup: int,
-    num_samples: int,
-    num_chains: int,
+    sampler: SamplerSpec,
     key: PRNGKeyArray,
-    adaptation_rate: float = ADAPTATION_RATE,
     initialization: ParticleInitialization,
-    compute_budget: ComputeBudget,
+    execution_context: ModelExecutionContext,
     # Both adaptation policies stop updating after warmup.
-    adaptation_scheme: Literal["simple", "dual_averaging"] = "simple",
+    adaptation_scheme: AdaptationScheme = "simple",
     tempering: ReplicaExchangeKernel | None = None,
     companion: CompanionKernel | None = None,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    profile: bool = False,
     continuation: SamplerCheckpoint | None = None,
     convergence: RetainedConvergenceCheck | None = None,
 ) -> ParticleChainResult:
     """Run marginalized Particle Gibbs chains from paired starts."""
     assert companion is None or tempering is None, "The sampler spec owns this exclusion"
+    num_warmup = sampler.num_warmup
+    num_chains = sampler.num_chains
+    compiler = execution_context.compiler
+    clock = execution_context.clock
     windows = covariance_windows(num_warmup)
     use_dual_averaging = adaptation_scheme == "dual_averaging"
     observations = target.observations
@@ -294,9 +287,7 @@ def run_marginal_particle_gibbs(
         jnp.asarray(initial_latent_delta_value, dtype=observations.dtype),
     )
     curvature_limited = (
-        isinstance(
-            kernel.path_update, (ParticleAGradSpec, TwistedParticleAGradSpec, ParticleMGradSpec)
-        )
+        isinstance(kernel.path_update, GuidedPathSpec)
         and kernel.path_update.kappa == 1
         and not isinstance(kernel.path_update.latent_step, FixedLatentStepSpec)
     )
@@ -332,9 +323,7 @@ def run_marginal_particle_gibbs(
             state = state._replace(latent_delta=jnp.full_like(state.latent_delta, 0.25))
         return state, geometry
 
-    with inference_phase(
-        "mpgibbs", "initializing_chains", clock=clock, logger=logger, wall_clock=wall_clock
-    ):
+    with inference_phase("mpgibbs", "initializing_chains", execution_context=execution_context):
         initialize = compiler(
             jax.vmap(particle_chain_initializer),
             chain_init_positions,
@@ -367,7 +356,7 @@ def run_marginal_particle_gibbs(
     warmup_rejections = jnp.zeros(swap_attempted.shape, dtype=betas.dtype)
     warmup_steps = scalar_operand(value=num_warmup, dtype=jnp.int32)
     scale_adaptation = latent_adaptation(kernel.path_update)
-    runtime_adaptation_rate = scalar_operand(value=adaptation_rate)
+    runtime_adaptation_rate = scalar_operand(value=ADAPTATION_RATE)
     ladder_interval = scalar_operand(
         value=1 if tempering is None else tempering.spec.adaptation_interval, dtype=jnp.int32
     )
@@ -661,29 +650,22 @@ def run_marginal_particle_gibbs(
 
         return sweep
 
-    with inference_phase(
-        "mpgibbs", "compiling_sweeps", clock=clock, logger=logger, wall_clock=wall_clock
-    ):
+    with inference_phase("mpgibbs", "compiling_sweeps", execution_context=execution_context):
         plan = compile_projected_sweeps(
-            step_factory,
+            SweepProgram(
+                step_factory,
+                label="mpgibbs",
+                max_batch_size=max(
+                    kernel.path_update.num_particles, (1 << (num_steps - 1).bit_length()) // 2
+                )
+                if isinstance(kernel.path_update, DsmcSpec)
+                else 1,
+                excluded_history=excluded_particle_diagnostics(kernel.diagnostic_metrics),
+            ),
             initial,
-            num_warmup=num_warmup,
-            num_samples=num_samples,
-            max_batch_size=max(
-                kernel.path_update.num_particles, (1 << (num_steps - 1).bit_length()) // 2
-            )
-            if isinstance(kernel.path_update, DsmcSpec)
-            else 1,
-            budget=compute_budget,
+            execution_context=execution_context,
+            sampler=sampler,
             target=target,
-            path_dtype=states.latent_trajectory.dtype,
-            num_chains=num_chains,
-            clock=clock,
-            logger=logger,
-            wall_clock=wall_clock,
-            label="mpgibbs",
-            prepare_program=prepare_program,
-            excluded_history=excluded_particle_diagnostics(kernel.diagnostic_metrics),
         )
     dimensions = ParticleProfileDimensions(
         particles=kernel.path_update.num_particles,
@@ -796,12 +778,9 @@ def run_marginal_particle_gibbs(
     run = run_sweeps(
         plan,
         initial,
-        clock=clock,
-        logger=logger,
-        wall_clock=wall_clock,
-        label="mpgibbs",
+        execution_context=execution_context,
         convergence=convergence,
-        profile=profile_state if profile else None,
+        profile=profile_state if execution_context.profile else None,
     )
     final = run.state
     draw_fields = frozenset(("positions", "paths", "observation_log_probs", "log_posterior"))
@@ -849,7 +828,7 @@ def run_marginal_particle_gibbs(
             time_steps=num_steps,
             particle_dimensions=dimensions,
         )
-        if profile
+        if execution_context.profile
         else None,
         compiled_step=plan.compiled_step,
         first_step_seconds=run.first_step_seconds,

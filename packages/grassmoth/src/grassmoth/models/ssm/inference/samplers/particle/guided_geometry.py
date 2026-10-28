@@ -11,7 +11,7 @@ from typing import Literal, NamedTuple
 import jax
 import jax.numpy as jnp
 
-from grassmoth.artifacts.sampling import GuidedPathSpec, TwistedParticleAGradSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.particle.guided_information import (
     InformationRule,
     memory_information,
@@ -22,7 +22,6 @@ from grassmoth.models.ssm.inference.samplers.particle.twist import (
     future_information,
     symmetric,
 )
-from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
 
@@ -130,8 +129,7 @@ def _proposal_geometry(
 
 
 def _build_twist(
-    target: ParticleTarget,
-    guide: ParticleContext,
+    memory: SequentialObservationRuntime,
     auxiliary: Float[Array, "T D"],
     mask: Bool[Array, "T D"],
     spec: GuidedPathSpec,
@@ -143,8 +141,9 @@ def _build_twist(
     the label and time, not the parent particle; evaluating it at u also keeps any
     proposal approximation fixed throughout the conditional update.
     """
+    target, guide = memory.target, memory.guide
     steps, dimension = auxiliary.shape
-    if not isinstance(spec, TwistedParticleAGradSpec) or steps == 1:
+    if spec.method != "twisted_particle_agrad" or steps == 1:
         covariances = jax.vmap(
             lambda previous, index: target.transition_moments(guide, previous, index)[1]
         )(auxiliary[:-1], jnp.arange(1, steps))
@@ -171,8 +170,6 @@ def _build_twist(
 
 
 def _memory_guide(
-    target: ParticleTarget,
-    guide: ParticleContext,
     memory: SequentialObservationRuntime,
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
     label_log_probs: Float[Array, " K"],
@@ -188,6 +185,7 @@ def _memory_guide(
     noise. Their exact nonlinear updates remain in every correction. Long memory,
     nonlinear responses, clipped curvature and separated modes can reduce efficiency.
     """
+    target, guide = memory.target, memory.guide
     points = memory.path(auxiliary)
     steps, dimension = auxiliary.shape
     augmented_mask = jnp.concatenate(
@@ -218,7 +216,7 @@ def _memory_guide(
     parents, innovations, offsets, covariances, matrices, shifts, noises = jax.vmap(affine)(
         points[:-1], auxiliary[1:], jnp.arange(1, steps)
     )
-    if isinstance(spec, TwistedParticleAGradSpec):
+    if spec.method == "twisted_particle_agrad":
         twist = future_information(matrices, shifts, noises, information)
     else:
         twist = GaussianTwist(
@@ -261,8 +259,6 @@ def _memory_guide(
 def build_guide(
     geometry: GuideGeometry,
     rule: InformationRule,
-    target: ParticleTarget,
-    guide: ParticleContext,
     memory: SequentialObservationRuntime,
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
     label_log_probs: Float[Array, " K"],
@@ -274,12 +270,14 @@ def build_guide(
     """Build proposal generation and its normalized density from a fixed guide."""
     if geometry == "memory":
         return _memory_guide(
-            target, guide, memory, observe, label_log_probs, auxiliary, variance, mask, spec, rule
+            memory, observe, label_log_probs, auxiliary, variance, mask, spec, rule
         )
     information = point_information(rule, observe, auxiliary, variance, mask)
-    twist, transition_covariances = _build_twist(target, guide, auxiliary, mask, spec, information)
+    twist, transition_covariances = _build_twist(memory, auxiliary, mask, spec, information)
     proposal = jax.vmap(_proposal_geometry)(
-        jnp.concatenate((target.initial_moments(guide)[1][None], transition_covariances)),
+        jnp.concatenate(
+            (memory.target.initial_moments(memory.guide)[1][None], transition_covariances)
+        ),
         information,
         mask,
         twist.precision,

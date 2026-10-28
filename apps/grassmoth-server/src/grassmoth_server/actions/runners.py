@@ -9,11 +9,10 @@ or changing pinned versions. The enclosing action evaluates its checks before pu
 from __future__ import annotations
 
 import asyncio
-from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from grassmoth.public import InferenceHardware, StructuralSelection, TransferredTuning
+from grassmoth.public import FitInputs, InferenceHardware, StructuralSelection
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import ContinueFitTarget, FitInput
 from grassmoth_server.actions.contracts.requests import (
@@ -23,7 +22,6 @@ from grassmoth_server.actions.contracts.requests import (
     SimulateRequest,
     call_identity,
 )
-from grassmoth_server.actions.errors import ModelFitError
 from grassmoth_server.actions.fit.selection import fit_source, prior_fit
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
@@ -63,66 +61,40 @@ def _fit_selected(
         if isinstance(request.target, ContinueFitTarget)
         else None
     )
-    continuation = None if previous is None else previous.inference.evidence.checkpoint
+    checkpoint = None if previous is None else previous.inference.evidence.checkpoint
 
     from grassmoth_server.study.persistence.store import model_values, read_model, read_question
 
     dynamical_model_spec = model_values(store, read_model(store, pins["model"]))
     question = read_question(store, pins["question"])
-    selection = StructuralSelection.for_question(dynamical_model_spec, question)
-    sampler = resolve_sampler_spec(
-        request.settings, None if continuation is None else continuation.settings
+    inputs = FitInputs(
+        selection=StructuralSelection.for_question(dynamical_model_spec, question),
+        question=question,
+        data_for_model=history.observations,
+        sampler=resolve_sampler_spec(
+            request.settings, None if checkpoint is None else checkpoint.settings
+        ),
+        compute_loo_diagnostics=get_config().inference.compute_loo_diagnostics,
+        previous=previous,
     )
-    if continuation is not None:
-        if (
-            sampler.num_chains != continuation.settings.num_chains
-            or sampler.seed != continuation.settings.seed
-        ):
-            raise ModelFitError(
-                "Continuation inherits its chain count and random stream",
-                diagnostics={"code": "INCOMPATIBLE_CONTINUATION"},
-            )
-        if sampler.kernel_identity != continuation.settings.kernel_identity:
-            if sampler.num_warmup == 0:
-                raise ModelFitError(
-                    "Switching algorithm or joint parameterization requires positive warmup",
-                    diagnostics={"code": "CONTINUATION_REQUIRES_WARMUP"},
-                )
-            continuation = continuation.revised(tuning=TransferredTuning())
+    sampler = inputs.sampler
 
-    config = get_config().inference
     from grassmoth_server.compute.analysis_cache import AnalysisCall, fit_profile_directory
 
     analysis_call = AnalysisCall(workspace_id=store.workspace_id, call_id=call_id)
     if sampler.hardware != InferenceHardware.LOCAL:
         from grassmoth_server.actions.fit.remote import fit_on_modal
 
-        compute_fit = partial(
-            fit_on_modal,
-            sampler.hardware,
-            analysis_call=analysis_call,
-            profile=request.settings.profile,
-        )
+        result = fit_on_modal(inputs, analysis_call=analysis_call, profile=request.settings.profile)
     else:
         from grassmoth_server.storage.paths import cache_dir
 
-        compute_fit = partial(
-            run_fit,
-            profile=request.settings.profile,
+        result = run_fit(
+            inputs,
             profile_dir=fit_profile_directory(Path(cache_dir(store.workspace_id)), analysis_call)
             if request.settings.profile
             else None,
         )
-    result = compute_fit(
-        selection=selection,
-        data_for_model=history.observations,
-        time_origin=history.time_origin,
-        sampler=sampler,
-        question=question,
-        compute_loo_diagnostics=config.compute_loo_diagnostics,
-        continuation=continuation,
-        previous=previous,
-    )
 
     from grassmoth_server.study.persistence.writes import write_model_revision
 

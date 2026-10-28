@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import equinox as eqx
 import jax.numpy as jnp
@@ -13,6 +13,7 @@ from grassmoth.artifacts.immutability import freeze_fields
 from grassmoth.artifacts.model.expressions import (
     CoefficientExpression,
     Expression,
+    MechanismKind,
     StateExpression,
     expression_coefficients,
     expression_states,
@@ -50,14 +51,24 @@ class ExpressionComponent(eqx.Module):
 
 
 @dataclass(frozen=True)
+class EdgeDrift:
+    """A directed edge's drift term, read at its target's edge-adjusted states."""
+
+    source: int
+
+
+# Edges own only drift terms; a construct owns its drift terms and potentials.
+type ComponentRole = EdgeDrift | MechanismKind
+
+
+@dataclass(frozen=True)
 class ExpressionComponentSpec:
     """An expression with resolved state coordinates and direct scientific parameter keys."""
 
     expression: Expression
     target: int
     state_ids: tuple[ConstructId, ...]
-    source: int | None
-    kind: Literal["drift", "potential"] = "drift"
+    role: ComponentRole
 
     state_index: Mapping[ConstructId, int] = field(init=False)
     coefficients: Mapping[CoefficientExpression, float | ParameterId] = field(init=False)
@@ -77,14 +88,14 @@ class ExpressionComponentSpec:
                 raise IncompleteModelError(f"Expression requires its {operand.role} coefficient")
             resolved[operand] = operand.value
         object.__setattr__(self, "coefficients", MappingProxyType(resolved))
-        if self.kind == "potential" and (self.source is not None or self.sources - {self.target}):
+        if self.role == "potential" and self.sources - {self.target}:
             raise ValueError("A node potential may depend only on its owning state")
         freeze_fields(self)
 
     @property
     def edge_owned(self) -> bool:
         """Whether the expression belongs to an edge and requires edge-adjusted state values."""
-        return self.source is not None
+        return isinstance(self.role, EdgeDrift)
 
     @property
     def sources(self) -> frozenset[int]:
@@ -128,11 +139,11 @@ class ExpressionComponentSpec:
 
     def parameter_sites(self, prefix: str) -> Iterator[tuple[ParameterId, SiteDescriptor]]:
         """Yield parameter identities and scalar sampling-site descriptors under the supplied prefix."""
-        positions = (
-            ((self.target, self.source, *sorted(self.sources - {self.source})),)
-            if self.source is not None
-            else (self.target,)
-        )
+        match self.role:
+            case EdgeDrift(source=source):
+                positions = ((self.target, source, *sorted(self.sources - {source})),)
+            case _:
+                positions = (self.target,)
         for index, (identity, operand) in enumerate(self.parameters):
             meaning = operand.meaning
             prior_field = meaning.quantity.value

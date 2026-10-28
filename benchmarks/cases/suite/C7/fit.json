@@ -102,10 +102,11 @@
         "indicator:y": {
           "observation": {
             "name": "y",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -129,10 +130,11 @@
         "indicator:y-mean": {
           "observation": {
             "name": "y_mean",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "mean",
-            "observation_window": "1350s",
-            "categorical_levels": null
+            "observation_window": "1350s"
           },
           "likelihood": {
             "law": {
@@ -164,10 +166,11 @@
         "indicator:u": {
           "observation": {
             "name": "u",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -287,10 +290,11 @@
         "indicator:x": {
           "observation": {
             "name": "x",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {

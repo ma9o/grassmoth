@@ -8,7 +8,7 @@ from grassmoth.artifacts.observations.preparation import (
     RecordedExtractionSpec,
 )
 from grassmoth.artifacts.observations.rows import validate_observation_rows
-from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
+from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
 from grassmoth_server.actions.contracts.preparation import FileSourceRef
 from grassmoth_server.actions.prepare_data.context import MeasurementContext
 from grassmoth_server.actions.prepare_data.materialization import (
@@ -25,7 +25,7 @@ def test_recorded_readings_preserve_irregular_overlapping_support_and_missing_va
             observation=AuthoredObservationSpec(
                 id="indicator:" + name,
                 name=name,
-                measurement_dtype="continuous",
+                measurement=NumericMeasurement(dtype="continuous"),
                 aggregation=aggregation,
                 observation_window="1d",
             ),

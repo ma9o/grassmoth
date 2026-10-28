@@ -1,8 +1,6 @@
 """Sampler continuation survives the server checkpoint codec."""
 
-import logging
-import time
-from datetime import UTC, datetime
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -10,39 +8,39 @@ import pytest
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
+    GuidedPathSpec,
     MarginalParticleGibbsSpec,
-    ParticleAGradSpec,
     SamplerSpec,
-    TwistedParticleAGradSpec,
+    UntemperedSpec,
 )
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.types import MCMCPosterior
 from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
-from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import nonlinear_fit_fixture
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
 @pytest.mark.parametrize(
-    ("companion", "path_type"),
+    ("companion", "path_update"),
     [
-        ("none", DsmcSpec),
-        ("centred_and_scale_noncentred_mh", DsmcSpec),
-        ("centred_nuts", DsmcSpec),
-        ("none", ParticleAGradSpec),
-        ("none", TwistedParticleAGradSpec),
+        ("none", DsmcSpec(num_particles=4)),
+        ("centred_and_scale_noncentred_mh", DsmcSpec(num_particles=4)),
+        ("centred_nuts", DsmcSpec(num_particles=4)),
+        ("none", GuidedPathSpec(method="particle_agrad", num_particles=4)),
+        ("none", GuidedPathSpec(method="twisted_particle_agrad", num_particles=4)),
     ],
 )
 @pytest.mark.inference(concern="warmup")
 def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(
-    companion, path_type
+    companion, path_update
 ):
     prepared, panel = nonlinear_fit_fixture()
     settings = SamplerSpec(
         algorithm=MarginalParticleGibbsSpec(
-            companion=companion, path_update=path_type(num_particles=4)
+            tempering=UntemperedSpec(companion=companion), path_update=path_update
         ),
         num_warmup=40,
         num_samples_per_chain=4,
@@ -55,13 +53,9 @@ def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundt
             panel,
             sampler=options,
             continuation=checkpoint,
-            compute_budget=COMPUTE_BUDGET,
-            reparam=None,
-            clock=time.monotonic,
-            compiler=compile_program,
-            prepare_program=prepare_program,
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
+            execution_context=replace(
+                EXECUTION_CONTEXT, compiler=compile_program, prepare_program=prepare_program
+            ),
         )
         assert isinstance(result, MCMCPosterior)
         assert result.diagnostics.checkpoint is not None

@@ -11,7 +11,10 @@ from grassmoth.artifacts.identity import GitOid, IndicatorId, IndicatorRef
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.reports.checks import NotEvaluated
 from grassmoth.artifacts.reports.data_quality import DataFinding
-from grassmoth.artifacts.reports.posterior_diagnostics import PosteriorPredictiveChecks
+from grassmoth.artifacts.reports.posterior_diagnostics import (
+    PosteriorPredictiveChecks,
+    PPCStatistic,
+)
 
 
 class Added[PayloadT](Value):
@@ -53,9 +56,7 @@ class DataPoint(Value):
     value: FiniteFloat | None
 
 
-type DataStatistic = Literal[
-    "observed_count", "missing_count", "mean", "sd", "min", "max", "proportion"
-]
+type DataStatistic = PPCStatistic | Literal["observed_count", "missing_count", "proportion"]
 
 
 class ScalarStatisticComparison(Value):
@@ -86,6 +87,9 @@ type DataStatisticComparison = Annotated[
 ]
 
 
+type ComparisonSide = Literal["left", "right"]
+
+
 class PredictiveComparison(Value):
     """One reference history compared with the other side's replicated histories.
 
@@ -98,11 +102,11 @@ class PredictiveComparison(Value):
     the side names and number of selected histories do not establish that provenance.
     """
 
-    reference_side: Literal["left", "right"]
+    reference_side: ComparisonSide
     evaluation: PosteriorPredictiveChecks | NotEvaluated[IndicatorRef]
 
 
-class DescriptiveIndicatorComparison(Value):
+class IndicatorComparison(Value):
     """Computed evidence for one persistent indicator identity, without copying its histories.
 
     Point changes are directional, from left to right, and only computed for one
@@ -124,19 +128,13 @@ class DescriptiveIndicatorComparison(Value):
     changes: tuple[Change[DataPoint], ...]
     statistics: tuple[DataStatisticComparison, ...]
     findings: tuple[DataFinding, ...]
-
-
-class PredictiveIndicatorComparison(Value):
-    """Compatible reference and replicate histories with their evaluated predictive comparison."""
-
-    indicator_id: IndicatorId
-    changes: tuple[Change[DataPoint], ...]
-    statistics: tuple[DataStatisticComparison, ...]
-    findings: tuple[DataFinding, ...]
-    predictive: PredictiveComparison
-
-
-type IndicatorComparison = DescriptiveIndicatorComparison | PredictiveIndicatorComparison
+    predictive: PredictiveComparison | None = Field(
+        description=(
+            "Reference history against the other side's replicates, when exactly one side is a "
+            "single history of a compatible numeric indicator; otherwise null. An alignment "
+            "failure is reported as a finding."
+        )
+    )
 
 
 class DataComparisonReport(Value):

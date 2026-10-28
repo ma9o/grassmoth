@@ -57,15 +57,16 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "A_obs",
-            "ordinal_levels": [
-              "low",
-              "mid",
-              "high"
-            ],
-            "measurement_dtype": "ordinal",
+            "measurement": {
+              "dtype": "ordinal",
+              "levels": [
+                "low",
+                "mid",
+                "high"
+              ]
+            },
             "observation_window": null
           }
         }
@@ -239,14 +240,15 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "B_obs",
-            "ordinal_levels": [
-              "absent",
-              "present"
-            ],
-            "measurement_dtype": "ordinal",
+            "measurement": {
+              "dtype": "ordinal",
+              "levels": [
+                "absent",
+                "present"
+              ]
+            },
             "observation_window": null
           }
         }

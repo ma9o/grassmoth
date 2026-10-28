@@ -10,7 +10,7 @@ import pytest
 
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.identity import ConstructId, IndicatorId
-from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
+from grassmoth.artifacts.observations.spec import NumericMeasurement, ResolvedObservationSpec
 from grassmoth.artifacts.reports.checks import NotEvaluated
 from grassmoth.study.projections.visuals import observation_history
 from grassmoth_test_support.helpers import fixture_entity_id
@@ -83,7 +83,7 @@ def test_full_draw_summaries_preserve_modes_and_masked_category_counts():
                 ResolvedObservationSpec(
                     id=indicator,
                     name="Observed",
-                    measurement_dtype="binary",
+                    measurement=NumericMeasurement(dtype="binary"),
                     aggregation="last",
                     observation_window="1d",
                 ),
@@ -96,7 +96,7 @@ def test_full_draw_summaries_preserve_modes_and_masked_category_counts():
             start="2026-01-01", horizon="9d", interventions=({"target": state_id, "value": 1},)
         ).assignments(datetime(2026, 1, 1, tzinfo=UTC)),
     )
-    summary = simulation_summary(evidence, action, observed, mask, reference, observed)
+    summary = simulation_summary(evidence)
     assert summary.state_frames[state_id] == pytest.approx((-5.875, 8.375))
     probabilities = summary.action_category_probabilities[indicator]
     assert probabilities.n_draws == (3, 0, 3)

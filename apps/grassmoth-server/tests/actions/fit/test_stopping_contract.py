@@ -6,17 +6,18 @@ import pytest
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
 
+from grassmoth.actions.fit.inputs import FitInputs
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.reports.checks import Evaluated, NumericCriterionEvidence
 from grassmoth.artifacts.reports.posterior_diagnostics import ConvergenceReport
 from grassmoth.artifacts.sampling import (
     ConvergenceStoppingSpec,
+    GuidedPathSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     NutsTrajectorySpec,
     SamplerSpec,
-    TwistedParticleAGradSpec,
 )
 from grassmoth.models.ssm.inference.diagnostics import convergence
 from grassmoth.models.structure import StructuralSelection
@@ -36,7 +37,9 @@ from grassmoth_test_support.model import load_model_fixture
 @pytest.mark.parametrize(
     "algorithm",
     [
-        MarginalParticleGibbsSpec(path_update=TwistedParticleAGradSpec(num_particles=8)),
+        MarginalParticleGibbsSpec(
+            path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=8)
+        ),
         NutsDASpec(trajectory=NutsTrajectorySpec(max_tree_depth=2)),
     ],
 )
@@ -72,12 +75,13 @@ def test_http_stopping_request_and_native_response_round_trip(algorithm, monkeyp
         stop_when_converged=policy,
     )
     output = run_fit(
-        question=QuestionSpec(text="Stopping response", outcome=model.constructs[0].id),
-        selection=StructuralSelection(model, None),
-        data_for_model=data,
-        time_origin=panel.time_origin,
-        sampler=settings,
-        compute_loo_diagnostics=False,
+        FitInputs(
+            selection=StructuralSelection(model, None),
+            question=QuestionSpec(text="Stopping response", outcome=model.constructs[0].id),
+            data_for_model=data,
+            sampler=settings,
+            compute_loo_diagnostics=False,
+        )
     )
     call_id = CallId("call:" + "a" * 64)
     poll = SuccessfulPoll(

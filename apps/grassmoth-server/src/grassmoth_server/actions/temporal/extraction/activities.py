@@ -225,7 +225,7 @@ class OpenRouterActivities:
                 _read_json(activity_input.call_ref)["result"]
             )
 
-        from grassmoth_server.llm.openrouter import GenerateConfig, Tool, call_model
+        from grassmoth_server.llm.openrouter import Tool, call_model
 
         async def _unused_tool(**kwargs: str) -> str:
             del kwargs
@@ -243,15 +243,10 @@ class OpenRouterActivities:
             for tool in activity_input.tools
         ] or None
         output = await call_model(
-            activity_input.llm.model,
+            activity_input.llm,
             messages,
             client=self._client,
             tools=tools,
-            config=GenerateConfig(
-                max_tokens=activity_input.llm.max_tokens,
-                timeout=activity_input.llm.timeout,
-                reasoning_effort=activity_input.llm.reasoning_effort,
-            ),
             log_label=activity_input.log_label,
         )
 

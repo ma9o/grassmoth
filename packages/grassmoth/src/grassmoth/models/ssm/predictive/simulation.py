@@ -127,16 +127,15 @@ def generate_simulation_batch(
     start: float,
     end: float,
     assignments: tuple[StateAssignment, ...] = (),
-    times: np.ndarray | jnp.ndarray | None = None,
     draws: int = SIMULATION_DRAWS,
     seed: int = SIMULATION_SEED,
     time_origin: datetime,
 ) -> SimulationBatch | ObservationPreflightFailure:
     """Sample current laws once and always generate nonlinear stochastic paths and emissions.
 
-    The window and intervention assignments are in model days. Internal check callers
-    may supply a prepared observation grid and execution budget; otherwise the grid
-    follows the model clock and the assignment boundaries.
+    The window and intervention assignments are in model days. A bound panel supplies
+    its prepared observation grid; otherwise the grid follows the model clock and the
+    assignment boundaries.
     """
     if isinstance(source, BoundPanel):
         time_origin = source.time_origin
@@ -146,6 +145,7 @@ def generate_simulation_batch(
         support = source.observation_support
     else:
         compiled_dynamical_model = source
+        times = None
         observations = None
         support = None
     indicator_ids = tuple(numeric.observation_ids(compiled_dynamical_model))

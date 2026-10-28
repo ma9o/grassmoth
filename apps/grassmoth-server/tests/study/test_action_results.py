@@ -147,7 +147,7 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
     from grassmoth_server.actions.contracts.requests import PrepareDataRequest
     from grassmoth_server.actions.output_builder import complete_attempt
     from grassmoth_server.study.queries.data import read_data_history
-    from grassmoth_server.study.records import applied_attempt
+    from grassmoth_server.study.records import action_attempt
     from grassmoth_server.study.state import ArtifactResult
     from grassmoth_server_test_support.action import question_root
     from grassmoth_server_test_support.runner_fixtures import (
@@ -198,7 +198,7 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
     )
     attempt = complete_attempt(
         workspace,
-        applied_attempt(
+        action_attempt(
             request,
             Applied(
                 result=store.write_result(prepared),
@@ -231,7 +231,7 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
     from grassmoth_server.actions.contracts.requests import EditModelRequest
     from grassmoth_server.actions.model_diff import model_diff
     from grassmoth_server.actions.output_builder import complete_attempt
-    from grassmoth_server.study.records import applied_attempt
+    from grassmoth_server.study.records import action_attempt
     from grassmoth_server_test_support.action import edit_and_check, question_root
     from grassmoth_test_support.helpers import make_model
 
@@ -250,7 +250,7 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
     )
     staged = edit_and_check(workspace, request, repository.state())
     assert isinstance(staged, Applied)
-    attempt = complete_attempt(workspace, applied_attempt(request, staged))
+    attempt = complete_attempt(workspace, action_attempt(request, staged))
     repository.append(AttemptRecord(seq=2, ts="2026-01-01T00:00:00Z", attempt=attempt))
     assert isinstance(attempt.outcome, Applied)
     tree = attempt.outcome.effects.produced[0].revision

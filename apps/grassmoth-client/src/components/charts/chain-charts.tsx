@@ -4,27 +4,21 @@ import type { InferenceDetailView } from "@/lib/model-asset/result-values";
 
 import type { RankHistogram } from "@grassmoth/api-types";
 import { useEffect, useMemo, useRef } from "react";
+import { CanvasChartFrame, ValueGridlines } from "./chart-frame";
 import { CHART_COLORS, chainColor, cssColor, resolveColor } from "./chart-tokens";
 import {
   type Domain,
   type PlotBox,
+  type Tick,
   extentOf,
   linearScale,
+  marginBox,
   padDomain,
   valueTicks,
 } from "./plot-geometry";
 import { paintCanvas, useChartSize } from "./use-chart-size";
 
 const MARGIN = { left: 40, right: 8, top: 6, bottom: 18 } as const;
-
-function plotBox(width: number, height: number): PlotBox {
-  return {
-    left: MARGIN.left,
-    top: MARGIN.top,
-    width: Math.max(1, width - MARGIN.left - MARGIN.right),
-    height: Math.max(1, height - MARGIN.top - MARGIN.bottom),
-  };
-}
 
 function Axes({
   box,
@@ -34,26 +28,13 @@ function Axes({
 }: {
   box: PlotBox;
   y: (value: number) => number;
-  yTicks: readonly { value: number; label: string }[];
+  yTicks: readonly Tick[];
   xLabels: readonly [string, string];
 }) {
   const bottom = box.top + box.height;
   return (
     <g fontSize={10} fill={cssColor(CHART_COLORS.axis)}>
-      {yTicks.map((tick) => (
-        <g key={tick.value}>
-          <line
-            x1={box.left}
-            x2={box.left + box.width}
-            y1={y(tick.value)}
-            y2={y(tick.value)}
-            stroke={cssColor(CHART_COLORS.grid)}
-          />
-          <text x={box.left - 5} y={y(tick.value)} textAnchor="end" dominantBaseline="middle">
-            {tick.label}
-          </text>
-        </g>
-      ))}
+      <ValueGridlines box={box} y={y} ticks={yTicks} />
       <text x={box.left} y={bottom + 13}>
         {xLabels[0]}
       </text>
@@ -79,7 +60,7 @@ export function TraceChart({
   const length = Math.max(0, ...chains.map((chain) => chain.length));
   const geometry = useMemo(() => {
     if (!size) return null;
-    const box = plotBox(size.width, size.height);
+    const box = marginBox(size.width, size.height, MARGIN);
     const domain: Domain = padDomain(extentOf(chains.flat()) ?? [0, 1]);
     return {
       box,
@@ -108,36 +89,22 @@ export function TraceChart({
   }, [size, geometry, chains]);
 
   return (
-    <div
-      ref={container}
-      className="relative w-full"
-      style={{ height }}
-      role="img"
-      aria-label={label}
+    <CanvasChartFrame
+      container={container}
+      canvas={canvas}
+      size={size}
+      height={height}
+      label={label}
     >
-      {size && geometry && (
-        <>
-          <canvas
-            ref={canvas}
-            className="absolute inset-0"
-            style={{ width: size.width, height: size.height }}
-          />
-          <svg
-            className="absolute inset-0 overflow-visible"
-            width={size.width}
-            height={size.height}
-            aria-hidden="true"
-          >
-            <Axes
-              box={geometry.box}
-              y={geometry.y}
-              yTicks={valueTicks(geometry.domain, 3)}
-              xLabels={["draw 1", `draw ${length.toLocaleString()}`]}
-            />
-          </svg>
-        </>
+      {geometry && (
+        <Axes
+          box={geometry.box}
+          y={geometry.y}
+          yTicks={valueTicks(geometry.domain, 3)}
+          xLabels={["draw 1", `draw ${length.toLocaleString()}`]}
+        />
       )}
-    </div>
+    </CanvasChartFrame>
   );
 }
 
@@ -190,7 +157,7 @@ function RankSvg({
   width: number;
   height: number;
 }) {
-  const box = plotBox(width, height);
+  const box = marginBox(width, height, MARGIN);
   const y = linearScale([0, peak], [box.top + box.height, box.top]);
   const binWidth = box.width / bins;
   const barWidth = Math.max(0.6, (binWidth - 1) / Math.max(1, rows.length));
@@ -272,7 +239,7 @@ function StepSvg({
   width: number;
   height: number;
 }) {
-  const box = plotBox(width, height);
+  const box = marginBox(width, height, MARGIN);
   const length = Math.max(1, ...rows.map((row) => row.length));
   const x = linearScale([0, Math.max(1, length - 1)], [box.left, box.left + box.width]);
   const logY = linearScale(domain, [box.top + box.height, box.top]);

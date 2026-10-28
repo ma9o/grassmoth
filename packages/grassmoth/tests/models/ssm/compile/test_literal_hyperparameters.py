@@ -11,6 +11,7 @@ import pytest
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.expressions import Expression, coefficient
 from grassmoth.artifacts.model.likelihood import NegativeBinomial2LawSpec, StudentTLawSpec, function
+from grassmoth.artifacts.observations.spec import NumericMeasurement
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.compile.inputs import compile_priors
 from grassmoth.models.ssm.execution.dynamical_model import (
@@ -56,7 +57,7 @@ def test_literal_observation_operand_has_no_prior_and_preserves_native_law(famil
             )
         )
         observation = indicator.observation.revised(
-            measurement_dtype="continuous" if family == "StudentT" else "count"
+            measurement=NumericMeasurement(dtype="continuous" if family == "StudentT" else "count")
         )
         constructs.append(
             construct.revised(

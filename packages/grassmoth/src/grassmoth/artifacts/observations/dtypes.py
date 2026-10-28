@@ -6,7 +6,9 @@ from typing import Final, Literal
 
 from grassmoth.artifacts.probability.families import DistributionFamily
 
-type MeasurementDtype = Literal["continuous", "binary", "count", "ordinal", "categorical"]
+type NumericDtype = Literal["continuous", "binary", "count"]
+type LabeledDtype = Literal["ordinal", "categorical"]
+type MeasurementDtype = NumericDtype | LabeledDtype
 
 
 VALID_LIKELIHOODS_FOR_DTYPE: Final[dict[str, tuple[DistributionFamily, ...]]] = {

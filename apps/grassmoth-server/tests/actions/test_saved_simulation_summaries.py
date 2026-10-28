@@ -10,6 +10,7 @@ from grassmoth.actions.simulate.summaries import simulation_summary
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from grassmoth.artifacts.observations.spec import LabeledMeasurement, NumericMeasurement
 from grassmoth.artifacts.reports.checks import NotEvaluated
 from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from grassmoth.artifacts.simulation import (
@@ -47,11 +48,11 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
         ["x", "binary", "ordinal", "category"],
         [("x", "binary"), ("binary", "ordinal"), ("ordinal", "category")],
     )
-    dtypes = {
-        "x": "continuous",
-        "binary": "binary",
-        "ordinal": "ordinal",
-        "category": "categorical",
+    measurements = {
+        "x": NumericMeasurement(dtype="continuous"),
+        "binary": NumericMeasurement(dtype="binary"),
+        "ordinal": LabeledMeasurement(dtype="ordinal", levels=("low", "medium", "high")),
+        "category": LabeledMeasurement(dtype="categorical", levels=("a", "b")),
     }
     constructs = tuple(
         c.revised(
@@ -59,9 +60,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
                 i.revised(
                     observation=i.observation.revised(
                         aggregation="last",
-                        measurement_dtype=dtypes[c.name],
-                        ordinal_levels=("low", "medium", "high") if c.name == "ordinal" else None,
-                        categorical_levels=("a", "b") if c.name == "category" else None,
+                        measurement=measurements[c.name],
                     )
                 )
                 for i in c.indicators
@@ -100,7 +99,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
     observations = np.stack(
         [
             np.tile(
-                by_type[dynamical_model_spec.indicator(i).observation.measurement_dtype], (2, 1)
+                by_type[dynamical_model_spec.indicator(i).observation.measurement.dtype], (2, 1)
             ).T
             for i in (indicator.observation.id for indicator in dynamical_model_spec.indicators)
         ],
@@ -162,11 +161,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
             ).assignments(datetime(2026, 1, 1, tzinfo=UTC)),
         ),
     )
-    report = report.revised(
-        summary=simulation_summary(
-            report.evidence, states, observations, mask, states - 1, observations
-        )
-    )
+    report = report.revised(summary=simulation_summary(report.evidence))
     published = history.append(
         applied_record(
             store.workspace_id,
@@ -213,15 +208,15 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
         assert resolve_vector(saved.data[1][variable.id].values) == expected
     path_data = saved.report.summary.model_dump(mode="json")
     for variable in layout.variables:
-        if variable.measurement_dtype == "binary":
+        if variable.measurement.dtype == "binary":
             assert path_data["action_category_probabilities"][variable.id]["probabilities"]["1"][
                 1
             ] == pytest.approx(2 / 3)
-        if variable.measurement_dtype == "ordinal":
+        if variable.measurement.dtype == "ordinal":
             assert path_data["action_category_probabilities"][variable.id]["probabilities"][
                 "medium"
             ][1] == pytest.approx(1 / 3)
-        if variable.measurement_dtype == "categorical":
+        if variable.measurement.dtype == "categorical":
             assert path_data["action_category_probabilities"][variable.id]["probabilities"]["b"][
                 1
             ] == pytest.approx(2 / 3)
@@ -235,8 +230,6 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "grassmoth.models.ssm.predictive.simulation.generate_simulation_batch", no_generation
     )
-    assert ArtifactStore("SUMMARY").read_result(result_ref, SimulateOutput).report == first
-    monkeypatch.setattr("grassmoth_server.actions.output_builder.build_output", no_generation)
     assert ArtifactStore("SUMMARY").read_result(result_ref, SimulateOutput).report == first
 
 

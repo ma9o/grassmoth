@@ -10,7 +10,7 @@ practical parameter identification or a full nonlinear relaxation timescale.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, assert_never
 
 import numpy as np
 
@@ -56,7 +56,6 @@ class CheckResult:
         diagnosis: tuple[str, ...] = (),
         evidence: Mapping[str, np.ndarray | float] | None = None,
         *,
-        outcome: Literal["passed", "failed"],
         measurements: tuple[NumericCriterionEvidence, ...],
     ) -> CheckResult:
         """Build an evaluated check from measurements, deriving its verdict from their accepted bands."""
@@ -65,7 +64,7 @@ class CheckResult:
             Evaluated(
                 code=check,
                 subject=target,
-                outcome=outcome,
+                outcome="passed" if all(item.accepted for item in measurements) else "failed",
                 evidence=tuple(
                     NumericCriterionEvidence(
                         criterion=item.criterion,
@@ -223,7 +222,6 @@ def check_confinement(
             f"simulation of {name} produced non-finite values — dependent measurements cannot be evaluated.",
             _diag_a,
             _ev,
-            outcome="passed" if _nonfinite == 0.0 else "failed",
             measurements=(
                 NumericCriterionEvidence(
                     criterion="nonfinite_fraction", value=_nonfinite, upper=0.0
@@ -238,7 +236,6 @@ def check_confinement(
             f"trajectories of {name} grow without settling within the study window.",
             _diag_b,
             _ev,
-            outcome="passed" if _explode < max_explosive_frac else "failed",
             measurements=(
                 NumericCriterionEvidence(
                     criterion="explosive_fraction",
@@ -290,7 +287,6 @@ def check_scale(
         f"marginal predictive scale of {name} is inconsistent with the standardized latent convention ({anchor_src}).",
         _diag,
         _ev,
-        outcome="passed" if _ok else "failed",
         measurements=(
             NumericCriterionEvidence(
                 criterion="median_latent_sd", value=_med, lower=_lo, upper=_hi
@@ -318,7 +314,6 @@ def check_resolvability(
             f"the schedule for {name} contains too few distinct observations to resolve dynamics.",
             ("no temporal contrast is available for this construct",),
             {"observation_times": _times},
-            outcome="failed",
             measurements=(
                 NumericCriterionEvidence(
                     criterion="distinct_observation_times", value=float(_times.size), lower=2.0
@@ -365,7 +360,6 @@ def check_resolvability(
         f"the timescale posited for {name} lies outside the window this sampling design can resolve under the declared decay-coefficient screen.",
         _diag,
         _ev,
-        outcome="passed" if _ok else "failed",
         measurements=(
             NumericCriterionEvidence(
                 criterion="resolvable_mass", value=_frac_in, lower=min_resolvable_mass
@@ -415,7 +409,6 @@ def check_edge_share(
             f"the {edge_label} input dominates the child's temporal variation; its self-dynamics are left uninformed.",
             _diag_b,
             _ev,
-            outcome="passed" if bool(_med <= 0.95) else "failed",
             measurements=(
                 NumericCriterionEvidence(
                     criterion="median_edge_displacement_share", value=_med, upper=0.95
@@ -470,7 +463,6 @@ def check_saturation(
         f"the saturating edge {edge_label} is not exercised over the parent's predictive range; its nonlinearity is either a dead linear arm or a flat saturated response.",
         _diag,
         _ev,
-        outcome="passed" if _ok else "failed",
         measurements=(
             NumericCriterionEvidence(
                 criterion="bend_exercised_mass", value=_exercised_mass, lower=min_exercised_mass
@@ -528,6 +520,10 @@ def check_coverage(
         _obs_width = float(-np.sum(_obs_freq * np.log(_obs_freq + _eps)))
         _width_band = _band(_rep_width)
         _width_ok = _inside(_obs_width, _width_band)
+        _location_value = f"frequency TV from predictive center {_obs_location:.2f}"
+        _location_band_text = f"≤ {_location_band[1]:.2f} (99% replicate envelope)"
+        _width_value = f"category entropy {_obs_width:.2f}"
+        _width_band_text = f"[{_width_band[0]:.2f}, {_width_band[1]:.2f}] replicate envelope"
         _width_measurements = (
             NumericCriterionEvidence(
                 criterion="observed_width",
@@ -536,10 +532,6 @@ def check_coverage(
                 upper=_width_band[1],
             ),
         )
-        _location_value = f"frequency TV from predictive center {_obs_location:.2f}"
-        _location_band_text = f"≤ {_location_band[1]:.2f} (99% replicate envelope)"
-        _width_value = f"category entropy {_obs_width:.2f}"
-        _width_band_text = f"[{_width_band[0]:.2f}, {_width_band[1]:.2f}] replicate envelope"
     elif _count:
         _rep_location = np.mean(_pp_matrix, axis=1)
         _obs_location = float(np.mean(_obs))
@@ -552,6 +544,15 @@ def check_coverage(
         _obs_zero = float(np.mean(_obs == 0))
         _zero_band = _band(_rep_zero)
         _width_ok = _inside(_obs_variance, _variance_band) and _inside(_obs_zero, _zero_band)
+        _location_value = f"observed mean {_obs_location:.2f}"
+        _location_band_text = (
+            f"[{_location_band[0]:.2f}, {_location_band[1]:.2f}] replicate envelope"
+        )
+        _width_value = f"variance {_obs_variance:.2f}; zero fraction {_obs_zero:.0%}"
+        _width_band_text = (
+            f"variance [{_variance_band[0]:.2f}, {_variance_band[1]:.2f}], "
+            f"zero fraction [{_zero_band[0]:.0%}, {_zero_band[1]:.0%}]"
+        )
         _width_measurements = (
             NumericCriterionEvidence(
                 criterion="observed_variance",
@@ -566,15 +567,6 @@ def check_coverage(
                 upper=_zero_band[1],
             ),
         )
-        _location_value = f"observed mean {_obs_location:.2f}"
-        _location_band_text = (
-            f"[{_location_band[0]:.2f}, {_location_band[1]:.2f}] replicate envelope"
-        )
-        _width_value = f"variance {_obs_variance:.2f}; zero fraction {_obs_zero:.0%}"
-        _width_band_text = (
-            f"variance [{_variance_band[0]:.2f}, {_variance_band[1]:.2f}], "
-            f"zero fraction [{_zero_band[0]:.0%}, {_zero_band[1]:.0%}]"
-        )
     else:
         _rep_location = np.median(_pp_matrix, axis=1)
         _obs_location = float(np.median(_obs))
@@ -584,6 +576,12 @@ def check_coverage(
         _obs_width = float(_robust_scale(_obs))
         _width_band = _band(_rep_width)
         _width_ok = _inside(_obs_width, _width_band)
+        _location_value = f"observed median {_obs_location:.2f}"
+        _location_band_text = (
+            f"[{_location_band[0]:.2f}, {_location_band[1]:.2f}] replicate envelope"
+        )
+        _width_value = f"robust scale {_obs_width:.2f}"
+        _width_band_text = f"[{_width_band[0]:.2f}, {_width_band[1]:.2f}] replicate envelope"
         _width_measurements = (
             NumericCriterionEvidence(
                 criterion="observed_width",
@@ -592,12 +590,6 @@ def check_coverage(
                 upper=_width_band[1],
             ),
         )
-        _location_value = f"observed median {_obs_location:.2f}"
-        _location_band_text = (
-            f"[{_location_band[0]:.2f}, {_location_band[1]:.2f}] replicate envelope"
-        )
-        _width_value = f"robust scale {_obs_width:.2f}"
-        _width_band_text = f"[{_width_band[0]:.2f}, {_width_band[1]:.2f}] replicate envelope"
 
     _pp = _pp_matrix.ravel()
     _ev = {
@@ -629,7 +621,6 @@ def check_coverage(
             f"the predictive puts little mass near the location of {indicator}.",
             _diag_a,
             _ev,
-            outcome="passed" if _location_ok else "failed",
             measurements=(
                 NumericCriterionEvidence(
                     criterion="observed_location",
@@ -647,7 +638,6 @@ def check_coverage(
             f"predictive spread for {indicator} is out of proportion to the observed spread.",
             _diag_b,
             _ev,
-            outcome="passed" if _width_ok else "failed",
             measurements=_width_measurements,
         ),
     ]
@@ -705,7 +695,6 @@ def check_transmission(
                 "Defined conditional observation moments",
                 "The observation law has undefined moments, so a variance-based temporal signal share cannot be reported for these draws.",
                 evidence={"undefined_moment_fraction": undefined},
-                outcome="failed",
                 measurements=(
                     NumericCriterionEvidence(
                         criterion="undefined_moment_fraction", value=undefined, upper=0.0
@@ -749,7 +738,6 @@ def check_transmission(
             "conditional_variance": _conditional_variance,
             "min_signal_fraction": min_signal_fraction,
         },
-        outcome="passed" if _trans_ok else "failed",
         measurements=(
             NumericCriterionEvidence(
                 criterion="median_temporal_signal_share", value=_transmit, lower=min_signal_fraction

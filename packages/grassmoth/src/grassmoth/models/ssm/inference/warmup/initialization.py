@@ -14,8 +14,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 )
 from grassmoth.artifacts.sampling import GaussianInitializationSpec
 from grassmoth.compute.batching import compiled_memory
-from grassmoth.compute.budget import ComputeBudget
-from grassmoth.compute.programs import ProgramCompiler
+from grassmoth.compute.context import ModelExecutionContext
 from grassmoth.models.ssm.inference.joint_coordinates import (
     CentredParameterization,
     JointChart,
@@ -53,11 +52,10 @@ def prepare_particle_initialization(
     spec: GaussianInitializationSpec,
     key: PRNGKeyArray,
     num_chains: int,
-    compute_budget: ComputeBudget,
-    compiler: ProgramCompiler,
+    execution_context: ModelExecutionContext,
 ) -> ParticleInitialization | InitializationFailure:
     """Select explicit starting geometry without changing the retained target."""
-    coordinates = build_joint_coordinates(target, "centred", compiler=compiler)
+    coordinates = build_joint_coordinates(target, "centred", compiler=execution_context.compiler)
     assert isinstance(coordinates.parameterization, CentredParameterization)
 
     def gaussian_initialization(
@@ -81,8 +79,8 @@ def prepare_particle_initialization(
             jnp.var(paths, axis=0),
         )
 
-    program = compiler(gaussian_initialization, coordinates.chart, key)
-    if not compute_budget.capacity(compiled_memory(program.executable), limit=1):
+    program = execution_context.compiler(gaussian_initialization, coordinates.chart, key)
+    if not execution_context.budget.capacity(compiled_memory(program.executable), limit=1):
         raise MemoryError("Gaussian initialization exceeds the numerical execution memory budget")
     positions, paths, parameter_chol, pilot_mean, pilot_variance = program.call(
         coordinates.chart, key

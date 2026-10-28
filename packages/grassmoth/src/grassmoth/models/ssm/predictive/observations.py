@@ -28,49 +28,6 @@ if TYPE_CHECKING:
 class PredictiveObservationMeanOverflow(RuntimeError):
     """Raised when a log-link predictive mean exceeds finite numeric range."""
 
-    def __init__(
-        self,
-        *,
-        bad_manifest_names: tuple[str, ...],
-        manifest_indices: tuple[int, ...],
-        failing_draw_indices: tuple[int, ...],
-        n_draws: int,
-        first_bad_time_index: int,
-        max_linear_predictor: float,
-        overflow_threshold: float,
-        n_nonfinite: int = 0,
-    ) -> None:
-        """Retain affected indicators, draws, and first failing time in a predictive overflow error."""
-        self.bad_manifest_names = bad_manifest_names
-        self.manifest_indices = manifest_indices
-        self.failing_draw_indices = failing_draw_indices
-        self.n_draws = n_draws
-        self.first_bad_time_index = first_bad_time_index
-        self.max_linear_predictor = max_linear_predictor
-        self.overflow_threshold = overflow_threshold
-        self.n_nonfinite = n_nonfinite
-        manifest_summary = ", ".join(bad_manifest_names) if bad_manifest_names else "unknown"
-        if n_nonfinite:
-            cause = (
-                f"linear predictor contains {n_nonfinite} non-finite (NaN/Inf) values for "
-                f"{manifest_summary} — the latent simulation diverged under these model laws "
-                "(rein in feedback edge gains, diffusion, or persistence), "
-                f"max finite eta={max_linear_predictor:.2f}"
-            )
-        else:
-            cause = (
-                f"linear predictor exceeded the finite exp range for {manifest_summary} "
-                f"(max eta={max_linear_predictor:.2f}, threshold={overflow_threshold:.2f}"
-            )
-        super().__init__(
-            "Predictive log-link mean overflow before observation sampling: "
-            f"{cause}, first bad time index={first_bad_time_index}; "
-            f"{len(failing_draw_indices)} of {n_draws} predictive draws affected — "
-            "a small fraction means heavy tails (tighten sigma/upper bounds); "
-            "most draws means the central mass is wrong (lower the loading/edge-gain "
-            "or intercept location feeding this log link)."
-        )
-
 
 def _resolve_effective_observation_mask(
     target_shape: tuple[int, ...],
@@ -129,23 +86,38 @@ def _raise_if_log_link_mean_overflow(
         return
 
     manifest_mask = bad_mask.any(axis=(0, 1))
-    manifest_indices = tuple(int(idx) for idx in np.flatnonzero(manifest_mask))
     names = manifest_names or [f"var_{idx}" for idx in range(linear_np.shape[2])]
-    bad_manifest_names = tuple(names[idx] for idx in manifest_indices if idx < len(names))
+    bad_manifest_names = tuple(
+        names[idx]
+        for idx in (int(idx) for idx in np.flatnonzero(manifest_mask))
+        if idx < len(names)
+    )
     draw_mask = bad_mask.reshape(bad_mask.shape[0], -1).any(axis=1)
-    failing_draw_indices = tuple(int(idx) for idx in np.flatnonzero(draw_mask))
+    failing_draws = int(np.count_nonzero(draw_mask))
     time_mask = bad_mask.any(axis=(0, 2))
     first_bad_time_index = int(np.flatnonzero(time_mask)[0])
     max_linear_predictor = float(np.nanmax(linear_np[..., log_link_mask]))
+    n_nonfinite = int((~np.isfinite(linear_np[..., log_link_mask])).sum())
+    manifest_summary = ", ".join(bad_manifest_names) if bad_manifest_names else "unknown"
+    if n_nonfinite:
+        cause = (
+            f"linear predictor contains {n_nonfinite} non-finite (NaN/Inf) values for "
+            f"{manifest_summary} — the latent simulation diverged under these model laws "
+            "(rein in feedback edge gains, diffusion, or persistence), "
+            f"max finite eta={max_linear_predictor:.2f}"
+        )
+    else:
+        cause = (
+            f"linear predictor exceeded the finite exp range for {manifest_summary} "
+            f"(max eta={max_linear_predictor:.2f}, threshold={overflow_threshold:.2f}"
+        )
     raise PredictiveObservationMeanOverflow(
-        bad_manifest_names=bad_manifest_names,
-        manifest_indices=manifest_indices,
-        failing_draw_indices=failing_draw_indices,
-        n_draws=int(linear_np.shape[0]),
-        first_bad_time_index=first_bad_time_index,
-        max_linear_predictor=max_linear_predictor,
-        overflow_threshold=overflow_threshold,
-        n_nonfinite=int((~np.isfinite(linear_np[..., log_link_mask])).sum()),
+        "Predictive log-link mean overflow before observation sampling: "
+        f"{cause}, first bad time index={first_bad_time_index}; "
+        f"{failing_draws} of {int(linear_np.shape[0])} predictive draws affected — "
+        "a small fraction means heavy tails (tighten sigma/upper bounds); "
+        "most draws means the central mass is wrong (lower the loading/edge-gain "
+        "or intercept location feeding this log link)."
     )
 
 

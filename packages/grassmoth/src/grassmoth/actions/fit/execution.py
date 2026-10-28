@@ -16,18 +16,13 @@ from grassmoth.models.ssm.preparation.panel import PreparedFit, prepare_fit
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Callable, Sequence
-    from datetime import datetime
 
+    from grassmoth.actions.fit.inputs import FitInputs
     from grassmoth.artifacts.continuation import SamplerCheckpoint
-    from grassmoth.artifacts.observations.dataset import ObservationDataset
-    from grassmoth.artifacts.sampling import SamplerSpec
-    from grassmoth.compute.budget import ComputeBudget
-    from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
+    from grassmoth.compute.context import ModelExecutionContext
     from grassmoth.models.ssm.inference.types import MCMCPosterior
     from grassmoth.models.ssm.preparation.binding import BoundPanel
-    from grassmoth.models.structure import StructuralSelection
 
 
 @dataclass(frozen=True)
@@ -51,37 +46,6 @@ class ModelFitFailure(Value):
 
     error: str
     duration_seconds: float
-
-
-def fit_prepared_model(
-    prepared: PreparedFit,
-    *,
-    sampler: SamplerSpec,
-    budget: ComputeBudget,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    compiler: ProgramCompiler,
-    prepare_program: ProgramPreparer,
-    profile: bool = False,
-    continuation: SamplerCheckpoint | None = None,
-) -> MCMCPosterior | UnretainedRun | ObservationPreflightFailure | InitializationFailure:
-    """Run on resolved sampler choices and the sampler's owned initialization."""
-    from grassmoth.models.ssm.inference.fit import fit
-
-    return fit(
-        prepared.inputs.prior_runtime_bundle,
-        prepared.panel,
-        compute_budget=budget,
-        sampler=sampler,
-        continuation=continuation,
-        profile=profile,
-        clock=clock,
-        logger=logger,
-        wall_clock=wall_clock,
-        compiler=compiler,
-        prepare_program=prepare_program,
-    )
 
 
 def _fit_elapsed_seconds(start: float, clock: Callable[[], float]) -> float:
@@ -121,21 +85,15 @@ def _support_summary(panel: BoundPanel) -> str:
 
 
 def fit_model(
-    selection: StructuralSelection,
-    data_for_model: ObservationDataset,
+    inputs: FitInputs,
     *,
-    time_origin: datetime,
-    sampler: SamplerSpec,
-    budget: ComputeBudget,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    compiler: ProgramCompiler,
-    prepare_program: ProgramPreparer,
-    profile: bool = False,
-    continuation: SamplerCheckpoint | None = None,
+    continuation: SamplerCheckpoint | None,
+    execution_context: ModelExecutionContext,
 ) -> FittedModelResult | ModelFitFailure:
     """Fit the selected SSM using supplied computation, timing and logging dependencies."""
+    clock = execution_context.clock
+    logger = execution_context.logger
+    data_for_model, sampler = inputs.data_for_model, inputs.sampler
     logger.info(
         "Fitting model: rows=%d indicators=%d sampler=%s",
         sum(len(series.rows) for series in data_for_model.series.values()),
@@ -146,9 +104,9 @@ def fit_model(
 
     from grassmoth.models.ssm.compile.inputs import compile_ssm_inputs_from_model
 
-    inputs = compile_ssm_inputs_from_model(selection)
+    compiled = compile_ssm_inputs_from_model(inputs.selection)
     prep_t0 = clock()
-    prepared = prepare_fit(inputs, data_for_model, time_origin=time_origin, compiler=compiler)
+    prepared = prepare_fit(compiled, data_for_model, compiler=execution_context.compiler)
     if not isinstance(prepared, PreparedFit):
         return ModelFitFailure(
             error=prepared.message, duration_seconds=_fit_elapsed_seconds(t0, clock)
@@ -175,17 +133,14 @@ def fit_model(
     # Fit the model and retain the exact joint posterior.
     logger.info("Starting inference kernel...")
     fit_t0 = clock()
-    result = fit_prepared_model(
-        prepared,
+    from grassmoth.models.ssm.inference.fit import fit
+
+    result = fit(
+        prepared.inputs.prior_runtime_bundle,
+        prepared.panel,
         sampler=sampler,
+        execution_context=execution_context,
         continuation=continuation,
-        profile=profile,
-        budget=budget,
-        clock=clock,
-        wall_clock=wall_clock,
-        logger=logger,
-        compiler=compiler,
-        prepare_program=prepare_program,
     )
     if isinstance(result, (ObservationPreflightFailure, InitializationFailure)):
         return ModelFitFailure(

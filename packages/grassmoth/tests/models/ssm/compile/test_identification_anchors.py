@@ -36,7 +36,7 @@ from grassmoth.artifacts.model.likelihood import (
 )
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
 from grassmoth.artifacts.observations.semantics import SummaryOperator
-from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
+from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.compilation_errors import AggregatedCompileError
 from grassmoth.models.ssm import compiled_access as numeric
@@ -108,7 +108,7 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_2_f
                 observation=AuthoredObservationSpec(
                     id=_MOOD_RATING_INDICATOR_ID,
                     name="mood_rating",
-                    measurement_dtype="count",
+                    measurement=NumericMeasurement(dtype="count"),
                     aggregation=SummaryOperator.COUNT,
                     observation_window=None,
                 ),
@@ -162,7 +162,7 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_2_f
     mood_rating = indicator_named(dynamical_model_spec, "mood_rating")
     mood_rating_revised = mood_rating.revised(
         observation=mood_rating.observation.revised(
-            measurement_dtype="continuous", aggregation=SummaryOperator.SUM
+            measurement=NumericMeasurement(dtype="continuous"), aggregation=SummaryOperator.SUM
         )
     )
     mood_revised = mood.revised(indicators=(mood_rating_revised,))
@@ -203,7 +203,7 @@ def _free_center_without_standardized_channel_fails__with_likelihoods() -> Dynam
                 observation=AuthoredObservationSpec(
                     id=_MOOD_FLAG_INDICATOR_ID,
                     name="mood_flag",
-                    measurement_dtype="binary",
+                    measurement=NumericMeasurement(dtype="binary"),
                     aggregation=SummaryOperator.LAST,
                     observation_window=None,
                 ),
@@ -303,7 +303,7 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_tru
     mood_rating = indicator_named(dynamical_model_spec, "mood_rating")
     mood_rating_revised = mood_rating.revised(
         observation=mood_rating.observation.revised(
-            measurement_dtype="count", aggregation=SummaryOperator.COUNT
+            measurement=NumericMeasurement(dtype="count"), aggregation=SummaryOperator.COUNT
         )
     )
     mood_revised = mood.revised(indicators=(mood_rating_revised,))
@@ -390,7 +390,7 @@ def _static_t0_mean_gated_without_standardized_channel__with_likelihoods() -> Dy
                 observation=AuthoredObservationSpec(
                     id=_TRAIT_FLAG_INDICATOR_ID,
                     name="trait_flag",
-                    measurement_dtype="binary",
+                    measurement=NumericMeasurement(dtype="binary"),
                     aggregation=SummaryOperator.LAST,
                     observation_window=None,
                 ),
@@ -454,7 +454,7 @@ def _manifest_intercept_remains_free_for_binary_channel__with_likelihoods() -> D
                 observation=AuthoredObservationSpec(
                     id=_MOOD_FLAG_INDICATOR_ID,
                     name="mood_flag",
-                    measurement_dtype="binary",
+                    measurement=NumericMeasurement(dtype="binary"),
                     aggregation=SummaryOperator.LAST,
                     observation_window=None,
                 ),
@@ -650,16 +650,15 @@ def _indicator(
     polarity: str = "positive",
 ) -> dict[str, Any]:
     levels: dict[str, list[str]] = {
-        "ordinal": {"ordinal_levels": ["low", "medium", "high"]},
-        "categorical": {"categorical_levels": ["a", "b", "c"]},
+        "ordinal": {"levels": ["low", "medium", "high"]},
+        "categorical": {"levels": ["a", "b", "c"]},
     }.get(dtype, {})
     return {
         "observation": {
             "id": fixture_entity_id("indicator", name),
             "name": name,
-            "measurement_dtype": dtype,
+            "measurement": {"dtype": dtype, **levels},
             "aggregation": "mean" if dtype == "continuous" else "last",
-            **levels,
         },
         "construct_id": fixture_entity_id("construct", construct_name),
         "construct_polarity": polarity,

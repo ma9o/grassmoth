@@ -111,7 +111,7 @@ def _measured_model() -> dict[str, Any]:
         "indicator:sleep": {
             "observation": {
                 "name": "sleep_steps_proxy",
-                "measurement_dtype": "continuous",
+                "measurement": {"dtype": "continuous"},
                 "aggregation": "mean",
             },
             "construct_polarity": "positive",

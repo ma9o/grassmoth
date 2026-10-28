@@ -19,7 +19,12 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     MCMCEvidence,
     ParticleSamplerDiagnostics,
 )
-from grassmoth.artifacts.sampling import DsmcSpec, MarginalParticleGibbsSpec
+from grassmoth.artifacts.sampling import (
+    DsmcSpec,
+    GaussianReferenceTemperingSpec,
+    MarginalParticleGibbsSpec,
+    UntemperedSpec,
+)
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import (
     frozen_particle_tuning,
@@ -31,6 +36,7 @@ from grassmoth.models.ssm.inference.extraction import (
     project_initialization,
 )
 from grassmoth.models.ssm.inference.problem import build_particle_problem
+from grassmoth.models.ssm.inference.reparameterization import AutoReparam
 from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
     build_companion_kernel,
     diffusion_scale_mask,
@@ -61,18 +67,11 @@ from grassmoth.models.ssm.inference.warmup.initialization import (
     prepare_particle_initialization,
 )
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
-from grassmoth.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
 
 if TYPE_CHECKING:
-    import logging
-    from collections.abc import Callable
-    from datetime import datetime
-
     from grassmoth.artifacts.reports.posterior_diagnostics import DiagnosticPhase
     from grassmoth.artifacts.sampling import SamplerSpec
-    from grassmoth.compute.budget import ComputeBudget
-    from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
-    from grassmoth.models.ssm.inference.reparameterization import Strategy
+    from grassmoth.compute.context import ModelExecutionContext
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
     from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
     from grassmoth.models.ssm.preparation.binding import BoundPanel
@@ -82,18 +81,14 @@ def fit_marginal_particle_gibbs(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
-    compiler: ProgramCompiler,
-    prepare_program: ProgramPreparer,
-    compute_budget: ComputeBudget,
     sampler: SamplerSpec,
-    reparam: Strategy | None = None,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    profile: bool = False,
+    execution_context: ModelExecutionContext,
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Run exact particle inference with resolved choices and owned warmup outputs."""
+    compiler = execution_context.compiler
+    clock = execution_context.clock
+    logger = execution_context.logger
     observations = panel.observations
     options = sampler.algorithm
     assert isinstance(options, MarginalParticleGibbsSpec)
@@ -115,18 +110,13 @@ def fit_marginal_particle_gibbs(
 
     phase_t0 = clock()
     logger.info("phase 1/4: building marginalized Particle Gibbs runtime bundle...")
-    # The model is a continuous-time nonlinear SDE; the particle smoother always
-    # discretizes it with the nonlinearity-preserving Euler-Maruyama scheme.
-    scheme = LATENT_TRANSITION_EULER_MARUYAMA
-    with inference_phase(
-        "mpgibbs", "building_target", clock=clock, logger=logger, wall_clock=wall_clock
-    ):
+    with inference_phase("mpgibbs", "building_target", execution_context=execution_context):
         bundle = build_particle_problem(
             priors,
             panel,
-            scheme=scheme,
             trace_key=trace_key,
-            reparam=reparam,
+            # Fully non-centred; a strategy caches per-site choices, so each fit owns one.
+            reparam=AutoReparam(centered=0.0),
             compiler=compiler,
         )
     logger.info(
@@ -142,15 +132,14 @@ def fit_marginal_particle_gibbs(
         initialization = continued_particle_initialization(continuation)
     else:
         with inference_phase(
-            "mpgibbs", "preparing_initialization", clock=clock, logger=logger, wall_clock=wall_clock
+            "mpgibbs", "preparing_initialization", execution_context=execution_context
         ):
             initialization = prepare_particle_initialization(
                 bundle.runtime,
-                compute_budget=compute_budget,
                 spec=options.initialization,
                 key=initialization_key,
                 num_chains=sampler.num_chains,
-                compiler=compiler,
+                execution_context=execution_context,
             )
     if isinstance(initialization, InitializationFailure):
         return initialization
@@ -188,48 +177,46 @@ def fit_marginal_particle_gibbs(
     kernel = make_kernel(bundle.runtime)
     tempering = None
     reference = None
-    if options.tempering is not None:
-        if (
-            continuation is not None
-            and isinstance(continuation.tuning, ParticleTuning)
-            and continuation.tuning.gaussian_reference
-        ):
-            from grassmoth.models.ssm.inference.targets.gaussian_reference import (
-                GaussianReference,
-            )
+    companion = None
+    match options.tempering:
+        case UntemperedSpec(companion=moves):
+            if moves != "none":
+                companion = build_companion_kernel(
+                    bundle.runtime,
+                    moves,
+                    diffusion_mask=diffusion_scale_mask(bundle.runtime, priors),
+                    parameter_gradient=kernel.parameter_gradient_fn,
+                    compiler=compiler,
+                )
+        case GaussianReferenceTemperingSpec() as ladder:
+            if (
+                continuation is not None
+                and isinstance(continuation.tuning, ParticleTuning)
+                and continuation.tuning.gaussian_reference
+            ):
+                from grassmoth.models.ssm.inference.targets.gaussian_reference import (
+                    GaussianReference,
+                )
 
-            reference = GaussianReference(
-                *(jnp.asarray(value.values) for value in continuation.tuning.gaussian_reference)
-            )
-        else:
-            reference = build_gaussian_reference(
-                bundle.runtime,
-                positions=initialization.positions,
-                paths=initialization.paths,
-                parameter_chol=initialization.parameter_chol,
-                scale=options.tempering.reference_scale,
-            )
-        tempering = ReplicaExchangeKernel(bundle.runtime, reference, make_kernel, options.tempering)
-    companion = (
-        None
-        if options.companion == "none"
-        else build_companion_kernel(
-            bundle.runtime,
-            options.companion,
-            diffusion_mask=diffusion_scale_mask(bundle.runtime, priors),
-            parameter_gradient=kernel.parameter_gradient_fn,
-            compiler=compiler,
-        )
-    )
+                reference = GaussianReference(
+                    *(jnp.asarray(value.values) for value in continuation.tuning.gaussian_reference)
+                )
+            else:
+                reference = build_gaussian_reference(
+                    bundle.runtime,
+                    positions=initialization.positions,
+                    paths=initialization.paths,
+                    parameter_chol=initialization.parameter_chol,
+                    scale=ladder.reference_scale,
+                )
+            tempering = ReplicaExchangeKernel(bundle.runtime, reference, make_kernel, ladder)
     run_result = run_marginal_particle_gibbs(
         bundle.runtime,
         kernel=kernel,
-        compute_budget=compute_budget,
-        num_warmup=sampler.num_warmup,
-        num_samples=sampler.num_samples_per_chain,
-        num_chains=sampler.num_chains,
+        sampler=sampler,
         key=sampling_key,
         initialization=initialization,
+        execution_context=execution_context,
         convergence=retained_convergence_check(
             sampler.stop_when_converged,
             bundle=bundle,
@@ -242,13 +229,7 @@ def fit_marginal_particle_gibbs(
         adaptation_scheme=options.adaptation_scheme,
         tempering=tempering,
         companion=companion,
-        clock=clock,
-        logger=logger,
-        wall_clock=wall_clock,
         continuation=continuation,
-        profile=profile,
-        compiler=compiler,
-        prepare_program=prepare_program,
     )
     tuning = (
         continuation.tuning
@@ -274,7 +255,6 @@ def fit_marginal_particle_gibbs(
     if sampler.num_samples_per_chain == 0:
         return UnretainedRun.completed(
             sampler,
-            MCMCEvidence(),
             run_result.compiled_step,
             {
                 "initialization" if continuation is None else "continued_start": starting_values,

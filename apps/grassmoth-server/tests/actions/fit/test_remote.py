@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import modal
 import pytest
 
+from grassmoth.actions.fit.inputs import FitInputs
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.sampling import InferenceHardware, NutsDASpec, SamplerSpec
 from grassmoth_server.actions.contracts.identity import CallId
@@ -130,7 +131,7 @@ def test_modal_timeout_propagates_without_another_call(monkeypatch, isolated_att
 def test_profile_flag_reaches_gpu_compute_with_a_volume_scoped_directory(monkeypatch):
     from grassmoth_server.actions.fit import action, remote
     from grassmoth_server.compute.analysis_cache import ANALYSIS_CACHE_ROOT, fit_profile_directory
-    from grassmoth_server_test_support.fit_cache import ORIGIN, fixture
+    from grassmoth_server_test_support.fit_cache import fixture
 
     question, selection, data = fixture()
 
@@ -141,13 +142,13 @@ def test_profile_flag_reaches_gpu_compute_with_a_volume_scoped_directory(monkeyp
     monkeypatch.setattr(remote, "_dispatch_fit", dispatch)
     with pytest.raises(ReachedCompute):
         remote.fit_on_modal(
-            InferenceHardware.L40S,
-            selection=selection,
-            data_for_model=data,
-            time_origin=ORIGIN,
-            sampler=SamplerSpec(),
-            question=question,
-            compute_loo_diagnostics=False,
+            FitInputs(
+                selection=selection,
+                question=question,
+                data_for_model=data,
+                sampler=SamplerSpec(hardware=InferenceHardware.L40S),
+                compute_loo_diagnostics=False,
+            ),
             analysis_call=_ANALYSIS_CALL,
             profile=True,
         )
@@ -157,7 +158,6 @@ def test_profile_flag_reaches_gpu_compute_with_a_volume_scoped_directory(monkeyp
     monkeypatch.setattr(action, "run_fit", compute)
     with pytest.raises(ReachedCompute):
         remote.execute_fit_compute(payload)
-    assert compute.call_args.kwargs["profile"] is True
     assert compute.call_args.kwargs["profile_dir"] == fit_profile_directory(
         ANALYSIS_CACHE_ROOT, _ANALYSIS_CALL
     )

@@ -45,11 +45,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "mean",
             "name": "mood_rating",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         },
@@ -88,11 +88,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "mood_flag",
-            "ordinal_levels": null,
-            "measurement_dtype": "binary",
+            "measurement": {
+              "dtype": "binary"
+            },
             "observation_window": null
           }
         }

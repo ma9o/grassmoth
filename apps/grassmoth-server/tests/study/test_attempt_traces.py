@@ -11,6 +11,7 @@ import pytest
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth_server.actions.call_logs import collect_call_log, read_call_log
+from grassmoth_server.actions.contracts.call_state import RunningCall
 from grassmoth_server.actions.contracts.inputs import EditModelInput
 from grassmoth_server.actions.contracts.progress import StepEvent
 from grassmoth_server.actions.contracts.requests import EditModelRequest, call_identity
@@ -107,7 +108,9 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     )
     emit_event("ws-trace", StepEvent(attempt_id=attempt_id, status="running"))
     live = collect_call_log(
-        "ws-trace", seq=1, attempt_id=attempt_id, messages=messages, at=datetime.now(UTC)
+        "ws-trace",
+        RunningCall(attempt_id=attempt_id, seq=1, request=request, messages=messages),
+        at=datetime.now(UTC),
     )
     assert {message.kind for message in live.messages} == {"log", "progress", "trace"}
     publication_input = AttemptPublication(

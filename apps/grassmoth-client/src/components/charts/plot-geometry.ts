@@ -107,3 +107,20 @@ export function jitter(index: number): number {
   const s = Math.sin(index * 12.9898 + 78.233) * 43_758.5453;
   return s - Math.floor(s);
 }
+
+export interface Margin {
+  readonly left: number;
+  readonly right: number;
+  readonly top: number;
+  readonly bottom: number;
+}
+
+/** The plot area inside a chart's margins, at least one pixel each way. */
+export function marginBox(width: number, height: number, margin: Margin): PlotBox {
+  return {
+    left: margin.left,
+    top: margin.top,
+    width: Math.max(1, width - margin.left - margin.right),
+    height: Math.max(1, height - margin.top - margin.bottom),
+  };
+}

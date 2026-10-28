@@ -1,6 +1,4 @@
-import logging
 from dataclasses import replace
-from datetime import UTC, datetime
 
 import dynestyx as dsx
 import equinox as eqx
@@ -22,7 +20,7 @@ from grassmoth.models.ssm.inference.conditioning import compile_exact_state_cons
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReference
-from grassmoth_test_support.compute import compile_program, prepare_program
+from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.interval_particle import gaussian_interval_case, interval_target
 from grassmoth_test_support.observation import observation_laws
 from packages.grassmoth.tests.models.ssm.compile.test_exact_state_space import _model, _problem
@@ -536,14 +534,12 @@ def test_compiler_mask_tracks_available_direct_multi_state_readings_only():
 
 
 def test_zero_warmup_rejects_changed_parameterization_or_mask_before_kernel_execution():
-    import time
-
     from grassmoth.artifacts.arrays import NumericalArray
     from grassmoth.artifacts.continuation import JointTuning, SamplerCheckpoint
     from grassmoth.artifacts.sampling import NutsDASpec, SamplerSpec
     from grassmoth.models.ssm.inference.samplers.nuts import run_nuts_da
     from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
-    from grassmoth_test_support.compute import COMPUTE_BUDGET
+    from grassmoth_test_support.compute import EXECUTION_CONTEXT
 
     target = _correlated_target()
     coordinates = build_joint_coordinates(target, "mixed", compiler=compile_program)
@@ -569,13 +565,7 @@ def test_zero_warmup_rejects_changed_parameterization_or_mask_before_kernel_exec
         result = run_nuts_da(
             changed_target,
             sampler=changed_settings,
-            compute_budget=COMPUTE_BUDGET,
-            key=jax.random.key(0),
-            clock=time.monotonic,
-            continuation=checkpoint,
-            prepare_program=prepare_program,
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
-            compiler=compile_program,
+            start=checkpoint,
+            execution_context=EXECUTION_CONTEXT,
         )
         assert isinstance(result, InitializationFailure)

@@ -161,7 +161,7 @@ def test_numerical_results_cross_workflows_only_as_saved_report_references(actio
     from grassmoth.artifacts.simulation import SimulationEvidence
     from grassmoth_server.actions.contracts.effects import ActionEffects
     from grassmoth_server.actions.contracts.requests import FitRequest, SimulateRequest
-    from grassmoth_server.study.records import ActionAttempt, Applied, applied_attempt
+    from grassmoth_server.study.records import ActionAttempt, Applied, action_attempt
 
     ref = {"workspace_id": "TEST", "revision": "1" * 40, "path": "model.json"}
     data = {"revision": "2" * 40, "replicate_index": 0}
@@ -205,7 +205,7 @@ def test_numerical_results_cross_workflows_only_as_saved_report_references(actio
                 },
             }
         )
-    staged = applied_attempt(
+    staged = action_attempt(
         request,
         Applied(
             result="3" * 40,

@@ -19,7 +19,10 @@
       "algorithm": {
         "method": "mpgibbs",
         "n_parameter_particles": 2,
-        "tempering": null,
+        "tempering": {
+          "kind": "untempered",
+          "companion": "centred_nuts"
+        },
         "path_update": {
           "method": "twisted_particle_agrad",
           "num_particles": 128,
@@ -40,8 +43,7 @@
         "adaptation_scheme": "simple",
         "initialization": {
           "scale": 0.1
-        },
-        "companion": "centred_nuts"
+        }
       },
       "stop_when_converged": null
     },

@@ -1,22 +1,24 @@
 """A real profile uses native compiled parts without advancing the sampled chain."""
 
 import json
-from functools import partial
+from dataclasses import replace
 
 import numpy as np
 import pytest
 
+from grassmoth.actions.fit.inputs import FitInputs
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
     GaussianInitializationSpec,
+    GuidedPathSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     NutsTrajectorySpec,
-    ParticleAGradSpec,
     SamplerSpec,
+    UntemperedSpec,
 )
 from grassmoth_server.actions.fit.action import run_fit
-from grassmoth_server_test_support.fit_cache import ORIGIN, fixture
+from grassmoth_server_test_support.fit_cache import fixture
 
 pytestmark = [pytest.mark.inference(concern="sampling"), pytest.mark.inference(concern="warmup")]
 
@@ -30,22 +32,20 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
         num_samples_per_chain=2,
         algorithm=MarginalParticleGibbsSpec(
             initialization=GaussianInitializationSpec(),
-            path_update=ParticleAGradSpec(num_particles=4),
-            companion="centred_nuts",
+            path_update=GuidedPathSpec(method="particle_agrad", num_particles=4),
+            tempering=UntemperedSpec(companion="centred_nuts"),
         ),
     )
-    execute = partial(
-        run_fit,
-        question=question,
+    inputs = FitInputs(
         selection=selection,
+        question=question,
         data_for_model=data,
-        time_origin=ORIGIN,
         sampler=sampler,
         compute_loo_diagnostics=False,
     )
-    plain = execute()
+    plain = run_fit(inputs)
     directory = tmp_path / "profile"
-    profiled = execute(profile=True, profile_dir=directory)
+    profiled = run_fit(inputs, profile_dir=directory)
     report = profiled.profile
     assert plain.profile is None
     assert report is not None
@@ -111,11 +111,13 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
     np.testing.assert_array_equal(before.parameters.values, after.parameters.values)
     np.testing.assert_array_equal(before.paths.values, after.paths.values)
 
-    continued = execute(
-        sampler=sampler.revised(num_warmup=0, num_samples_per_chain=1),
-        profile=True,
-        previous=profiled,
-        continuation=after,
+    continued = run_fit(
+        replace(
+            inputs,
+            sampler=sampler.revised(num_warmup=0, num_samples_per_chain=1),
+            previous=profiled,
+        ),
+        profile_dir=tmp_path / "continued",
     )
     assert continued.profile is not None
     assert continued.profile.phase == "after_first_sweep"
@@ -134,22 +136,23 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
         NutsDASpec(trajectory=NutsTrajectorySpec(max_tree_depth=2)),
     ],
 )
-def test_profile_compile_only_and_without_companion(algorithm, draws):
+def test_profile_compile_only_and_without_companion(algorithm, draws, tmp_path):
     question, selection, data = fixture()
     result = run_fit(
-        question=question,
-        selection=selection,
-        data_for_model=data,
-        time_origin=ORIGIN,
-        sampler=SamplerSpec(
-            hardware="local",
-            num_chains=1,
-            num_warmup=0,
-            num_samples_per_chain=draws,
-            algorithm=algorithm,
+        FitInputs(
+            selection=selection,
+            question=question,
+            data_for_model=data,
+            sampler=SamplerSpec(
+                hardware="local",
+                num_chains=1,
+                num_warmup=0,
+                num_samples_per_chain=draws,
+                algorithm=algorithm,
+            ),
+            compute_loo_diagnostics=False,
         ),
-        compute_loo_diagnostics=False,
-        profile=True,
+        profile_dir=tmp_path / "profile",
     )
     report = result.profile
     assert report is not None

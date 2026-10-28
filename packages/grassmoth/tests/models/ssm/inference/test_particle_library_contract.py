@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Never
 from unittest.mock import Mock
 
+import dynestyx as dsx
 import jax.numpy as jnp
 import numpy as np
 import pytest
@@ -97,7 +98,7 @@ def test_library_parameter_output_preserves_public_vector_sites_and_chain_order(
 def test_supplied_initial_path_does_not_compute_a_predictive_rollout():
     target = Mock(
         spec=ParticleTarget,
-        context=Mock(),
+        context=Mock(return_value=(Mock(spec=dsx.DynamicalModel), jnp.zeros(1), jnp.arange(3.0))),
         initial_path=Mock(side_effect=_no_numerical_execution),
         replay_path=Mock(side_effect=lambda _context, path: path),
         initial_moments=Mock(return_value=(jnp.zeros(1), jnp.eye(1))),

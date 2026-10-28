@@ -41,7 +41,7 @@ def choose_reference_indicator(
 
     def _rank(item: tuple[int, IndicatorSpec]) -> tuple[int, int, int]:
         declaration_index, indicator = item
-        tier = _REFERENCE_DTYPE_TIERS[indicator.observation.measurement_dtype]
+        tier = _REFERENCE_DTYPE_TIERS[indicator.observation.measurement.dtype]
         polarity_rank = 0 if indicator.construct_polarity == "positive" else 1
         return (tier, polarity_rank, declaration_index)
 

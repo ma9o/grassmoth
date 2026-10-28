@@ -198,7 +198,6 @@ def bind_panel(
     observations: ObservationDataset,
     *,
     compiled_dynamical_model: CompiledDynamicalModel,
-    time_origin: datetime,
     compiler: ProgramCompiler,
 ) -> BoundPanel | PanelPreparationFailure:
     """Own compatibility once, retaining the exact identity-bearing input rows."""
@@ -208,7 +207,7 @@ def bind_panel(
     if not isinstance(observation_selection, SelectedObservations):
         return PanelPreparationFailure(observation_selection.message)
     data_for_model = observation_selection.frame
-    time_origin = ObservationInstant(time_origin).value
+    time_origin = ObservationInstant(observations.time_origin).value
     if data_for_model.is_empty():
         return PanelPreparationFailure("Cannot bind an empty observation panel")
     projected = project_observation_data(

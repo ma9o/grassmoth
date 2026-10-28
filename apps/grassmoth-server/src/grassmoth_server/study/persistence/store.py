@@ -155,14 +155,13 @@ class ArtifactStore:
         produced_by: str | None,
         json_files: JsonObject | None = None,
         parquet_files: dict[str, pl.DataFrame | pa.Table] | None = None,
-        created_at: str | None = None,
     ) -> ArtifactRecord:
         """Write one content-addressed tree; Git assigns its immutable identity."""
         metadata = {
             "artifact_id": artifact_id,
             "derived_from": derived_from,
             "produced_by": produced_by,
-            "created_at": created_at if created_at is not None else utc_now_iso(),
+            "created_at": utc_now_iso(),
         }
 
         files = {

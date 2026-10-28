@@ -124,7 +124,7 @@ def observation_families(selection: StructuralSelection) -> tuple[DistributionFa
 def observation_level_counts(selection: StructuralSelection) -> tuple[int, ...]:
     """Count declared levels for ordinal and categorical observations, using zero otherwise."""
     return tuple(
-        len(indicator.observation.ordinal_levels or indicator.observation.categorical_levels or ())
+        len(indicator.observation.levels)
         if indicator.likelihood is not None
         and indicator.likelihood.law.family
         in {DistributionFamily.ORDERED_LOGISTIC, DistributionFamily.CATEGORICAL}

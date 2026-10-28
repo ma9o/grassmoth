@@ -68,7 +68,7 @@ class WorkerOutput(Value):
 
 
 def _check_dtype_match(value: object, expected_dtype: MeasurementDtype) -> bool:
-    """Check if a value matches the expected measurement_dtype."""
+    """Check if a value matches the expected measurement dtype."""
     if isinstance(value, (int, float)) and not math.isfinite(value):
         return False
     if value is None:
@@ -186,7 +186,8 @@ def validate_worker_output(
         seen_pairs.add(pair)
 
         # Check dtype match
-        expected_dtype = indicator_info[ind_name].observation.measurement_dtype
+        observation = indicator_info[ind_name].observation
+        expected_dtype = observation.measurement.dtype
         if not _check_dtype_match(value, expected_dtype):
             errors.append(
                 f"extractions[{i}]: value {value!r} for '{ind_name}' doesn't match "
@@ -194,28 +195,26 @@ def validate_worker_output(
             )
             continue
 
-        if expected_dtype == "categorical" and isinstance(value, str):
-            levels = indicator_info[ind_name].observation.categorical_levels
-            if levels is not None and normalize_level_label(value) not in {
-                normalize_level_label(label) for label in levels
-            }:
-                errors.append(
-                    f"extractions[{i}]: categorical value {value!r} is outside the codebook"
-                )
-                continue
+        if (
+            expected_dtype == "categorical"
+            and isinstance(value, str)
+            and normalize_level_label(value)
+            not in {normalize_level_label(label) for label in observation.levels}
+        ):
+            errors.append(f"extractions[{i}]: categorical value {value!r} is outside the codebook")
+            continue
 
         if expected_dtype == "ordinal" and value is not None:
-            ordinal_levels = indicator_info[ind_name].observation.ordinal_levels
             ordinal_code = int(value)
             if ordinal_code < 0:
                 errors.append(
                     f"extractions[{i}]: ordinal value {value!r} for '{ind_name}' must be >= 0"
                 )
                 continue
-            if ordinal_levels is not None and ordinal_code >= len(ordinal_levels):
+            if ordinal_code >= len(observation.levels):
                 errors.append(
                     f"extractions[{i}]: ordinal value {value!r} for '{ind_name}' "
-                    f"must be in 0..{len(ordinal_levels) - 1}"
+                    f"must be in 0..{len(observation.levels) - 1}"
                 )
                 continue
             value = ordinal_code

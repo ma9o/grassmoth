@@ -75,6 +75,7 @@ select = [
     "A001",   # builtin variable shadowing
     "A002",   # builtin argument shadowing
     "PLW0603",# global rebinding
+    "PLR0913",# too many arguments: boundaries pass the owner of their inputs (scoped below)
     "BLE",    # flake8-blind-except
     "C4",     # flake8-comprehensions
     "DTZ",    # flake8-datetimez
@@ -107,6 +108,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 # The documentation contract belongs to src; fixtures and analysis cells are callers.
 "!**/src/**.py" = ["D"]
+# Argument counts are a boundary rule: the library's actions and the server take owners,
+# while numerical kernels pass the arrays a traced program needs.
+"!{packages/grassmoth/src/grassmoth/actions/**,apps/grassmoth-server/src/**}" = ["PLR0913"]
 "**/tests/*.py" = [
     "ARG001",  # unused function arguments (pytest fixtures)
     "ARG002",  # unused method arguments (pytest fixtures)
@@ -149,6 +153,9 @@ runtime-evaluated-decorators = [
     "fastapi.APIRouter.get",
     "fastapi.APIRouter.post",
 ]
+
+[tool.ruff.lint.pylint]
+max-args = 5
 
 [tool.ruff.lint.flake8-pytest-style]
 parametrize-names-type = "tuple"

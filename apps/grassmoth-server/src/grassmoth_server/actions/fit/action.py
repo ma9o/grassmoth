@@ -13,15 +13,13 @@ import jax
 from jax.stages import Compiled
 
 from grassmoth.public import (
+    ContinuationRefusal,
+    FitInputs,
     FitOutput,
     MemoryDemand,
+    ModelExecutionContext,
     ModelFitFailure,
-    ObservationDataset,
     PreparedProgram,
-    QuestionSpec,
-    SamplerCheckpoint,
-    SamplerSpec,
-    StructuralSelection,
     fit,
 )
 from grassmoth_server.actions.errors import ModelFitError
@@ -44,21 +42,13 @@ class CompiledArtifact(NamedTuple):
     persistent_cache: CacheStatus
 
 
-def run_fit(
-    *,
-    question: QuestionSpec,
-    selection: StructuralSelection,
-    data_for_model: ObservationDataset,
-    time_origin: datetime,
-    sampler: SamplerSpec,
-    compute_loo_diagnostics: bool,
-    profile: bool = False,
-    profile_dir: Path | None = None,
-    continuation: SamplerCheckpoint | None = None,
-    previous: FitOutput | None = None,
-) -> FitOutput:
-    """Supply compilation services, then write profiling artifacts outside fit timing."""
+def run_fit(inputs: FitInputs, *, profile_dir: Path | None = None) -> FitOutput:
+    """Supply compilation services, then write profiling artifacts outside fit timing.
+
+    A profile directory turns profiling on.
+    """
     initialize_numerical_runtime()
+    profile = profile_dir is not None
     if profile_dir is not None:
         profile_dir.mkdir(parents=True)
     captured: dict[str, CompiledArtifact] = {}
@@ -120,31 +110,27 @@ def run_fit(
         return compile_with_profile, operands, result_shape, demand
 
     logger = logging.getLogger(__name__)
-    runtime = fit_runtime(sampler)
     if profile:
         jax.monitoring.register_event_listener(cache_event)
     try:
         result = fit(
-            question=question,
-            selection=selection,
-            data_for_model=data_for_model,
-            time_origin=time_origin,
-            sampler=sampler,
-            profile=profile,
-            budget=read_compute_budget(),
-            runtime=runtime,
-            clock=time.monotonic,
-            wall_clock=lambda: datetime.now(UTC),
-            logger=logger,
-            compiler=compile_profiled if profile else compile_program,
-            prepare_program=prepare_profiled if profile else prepare_program,
-            compute_loo_diagnostics=compute_loo_diagnostics,
-            continuation=continuation,
-            previous=previous,
+            inputs,
+            execution_context=ModelExecutionContext(
+                compiler=compile_profiled if profile else compile_program,
+                prepare_program=prepare_profiled if profile else prepare_program,
+                budget=read_compute_budget(),
+                clock=time.monotonic,
+                wall_clock=lambda: datetime.now(UTC),
+                logger=logger,
+                profile=profile,
+            ),
+            runtime=fit_runtime(inputs.sampler),
         )
     finally:
         if profile:
             jax.monitoring.unregister_event_listener(cache_event)
+    if isinstance(result, ContinuationRefusal):
+        raise ModelFitError(result.message, diagnostics={"code": result.code})
     if isinstance(result, ModelFitFailure):
         raise ModelFitError(result.error, diagnostics={"duration_seconds": result.duration_seconds})
     if result.profile is not None:

@@ -64,7 +64,6 @@ def runtime(monkeypatch):
             jnp.array([[0.2, 1.0], [jnp.nan, 2.0], [jnp.nan, jnp.nan]]),
             times,
         ),
-        scheme="euler_maruyama",
         trace_key=jax.random.key(0),
         reparam=None,
         compiler=compile_program,

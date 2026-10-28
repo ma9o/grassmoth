@@ -45,11 +45,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "stress_cont",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         }
@@ -220,11 +220,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "adherence_flag",
-            "ordinal_levels": null,
-            "measurement_dtype": "binary",
+            "measurement": {
+              "dtype": "binary"
+            },
             "observation_window": null
           }
         },
@@ -269,11 +269,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "steps_count",
-            "ordinal_levels": null,
-            "measurement_dtype": "count",
+            "measurement": {
+              "dtype": "count"
+            },
             "observation_window": null
           }
         },
@@ -342,11 +342,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "fatigue_t",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         }
@@ -526,11 +526,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "screen_gap",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         },
@@ -669,11 +669,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "sleep_efficiency",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         },
@@ -730,16 +730,17 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "symptom_severity",
-            "ordinal_levels": [
-              "0",
-              "1",
-              "2",
-              "3"
-            ],
-            "measurement_dtype": "ordinal",
+            "measurement": {
+              "dtype": "ordinal",
+              "levels": [
+                "0",
+                "1",
+                "2",
+                "3"
+              ]
+            },
             "observation_window": null
           }
         },
@@ -814,16 +815,17 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": [
-              "0",
-              "1",
-              "2",
-              "3"
-            ],
             "aggregation": "last",
             "name": "coping_style",
-            "ordinal_levels": null,
-            "measurement_dtype": "categorical",
+            "measurement": {
+              "dtype": "categorical",
+              "levels": [
+                "0",
+                "1",
+                "2",
+                "3"
+              ]
+            },
             "observation_window": null
           }
         }
@@ -1009,11 +1011,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "rumination_count",
-            "ordinal_levels": null,
-            "measurement_dtype": "count",
+            "measurement": {
+              "dtype": "count"
+            },
             "observation_window": null
           }
         },
@@ -1094,11 +1096,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "focus_cont",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         }

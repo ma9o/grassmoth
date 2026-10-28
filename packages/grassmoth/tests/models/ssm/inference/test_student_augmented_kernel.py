@@ -11,11 +11,7 @@ import numpyro.distributions as dist
 import pytest
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import (
-    FixedLatentStepSpec,
-    ParticleAGradSpec,
-    TwistedParticleAGradSpec,
-)
+from grassmoth.artifacts.sampling import FixedLatentStepSpec, GuidedPathSpec
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
@@ -101,20 +97,20 @@ def _initialize(target, kernel, joint):
 
 
 @pytest.mark.parametrize(
-    ("spec_type", "kappa", "proposal", "companion"),
+    ("method", "kappa", "proposal", "companion"),
     [
-        (ParticleAGradSpec, 0, "random_walk", False),
-        (ParticleAGradSpec, 1, "pseudo_langevin", False),
-        (TwistedParticleAGradSpec, 0, "pseudo_langevin", False),
-        (TwistedParticleAGradSpec, 1, "random_walk", False),
-        (ParticleAGradSpec, 0, "pseudo_langevin", True),
-        (ParticleAGradSpec, 1, "random_walk", True),
-        (TwistedParticleAGradSpec, 0, "random_walk", True),
-        (TwistedParticleAGradSpec, 1, "pseudo_langevin", True),
+        ("particle_agrad", 0, "random_walk", False),
+        ("particle_agrad", 1, "pseudo_langevin", False),
+        ("twisted_particle_agrad", 0, "pseudo_langevin", False),
+        ("twisted_particle_agrad", 1, "random_walk", False),
+        ("particle_agrad", 0, "pseudo_langevin", True),
+        ("particle_agrad", 1, "random_walk", True),
+        ("twisted_particle_agrad", 0, "random_walk", True),
+        ("twisted_particle_agrad", 1, "pseudo_langevin", True),
     ],
 )
 def test_augmented_sweep_preserves_joint_marginal_posterior(
-    marginal_reference, spec_type, kappa, proposal, companion
+    marginal_reference, method, kappa, proposal, companion
 ):
     starts, expected, variance = marginal_reference
     # Round the starts to float32 first, so unmoved coordinates compare equal.
@@ -125,7 +121,7 @@ def test_augmented_sweep_preserves_joint_marginal_posterior(
         num_parameter_particles=3,
         parameter_proposal=proposal,
         parameter_reference_path=jnp.zeros((2, 1)),
-        path_update=spec_type(num_particles=8, kappa=kappa),
+        path_update=GuidedPathSpec(method=method, num_particles=8, kappa=kappa),
     )
     extra = (
         build_companion_kernel(
@@ -180,7 +176,9 @@ def test_trace_and_split_sweeps_preserve_marginal_caches_and_fixed_steps(fixed):
         num_parameter_particles=3,
         parameter_proposal="pseudo_langevin",
         parameter_reference_path=jnp.zeros((2, 1)),
-        path_update=TwistedParticleAGradSpec(num_particles=8, kappa=1, **options),
+        path_update=GuidedPathSpec(
+            method="twisted_particle_agrad", num_particles=8, kappa=1, **options
+        ),
     )
     state = _initialize(target, kernel, jnp.zeros(5))
     key = jax.random.key(321)

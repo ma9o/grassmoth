@@ -45,11 +45,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "x1",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         }
@@ -208,11 +208,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "y1",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         }

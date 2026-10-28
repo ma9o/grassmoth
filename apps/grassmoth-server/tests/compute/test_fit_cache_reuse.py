@@ -46,9 +46,9 @@ def test_whole_fits_reuse_jax_cache_across_processes(tmp_path):
         "project_response_trajectory",
         "draw_sites",
         "affine_chart",
-        "draw",
-        "project",
-        "block",
+        "gaussian_initialization",
+        "observation_projection",
+        "production_sweep",
         "scan",
         "<lambda>",
     } <= set(results[0][0]["traced"])

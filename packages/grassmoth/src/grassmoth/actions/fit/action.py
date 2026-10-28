@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import wraps
 from typing import TYPE_CHECKING, cast
 
@@ -12,6 +12,7 @@ from grassmoth.actions.contracts.bodies import FitOutput
 from grassmoth.actions.fit.conditioning import condition_model
 from grassmoth.actions.fit.diagnostics import segment_diagnostics
 from grassmoth.actions.fit.execution import ModelFitFailure
+from grassmoth.actions.fit.inputs import ContinuationRefusal, resumed_checkpoint
 from grassmoth.artifacts.arrays import ArrayVector, NumericalArray
 from grassmoth.artifacts.identity import ConstructRef, ParameterRef
 from grassmoth.artifacts.model.parameter import ParameterCoordinate
@@ -33,26 +34,22 @@ from grassmoth.models.ssm.inference.samplers.progress import capture_phases
 from grassmoth.models.ssm.inference.types import UnretainedRun
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Callable
-    from datetime import datetime
     from types import FunctionType
 
     import jax
     from jax.stages import Compiled
 
+    from grassmoth.actions.fit.inputs import FitInputs
     from grassmoth.artifacts.continuation import SamplerCheckpoint
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-    from grassmoth.artifacts.model.question import QuestionSpec
-    from grassmoth.artifacts.observations.dataset import ObservationDataset
     from grassmoth.artifacts.reports.inference import FitRuntime
     from grassmoth.artifacts.reports.posterior_diagnostics import ChainDiagnostics
     from grassmoth.artifacts.reports.profiling import FitProfileReport
     from grassmoth.artifacts.reports.scorecard import MovementWindow
-    from grassmoth.artifacts.sampling import SamplerSpec
-    from grassmoth.compute.budget import ComputeBudget, MemoryDemand
-    from grassmoth.compute.programs import PreparedProgram, ProgramCompiler, ProgramPreparer
-    from grassmoth.models.structure import StructuralSelection
+    from grassmoth.compute.budget import MemoryDemand
+    from grassmoth.compute.context import ModelExecutionContext
+    from grassmoth.compute.programs import PreparedProgram
 
 
 @dataclass(frozen=True)
@@ -66,41 +63,18 @@ class FitResult:
 
 
 def _fit(
+    inputs: FitInputs,
     *,
-    selection: StructuralSelection,
-    data_for_model: ObservationDataset,
-    time_origin: datetime,
-    sampler: SamplerSpec,
-    budget: ComputeBudget,
+    continuation: SamplerCheckpoint | None,
     runtime: FitRuntime,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    compiler: ProgramCompiler,
-    prepare_program: ProgramPreparer,
-    compute_loo_diagnostics: bool,
-    profile: bool = False,
-    continuation: SamplerCheckpoint | None = None,
-    previous: FitOutput | None = None,
+    execution_context: ModelExecutionContext,
 ) -> FitResult | ModelFitFailure:
     """The exact producer's buffers cross the compute boundary without report reductions."""
     from grassmoth.actions.fit.execution import fit_model
 
-    with capture_phases(clock) as phases:
-        fitted = fit_model(
-            selection,
-            data_for_model,
-            time_origin=time_origin,
-            sampler=sampler,
-            continuation=continuation,
-            profile=profile,
-            budget=budget,
-            clock=clock,
-            wall_clock=wall_clock,
-            logger=logger,
-            compiler=compiler,
-            prepare_program=prepare_program,
-        )
+    selection, sampler, previous = inputs.selection, inputs.sampler, inputs.previous
+    with capture_phases(execution_context.clock) as phases:
+        fitted = fit_model(inputs, continuation=continuation, execution_context=execution_context)
     if isinstance(fitted, ModelFitFailure):
         return fitted
     result = fitted.result
@@ -192,7 +166,7 @@ def _fit(
         fitted.panel.compiled_dynamical_model,
         result,
         times=fitted.panel.times,
-        time_origin=time_origin,
+        time_origin=inputs.data_for_model.time_origin,
     )
     layout = conditioned.law_layouts[identity]
     latent_indices = (
@@ -215,10 +189,10 @@ def _fit(
             for name, values in native.mcmc.get_extra_fields(group_by_chain=True).items()
         },
         observation_log_probs=retain(native.observation_log_probs)
-        if compute_loo_diagnostics
+        if inputs.compute_loo_diagnostics
         else None,
         observed_rows=retain(np.any(np.isfinite(fitted.panel.observations), axis=1))
-        if compute_loo_diagnostics
+        if inputs.compute_loo_diagnostics
         or (
             isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
             and "regional_movement" in sampler.algorithm.diagnostic_metrics
@@ -503,28 +477,21 @@ def inference_report(
 
 
 def fit(
+    inputs: FitInputs,
     *,
-    question: QuestionSpec,
-    selection: StructuralSelection,
-    data_for_model: ObservationDataset,
-    time_origin: datetime,
-    sampler: SamplerSpec,
-    budget: ComputeBudget,
+    execution_context: ModelExecutionContext,
     runtime: FitRuntime,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    compiler: ProgramCompiler,
-    prepare_program: ProgramPreparer,
-    compute_loo_diagnostics: bool,
-    profile: bool = False,
-    continuation: SamplerCheckpoint | None = None,
-    previous: FitOutput | None = None,
-) -> FitOutput | ModelFitFailure:
+) -> FitOutput | ModelFitFailure | ContinuationRefusal:
     """Compute a complete fit from owned inputs and explicit execution dependencies."""
     from grassmoth.actions.checks import fit_check_report
     from grassmoth.artifacts.reports.scorecard import MovementWindow
 
+    continuation = resumed_checkpoint(inputs)
+    if isinstance(continuation, ContinuationRefusal):
+        return continuation
+    selection, question, previous = inputs.selection, inputs.question, inputs.previous
+    time_origin = inputs.data_for_model.time_origin
+    clock = execution_context.clock
     compilation_intervals: list[tuple[str, float, float]] = []
     program_counts: dict[str, int] = {}
 
@@ -547,7 +514,7 @@ def fit(
     ) -> PreparedProgram[Result]:
         started = clock()
         named = named_program(function)
-        program = compiler(named, *args, **kwargs)
+        program = execution_context.compiler(named, *args, **kwargs)
         compilation_intervals.append((cast("FunctionType", named).__name__, started, clock()))
         return program
 
@@ -556,7 +523,9 @@ def fit(
     ) -> tuple[Callable[[], Compiled], tuple[jax.Array, ...], Result, MemoryDemand]:
         started = clock()
         named = named_program(function)
-        compile_program, operands, shape, demand = prepare_program(named, *args, **kwargs)
+        compile_program, operands, shape, demand = execution_context.prepare_program(
+            named, *args, **kwargs
+        )
 
         def compile_timed() -> Compiled:
             compiled = compile_program()
@@ -566,21 +535,14 @@ def fit(
         return compile_timed, operands, shape, demand
 
     result = _fit(
-        selection=selection,
-        data_for_model=data_for_model,
-        time_origin=time_origin,
-        sampler=sampler,
-        budget=budget,
-        runtime=runtime,
-        clock=clock,
-        wall_clock=wall_clock,
-        logger=logger,
-        compiler=timed_compile if profile else compiler,
-        prepare_program=timed_prepare if profile else prepare_program,
-        compute_loo_diagnostics=compute_loo_diagnostics,
+        inputs,
         continuation=continuation,
-        profile=profile,
-        previous=previous,
+        runtime=runtime,
+        execution_context=replace(
+            execution_context, compiler=timed_compile, prepare_program=timed_prepare
+        )
+        if execution_context.profile
+        else execution_context,
     )
     if isinstance(result, ModelFitFailure):
         return result
@@ -631,14 +593,14 @@ def fit(
         )
     )
     if profiling is not None:
-        log_profile(profiling, logger)
+        log_profile(profiling, execution_context.logger)
     return FitOutput(
         dynamical_model_spec=conditioned
         if conditioned is not None
         else previous.dynamical_model_spec
         if previous is not None
         else None,
-        checks=fit_check_report(selection, question, data_for_model),
+        checks=fit_check_report(selection, question, inputs.data_for_model),
         inference=report,
         profile=profiling,
     )

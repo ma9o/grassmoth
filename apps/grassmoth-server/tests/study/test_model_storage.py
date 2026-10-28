@@ -74,7 +74,7 @@ def _model():
                         f"indicator:{key}": {
                             "observation": {
                                 "name": f"{key.upper()}_obs",
-                                "measurement_dtype": "continuous",
+                                "measurement": {"dtype": "continuous"},
                                 "aggregation": "mean",
                             },
                             "construct_polarity": "positive",
@@ -134,7 +134,6 @@ def test_predictive_findings_use_entity_ids_and_keep_served_reasons(monkeypatch)
                 "1",
                 "0",
                 "Served reason.",
-                outcome="failed",
                 measurements=(NumericCriterionEvidence(criterion="measured", value=1, upper=0),),
             )
             for target in (

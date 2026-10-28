@@ -121,7 +121,7 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
     assert {row.parameter for row in marginals} == set(labels.values())
     assert report.core.inference_metadata.num_chains == 1
     assert report.core.inference_diagnostics is not None
-    assert set(output.model_dump()) == {"dynamical_model_spec", "checks", "inference"}
+    assert set(output.model_dump()) == {"dynamical_model_spec", "checks", "inference", "profile"}
     from grassmoth.artifacts.probability.serialization import empirical_atoms
 
     assert output.dynamical_model_spec is not None

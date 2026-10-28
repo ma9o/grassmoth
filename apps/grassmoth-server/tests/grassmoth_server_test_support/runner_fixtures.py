@@ -8,7 +8,7 @@ from grassmoth.artifacts.observations.preparation import (
     PreparedDataMetadata,
     SemanticExtractionSpec,
 )
-from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
+from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
 from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.model import stress_sleep_model
 from grassmoth_test_support.helpers import fixture_entity_id
@@ -75,7 +75,7 @@ def panel_metadata():
                     observation_window=None,
                     id=fixture_entity_id("indicator", name),
                     name=name,
-                    measurement_dtype="continuous",
+                    measurement=NumericMeasurement(dtype="continuous"),
                     aggregation="mean",
                 ),
                 extraction=SemanticExtractionSpec(how_to_measure="Read " + name),

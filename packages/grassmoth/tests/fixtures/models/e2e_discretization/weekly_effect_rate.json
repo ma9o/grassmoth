@@ -45,11 +45,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "mean",
             "name": "stress_self_report",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         },
@@ -94,11 +94,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "mean",
             "name": "stress_cortisol",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         }
@@ -262,11 +262,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "mean",
             "name": "mood_rating",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         }

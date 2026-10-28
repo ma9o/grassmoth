@@ -35,9 +35,9 @@ def workspace(monkeypatch, tmp_path):
 class TestArtifactStore:
     def test_storage_format_requires_explicit_conversion(self, workspace):
         repository = ArtifactStore(workspace).repo
-        assert repository.config.get_int("grassmoth.format") == 30
-        repository.config["grassmoth.format"] = 29
-        with pytest.raises(ValueError, match="format 30"):
+        assert repository.config.get_int("grassmoth.format") == 31
+        repository.config["grassmoth.format"] = 30
+        with pytest.raises(ValueError, match="format 31"):
             ArtifactStore(workspace)
 
     def test_artifacts_are_immutable_git_trees(self, workspace):

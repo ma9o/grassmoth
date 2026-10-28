@@ -1,9 +1,6 @@
 """Self-preconditioning learns geometry without changing the exact posterior."""
 
-import logging
-import time
 from dataclasses import replace
-from datetime import UTC, datetime
 
 import jax
 import jax.numpy as jnp
@@ -11,7 +8,7 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from grassmoth.artifacts.sampling import DsmcSpec, GaussianInitializationSpec
+from grassmoth.artifacts.sampling import DsmcSpec, GaussianInitializationSpec, SamplerSpec
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -26,7 +23,7 @@ from grassmoth.models.ssm.inference.warmup.parameter_adaptation import (
     covariance_windows,
     initialize_parameter_covariance,
 )
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.interval_particle import interval_target
 
 pytestmark = pytest.mark.inference(concern="warmup")
@@ -79,8 +76,7 @@ def test_adapted_particle_kernel_recovers_correlated_unequal_scale_gaussian(prop
         spec=GaussianInitializationSpec(),
         key=jax.random.key(15),
         num_chains=4,
-        compute_budget=COMPUTE_BUDGET,
-        compiler=compile_program,
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(initialization, ParticleInitialization)
     kernel = build_marginal_particle_gibbs_kernel(
@@ -94,19 +90,11 @@ def test_adapted_particle_kernel_recovers_correlated_unequal_scale_gaussian(prop
     result = run_marginal_particle_gibbs(
         target,
         kernel=kernel,
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        num_warmup=1000,
-        num_samples=4000,
-        num_chains=4,
+        sampler=SamplerSpec(num_warmup=1000, num_samples_per_chain=4000, num_chains=4),
         key=jax.random.key(293),
-        adaptation_rate=0.05,
         adaptation_scheme="dual_averaging",
         initialization=initialization,
-        compute_budget=COMPUTE_BUDGET,
-        clock=time.monotonic,
-        wall_clock=lambda: datetime.now(UTC),
-        logger=logging.getLogger(__name__),
+        execution_context=EXECUTION_CONTEXT,
     )
     draws = np.asarray(result.grouped_positions).reshape((-1, 2))
     np.testing.assert_allclose(draws.mean(axis=0), mean, atol=0.06)

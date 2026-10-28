@@ -54,8 +54,8 @@ def test_inference_advances_model_and_uses_the_selected_input(
     paths = jnp.arange(4 * 2 * len(states), dtype=jnp.float32).reshape(4, 2, len(states))
     fitted_inputs = []
 
-    def fake_fit_model(selection, *_args: Any, **_kwargs: Any) -> FittedModelResult:
-        model = selection.dynamical_model_spec
+    def fake_fit_model(inputs, *_args: Any, **_kwargs: Any) -> FittedModelResult:
+        model = inputs.selection.dynamical_model_spec
         fitted_inputs.append(model.model_dump(mode="json"))
         return FittedModelResult.from_run(
             duration_seconds=0.01,

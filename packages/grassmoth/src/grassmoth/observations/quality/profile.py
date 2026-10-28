@@ -83,11 +83,7 @@ def profile_data(
                 )
             )
         for variable in definitions:
-            levels = (
-                variable.ordinal_levels
-                if variable.measurement_dtype == "ordinal"
-                else variable.categorical_levels
-            )
+            levels = variable.levels
             values = data.filter(pl.col("indicator_id") == variable.id)["value"].drop_nulls()
             if levels and any(
                 value < 0 or value >= len(levels) or value != int(value)

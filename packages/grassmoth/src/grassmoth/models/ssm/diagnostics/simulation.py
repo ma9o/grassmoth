@@ -30,6 +30,7 @@ from grassmoth.models.ssm.diagnostics.reachability import (
     check_scale,
     check_transmission,
 )
+from grassmoth.models.ssm.dynamics.expression import EdgeDrift
 from grassmoth.models.ssm.dynamics.spec import DynamicsSpec
 from grassmoth.models.ssm.predictive.registry_runtime import predictive_keys
 from grassmoth.models.ssm.predictive.statistics import observation_signal_and_variance
@@ -222,7 +223,6 @@ def measure_construct_dynamics(
                 f"nonfinite {float(np.mean(~np.isfinite(x))):.1%}",
                 "0%",
                 "Finite-value scan; confinement requires at least four times.",
-                outcome="passed" if bool(np.isfinite(x).all()) else "failed",
                 measurements=(
                     NumericCriterionEvidence(
                         criterion="nonfinite_fraction",
@@ -266,8 +266,8 @@ def measure_construct_dynamics(
     potentials = [
         (i, comp, operand)
         for i, comp in enumerate(compiled_dynamical_model.dynamics.spec.components)
-        if comp.target == d and not comp.edge_owned
-        for operand in restoring_coefficients(comp.expression, comp.state_ids[d], kind=comp.kind)
+        if comp.target == d and not isinstance(comp.role, EdgeDrift)
+        for operand in restoring_coefficients(comp.expression, comp.state_ids[d], kind=comp.role)
         if operand.role == "decay"
     ]
     if potentials:
@@ -309,9 +309,8 @@ def measure_construct_dynamics(
         x_off = _resimulate_edge_off(
             compiled_dynamical_model,
             pred,
-            design.t_grid,
+            design,
             edge_target,
-            design.seed,
             compute_budget=compute_budget,
         )[:, :, d]
         results.extend(
@@ -403,7 +402,6 @@ def measure_construct_measurement(
                         f"nonfinite {float(np.mean(~np.isfinite(pp_y))):.1%}",
                         "0%",
                         "The sampled emission contains non-finite values.",
-                        outcome="failed",
                         measurements=(
                             NumericCriterionEvidence(
                                 criterion="nonfinite_fraction",
@@ -498,9 +496,8 @@ def _incoming_edge_off_target(
 def _resimulate_edge_off(
     compiled_dynamical_model: CompiledDynamicalModel,
     pred: PredictiveDraws,
-    t_grid: jnp.ndarray,
+    design: DesignInfo,
     edge_target: _EdgeOffTarget,
-    seed: int,
     *,
     compute_budget: ComputeBudget,
 ) -> jnp.ndarray:
@@ -528,8 +525,8 @@ def _resimulate_edge_off(
     latents, _linear_predictors = _simulate_vector_field_predictive_latents(
         compiled_dynamical_model,
         samples,
-        t_grid,
-        rng_key=predictive_keys(seed).latents,
+        design.t_grid,
+        rng_key=predictive_keys(design.seed).latents,
         dynamics=intervention_dynamics,
         compute_budget=compute_budget,
     )

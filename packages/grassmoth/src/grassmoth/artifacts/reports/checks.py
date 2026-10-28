@@ -51,6 +51,9 @@ type NotEvaluatedReason = (
     ]
 )
 
+type CheckOutcome = Literal["passed", "failed"]
+type CheckStatus = CheckOutcome | Literal["not_evaluated"]
+
 
 class Evaluated[Subject, Evidence](Value):
     """One producer's measured outcome and the evidence supporting it."""
@@ -58,7 +61,7 @@ class Evaluated[Subject, Evidence](Value):
     kind: Literal["evaluated"] = "evaluated"
     code: str
     subject: Subject
-    outcome: Literal["passed", "failed"]
+    outcome: CheckOutcome
     evidence: Evidence
 
 
@@ -98,15 +101,23 @@ class NumericCriterionEvidence(Value):
     display_value: str = ""
     band_label: str = ""
 
+    @property
+    def accepted(self) -> bool:
+        """Whether the value lies inside the acceptance region; NaN never does."""
+        above = self.lower is None or (
+            self.value >= self.lower if self.lower_inclusive else self.value > self.lower
+        )
+        below = self.upper is None or (
+            self.value <= self.upper if self.upper_inclusive else self.value < self.upper
+        )
+        return above and below
+
 
 class PredictiveSubject(Value):
     """One named check and its stable target in a construct's scientific context."""
 
     construct_id: ConstructId | None = None
     target: EntityRef | Literal["whole_model", "observations"]
-
-
-type IndicatorCheck = Literal["calibration", "autocorrelation", "variance"]
 
 
 class IndicatorCheckSubject(Value):

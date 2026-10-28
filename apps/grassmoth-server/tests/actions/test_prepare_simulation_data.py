@@ -225,19 +225,15 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     from grassmoth_server.actions.fit import action as fit_module
     from grassmoth_test_support.inference import _report
 
-    def fit(**kwargs):
-        assert kwargs["data_for_model"].recorded.frame.equals(panel)
-        assert kwargs["time_origin"] == selected.time_origin
+    def fit(inputs, **_kwargs):
+        assert inputs.data_for_model.recorded.frame.equals(panel)
+        assert inputs.data_for_model.time_origin == selected.time_origin
         from grassmoth.actions.checks import fit_check_report
         from grassmoth.actions.contracts.bodies import FitOutput
 
         return FitOutput(
             dynamical_model_spec=dynamical_model_spec,
-            checks=fit_check_report(
-                kwargs["selection"],
-                kwargs["question"],
-                kwargs["data_for_model"],
-            ),
+            checks=fit_check_report(inputs.selection, inputs.question, inputs.data_for_model),
             inference=_report(dynamical_model_spec),
         )
 
@@ -280,8 +276,7 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
             if interval
             else {
                 "aggregation": "last",
-                "measurement_dtype": "categorical",
-                "categorical_levels": ("a", "b", "c"),
+                "measurement": {"dtype": "categorical", "levels": ("a", "b", "c")},
             }
         )
     )

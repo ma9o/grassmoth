@@ -11,7 +11,11 @@ from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data_module
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.records import AttemptRecord, EditAttempt, Raised
-from grassmoth_server.study.sweep import collect_completed_runs, sweep_workspace
+from grassmoth_server.study.sweep import (
+    RetentionPolicy,
+    collect_completed_runs,
+    sweep_workspace,
+)
 
 pytestmark = pytest.mark.contract
 
@@ -96,10 +100,10 @@ def test_sweep_expires_events_and_cache_and_bounds_cache_size(monkeypatch, tmp_p
 
     result = sweep_workspace(
         workspace_id,
+        policy=RetentionPolicy(
+            event_retention_seconds=500, cache_retention_seconds=500, cache_max_bytes=5
+        ),
         now_seconds=1_000,
-        event_retention_seconds=500,
-        cache_retention_seconds=500,
-        cache_max_bytes=5,
     )
 
     assert result.removed_events == 1

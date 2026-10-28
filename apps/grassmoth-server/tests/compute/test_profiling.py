@@ -33,13 +33,13 @@ def test_compiled_analysis_writes_readable_hlo_and_numeric_costs(tmp_path):
 @pytest.mark.parametrize("failed", [False, True])
 def test_fit_shell_attributes_cache_events_and_defers_dumps(monkeypatch, tmp_path, failed):
     from concurrent.futures import ThreadPoolExecutor
-    from datetime import UTC, datetime
     from importlib import import_module
     from threading import Barrier
     from unittest.mock import Mock
 
     from jax.stages import Compiled
 
+    from grassmoth.actions.fit.inputs import FitInputs
     from grassmoth.artifacts.reports.profiling import FitProfileReport, ProgramCompileReport
     from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.compute.budget import NO_MEMORY_DEMAND
@@ -81,11 +81,12 @@ def test_fit_shell_attributes_cache_events_and_defers_dumps(monkeypatch, tmp_pat
     def prepare_program(function, *_args, **_kwargs):
         return lambda: compile_one(function.__name__), (), (), NO_MEMORY_DEMAND
 
-    def run(**kwargs):
+    def run(_inputs, *, execution_context, runtime):
         calls.append("fit")
-        assert callable(kwargs["clock"])
-        assert callable(kwargs["wall_clock"])
-        assert kwargs["logger"].name == shell.__name__
+        assert callable(execution_context.clock)
+        assert callable(execution_context.wall_clock)
+        assert execution_context.logger.name == shell.__name__
+        assert runtime.devices
 
         def production_sweep():
             pass
@@ -93,10 +94,10 @@ def test_fit_shell_attributes_cache_events_and_defers_dumps(monkeypatch, tmp_pat
         def observation_projection():
             pass
 
-        compile_projection, *_ = kwargs["prepare_program"](observation_projection)
+        compile_projection, *_ = execution_context.prepare_program(observation_projection)
         with ThreadPoolExecutor(max_workers=1) as pool:
             projection = pool.submit(compile_projection)
-            kwargs["compiler"](production_sweep)
+            execution_context.compiler(production_sweep)
             projection.result()
         assert calls == ["fit"]
         if failed:
@@ -122,13 +123,13 @@ def test_fit_shell_attributes_cache_events_and_defers_dumps(monkeypatch, tmp_pat
 
     def execute():
         return shell.run_fit(
-            question=Mock(),
-            selection=Mock(),
-            data_for_model=Mock(),
-            time_origin=datetime(2024, 1, 1, tzinfo=UTC),
-            sampler=SamplerSpec(),
-            compute_loo_diagnostics=False,
-            profile=True,
+            FitInputs(
+                selection=Mock(),
+                question=Mock(),
+                data_for_model=Mock(),
+                sampler=SamplerSpec(),
+                compute_loo_diagnostics=False,
+            ),
             profile_dir=tmp_path / "profile",
         )
 

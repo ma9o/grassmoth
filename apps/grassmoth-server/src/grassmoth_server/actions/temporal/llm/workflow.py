@@ -86,9 +86,10 @@ async def _execute_openrouter_call(
     start: LLMSubroutineStart,
     conversation_ref: str,
     turn_label: str,
-    llm: EmbeddedLLMSpec,
     retain_conversation: Callable[[str], Awaitable[None]],
 ) -> tuple[OpenRouterCallResult, int]:
+    llm = workflow_input.llm
+
     def _call(label: str, source_conversation_ref: str) -> OpenRouterCallInput:
         return OpenRouterCallInput(
             conversation_ref=source_conversation_ref,
@@ -210,7 +211,6 @@ class LLMSubroutineWorkflow:
                         start,
                         conversation_ref,
                         turn_label,
-                        workflow_input.llm,
                         retain_conversation,
                     )
                     n_llm_calls += call_count

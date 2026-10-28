@@ -6,7 +6,7 @@ import { PPCWarningsTable } from "./ppc-warnings-table";
 
 const indicators = [...scenarioResult("prepared").body.metadata.variables];
 const comparison = fixtureValue(scenarioResult("dataCompared").body.report.variables[0]);
-if (!("predictive" in comparison) || "kind" in comparison.predictive.evaluation)
+if (comparison.predictive === null || "kind" in comparison.predictive.evaluation)
   throw new Error("The synthetic comparison must include predictive check examples");
 const ppc = comparison.predictive.evaluation;
 

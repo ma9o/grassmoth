@@ -11,6 +11,7 @@ from grassmoth.artifacts.identity import ParameterId
 from grassmoth.artifacts.model.parameter import SiteKind
 from grassmoth.compilation_errors import AggregatedCompileError
 from grassmoth.models.ssm.compile.layout import axes, static_factors
+from grassmoth.models.ssm.dynamics.expression import EdgeDrift
 from grassmoth.models.ssm.structure.sites import (
     CompiledBlockTarget,
     CompiledEdgeTarget,
@@ -51,14 +52,11 @@ def _native_dynamics_bindings(
     """Bind coefficient references within the native component emitted by their own term."""
     result = {}
     for index, component in enumerate(components):
-        target = (
-            CompiledNodeTarget(target_index=component.target)
-            if component.source is None
-            else CompiledEdgeTarget(
-                target_index=component.target,
-                source_index=component.source,
-            )
-        )
+        match component.role:
+            case EdgeDrift(source=source):
+                target = CompiledEdgeTarget(target_index=component.target, source_index=source)
+            case _:
+                target = CompiledNodeTarget(target_index=component.target)
         for identity, site in component.parameter_sites(f"vf_{index}"):
             if identity in result:
                 raise PriorIndexingError(

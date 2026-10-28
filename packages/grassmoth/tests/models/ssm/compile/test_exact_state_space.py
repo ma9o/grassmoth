@@ -1,6 +1,4 @@
-import logging
 from dataclasses import replace
-from datetime import UTC, datetime
 
 import jax
 import jax.numpy as jnp
@@ -37,7 +35,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
 )
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT, compile_program
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
 
@@ -135,7 +133,6 @@ def _problem(model, observations=None):
     return compiled, build_particle_problem(
         fit.prior_runtime_bundle,
         panel,
-        scheme="euler_maruyama",
         trace_key=jax.random.key(2),
         reparam=None,
         compiler=compile_program,
@@ -451,13 +448,8 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
     failure = fit(
         prepared.prior_runtime_bundle,
         panel,
-        compute_budget=COMPUTE_BUDGET,
         sampler=SamplerSpec(),
-        clock=lambda: 0.0,
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(failure, ObservationPreflightFailure)
     assert "O(log T)" in failure.message
@@ -467,8 +459,8 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
     coupled = DynamicsSpec(
         2,
         (
-            ExpressionComponentSpec(state(total.id), 0, state_ids, None),
-            ExpressionComponentSpec(state(driver.id), 1, state_ids, None),
+            ExpressionComponentSpec(state(total.id), 0, state_ids, "drift"),
+            ExpressionComponentSpec(state(driver.id), 1, state_ids, "drift"),
         ),
     )
     assert _compile_recurrence(coupled, (0, 1)) == (ParallelRecurrences((0, 1)),)
@@ -536,7 +528,6 @@ def test_staged_replay_matches_sequential_path_density_and_gradients():
     target = build_particle_problem(
         prepared.prior_runtime_bundle,
         bind_panel_fixture(compiled, observations, times),
-        scheme="euler_maruyama",
         trace_key=jax.random.key(2),
         reparam=None,
         compiler=compile_program,
@@ -737,7 +728,6 @@ def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients
     problem = build_particle_problem(
         fit.prior_runtime_bundle,
         panel,
-        scheme="euler_maruyama",
         trace_key=jax.random.key(2),
         reparam=None,
         compiler=compile_program,

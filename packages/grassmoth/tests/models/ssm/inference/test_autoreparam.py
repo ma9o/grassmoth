@@ -33,7 +33,6 @@ from grassmoth.models.ssm.inference.reparameterization import (
     _loc_scale_reparam,
     _minimal_reparam,
 )
-from grassmoth.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
 from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.inference import (
     MinimalReparam,
@@ -540,7 +539,6 @@ class TestAutoReparamSSM:
         bundle = build_particle_problem(
             model.prior_runtime_bundle,
             bind_panel_fixture(model.compiled_dynamical_model, observations, times),
-            scheme=LATENT_TRANSITION_EULER_MARUYAMA,
             trace_key=jax.random.PRNGKey(0),
             reparam=AutoReparam(centered=0.0),
             compiler=compile_program,

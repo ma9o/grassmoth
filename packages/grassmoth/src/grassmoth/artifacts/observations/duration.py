@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal, override
 
 from dateutil.relativedelta import relativedelta
-from pydantic_core import core_schema
 from pytimeparse2 import parse
+
+from grassmoth.artifacts.base import string_wire_schema
 
 if TYPE_CHECKING:
     from pydantic import GetCoreSchemaHandler
@@ -74,7 +75,7 @@ class Duration:
         cls, _source_type: object, _handler: GetCoreSchemaHandler
     ) -> CoreSchema:
         """Accept parsed durations or duration strings and serialize them with their original spelling."""
-        return _duration_schema(cls)
+        return string_wire_schema(cls)
 
 
 @dataclass(frozen=True, init=False)
@@ -118,18 +119,7 @@ class CalendarDuration:
         cls, _source_type: object, _handler: GetCoreSchemaHandler
     ) -> CoreSchema:
         """Parse strings at the scalar boundary and retain the same string wire contract."""
-        return _duration_schema(cls)
-
-
-def _duration_schema(owner: type[Duration] | type[CalendarDuration]) -> CoreSchema:
-    parsed = core_schema.no_info_after_validator_function(owner, core_schema.str_schema())
-    return core_schema.json_or_python_schema(
-        json_schema=parsed,
-        python_schema=core_schema.union_schema([core_schema.is_instance_schema(owner), parsed]),
-        serialization=core_schema.plain_serializer_function_ser_schema(
-            str, return_schema=core_schema.str_schema()
-        ),
-    )
+        return string_wire_schema(cls)
 
 
 def parse_observation_window(source: str) -> Duration | CalendarDuration:

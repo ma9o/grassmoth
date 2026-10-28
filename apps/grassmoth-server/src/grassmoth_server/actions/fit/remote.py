@@ -13,9 +13,9 @@ from typing import TYPE_CHECKING
 
 from grassmoth.public import (
     DynamicalModelSpec,
+    FitInputs,
     FitOutput,
     ObservationDataset,
-    SamplerCheckpoint,
 )
 from grassmoth_server.compute.analysis_cache import (
     ANALYSIS_CACHE_ROOT,
@@ -38,7 +38,6 @@ if TYPE_CHECKING:
         QuestionSpec,
         ResolvedObservationSpec,
         SamplerSpec,
-        StructuralSelection,
     )
 
 _FIT_CPU_CORES = 8
@@ -61,7 +60,6 @@ class FitComputeInput:
     compute_loo_diagnostics: bool
     analysis_call: AnalysisCall
     profile: bool = False
-    continuation: bytes | None = None
     previous: bytes | None = None
 
 
@@ -114,25 +112,22 @@ def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
         unpack_result(payload.dynamical_model_spec_bytes)
     ).materialized()
     result = run_fit(
-        selection=StructuralSelection.for_question(dynamical_model_spec, payload.question),
-        question=payload.question,
-        data_for_model=ObservationDataset.from_frame(
-            pl.read_parquet(io.BytesIO(payload.panel_parquet)),
-            payload.variables,
-            time_origin=payload.time_origin,
+        FitInputs(
+            selection=StructuralSelection.for_question(dynamical_model_spec, payload.question),
+            question=payload.question,
+            data_for_model=ObservationDataset.from_frame(
+                pl.read_parquet(io.BytesIO(payload.panel_parquet)),
+                payload.variables,
+                time_origin=payload.time_origin,
+            ),
+            sampler=payload.sampler,
+            compute_loo_diagnostics=payload.compute_loo_diagnostics,
+            previous=FitOutput.model_validate(unpack_result(payload.previous))
+            if payload.previous is not None
+            else None,
         ),
-        time_origin=payload.time_origin,
-        sampler=payload.sampler,
-        compute_loo_diagnostics=payload.compute_loo_diagnostics,
-        profile=payload.profile,
         profile_dir=fit_profile_directory(ANALYSIS_CACHE_ROOT, payload.analysis_call)
         if payload.profile
-        else None,
-        continuation=SamplerCheckpoint.model_validate(unpack_result(payload.continuation))
-        if payload.continuation is not None
-        else None,
-        previous=FitOutput.model_validate(unpack_result(payload.previous))
-        if payload.previous is not None
         else None,
     )
     return FitComputeResult(output=pack_result(result))
@@ -234,20 +229,10 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
 
 
 def fit_on_modal(
-    hardware: InferenceHardware,
-    *,
-    selection: StructuralSelection,
-    data_for_model: ObservationDataset,
-    time_origin: datetime,
-    sampler: SamplerSpec,
-    question: QuestionSpec,
-    compute_loo_diagnostics: bool,
-    analysis_call: AnalysisCall,
-    profile: bool = False,
-    continuation: SamplerCheckpoint | None = None,
-    previous: FitOutput | None = None,
+    inputs: FitInputs, *, analysis_call: AnalysisCall, profile: bool = False
 ) -> FitOutput:
     """Transfer pinned values, compute once on Modal, then retain returned arrays locally."""
+    previous = inputs.previous
     # Prior phase traces are publication history, never transition inputs. Keep
     # them at the caller instead of uploading and downloading them unchanged.
     compute_previous = (
@@ -260,22 +245,21 @@ def fit_on_modal(
         )
     )
     panel = io.BytesIO()
-    data_for_model.recorded.frame.write_parquet(panel)
+    inputs.data_for_model.recorded.frame.write_parquet(panel)
     result = _dispatch_fit(
         FitComputeInput(
-            dynamical_model_spec_bytes=pack_result(selection.dynamical_model_spec),
-            question=question,
+            dynamical_model_spec_bytes=pack_result(inputs.selection.dynamical_model_spec),
+            question=inputs.question,
             panel_parquet=panel.getvalue(),
-            variables=data_for_model.variables,
-            time_origin=time_origin,
-            sampler=sampler,
-            compute_loo_diagnostics=compute_loo_diagnostics,
+            variables=inputs.data_for_model.variables,
+            time_origin=inputs.data_for_model.time_origin,
+            sampler=inputs.sampler,
+            compute_loo_diagnostics=inputs.compute_loo_diagnostics,
             analysis_call=analysis_call,
             profile=profile,
-            continuation=None if continuation is None else pack_result(continuation),
             previous=None if compute_previous is None else pack_result(compute_previous),
         ),
-        hardware=hardware,
+        hardware=inputs.sampler.hardware,
     )
     # Validate the complete response before the first local write. Exceptions
     # propagate to the action's normal error path; there is no local retry.

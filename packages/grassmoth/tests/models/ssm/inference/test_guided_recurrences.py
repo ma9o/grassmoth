@@ -13,7 +13,7 @@ from numpy.polynomial.hermite import hermgauss
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal, norm
 
-from grassmoth.artifacts.sampling import ParticleAGradSpec, TwistedParticleAGradSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.compile.state_space import (
     ParallelRecurrences,
     SequentialRecurrences,
@@ -179,15 +179,13 @@ def test_recurrence_guide_matches_dense_gaussian_conditioning(steps, random_init
 
     _, geometry = jax.jit(
         lambda: _memory_guide(
-            target,
-            guide,
             memory,
             observe,
             jnp.zeros(1),
             auxiliary,
             jnp.full(auxiliary.shape, variance),
             target.independent_mask,
-            TwistedParticleAGradSpec(kappa=1),
+            GuidedPathSpec(method="twisted_particle_agrad", kappa=1),
             "actual_law",
         )
     )()
@@ -223,10 +221,10 @@ def test_recurrence_guide_matches_dense_gaussian_conditioning(steps, random_init
 
 
 @pytest.mark.parametrize(
-    ("spec_type", "kappa"),
-    [(TwistedParticleAGradSpec, 1), (TwistedParticleAGradSpec, 0), (ParticleAGradSpec, 1)],
+    ("method", "kappa"),
+    [("twisted_particle_agrad", 1), ("twisted_particle_agrad", 0), ("particle_agrad", 1)],
 )
-def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(spec_type, kappa):
+def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa):
     target = _target(1.0)
     labels = np.array([-0.45, 0.55])
     label_prior = np.exp(norm.logpdf(labels) - logsumexp(norm.logpdf(labels)))
@@ -250,7 +248,7 @@ def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(spec_type, kap
         paths = _prior(rng.normal(size=(8192, 4)), labels[selected], 1.0)
         accepted.append(paths[np.log(rng.uniform(size=8192)) < _likelihood(paths)])
     starts = jnp.asarray(np.concatenate(accepted)[:4096])
-    spec = spec_type(num_particles=8, kappa=kappa)
+    spec = GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
     setup = build_smoother_setup(
         target,
         spec,
@@ -384,7 +382,7 @@ def test_fixed_initial_state_without_memory_keeps_backward_selection():
     chosen = rng.choice(2, 4096, p=probabilities)
     samples = means[chosen] + rng.normal(size=(4096, 2)) @ np.linalg.cholesky(covariance).T
     starts = jnp.asarray(np.column_stack((0.2 * labels[chosen], samples))[..., None])
-    spec = TwistedParticleAGradSpec(num_particles=8, kappa=1)
+    spec = GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1)
     setup = build_smoother_setup(
         target,
         spec,

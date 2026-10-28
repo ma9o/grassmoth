@@ -46,7 +46,7 @@ def observation(identity: str, name: str, *, resolved: bool = False) -> dict[str
     return {
         "id": identity,
         "name": name,
-        "measurement_dtype": "continuous",
+        "measurement": {"dtype": "continuous"},
         "aggregation": "mean",
         "observation_window": "1d" if resolved else None,
     }

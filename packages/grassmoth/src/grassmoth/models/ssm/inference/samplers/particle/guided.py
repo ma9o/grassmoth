@@ -47,7 +47,7 @@ import jax.numpy as jnp
 from jax.scipy.special import logsumexp
 from jax.typing import DTypeLike
 
-from grassmoth.artifacts.sampling import GuidedPathSpec, ParticleMGradSpec, TwistedParticleAGradSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.particle.contract import (
     ParticleSmootherResult,
     SmootherContext,
@@ -130,7 +130,7 @@ def _guided_components(target: ParticleTarget, spec: GuidedPathSpec) -> _GuidedC
     """Resolve immutable choices from the method and compiled support before tracing scans."""
     return _GuidedComponents(
         "actual_law"
-        if isinstance(spec, TwistedParticleAGradSpec) and spec.kappa == 1
+        if spec.method == "twisted_particle_agrad" and spec.kappa == 1
         else "unshifted",
         "memory" if target.intervals is not None or target.state_space.requires_replay else "point",
         "ancestral"
@@ -187,8 +187,6 @@ def _guided_step(
     twist, geometry = build_guide(
         components.geometry,
         components.information,
-        target,
-        guide,
         memory,
         observe,
         ctx.initial_label_log_probs,
@@ -200,7 +198,7 @@ def _guided_step(
     initial_mean = target.initial_moments(guide)[0]
     marginal = (
         jax.vmap(marginal_geometry, in_axes=(0, 0, 0, None))(geometry.chol, variance, mask, count)
-        if isinstance(spec, ParticleMGradSpec)
+        if spec.method == "particle_mgrad"
         else None
     )
 
@@ -346,8 +344,6 @@ def _guided_step(
 
     path, picks, trajectory_scores = select_path(
         components.selector,
-        target,
-        ctx,
         memory,
         memory_bank,
         bank,
@@ -362,7 +358,6 @@ def _guided_step(
         mask,
         observe,
         transition,
-        log_precisions,
         reference.dtype,
         spec.scan_unroll,
     )

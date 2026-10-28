@@ -166,7 +166,7 @@ def _make_spec(
             "id": fixture_entity_id("indicator", indicator_name),
             "construct_id": fixture_entity_id("construct", construct_name),
             "name": indicator_name,
-            "measurement_dtype": dtype,
+            "measurement": {"dtype": dtype},
         },
     ]
     if extra_indicators:
@@ -176,7 +176,7 @@ def _make_spec(
     for indicator in indicators:
         assert indicator.pop("construct_id") == fixture_entity_id("construct", construct_name)
         indicator.setdefault("construct_polarity", "positive")
-        indicator.setdefault("measurement_dtype", "continuous")
+        indicator.setdefault("measurement", {"dtype": "continuous"})
         indicator.setdefault("aggregation", "last")
         definitions.append(
             {"observation": indicator, "construct_polarity": indicator.pop("construct_polarity")}
@@ -939,7 +939,7 @@ class TestCheckConstructCorrelations:
                     "id": "indicator:4ff8be7491bd87d28af4",
                     "construct_id": "construct:6b04dc42c531e7091eb8",
                     "name": "stress_self_report",
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                 },
             ],
         )
@@ -974,7 +974,7 @@ class TestCheckConstructCorrelations:
                     "id": "indicator:4ff8be7491bd87d28af4",
                     "construct_id": "construct:6b04dc42c531e7091eb8",
                     "name": "stress_self_report",
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                 },
             ],
         )
@@ -1028,7 +1028,7 @@ class TestCheckConstructCorrelations:
                     "id": "indicator:4ff8be7491bd87d28af4",
                     "construct_id": "construct:6b04dc42c531e7091eb8",
                     "name": "stress_self_report",
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                 },
             ],
         )

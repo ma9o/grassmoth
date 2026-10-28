@@ -68,7 +68,6 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "models/ssm/predictive/types": "domain",
     "models/ssm/priors": "compiler",
     "models/ssm/shapes": "domain",
-    "models/ssm/transition_kinds": "domain",
 }
 
 SERVICE_PACKAGE = "grassmoth_server"

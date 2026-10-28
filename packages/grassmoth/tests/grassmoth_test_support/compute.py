@@ -1,6 +1,9 @@
 """Local JAX compilation and resource budgets for numerical library tests."""
 
+import logging
+import time
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import cast
 
 import jax
@@ -8,6 +11,7 @@ from jax.stages import Compiled
 
 from grassmoth.compute.batching import compiled_memory
 from grassmoth.compute.budget import ComputeBudget, MemoryDemand, SharedMemoryBudget
+from grassmoth.compute.context import ModelExecutionContext
 from grassmoth.compute.programs import PreparedProgram
 
 COMPUTE_BUDGET = ComputeBudget(
@@ -38,3 +42,14 @@ def prepare_program[Result](
     executable = jax.jit(bound).lower((), *args, **kwargs).compile()
     shapes = cast("Result", jax.eval_shape(function, *args, **kwargs))
     return lambda: executable, (), shapes, compiled_memory(executable)
+
+
+EXECUTION_CONTEXT = ModelExecutionContext(
+    compiler=compile_program,
+    prepare_program=prepare_program,
+    budget=COMPUTE_BUDGET,
+    clock=time.monotonic,
+    wall_clock=lambda: datetime.now(UTC),
+    logger=logging.getLogger("grassmoth.tests"),
+    profile=False,
+)

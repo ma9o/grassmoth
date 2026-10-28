@@ -274,6 +274,8 @@ export interface components {
         readonly ActionReportName: "checks" | "identification" | "validation" | "data-profile" | "inference" | "simulation" | "data-diff" | "model-diff";
         /** @description A successful call pairs its action with that action's scientific result body. */
         readonly ActionSuccess: Domain.SuccessfulPoll<"edit_question", Domain.EditQuestionOutput> | Domain.SuccessfulPoll<"edit_model", Domain.EditModelOutput> | Domain.SuccessfulPoll<"prepare_data", Domain.PrepareDataOutput> | Domain.SuccessfulPoll<"fit", Domain.FitOutput> | Domain.SuccessfulPoll<"simulate", Domain.SimulateOutput> | Domain.SuccessfulPoll<"data_diff", Domain.DataDiffOutput> | Domain.SuccessfulPoll<"model_diff", Domain.ModelDiffOutput>;
+        /** @enum {string} */
+        readonly AdaptationScheme: "simple" | "dual_averaging";
         /**
          * AdaptedLatentStepSpec
          * @description Warmup adapts the per-time scale towards the assigned movement target.
@@ -827,6 +829,9 @@ export interface components {
             readonly energy: components["schemas"]["EnergyDiagnostics"] | null;
         };
         readonly Change_DataPoint_: Domain.Added<Domain.DataPoint> | Domain.Removed<Domain.DataPoint> | Domain.Revised<Domain.DataPoint>;
+        /** @enum {string} */
+        readonly CheckOutcome: "passed" | "failed";
+        readonly CheckStatus: components["schemas"]["CheckOutcome"] | "not_evaluated";
         /**
          * CoefficientExpression
          * @description A scientifically typed coefficient operand, literal or parameter reference.
@@ -858,6 +863,8 @@ export interface components {
         readonly CoefficientRole: "center" | "decay" | "quartic" | "intercept" | "weight" | "emax" | "ec50" | "exponent" | "loading" | "observation_intercept" | "observation_scale" | "degrees_of_freedom" | "shape" | "dispersion" | "concentration" | "cutpoint_base" | "cutpoint_gaps" | "category_intercepts" | "category_slopes" | "diffusion_scale" | "diffusion_loading" | "process_degrees_of_freedom" | "initial_mean" | "initial_scale" | "initial_correlation";
         /** @enum {string} */
         readonly CompanionMoves: "none" | "centred_mh" | "centred_and_scale_noncentred_mh" | "centred_nuts";
+        /** @enum {string} */
+        readonly ComparisonSide: "left" | "right";
         /**
          * CompletedExtractionWorker
          * @description Counts of extracted observations and windows retained from a completed worker.
@@ -1083,12 +1090,8 @@ export interface components {
              * @description Number of distinct parameter and construct references with convergence findings.
              */
             readonly checked: number;
-            /**
-             * Status
-             * @description Convergence verdict with failed checks taking precedence over unevaluated checks.
-             * @enum {string}
-             */
-            readonly status: "passed" | "failed" | "not_evaluated";
+            /** @description Convergence verdict with failed checks taking precedence over unevaluated checks. */
+            readonly status: components["schemas"]["CheckStatus"];
             /**
              * Messages
              * @description Explanations for convergence checks that failed or could not be evaluated.
@@ -1399,33 +1402,6 @@ export interface components {
              */
             readonly density: readonly number[];
         };
-        /**
-         * DescriptiveIndicatorComparison
-         * @description Computed evidence for one persistent indicator identity, without copying its histories.
-         *
-         *     Point changes are directional, from left to right, and only computed for one
-         *     history on each side. Match by calendar instant:
-         *     a new anchor is Added, a lost anchor Removed, and an exact value or support change
-         *     at a retained anchor Revised. Omit unchanged points and order changes by anchor.
-         *     Renames and measurement-definition changes are not point revisions; definition
-         *     mismatches are findings. No tolerance, interpolation, or imputation is
-         *     used. Reversing sides exchanges additions/removals and before/after payloads.
-         *
-         *     An empty changes tuple can mean identical points or an inapplicable point diff
-         *     (replicated selections); it never asserts that whole
-         *     datasets are equal. Missing variables and differing schedules remain explicit
-         *     findings. Predictive evaluation owns its own applicability, so extra replicate
-         *     anchors can produce a schedule finding without preventing checks at observed anchors.
-         */
-        readonly DescriptiveIndicatorComparison: {
-            readonly indicator_id: components["schemas"]["IndicatorId-Output"];
-            /** Changes */
-            readonly changes: readonly Domain.Change<Domain.DataPoint>[];
-            /** Statistics */
-            readonly statistics: readonly components["schemas"]["DataStatisticComparison"][];
-            /** Findings */
-            readonly findings: readonly components["schemas"]["DataFinding"][];
-        };
         /** @enum {string} */
         readonly DiagnosticPhase: "warmup" | "post_warmup";
         readonly "DistributionId-Input": `distribution:${string}`;
@@ -1566,8 +1542,19 @@ export interface components {
                     readonly observation?: {
                         /** @description Indicator name (e.g., 'hrv', 'self_reported_stress') */
                         readonly name?: string;
-                        /** @enum {string} */
-                        readonly measurement_dtype?: "continuous" | "binary" | "count" | "ordinal" | "categorical";
+                        readonly measurement?: {
+                            /** @enum {string} */
+                            readonly dtype?: "continuous" | "binary" | "count";
+                        } | {
+                            /** @enum {string} */
+                            readonly dtype?: "ordinal" | "categorical";
+                            /** @description At least two distinct level labels, coded 0..K-1 in this order. Ordinal levels run from lowest to highest (e.g., ['low', 'medium', 'high']); categorical levels list every category (e.g., ['home', 'work', 'other']). */
+                            readonly levels?: readonly [
+                                string,
+                                string,
+                                ...string[]
+                            ];
+                        };
                         /**
                          * @description How measurements within a support window are reduced to one observation.
                          * @enum {string}
@@ -1575,10 +1562,6 @@ export interface components {
                         readonly aggregation?: "first" | "last" | "sum" | "count" | "mean" | "std";
                         /** @description Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock. */
                         readonly observation_window?: string | null;
-                        /** @description Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding. */
-                        readonly ordinal_levels?: readonly string[] | null;
-                        /** @description Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding. */
-                        readonly categorical_levels?: readonly string[] | null;
                     };
                     readonly likelihood?: {
                         readonly law?: {
@@ -2411,8 +2394,19 @@ export interface components {
                     readonly observation: {
                         /** @description Indicator name (e.g., 'hrv', 'self_reported_stress') */
                         readonly name: string;
-                        /** @enum {string} */
-                        readonly measurement_dtype: "continuous" | "binary" | "count" | "ordinal" | "categorical";
+                        readonly measurement: {
+                            /** @enum {string} */
+                            readonly dtype: "continuous" | "binary" | "count";
+                        } | {
+                            /** @enum {string} */
+                            readonly dtype: "ordinal" | "categorical";
+                            /** @description At least two distinct level labels, coded 0..K-1 in this order. Ordinal levels run from lowest to highest (e.g., ['low', 'medium', 'high']); categorical levels list every category (e.g., ['home', 'work', 'other']). */
+                            readonly levels: readonly [
+                                string,
+                                string,
+                                ...string[]
+                            ];
+                        };
                         /**
                          * @description How measurements within a support window are reduced to one observation.
                          * @enum {string}
@@ -2423,16 +2417,6 @@ export interface components {
                          * @default null
                          */
                         readonly observation_window: string | null;
-                        /**
-                         * @description Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding.
-                         * @default null
-                         */
-                        readonly ordinal_levels: readonly string[] | null;
-                        /**
-                         * @description Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding.
-                         * @default null
-                         */
-                        readonly categorical_levels: readonly string[] | null;
                     };
                     /** @default null */
                     readonly likelihood: {
@@ -4009,11 +3993,7 @@ export interface components {
             /** Code */
             readonly code: string;
             readonly subject: components["schemas"]["ConvergenceAssessmentSubject"];
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            readonly outcome: "passed" | "failed";
+            readonly outcome: components["schemas"]["CheckOutcome"];
             readonly evidence: components["schemas"]["NumericCriterionEvidence"];
         };
         /**
@@ -4029,11 +4009,7 @@ export interface components {
             /** Code */
             readonly code: string;
             readonly subject: components["schemas"]["IndicatorCheckSubject"];
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            readonly outcome: "passed" | "failed";
+            readonly outcome: components["schemas"]["CheckOutcome"];
             readonly evidence: components["schemas"]["NumericCriterionEvidence"];
         };
         /**
@@ -4049,11 +4025,7 @@ export interface components {
             /** Code */
             readonly code: string;
             readonly subject: components["schemas"]["PredictiveSubject"];
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            readonly outcome: "passed" | "failed";
+            readonly outcome: components["schemas"]["CheckOutcome"];
             /** Evidence */
             readonly evidence: readonly components["schemas"]["NumericCriterionEvidence"][];
         };
@@ -4070,11 +4042,7 @@ export interface components {
             /** Code */
             readonly code: string;
             readonly subject: components["schemas"]["QuestionSubject"];
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            readonly outcome: "passed" | "failed";
+            readonly outcome: components["schemas"]["CheckOutcome"];
             /** Evidence */
             readonly evidence: string;
         };
@@ -4092,11 +4060,7 @@ export interface components {
             readonly code: string;
             /** Subject */
             readonly subject: components["schemas"]["IndicatorRef"] | "dataset";
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            readonly outcome: "passed" | "failed";
+            readonly outcome: components["schemas"]["CheckOutcome"];
             /** Evidence */
             readonly evidence: string;
         };
@@ -4114,11 +4078,7 @@ export interface components {
             readonly code: string;
             /** Subject */
             readonly subject: string;
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            readonly outcome: "passed" | "failed";
+            readonly outcome: components["schemas"]["CheckOutcome"];
             /** Evidence */
             readonly evidence: string;
         };
@@ -4837,7 +4797,7 @@ export interface components {
         };
         /**
          * GaussianReferenceTemperingSpec
-         * @description Optional replica exchange; each ladder retains only its exact beta-one chain.
+         * @description Replica exchange; each ladder retains only its exact beta-one chain.
          *
          *     The ladder spans beta one to zero. The reference is fixed at initialization,
          *     its endpoint is independently refreshed every sweep, and even/odd neighboring
@@ -4846,9 +4806,15 @@ export interface components {
          *
          *     It is for posteriors whose chains stay in separate modes: states that move freely
          *     under the reference reach the exact chain through swaps (Syed et al. 2022). Its
-         *     limits are in docs/assumptions.md, under Model class.
+         *     limits are in docs/assumptions.md, under Model class. Companion moves are built for
+         *     the untempered posterior, so a tempered run has none.
          */
         readonly "GaussianReferenceTemperingSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "gaussian_reference";
             /**
              * Num Temperatures
              * @description Replicas per chain, initially evenly spaced from beta one (the exact posterior) to beta zero (the Gaussian reference). Each replica runs a full sweep, so cost grows linearly. With alternating even/odd swaps the round-trip rate tends to 1 / (2 + 2Λ) instead of collapsing as replicas are added, and about 2Λ replicas are optimal, where Λ is the posterior's communication barrier (Syed et al. 2022, sections 4.2 and 5.3).
@@ -4870,7 +4836,7 @@ export interface components {
         };
         /**
          * GaussianReferenceTemperingSpec
-         * @description Optional replica exchange; each ladder retains only its exact beta-one chain.
+         * @description Replica exchange; each ladder retains only its exact beta-one chain.
          *
          *     The ladder spans beta one to zero. The reference is fixed at initialization,
          *     its endpoint is independently refreshed every sweep, and even/odd neighboring
@@ -4879,9 +4845,15 @@ export interface components {
          *
          *     It is for posteriors whose chains stay in separate modes: states that move freely
          *     under the reference reach the exact chain through swaps (Syed et al. 2022). Its
-         *     limits are in docs/assumptions.md, under Model class.
+         *     limits are in docs/assumptions.md, under Model class. Companion moves are built for
+         *     the untempered posterior, so a tempered run has none.
          */
         readonly "GaussianReferenceTemperingSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "gaussian_reference";
             /**
              * Num Temperatures
              * @description Replicas per chain, initially evenly spaced from beta one (the exact posterior) to beta zero (the Gaussian reference). Each replica runs a full sweep, so cost grows linearly. With alternating even/odd swaps the round-trip rate tends to 1 / (2 + 2Λ) instead of collapsing as replicas are added, and about 2Λ replicas are optimal, where Λ is the posterior's communication barrier (Syed et al. 2022, sections 4.2 and 5.3).
@@ -4905,6 +4877,78 @@ export interface components {
         readonly "GitOid-Input": string;
         /** @description A native Git object identity for an immutable tree or commit. */
         readonly "GitOid-Output": string;
+        /**
+         * GuidedPathSpec
+         * @description Sequential conditional SMC with exact Gaussian transition-informed proposals.
+         *
+         *     Corenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear
+         *     transitions and densities pay every weight, so each method's approximation costs
+         *     mixing, never the target.
+         */
+        readonly "GuidedPathSpec-Input": {
+            /**
+             * @description particle_agrad keeps the auxiliary variable in the weights (section 4.1); strong future information or multiple modes can reduce its mixing. twisted_particle_agrad adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings without deterministic recurrences, and separated path components and informative future readings can slow its mixing. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly method: "particle_agrad" | "particle_mgrad" | "twisted_particle_agrad";
+            /**
+             * Num Particles
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @default 64
+             */
+            readonly num_particles?: number;
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
+            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
+            /**
+             * Kappa
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @default 1
+             * @enum {integer}
+             */
+            readonly kappa?: 0 | 1;
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @default 8
+             */
+            readonly scan_unroll?: number;
+        };
+        /**
+         * GuidedPathSpec
+         * @description Sequential conditional SMC with exact Gaussian transition-informed proposals.
+         *
+         *     Corenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear
+         *     transitions and densities pay every weight, so each method's approximation costs
+         *     mixing, never the target.
+         */
+        readonly "GuidedPathSpec-Output": {
+            /**
+             * @description particle_agrad keeps the auxiliary variable in the weights (section 4.1); strong future information or multiple modes can reduce its mixing. twisted_particle_agrad adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings without deterministic recurrences, and separated path components and informative future readings can slow its mixing. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly method: "particle_agrad" | "particle_mgrad" | "twisted_particle_agrad";
+            /**
+             * Num Particles
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @default 64
+             */
+            readonly num_particles: number;
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
+            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
+            /**
+             * Kappa
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @default 1
+             * @enum {integer}
+             */
+            readonly kappa: 0 | 1;
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @default 8
+             */
+            readonly scan_unroll: number;
+        };
         /** HTTPValidationError */
         readonly HTTPValidationError: {
             /** Detail */
@@ -4990,7 +5034,35 @@ export interface components {
         readonly IndicatorCheckSubject: {
             readonly target: components["schemas"]["IndicatorRef"];
         };
-        readonly IndicatorComparison: components["schemas"]["DescriptiveIndicatorComparison"] | components["schemas"]["PredictiveIndicatorComparison"];
+        /**
+         * IndicatorComparison
+         * @description Computed evidence for one persistent indicator identity, without copying its histories.
+         *
+         *     Point changes are directional, from left to right, and only computed for one
+         *     history on each side. Match by calendar instant:
+         *     a new anchor is Added, a lost anchor Removed, and an exact value or support change
+         *     at a retained anchor Revised. Omit unchanged points and order changes by anchor.
+         *     Renames and measurement-definition changes are not point revisions; definition
+         *     mismatches are findings. No tolerance, interpolation, or imputation is
+         *     used. Reversing sides exchanges additions/removals and before/after payloads.
+         *
+         *     An empty changes tuple can mean identical points or an inapplicable point diff
+         *     (replicated selections); it never asserts that whole
+         *     datasets are equal. Missing variables and differing schedules remain explicit
+         *     findings. Predictive evaluation owns its own applicability, so extra replicate
+         *     anchors can produce a schedule finding without preventing checks at observed anchors.
+         */
+        readonly IndicatorComparison: {
+            readonly indicator_id: components["schemas"]["IndicatorId-Output"];
+            /** Changes */
+            readonly changes: readonly Domain.Change<Domain.DataPoint>[];
+            /** Statistics */
+            readonly statistics: readonly components["schemas"]["DataStatisticComparison"][];
+            /** Findings */
+            readonly findings: readonly components["schemas"]["DataFinding"][];
+            /** @description Reference history against the other side's replicates, when exactly one side is a single history of a compatible numeric indicator; otherwise null. An alignment failure is reported as a finding. */
+            readonly predictive: components["schemas"]["PredictiveComparison"] | null;
+        };
         /**
          * IndicatorEmpiricalProfile
          * @description Count, recorded range, quartiles and mean of one indicator's usable observations.
@@ -5123,11 +5195,7 @@ export interface components {
             readonly start_seconds: number;
             /** End Seconds */
             readonly end_seconds: number;
-            /**
-             * Outcome
-             * @enum {string}
-             */
-            readonly outcome: "complete" | "failed";
+            readonly outcome: components["schemas"]["PhaseOutcome"];
         };
         /**
          * InferenceReport
@@ -5356,6 +5424,28 @@ export interface components {
             /** Ecdf */
             readonly ecdf: number;
         };
+        /** @enum {string} */
+        readonly LabeledDtype: "ordinal" | "categorical";
+        /**
+         * LabeledMeasurement
+         * @description Readings recorded as labels, coded 0..K-1 in level order.
+         */
+        readonly LabeledMeasurement: {
+            /**
+             * @description 'ordinal' or 'categorical' (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly dtype: "categorical" | "ordinal";
+            /**
+             * Levels
+             * @description At least two distinct level labels, coded 0..K-1 in this order. Ordinal levels run from lowest to highest (e.g., ['low', 'medium', 'high']); categorical levels list every category (e.g., ['home', 'work', 'other']).
+             */
+            readonly levels: readonly [
+                string,
+                string,
+                ...string[]
+            ];
+        };
         /** @enum {unknown} */
         readonly LatentBlockSize: 1 | 2 | "all";
         /**
@@ -5481,25 +5571,15 @@ export interface components {
              * @default 2
              */
             readonly n_parameter_particles?: number;
-            /**
-             * @description Gaussian-reference parallel tempering; null runs the exact posterior alone.
-             * @default null
-             */
-            readonly tempering?: components["schemas"]["GaussianReferenceTemperingSpec-Input"] | null;
+            /** @description untempered runs the exact posterior alone and allows companion moves; gaussian_reference runs Gaussian-reference parallel tempering. */
+            readonly tempering?: components["schemas"]["TemperingSpec-Input"];
             /** @description Exact path update. */
             readonly path_update?: components["schemas"]["PathUpdateSpec-Input"];
             /**
-             * Parameter Proposal
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk
-             * @enum {string}
              */
-            readonly parameter_proposal?: "random_walk" | "pseudo_langevin";
-            /**
-             * @description Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density. Not available with tempering.
-             * @default none
-             */
-            readonly companion?: components["schemas"]["CompanionMoves"];
+            readonly parameter_proposal?: components["schemas"]["ParameterProposal"];
             /**
              * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
              * @default []
@@ -5512,12 +5592,10 @@ export interface components {
              */
             readonly param_target_accept?: number;
             /**
-             * Adaptation Scheme
              * @description How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2).
              * @default simple
-             * @enum {string}
              */
-            readonly adaptation_scheme?: "simple" | "dual_averaging";
+            readonly adaptation_scheme?: components["schemas"]["AdaptationScheme"];
             /** @description Independent Gaussian starts, which also set the initial proposal scale. */
             readonly initialization?: components["schemas"]["GaussianInitializationSpec-Input"];
         };
@@ -5544,25 +5622,15 @@ export interface components {
              * @default 2
              */
             readonly n_parameter_particles: number;
-            /**
-             * @description Gaussian-reference parallel tempering; null runs the exact posterior alone.
-             * @default null
-             */
-            readonly tempering: components["schemas"]["GaussianReferenceTemperingSpec-Output"] | null;
+            /** @description untempered runs the exact posterior alone and allows companion moves; gaussian_reference runs Gaussian-reference parallel tempering. */
+            readonly tempering: components["schemas"]["TemperingSpec-Output"];
             /** @description Exact path update. */
             readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
             /**
-             * Parameter Proposal
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk
-             * @enum {string}
              */
-            readonly parameter_proposal: "random_walk" | "pseudo_langevin";
-            /**
-             * @description Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density. Not available with tempering.
-             * @default none
-             */
-            readonly companion: components["schemas"]["CompanionMoves"];
+            readonly parameter_proposal: components["schemas"]["ParameterProposal"];
             /**
              * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
              * @default []
@@ -5575,20 +5643,14 @@ export interface components {
              */
             readonly param_target_accept: number;
             /**
-             * Adaptation Scheme
              * @description How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2).
              * @default simple
-             * @enum {string}
              */
-            readonly adaptation_scheme: "simple" | "dual_averaging";
+            readonly adaptation_scheme: components["schemas"]["AdaptationScheme"];
             /** @description Independent Gaussian starts, which also set the initial proposal scale. */
             readonly initialization: components["schemas"]["GaussianInitializationSpec-Output"];
         };
-        /**
-         * @description A measurement dtype defines the observed value domain of an indicator.
-         * @enum {string}
-         */
-        readonly MeasurementDtype: "continuous" | "binary" | "count" | "ordinal" | "categorical";
+        readonly Measurement: components["schemas"]["NumericMeasurement"] | components["schemas"]["LabeledMeasurement"];
         /** @description A persistent mechanism identity distinguishes additive terms through reordering and revision. */
         readonly "MechanismId-Input": `mechanism:${string}`;
         /** @description A persistent mechanism identity distinguishes additive terms through reordering and revision. */
@@ -6129,6 +6191,19 @@ export interface components {
              */
             readonly band_label: string;
         };
+        /** @enum {string} */
+        readonly NumericDtype: "continuous" | "binary" | "count";
+        /**
+         * NumericMeasurement
+         * @description Readings recorded as numbers: real values, 0/1 outcomes or non-negative counts.
+         */
+        readonly NumericMeasurement: {
+            /**
+             * @description 'continuous', 'binary' or 'count' (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly dtype: "binary" | "continuous" | "count";
+        };
         /**
          * NumericalArray
          * @description An immutable NPY buffer carried as a MessagePack binary value.
@@ -6290,8 +6365,8 @@ export interface components {
              * @description Indicator name (e.g., 'hrv', 'self_reported_stress')
              */
             readonly name: string;
-            /** @description 'continuous', 'binary', 'count', 'ordinal', 'categorical' */
-            readonly measurement_dtype: components["schemas"]["MeasurementDtype"];
+            /** @description How readings are recorded: {dtype: 'continuous' | 'binary' | 'count'}, or {dtype: 'ordinal' | 'categorical', levels: [...]} for labels coded 0..K-1. */
+            readonly measurement: components["schemas"]["Measurement"];
             /** @description Aggregation function applied when bucketing raw extractions within the indicator support window. Supported operators: first, last, sum, count, mean, std. A computed_rule must produce this same summary. */
             readonly aggregation: components["schemas"]["SummaryOperator"];
             /**
@@ -6299,18 +6374,6 @@ export interface components {
              * @default null
              */
             readonly observation_window: components["schemas"]["ObservationWindow"] | null;
-            /**
-             * Ordinal Levels
-             * @description Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding.
-             * @default null
-             */
-            readonly ordinal_levels: readonly string[] | null;
-            /**
-             * Categorical Levels
-             * @description Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding.
-             * @default null
-             */
-            readonly categorical_levels: readonly string[] | null;
         };
         /** ObservationSpec[ObservationWindow] */
         readonly ObservationSpec_ObservationWindow_: {
@@ -6321,24 +6384,12 @@ export interface components {
              * @description Indicator name (e.g., 'hrv', 'self_reported_stress')
              */
             readonly name: string;
-            /** @description 'continuous', 'binary', 'count', 'ordinal', 'categorical' */
-            readonly measurement_dtype: components["schemas"]["MeasurementDtype"];
+            /** @description How readings are recorded: {dtype: 'continuous' | 'binary' | 'count'}, or {dtype: 'ordinal' | 'categorical', levels: [...]} for labels coded 0..K-1. */
+            readonly measurement: components["schemas"]["Measurement"];
             /** @description Aggregation function applied when bucketing raw extractions within the indicator support window. Supported operators: first, last, sum, count, mean, std. A computed_rule must produce this same summary. */
             readonly aggregation: components["schemas"]["SummaryOperator"];
             /** @description Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock. */
             readonly observation_window: components["schemas"]["ObservationWindow"];
-            /**
-             * Ordinal Levels
-             * @description Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding.
-             * @default null
-             */
-            readonly ordinal_levels: readonly string[] | null;
-            /**
-             * Categorical Levels
-             * @description Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding.
-             * @default null
-             */
-            readonly categorical_levels: readonly string[] | null;
         };
         readonly ObservationWindow: string;
         /**
@@ -6394,6 +6445,8 @@ export interface components {
                 number
             ] | null;
         };
+        /** @enum {string} */
+        readonly PPCStatistic: "mean" | "sd" | "min" | "max";
         /**
          * PPCTestStat
          * @description An observed summary compared with the same statistic across predictive replicates.
@@ -6403,11 +6456,7 @@ export interface components {
          */
         readonly PPCTestStat: {
             readonly indicator_id: components["schemas"]["IndicatorId-Output"];
-            /**
-             * Stat Name
-             * @enum {string}
-             */
-            readonly stat_name: "mean" | "sd" | "min" | "max";
+            readonly stat_name: components["schemas"]["PPCStatistic"];
             /** Observed Value */
             readonly observed_value: number;
             /** Rep Values */
@@ -6465,6 +6514,8 @@ export interface components {
         readonly "ParameterId-Input": `parameter:${string}`;
         /** @description A scientific parameter identity connects component coefficients to one parameter definition. */
         readonly "ParameterId-Output": `parameter:${string}`;
+        /** @enum {string} */
+        readonly ParameterProposal: "random_walk" | "pseudo_langevin";
         /**
          * ParameterRef
          * @description A scalar finding identifies its scientific parameter and declared logical component.
@@ -6518,161 +6569,11 @@ export interface components {
             readonly timestep: number;
             /** K */
             readonly k: number | ("infinity" | "-infinity" | "undefined");
-            /**
-             * Status
-             * @enum {string}
-             */
-            readonly status: "passed" | "failed" | "not_evaluated";
-        };
-        /**
-         * ParticleAGradSpec
-         * @description Sequential conditional SMC with exact Gaussian transition-informed proposals.
-         *
-         *     Particle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary
-         *     variable in the weights. Parameter labels remain marginalized. Strong future
-         *     information or multiple modes can reduce mixing; the target stays exact.
-         */
-        readonly "ParticleAGradSpec-Input": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly method: "particle_agrad";
-            /**
-             * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
-             * @default 64
-             */
-            readonly num_particles?: number;
-            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
-            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
-            /**
-             * Kappa
-             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
-             * @default 1
-             * @enum {integer}
-             */
-            readonly kappa?: 0 | 1;
-            /**
-             * Scan Unroll
-             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
-             * @default 8
-             */
-            readonly scan_unroll?: number;
-        };
-        /**
-         * ParticleAGradSpec
-         * @description Sequential conditional SMC with exact Gaussian transition-informed proposals.
-         *
-         *     Particle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary
-         *     variable in the weights. Parameter labels remain marginalized. Strong future
-         *     information or multiple modes can reduce mixing; the target stays exact.
-         */
-        readonly "ParticleAGradSpec-Output": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly method: "particle_agrad";
-            /**
-             * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
-             * @default 64
-             */
-            readonly num_particles: number;
-            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
-            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
-            /**
-             * Kappa
-             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
-             * @default 1
-             * @enum {integer}
-             */
-            readonly kappa: 0 | 1;
-            /**
-             * Scan Unroll
-             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
-             * @default 8
-             */
-            readonly scan_unroll: number;
+            readonly status: components["schemas"]["CheckStatus"];
         };
         /** @enum {string} */
         readonly ParticleDiagnosticMetric: "particle_identity" | "parameter_movement" | "particle_weights" | "frequency_refresh" | "regional_movement";
         readonly ParticleDiagnosticMetrics: readonly components["schemas"]["ParticleDiagnosticMetric"][];
-        /**
-         * ParticleMGradSpec
-         * @description Particle-mGRAD integrates the path auxiliary out of the particle weights.
-         *
-         *     Uses the untwisted Gaussian transition-informed proposal with exact nonlinear
-         *     corrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain
-         *     marginalized. Supports point readings without deterministic recurrences;
-         *     separated path components and informative future readings can slow mixing.
-         */
-        readonly "ParticleMGradSpec-Input": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly method: "particle_mgrad";
-            /**
-             * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
-             * @default 64
-             */
-            readonly num_particles?: number;
-            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
-            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
-            /**
-             * Kappa
-             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
-             * @default 1
-             * @enum {integer}
-             */
-            readonly kappa?: 0 | 1;
-            /**
-             * Scan Unroll
-             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
-             * @default 8
-             */
-            readonly scan_unroll?: number;
-        };
-        /**
-         * ParticleMGradSpec
-         * @description Particle-mGRAD integrates the path auxiliary out of the particle weights.
-         *
-         *     Uses the untwisted Gaussian transition-informed proposal with exact nonlinear
-         *     corrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain
-         *     marginalized. Supports point readings without deterministic recurrences;
-         *     separated path components and informative future readings can slow mixing.
-         */
-        readonly "ParticleMGradSpec-Output": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly method: "particle_mgrad";
-            /**
-             * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
-             * @default 64
-             */
-            readonly num_particles: number;
-            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
-            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
-            /**
-             * Kappa
-             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
-             * @default 1
-             * @enum {integer}
-             */
-            readonly kappa: 0 | 1;
-            /**
-             * Scan Unroll
-             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
-             * @default 8
-             */
-            readonly scan_unroll: number;
-        };
         /**
          * ParticleProfileDimensions
          * @description Particle-kernel work dimensions, including any temperature replicas.
@@ -6710,11 +6611,7 @@ export interface components {
             readonly latent_update_fraction: number;
             /** Latent Frozen Fraction */
             readonly latent_frozen_fraction: number;
-            /**
-             * Latent Block Coords
-             * @enum {unknown}
-             */
-            readonly latent_block_coords: 1 | 2 | "all";
+            readonly latent_block_coords: components["schemas"]["LatentBlockSize"];
             /** Initial Param Step Size */
             readonly initial_param_step_size: readonly number[];
             /** Final Param Step Size */
@@ -6821,8 +6718,8 @@ export interface components {
             /** Nonfinite Fraction */
             readonly nonfinite_fraction: number;
         };
-        readonly "PathUpdateSpec-Input": components["schemas"]["DsmcSpec-Input"] | components["schemas"]["ParticleAGradSpec-Input"] | components["schemas"]["TwistedParticleAGradSpec-Input"] | components["schemas"]["ParticleMGradSpec-Input"];
-        readonly "PathUpdateSpec-Output": components["schemas"]["DsmcSpec-Output"] | components["schemas"]["ParticleAGradSpec-Output"] | components["schemas"]["TwistedParticleAGradSpec-Output"] | components["schemas"]["ParticleMGradSpec-Output"];
+        readonly "PathUpdateSpec-Input": components["schemas"]["DsmcSpec-Input"] | components["schemas"]["GuidedPathSpec-Input"];
+        readonly "PathUpdateSpec-Output": components["schemas"]["DsmcSpec-Output"] | components["schemas"]["GuidedPathSpec-Output"];
         readonly PathWeightDiagnostics: components["schemas"]["DsmcWeightDiagnostics"] | components["schemas"]["SequentialWeightDiagnostics"];
         /**
          * PersistenceTransformSpec
@@ -6837,6 +6734,8 @@ export interface components {
             /** Interval Days */
             readonly interval_days: number | "model_clock";
         };
+        /** @enum {string} */
+        readonly PhaseOutcome: "complete" | "failed";
         /**
          * PoissonLawSpec[Expression]
          * @description The Poisson conditional law.
@@ -6925,27 +6824,9 @@ export interface components {
          *     the side names and number of selected histories do not establish that provenance.
          */
         readonly PredictiveComparison: {
-            /**
-             * Reference Side
-             * @enum {string}
-             */
-            readonly reference_side: "left" | "right";
+            readonly reference_side: components["schemas"]["ComparisonSide"];
             /** Evaluation */
             readonly evaluation: components["schemas"]["PosteriorPredictiveChecks"] | Domain.NotEvaluated<Domain.IndicatorRef>;
-        };
-        /**
-         * PredictiveIndicatorComparison
-         * @description Compatible reference and replicate histories with their evaluated predictive comparison.
-         */
-        readonly PredictiveIndicatorComparison: {
-            readonly indicator_id: components["schemas"]["IndicatorId-Output"];
-            /** Changes */
-            readonly changes: readonly Domain.Change<Domain.DataPoint>[];
-            /** Statistics */
-            readonly statistics: readonly components["schemas"]["DataStatisticComparison"][];
-            /** Findings */
-            readonly findings: readonly components["schemas"]["DataFinding"][];
-            readonly predictive: components["schemas"]["PredictiveComparison"];
         };
         readonly PredictiveLawProvenance: components["schemas"]["AuthoredLawProvenance"] | components["schemas"]["FittedLawProvenance"] | components["schemas"]["MixedLawProvenance"] | components["schemas"]["UnknownLawProvenance"];
         /**
@@ -8121,6 +8002,8 @@ export interface components {
             /** Swaps */
             readonly swaps: readonly (readonly components["schemas"]["ReplicaSwapCounts"][])[];
         };
+        readonly "TemperingSpec-Input": components["schemas"]["UntemperedSpec-Input"] | components["schemas"]["GaussianReferenceTemperingSpec-Input"];
+        readonly "TemperingSpec-Output": components["schemas"]["UntemperedSpec-Output"] | components["schemas"]["GaussianReferenceTemperingSpec-Output"];
         /**
          * TemporalStatus
          * @description Temporal status states whether a construct varies within the individual over time.
@@ -8290,80 +8173,6 @@ export interface components {
             readonly kind: "transferred";
         };
         /**
-         * TwistedParticleAGradSpec
-         * @description Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.
-         *
-         *     A parallel backward information scan guides a sequential conditional filter.
-         *     Proposals combine exact nonlinear transition means with the approximate twist;
-         *     their normalized densities and twist ratios are paid in full. Poor local fits
-         *     and multiple modes cost efficiency, never change the target (section 4.4).
-         */
-        readonly "TwistedParticleAGradSpec-Input": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly method: "twisted_particle_agrad";
-            /**
-             * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
-             * @default 64
-             */
-            readonly num_particles?: number;
-            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
-            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
-            /**
-             * Kappa
-             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
-             * @default 1
-             * @enum {integer}
-             */
-            readonly kappa?: 0 | 1;
-            /**
-             * Scan Unroll
-             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
-             * @default 8
-             */
-            readonly scan_unroll?: number;
-        };
-        /**
-         * TwistedParticleAGradSpec
-         * @description Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.
-         *
-         *     A parallel backward information scan guides a sequential conditional filter.
-         *     Proposals combine exact nonlinear transition means with the approximate twist;
-         *     their normalized densities and twist ratios are paid in full. Poor local fits
-         *     and multiple modes cost efficiency, never change the target (section 4.4).
-         */
-        readonly "TwistedParticleAGradSpec-Output": {
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            readonly method: "twisted_particle_agrad";
-            /**
-             * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
-             * @default 64
-             */
-            readonly num_particles: number;
-            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
-            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
-            /**
-             * Kappa
-             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
-             * @default 1
-             * @enum {integer}
-             */
-            readonly kappa: 0 | 1;
-            /**
-             * Scan Unroll
-             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
-             * @default 8
-             */
-            readonly scan_unroll: number;
-        };
-        /**
          * UnknownLawProvenance
          * @description Imported laws do not establish a conditioning history.
          */
@@ -8379,6 +8188,38 @@ export interface components {
              * @constant
              */
             readonly interpretation: "unknown";
+        };
+        /**
+         * UntemperedSpec
+         * @description The exact posterior alone, optionally followed by companion moves each sweep.
+         */
+        readonly "UntemperedSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "untempered";
+            /**
+             * @description Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density.
+             * @default none
+             */
+            readonly companion?: components["schemas"]["CompanionMoves"];
+        };
+        /**
+         * UntemperedSpec
+         * @description The exact posterior alone, optionally followed by companion moves each sweep.
+         */
+        readonly "UntemperedSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "untempered";
+            /**
+             * @description Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density.
+             * @default none
+             */
+            readonly companion: components["schemas"]["CompanionMoves"];
         };
         /** ValidationError */
         readonly ValidationError: {

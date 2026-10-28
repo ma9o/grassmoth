@@ -10,8 +10,10 @@ import pytest
 
 from grassmoth.actions.contracts.bodies import SimulateOutput
 from grassmoth.actions.fit.conditioning import condition_model
+from grassmoth.actions.simulate.inputs import SimulationInputs
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.reference import DataRef
+from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from grassmoth.artifacts.simulation import SimulationSpec
 from grassmoth.models.ssm.inference.types import JointPosteriorDraws
 from grassmoth.models.ssm.predictive.parameters import sample_model_laws
@@ -346,12 +348,14 @@ def test_retained_forecast_and_timed_intervention_preserve_joint_starts(
     )
     assert design.start_day(origin) == start_time
     report = simulate(
-        StructuralSelection(dynamical_model_spec, None),
-        design,
-        seed=0,
-        num_replicates=100,
+        SimulationInputs(
+            selection=StructuralSelection(dynamical_model_spec, None),
+            design=design,
+            seed=0,
+            num_replicates=100,
+            law=AuthoredLawProvenance(),
+        ),
         budget=read_compute_budget(),
-        fitted=None,
     )
     assert not isinstance(report, ObservationPreflightFailure)
     action = report.arms.action.latent_paths.values
@@ -402,15 +406,16 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
     inference_log(dynamical_model_spec)
     ArtifactStore("TEST")
     evidence = simulate(
-        StructuralSelection(dynamical_model_spec, states[1]),
-        design,
-        seed=0,
-        num_replicates=100,
+        SimulationInputs(
+            selection=StructuralSelection(dynamical_model_spec, states[1]),
+            design=design,
+            seed=0,
+            num_replicates=100,
+            law=AuthoredLawProvenance(),
+        ),
         budget=read_compute_budget(),
-        fitted=None,
     )
     assert not isinstance(evidence, ObservationPreflightFailure)
-    from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
     from grassmoth.artifacts.simulation import SimulationReport
     from grassmoth_test_support.inference import _report
 
@@ -430,9 +435,14 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
 
     def summarize():
         return summarize_causal_simulation(
-            StructuralSelection(dynamical_model_spec, states[1]),
-            design,
-            fitted=fitted,
+            SimulationInputs(
+                selection=StructuralSelection(dynamical_model_spec, states[1]),
+                design=design,
+                seed=0,
+                num_replicates=100,
+                law=AuthoredLawProvenance(),
+                fitted=fitted,
+            ),
             action=arms.action,
             reference=arms.reference,
             state_ids=evidence.state_ids,
@@ -566,12 +576,14 @@ def test_simulation_retains_exact_histories_without_running_measurement_reducers
     from grassmoth_server.compute.resources import read_compute_budget
 
     evidence = action._simulate(
-        StructuralSelection(dynamical_model_spec, None),
-        SimulationSpec(start=date(2026, 1, 1), horizon="2d"),
-        seed=0,
-        num_replicates=100,
+        SimulationInputs(
+            selection=StructuralSelection(dynamical_model_spec, None),
+            design=SimulationSpec(start=date(2026, 1, 1), horizon="2d"),
+            seed=0,
+            num_replicates=100,
+            law=AuthoredLawProvenance(),
+        ),
         budget=read_compute_budget(),
-        fitted=None,
     )
     assert not isinstance(evidence, ObservationPreflightFailure)
     assert called == []

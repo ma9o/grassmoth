@@ -6,14 +6,14 @@ import json
 import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
-from grassmoth.artifacts.reports.inference import InferencePhase
+from grassmoth.artifacts.reports.inference import InferencePhase, PhaseOutcome
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
-    from datetime import datetime
 
+    from grassmoth.compute.context import ModelExecutionContext
     from grassmoth.json_types import JsonScalar
 
 
@@ -38,8 +38,7 @@ def log_inference_event(
     stage: str,
     event: str,
     *,
-    logger: logging.Logger,
-    wall_clock: Callable[[], datetime],
+    execution_context: ModelExecutionContext,
     **details: JsonScalar,
 ) -> None:
     """Emit one timestamped event through the caller's configured logging handlers."""
@@ -48,9 +47,9 @@ def log_inference_event(
         "sampler": label,
         "stage": stage,
         "event": event,
-        "time_utc": wall_clock().isoformat(),
+        "time_utc": execution_context.wall_clock().isoformat(),
     }
-    logger.log(
+    execution_context.logger.log(
         logging.ERROR if event == "failed" else logging.INFO,
         json.dumps(payload, allow_nan=False),
         extra={"inference_progress": payload},
@@ -62,20 +61,18 @@ def inference_phase(
     label: str,
     stage: str,
     *,
-    clock: Callable[[], float],
-    logger: logging.Logger,
-    wall_clock: Callable[[], datetime],
+    execution_context: ModelExecutionContext,
     **details: JsonScalar,
 ) -> Iterator[None]:
     """Mark phase entry and completion; preserve exceptions and identify their phase."""
-    started = clock()
-    log_inference_event(label, stage, "started", logger=logger, wall_clock=wall_clock, **details)
-    outcome: Literal["complete", "failed"] = "failed"
+    started = execution_context.clock()
+    log_inference_event(label, stage, "started", execution_context=execution_context, **details)
+    outcome: PhaseOutcome = "failed"
     try:
         yield
         outcome = "complete"
     finally:
-        ended = clock()
+        ended = execution_context.clock()
         capture = _PHASE_CAPTURE.get()
         if capture is not None:
             origin, phases = capture
@@ -93,7 +90,6 @@ def inference_phase(
             stage,
             outcome,
             elapsed_seconds=ended - started,
-            logger=logger,
-            wall_clock=wall_clock,
+            execution_context=execution_context,
             **details,
         )

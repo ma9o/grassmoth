@@ -10,6 +10,7 @@ import pytest
 
 from grassmoth.artifacts.identity import IndicatorId
 from grassmoth.artifacts.observations.semantics import SummaryOperator
+from grassmoth.artifacts.observations.spec import LabeledMeasurement, NumericMeasurement
 from grassmoth_server.actions.contracts.preparation import FilePreparationSpec
 from grassmoth_server.actions.prepare_data.aggregations import (
     _build_agg_expr,
@@ -31,7 +32,7 @@ def compute_indicators(raw_df, indicators, model_clock, time_col, **kwargs):
                 "observation": {
                     "id": "indicator:unused",
                     "name": "unused",
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "aggregation": "mean",
                 },
                 "extraction": {"kind": "semantic", "how_to_measure": "Unused semantic variable"},
@@ -110,7 +111,9 @@ class TestEncodeNonContinuous:
                 "value": ["true", "false", "yes"],
             }
         )
-        result = _encode_non_continuous(df, {"indicator:869e1d0209fb25a7fc06": "binary"})
+        result = _encode_non_continuous(
+            df, {"indicator:869e1d0209fb25a7fc06": NumericMeasurement(dtype="binary")}
+        )
         values = result.sort("value")["value"].to_list()
         # "false" -> "0.0", "true" -> "1.0", "yes" -> "1.0"
         assert "0.0" in values
@@ -129,8 +132,11 @@ class TestEncodeNonContinuous:
         )
         result = _encode_non_continuous(
             df,
-            {"indicator:036fd134b9ad32d7a2ca": "ordinal"},
-            ordinal_levels_lookup={"indicator:036fd134b9ad32d7a2ca": ["low", "medium", "high"]},
+            {
+                "indicator:036fd134b9ad32d7a2ca": LabeledMeasurement(
+                    dtype="ordinal", levels=("low", "medium", "high")
+                )
+            },
         )
         vals = sorted(float(v) for v in result["value"].to_list())
         assert vals == [0.0, 1.0, 2.0]
@@ -147,8 +153,11 @@ class TestEncodeNonContinuous:
         )
         result = _encode_non_continuous(
             df,
-            {"indicator:036fd134b9ad32d7a2ca": "ordinal"},
-            ordinal_levels_lookup={"indicator:036fd134b9ad32d7a2ca": ["low", "medium", "high"]},
+            {
+                "indicator:036fd134b9ad32d7a2ca": LabeledMeasurement(
+                    dtype="ordinal", levels=("low", "medium", "high")
+                )
+            },
         ).sort("value", nulls_last=True)
         assert result["value"].to_list() == ["2", None]
 
@@ -162,7 +171,9 @@ class TestEncodeNonContinuous:
                 "value": [70.5, 80.2],
             }
         )
-        result = _encode_non_continuous(df, {"indicator:c5b118ae552981435d7b": "continuous"})
+        result = _encode_non_continuous(
+            df, {"indicator:c5b118ae552981435d7b": NumericMeasurement(dtype="continuous")}
+        )
         assert result["value"].to_list() == [70.5, 80.2]
 
     def test_empty_dtype_lookup(self):
@@ -184,8 +195,8 @@ class TestEncodeNonContinuous:
         result = _encode_non_continuous(
             df,
             {
-                "indicator:869e1d0209fb25a7fc06": "binary",
-                "indicator:c5b118ae552981435d7b": "continuous",
+                "indicator:869e1d0209fb25a7fc06": NumericMeasurement(dtype="binary"),
+                "indicator:c5b118ae552981435d7b": NumericMeasurement(dtype="continuous"),
             },
         )
         mood_row = result.filter(pl.col("indicator_id") == "indicator:869e1d0209fb25a7fc06")
@@ -225,7 +236,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:c21b43949b3712e734c8"),
                     "name": "avg_hr",
                     "aggregation": "mean",
@@ -250,7 +261,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:a0ce08437c19d06aafd1"),
                     "name": "total_steps",
                     "aggregation": "sum",
@@ -273,7 +284,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:c21b43949b3712e734c8"),
                     "name": "avg_hr",
                     "aggregation": "mean",
@@ -286,7 +297,7 @@ class TestComputeIndicators:
             },
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:a0ce08437c19d06aafd1"),
                     "name": "total_steps",
                     "aggregation": "sum",
@@ -312,7 +323,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:c21b43949b3712e734c8"),
                     "name": "avg_hr",
                     "aggregation": "mean",
@@ -352,7 +363,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:cacaf060b8afc7a952d9"),
                     "name": "hr_trend",
                     "aggregation": "trend",
@@ -373,7 +384,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:938f71ec0999bbbe342c"),
                     "name": "missing",
                     "aggregation": "mean",
@@ -403,7 +414,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:c21b43949b3712e734c8"),
                     "name": "avg_hr",
                     "aggregation": "mean",
@@ -437,8 +448,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:c0486b3cc6b5559e95d0"),
                     "name": "first_setting",
-                    "measurement_dtype": "categorical",
-                    "categorical_levels": ["home", "clinic"],
+                    "measurement": {"dtype": "categorical", "levels": ["home", "clinic"]},
                     "aggregation": "first",
                 },
                 "extraction": {
@@ -469,8 +479,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:c664114dcb2ded460d6e"),
                     "name": "last_setting",
-                    "measurement_dtype": "categorical",
-                    "categorical_levels": ["home", "clinic"],
+                    "measurement": {"dtype": "categorical", "levels": ["home", "clinic"]},
                     "aggregation": "last",
                 },
                 "extraction": {
@@ -501,9 +510,8 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:5dc4b94693df7e0aef53"),
                     "name": "closing_mood",
-                    "measurement_dtype": "ordinal",
+                    "measurement": {"dtype": "ordinal", "levels": ["bad", "ok", "good"]},
                     "aggregation": "last",
-                    "ordinal_levels": ["bad", "ok", "good"],
                 },
                 "extraction": {
                     "kind": "computed",
@@ -534,7 +542,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:6a123c22171bbe49ee54"),
                     "name": "text_events",
-                    "measurement_dtype": "count",
+                    "measurement": {"dtype": "count"},
                     "aggregation": "count",
                 },
                 "extraction": {
@@ -567,7 +575,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:46df40a36557ed795b7b"),
                     "name": "map",
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "aggregation": "mean",
                 },
                 "extraction": {
@@ -605,7 +613,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:097d80d6767b143a71b4"),
                     "name": "missed_doses",
-                    "measurement_dtype": "count",
+                    "measurement": {"dtype": "count"},
                     "aggregation": "sum",
                 },
                 "extraction": {
@@ -643,7 +651,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:e8bcfd4304d709a5cce3"),
                     "name": "event_count",
-                    "measurement_dtype": "count",
+                    "measurement": {"dtype": "count"},
                     "aggregation": "count",
                 },
                 "extraction": {
@@ -656,7 +664,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:422841bed8b563beeec0"),
                     "name": "score_mean",
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "aggregation": "mean",
                 },
                 "extraction": {
@@ -696,7 +704,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:42b9030df461ee342451"),
                     "name": "stress_mentions",
-                    "measurement_dtype": "count",
+                    "measurement": {"dtype": "count"},
                     "aggregation": "count",
                 },
                 "extraction": {
@@ -738,7 +746,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:86e4453f8f098e1007ef"),
                     "name": "low_spo2",
-                    "measurement_dtype": "binary",
+                    "measurement": {"dtype": "binary"},
                     "aggregation": "last",
                 },
                 "extraction": {
@@ -763,7 +771,7 @@ class TestComputeIndicators:
                         "observation": {
                             "id": IndicatorId("indicator:reading"),
                             "name": "reading",
-                            "measurement_dtype": "continuous",
+                            "measurement": {"dtype": "continuous"},
                             "aggregation": "mean",
                         },
                         "extraction": {
@@ -799,7 +807,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:cce51902cd8da81b8457"),
                     "name": "social_media_hits",
-                    "measurement_dtype": "count",
+                    "measurement": {"dtype": "count"},
                     "aggregation": "count",
                 },
                 "extraction": {
@@ -848,7 +856,7 @@ class TestComputeIndicators:
                 "observation": {
                     "id": IndicatorId("indicator:1d23877d34bd268f1d4d"),
                     "name": "stress_content_count",
-                    "measurement_dtype": "count",
+                    "measurement": {"dtype": "count"},
                     "aggregation": "count",
                 },
                 "extraction": {
@@ -875,7 +883,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:c21b43949b3712e734c8"),
                     "name": "avg_hr",
                     "aggregation": "mean",
@@ -906,7 +914,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:c21b43949b3712e734c8"),
                     "name": "avg_hr",
                     "aggregation": "mean",
@@ -930,7 +938,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:c21b43949b3712e734c8"),
                     "name": "avg_hr",
                     "aggregation": "mean",
@@ -954,7 +962,7 @@ class TestComputeIndicators:
         indicators = [
             {
                 "observation": {
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "id": IndicatorId("indicator:f56b7b4807d8c6627ccb"),
                     "name": "weekly_steps",
                     "aggregation": "sum",
@@ -1027,7 +1035,9 @@ def test_fill_null_uses_polars_after_window_aggregation(fields, aggregation, exp
             observation_window=None,
             id="indicator:record",
             name="record",
-            measurement_dtype="count" if aggregation == "count" else "continuous",
+            measurement=NumericMeasurement(
+                dtype="count" if aggregation == "count" else "continuous"
+            ),
             aggregation=aggregation,
         ),
         extraction=ComputedExtractionSpec(

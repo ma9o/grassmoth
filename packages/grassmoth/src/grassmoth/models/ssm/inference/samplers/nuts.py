@@ -28,8 +28,10 @@ from grassmoth.models.ssm.inference.extraction import extract_grouped_public_sam
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from grassmoth.models.ssm.inference.problem import build_particle_problem
+from grassmoth.models.ssm.inference.reparameterization import AutoReparam
 from grassmoth.models.ssm.inference.samplers.profiling import REPETITIONS, measure_sweep
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
+from grassmoth.models.ssm.inference.samplers.sweep_plan import SweepProgram
 from grassmoth.models.ssm.inference.samplers.sweeps import (
     ConvergenceCheckpoint,
     RetainedConvergenceCheck,
@@ -44,19 +46,14 @@ from grassmoth.models.ssm.inference.types import (
     UnretainedRun,
 )
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
-from grassmoth.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Callable, Mapping
-    from datetime import datetime
 
     from jax.stages import Compiled
 
-    from grassmoth.compute.budget import ComputeBudget
-    from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
+    from grassmoth.compute.context import ModelExecutionContext
     from grassmoth.models.ssm.inference.joint_coordinates import JointChart
-    from grassmoth.models.ssm.inference.reparameterization import Strategy
     from grassmoth.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
     from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
@@ -113,24 +110,21 @@ def _extra_fields(
 def run_nuts_da(
     target: ParticleTarget,
     *,
-    prepare_program: ProgramPreparer,
-    compiler: ProgramCompiler,
     sampler: SamplerSpec,
-    compute_budget: ComputeBudget,
-    key: jax.Array,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    profile: bool = False,
-    continuation: SamplerCheckpoint | None = None,
+    start: jax.Array | SamplerCheckpoint,
+    execution_context: ModelExecutionContext,
     convergence: RetainedConvergenceCheck | None = None,
 ) -> NutsDARun | InitializationFailure:
     """Advance independent chains together, then retain only post-adaptation joint draws.
 
+    ``start`` is a fresh random key or the checkpoint these chains resume.
     NumPyro owns dual averaging, windowed diagonal mass adaptation and the NUTS
     transition. A single vectorized executable advances every chain on either CPU
     or GPU; no chain is serialized to accommodate a smaller memory allocation.
     """
+    continuation = start if isinstance(start, SamplerCheckpoint) else None
+    compiler = execution_context.compiler
+    clock = execution_context.clock
     options = sampler.algorithm
     assert isinstance(options, NutsDASpec)
     coordinates = build_joint_coordinates(target, options.parameterization, compiler=compiler)
@@ -202,9 +196,7 @@ def run_nuts_da(
             model_args=(runtime_chart,),
         )
 
-    with inference_phase(
-        "nuts_da", "initializing_chains", clock=clock, logger=logger, wall_clock=wall_clock
-    ):
+    with inference_phase("nuts_da", "initializing_chains", execution_context=execution_context):
         starts = (
             jnp.broadcast_to(initial, (sampler.num_chains, initial.size))
             if continuation is None
@@ -212,8 +204,11 @@ def run_nuts_da(
                 jnp.asarray(continuation.parameters.values), jnp.asarray(continuation.paths.values)
             )
         )
-        if continuation is not None:
-            key = jax.random.wrap_key_data(jnp.asarray(continuation.random_key.values))
+        key = (
+            jax.random.wrap_key_data(jnp.asarray(start.random_key.values))
+            if isinstance(start, SamplerCheckpoint)
+            else start
+        )
         chain_keys = jax.random.split(key, sampler.num_chains)
         states = compiler(
             jax.vmap(nuts_chain_initializer, in_axes=(0, 0, None)), starts, chain_keys, chart
@@ -277,24 +272,13 @@ def run_nuts_da(
 
         return sweep
 
-    with inference_phase(
-        "nuts_da", "compiling_sweeps", clock=clock, logger=logger, wall_clock=wall_clock
-    ):
+    with inference_phase("nuts_da", "compiling_sweeps", execution_context=execution_context):
         plan = compile_projected_sweeps(
-            step_factory,
+            SweepProgram(step_factory, label="nuts_da"),
             (states, key, chart),
-            num_warmup=sampler.num_warmup,
-            num_samples=sampler.num_samples_per_chain,
-            max_batch_size=1,
-            budget=compute_budget,
+            execution_context=execution_context,
+            sampler=sampler,
             target=target,
-            path_dtype=states.z.dtype,
-            num_chains=sampler.num_chains,
-            clock=clock,
-            logger=logger,
-            wall_clock=wall_clock,
-            label="nuts_da",
-            prepare_program=prepare_program,
         )
 
     def profile_state(
@@ -316,12 +300,9 @@ def run_nuts_da(
     run = run_sweeps(
         plan,
         (states, key, chart),
-        clock=clock,
-        logger=logger,
-        wall_clock=wall_clock,
-        label="nuts_da",
+        execution_context=execution_context,
         convergence=convergence,
-        profile=profile_state if profile else None,
+        profile=profile_state if execution_context.profile else None,
     )
     states, next_key, _ = run.state
     last_parameters, last_paths = jax.vmap(coordinates.decode)(states.z)
@@ -353,7 +334,7 @@ def run_nuts_da(
             chains=sampler.num_chains,
             time_steps=len(target.times),
         )
-        if profile
+        if execution_context.profile
         else None,
         compiled_step=plan.compiled_step,
         checkpoint=SamplerCheckpoint(
@@ -371,28 +352,21 @@ def fit_nuts_da(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
-    prepare_program: ProgramPreparer,
-    compiler: ProgramCompiler,
-    compute_budget: ComputeBudget,
     sampler: SamplerSpec,
-    reparam: Strategy | None,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    profile: bool = False,
+    execution_context: ModelExecutionContext,
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Fit the production exact target and expose the shared posterior/report contract."""
+    compiler = execution_context.compiler
+    clock = execution_context.clock
     trace_key, sampling_key = jax.random.split(jax.random.key(sampler.seed))
-    with inference_phase(
-        "nuts_da", "building_target", clock=clock, logger=logger, wall_clock=wall_clock
-    ):
+    with inference_phase("nuts_da", "building_target", execution_context=execution_context):
         bundle = build_particle_problem(
             priors,
             panel,
-            scheme=LATENT_TRANSITION_EULER_MARUYAMA,
             trace_key=trace_key,
-            reparam=reparam,
+            # Fully non-centred; a strategy caches per-site choices, so each fit owns one.
+            reparam=AutoReparam(centered=0.0),
             compiler=compiler,
         )
     started = clock()
@@ -408,15 +382,8 @@ def fit_nuts_da(
             compiler=compiler,
         ),
         sampler=sampler,
-        compute_budget=compute_budget,
-        key=sampling_key,
-        clock=clock,
-        logger=logger,
-        wall_clock=wall_clock,
-        continuation=continuation,
-        profile=profile,
-        prepare_program=prepare_program,
-        compiler=compiler,
+        start=sampling_key if continuation is None else continuation,
+        execution_context=execution_context,
     )
     if isinstance(run, InitializationFailure):
         return run
@@ -425,7 +392,6 @@ def fit_nuts_da(
     if sampler.num_samples_per_chain == 0:
         return UnretainedRun.completed(
             sampler,
-            MCMCEvidence(method="nuts_da"),
             run.compiled_step,
             run.phase_extra_fields,
             parameterization=parameterization_record,

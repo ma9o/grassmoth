@@ -69,14 +69,3 @@ def test_declared_discrete_levels_reject_out_of_range_code():
 
     with pytest.raises(ValueError, match="outside its codebook"):
         _single_row_panel(dynamical_model_spec, symptom_severity=4.0)
-
-
-def test_missing_declared_levels_are_rejected_in_the_scientific_definition():
-
-    indicator = next(
-        item
-        for item in mixed_family_model().indicators
-        if item.observation.measurement_dtype == "ordinal"
-    )
-    with pytest.raises(ValueError, match="ordinal_levels"):
-        indicator.revised(observation=indicator.observation.revised(ordinal_levels=None))

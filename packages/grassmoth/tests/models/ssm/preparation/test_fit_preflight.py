@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-import time
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
@@ -23,13 +20,14 @@ from grassmoth.artifacts.model.expressions import (
 from grassmoth.artifacts.model.likelihood import NegativeBinomial2LawSpec, NormalLawSpec
 from grassmoth.artifacts.model.parameter import SiteKind
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+from grassmoth.artifacts.observations.spec import NumericMeasurement
 from grassmoth.artifacts.sampling import SamplerSpec
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.preparation.preflight import (
     ObservationPreflightFailure,
     validate_observations_for_fit,
 )
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
 from grassmoth_test_support.model import (
     construct_named,
@@ -173,7 +171,7 @@ def _non_identity_links_are_not_judged__model() -> DynamicalModelSpec:
         dynamical_model_spec, SiteKind.MANIFEST_VAR_DIAG, "latent_0", "raw_channel"
     )
     raw_channel_revised = raw_channel.revised(
-        observation=raw_channel.observation.revised(measurement_dtype="count"),
+        observation=raw_channel.observation.revised(measurement=NumericMeasurement(dtype="count")),
         likelihood=raw_channel_likelihood.revised(
             law=NegativeBinomial2LawSpec[Expression](
                 mean=CallExpression(
@@ -322,12 +320,7 @@ def test_fit_runs_preflight_before_dispatch():
             jnp.arange(obs.shape[0], dtype=jnp.float32),
         ),
         sampler=SamplerSpec(),
-        clock=time.monotonic,
-        compute_budget=COMPUTE_BUDGET,
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(failure, ObservationPreflightFailure)
     assert "raw_channel" in failure.message

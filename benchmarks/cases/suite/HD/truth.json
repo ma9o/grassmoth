@@ -102,10 +102,11 @@
         "indicator:y": {
           "observation": {
             "name": "y",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -137,10 +138,11 @@
         "indicator:u": {
           "observation": {
             "name": "u",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -260,10 +262,11 @@
         "indicator:x": {
           "observation": {
             "name": "x",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -388,10 +391,11 @@
         "indicator:z2": {
           "observation": {
             "name": "z2",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -516,10 +520,11 @@
         "indicator:z3": {
           "observation": {
             "name": "z3",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -644,10 +649,11 @@
         "indicator:z4": {
           "observation": {
             "name": "z4",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -772,10 +778,11 @@
         "indicator:z5": {
           "observation": {
             "name": "z5",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -900,10 +907,11 @@
         "indicator:z6": {
           "observation": {
             "name": "z6",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {
@@ -1028,10 +1036,11 @@
         "indicator:z7": {
           "observation": {
             "name": "z7",
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "aggregation": "last",
-            "observation_window": "675s",
-            "categorical_levels": null
+            "observation_window": "675s"
           },
           "likelihood": {
             "law": {

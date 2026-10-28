@@ -38,9 +38,9 @@ class IndicatorSpec(Value):
         if (
             self.likelihood is not None
             and self.likelihood.law.family
-            not in VALID_LIKELIHOODS_FOR_DTYPE[self.observation.measurement_dtype]
+            not in VALID_LIKELIHOODS_FOR_DTYPE[self.observation.measurement.dtype]
         ):
             raise ValueError(
-                f"Likelihood {self.likelihood.law.family.value!r} is incompatible with {self.observation.measurement_dtype!r} indicator {self.observation.id!r}"
+                f"Likelihood {self.likelihood.law.family.value!r} is incompatible with {self.observation.measurement.dtype!r} indicator {self.observation.id!r}"
             )
         return self

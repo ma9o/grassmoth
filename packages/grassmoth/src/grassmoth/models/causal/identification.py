@@ -20,7 +20,6 @@ authoring and causal reporting do not permit the linear-IV argument.
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 import networkx as nx
@@ -29,43 +28,18 @@ from y0.algorithm.simplify_latent import simplify_latent_dag
 from y0.dsl import Variable
 from y0.graph import NxMixedGraph
 
-from grassmoth.artifacts.immutability import freeze_fields
+from grassmoth.artifacts.reports.identification import (
+    IdentificationReport,
+    IdentifiedTreatmentStatus,
+    NonIdentifiableTreatmentStatus,
+)
 from grassmoth.models.causal.graphs import build_digraph, get_all_treatments, get_outcome_name
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
 
     from grassmoth.artifacts.identity import ConstructId
     from grassmoth.artifacts.model.construct import CausalEdgeSpec, ConstructSpec
-
-
-@dataclass(frozen=True, kw_only=True)
-class IdentifiedQuery:
-    """An identified causal query with its estimand and supporting confounder or instrument findings."""
-
-    estimand: str
-    marginalized_confounders: tuple[str, ...]
-    instruments: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, kw_only=True)
-class UnidentifiedQuery:
-    """A causal query blocked by the reported confounding structure, with optional explanatory notes."""
-
-    confounders: tuple[str, ...]
-    notes: str | None = None
-
-
-@dataclass(frozen=True, kw_only=True)
-class IdentificationResult:
-    """y0 query output; names are resolved to canonical IDs by the report producer."""
-
-    identifiable_treatments: Mapping[str, IdentifiedQuery]
-    non_identifiable_treatments: Mapping[str, UnidentifiedQuery]
-
-    def __post_init__(self) -> None:
-        """Own immutable collections of causal identification findings after construction."""
-        freeze_fields(self)
 
 
 def check_identifiability(
@@ -75,7 +49,7 @@ def check_identifiability(
     outcome_id: ConstructId | None,
     observed_constructs: set[str],
     iv_allowed: bool = False,
-) -> IdentificationResult:
+) -> IdentificationReport:
     """Check which treatment effects are identifiable using y0's ID algorithm.
 
     Applies ID to the selected treatment/outcome query in a 2-timestep graph.
@@ -93,14 +67,10 @@ def check_identifiability(
             nonparametric do-calculus identifications are returned (the default).
 
     Returns:
-        Dict with:
-            - identifiable_treatments: Map of treatment -> identification details
-                * estimand: Closed-form estimand or IV placeholder
-                * marginalized_confounders: Unobserved constructs the estimand integrates out
-                * instruments: Optional list of IVs when applicable
-            - non_identifiable_treatments: Map of treatment -> confounder context
-                * confounders: Unobserved constructs blocking identification
-                * notes: Optional explanation when confounders cannot be enumerated
+        The outcome and one finding per treatment, keyed by construct ID: identified
+        treatments first, with their estimand (or IV placeholder), the unobserved
+        constructs it integrates out and any instruments; then unidentified treatments,
+        with their blocking confounders and optional notes.
 
     Raises:
         ValueError: No outcome construct is selected for the identification query.
@@ -108,6 +78,7 @@ def check_identifiability(
     outcome = get_outcome_name(constructs, outcome_id)
     if not outcome:
         raise ValueError("No outcome selected for identification")
+    identities = {construct.name: construct.id for construct in constructs}
 
     # Get all potential treatments (observed constructs with paths to outcome)
     # Only observed constructs can be treatments - you can't do(X) on unobserved X
@@ -120,20 +91,21 @@ def check_identifiability(
     # Determine if outcome is time-varying or time-invariant
     outcome_is_time_varying = _is_time_varying(constructs, outcome)
 
-    # Check each treatment
-    identifiable_treatments: dict[str, IdentifiedQuery] = {}
-    non_identifiable_treatments: dict[str, UnidentifiedQuery] = {}
-
     # If outcome itself is unobserved, no effects are identifiable
     if outcome not in observed_constructs:
-        for treatment in all_treatments:
-            non_identifiable_treatments[treatment] = UnidentifiedQuery(
-                confounders=(outcome,), notes="outcome is unobserved"
-            )
-        return IdentificationResult(
-            identifiable_treatments=identifiable_treatments,
-            non_identifiable_treatments=non_identifiable_treatments,
+        return IdentificationReport(
+            outcome=outcome_id,
+            treatments={
+                identities[treatment]: NonIdentifiableTreatmentStatus(
+                    confounders=(identities[outcome],), notes="outcome is unobserved"
+                )
+                for treatment in all_treatments
+            },
         )
+
+    # Check each treatment
+    identifiable_treatments: dict[ConstructId, IdentifiedTreatmentStatus] = {}
+    non_identifiable_treatments: dict[ConstructId, NonIdentifiableTreatmentStatus] = {}
 
     # Convert DAG to ADMG via 2-timestep unrolling
     admg, unobserved_confounders = dag_to_admg(constructs, edges, observed_constructs)
@@ -158,9 +130,11 @@ def check_identifiability(
         if estimand is not None:  # ty: ignore[redundant-condition-strict]  # pyright: ignore[reportUnnecessaryComparison] - y0 returns None for unidentifiable queries; static analysis narrows its exception path incorrectly.
             # Map estimand back to original names for readability
             estimand_str = _canonicalize_estimand_string(str(estimand))
-            identifiable_treatments[treatment] = IdentifiedQuery(
+            identifiable_treatments[identities[treatment]] = IdentifiedTreatmentStatus(
                 estimand=estimand_str,
-                marginalized_confounders=tuple(sorted(unobserved_confounders)),
+                marginalized_confounders=tuple(
+                    identities[name] for name in sorted(unobserved_confounders)
+                ),
             )
         else:
             # y0's nonparametric check failed; optionally report IV
@@ -173,10 +147,12 @@ def check_identifiability(
             if instruments:
                 # IV identification available under the caller's linearity assumption.
                 iv_list = ", ".join(instruments)
-                identifiable_treatments[treatment] = IdentifiedQuery(
+                identifiable_treatments[identities[treatment]] = IdentifiedTreatmentStatus(
                     estimand=f"IV({iv_list}) [requires linearity]",
-                    marginalized_confounders=tuple(sorted(unobserved_confounders)),
-                    instruments=tuple(instruments),
+                    marginalized_confounders=tuple(
+                        identities[name] for name in sorted(unobserved_confounders)
+                    ),
+                    instruments=tuple(identities[name] for name in instruments),
                 )
             else:
                 if treatment_node == _node_name(treatment, "{t-1}"):
@@ -191,13 +167,13 @@ def check_identifiability(
                     blockers = find_blocking_confounders(
                         constructs, edges, observed_constructs, treatment, outcome
                     )
-                non_identifiable_treatments[treatment] = UnidentifiedQuery(
-                    confounders=tuple(blockers)
+                non_identifiable_treatments[identities[treatment]] = NonIdentifiableTreatmentStatus(
+                    confounders=tuple(identities[name] for name in blockers)
                 )
 
-    return IdentificationResult(
-        identifiable_treatments=identifiable_treatments,
-        non_identifiable_treatments=non_identifiable_treatments,
+    return IdentificationReport(
+        outcome=outcome_id,
+        treatments={**identifiable_treatments, **non_identifiable_treatments},
     )
 
 

@@ -147,7 +147,7 @@ export function pathsView(
           action: paths(evidence.arms.action.observations, column, true),
           reference: reference ? paths(reference.observations, column, true) : [],
           frame: summary.indicator_frames[variable.id] ?? null,
-          levels: variable.ordinal_levels ?? variable.categorical_levels,
+          levels: "levels" in variable.measurement ? variable.measurement.levels : null,
         },
       ]),
     ),

@@ -328,10 +328,10 @@ export function modelDraws(model: DynamicalModelSpec): ModelDraws {
           throw new PlotUnavailable(
             "Category slope plots require the saved anchoring coordinates.",
           );
+        const { measurement } = indicator.observation;
+        const codebook = role === "cutpoint_gaps" ? "ordinal" : "categorical";
         const levels =
-          role === "cutpoint_gaps"
-            ? indicator.observation.ordinal_levels
-            : indicator.observation.categorical_levels;
+          "levels" in measurement && measurement.dtype === codebook ? measurement.levels : null;
         if (!levels) throw new Error("A discrete observation law is missing its levels.");
         const width = levels.length - (role === "cutpoint_gaps" ? 2 : 1);
         return Array.from({ length: width }, (_, element) =>

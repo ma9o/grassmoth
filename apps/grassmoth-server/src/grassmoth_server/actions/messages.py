@@ -11,7 +11,6 @@ from grassmoth.public import (
     NotEvaluated,
     NumericCriterionEvidence,
     PairedArmSimulation,
-    PredictiveIndicatorComparison,
     QueryTargetSubject,
 )
 from grassmoth_server.study.records import ActionMessage
@@ -190,7 +189,7 @@ def comparison_messages(
                     if isinstance(variable.predictive.evaluation, NotEvaluated)
                     else _findings(variable.predictive.evaluation.findings, timestamp)
                 )
-                if isinstance(variable, PredictiveIndicatorComparison)
+                if variable.predictive is not None
                 else ()
             ),
         )

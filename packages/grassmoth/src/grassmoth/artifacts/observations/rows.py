@@ -91,16 +91,13 @@ def validate_observation_rows(
         if rows.select(invalid.any()).item():
             raise ValueError(f"Observation {variable.id} has invalid measurement support")
         values = rows["value"].drop_nulls()
-        dtype = variable.measurement_dtype
+        dtype = variable.measurement.dtype
         if dtype == "binary" and not values.is_in([0, 1]).all():
             raise ValueError(f"Binary observation {variable.id} requires values 0 or 1")
         if dtype == "count" and ((values < 0) | (values != values.floor())).any():
             raise ValueError(f"Count observation {variable.id} requires non-negative integers")
-        levels = variable.ordinal_levels or variable.categorical_levels
-        if (
-            levels is not None
-            and ((values < 0) | (values >= len(levels)) | (values != values.floor())).any()
-        ):
+        levels = variable.levels
+        if levels and ((values < 0) | (values >= len(levels)) | (values != values.floor())).any():
             raise ValueError(f"Observation {variable.id} has values outside its codebook")
     return data.sort("indicator_id", "anchor_time")
 

@@ -34,7 +34,7 @@ from grassmoth_server.actions.contracts.requests import (
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data
 from grassmoth_server.study.errors import StudyLookupError
-from grassmoth_server.study.records import Applied
+from grassmoth_server.study.records import Applied, recorded_question
 from grassmoth_server.study.state import ArtifactRecord, StudyState, is_stale
 
 if TYPE_CHECKING:
@@ -213,17 +213,7 @@ def input_state(
     if isinstance(request, EditModelRequest):
         return model_edit_state(store, request.input.parent_ref)
     records = repository.attempts()
-    question = next(
-        (
-            item
-            for revision in records
-            if revision.record.attempt.action == "edit_question"
-            and isinstance(revision.record.attempt.outcome, Applied)
-            for item in revision.record.attempt.outcome.effects.produced
-            if item.artifact_id == "question"
-        ),
-        None,
-    )
+    question = recorded_question(records)
     current: dict[ArtifactId, ArtifactRecord] = (
         {"question": question} if question is not None else {}
     )

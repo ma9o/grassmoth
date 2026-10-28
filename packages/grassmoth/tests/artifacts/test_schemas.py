@@ -40,7 +40,11 @@ from grassmoth.artifacts.observations.semantics import (
     SupportKind,
     derive_indicator_observation_semantics,
 )
-from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
+from grassmoth.artifacts.observations.spec import (
+    AuthoredObservationSpec,
+    LabeledMeasurement,
+    NumericMeasurement,
+)
 from grassmoth_test_support.helpers import graph_constructs, make_model
 
 pytestmark = pytest.mark.contract
@@ -145,7 +149,7 @@ class TestDataVariable:
                     "observation": {
                         "id": "indicator:e05e217de7f4442abdc5",
                         "name": "mood_rating",
-                        "measurement_dtype": "continuous",
+                        "measurement": {"dtype": "continuous"},
                         "aggregation": "invalid_agg",
                     },
                     "extraction": {"kind": "semantic", "how_to_measure": "Extract mood"},
@@ -153,14 +157,14 @@ class TestDataVariable:
             )
 
     def test_invalid_measurement_dtype(self):
-        """Invalid measurement_dtype is rejected."""
-        with pytest.raises(ValueError, match="measurement_dtype"):
+        """Invalid measurement dtype is rejected."""
+        with pytest.raises(ValueError, match="measurement"):
             DataVariableSpec.model_validate(
                 {
                     "observation": {
                         "id": "indicator:e05e217de7f4442abdc5",
                         "name": "mood_rating",
-                        "measurement_dtype": "invalid_type",
+                        "measurement": {"dtype": "invalid_type"},
                         "aggregation": "mean",
                     },
                     "extraction": {"kind": "semantic", "how_to_measure": "Extract mood"},
@@ -168,17 +172,18 @@ class TestDataVariable:
             )
 
     def test_ordinal_requires_levels(self):
-        """Ordinal dtype without ordinal_levels is rejected."""
-        with pytest.raises(ValueError, match="ordinal_levels is required"):
-            DataVariableSpec(
-                observation=AuthoredObservationSpec(
-                    observation_window=None,
-                    id="indicator:036fd134b9ad32d7a2ca",
-                    name="pain",
-                    measurement_dtype="ordinal",
-                    aggregation="last",
-                ),
-                extraction=SemanticExtractionSpec(how_to_measure="Extract pain level"),
+        """Ordinal readings without levels are rejected."""
+        with pytest.raises(ValueError, match="levels"):
+            DataVariableSpec.model_validate(
+                {
+                    "observation": {
+                        "id": "indicator:036fd134b9ad32d7a2ca",
+                        "name": "pain",
+                        "measurement": {"dtype": "ordinal"},
+                        "aggregation": "last",
+                    },
+                    "extraction": {"kind": "semantic", "how_to_measure": "Extract pain level"},
+                }
             )
 
     def test_ordinal_needs_at_least_two_levels(self):
@@ -189,9 +194,8 @@ class TestDataVariable:
                     observation_window=None,
                     id="indicator:036fd134b9ad32d7a2ca",
                     name="pain",
-                    measurement_dtype="ordinal",
+                    measurement=LabeledMeasurement(dtype="ordinal", levels=("only_one",)),
                     aggregation="last",
-                    ordinal_levels=["only_one"],
                 ),
                 extraction=SemanticExtractionSpec(how_to_measure="Extract pain level"),
             )
@@ -204,9 +208,8 @@ class TestDataVariable:
                     observation_window=None,
                     id="indicator:036fd134b9ad32d7a2ca",
                     name="pain",
-                    measurement_dtype="ordinal",
+                    measurement=LabeledMeasurement(dtype="ordinal", levels=("low", "low", "high")),
                     aggregation="last",
-                    ordinal_levels=["low", "low", "high"],
                 ),
                 extraction=SemanticExtractionSpec(how_to_measure="Extract pain level"),
             )
@@ -218,25 +221,25 @@ class TestDataVariable:
                 observation_window=None,
                 id="indicator:036fd134b9ad32d7a2ca",
                 name="pain",
-                measurement_dtype="ordinal",
+                measurement=LabeledMeasurement(dtype="ordinal", levels=("low", "medium", "high")),
                 aggregation="last",
-                ordinal_levels=["low", "medium", "high"],
             ),
             extraction=SemanticExtractionSpec(how_to_measure="Extract pain level"),
         )
-        assert ind.observation.ordinal_levels == ("low", "medium", "high")
+        assert ind.observation.levels == ("low", "medium", "high")
 
     def test_categorical_requires_levels(self):
-        with pytest.raises(ValueError, match="categorical_levels is required"):
-            DataVariableSpec(
-                observation=AuthoredObservationSpec(
-                    observation_window=None,
-                    id="indicator:73fed6c52a41057ef02f",
-                    name="location",
-                    measurement_dtype="categorical",
-                    aggregation="last",
-                ),
-                extraction=SemanticExtractionSpec(how_to_measure="Extract location"),
+        with pytest.raises(ValueError, match="levels"):
+            DataVariableSpec.model_validate(
+                {
+                    "observation": {
+                        "id": "indicator:73fed6c52a41057ef02f",
+                        "name": "location",
+                        "measurement": {"dtype": "categorical"},
+                        "aggregation": "last",
+                    },
+                    "extraction": {"kind": "semantic", "how_to_measure": "Extract location"},
+                }
             )
 
     def test_categorical_needs_at_least_two_levels(self):
@@ -246,9 +249,8 @@ class TestDataVariable:
                     observation_window=None,
                     id="indicator:73fed6c52a41057ef02f",
                     name="location",
-                    measurement_dtype="categorical",
+                    measurement=LabeledMeasurement(dtype="categorical", levels=("home",)),
                     aggregation="last",
-                    categorical_levels=["home"],
                 ),
                 extraction=SemanticExtractionSpec(how_to_measure="Extract location"),
             )
@@ -260,26 +262,11 @@ class TestDataVariable:
                     observation_window=None,
                     id="indicator:73fed6c52a41057ef02f",
                     name="location",
-                    measurement_dtype="categorical",
+                    measurement=LabeledMeasurement(dtype="categorical", levels=("home", "home")),
                     aggregation="last",
-                    categorical_levels=["home", "home"],
                 ),
                 extraction=SemanticExtractionSpec(how_to_measure="Extract location"),
             )
-
-    def test_non_ordinal_ignores_levels(self):
-        """Non-ordinal dtype doesn't require ordinal_levels."""
-        ind = DataVariableSpec(
-            observation=AuthoredObservationSpec(
-                observation_window=None,
-                id="indicator:c5b118ae552981435d7b",
-                name="weight",
-                measurement_dtype="continuous",
-                aggregation="mean",
-            ),
-            extraction=SemanticExtractionSpec(how_to_measure="Extract weight"),
-        )
-        assert ind.observation.ordinal_levels is None
 
     def test_semantic_default(self):
         """Extraction mode defaults to 'semantic'."""
@@ -288,7 +275,7 @@ class TestDataVariable:
                 observation_window=None,
                 id="indicator:e05e217de7f4442abdc5",
                 name="mood_rating",
-                measurement_dtype="continuous",
+                measurement=NumericMeasurement(dtype="continuous"),
                 aggregation="mean",
             ),
             extraction=SemanticExtractionSpec(how_to_measure="Extract mood"),
@@ -303,7 +290,7 @@ class TestDataVariable:
                     "observation": {
                         "id": "indicator:e05e217de7f4442abdc5",
                         "name": "mood_rating",
-                        "measurement_dtype": "continuous",
+                        "measurement": {"dtype": "continuous"},
                         "aggregation": "mean",
                     },
                     "extraction": {"kind": "invalid", "how_to_measure": "Extract mood"},
@@ -317,7 +304,7 @@ class TestDataVariable:
                 observation_window=None,
                 id="indicator:aa573b5cc0c0a1837e05",
                 name="avg_heart_rate",
-                measurement_dtype="continuous",
+                measurement=NumericMeasurement(dtype="continuous"),
                 aggregation="mean",
             ),
             extraction=ComputedExtractionSpec(
@@ -333,7 +320,7 @@ class TestDataVariable:
                 observation_window=None,
                 id="indicator:a0ce08437c19d06aafd1",
                 name="total_steps",
-                measurement_dtype="count",
+                measurement=NumericMeasurement(dtype="count"),
                 aggregation="sum",
             ),
             extraction=ComputedExtractionSpec(
@@ -349,7 +336,7 @@ class TestDataVariable:
                 observation_window=None,
                 id="indicator:58ba7e8b022133d4764f",
                 name="alarm_state",
-                measurement_dtype="binary",
+                measurement=NumericMeasurement(dtype="binary"),
                 aggregation="last",
             ),
             extraction=ComputedExtractionSpec(
@@ -366,9 +353,8 @@ class TestDataVariable:
                 observation_window=None,
                 id="indicator:745132edf4775f59f221",
                 name="mood_label",
-                measurement_dtype="ordinal",
+                measurement=LabeledMeasurement(dtype="ordinal", levels=("bad", "ok", "good")),
                 aggregation="last",
-                ordinal_levels=["bad", "ok", "good"],
             ),
             extraction=ComputedExtractionSpec(
                 how_to_measure="Use the last observed mood_label value directly",
@@ -384,9 +370,8 @@ class TestDataVariable:
                 observation_window=None,
                 id="indicator:42f1f2a7a4c92ee606b6",
                 name="care_setting",
-                measurement_dtype="categorical",
+                measurement=LabeledMeasurement(dtype="categorical", levels=("home", "clinic")),
                 aggregation="first",
-                categorical_levels=["home", "clinic"],
             ),
             extraction=ComputedExtractionSpec(
                 how_to_measure="Use the first observed care_setting value directly",
@@ -403,7 +388,7 @@ class TestDataVariable:
                     observation_window=None,
                     id="indicator:c21b43949b3712e734c8",
                     name="avg_hr",
-                    measurement_dtype="continuous",
+                    measurement=NumericMeasurement(dtype="continuous"),
                     aggregation="mean",
                 ),
                 extraction=ComputedExtractionSpec(
@@ -416,7 +401,7 @@ class TestDataVariable:
                     observation_window=None,
                     id="indicator:c21b43949b3712e734c8",
                     name="avg_hr",
-                    measurement_dtype="continuous",
+                    measurement=NumericMeasurement(dtype="continuous"),
                     aggregation="mean",
                 ),
                 extraction=ComputedExtractionSpec(
@@ -432,7 +417,7 @@ class TestDataVariable:
                 observation_window=None,
                 id="indicator:e33fbf156ca312595e47",
                 name="mean_arterial_pressure",
-                measurement_dtype="continuous",
+                measurement=NumericMeasurement(dtype="continuous"),
                 aggregation="mean",
             ),
             extraction=ComputedExtractionSpec(
@@ -475,7 +460,7 @@ class TestDataVariable:
                     observation_window=None,
                     id="indicator:0c111e9b74f243fbc086",
                     name="glucose_out_of_range",
-                    measurement_dtype="count",
+                    measurement=NumericMeasurement(dtype="count"),
                     aggregation="sum",
                 ),
                 extraction=ComputedExtractionSpec(
@@ -493,7 +478,7 @@ class TestDataVariable:
                     observation_window=None,
                     id="indicator:4aa7a5f09fd3489f4f2e",
                     name="constant_flag",
-                    measurement_dtype="binary",
+                    measurement=NumericMeasurement(dtype="binary"),
                     aggregation="last",
                 ),
                 extraction=ComputedExtractionSpec(
@@ -506,14 +491,14 @@ class TestDataVariable:
     def test_computed_still_rejects_invalid_semantics(self):
         """Computed indicators still respect the measurement-semantics grid."""
         with pytest.raises(
-            ValueError, match="aggregation 'mean' requires measurement_dtype='continuous'"
+            ValueError, match=r"aggregation 'mean' requires measurement\.dtype='continuous'"
         ):
             DataVariableSpec(
                 observation=AuthoredObservationSpec(
                     observation_window=None,
                     id="indicator:58ba7e8b022133d4764f",
                     name="alarm_state",
-                    measurement_dtype="binary",
+                    measurement=NumericMeasurement(dtype="binary"),
                     aggregation="mean",
                 ),
                 extraction=ComputedExtractionSpec(
@@ -641,7 +626,7 @@ class TestDeriveObservationSemantics:
 
     def test_std_requires_continuous_measurements(self):
         with pytest.raises(
-            ValueError, match="aggregation 'std' requires measurement_dtype='continuous'"
+            ValueError, match=r"aggregation 'std' requires measurement\.dtype='continuous'"
         ):
             derive_indicator_observation_semantics(SummaryOperator.STD, "count")
 
@@ -658,7 +643,7 @@ class TestDeriveObservationSemantics:
                     "observation": {
                         "id": "indicator:mood",
                         "name": "mood",
-                        "measurement_dtype": "continuous",
+                        "measurement": {"dtype": "continuous"},
                         "aggregation": "median",
                     },
                     "extraction": {"kind": "semantic", "how_to_measure": "Median score"},
@@ -737,7 +722,7 @@ class TestIndicatorObservationWindow:
             observation=AuthoredObservationSpec(
                 id="indicator:b41c85c254676b4bc588",
                 name="fortnightly_mood",
-                measurement_dtype="continuous",
+                measurement=NumericMeasurement(dtype="continuous"),
                 aggregation="mean",
                 observation_window="2w",
             ),
@@ -753,7 +738,7 @@ class TestIndicatorObservationWindow:
                 observation=AuthoredObservationSpec(
                     id="indicator:b41c85c254676b4bc588",
                     name="fortnightly_mood",
-                    measurement_dtype="continuous",
+                    measurement=NumericMeasurement(dtype="continuous"),
                     aggregation="mean",
                     observation_window="monthly",
                 ),
@@ -795,7 +780,7 @@ def test_computed_measurement_cannot_claim_different_summary_semantics(expressio
                 observation_window=None,
                 id="indicator:reading",
                 name="reading",
-                measurement_dtype="continuous",
+                measurement=NumericMeasurement(dtype="continuous"),
                 aggregation=aggregation,
             ),
             extraction=ComputedExtractionSpec(

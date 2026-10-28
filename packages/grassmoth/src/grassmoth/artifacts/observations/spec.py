@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.identity import IndicatorId
-from grassmoth.artifacts.observations.dtypes import MeasurementDtype
+from grassmoth.artifacts.observations.dtypes import LabeledDtype, NumericDtype
 from grassmoth.artifacts.observations.duration import (
     CalendarDuration,
     Duration,
@@ -34,12 +34,42 @@ def canonical_observation_window(window: ObservationWindow | str) -> Observation
     return Duration(f"{parsed.seconds}s")
 
 
+class NumericMeasurement(Value):
+    """Readings recorded as numbers: real values, 0/1 outcomes or non-negative counts."""
+
+    dtype: NumericDtype = Field(description="'continuous', 'binary' or 'count'")
+
+
+class LabeledMeasurement(Value):
+    """Readings recorded as labels, coded 0..K-1 in level order."""
+
+    dtype: LabeledDtype = Field(description="'ordinal' or 'categorical'")
+    levels: tuple[str, ...] = Field(
+        min_length=2,
+        description=(
+            "At least two distinct level labels, coded 0..K-1 in this order. Ordinal levels run "
+            "from lowest to highest (e.g., ['low', 'medium', 'high']); categorical levels list "
+            "every category (e.g., ['home', 'work', 'other'])."
+        ),
+    )
+
+    @field_validator("levels")
+    @classmethod
+    def distinct_levels(cls, levels: tuple[str, ...]) -> tuple[str, ...]:
+        """Keep each code's label unique."""
+        if len(levels) != len(set(levels)):
+            raise ValueError("levels must not contain duplicate labels")
+        return levels
+
+
+type Measurement = Annotated[NumericMeasurement | LabeledMeasurement, Field(discriminator="dtype")]
+
+
 class ObservationDefinitionSpec(Value):
     """Measurement meaning, independent of variable identity and display spelling."""
 
-    measurement_dtype: MeasurementDtype
+    measurement: Measurement
     aggregation: SummaryOperator
-    levels: tuple[str, ...]
     window: ObservationWindow
 
 
@@ -50,8 +80,11 @@ class ObservationSpec[WindowT: ObservationWindow | None](Value):
 
     id: IndicatorId = Field(description="Persistent identity. Preserve when revising or renaming.")
     name: str = Field(description="Indicator name (e.g., 'hrv', 'self_reported_stress')")
-    measurement_dtype: MeasurementDtype = Field(
-        description="'continuous', 'binary', 'count', 'ordinal', 'categorical'"
+    measurement: Measurement = Field(
+        description=(
+            "How readings are recorded: {dtype: 'continuous' | 'binary' | 'count'}, or "
+            "{dtype: 'ordinal' | 'categorical', levels: [...]} for labels coded 0..K-1."
+        )
     )
     aggregation: SummaryOperator = Field(
         description=(
@@ -70,88 +103,35 @@ class ObservationSpec[WindowT: ObservationWindow | None](Value):
             "Resolved by the preparation window or the generative model clock."
         ),
     )
-    ordinal_levels: tuple[str, ...] | None = Field(
-        default=None,
-        description=(
-            "Ordered list of level labels from lowest to highest for ordinal indicators "
-            "(e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' "
-            "to ensure correct numeric encoding."
-        ),
-    )
-    categorical_levels: tuple[str, ...] | None = Field(
-        default=None,
-        description=(
-            "Exhaustive list of level labels for categorical indicators "
-            "(e.g., ['home', 'work', 'other']). Required when "
-            "measurement_dtype='categorical' to ensure correct numeric encoding."
-        ),
-    )
 
     def resolved(self, window: ObservationWindow) -> ResolvedObservationSpec:
         """Retain the observation definition with its owned, resolved window."""
         return ResolvedObservationSpec(
             id=self.id,
             name=self.name,
-            measurement_dtype=self.measurement_dtype,
+            measurement=self.measurement,
             aggregation=self.aggregation,
             observation_window=window,
-            ordinal_levels=self.ordinal_levels,
-            categorical_levels=self.categorical_levels,
         )
 
     @property
     def definition(self: ObservationSpec[ObservationWindow]) -> ObservationDefinitionSpec:
         """Resolved measurement equality; codebook order remains scientifically meaningful."""
-        codebooks = (
-            ("ordinal", self.ordinal_levels),
-            ("categorical", self.categorical_levels),
-        )
         return ObservationDefinitionSpec(
-            measurement_dtype=self.measurement_dtype,
+            measurement=self.measurement,
             aggregation=self.aggregation,
-            levels=tuple(
-                level
-                for dtype, levels in codebooks
-                if dtype == self.measurement_dtype and levels is not None
-                for level in levels
-            ),
             window=canonical_observation_window(self.observation_window),
         )
 
-    @model_validator(mode="after")
-    def validate_discrete_levels(self) -> Self:
-        """Require at least two unique labels for ordinal and categorical indicators."""
-        for dtype, levels in (
-            ("ordinal", self.ordinal_levels),
-            ("categorical", self.categorical_levels),
-        ):
-            if levels is not None and self.measurement_dtype != dtype:
-                raise ValueError(f"{dtype}_levels requires measurement_dtype={dtype!r}")
-        if self.measurement_dtype not in {"ordinal", "categorical"}:
-            return self
-
-        field_name = f"{self.measurement_dtype}_levels"
-        levels = (
-            self.ordinal_levels if self.measurement_dtype == "ordinal" else self.categorical_levels
-        )
-        label_description = (
-            "ordered level labels" if self.measurement_dtype == "ordinal" else "level labels"
-        )
-        if not levels:
-            raise ValueError(
-                f"{field_name} is required when measurement_dtype={self.measurement_dtype!r} "
-                f"(provide at least 2 {label_description})"
-            )
-        if len(levels) < 2:
-            raise ValueError(f"{field_name} must have at least 2 items, got {len(levels)}")
-        if len(levels) != len(set(levels)):
-            raise ValueError(f"{field_name} must not contain duplicate labels")
-        return self
+    @property
+    def levels(self) -> tuple[str, ...]:
+        """Labels in code order for labeled readings; numeric readings have none."""
+        return self.measurement.levels if isinstance(self.measurement, LabeledMeasurement) else ()
 
     @model_validator(mode="after")
     def validate_observation_semantics(self) -> Self:
         """Reject aggregation/dtype combinations the measurement stack cannot model."""
-        semantics = derive_indicator_observation_semantics(self.aggregation, self.measurement_dtype)
+        semantics = derive_indicator_observation_semantics(self.aggregation, self.measurement.dtype)
         if (
             isinstance(self.observation_window, CalendarDuration)
             and semantics.support_kind != SupportKind.INTERVAL
@@ -162,7 +142,7 @@ class ObservationSpec[WindowT: ObservationWindow | None](Value):
         return self
 
     def _observation_semantics(self) -> IndicatorObservationSemantics:
-        return derive_indicator_observation_semantics(self.aggregation, self.measurement_dtype)
+        return derive_indicator_observation_semantics(self.aggregation, self.measurement.dtype)
 
     @property
     def support_kind(self) -> SupportKind:

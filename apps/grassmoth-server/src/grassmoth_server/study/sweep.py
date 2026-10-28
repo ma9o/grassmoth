@@ -10,9 +10,22 @@ from pydantic import BaseModel, ConfigDict
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data_module
 
-DEFAULT_EVENT_RETENTION_SECONDS = 24 * 60 * 60
-DEFAULT_CACHE_RETENTION_SECONDS = 30 * 24 * 60 * 60
-DEFAULT_CACHE_MAX_BYTES = 5 * 1024**3
+_HOUR_SECONDS = 60 * 60
+_DAY_SECONDS = 24 * _HOUR_SECONDS
+_GIB = 1024**3
+
+
+class RetentionPolicy(BaseModel):
+    """How long scratch events and cached files live, and the cache's size cap."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    event_retention_seconds: int = 24 * _HOUR_SECONDS
+    cache_retention_seconds: int = 30 * _DAY_SECONDS
+    cache_max_bytes: int = 5 * _GIB
+
+
+DEFAULT_RETENTION = RetentionPolicy()
 
 
 class SweepResult(BaseModel):
@@ -98,10 +111,8 @@ def _sweep_cache(
 def sweep_workspace(
     workspace_id: str,
     *,
+    policy: RetentionPolicy = DEFAULT_RETENTION,
     now_seconds: float | None = None,
-    event_retention_seconds: int = DEFAULT_EVENT_RETENTION_SECONDS,
-    cache_retention_seconds: int = DEFAULT_CACHE_RETENTION_SECONDS,
-    cache_max_bytes: int = DEFAULT_CACHE_MAX_BYTES,
     collect_runs: bool = False,
 ) -> SweepResult:
     """Expire telemetry/caches and optionally collect runs while the study is offline."""
@@ -112,12 +123,12 @@ def sweep_workspace(
         removed_runs = 0
     removed_events = _sweep_events(
         workspace_id,
-        cutoff_seconds=now - event_retention_seconds,
+        cutoff_seconds=now - policy.event_retention_seconds,
     )
     removed_cache_files, removed_cache_bytes = _sweep_cache(
         workspace_id,
-        cutoff_seconds=now - cache_retention_seconds,
-        max_bytes=cache_max_bytes,
+        cutoff_seconds=now - policy.cache_retention_seconds,
+        max_bytes=policy.cache_max_bytes,
     )
     return SweepResult(
         removed_runs=removed_runs,
@@ -131,9 +142,19 @@ def sweep_cli() -> None:
     """Parse workspace retention limits, perform the requested sweep, and print its removal counts."""
     parser = argparse.ArgumentParser(description="Collect workspace scratch state and caches.")
     parser.add_argument("workspace_id")
-    parser.add_argument("--event-retention-hours", type=int, default=24)
-    parser.add_argument("--cache-retention-days", type=int, default=30)
-    parser.add_argument("--cache-max-gib", type=float, default=5.0)
+    parser.add_argument(
+        "--event-retention-hours",
+        type=int,
+        default=DEFAULT_RETENTION.event_retention_seconds // _HOUR_SECONDS,
+    )
+    parser.add_argument(
+        "--cache-retention-days",
+        type=int,
+        default=DEFAULT_RETENTION.cache_retention_seconds // _DAY_SECONDS,
+    )
+    parser.add_argument(
+        "--cache-max-gib", type=float, default=DEFAULT_RETENTION.cache_max_bytes / _GIB
+    )
     parser.add_argument(
         "--collect-runs",
         action="store_true",
@@ -142,9 +163,11 @@ def sweep_cli() -> None:
     args = parser.parse_args()
     result = sweep_workspace(
         args.workspace_id,
-        event_retention_seconds=args.event_retention_hours * 60 * 60,
-        cache_retention_seconds=args.cache_retention_days * 24 * 60 * 60,
-        cache_max_bytes=int(args.cache_max_gib * 1024**3),
+        policy=RetentionPolicy(
+            event_retention_seconds=args.event_retention_hours * _HOUR_SECONDS,
+            cache_retention_seconds=args.cache_retention_days * _DAY_SECONDS,
+            cache_max_bytes=int(args.cache_max_gib * _GIB),
+        ),
         collect_runs=args.collect_runs,
     )
     print(result.model_dump_json())

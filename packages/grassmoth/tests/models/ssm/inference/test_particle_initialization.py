@@ -1,7 +1,3 @@
-import logging
-import time
-from datetime import UTC, datetime
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -16,16 +12,15 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 )
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
+    GuidedPathSpec,
     MarginalParticleGibbsSpec,
-    ParticleAGradSpec,
     SamplerSpec,
-    TwistedParticleAGradSpec,
 )
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.problem import build_particle_problem
 from grassmoth.models.ssm.inference.types import MCMCPosterior
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT, compile_program
 from grassmoth_test_support.inference import (
     compile_fit_fixture,
     nonlinear_fit_fixture,
@@ -46,7 +41,6 @@ def test_initialization_chart_preserves_exact_density_and_directional_gradients(
         target = build_particle_problem(
             prepared.prior_runtime_bundle,
             panel,
-            scheme="euler_maruyama",
             trace_key=jax.random.key(7),
             reparam=None,
             compiler=compile_program,
@@ -120,7 +114,6 @@ def test_production_fit_consumes_gaussian_initialization(leaf):
     result = fit(
         prepared.prior_runtime_bundle,
         panel,
-        compute_budget=COMPUTE_BUDGET,
         sampler=SamplerSpec(
             num_warmup=2,
             num_samples_per_chain=3,
@@ -130,10 +123,10 @@ def test_production_fit_consumes_gaussian_initialization(leaf):
                 diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights")
                 if leaf != "amala"
                 else (),
-                path_update=ParticleAGradSpec(num_particles=4)
+                path_update=GuidedPathSpec(method="particle_agrad", num_particles=4)
                 if leaf == "agrad"
                 else (
-                    TwistedParticleAGradSpec(num_particles=4)
+                    GuidedPathSpec(method="twisted_particle_agrad", num_particles=4)
                     if leaf == "twisted"
                     else DsmcSpec(
                         num_particles=4,
@@ -148,12 +141,7 @@ def test_production_fit_consumes_gaussian_initialization(leaf):
                 ),
             ),
         ),
-        reparam=None,
-        clock=time.monotonic,
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(result, MCMCPosterior)
     evidence = result.diagnostics.sampler_diagnostics

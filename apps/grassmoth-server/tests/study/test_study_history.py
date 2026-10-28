@@ -133,14 +133,14 @@ def test_out_of_order_publication_selects_submission_order_and_retains_input_par
     assert "refs/heads/main" not in repository.repo.references
 
     from grassmoth_server.actions.contracts.requests import DataDiffRequest
-    from grassmoth_server.study.records import failed_attempt
+    from grassmoth_server.study.records import action_attempt
     from grassmoth_test_support.git import git_oid
 
     compared = repository.append(
         AttemptRecord(
             seq=4,
             ts="2026-10-21T00:00:00Z",
-            attempt=failed_attempt(
+            attempt=action_attempt(
                 DataDiffRequest[GitOid](
                     input=DataDiffInput[GitOid](
                         left_ref=tuple(
@@ -194,7 +194,7 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
     from grassmoth.artifacts.reports.checks import Evaluated
     from grassmoth.artifacts.reports.data_comparison import (
         DataComparisonReport,
-        DescriptiveIndicatorComparison,
+        IndicatorComparison,
     )
     from grassmoth_server.actions import data_diff
     from grassmoth_server.actions import model_diff as revisions
@@ -243,11 +243,12 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
                 left=(left,),
                 right=(right,),
                 variables=(
-                    DescriptiveIndicatorComparison(
+                    IndicatorComparison(
                         indicator_id="indicator:sleep",
                         changes=(),
                         statistics=(),
                         findings=(finding,),
+                        predictive=None,
                     ),
                 ),
             )
@@ -400,13 +401,13 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
     from grassmoth_server.study.records import FitAttempt
 
     def dependency_record(applied, *, seq, request=None, **metadata):
-        from grassmoth_server.study.records import applied_attempt
+        from grassmoth_server.study.records import action_attempt
 
         assert request is not None
         return AttemptRecord(
             seq=seq,
             ts="2026-10-01T00:00:00Z",
-            attempt=applied_attempt(
+            attempt=action_attempt(
                 request, Applied(result=oid(500 + seq), effects=applied.effects)
             ),
         )

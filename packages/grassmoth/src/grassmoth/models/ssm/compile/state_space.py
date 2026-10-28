@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     import jax
 
     from grassmoth.artifacts.model.expressions import SymbolicExpression
+    from grassmoth.models.ssm.compile.inputs import CompiledState
     from grassmoth.models.ssm.dynamics.expression import ExpressionComponentSpec
     from grassmoth.models.ssm.dynamics.spec import DynamicsSpec
     from grassmoth.models.ssm.structure.blocks import DiffusionBlockSpec, T0CholBlockSpec
@@ -81,11 +82,14 @@ def compile_state_space(
     diffusion: DiffusionBlockSpec,
     initial: T0CholBlockSpec,
     static_loadings: jax.Array,
-    inputs: tuple[int, ...],
-    static: tuple[int, ...],
+    states: tuple[CompiledState, ...],
     dynamics: DynamicsSpec,
 ) -> StateSpace:
     """Resolve support from declared fixed values and free coefficient positions once."""
+    inputs = tuple(index for index, state in enumerate(states) if state.is_input)
+    static = tuple(
+        index for index, state in enumerate(states) if state.time_invariant and not state.is_input
+    )
     initial_random = np.any(np.asarray(initial.template) != 0, axis=1) | np.asarray(
         initial.diag_support
     )
@@ -179,7 +183,7 @@ def _effective_drift(component: ExpressionComponentSpec) -> SymbolicExpression:
             if float(number).is_integer()
         }
     )
-    if component.kind == "potential":
+    if component.role == "potential":
         own = next(
             (
                 symbol

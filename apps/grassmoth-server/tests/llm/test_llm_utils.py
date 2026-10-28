@@ -10,6 +10,7 @@ from typing import Any, cast
 
 import pytest
 
+from grassmoth_server.llm.specs import EmbeddedLLMSpec
 from grassmoth_server_test_support.helpers import run_async as _run
 
 pytestmark = pytest.mark.contract
@@ -91,7 +92,7 @@ class TestOpenRouterClient:
         class _SlowChatCompletions:
             async def create(self, **kwargs):
                 seen["kwargs"] = kwargs
-                await asyncio.sleep(0.05)
+                await asyncio.sleep(2)
                 return {"choices": []}
 
         slow_client = type(
@@ -108,18 +109,16 @@ class TestOpenRouterClient:
 
         client = cast("Any", slow_client)
 
-        timeout_seconds = cast("Any", 0.01)
         with pytest.raises(TimeoutError):
             _run(
                 openrouter_client.call_model(
-                    "test-model",
+                    EmbeddedLLMSpec(model="test-model", timeout=1),
                     [{"role": "user", "content": "hello"}],
                     client=client,
-                    config=openrouter_client.GenerateConfig(timeout=timeout_seconds),
                 )
             )
 
-        assert _require_mapping(seen["kwargs"])["timeout"] == 0.01
+        assert _require_mapping(seen["kwargs"])["timeout"] == 1
 
     def test_call_model_logs_completion_tool_calls_and_reasoning(self, monkeypatch, caplog):
         from grassmoth_server.llm import openrouter as openrouter_client
@@ -153,10 +152,9 @@ class TestOpenRouterClient:
         with caplog.at_level(logging.INFO):
             _run(
                 openrouter_client.call_model(
-                    "test-model",
+                    EmbeddedLLMSpec(model="test-model"),
                     [{"role": "user", "content": "hello"}],
                     client=client,
-                    config=openrouter_client.GenerateConfig(),
                     log_label="extraction chunk=1",
                 )
             )
@@ -188,10 +186,9 @@ class TestOpenRouterClient:
         with caplog.at_level(logging.INFO):
             _run(
                 openrouter_client.call_model(
-                    "test-model",
+                    EmbeddedLLMSpec(model="test-model"),
                     [{"role": "user", "content": "hello"}],
                     client=client,
-                    config=openrouter_client.GenerateConfig(),
                 )
             )
 
@@ -221,10 +218,9 @@ class TestOpenRouterClient:
 
         _run(
             openrouter_client.call_model(
-                "openrouter/anthropic/claude-sonnet-4",
+                EmbeddedLLMSpec(model="openrouter/anthropic/claude-sonnet-4"),
                 [{"role": "user", "content": "hello"}],
                 client=client,
-                config=openrouter_client.GenerateConfig(),
             )
         )
 
@@ -257,10 +253,9 @@ class TestOpenRouterClient:
 
         _run(
             openrouter_client.call_model(
-                "test-model",
+                EmbeddedLLMSpec(model="test-model"),
                 [{"role": "user", "content": "hello"}],
                 client=openrouter_client.create_openrouter_client(),
-                config=openrouter_client.GenerateConfig(),
             )
         )
 
@@ -288,10 +283,9 @@ class TestOpenRouterClient:
 
         _run(
             openrouter_client.call_model(
-                "test-model",
+                EmbeddedLLMSpec(model="test-model", reasoning_effort="high"),
                 [{"role": "user", "content": "hello"}],
                 client=client,
-                config=openrouter_client.GenerateConfig(reasoning_effort="high"),
             )
         )
 

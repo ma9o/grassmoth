@@ -885,6 +885,16 @@
         "x-concern": "api_tools",
         "description": "A successful call pairs its action with that action's scientific result body."
       },
+      "AdaptationScheme": {
+        "enum": [
+          "simple",
+          "dual_averaging"
+        ],
+        "type": "string",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "AdaptedLatentStepSpec-Input": {
         "additionalProperties": false,
         "description": "Warmup adapts the per-time scale towards the assigned movement target.",
@@ -2958,6 +2968,30 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "CheckOutcome": {
+        "enum": [
+          "passed",
+          "failed"
+        ],
+        "type": "string",
+        "x-python-module": "grassmoth.artifacts.reports.checks",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "CheckStatus": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/CheckOutcome"
+          },
+          {
+            "const": "not_evaluated",
+            "type": "string"
+          }
+        ],
+        "x-python-module": "grassmoth.artifacts.reports.checks",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "CoefficientExpression-Input": {
         "additionalProperties": false,
         "description": "A scientifically typed coefficient operand, literal or parameter reference.",
@@ -3101,6 +3135,16 @@
         "type": "string",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ComparisonSide": {
+        "enum": [
+          "left",
+          "right"
+        ],
+        "type": "string",
+        "x-python-module": "grassmoth.artifacts.reports.data_comparison",
+        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "CompletedExtractionWorker": {
@@ -3729,15 +3773,9 @@
             "type": "integer"
           },
           "status": {
+            "$ref": "#/components/schemas/CheckStatus",
             "description": "Convergence verdict with failed checks taking precedence over unevaluated checks.",
-            "enum": [
-              "passed",
-              "failed",
-              "not_evaluated"
-            ],
-            "readOnly": true,
-            "title": "Status",
-            "type": "string"
+            "readOnly": true
           },
           "messages": {
             "description": "Explanations for convergence checks that failed or could not be evaluated.",
@@ -4686,47 +4724,6 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "DescriptiveIndicatorComparison": {
-        "additionalProperties": false,
-        "description": "Computed evidence for one persistent indicator identity, without copying its histories.\n\nPoint changes are directional, from left to right, and only computed for one\nhistory on each side. Match by calendar instant:\na new anchor is Added, a lost anchor Removed, and an exact value or support change\nat a retained anchor Revised. Omit unchanged points and order changes by anchor.\nRenames and measurement-definition changes are not point revisions; definition\nmismatches are findings. No tolerance, interpolation, or imputation is\nused. Reversing sides exchanges additions/removals and before/after payloads.\n\nAn empty changes tuple can mean identical points or an inapplicable point diff\n(replicated selections); it never asserts that whole\ndatasets are equal. Missing variables and differing schedules remain explicit\nfindings. Predictive evaluation owns its own applicability, so extra replicate\nanchors can produce a schedule finding without preventing checks at observed anchors.",
-        "properties": {
-          "indicator_id": {
-            "$ref": "#/components/schemas/IndicatorId-Output"
-          },
-          "changes": {
-            "items": {
-              "$ref": "#/components/schemas/Change_DataPoint_"
-            },
-            "title": "Changes",
-            "type": "array"
-          },
-          "statistics": {
-            "items": {
-              "$ref": "#/components/schemas/DataStatisticComparison"
-            },
-            "title": "Statistics",
-            "type": "array"
-          },
-          "findings": {
-            "items": {
-              "$ref": "#/components/schemas/DataFinding"
-            },
-            "title": "Findings",
-            "type": "array"
-          }
-        },
-        "required": [
-          "indicator_id",
-          "changes",
-          "statistics",
-          "findings"
-        ],
-        "title": "DescriptiveIndicatorComparison",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.data_comparison",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
       "DiagnosticPhase": {
         "enum": [
           "warmup",
@@ -5006,15 +5003,46 @@
                                     "description": "Indicator name (e.g., 'hrv', 'self_reported_stress')",
                                     "type": "string"
                                   },
-                                  "measurement_dtype": {
-                                    "enum": [
-                                      "continuous",
-                                      "binary",
-                                      "count",
-                                      "ordinal",
-                                      "categorical"
-                                    ],
-                                    "type": "string"
+                                  "measurement": {
+                                    "anyOf": [
+                                      {
+                                        "additionalProperties": false,
+                                        "description": "Readings recorded as numbers: real values, 0/1 outcomes or non-negative counts.",
+                                        "properties": {
+                                          "dtype": {
+                                            "enum": [
+                                              "continuous",
+                                              "binary",
+                                              "count"
+                                            ],
+                                            "type": "string"
+                                          }
+                                        },
+                                        "type": "object"
+                                      },
+                                      {
+                                        "additionalProperties": false,
+                                        "description": "Readings recorded as labels, coded 0..K-1 in level order.",
+                                        "properties": {
+                                          "dtype": {
+                                            "enum": [
+                                              "ordinal",
+                                              "categorical"
+                                            ],
+                                            "type": "string"
+                                          },
+                                          "levels": {
+                                            "description": "At least two distinct level labels, coded 0..K-1 in this order. Ordinal levels run from lowest to highest (e.g., ['low', 'medium', 'high']); categorical levels list every category (e.g., ['home', 'work', 'other']).",
+                                            "items": {
+                                              "type": "string"
+                                            },
+                                            "minItems": 2,
+                                            "type": "array"
+                                          }
+                                        },
+                                        "type": "object"
+                                      }
+                                    ]
                                   },
                                   "aggregation": {
                                     "description": "How measurements within a support window are reduced to one observation.",
@@ -5038,34 +5066,6 @@
                                       }
                                     ],
                                     "description": "Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock."
-                                  },
-                                  "ordinal_levels": {
-                                    "anyOf": [
-                                      {
-                                        "items": {
-                                          "type": "string"
-                                        },
-                                        "type": "array"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ],
-                                    "description": "Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding."
-                                  },
-                                  "categorical_levels": {
-                                    "anyOf": [
-                                      {
-                                        "items": {
-                                          "type": "string"
-                                        },
-                                        "type": "array"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ],
-                                    "description": "Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding."
                                   }
                                 },
                                 "type": "object",
@@ -9104,15 +9104,63 @@
                             "description": "Indicator name (e.g., 'hrv', 'self_reported_stress')",
                             "type": "string"
                           },
-                          "measurement_dtype": {
-                            "enum": [
-                              "continuous",
-                              "binary",
-                              "count",
-                              "ordinal",
-                              "categorical"
-                            ],
-                            "type": "string"
+                          "measurement": {
+                            "discriminator": {
+                              "mapping": {
+                                "binary": "#/components/schemas/NumericMeasurement",
+                                "categorical": "#/components/schemas/LabeledMeasurement",
+                                "continuous": "#/components/schemas/NumericMeasurement",
+                                "count": "#/components/schemas/NumericMeasurement",
+                                "ordinal": "#/components/schemas/LabeledMeasurement"
+                              },
+                              "propertyName": "dtype"
+                            },
+                            "oneOf": [
+                              {
+                                "additionalProperties": false,
+                                "description": "Readings recorded as numbers: real values, 0/1 outcomes or non-negative counts.",
+                                "properties": {
+                                  "dtype": {
+                                    "enum": [
+                                      "continuous",
+                                      "binary",
+                                      "count"
+                                    ],
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "dtype"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "additionalProperties": false,
+                                "description": "Readings recorded as labels, coded 0..K-1 in level order.",
+                                "properties": {
+                                  "dtype": {
+                                    "enum": [
+                                      "ordinal",
+                                      "categorical"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  "levels": {
+                                    "description": "At least two distinct level labels, coded 0..K-1 in this order. Ordinal levels run from lowest to highest (e.g., ['low', 'medium', 'high']); categorical levels list every category (e.g., ['home', 'work', 'other']).",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "minItems": 2,
+                                    "type": "array"
+                                  }
+                                },
+                                "required": [
+                                  "dtype",
+                                  "levels"
+                                ],
+                                "type": "object"
+                              }
+                            ]
                           },
                           "aggregation": {
                             "description": "How measurements within a support window are reduced to one observation.",
@@ -9137,45 +9185,13 @@
                             ],
                             "default": null,
                             "description": "Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock."
-                          },
-                          "ordinal_levels": {
-                            "anyOf": [
-                              {
-                                "items": {
-                                  "type": "string"
-                                },
-                                "type": "array"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "default": null,
-                            "description": "Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding."
-                          },
-                          "categorical_levels": {
-                            "anyOf": [
-                              {
-                                "items": {
-                                  "type": "string"
-                                },
-                                "type": "array"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "default": null,
-                            "description": "Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding."
                           }
                         },
                         "required": [
                           "name",
-                          "measurement_dtype",
+                          "measurement",
                           "aggregation",
-                          "observation_window",
-                          "ordinal_levels",
-                          "categorical_levels"
+                          "observation_window"
                         ],
                         "type": "object",
                         "x-typescript-mode": "serialization",
@@ -14840,12 +14856,7 @@
             "type": "string"
           },
           "outcome": {
-            "enum": [
-              "passed",
-              "failed"
-            ],
-            "title": "Outcome",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckOutcome"
           },
           "evidence": {
             "title": "Evidence",
@@ -14889,12 +14900,7 @@
             "$ref": "#/components/schemas/ConvergenceAssessmentSubject"
           },
           "outcome": {
-            "enum": [
-              "passed",
-              "failed"
-            ],
-            "title": "Outcome",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckOutcome"
           },
           "evidence": {
             "$ref": "#/components/schemas/NumericCriterionEvidence"
@@ -14933,12 +14939,7 @@
             "$ref": "#/components/schemas/IndicatorCheckSubject"
           },
           "outcome": {
-            "enum": [
-              "passed",
-              "failed"
-            ],
-            "title": "Outcome",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckOutcome"
           },
           "evidence": {
             "$ref": "#/components/schemas/NumericCriterionEvidence"
@@ -14977,12 +14978,7 @@
             "$ref": "#/components/schemas/PredictiveSubject"
           },
           "outcome": {
-            "enum": [
-              "passed",
-              "failed"
-            ],
-            "title": "Outcome",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckOutcome"
           },
           "evidence": {
             "items": {
@@ -15025,12 +15021,7 @@
             "$ref": "#/components/schemas/QuestionSubject"
           },
           "outcome": {
-            "enum": [
-              "passed",
-              "failed"
-            ],
-            "title": "Outcome",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckOutcome"
           },
           "evidence": {
             "title": "Evidence",
@@ -15079,12 +15070,7 @@
             "title": "Subject"
           },
           "outcome": {
-            "enum": [
-              "passed",
-              "failed"
-            ],
-            "title": "Outcome",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckOutcome"
           },
           "evidence": {
             "title": "Evidence",
@@ -15125,12 +15111,7 @@
             "type": "string"
           },
           "outcome": {
-            "enum": [
-              "passed",
-              "failed"
-            ],
-            "title": "Outcome",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckOutcome"
           },
           "evidence": {
             "title": "Evidence",
@@ -17113,8 +17094,14 @@
       },
       "GaussianReferenceTemperingSpec-Input": {
         "additionalProperties": false,
-        "description": "Optional replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class.",
+        "description": "Replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class. Companion moves are built for\nthe untempered posterior, so a tempered run has none.",
         "properties": {
+          "kind": {
+            "const": "gaussian_reference",
+            "default": "gaussian_reference",
+            "title": "Kind",
+            "type": "string"
+          },
           "num_temperatures": {
             "default": 48,
             "description": "Replicas per chain, initially evenly spaced from beta one (the exact posterior) to beta zero (the Gaussian reference). Each replica runs a full sweep, so cost grows linearly. With alternating even/odd swaps the round-trip rate tends to 1 / (2 + 2\u039b) instead of collapsing as replicas are added, and about 2\u039b replicas are optimal, where \u039b is the posterior's communication barrier (Syed et al. 2022, sections 4.2 and 5.3).",
@@ -17145,8 +17132,14 @@
       },
       "GaussianReferenceTemperingSpec-Output": {
         "additionalProperties": false,
-        "description": "Optional replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class.",
+        "description": "Replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class. Companion moves are built for\nthe untempered posterior, so a tempered run has none.",
         "properties": {
+          "kind": {
+            "const": "gaussian_reference",
+            "default": "gaussian_reference",
+            "title": "Kind",
+            "type": "string"
+          },
           "num_temperatures": {
             "default": 48,
             "description": "Replicas per chain, initially evenly spaced from beta one (the exact posterior) to beta zero (the Gaussian reference). Each replica runs a full sweep, so cost grows linearly. With alternating even/odd swaps the round-trip rate tends to 1 / (2 + 2\u039b) instead of collapsing as replicas are added, and about 2\u039b replicas are optimal, where \u039b is the posterior's communication barrier (Syed et al. 2022, sections 4.2 and 5.3).",
@@ -17170,6 +17163,7 @@
           }
         },
         "required": [
+          "kind",
           "num_temperatures",
           "reference_scale",
           "adaptation_interval"
@@ -17194,6 +17188,113 @@
         "x-layer": "identity",
         "x-concern": "identity",
         "description": "A native Git object identity for an immutable tree or commit."
+      },
+      "GuidedPathSpec-Input": {
+        "additionalProperties": false,
+        "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nCorenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear\ntransitions and densities pay every weight, so each method's approximation costs\nmixing, never the target.",
+        "properties": {
+          "method": {
+            "default": "particle_agrad",
+            "description": "particle_agrad keeps the auxiliary variable in the weights (section 4.1); strong future information or multiple modes can reduce its mixing. twisted_particle_agrad adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings without deterministic recurrences, and separated path components and informative future readings can slow its mixing.",
+            "enum": [
+              "particle_agrad",
+              "twisted_particle_agrad",
+              "particle_mgrad"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Input",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+          },
+          "kappa": {
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Kappa",
+            "type": "integer"
+          },
+          "scan_unroll": {
+            "default": 8,
+            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
+            "minimum": 1,
+            "title": "Scan Unroll",
+            "type": "integer"
+          }
+        },
+        "title": "GuidedPathSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "GuidedPathSpec-Output": {
+        "additionalProperties": false,
+        "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nCorenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear\ntransitions and densities pay every weight, so each method's approximation costs\nmixing, never the target.",
+        "properties": {
+          "method": {
+            "default": "particle_agrad",
+            "description": "particle_agrad keeps the auxiliary variable in the weights (section 4.1); strong future information or multiple modes can reduce its mixing. twisted_particle_agrad adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings without deterministic recurrences, and separated path components and informative future readings can slow its mixing.",
+            "enum": [
+              "particle_agrad",
+              "twisted_particle_agrad",
+              "particle_mgrad"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "num_particles": {
+            "default": 64,
+            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
+            "minimum": 2,
+            "title": "Num Particles",
+            "type": "integer"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Output",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+          },
+          "kappa": {
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
+            "enum": [
+              0,
+              1
+            ],
+            "title": "Kappa",
+            "type": "integer"
+          },
+          "scan_unroll": {
+            "default": 8,
+            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
+            "minimum": 1,
+            "title": "Scan Unroll",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "method",
+          "num_particles",
+          "latent_step",
+          "kappa",
+          "scan_unroll"
+        ],
+        "title": "GuidedPathSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
       },
       "HTTPValidationError": {
         "title": "HTTPValidationError",
@@ -17424,14 +17525,54 @@
         "x-concern": "scientific_model"
       },
       "IndicatorComparison": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/DescriptiveIndicatorComparison"
+        "additionalProperties": false,
+        "description": "Computed evidence for one persistent indicator identity, without copying its histories.\n\nPoint changes are directional, from left to right, and only computed for one\nhistory on each side. Match by calendar instant:\na new anchor is Added, a lost anchor Removed, and an exact value or support change\nat a retained anchor Revised. Omit unchanged points and order changes by anchor.\nRenames and measurement-definition changes are not point revisions; definition\nmismatches are findings. No tolerance, interpolation, or imputation is\nused. Reversing sides exchanges additions/removals and before/after payloads.\n\nAn empty changes tuple can mean identical points or an inapplicable point diff\n(replicated selections); it never asserts that whole\ndatasets are equal. Missing variables and differing schedules remain explicit\nfindings. Predictive evaluation owns its own applicability, so extra replicate\nanchors can produce a schedule finding without preventing checks at observed anchors.",
+        "properties": {
+          "indicator_id": {
+            "$ref": "#/components/schemas/IndicatorId-Output"
           },
-          {
-            "$ref": "#/components/schemas/PredictiveIndicatorComparison"
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/Change_DataPoint_"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "statistics": {
+            "items": {
+              "$ref": "#/components/schemas/DataStatisticComparison"
+            },
+            "title": "Statistics",
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/DataFinding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "predictive": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictiveComparison"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reference history against the other side's replicates, when exactly one side is a single history of a compatible numeric indicator; otherwise null. An alignment failure is reported as a finding."
           }
+        },
+        "required": [
+          "indicator_id",
+          "changes",
+          "statistics",
+          "findings",
+          "predictive"
         ],
+        "title": "IndicatorComparison",
+        "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
@@ -17940,12 +18081,7 @@
             "type": "number"
           },
           "outcome": {
-            "enum": [
-              "complete",
-              "failed"
-            ],
-            "title": "Outcome",
-            "type": "string"
+            "$ref": "#/components/schemas/PhaseOutcome"
           }
         },
         "required": [
@@ -18785,6 +18921,44 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "LabeledDtype": {
+        "enum": [
+          "ordinal",
+          "categorical"
+        ],
+        "type": "string",
+        "x-python-module": "grassmoth.artifacts.observations.dtypes",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "LabeledMeasurement": {
+        "additionalProperties": false,
+        "description": "Readings recorded as labels, coded 0..K-1 in level order.",
+        "properties": {
+          "dtype": {
+            "$ref": "#/components/schemas/LabeledDtype",
+            "description": "'ordinal' or 'categorical'"
+          },
+          "levels": {
+            "description": "At least two distinct level labels, coded 0..K-1 in this order. Ordinal levels run from lowest to highest (e.g., ['low', 'medium', 'high']); categorical levels list every category (e.g., ['home', 'work', 'other']).",
+            "items": {
+              "type": "string"
+            },
+            "minItems": 2,
+            "title": "Levels",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dtype",
+          "levels"
+        ],
+        "title": "LabeledMeasurement",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.observations.spec",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "LatentBlockSize": {
         "enum": [
           1,
@@ -19175,35 +19349,17 @@
             "type": "integer"
           },
           "tempering": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/GaussianReferenceTemperingSpec-Input"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Gaussian-reference parallel tempering; null runs the exact posterior alone."
+            "$ref": "#/components/schemas/TemperingSpec-Input",
+            "description": "untempered runs the exact posterior alone and allows companion moves; gaussian_reference runs Gaussian-reference parallel tempering."
           },
           "path_update": {
             "$ref": "#/components/schemas/PathUpdateSpec-Input",
             "description": "Exact path update."
           },
           "parameter_proposal": {
+            "$ref": "#/components/schemas/ParameterProposal",
             "default": "random_walk",
-            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.",
-            "enum": [
-              "random_walk",
-              "pseudo_langevin"
-            ],
-            "title": "Parameter Proposal",
-            "type": "string"
-          },
-          "companion": {
-            "$ref": "#/components/schemas/CompanionMoves",
-            "default": "none",
-            "description": "Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density. Not available with tempering."
+            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel."
           },
           "diagnostic_metrics": {
             "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
@@ -19217,14 +19373,9 @@
             "type": "number"
           },
           "adaptation_scheme": {
+            "$ref": "#/components/schemas/AdaptationScheme",
             "default": "simple",
-            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2).",
-            "enum": [
-              "simple",
-              "dual_averaging"
-            ],
-            "title": "Adaptation Scheme",
-            "type": "string"
+            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2)."
           },
           "initialization": {
             "$ref": "#/components/schemas/GaussianInitializationSpec-Input",
@@ -19255,35 +19406,17 @@
             "type": "integer"
           },
           "tempering": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/GaussianReferenceTemperingSpec-Output"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Gaussian-reference parallel tempering; null runs the exact posterior alone."
+            "$ref": "#/components/schemas/TemperingSpec-Output",
+            "description": "untempered runs the exact posterior alone and allows companion moves; gaussian_reference runs Gaussian-reference parallel tempering."
           },
           "path_update": {
             "$ref": "#/components/schemas/PathUpdateSpec-Output",
             "description": "Exact path update."
           },
           "parameter_proposal": {
+            "$ref": "#/components/schemas/ParameterProposal",
             "default": "random_walk",
-            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.",
-            "enum": [
-              "random_walk",
-              "pseudo_langevin"
-            ],
-            "title": "Parameter Proposal",
-            "type": "string"
-          },
-          "companion": {
-            "$ref": "#/components/schemas/CompanionMoves",
-            "default": "none",
-            "description": "Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density. Not available with tempering."
+            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel."
           },
           "diagnostic_metrics": {
             "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
@@ -19297,14 +19430,9 @@
             "type": "number"
           },
           "adaptation_scheme": {
+            "$ref": "#/components/schemas/AdaptationScheme",
             "default": "simple",
-            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2).",
-            "enum": [
-              "simple",
-              "dual_averaging"
-            ],
-            "title": "Adaptation Scheme",
-            "type": "string"
+            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2)."
           },
           "initialization": {
             "$ref": "#/components/schemas/GaussianInitializationSpec-Output",
@@ -19317,7 +19445,6 @@
           "tempering",
           "path_update",
           "parameter_proposal",
-          "companion",
           "diagnostic_metrics",
           "param_target_accept",
           "adaptation_scheme",
@@ -19329,19 +19456,28 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "MeasurementDtype": {
-        "enum": [
-          "continuous",
-          "binary",
-          "count",
-          "ordinal",
-          "categorical"
+      "Measurement": {
+        "discriminator": {
+          "mapping": {
+            "binary": "#/components/schemas/NumericMeasurement",
+            "categorical": "#/components/schemas/LabeledMeasurement",
+            "continuous": "#/components/schemas/NumericMeasurement",
+            "count": "#/components/schemas/NumericMeasurement",
+            "ordinal": "#/components/schemas/LabeledMeasurement"
+          },
+          "propertyName": "dtype"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/NumericMeasurement"
+          },
+          {
+            "$ref": "#/components/schemas/LabeledMeasurement"
+          }
         ],
-        "type": "string",
-        "x-python-module": "grassmoth.artifacts.observations.dtypes",
+        "x-python-module": "grassmoth.artifacts.observations.spec",
         "x-layer": "authored",
-        "x-concern": "scientific_model",
-        "description": "A measurement dtype defines the observed value domain of an indicator."
+        "x-concern": "scientific_model"
       },
       "MechanismId-Input": {
         "pattern": "^mechanism:[A-Za-z0-9_.-]+$",
@@ -20983,6 +21119,35 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "NumericDtype": {
+        "enum": [
+          "continuous",
+          "binary",
+          "count"
+        ],
+        "type": "string",
+        "x-python-module": "grassmoth.artifacts.observations.dtypes",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "NumericMeasurement": {
+        "additionalProperties": false,
+        "description": "Readings recorded as numbers: real values, 0/1 outcomes or non-negative counts.",
+        "properties": {
+          "dtype": {
+            "$ref": "#/components/schemas/NumericDtype",
+            "description": "'continuous', 'binary' or 'count'"
+          }
+        },
+        "required": [
+          "dtype"
+        ],
+        "title": "NumericMeasurement",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.observations.spec",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "NumericalArray": {
         "additionalProperties": false,
         "description": "An immutable NPY buffer carried as a MessagePack binary value.\n\nThe NPY header owns dtype and shape. Buffers use little-endian, row-major\nstorage; numerical decoding belongs to the boundary that consumes them.",
@@ -21392,9 +21557,9 @@
             "title": "Name",
             "type": "string"
           },
-          "measurement_dtype": {
-            "$ref": "#/components/schemas/MeasurementDtype",
-            "description": "'continuous', 'binary', 'count', 'ordinal', 'categorical'"
+          "measurement": {
+            "$ref": "#/components/schemas/Measurement",
+            "description": "How readings are recorded: {dtype: 'continuous' | 'binary' | 'count'}, or {dtype: 'ordinal' | 'categorical', levels: [...]} for labels coded 0..K-1."
           },
           "aggregation": {
             "$ref": "#/components/schemas/SummaryOperator",
@@ -21405,48 +21570,14 @@
             "title": "Observation Window",
             "tsType": "WindowT",
             "type": "string"
-          },
-          "ordinal_levels": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding.",
-            "title": "Ordinal Levels"
-          },
-          "categorical_levels": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding.",
-            "title": "Categorical Levels"
           }
         },
         "required": [
           "id",
           "name",
-          "measurement_dtype",
+          "measurement",
           "aggregation",
-          "observation_window",
-          "ordinal_levels",
-          "categorical_levels"
+          "observation_window"
         ],
         "title": "ObservationSpec[Annotated[Any, WithJsonSchema]]",
         "type": "object",
@@ -21470,9 +21601,9 @@
             "title": "Name",
             "type": "string"
           },
-          "measurement_dtype": {
-            "$ref": "#/components/schemas/MeasurementDtype",
-            "description": "'continuous', 'binary', 'count', 'ordinal', 'categorical'"
+          "measurement": {
+            "$ref": "#/components/schemas/Measurement",
+            "description": "How readings are recorded: {dtype: 'continuous' | 'binary' | 'count'}, or {dtype: 'ordinal' | 'categorical', levels: [...]} for labels coded 0..K-1."
           },
           "aggregation": {
             "$ref": "#/components/schemas/SummaryOperator",
@@ -21489,44 +21620,12 @@
             ],
             "default": null,
             "description": "Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock."
-          },
-          "ordinal_levels": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding.",
-            "title": "Ordinal Levels"
-          },
-          "categorical_levels": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding.",
-            "title": "Categorical Levels"
           }
         },
         "required": [
           "id",
           "name",
-          "measurement_dtype",
+          "measurement",
           "aggregation"
         ],
         "title": "ObservationSpec[Annotated[Union[ObservationWindow, NoneType], FieldInfo(annotation=NoneType, required=False, default=None)]]",
@@ -21549,9 +21648,9 @@
             "title": "Name",
             "type": "string"
           },
-          "measurement_dtype": {
-            "$ref": "#/components/schemas/MeasurementDtype",
-            "description": "'continuous', 'binary', 'count', 'ordinal', 'categorical'"
+          "measurement": {
+            "$ref": "#/components/schemas/Measurement",
+            "description": "How readings are recorded: {dtype: 'continuous' | 'binary' | 'count'}, or {dtype: 'ordinal' | 'categorical', levels: [...]} for labels coded 0..K-1."
           },
           "aggregation": {
             "$ref": "#/components/schemas/SummaryOperator",
@@ -21568,48 +21667,14 @@
             ],
             "default": null,
             "description": "Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock."
-          },
-          "ordinal_levels": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding.",
-            "title": "Ordinal Levels"
-          },
-          "categorical_levels": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding.",
-            "title": "Categorical Levels"
           }
         },
         "required": [
           "id",
           "name",
-          "measurement_dtype",
+          "measurement",
           "aggregation",
-          "observation_window",
-          "ordinal_levels",
-          "categorical_levels"
+          "observation_window"
         ],
         "title": "ObservationSpec[Annotated[Union[ObservationWindow, NoneType], FieldInfo(annotation=NoneType, required=False, default=None)]]",
         "type": "object",
@@ -21631,9 +21696,9 @@
             "title": "Name",
             "type": "string"
           },
-          "measurement_dtype": {
-            "$ref": "#/components/schemas/MeasurementDtype",
-            "description": "'continuous', 'binary', 'count', 'ordinal', 'categorical'"
+          "measurement": {
+            "$ref": "#/components/schemas/Measurement",
+            "description": "How readings are recorded: {dtype: 'continuous' | 'binary' | 'count'}, or {dtype: 'ordinal' | 'categorical', levels: [...]} for labels coded 0..K-1."
           },
           "aggregation": {
             "$ref": "#/components/schemas/SummaryOperator",
@@ -21642,48 +21707,14 @@
           "observation_window": {
             "$ref": "#/components/schemas/ObservationWindow",
             "description": "Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock."
-          },
-          "ordinal_levels": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding.",
-            "title": "Ordinal Levels"
-          },
-          "categorical_levels": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding.",
-            "title": "Categorical Levels"
           }
         },
         "required": [
           "id",
           "name",
-          "measurement_dtype",
+          "measurement",
           "aggregation",
-          "observation_window",
-          "ordinal_levels",
-          "categorical_levels"
+          "observation_window"
         ],
         "title": "ObservationSpec[ObservationWindow]",
         "type": "object",
@@ -21919,6 +21950,18 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "PPCStatistic": {
+        "enum": [
+          "mean",
+          "sd",
+          "min",
+          "max"
+        ],
+        "type": "string",
+        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "PPCTestStat": {
         "additionalProperties": false,
         "description": "An observed summary compared with the same statistic across predictive replicates.\n\nProvides the data for Gabry's ppc_stat plots: a histogram of T(y_rep)\nwith a vertical line at T(y_observed).",
@@ -21927,14 +21970,7 @@
             "$ref": "#/components/schemas/IndicatorId-Output"
           },
           "stat_name": {
-            "enum": [
-              "mean",
-              "sd",
-              "min",
-              "max"
-            ],
-            "title": "Stat Name",
-            "type": "string"
+            "$ref": "#/components/schemas/PPCStatistic"
           },
           "observed_value": {
             "title": "Observed Value",
@@ -22147,6 +22183,16 @@
         "x-layer": "identity",
         "x-concern": "identity",
         "description": "A scientific parameter identity connects component coefficients to one parameter definition."
+      },
+      "ParameterProposal": {
+        "enum": [
+          "random_walk",
+          "pseudo_langevin"
+        ],
+        "type": "string",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
       },
       "ParameterRef": {
         "additionalProperties": false,
@@ -22386,13 +22432,7 @@
             "title": "K"
           },
           "status": {
-            "enum": [
-              "passed",
-              "failed",
-              "not_evaluated"
-            ],
-            "title": "Status",
-            "type": "string"
+            "$ref": "#/components/schemas/CheckStatus"
           }
         },
         "required": [
@@ -22404,103 +22444,6 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
         "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "ParticleAGradSpec-Input": {
-        "additionalProperties": false,
-        "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nParticle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary\nvariable in the weights. Parameter labels remain marginalized. Strong future\ninformation or multiple modes can reduce mixing; the target stays exact.",
-        "properties": {
-          "method": {
-            "const": "particle_agrad",
-            "default": "particle_agrad",
-            "title": "Method",
-            "type": "string"
-          },
-          "num_particles": {
-            "default": 64,
-            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
-            "minimum": 2,
-            "title": "Num Particles",
-            "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Input",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
-          },
-          "kappa": {
-            "default": 1,
-            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
-            "enum": [
-              0,
-              1
-            ],
-            "title": "Kappa",
-            "type": "integer"
-          },
-          "scan_unroll": {
-            "default": 8,
-            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
-            "minimum": 1,
-            "title": "Scan Unroll",
-            "type": "integer"
-          }
-        },
-        "title": "ParticleAGradSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ParticleAGradSpec-Output": {
-        "additionalProperties": false,
-        "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nParticle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary\nvariable in the weights. Parameter labels remain marginalized. Strong future\ninformation or multiple modes can reduce mixing; the target stays exact.",
-        "properties": {
-          "method": {
-            "const": "particle_agrad",
-            "default": "particle_agrad",
-            "title": "Method",
-            "type": "string"
-          },
-          "num_particles": {
-            "default": 64,
-            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
-            "minimum": 2,
-            "title": "Num Particles",
-            "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Output",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
-          },
-          "kappa": {
-            "default": 1,
-            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
-            "enum": [
-              0,
-              1
-            ],
-            "title": "Kappa",
-            "type": "integer"
-          },
-          "scan_unroll": {
-            "default": 8,
-            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
-            "minimum": 1,
-            "title": "Scan Unroll",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "method",
-          "num_particles",
-          "latent_step",
-          "kappa",
-          "scan_unroll"
-        ],
-        "title": "ParticleAGradSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "ParticleDiagnosticMetric": {
@@ -22521,103 +22464,6 @@
           "$ref": "#/components/schemas/ParticleDiagnosticMetric"
         },
         "type": "array",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ParticleMGradSpec-Input": {
-        "additionalProperties": false,
-        "description": "Particle-mGRAD integrates the path auxiliary out of the particle weights.\n\nUses the untwisted Gaussian transition-informed proposal with exact nonlinear\ncorrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain\nmarginalized. Supports point readings without deterministic recurrences;\nseparated path components and informative future readings can slow mixing.",
-        "properties": {
-          "method": {
-            "const": "particle_mgrad",
-            "default": "particle_mgrad",
-            "title": "Method",
-            "type": "string"
-          },
-          "num_particles": {
-            "default": 64,
-            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
-            "minimum": 2,
-            "title": "Num Particles",
-            "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Input",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
-          },
-          "kappa": {
-            "default": 1,
-            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
-            "enum": [
-              0,
-              1
-            ],
-            "title": "Kappa",
-            "type": "integer"
-          },
-          "scan_unroll": {
-            "default": 8,
-            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
-            "minimum": 1,
-            "title": "Scan Unroll",
-            "type": "integer"
-          }
-        },
-        "title": "ParticleMGradSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ParticleMGradSpec-Output": {
-        "additionalProperties": false,
-        "description": "Particle-mGRAD integrates the path auxiliary out of the particle weights.\n\nUses the untwisted Gaussian transition-informed proposal with exact nonlinear\ncorrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain\nmarginalized. Supports point readings without deterministic recurrences;\nseparated path components and informative future readings can slow mixing.",
-        "properties": {
-          "method": {
-            "const": "particle_mgrad",
-            "default": "particle_mgrad",
-            "title": "Method",
-            "type": "string"
-          },
-          "num_particles": {
-            "default": 64,
-            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
-            "minimum": 2,
-            "title": "Num Particles",
-            "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Output",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
-          },
-          "kappa": {
-            "default": 1,
-            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
-            "enum": [
-              0,
-              1
-            ],
-            "title": "Kappa",
-            "type": "integer"
-          },
-          "scan_unroll": {
-            "default": 8,
-            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
-            "minimum": 1,
-            "title": "Scan Unroll",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "method",
-          "num_particles",
-          "latent_step",
-          "kappa",
-          "scan_unroll"
-        ],
-        "title": "ParticleMGradSpec",
-        "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
@@ -22703,12 +22549,7 @@
             "type": "number"
           },
           "latent_block_coords": {
-            "enum": [
-              1,
-              2,
-              "all"
-            ],
-            "title": "Latent Block Coords"
+            "$ref": "#/components/schemas/LatentBlockSize"
           },
           "initial_param_step_size": {
             "items": {
@@ -23029,12 +22870,12 @@
       "PathUpdateSpec-Input": {
         "discriminator": {
           "mapping": {
-            "particle_agrad": "#/components/schemas/ParticleAGradSpec-Input",
+            "particle_agrad": "#/components/schemas/GuidedPathSpec-Input",
             "particle_amala": "#/components/schemas/DsmcSpec-Input",
             "particle_amala_plus": "#/components/schemas/DsmcSpec-Input",
-            "particle_mgrad": "#/components/schemas/ParticleMGradSpec-Input",
+            "particle_mgrad": "#/components/schemas/GuidedPathSpec-Input",
             "particle_rwm": "#/components/schemas/DsmcSpec-Input",
-            "twisted_particle_agrad": "#/components/schemas/TwistedParticleAGradSpec-Input"
+            "twisted_particle_agrad": "#/components/schemas/GuidedPathSpec-Input"
           },
           "propertyName": "method"
         },
@@ -23043,13 +22884,7 @@
             "$ref": "#/components/schemas/DsmcSpec-Input"
           },
           {
-            "$ref": "#/components/schemas/ParticleAGradSpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/TwistedParticleAGradSpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/ParticleMGradSpec-Input"
+            "$ref": "#/components/schemas/GuidedPathSpec-Input"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -23059,12 +22894,12 @@
       "PathUpdateSpec-Output": {
         "discriminator": {
           "mapping": {
-            "particle_agrad": "#/components/schemas/ParticleAGradSpec-Output",
+            "particle_agrad": "#/components/schemas/GuidedPathSpec-Output",
             "particle_amala": "#/components/schemas/DsmcSpec-Output",
             "particle_amala_plus": "#/components/schemas/DsmcSpec-Output",
-            "particle_mgrad": "#/components/schemas/ParticleMGradSpec-Output",
+            "particle_mgrad": "#/components/schemas/GuidedPathSpec-Output",
             "particle_rwm": "#/components/schemas/DsmcSpec-Output",
-            "twisted_particle_agrad": "#/components/schemas/TwistedParticleAGradSpec-Output"
+            "twisted_particle_agrad": "#/components/schemas/GuidedPathSpec-Output"
           },
           "propertyName": "method"
         },
@@ -23073,13 +22908,7 @@
             "$ref": "#/components/schemas/DsmcSpec-Output"
           },
           {
-            "$ref": "#/components/schemas/ParticleAGradSpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/TwistedParticleAGradSpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/ParticleMGradSpec-Output"
+            "$ref": "#/components/schemas/GuidedPathSpec-Output"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -23171,6 +23000,16 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.model.parameter_spec",
         "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PhaseOutcome": {
+        "enum": [
+          "complete",
+          "failed"
+        ],
+        "type": "string",
+        "x-python-module": "grassmoth.artifacts.reports.inference",
+        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "PoissonLawSpec_Annotated_Any__WithJsonSchema__": {
@@ -23463,12 +23302,7 @@
         "description": "One reference history compared with the other side's replicated histories.\n\nThe singleton side owns the reference role even when evaluation is unavailable.\nSwapping sides changes reference_side and preserves the evaluation. Matching\nmeasurement definitions, calendar binding, and support at every observed anchor\nare required. Missing reference values are masked; missing replicate values at\nobserved anchors prevent evaluation. Replicates may have additional anchors.\nThe source simulation's law provenance determines prior/posterior interpretation;\nthe side names and number of selected histories do not establish that provenance.",
         "properties": {
           "reference_side": {
-            "enum": [
-              "left",
-              "right"
-            ],
-            "title": "Reference Side",
-            "type": "string"
+            "$ref": "#/components/schemas/ComparisonSide"
           },
           "evaluation": {
             "anyOf": [
@@ -23487,51 +23321,6 @@
           "evaluation"
         ],
         "title": "PredictiveComparison",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.data_comparison",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "PredictiveIndicatorComparison": {
-        "additionalProperties": false,
-        "description": "Compatible reference and replicate histories with their evaluated predictive comparison.",
-        "properties": {
-          "indicator_id": {
-            "$ref": "#/components/schemas/IndicatorId-Output"
-          },
-          "changes": {
-            "items": {
-              "$ref": "#/components/schemas/Change_DataPoint_"
-            },
-            "title": "Changes",
-            "type": "array"
-          },
-          "statistics": {
-            "items": {
-              "$ref": "#/components/schemas/DataStatisticComparison"
-            },
-            "title": "Statistics",
-            "type": "array"
-          },
-          "findings": {
-            "items": {
-              "$ref": "#/components/schemas/DataFinding"
-            },
-            "title": "Findings",
-            "type": "array"
-          },
-          "predictive": {
-            "$ref": "#/components/schemas/PredictiveComparison"
-          }
-        },
-        "required": [
-          "indicator_id",
-          "changes",
-          "statistics",
-          "findings",
-          "predictive"
-        ],
-        "title": "PredictiveIndicatorComparison",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.data_comparison",
         "x-layer": "findings",
@@ -26686,6 +26475,46 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "TemperingSpec-Input": {
+        "discriminator": {
+          "mapping": {
+            "gaussian_reference": "#/components/schemas/GaussianReferenceTemperingSpec-Input",
+            "untempered": "#/components/schemas/UntemperedSpec-Input"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/UntemperedSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/GaussianReferenceTemperingSpec-Input"
+          }
+        ],
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "TemperingSpec-Output": {
+        "discriminator": {
+          "mapping": {
+            "gaussian_reference": "#/components/schemas/GaussianReferenceTemperingSpec-Output",
+            "untempered": "#/components/schemas/UntemperedSpec-Output"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/UntemperedSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/GaussianReferenceTemperingSpec-Output"
+          }
+        ],
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "TemporalStatus": {
         "description": "Temporal status states whether a construct varies within the individual over time.",
         "enum": [
@@ -27092,103 +26921,6 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "TwistedParticleAGradSpec-Input": {
-        "additionalProperties": false,
-        "description": "Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.\n\nA parallel backward information scan guides a sequential conditional filter.\nProposals combine exact nonlinear transition means with the approximate twist;\ntheir normalized densities and twist ratios are paid in full. Poor local fits\nand multiple modes cost efficiency, never change the target (section 4.4).",
-        "properties": {
-          "method": {
-            "const": "twisted_particle_agrad",
-            "default": "twisted_particle_agrad",
-            "title": "Method",
-            "type": "string"
-          },
-          "num_particles": {
-            "default": 64,
-            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
-            "minimum": 2,
-            "title": "Num Particles",
-            "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Input",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
-          },
-          "kappa": {
-            "default": 1,
-            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
-            "enum": [
-              0,
-              1
-            ],
-            "title": "Kappa",
-            "type": "integer"
-          },
-          "scan_unroll": {
-            "default": 8,
-            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
-            "minimum": 1,
-            "title": "Scan Unroll",
-            "type": "integer"
-          }
-        },
-        "title": "TwistedParticleAGradSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "TwistedParticleAGradSpec-Output": {
-        "additionalProperties": false,
-        "description": "Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.\n\nA parallel backward information scan guides a sequential conditional filter.\nProposals combine exact nonlinear transition means with the approximate twist;\ntheir normalized densities and twist ratios are paid in full. Poor local fits\nand multiple modes cost efficiency, never change the target (section 4.4).",
-        "properties": {
-          "method": {
-            "const": "twisted_particle_agrad",
-            "default": "twisted_particle_agrad",
-            "title": "Method",
-            "type": "string"
-          },
-          "num_particles": {
-            "default": 64,
-            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).",
-            "minimum": 2,
-            "title": "Num Particles",
-            "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Output",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
-          },
-          "kappa": {
-            "default": 1,
-            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.",
-            "enum": [
-              0,
-              1
-            ],
-            "title": "Kappa",
-            "type": "integer"
-          },
-          "scan_unroll": {
-            "default": 8,
-            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.",
-            "minimum": 1,
-            "title": "Scan Unroll",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "method",
-          "num_particles",
-          "latent_step",
-          "kappa",
-          "scan_unroll"
-        ],
-        "title": "TwistedParticleAGradSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "UnknownLawProvenance": {
         "additionalProperties": false,
         "description": "Imported laws do not establish a conditioning history.",
@@ -27214,6 +26946,54 @@
         "title": "UnknownLawProvenance",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.predictive_provenance",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "UntemperedSpec-Input": {
+        "additionalProperties": false,
+        "description": "The exact posterior alone, optionally followed by companion moves each sweep.",
+        "properties": {
+          "kind": {
+            "const": "untempered",
+            "default": "untempered",
+            "title": "Kind",
+            "type": "string"
+          },
+          "companion": {
+            "$ref": "#/components/schemas/CompanionMoves",
+            "default": "none",
+            "description": "Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density."
+          }
+        },
+        "title": "UntemperedSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "UntemperedSpec-Output": {
+        "additionalProperties": false,
+        "description": "The exact posterior alone, optionally followed by companion moves each sweep.",
+        "properties": {
+          "kind": {
+            "const": "untempered",
+            "default": "untempered",
+            "title": "Kind",
+            "type": "string"
+          },
+          "companion": {
+            "$ref": "#/components/schemas/CompanionMoves",
+            "default": "none",
+            "description": "Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density."
+          }
+        },
+        "required": [
+          "kind",
+          "companion"
+        ],
+        "title": "UntemperedSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -27692,15 +27472,46 @@
                                     "description": "Indicator name (e.g., 'hrv', 'self_reported_stress')",
                                     "type": "string"
                                   },
-                                  "measurement_dtype": {
-                                    "enum": [
-                                      "continuous",
-                                      "binary",
-                                      "count",
-                                      "ordinal",
-                                      "categorical"
-                                    ],
-                                    "type": "string"
+                                  "measurement": {
+                                    "anyOf": [
+                                      {
+                                        "additionalProperties": false,
+                                        "description": "Readings recorded as numbers: real values, 0/1 outcomes or non-negative counts.",
+                                        "properties": {
+                                          "dtype": {
+                                            "enum": [
+                                              "continuous",
+                                              "binary",
+                                              "count"
+                                            ],
+                                            "type": "string"
+                                          }
+                                        },
+                                        "type": "object"
+                                      },
+                                      {
+                                        "additionalProperties": false,
+                                        "description": "Readings recorded as labels, coded 0..K-1 in level order.",
+                                        "properties": {
+                                          "dtype": {
+                                            "enum": [
+                                              "ordinal",
+                                              "categorical"
+                                            ],
+                                            "type": "string"
+                                          },
+                                          "levels": {
+                                            "description": "At least two distinct level labels, coded 0..K-1 in this order. Ordinal levels run from lowest to highest (e.g., ['low', 'medium', 'high']); categorical levels list every category (e.g., ['home', 'work', 'other']).",
+                                            "items": {
+                                              "type": "string"
+                                            },
+                                            "minItems": 2,
+                                            "type": "array"
+                                          }
+                                        },
+                                        "type": "object"
+                                      }
+                                    ]
                                   },
                                   "aggregation": {
                                     "description": "How measurements within a support window are reduced to one observation.",
@@ -27724,34 +27535,6 @@
                                       }
                                     ],
                                     "description": "Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock."
-                                  },
-                                  "ordinal_levels": {
-                                    "anyOf": [
-                                      {
-                                        "items": {
-                                          "type": "string"
-                                        },
-                                        "type": "array"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ],
-                                    "description": "Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding."
-                                  },
-                                  "categorical_levels": {
-                                    "anyOf": [
-                                      {
-                                        "items": {
-                                          "type": "string"
-                                        },
-                                        "type": "array"
-                                      },
-                                      {
-                                        "type": "null"
-                                      }
-                                    ],
-                                    "description": "Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding."
                                   }
                                 },
                                 "type": "object",
@@ -31790,15 +31573,63 @@
                             "description": "Indicator name (e.g., 'hrv', 'self_reported_stress')",
                             "type": "string"
                           },
-                          "measurement_dtype": {
-                            "enum": [
-                              "continuous",
-                              "binary",
-                              "count",
-                              "ordinal",
-                              "categorical"
-                            ],
-                            "type": "string"
+                          "measurement": {
+                            "discriminator": {
+                              "mapping": {
+                                "binary": "#/components/schemas/NumericMeasurement",
+                                "categorical": "#/components/schemas/LabeledMeasurement",
+                                "continuous": "#/components/schemas/NumericMeasurement",
+                                "count": "#/components/schemas/NumericMeasurement",
+                                "ordinal": "#/components/schemas/LabeledMeasurement"
+                              },
+                              "propertyName": "dtype"
+                            },
+                            "oneOf": [
+                              {
+                                "additionalProperties": false,
+                                "description": "Readings recorded as numbers: real values, 0/1 outcomes or non-negative counts.",
+                                "properties": {
+                                  "dtype": {
+                                    "enum": [
+                                      "continuous",
+                                      "binary",
+                                      "count"
+                                    ],
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "dtype"
+                                ],
+                                "type": "object"
+                              },
+                              {
+                                "additionalProperties": false,
+                                "description": "Readings recorded as labels, coded 0..K-1 in level order.",
+                                "properties": {
+                                  "dtype": {
+                                    "enum": [
+                                      "ordinal",
+                                      "categorical"
+                                    ],
+                                    "type": "string"
+                                  },
+                                  "levels": {
+                                    "description": "At least two distinct level labels, coded 0..K-1 in this order. Ordinal levels run from lowest to highest (e.g., ['low', 'medium', 'high']); categorical levels list every category (e.g., ['home', 'work', 'other']).",
+                                    "items": {
+                                      "type": "string"
+                                    },
+                                    "minItems": 2,
+                                    "type": "array"
+                                  }
+                                },
+                                "required": [
+                                  "dtype",
+                                  "levels"
+                                ],
+                                "type": "object"
+                              }
+                            ]
                           },
                           "aggregation": {
                             "description": "How measurements within a support window are reduced to one observation.",
@@ -31823,45 +31654,13 @@
                             ],
                             "default": null,
                             "description": "Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock."
-                          },
-                          "ordinal_levels": {
-                            "anyOf": [
-                              {
-                                "items": {
-                                  "type": "string"
-                                },
-                                "type": "array"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "default": null,
-                            "description": "Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding."
-                          },
-                          "categorical_levels": {
-                            "anyOf": [
-                              {
-                                "items": {
-                                  "type": "string"
-                                },
-                                "type": "array"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "default": null,
-                            "description": "Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding."
                           }
                         },
                         "required": [
                           "name",
-                          "measurement_dtype",
+                          "measurement",
                           "aggregation",
-                          "observation_window",
-                          "ordinal_levels",
-                          "categorical_levels"
+                          "observation_window"
                         ],
                         "type": "object",
                         "x-typescript-mode": "serialization",

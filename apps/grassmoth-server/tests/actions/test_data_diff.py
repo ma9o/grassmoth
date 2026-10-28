@@ -14,12 +14,12 @@ from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.observations.preparation import PreparedDataMetadata
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.observations.semantics import AnchorPolicy
-from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
-from grassmoth.artifacts.reports.checks import NotEvaluated
-from grassmoth.artifacts.reports.data_comparison import (
-    DescriptiveIndicatorComparison,
-    PredictiveIndicatorComparison,
+from grassmoth.artifacts.observations.spec import (
+    LabeledMeasurement,
+    NumericMeasurement,
+    ResolvedObservationSpec,
 )
+from grassmoth.artifacts.reports.checks import NotEvaluated
 from grassmoth.artifacts.reports.posterior_diagnostics import PosteriorPredictiveChecks
 from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
 from grassmoth.artifacts.simulation import (
@@ -48,7 +48,7 @@ def _dataset(values, *, number=1, times=None, variable=None):
     variable = variable or ResolvedObservationSpec(
         id="indicator:y",
         name="Y",
-        measurement_dtype="continuous",
+        measurement=NumericMeasurement(dtype="continuous"),
         aggregation="last",
         observation_window="1d",
     )
@@ -103,7 +103,7 @@ def test_single_histories_report_values_missingness_and_schedule_changes():
     left = _dataset([1, None, 3], times=[0, 1, 2])
     right = _dataset([1, 4, 8], times=[0, 1, 3], number=2)
     variable = compare_data_variables((left,), (right,))[0]
-    assert isinstance(variable, DescriptiveIndicatorComparison)
+    assert variable.predictive is None
     assert [item.kind for item in variable.changes] == ["revised", "removed", "added"]
     revised = variable.changes[0]
     assert revised.kind == "revised"
@@ -126,8 +126,8 @@ def test_replica_checks_are_symmetric_and_preserve_whole_history_statistics():
     ]
     forward = compare_data_variables(replicas, (observed,))[0]
     backward = compare_data_variables((observed,), replicas)[0]
-    assert isinstance(forward, PredictiveIndicatorComparison)
-    assert isinstance(backward, PredictiveIndicatorComparison)
+    assert forward.predictive is not None
+    assert backward.predictive is not None
     assert forward.predictive.reference_side == "right"
     assert backward.predictive.reference_side == "left"
     assert forward.predictive.evaluation == backward.predictive.evaluation
@@ -139,7 +139,7 @@ def test_replica_checks_are_symmetric_and_preserve_whole_history_statistics():
     assert checks.n_subsample == 3
     assert {item.code for item in forward.findings} == {"observation_schedule"}
     many = compare_data_variables(replicas, [observed, _dataset([0, 1, 2, 3], number=9)])[0]
-    assert isinstance(many, DescriptiveIndicatorComparison)
+    assert many.predictive is None
     means = next(item for item in many.statistics if item.statistic == "mean")
     assert len(means.left) == 3
     assert len(means.right) == 2
@@ -151,7 +151,7 @@ def test_predictive_support_follows_the_model_observation_semantics(aggregation)
     variable = ResolvedObservationSpec(
         id="indicator:y",
         name="Y",
-        measurement_dtype="count" if aggregation == "count" else "continuous",
+        measurement=NumericMeasurement(dtype="count" if aggregation == "count" else "continuous"),
         aggregation=aggregation,
         observation_window="1d",
     )
@@ -174,16 +174,16 @@ def test_predictive_support_follows_the_model_observation_semantics(aggregation)
     forward = compare_data_variables((observed,), replicas)[0]
     reverse = compare_data_variables(replicas, (observed,))[0]
     if variable.requires_interval_summary_measurement:
-        assert isinstance(forward, DescriptiveIndicatorComparison)
-        assert isinstance(reverse, DescriptiveIndicatorComparison)
+        assert forward.predictive is None
+        assert reverse.predictive is None
         assert {finding.code for finding in forward.findings} == {
             "observation_schedule",
             "observation_support",
         }
         assert forward.findings == reverse.findings
     else:
-        assert isinstance(forward, PredictiveIndicatorComparison)
-        assert isinstance(reverse, PredictiveIndicatorComparison)
+        assert forward.predictive is not None
+        assert reverse.predictive is not None
         assert isinstance(forward.predictive.evaluation, PosteriorPredictiveChecks)
         assert forward.predictive.evaluation == reverse.predictive.evaluation
         assert forward.findings == reverse.findings == ()
@@ -194,7 +194,7 @@ def test_measurement_mismatches_and_uncovered_times_do_not_produce_predictive_ch
     observed = _dataset([1, 2, 3])
     replicas = [_dataset([1, 2, 3], number=n, times=[0, 1, 2.5]) for n in (2, 3)]
     mismatch = compare_data_variables((observed,), replicas)[0]
-    assert isinstance(mismatch, DescriptiveIndicatorComparison)
+    assert mismatch.predictive is None
     assert {finding.code for finding in mismatch.findings} == {
         "observation_schedule",
         "observation_support",
@@ -202,7 +202,7 @@ def test_measurement_mismatches_and_uncovered_times_do_not_produce_predictive_ch
     missing = compare_data_variables(
         (observed,), [_dataset([1, None, 3], number=n) for n in (2, 3)]
     )[0]
-    assert isinstance(missing, PredictiveIndicatorComparison)
+    assert missing.predictive is not None
     assert isinstance(missing.predictive.evaluation, NotEvaluated)
     assert missing.predictive.evaluation.reason == "MISSING_REPLICATE_VALUES"
     assert missing.findings == ()
@@ -211,7 +211,7 @@ def test_measurement_mismatches_and_uncovered_times_do_not_produce_predictive_ch
         _dataset([1, 2, 3], number=n, variable=original.revised(aggregation="mean")) for n in (2, 3)
     ]
     mismatch = compare_data_variables((observed,), replicas)[0]
-    assert isinstance(mismatch, DescriptiveIndicatorComparison)
+    assert mismatch.predictive is None
     assert "measurement_definition" in {finding.code for finding in mismatch.findings}
     renamed = _dataset(
         [1, 2, 3], variable=original.revised(name="Renamed", observation_window="24h")
@@ -228,15 +228,14 @@ def test_discrete_codebooks_compare_frequencies_and_keep_absent_variables_explic
     variable = ResolvedObservationSpec(
         id="indicator:category",
         name="Category",
-        measurement_dtype="categorical",
+        measurement=LabeledMeasurement(dtype="categorical", levels=("a", "b", "c")),
         aggregation="last",
         observation_window="1d",
-        categorical_levels=("a", "b", "c"),
     )
     a = _dataset([0, 1, 1], variable=variable)
     b = [_dataset([2, 2, 1], number=n, variable=variable) for n in (2, 3)]
     result = compare_data_variables((a,), b)[0]
-    assert isinstance(result, DescriptiveIndicatorComparison)
+    assert result.predictive is None
     proportions = {item.level: item for item in result.statistics if item.statistic == "proportion"}
     assert proportions["c"].left == (0,)
     assert proportions["c"].right == pytest.approx((2 / 3, 2 / 3))

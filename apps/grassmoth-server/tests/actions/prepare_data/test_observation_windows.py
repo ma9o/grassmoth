@@ -50,7 +50,7 @@ def test_period_counts_keep_exact_bounds_and_missing_windows(window, start, miss
                         "observation": {
                             "id": "indicator:count",
                             "name": "Count",
-                            "measurement_dtype": "count",
+                            "measurement": {"dtype": "count"},
                             "aggregation": "sum",
                             "observation_window": window,
                         },
@@ -102,7 +102,7 @@ def test_mixed_indicator_windows_keep_their_own_calendar_bounds():
             {
                 "id": "indicator:" + window,
                 "name": window,
-                "measurement_dtype": "count",
+                "measurement": {"dtype": "count"},
                 "aggregation": "sum",
                 "observation_window": window,
             }

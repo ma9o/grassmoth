@@ -13,6 +13,7 @@ import polars as pl
 
 from grassmoth.actions.contracts.bodies import FitOutput
 from grassmoth.actions.fit.action import fit
+from grassmoth.actions.fit.inputs import FitInputs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
@@ -20,13 +21,14 @@ from grassmoth.artifacts.reports.inference import FitRuntime
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
     GaussianInitializationSpec,
+    GuidedPathSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     NutsTrajectorySpec,
-    ParticleAGradSpec,
     SamplerSpec,
 )
 from grassmoth.compute.budget import ComputeBudget, SharedMemoryBudget
+from grassmoth.compute.context import ModelExecutionContext
 from grassmoth.models.ssm.compile.inputs import compile_executable_model
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
@@ -113,21 +115,24 @@ def run(phase, output):
         compiled.clear()
         started = monotonic()
         result = fit(
-            question=question,
-            selection=selection,
-            data_for_model=data,
-            time_origin=ORIGIN,
-            sampler=sampler,
-            budget=budget,
+            FitInputs(
+                selection=selection,
+                question=question,
+                data_for_model=data,
+                sampler=sampler,
+                compute_loo_diagnostics=False,
+                previous=previous,
+            ),
+            execution_context=ModelExecutionContext(
+                compiler=compile_program,
+                prepare_program=prepare_program,
+                budget=budget,
+                clock=monotonic,
+                wall_clock=lambda: datetime.now(UTC),
+                logger=logging.getLogger(__name__),
+                profile=False,
+            ),
             runtime=runtime,
-            clock=monotonic,
-            wall_clock=lambda: datetime.now(UTC),
-            logger=logging.getLogger(__name__),
-            compiler=compile_program,
-            prepare_program=prepare_program,
-            compute_loo_diagnostics=False,
-            continuation=None if previous is None else previous.inference.evidence.checkpoint,
-            previous=previous,
         )
         assert isinstance(result, FitOutput), result
         requests = events["/jax/compilation_cache/compile_requests_use_cache"]
@@ -154,7 +159,7 @@ def run(phase, output):
             diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights"),
         ),
         "agrad": MarginalParticleGibbsSpec(
-            path_update=ParticleAGradSpec(num_particles=4),
+            path_update=GuidedPathSpec(method="particle_agrad", num_particles=4),
             initialization=GaussianInitializationSpec(),
             diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights"),
         ),

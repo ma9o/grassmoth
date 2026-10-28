@@ -25,7 +25,7 @@ from grassmoth.artifacts.probability.native import (
     persistence_to_decay,
     prior_reference_value,
 )
-from grassmoth.artifacts.reports.prior import PriorFailureStage, PriorValidationResult
+from grassmoth.artifacts.reports.prior import PriorValidationResult
 from grassmoth.compilation_errors import AggregatedCompileError
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.compile.bindings import (
@@ -117,25 +117,17 @@ def _format_interval_days(days: float) -> str:
 
 
 def _compile_warning(
-    *,
-    code: str,
-    parameter: str,
-    issue: str,
-    suggested_adjustment: str,
-    compiled_site_name: str | None = None,
-    compiled_flat_index: int | None = None,
-    failure_stage: PriorFailureStage | None = None,
+    binding: CompiledParameterBinding, *, issue: str, suggested_adjustment: str
 ) -> CompileDiagnostic:
-    """Build a typed non-fatal compile diagnostic."""
+    """Build a typed non-fatal compile diagnostic for one compiled prior coordinate."""
+    parameter = binding.site.prior_field or binding.site.name
     return CompileDiagnostic(
         parameter=parameter,
-        code=code,
         issue=issue,
         suggested_adjustment=suggested_adjustment,
         related_parameters=(parameter,),
-        compiled_site_name=compiled_site_name,
-        compiled_flat_index=compiled_flat_index,
-        failure_stage=failure_stage,
+        compiled_site_name=binding.site.name,
+        compiled_flat_index=binding.flat_index,
     )
 
 
@@ -221,16 +213,12 @@ def collect_first_order_approximation_warnings(
         except PriorCompilationError as exc:
             warnings.append(
                 _compile_warning(
-                    code="dt_ct_approximation_warning",
-                    parameter=binding.site.prior_field or binding.site.name,
+                    binding,
                     issue=f"{offdiag_label}: exact matrix-log CT diagnostic failed: {exc}",
                     suggested_adjustment=(
                         "Shrink the DT beta prior or elicit the prior directly on a real, stable "
                         "CT drift scale."
                     ),
-                    compiled_site_name=binding.site.name,
-                    compiled_flat_index=binding.flat_index,
-                    failure_stage="compiled_parameters",
                 )
             )
             continue
@@ -244,8 +232,7 @@ def collect_first_order_approximation_warnings(
             continue
         warnings.append(
             _compile_warning(
-                code="dt_ct_approximation_warning",
-                parameter=binding.site.prior_field or binding.site.name,
+                binding,
                 issue=(
                     f"{offdiag_label}: matrix-log mismatch; exact CT coupling at "
                     f"{_format_interval_days(interval_days)} is {abs(exact_value):.3f} 1/day "
@@ -259,9 +246,6 @@ def collect_first_order_approximation_warnings(
                     "reference interval, shrink the DT beta prior, or elicit the prior directly "
                     "on the CT rate."
                 ),
-                compiled_site_name=binding.site.name,
-                compiled_flat_index=binding.flat_index,
-                failure_stage="compiled_parameters",
             )
         )
     return warnings

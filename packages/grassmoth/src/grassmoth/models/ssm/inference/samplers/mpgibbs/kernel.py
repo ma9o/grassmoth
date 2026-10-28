@@ -38,7 +38,7 @@ rescales it whenever ``Sigma`` is re-estimated, keeping the average variance.
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import Literal, NamedTuple, Protocol, cast
+from typing import NamedTuple, Protocol, cast
 
 import jax
 import jax.numpy as jnp
@@ -48,6 +48,7 @@ from jax.scipy.linalg import solve_triangular
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
     MarginalParticleGibbsSpec,
+    ParameterProposal,
     ParticleDiagnosticMetric,
     PathUpdateSpec,
 )
@@ -198,12 +199,8 @@ def build_marginal_particle_gibbs_kernel(
     num_parameter_particles: int,
     param_step_size: float = INITIAL_PARAM_STEP_SIZE,
     target_accept: float | None = None,
-    min_scale: float = PARAM_STEP_SIZE_MIN,
-    max_scale: float = PARAM_STEP_SIZE_MAX,
     parameter_preconditioner_chol: Float[Array, "U U"] | None = None,
-    parameter_proposal: Literal[
-        "random_walk", "pseudo_langevin"
-    ] = _DEFAULT_OPTIONS.parameter_proposal,
+    parameter_proposal: ParameterProposal = _DEFAULT_OPTIONS.parameter_proposal,
     path_update: PathUpdateSpec = _DEFAULT_OPTIONS.path_update,
     paid_mix: PaidMixture | None = None,
     parameter_reference_path: Float[Array, "T D"] | None = None,
@@ -214,17 +211,12 @@ def build_marginal_particle_gibbs_kernel(
     diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=diagnostic_metrics)
     if num_parameter_particles < 2:
         raise ValueError("marginal_particle_gibbs requires num_parameter_particles >= 2.")
-    if min_scale > max_scale:
-        raise ValueError(
-            "marginal_particle_gibbs min_scale must be <= max_scale; "
-            f"got {min_scale} > {max_scale}."
-        )
     use_gradient_drift = parameter_proposal == "pseudo_langevin"
     if target_accept is None:
         target_accept = _DEFAULT_OPTIONS.param_target_accept
 
-    runtime_min_scale = scalar_operand(value=min_scale)
-    runtime_max_scale = scalar_operand(value=max_scale)
+    runtime_min_scale = scalar_operand(value=PARAM_STEP_SIZE_MIN)
+    runtime_max_scale = scalar_operand(value=PARAM_STEP_SIZE_MAX)
 
     assert all(
         isinstance(stage, (AdditiveRecurrences, ParallelRecurrences))
@@ -413,11 +405,9 @@ def build_marginal_particle_gibbs_kernel(
     ) -> SelectedParameter:
         with jax.named_scope("label_selection"):
             scores = finish_path_update(
-                prepared.boundary,
+                prepared,
                 ConditionalPathScores(smoother.label_scores),
                 target,
-                prepared.particles,
-                prepared.correction,
                 smoother.latent_path,
             )
             label = random.categorical(prepared.label_key, scores.log_probs).astype(jnp.int32)

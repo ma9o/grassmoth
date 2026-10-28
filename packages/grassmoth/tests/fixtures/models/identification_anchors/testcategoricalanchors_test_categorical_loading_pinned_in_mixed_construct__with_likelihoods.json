@@ -45,11 +45,11 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "mean",
             "name": "mood_rating",
-            "ordinal_levels": null,
-            "measurement_dtype": "continuous",
+            "measurement": {
+              "dtype": "continuous"
+            },
             "observation_window": null
           }
         },
@@ -106,15 +106,16 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": [
-              "a",
-              "b",
-              "c"
-            ],
             "aggregation": "last",
             "name": "mood_kind",
-            "ordinal_levels": null,
-            "measurement_dtype": "categorical",
+            "measurement": {
+              "dtype": "categorical",
+              "levels": [
+                "a",
+                "b",
+                "c"
+              ]
+            },
             "observation_window": null
           }
         }

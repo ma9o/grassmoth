@@ -54,6 +54,21 @@ type SweepPhase = EmptySweepPhase | CompiledSweepPhase
 
 
 @dataclass(frozen=True)
+class SweepProgram[Carry]:
+    """One sampler's transition as the sweep engine compiles, runs and reports it.
+
+    ``step_factory`` builds the transition for a node/root width up to
+    ``max_batch_size``; sweeps retain every transition output except
+    ``excluded_history``; ``label`` names the sampler in progress events.
+    """
+
+    step_factory: Callable[[int], Callable[[Carry, jax.Array], tuple[Carry, dict[str, jax.Array]]]]
+    label: str
+    max_batch_size: int = 1
+    excluded_history: frozenset[str] = frozenset()
+
+
+@dataclass(frozen=True)
 class SweepPlan:
     """Warmup and posterior blocks keep chain concurrency fixed throughout the fit."""
 
@@ -61,6 +76,7 @@ class SweepPlan:
     posterior: SweepPhase
     batch_size: int
     compiled_step: Compiled
+    label: str
     memory: MemoryDemand = NO_MEMORY_DEMAND
     projection: Compiled | None = None
     projection_arguments: tuple[jax.Array, ...] = ()

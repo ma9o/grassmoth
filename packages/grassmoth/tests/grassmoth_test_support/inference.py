@@ -259,7 +259,6 @@ def bind_panel_fixture(
     panel = bind_panel(
         dataset,
         compiled_dynamical_model=compiled_dynamical_model,
-        time_origin=origin,
         compiler=compile_program,
     )
     assert isinstance(panel, BoundPanel), panel

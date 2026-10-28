@@ -14,20 +14,18 @@ from grassmoth_server.study.persistence.log_codec import assemble_call_log
 
 if TYPE_CHECKING:
     from datetime import datetime
-    from uuid import UUID
 
+    from grassmoth_server.actions.contracts.call_state import CompletedCall, RunningCall
     from grassmoth_server.study.persistence.history import StudyRepository
-    from grassmoth_server.study.records import ActionMessage, FailedOutcome
+    from grassmoth_server.study.records import FailedOutcome
 
 _PROGRESS = TypeAdapter(tuple[ProgressEvent, ...])
 
 
 def collect_call_log(
     workspace_id: str,
+    call: RunningCall | CompletedCall,
     *,
-    seq: int,
-    attempt_id: UUID,
-    messages: tuple[ActionMessage, ...],
     at: datetime,
     failure: FailedOutcome | None = None,
 ) -> ActionLog:
@@ -35,9 +33,8 @@ def collect_call_log(
 
     Args:
         workspace_id: Workspace containing the attempt's scratch events and traces.
-        seq: Study sequence number identifying the run's trace directory.
-        attempt_id: Attempt whose progress events are included.
-        messages: Action messages already emitted by the workflow.
+        call: Sequenced call naming the trace directory, the attempt's progress events
+            and the action messages already emitted by the workflow.
         at: Timestamp to use when assembling the final log entries.
         failure: Rejection or exception to include in the log, if the attempt failed.
 
@@ -45,10 +42,10 @@ def collect_call_log(
         Combined action log ready to be published with the attempt.
     """
     return assemble_call_log(
-        messages,
+        call.messages,
         {
-            **collect_run_traces(workspace_id, seq),
-            "progress.json": _PROGRESS.dump_json(tuple(read_events(workspace_id, attempt_id))),
+            **collect_run_traces(workspace_id, call.seq),
+            "progress.json": _PROGRESS.dump_json(tuple(read_events(workspace_id, call.attempt_id))),
         },
         at=at,
         failure=failure,

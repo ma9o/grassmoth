@@ -2,6 +2,7 @@
 
 import { type PointerEvent, useEffect, useMemo, useRef, useState } from "react";
 import { formatModelDate, formatSignificant } from "@/lib/utils/format";
+import { CanvasChartFrame, ValueGridlines } from "./chart-frame";
 import { CHART_COLORS, type ChartColor, cssColor, resolveColor } from "./chart-tokens";
 import {
   type Domain,
@@ -9,6 +10,7 @@ import {
   extentOf,
   linePath,
   linearScale,
+  marginBox,
   padDomain,
   timeTicks,
   valueTicks,
@@ -152,13 +154,7 @@ export function DrawsChart({
 
   const geometry = useMemo(() => {
     if (!size) return null;
-    const margin = compact ? COMPACT_MARGIN : MARGIN;
-    const box: PlotBox = {
-      left: margin.left,
-      top: margin.top,
-      width: Math.max(1, size.width - margin.left - margin.right),
-      height: Math.max(1, size.height - margin.top - margin.bottom),
-    };
+    const box = marginBox(size.width, size.height, compact ? COMPACT_MARGIN : MARGIN);
     const span =
       timeWindow ??
       extentOf([...times, ...(observed?.supportStart ?? []), ...(observed?.supportEnd ?? [])]) ??
@@ -242,163 +238,150 @@ export function DrawsChart({
   const observedValue = hover ? observed?.values[hover.index] : undefined;
 
   return (
-    <div
-      ref={container}
-      className="relative w-full"
-      style={{ height }}
-      role="img"
-      aria-label={label}
+    <CanvasChartFrame
+      container={container}
+      canvas={canvas}
+      size={size}
+      height={height}
+      label={label}
     >
-      {size && geometry && (
+      {geometry && (
         <>
-          <canvas
-            ref={canvas}
-            className="absolute inset-0"
-            style={{ width: size.width, height: size.height }}
-          />
-          <svg
-            className="absolute inset-0 overflow-visible"
-            width={size.width}
-            height={size.height}
-            aria-hidden="true"
-          >
-            {!compact && (
-              <ChartAxes
-                geometry={geometry}
-                timeOrigin={timeOrigin}
-                levels={categorical ? levels : null}
-                xLabel={timeOrigin ? null : (xLabel ?? "Day")}
-              />
-            )}
-            {thresholds.map((threshold) => {
-              const py = geometry.y(threshold.value);
-              return (
-                <g key={threshold.label} stroke={cssColor(threshold.color)}>
-                  <line
-                    x1={geometry.box.left}
-                    x2={geometry.box.left + geometry.box.width}
-                    y1={py}
-                    y2={py}
-                    strokeDasharray="4 3"
-                  />
-                  {!compact && (
-                    <text
-                      x={geometry.box.left + geometry.box.width - 2}
-                      y={py - 3}
-                      textAnchor="end"
-                      fontSize={9}
-                      stroke="none"
-                      fill={cssColor(threshold.color)}
-                    >
-                      {threshold.label}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-            {markers.map((marker) => {
-              const px = geometry.x(marker.time);
-              if (px < geometry.box.left || px > geometry.box.left + geometry.box.width)
-                return null;
-              return (
-                <g key={`${marker.time}-${marker.label}`}>
-                  <line
-                    x1={px}
-                    x2={px}
-                    y1={geometry.box.top}
-                    y2={geometry.box.top + geometry.box.height}
-                    stroke={cssColor(CHART_COLORS.intervened)}
-                    strokeDasharray="3 3"
-                  />
-                  {!compact && (
-                    <text
-                      x={Math.min(px + 3, geometry.box.left + geometry.box.width - 30)}
-                      y={geometry.box.top - 4}
-                      fontSize={9}
-                      fill={cssColor(CHART_COLORS.intervened)}
-                    >
-                      {marker.label}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-            {!compact && (
-              <rect
-                x={geometry.box.left}
-                y={geometry.box.top}
-                width={geometry.box.width}
-                height={geometry.box.height}
-                fill="transparent"
-                onPointerMove={track}
-                onPointerLeave={() => setHover(null)}
-              />
-            )}
-            {observed && (
-              <ObservedMarks
-                observed={observed}
-                times={times}
-                geometry={geometry}
-                compact={compact}
-                describe={(index, value) => {
-                  const time = times[index];
-                  const start = observed.supportStart?.[index];
-                  const end = observed.supportEnd?.[index];
-                  return `${observed.label} · ${time === undefined ? "" : dateLabel(time)}: ${valueLabel(value)}${
-                    start != null && end != null
-                      ? ` · measured ${dateLabel(start)}–${dateLabel(end)}`
-                      : ""
-                  }`;
-                }}
-              />
-            )}
-            {hover?.row && hover.layer && (
-              <path
-                d={linePath(times, hover.row.values, geometry.x, geometry.y)}
-                fill="none"
-                stroke={cssColor(hover.layer.color)}
-                strokeWidth={2}
-                pointerEvents="none"
-              />
-            )}
-            {hoveredTime !== undefined && (
-              <line
-                x1={geometry.x(hoveredTime)}
-                x2={geometry.x(hoveredTime)}
-                y1={geometry.box.top}
-                y2={geometry.box.top + geometry.box.height}
-                stroke={cssColor(CHART_COLORS.axis)}
-                strokeOpacity={0.5}
-                pointerEvents="none"
-              />
-            )}
-            {!compact && (hoveredTime !== undefined || outside > 0) && (
-              <text
-                x={geometry.box.left + geometry.box.width}
-                y={geometry.box.top - 5}
-                textAnchor="end"
-                fontSize={9.5}
-                fill={cssColor(CHART_COLORS.axis)}
-              >
-                {hoveredTime !== undefined
-                  ? [
-                      dateLabel(hoveredTime),
-                      hover?.row && hover.layer && hoveredValue != null
-                        ? `${hover.layer.label} · ${hover.row.label}: ${valueLabel(hoveredValue)}`
-                        : null,
-                      observedValue != null && observed
-                        ? `${observed.label}: ${valueLabel(observedValue)}`
-                        : null,
-                    ]
-                      .filter((part) => part !== null)
-                      .join(" · ")
-                  : `${outside} of ${total} draws leave the frame`}
-              </text>
-            )}
-          </svg>
+          {!compact && (
+            <ChartAxes
+              geometry={geometry}
+              timeOrigin={timeOrigin}
+              levels={categorical ? levels : null}
+              xLabel={timeOrigin ? null : (xLabel ?? "Day")}
+            />
+          )}
+          {thresholds.map((threshold) => {
+            const py = geometry.y(threshold.value);
+            return (
+              <g key={threshold.label} stroke={cssColor(threshold.color)}>
+                <line
+                  x1={geometry.box.left}
+                  x2={geometry.box.left + geometry.box.width}
+                  y1={py}
+                  y2={py}
+                  strokeDasharray="4 3"
+                />
+                {!compact && (
+                  <text
+                    x={geometry.box.left + geometry.box.width - 2}
+                    y={py - 3}
+                    textAnchor="end"
+                    fontSize={9}
+                    stroke="none"
+                    fill={cssColor(threshold.color)}
+                  >
+                    {threshold.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+          {markers.map((marker) => {
+            const px = geometry.x(marker.time);
+            if (px < geometry.box.left || px > geometry.box.left + geometry.box.width) return null;
+            return (
+              <g key={`${marker.time}-${marker.label}`}>
+                <line
+                  x1={px}
+                  x2={px}
+                  y1={geometry.box.top}
+                  y2={geometry.box.top + geometry.box.height}
+                  stroke={cssColor(CHART_COLORS.intervened)}
+                  strokeDasharray="3 3"
+                />
+                {!compact && (
+                  <text
+                    x={Math.min(px + 3, geometry.box.left + geometry.box.width - 30)}
+                    y={geometry.box.top - 4}
+                    fontSize={9}
+                    fill={cssColor(CHART_COLORS.intervened)}
+                  >
+                    {marker.label}
+                  </text>
+                )}
+              </g>
+            );
+          })}
+          {!compact && (
+            <rect
+              x={geometry.box.left}
+              y={geometry.box.top}
+              width={geometry.box.width}
+              height={geometry.box.height}
+              fill="transparent"
+              onPointerMove={track}
+              onPointerLeave={() => setHover(null)}
+            />
+          )}
+          {observed && (
+            <ObservedMarks
+              observed={observed}
+              times={times}
+              geometry={geometry}
+              compact={compact}
+              describe={(index, value) => {
+                const time = times[index];
+                const start = observed.supportStart?.[index];
+                const end = observed.supportEnd?.[index];
+                return `${observed.label} · ${time === undefined ? "" : dateLabel(time)}: ${valueLabel(value)}${
+                  start != null && end != null
+                    ? ` · measured ${dateLabel(start)}–${dateLabel(end)}`
+                    : ""
+                }`;
+              }}
+            />
+          )}
+          {hover?.row && hover.layer && (
+            <path
+              d={linePath(times, hover.row.values, geometry.x, geometry.y)}
+              fill="none"
+              stroke={cssColor(hover.layer.color)}
+              strokeWidth={2}
+              pointerEvents="none"
+            />
+          )}
+          {hoveredTime !== undefined && (
+            <line
+              x1={geometry.x(hoveredTime)}
+              x2={geometry.x(hoveredTime)}
+              y1={geometry.box.top}
+              y2={geometry.box.top + geometry.box.height}
+              stroke={cssColor(CHART_COLORS.axis)}
+              strokeOpacity={0.5}
+              pointerEvents="none"
+            />
+          )}
+          {!compact && (hoveredTime !== undefined || outside > 0) && (
+            <text
+              x={geometry.box.left + geometry.box.width}
+              y={geometry.box.top - 5}
+              textAnchor="end"
+              fontSize={9.5}
+              fill={cssColor(CHART_COLORS.axis)}
+            >
+              {hoveredTime !== undefined
+                ? [
+                    dateLabel(hoveredTime),
+                    hover?.row && hover.layer && hoveredValue != null
+                      ? `${hover.layer.label} · ${hover.row.label}: ${valueLabel(hoveredValue)}`
+                      : null,
+                    observedValue != null && observed
+                      ? `${observed.label}: ${valueLabel(observedValue)}`
+                      : null,
+                  ]
+                    .filter((part) => part !== null)
+                    .join(" · ")
+                : `${outside} of ${total} draws leave the frame`}
+            </text>
+          )}
         </>
       )}
-    </div>
+    </CanvasChartFrame>
   );
 }
 
@@ -431,20 +414,7 @@ function ChartAxes({
   const bottom = box.top + box.height;
   return (
     <g fontSize={10} fill={cssColor(CHART_COLORS.axis)}>
-      {rows.map((tick) => (
-        <g key={tick.value}>
-          <line
-            x1={box.left}
-            x2={box.left + box.width}
-            y1={y(tick.value)}
-            y2={y(tick.value)}
-            stroke={cssColor(CHART_COLORS.grid)}
-          />
-          <text x={box.left - 6} y={y(tick.value)} textAnchor="end" dominantBaseline="middle">
-            {tick.label}
-          </text>
-        </g>
-      ))}
+      <ValueGridlines box={box} y={y} ticks={rows} />
       {columns.map((tick) => (
         <g key={tick.value}>
           <line

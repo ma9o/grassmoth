@@ -8,7 +8,7 @@ from grassmoth_server.storage import paths as data_module
 from grassmoth_server.study.calls import actions_enabled, parse_workspace_id
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_question
-from grassmoth_server.study.records import Applied
+from grassmoth_server.study.records import recorded_question
 
 
 def list_workspaces() -> Mapping[str, str | None]:
@@ -18,19 +18,7 @@ def list_workspaces() -> Mapping[str, str | None]:
         workspace_id = entry.rstrip("/").rsplit("/", 1)[-1]
         if not workspace_id or workspace_id.startswith("."):
             continue
-        repository = StudyRepository(workspace_id)
-        records = repository.attempts()
-        question = next(
-            (
-                item
-                for revision in records
-                if revision.record.attempt.action == "edit_question"
-                and isinstance(revision.record.attempt.outcome, Applied)
-                for item in revision.record.attempt.outcome.effects.produced
-                if item.artifact_id == "question"
-            ),
-            None,
-        )
+        question = recorded_question(StudyRepository(workspace_id).attempts())
         workspaces[workspace_id] = (
             read_question(ArtifactStore(workspace_id), question.revision).text
             if question is not None

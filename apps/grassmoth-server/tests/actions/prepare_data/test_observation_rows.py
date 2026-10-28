@@ -4,7 +4,7 @@ import polars as pl
 import pytest
 
 from grassmoth.artifacts.identity import IndicatorId
-from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
+from grassmoth.artifacts.observations.spec import NumericMeasurement, ResolvedObservationSpec
 
 pytestmark = pytest.mark.contract
 
@@ -28,7 +28,7 @@ class TestAnnotateObservationRows:
             ResolvedObservationSpec(
                 id=IndicatorId("indicator:3696aef3ff6f446744e5"),
                 name="stress_score",
-                measurement_dtype="continuous",
+                measurement=NumericMeasurement(dtype="continuous"),
                 aggregation="mean",
                 observation_window="1d",
             ),
@@ -58,7 +58,7 @@ class TestAnnotateObservationRows:
             ResolvedObservationSpec(
                 id=IndicatorId("indicator:8172ff8b9182b2e869c5"),
                 name="weekly_stress_score",
-                measurement_dtype="continuous",
+                measurement=NumericMeasurement(dtype="continuous"),
                 aggregation="mean",
                 observation_window="1w",
             ),
@@ -86,7 +86,7 @@ class TestAnnotateObservationRows:
             ResolvedObservationSpec(
                 id=IndicatorId("indicator:5dc4b94693df7e0aef53"),
                 name="closing_mood",
-                measurement_dtype="continuous",
+                measurement=NumericMeasurement(dtype="continuous"),
                 aggregation="last",
                 observation_window="1d",
             ),

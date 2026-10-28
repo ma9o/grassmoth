@@ -26,6 +26,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from grassmoth.public import DataRef
+    from grassmoth_server.study.state import ArtifactRecord
 
 
 class ActionMessage(Value):
@@ -164,11 +165,11 @@ class RecordDependency(Value):
     argument: str = Field(description="Input reference field name with its `_ref` suffix removed.")
 
 
-def failed_attempt(
+def action_attempt(
     request: ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid],
-    outcome: FailedOutcome,
+    outcome: Applied[GitOid] | FailedOutcome,
 ) -> ActionAttempt:
-    """Close the action/request relation for a rejection or execution failure."""
+    """Close the action/request relation with a saved result reference or a failure."""
     match request:
         case EditQuestionRequest():
             return EditQuestionAttempt(action="edit_question", request=request, outcome=outcome)
@@ -187,27 +188,19 @@ def failed_attempt(
     raise TypeError("Unknown action request")
 
 
-def applied_attempt(
-    request: ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid],
-    applied: Applied[GitOid],
-) -> ActionAttempt:
-    """Pair a saved result reference with its owning scientific request."""
-    match request:
-        case EditQuestionRequest():
-            return EditQuestionAttempt(action="edit_question", request=request, outcome=applied)
-        case EditModelRequest():
-            return EditAttempt(action="edit_model", request=request, outcome=applied)
-        case PrepareDataRequest():
-            return PrepareAttempt(action="prepare_data", request=request, outcome=applied)
-        case FitRequest():
-            return FitAttempt(action="fit", request=request, outcome=applied)
-        case SimulateRequest():
-            return SimulateAttempt(action="simulate", request=request, outcome=applied)
-        case DataDiffRequest():
-            return DataDiffAttempt(action="data_diff", request=request, outcome=applied)
-        case ModelDiffRequest():
-            return ModelDiffAttempt(action="model_diff", request=request, outcome=applied)
-    raise TypeError("Unknown action request")
+def recorded_question(revisions: Iterable[StudyRevision]) -> ArtifactRecord | None:
+    """The question produced by the study's applied edit_question, if it has one."""
+    return next(
+        (
+            item
+            for revision in revisions
+            if revision.record.attempt.action == "edit_question"
+            and isinstance(revision.record.attempt.outcome, Applied)
+            for item in revision.record.attempt.outcome.effects.produced
+            if item.artifact_id == "question"
+        ),
+        None,
+    )
 
 
 def argument_revisions(attempt: ActionAttempt) -> tuple[tuple[str, GitOid], ...]:

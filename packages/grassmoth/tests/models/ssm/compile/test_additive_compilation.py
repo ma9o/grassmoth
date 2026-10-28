@@ -149,7 +149,6 @@ def test_predictive_edge_findings_exclude_the_response_state(monkeypatch):
                 "1",
                 "0",
                 "Retain the declared parent edge.",
-                outcome="passed",
                 measurements=(),
             )
             for parent in target.edge_parents

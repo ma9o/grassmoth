@@ -54,7 +54,7 @@ def make_model(state_names: list[str], edges: Sequence[tuple[str, str]] = ()):
                         "observation": {
                             "id": fixture_entity_id("indicator", name + "_obs"),
                             "name": name + "_obs",
-                            "measurement_dtype": "continuous",
+                            "measurement": {"dtype": "continuous"},
                             "aggregation": "mean",
                         },
                         "construct_polarity": "positive",

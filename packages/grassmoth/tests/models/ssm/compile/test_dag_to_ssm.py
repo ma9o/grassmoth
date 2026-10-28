@@ -29,6 +29,7 @@ from grassmoth.artifacts.model.parameter_spec import (
 from grassmoth.artifacts.probability.families import PriorDistributionFamily
 from grassmoth.artifacts.probability.native import distribution_from_params
 from grassmoth.models.ssm import compiled_access as numeric
+from grassmoth.models.ssm.dynamics.expression import EdgeDrift
 from grassmoth.models.ssm.inference.prior_program import numpyro_model
 from grassmoth.models.ssm.parameterization import build_site_registry
 from grassmoth.models.ssm.priors import resolve_site_priors
@@ -572,7 +573,9 @@ class TestRuntimeStructuralSupport:
         compiled_dynamical_model = compile_model_fixture(dynamical_model_spec)
         components = compiled_dynamical_model.dynamics.spec.components
         assert {
-            (component.source, component.target) for component in components if component.edge_owned
+            (component.role.source, component.target)
+            for component in components
+            if isinstance(component.role, EdgeDrift)
         } == {(0, 1), (1, 0), (0, 2), (2, 0), (1, 2), (2, 1)}
         assert {component.target for component in components if not component.edge_owned} == {
             0,
@@ -848,15 +851,23 @@ class TestGradualBuildComponents:
 
         dynamical_model_spec = _hill_edge_emitted_for_saturating_edge_complete_test_model()
         edge_components = [
-            item
+            (item.role.source, item)
             for item in compile_model_fixture(dynamical_model_spec).dynamics.spec.components
-            if item.edge_owned
+            if isinstance(item.role, EdgeDrift)
         ]
-        hill = [item for item in edge_components if any(hill_applications(item.expression))]
-        linear = [item for item in edge_components if not any(hill_applications(item.expression))]
-        assert [(item.source, item.target) for item in hill] == [(0, 1)]
-        assert (1, 2) in [(item.source, item.target) for item in linear]
-        assert (0, 1) not in [(item.source, item.target) for item in linear]
+        hill = [
+            (source, item.target)
+            for source, item in edge_components
+            if any(hill_applications(item.expression))
+        ]
+        linear = [
+            (source, item.target)
+            for source, item in edge_components
+            if not any(hill_applications(item.expression))
+        ]
+        assert hill == [(0, 1)]
+        assert (1, 2) in linear
+        assert (0, 1) not in linear
 
     @pytest.mark.inference(concern="sampling")
     def test_freed_quartic_and_hill_sites_sample_finite(self):

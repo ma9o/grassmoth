@@ -1,9 +1,5 @@
 """Declared stopping composes the production gate without altering either exact engine."""
 
-import logging
-from datetime import UTC, datetime
-from time import monotonic
-
 import numpy as np
 import pytest
 
@@ -12,16 +8,16 @@ from grassmoth.artifacts.reports.checks import Evaluated, NumericCriterionEviden
 from grassmoth.artifacts.reports.posterior_diagnostics import ConvergenceReport
 from grassmoth.artifacts.sampling import (
     ConvergenceStoppingSpec,
+    GuidedPathSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     NutsTrajectorySpec,
     SamplerSpec,
-    TwistedParticleAGradSpec,
 )
 from grassmoth.models.ssm.inference.diagnostics import convergence
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.types import MCMCPosterior
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import nonlinear_fit_fixture
 
 
@@ -46,7 +42,9 @@ def test_stopping_spec_is_opt_in_and_has_positive_checkpoints():
 @pytest.mark.parametrize(
     "algorithm",
     [
-        MarginalParticleGibbsSpec(path_update=TwistedParticleAGradSpec(num_particles=8)),
+        MarginalParticleGibbsSpec(
+            path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=8)
+        ),
         NutsDASpec(trajectory=NutsTrajectorySpec(max_tree_depth=2)),
     ],
 )
@@ -61,13 +59,7 @@ def test_native_checks_and_stopping_keep_nonlinear_draws_and_frozen_tuning(algor
             prepared.prior_runtime_bundle,
             panel,
             sampler=settings.revised(stop_when_converged=policy),
-            compute_budget=COMPUTE_BUDGET,
-            reparam=None,
-            clock=monotonic,
-            compiler=compile_program,
-            prepare_program=prepare_program,
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
+            execution_context=EXECUTION_CONTEXT,
         )
         assert isinstance(result, MCMCPosterior)
         return result
@@ -140,13 +132,7 @@ def test_native_checks_and_stopping_keep_nonlinear_draws_and_frozen_tuning(algor
         panel,
         sampler=settings.revised(num_warmup=0, num_samples_per_chain=4),
         continuation=stopped.diagnostics.checkpoint,
-        compute_budget=COMPUTE_BUDGET,
-        reparam=None,
-        clock=monotonic,
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(resumed, MCMCPosterior)
     assert resumed.draws.latent_paths is not None

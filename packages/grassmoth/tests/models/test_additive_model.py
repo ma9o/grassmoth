@@ -49,7 +49,7 @@ def _model():
                         "indicator:y": {
                             "observation": {
                                 "name": "measured_y",
-                                "measurement_dtype": "continuous",
+                                "measurement": {"dtype": "continuous"},
                                 "aggregation": "mean",
                             },
                             "construct_polarity": "positive",

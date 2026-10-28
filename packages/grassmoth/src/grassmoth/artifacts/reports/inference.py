@@ -32,6 +32,8 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 from grassmoth.artifacts.reports.scorecard import FrequencyRefresh, RegionalMovement
 from grassmoth.artifacts.sampling import SamplerSpec
 
+type PhaseOutcome = Literal["complete", "failed"]
+
 
 class InferencePhase(Value):
     """Measured interval relative to this execution's start; intervals may overlap."""
@@ -40,7 +42,7 @@ class InferencePhase(Value):
     stage: str
     start_seconds: float
     end_seconds: float
-    outcome: Literal["complete", "failed"]
+    outcome: PhaseOutcome
 
 
 class FitRuntime(Value):

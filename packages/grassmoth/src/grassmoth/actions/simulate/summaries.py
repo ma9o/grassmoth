@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from grassmoth.artifacts.reports.display_frames import central_frame
-from grassmoth.artifacts.simulation import CategoryProbabilitySummary, SimulationSummary
+from grassmoth.artifacts.simulation import (
+    CategoryProbabilitySummary,
+    PairedArmSimulation,
+    SimulationSummary,
+)
 
 if TYPE_CHECKING:
     from grassmoth.artifacts.simulation import SimulationEvidence
@@ -30,20 +34,19 @@ def category_probabilities(
     )
 
 
-def simulation_summary(
-    evidence: SimulationEvidence,
-    latent: np.ndarray,
-    observed: np.ndarray,
-    mask: np.ndarray,
-    reference: np.ndarray | None,
-    reference_observed: np.ndarray | None,
-) -> SimulationSummary:
+def simulation_summary(evidence: SimulationEvidence) -> SimulationSummary:
     """Reduce the full saved draws once; a chart's page never changes its summaries."""
+    latent = evidence.arms.action.latent_paths.values
+    observed = evidence.arms.action.observations.values
+    mask = evidence.observation_layout.mask.values
+    reference_arm = (
+        evidence.arms.reference if isinstance(evidence.arms, PairedArmSimulation) else None
+    )
+    reference = None if reference_arm is None else reference_arm.latent_paths.values
+    reference_observed = None if reference_arm is None else reference_arm.observations.values
     variables = evidence.observation_layout.variables
     category_levels = {
-        index: ("0", "1")
-        if variable.measurement_dtype == "binary"
-        else variable.ordinal_levels or variable.categorical_levels
+        index: ("0", "1") if variable.measurement.dtype == "binary" else variable.levels
         for index, variable in enumerate(variables)
     }
     states = np.concatenate((latent, reference)) if reference is not None else latent
@@ -70,14 +73,14 @@ def simulation_summary(
                 observed[:, :, index], mask[:, :, index], levels
             )
             for index, levels in category_levels.items()
-            if levels is not None
+            if levels
         },
         reference_category_probabilities={
             variables[index].id: category_probabilities(
                 reference_observed[:, :, index], mask[:, :, index], levels
             )
             for index, levels in category_levels.items()
-            if levels is not None
+            if levels
         }
         if reference_observed is not None
         else {},

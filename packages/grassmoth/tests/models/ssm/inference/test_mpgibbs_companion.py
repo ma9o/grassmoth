@@ -1,22 +1,17 @@
 """Companion moves are exact parameter transitions with their own warmup-adapted steps."""
 
-import logging
-import time
-from datetime import UTC, datetime
-
 import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
-from pydantic import ValidationError
 
 from grassmoth.artifacts.sampling import (
     DsmcSpec,
     GaussianInitializationSpec,
-    GaussianReferenceTemperingSpec,
+    GuidedPathSpec,
     MarginalParticleGibbsSpec,
     SamplerSpec,
-    TwistedParticleAGradSpec,
+    UntemperedSpec,
 )
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
@@ -35,7 +30,7 @@ from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
     prepare_particle_initialization,
 )
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT, compile_program
 from grassmoth_test_support.interval_particle import gaussian_interval_case
 from packages.grassmoth.tests.models.ssm.inference.test_joint_coordinates import (
     _correlated_target,
@@ -43,16 +38,14 @@ from packages.grassmoth.tests.models.ssm.inference.test_joint_coordinates import
 
 
 @pytest.mark.contract
-def test_companion_choice_identifies_the_kernel_and_excludes_tempering():
+def test_companion_choice_identifies_the_kernel():
     identities = {
-        SamplerSpec(algorithm=MarginalParticleGibbsSpec(companion=choice)).kernel_identity
+        SamplerSpec(
+            algorithm=MarginalParticleGibbsSpec(tempering=UntemperedSpec(companion=choice))
+        ).kernel_identity
         for choice in ("none", "centred_mh", "centred_and_scale_noncentred_mh", "centred_nuts")
     }
     assert len(identities) == 4
-    with pytest.raises(ValidationError, match="tempering"):
-        MarginalParticleGibbsSpec(
-            companion="centred_mh", tempering=GaussianReferenceTemperingSpec()
-        )
 
 
 @pytest.mark.inference(concern="sampling")
@@ -183,11 +176,15 @@ def test_centred_nuts_preserves_the_joint_posterior_and_freezes_its_adaptation()
             ("centred_mh", "scale_noncentred_mh"),
             DsmcSpec(num_particles=4),
         ),
-        ("centred_mh", ("centred_mh",), TwistedParticleAGradSpec(num_particles=4)),
+        (
+            "centred_mh",
+            ("centred_mh",),
+            GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
+        ),
         (
             "centred_and_scale_noncentred_mh",
             ("centred_mh", "scale_noncentred_mh"),
-            TwistedParticleAGradSpec(num_particles=4),
+            GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
         ),
         ("centred_nuts", ("centred_nuts",), DsmcSpec(num_particles=4)),
     ],
@@ -209,8 +206,7 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, 
         spec=GaussianInitializationSpec(),
         key=jax.random.key(3),
         num_chains=2,
-        compute_budget=COMPUTE_BUDGET,
-        compiler=compile_program,
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(initialization, ParticleInitialization)
     kernel = build_marginal_particle_gibbs_kernel(
@@ -231,18 +227,10 @@ def test_each_companion_adapts_its_own_step_in_warmup_and_freezes_it(companion, 
             parameter_gradient=kernel.parameter_gradient_fn,
             compiler=compile_program,
         ),
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        num_warmup=60,
-        num_samples=20,
-        num_chains=2,
+        sampler=SamplerSpec(num_warmup=60, num_samples_per_chain=20, num_chains=2),
         key=jax.random.key(11),
-        adaptation_rate=0.05,
         initialization=initialization,
-        compute_budget=COMPUTE_BUDGET,
-        clock=time.monotonic,
-        wall_clock=lambda: datetime.now(UTC),
-        logger=logging.getLogger(__name__),
+        execution_context=EXECUTION_CONTEXT,
     )
     for move in moves:
         warmup = np.asarray(result.warmup_chain_extra_fields[f"{move}_step_size"])

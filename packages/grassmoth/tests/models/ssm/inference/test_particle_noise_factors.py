@@ -130,9 +130,7 @@ def test_prepared_noise_matches_native_values_and_gradients(with_interval):
             return target.transition_log_prob_with_noise(bound, factors, previous, current, index)
 
         def prepared_observation(state, index):
-            return target.observation_increment_with_noise(
-                bound, factors, state, index, target.observations
-            )
+            return target.observation_increment_with_noise(bound, factors, state, index)
 
         transition_args = (states[:-1], states[1:], jnp.arange(1, len(times)))
         observed_args = (states, jnp.arange(len(times)))

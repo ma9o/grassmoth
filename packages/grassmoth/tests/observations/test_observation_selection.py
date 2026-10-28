@@ -11,7 +11,7 @@ from grassmoth.artifacts.observations.dataset import (
     ObservationDefinitionMismatch,
     SelectedObservations,
 )
-from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
+from grassmoth.artifacts.observations.spec import LabeledMeasurement, ResolvedObservationSpec
 from grassmoth.models.ssm.preparation.binding import PanelPreparationFailure, bind_panel
 from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.inference import compile_model_fixture
@@ -27,7 +27,7 @@ def _dataset(variable):
         pl.DataFrame(
             {
                 "indicator_id": [variable.id] * 2,
-                "value": [0.0, 1.0] if variable.measurement_dtype == "categorical" else [1.0, 2.0],
+                "value": [0.0, 1.0] if variable.measurement.dtype == "categorical" else [1.0, 2.0],
                 "anchor_time": anchors,
                 "support_start": anchors,
                 "support_end": anchors,
@@ -59,7 +59,7 @@ def test_selection_accepts_renames_and_equivalent_windows_but_requires_identity(
 
 @pytest.mark.parametrize(
     "changes",
-    [{"aggregation": "mean"}, {"observation_window": "2d"}, {"measurement_dtype": "count"}],
+    [{"aggregation": "mean"}, {"observation_window": "2d"}, {"measurement": {"dtype": "count"}}],
 )
 def test_fit_rejects_changed_definitions_before_projecting_observations(changes, monkeypatch):
     from grassmoth.models.ssm.preparation import binding as runtime
@@ -90,7 +90,6 @@ def test_fit_rejects_changed_definitions_before_projecting_observations(changes,
     result = bind_panel(
         dataset,
         compiled_dynamical_model=compiled_dynamical_model,
-        time_origin=_ORIGIN,
         compiler=compile_program,
     )
     assert isinstance(result, PanelPreparationFailure)
@@ -101,10 +100,9 @@ def test_definition_equality_preserves_ordered_codebooks():
     observation = ResolvedObservationSpec(
         id="indicator:category",
         name="Category",
-        measurement_dtype="categorical",
+        measurement=LabeledMeasurement(dtype="categorical", levels=("home", "work")),
         aggregation="last",
         observation_window="1d",
-        categorical_levels=("home", "work"),
     )
     assert (
         observation.definition
@@ -112,14 +110,10 @@ def test_definition_equality_preserves_ordered_codebooks():
             id="indicator:renamed", name="Renamed", observation_window="24h"
         ).definition
     )
-    assert (
-        observation.definition
-        != observation.revised(categorical_levels=("work", "home")).definition
+    reordered = observation.revised(
+        measurement=LabeledMeasurement(dtype="categorical", levels=("work", "home"))
     )
+    assert observation.definition != reordered.definition
 
-    mismatch = _dataset(observation).select(
-        (observation.revised(categorical_levels=("work", "home")),)
-    )
+    mismatch = _dataset(observation).select((reordered,))
     assert isinstance(mismatch, ObservationDefinitionMismatch)
-    with pytest.raises(ValueError, match="ordinal_levels requires"):
-        observation.revised(ordinal_levels=("low", "high"))

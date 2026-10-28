@@ -9,12 +9,15 @@ from __future__ import annotations
 import pytest
 
 from grassmoth.artifacts.model.construct import replace_constructs
+from grassmoth.artifacts.reports.identification import IdentifiedTreatmentStatus
 from grassmoth.models.causal.identification import check_identifiability
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_test_support.causal_graphs import make_graph
 from grassmoth_test_support.helpers import fixture_entity_id
 
 pytestmark = pytest.mark.contract
+
+X = fixture_entity_id("construct", "X")
 
 
 def _iv_graph():
@@ -37,8 +40,8 @@ class TestIVAllowedDefault:
             outcome_id=fixture_entity_id("construct", "Y"),
             observed_constructs={"X", "Y", "Z"},
         )
-        assert "X" not in result.identifiable_treatments
-        assert "X" in result.non_identifiable_treatments
+        assert X not in result.estimable_treatments
+        assert X in result.non_identifiable
 
 
 class TestIVAllowedFalse:
@@ -58,9 +61,11 @@ class TestIVAllowedFalse:
             iv_allowed=False,
         )
 
-        assert result_with_iv.identifiable_treatments["X"].instruments == ("Z",)
-        assert "X" not in result_no_iv.identifiable_treatments
-        assert "X" in result_no_iv.non_identifiable_treatments
+        finding = result_with_iv.treatments[X]
+        assert isinstance(finding, IdentifiedTreatmentStatus)
+        assert finding.instruments == (fixture_entity_id("construct", "Z"),)
+        assert X not in result_no_iv.estimable_treatments
+        assert X in result_no_iv.non_identifiable
 
     def test_disabled_iv_gate_preserves_do_calculus_identifications(self):
         """The IV gate does not change nonparametric identification."""
@@ -81,12 +86,10 @@ class TestIVAllowedFalse:
             iv_allowed=False,
         )
 
-        assert "X" in result_with_iv.identifiable_treatments
-        assert "X" in result_no_iv.identifiable_treatments
-        assert (
-            result_with_iv.identifiable_treatments["X"].estimand
-            == result_no_iv.identifiable_treatments["X"].estimand
-        )
+        with_iv, no_iv = result_with_iv.treatments[X], result_no_iv.treatments[X]
+        assert isinstance(with_iv, IdentifiedTreatmentStatus)
+        assert isinstance(no_iv, IdentifiedTreatmentStatus)
+        assert with_iv.estimand == no_iv.estimand
 
 
 def test_model_reporting_keeps_nonparametric_findings_without_linear_iv_assumptions():

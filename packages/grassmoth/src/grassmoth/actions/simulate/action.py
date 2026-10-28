@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, cast
 import numpy as np
 
 from grassmoth.actions.contracts.bodies import SimulateOutput
+from grassmoth.actions.simulate.inputs import FittedLaw
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.simulation import (
     FitReliability,
@@ -28,28 +29,20 @@ if TYPE_CHECKING:
     import dynestyx as dsx
     from jax import Array
 
-    from grassmoth.artifacts.identity import GitRef
-    from grassmoth.artifacts.reports.inference import InferenceReportCore
-    from grassmoth.artifacts.reports.predictive_provenance import PredictiveLawProvenance
-    from grassmoth.artifacts.simulation import SimulationSpec
+    from grassmoth.actions.simulate.inputs import PredictiveLaw, SimulationInputs
     from grassmoth.compute.budget import ComputeBudget
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
     from grassmoth.models.structure import StructuralSelection
 
 
 def _simulate(
-    selection: StructuralSelection,
-    design: SimulationSpec,
-    *,
-    seed: int,
-    num_replicates: int,
-    budget: ComputeBudget,
-    fitted: tuple[GitRef, InferenceReportCore] | None,
+    inputs: SimulationInputs, *, budget: ComputeBudget
 ) -> SimulationEvidence | ObservationPreflightFailure:
     """Generate current model histories; data_diff compares the saved observations separately."""
     from grassmoth.models.ssm.compile.inputs import compile_executable_model
 
-    compiled_dynamical_model = compile_executable_model(selection)
+    design = inputs.design
+    compiled_dynamical_model = compile_executable_model(inputs.selection)
     time_origin = next(
         (
             law.layout.time_origin
@@ -67,8 +60,8 @@ def _simulate(
         end=end,
         assignments=assignments,
         time_origin=time_origin,
-        seed=seed,
-        draws=num_replicates,
+        seed=inputs.seed,
+        draws=inputs.num_replicates,
     )
     if isinstance(batch, ObservationPreflightFailure):
         return batch
@@ -96,9 +89,7 @@ def _simulate(
             action=action,
             reference=reference,
             causal=summarize_causal_simulation(
-                selection,
-                design,
-                fitted=fitted,
+                inputs,
                 action=action,
                 reference=reference,
                 state_ids=state_ids,
@@ -127,10 +118,7 @@ def _simulate(
 
 
 def simulation_report(
-    selection: StructuralSelection,
-    evidence: SimulationEvidence,
-    law: PredictiveLawProvenance,
-    law_report: InferenceReportCore | None,
+    selection: StructuralSelection, evidence: SimulationEvidence, law: PredictiveLaw
 ) -> SimulationReport:
     """Evaluate this simulation's findings from its already generated histories."""
     import equinox as eqx
@@ -138,10 +126,6 @@ def simulation_report(
     import jax.numpy as jnp
 
     from grassmoth.actions.simulate.summaries import simulation_summary
-    from grassmoth.artifacts.reports.predictive_provenance import (
-        FittedLawProvenance,
-        MixedLawProvenance,
-    )
     from grassmoth.models.ssm.compile.inputs import compile_executable_model
     from grassmoth.models.ssm.diagnostics.simulation import DesignInfo
     from grassmoth.models.ssm.inference.diagnostics.convergence import convergence_failures
@@ -150,36 +134,30 @@ def simulation_report(
     from grassmoth.models.ssm.predictive.types import PredictiveDraws, PredictiveTrajectory
     from grassmoth.models.ssm.preparation.observations import recorded_observation_support
 
-    reliability: FitReliability = "unknown" if law.kind == "unknown" else "not_fitted"
-    if isinstance(law, (FittedLawProvenance, MixedLawProvenance)):
-        assert law_report is not None, "Fitted provenance supplies its retained report"
-        reliability = (
-            "unknown"
-            if law_report.inference_diagnostics is None
-            else "unconverged"
-            if convergence_failures(law_report.convergence)
-            else "converged"
-        )
+    reliability: FitReliability
+    match law:
+        case FittedLaw(provenance=provenance, report=report):
+            reliability = (
+                "unknown"
+                if report.inference_diagnostics is None
+                else "unconverged"
+                if convergence_failures(report.convergence)
+                else "converged"
+            )
+        case _:
+            provenance = law
+            reliability = "unknown" if law.kind == "unknown" else "not_fitted"
     latents = evidence.arms.action.latent_paths.values
     observations = evidence.arms.action.observations.values
     mask = evidence.observation_layout.mask.values
-    reference = (
-        evidence.arms.reference.latent_paths.values
-        if isinstance(evidence.arms, PairedArmSimulation)
-        else None
-    )
     reference_observations = (
         evidence.arms.reference.observations.values
         if isinstance(evidence.arms, PairedArmSimulation)
         else None
     )
     for index, variable in enumerate(evidence.observation_layout.variables):
-        levels = (
-            ("0", "1")
-            if variable.measurement_dtype == "binary"
-            else variable.ordinal_levels or variable.categorical_levels
-        )
-        if levels is None:
+        levels = ("0", "1") if variable.measurement.dtype == "binary" else variable.levels
+        if not levels:
             continue
         for buffer in (observations, reference_observations):
             if buffer is None:
@@ -190,9 +168,7 @@ def simulation_report(
                 raise ValueError(
                     "Saved simulation emissions differ from their declared category codes"
                 )
-    summary = simulation_summary(
-        evidence, latents, observations, mask, reference, reference_observations
-    )
+    summary = simulation_summary(evidence)
     compiled_dynamical_model = compile_executable_model(selection)
     times = jnp.asarray(evidence.times)
     parameters = {name: jnp.asarray(ref.values) for name, ref in evidence.parameter_draws.items()}
@@ -255,33 +231,23 @@ def simulation_report(
     return SimulationReport(
         evidence=evidence,
         summary=summary,
-        law=law,
+        law=provenance,
         findings=findings,
         fit_reliability=reliability,
     )
 
 
 def simulate(
-    selection: StructuralSelection,
-    design: SimulationSpec,
-    *,
-    seed: int,
-    num_replicates: int,
-    budget: ComputeBudget,
-    law: PredictiveLawProvenance,
-    law_report: InferenceReportCore | None,
-    fitted: tuple[GitRef, InferenceReportCore] | None,
+    inputs: SimulationInputs, *, budget: ComputeBudget
 ) -> SimulateOutput | ObservationPreflightFailure:
     """Generate and evaluate complete histories using resolved scientific evidence."""
     from grassmoth.study.projections.visuals import simulation_observation_histories
 
-    evidence = _simulate(
-        selection, design, seed=seed, num_replicates=num_replicates, budget=budget, fitted=fitted
-    )
+    evidence = _simulate(inputs, budget=budget)
     if isinstance(evidence, ObservationPreflightFailure):
         return evidence
     return SimulateOutput(
-        report=simulation_report(selection, evidence, law, law_report),
+        report=simulation_report(inputs.selection, evidence, inputs.law),
         data=simulation_observation_histories(
             evidence,
             evidence.arms.action.observations.values,

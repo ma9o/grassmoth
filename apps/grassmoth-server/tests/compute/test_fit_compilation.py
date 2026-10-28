@@ -1,8 +1,6 @@
 """Particle fits reuse JAX executables across nonstructural settings changes."""
 
-import logging
-from datetime import UTC, datetime
-from time import monotonic
+from dataclasses import replace
 
 import jax
 import numpy as np
@@ -13,6 +11,7 @@ from grassmoth.artifacts.sampling import (
     DsmcSpec,
     FixedLatentStepSpec,
     GaussianInitializationSpec,
+    SamplerSpec,
 )
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
@@ -29,7 +28,7 @@ from grassmoth_server.compute.compilation_cache import (
     local_compilation_cache,
     prepare_program,
 )
-from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.interval_particle import interval_target
 
 pytestmark = [pytest.mark.inference(concern="sampling"), pytest.mark.inference(concern="warmup")]
@@ -44,8 +43,7 @@ def test_particle_fit_settings_reuse_jax_executable_and_preserve_transitions(tmp
         spec=GaussianInitializationSpec(),
         key=jax.random.key(91),
         num_chains=2,
-        compute_budget=COMPUTE_BUDGET,
-        compiler=compile_program,
+        execution_context=replace(EXECUTION_CONTEXT, compiler=compile_program),
     )
     assert isinstance(initialization, ParticleInitialization)
     active = False
@@ -67,7 +65,7 @@ def test_particle_fit_settings_reuse_jax_executable_and_preserve_transitions(tmp
 
     def prepare(function, *args, **kwargs):
         compile_function, operands, shapes, memory = prepare_program(function, *args, **kwargs)
-        if function.__name__ != "block":
+        if function.__name__ != "production_sweep":
             return compile_function, operands, shapes, memory
 
         def compile_sweep():
@@ -110,19 +108,15 @@ def test_particle_fit_settings_reuse_jax_executable_and_preserve_transitions(tmp
             results.append(
                 run_marginal_particle_gibbs(
                     target,
-                    compiler=compile_program,
-                    prepare_program=prepare,
                     kernel=kernel,
-                    num_warmup=warmup,
-                    num_samples=samples,
-                    num_chains=2,
+                    sampler=SamplerSpec(
+                        num_warmup=warmup, num_samples_per_chain=samples, num_chains=2
+                    ),
                     key=jax.random.key(123),
-                    adaptation_rate=0.05,
                     initialization=initialization,
-                    compute_budget=COMPUTE_BUDGET,
-                    clock=monotonic,
-                    wall_clock=lambda: datetime.now(UTC),
-                    logger=logging.getLogger(__name__),
+                    execution_context=replace(
+                        EXECUTION_CONTEXT, compiler=compile_program, prepare_program=prepare
+                    ),
                 )
             )
     assert len(keys) == 3

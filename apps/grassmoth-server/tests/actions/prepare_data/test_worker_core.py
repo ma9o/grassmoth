@@ -20,7 +20,7 @@ def _measurement_structure():
                     "observation": {
                         "id": IndicatorId("indicator:6bde869aba53fb51e0f4"),
                         "name": "pss_score",
-                        "measurement_dtype": "continuous",
+                        "measurement": {"dtype": "continuous"},
                         "aggregation": "mean",
                     },
                     "extraction": {
@@ -32,7 +32,7 @@ def _measurement_structure():
                     "observation": {
                         "id": IndicatorId("indicator:9866c549bd1c25f0a5d7"),
                         "name": "sleep_hours",
-                        "measurement_dtype": "continuous",
+                        "measurement": {"dtype": "continuous"},
                         "aggregation": "mean",
                     },
                     "extraction": {
@@ -78,7 +78,7 @@ class TestFormatIndicators:
                             "observation": {
                                 "id": "indicator:x",
                                 "name": "x",
-                                "measurement_dtype": "continuous",
+                                "measurement": {"dtype": "continuous"},
                                 "aggregation": "mean",
                             },
                             "extraction": {"kind": "semantic"},
@@ -97,7 +97,7 @@ class TestFormatIndicators:
                         "observation": {
                             "id": IndicatorId("indicator:fortnightly_pss_score"),
                             "name": "fortnightly_pss_score",
-                            "measurement_dtype": "continuous",
+                            "measurement": {"dtype": "continuous"},
                             "aggregation": "mean",
                             "observation_window": "2w",
                         },

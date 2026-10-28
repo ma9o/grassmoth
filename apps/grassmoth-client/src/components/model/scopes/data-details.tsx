@@ -16,7 +16,7 @@ import { extentOf } from "@/components/charts/plot-geometry";
 import { dataComparisonChart } from "@/components/charts/series-adapters";
 
 function comparisonEvaluation(variable: DataVariableView) {
-  return "predictive" in variable ? variable.predictive.evaluation : null;
+  return variable.predictive?.evaluation ?? null;
 }
 
 export function DataComparisonOutcome({

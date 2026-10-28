@@ -12,6 +12,7 @@ from grassmoth.actions.fit.conditioning import condition_model
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.likelihood import ObservationLawSpec
+from grassmoth.artifacts.observations.spec import LabeledMeasurement
 from grassmoth.models.ssm.inference.types import JointPosteriorDraws
 from grassmoth.models.ssm.parameterization import (
     assemble_deterministics_from_registry,
@@ -65,8 +66,9 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
         construct = dynamical_model_spec.constructs[1]
         indicator = construct.indicators[0].revised(
             observation=construct.indicators[0].observation.revised(
-                measurement_dtype="categorical",
-                categorical_levels=("low", "medium", "high"),
+                measurement=LabeledMeasurement(
+                    dtype="categorical", levels=("low", "medium", "high")
+                ),
                 aggregation="last",
             ),
             likelihood=LikelihoodSpec(
@@ -183,7 +185,9 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
                         indicators=(
                             indicator.revised(
                                 observation=indicator.observation.revised(
-                                    categorical_levels=("medium", "low", "high")
+                                    measurement=LabeledMeasurement(
+                                        dtype="categorical", levels=("medium", "low", "high")
+                                    )
                                 )
                             ),
                         )

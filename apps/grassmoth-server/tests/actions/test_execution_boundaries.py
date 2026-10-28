@@ -100,7 +100,7 @@ def test_partial_model_revisions_remain_readable_with_capability_findings(worksp
 def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monkeypatch):
     from threading import get_ident
 
-    from grassmoth.actions.fit import execution
+    from grassmoth.models.ssm.inference import fit as inference_fit
     from grassmoth_server.study.persistence import store as store_module
     from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
 
@@ -114,7 +114,7 @@ def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monke
     monkeypatch.setattr(store_module, "read_model", read_model_off_loop)
 
     local = Mock()
-    monkeypatch.setattr(execution, "fit_prepared_model", local)
+    monkeypatch.setattr(inference_fit, "fit", local)
     store = ArtifactStore(workspace)
     model = store.write_artifact(
         "model",
@@ -224,8 +224,8 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
         particle_posterior,
     )
 
-    def fit(**kwargs):
-        model = kwargs["selection"].dynamical_model_spec
+    def fit(inputs, **_kwargs):
+        model = inputs.selection.dynamical_model_spec
         assert model == edited
         conditioned, _ = condition_model(
             model,
@@ -242,11 +242,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
 
         return FitOutput(
             dynamical_model_spec=conditioned,
-            checks=fit_check_report(
-                kwargs["selection"],
-                kwargs["question"],
-                kwargs["data_for_model"],
-            ),
+            checks=fit_check_report(inputs.selection, inputs.question, inputs.data_for_model),
             inference=_report(conditioned),
         )
 
@@ -263,7 +259,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
         ),
     )
     local_fit = Mock(side_effect=fit)
-    modal_fit = Mock(side_effect=lambda _hardware, **kwargs: fit(**kwargs))
+    modal_fit = Mock(side_effect=fit)
     monkeypatch.setattr(flow, "run_fit", local_fit)
     monkeypatch.setattr(remote, "fit_on_modal", modal_fit)
     pins: dict[ArtifactId, GitOid] = {
@@ -288,13 +284,12 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     assert effects.effects.produced[0].derived_from == pins
     if hardware is InferenceHardware.LOCAL:
         local_fit.assert_called_once()
-        assert local_fit.call_args.kwargs["profile"] is True
         assert local_fit.call_args.kwargs["profile_dir"] is not None
         modal_fit.assert_not_called()
     else:
         local_fit.assert_not_called()
         modal_fit.assert_called_once()
-        assert modal_fit.call_args.args == (hardware,)
+        assert modal_fit.call_args.args[0].sampler.hardware is hardware
         assert modal_fit.call_args.kwargs["profile"] is True
     assert (
         read_model(store, effects.effects.produced[0].revision).edges[0].description

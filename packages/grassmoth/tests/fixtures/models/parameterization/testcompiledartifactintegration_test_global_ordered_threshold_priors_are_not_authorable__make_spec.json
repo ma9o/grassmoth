@@ -57,16 +57,17 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "scale",
-            "ordinal_levels": [
-              "0",
-              "1",
-              "2",
-              "3"
-            ],
-            "measurement_dtype": "ordinal",
+            "measurement": {
+              "dtype": "ordinal",
+              "levels": [
+                "0",
+                "1",
+                "2",
+                "3"
+              ]
+            },
             "observation_window": null
           }
         }

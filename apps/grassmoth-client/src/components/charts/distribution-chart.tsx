@@ -4,6 +4,7 @@ import type { DensityCurve, EmpiricalPoint } from "@grassmoth/api-types";
 import { area, curveLinear, curveStep, curveStepAfter, line } from "d3-shape";
 import { useEffect, useMemo, useRef } from "react";
 import { formatSignificant } from "@/lib/utils/format";
+import { CanvasChartFrame, ValueGridlines } from "./chart-frame";
 import { CHART_COLORS, type ChartColor, cssColor, resolveColor } from "./chart-tokens";
 import {
   type Domain,
@@ -11,6 +12,7 @@ import {
   extentOf,
   jitter,
   linearScale,
+  marginBox,
   padDomain,
   valueTicks,
 } from "./plot-geometry";
@@ -166,13 +168,11 @@ export function DistributionChart({
 
   const geometry = useMemo(() => {
     if (!size) return null;
-    const margin = compact ? COMPACT_MARGIN : isCumulative ? CUMULATIVE_MARGIN : MARGIN;
-    const box: PlotBox = {
-      left: margin.left,
-      top: margin.top,
-      width: Math.max(1, size.width - margin.left - margin.right),
-      height: Math.max(1, size.height - margin.top - margin.bottom),
-    };
+    const box = marginBox(
+      size.width,
+      size.height,
+      compact ? COMPACT_MARGIN : isCumulative ? CUMULATIVE_MARGIN : MARGIN,
+    );
     const domain =
       frame ??
       extentOf([
@@ -254,118 +254,103 @@ export function DistributionChart({
   );
 
   return (
-    <div
-      ref={container}
-      className="relative w-full"
-      style={{ height }}
-      role="img"
-      aria-label={label}
+    <CanvasChartFrame
+      container={container}
+      canvas={dots.length > 0 ? canvas : null}
+      size={size}
+      height={height}
+      label={label}
     >
-      {size && geometry && (
+      {geometry && (
         <>
-          {dots.length > 0 && (
-            <canvas
-              ref={canvas}
-              className="absolute inset-0"
-              style={{ width: size.width, height: size.height }}
+          {isCumulative ? (
+            <CumulativeMarks
+              layers={cumulative}
+              diagonal={diagonal}
+              x={geometry.x}
+              box={geometry.box}
             />
-          )}
-          <svg
-            className="absolute inset-0 overflow-visible"
-            width={size.width}
-            height={size.height}
-            aria-hidden="true"
-          >
-            {isCumulative ? (
-              <CumulativeMarks
-                layers={cumulative}
-                diagonal={diagonal}
+          ) : (
+            densities.length > 0 && (
+              <DensityMarks
+                layers={densities}
                 x={geometry.x}
-                box={geometry.box}
+                box={geometry.densityBox}
+                peak={densityPeak(densities)}
               />
-            ) : (
-              densities.length > 0 && (
-                <DensityMarks
-                  layers={densities}
-                  x={geometry.x}
-                  box={geometry.densityBox}
-                  peak={densityPeak(densities)}
-                />
-              )
-            )}
-            {interval && (
-              <g stroke={cssColor(interval.color)} fill={cssColor(interval.color)}>
-                <title>{interval.label}</title>
-                <line
-                  x1={geometry.x(interval.lower)}
-                  x2={geometry.x(interval.upper)}
-                  y1={geometry.intervalY}
-                  y2={geometry.intervalY}
-                  strokeWidth={2}
-                />
-                <circle
-                  cx={geometry.x(interval.center)}
-                  cy={geometry.intervalY}
-                  r={2.6}
-                  stroke="none"
-                />
-              </g>
-            )}
-            {marks.map((mark) => (
-              <g key={mark.key}>
-                <title>{`${mark.label}: ${formatSignificant(mark.value)}`}</title>
-                <line
-                  x1={geometry.x(mark.value)}
-                  x2={geometry.x(mark.value)}
-                  y1={geometry.box.top - (compact ? 1 : 2)}
-                  y2={geometry.box.top + geometry.box.height + (compact ? 1 : 2)}
-                  stroke={cssColor(mark.color)}
-                  strokeWidth={compact ? 1.5 : 1.8}
-                />
-              </g>
-            ))}
-            {!compact && (
-              <g fontSize={10} fill={cssColor(CHART_COLORS.axis)}>
-                {valueTicks(geometry.valueDomain, Math.max(2, Math.round(geometry.box.width / 70)))
-                  .filter(
-                    (tick) =>
-                      tick.value >= geometry.valueDomain[0] &&
-                      tick.value <= geometry.valueDomain[1],
-                  )
-                  .map((tick) => (
-                    <text
-                      key={tick.value}
-                      x={geometry.x(tick.value)}
-                      y={geometry.box.top + geometry.box.height + 14}
-                      textAnchor="middle"
-                    >
-                      {tick.label}
-                    </text>
-                  ))}
-                <line
-                  x1={geometry.box.left}
-                  x2={geometry.box.left + geometry.box.width}
-                  y1={geometry.box.top + geometry.box.height + 0.5}
-                  y2={geometry.box.top + geometry.box.height + 0.5}
-                  stroke={cssColor(CHART_COLORS.grid)}
-                />
-                {beyond > 0 && (
+            )
+          )}
+          {interval && (
+            <g stroke={cssColor(interval.color)} fill={cssColor(interval.color)}>
+              <title>{interval.label}</title>
+              <line
+                x1={geometry.x(interval.lower)}
+                x2={geometry.x(interval.upper)}
+                y1={geometry.intervalY}
+                y2={geometry.intervalY}
+                strokeWidth={2}
+              />
+              <circle
+                cx={geometry.x(interval.center)}
+                cy={geometry.intervalY}
+                r={2.6}
+                stroke="none"
+              />
+            </g>
+          )}
+          {marks.map((mark) => (
+            <g key={mark.key}>
+              <title>{`${mark.label}: ${formatSignificant(mark.value)}`}</title>
+              <line
+                x1={geometry.x(mark.value)}
+                x2={geometry.x(mark.value)}
+                y1={geometry.box.top - (compact ? 1 : 2)}
+                y2={geometry.box.top + geometry.box.height + (compact ? 1 : 2)}
+                stroke={cssColor(mark.color)}
+                strokeWidth={compact ? 1.5 : 1.8}
+              />
+            </g>
+          ))}
+          {!compact && (
+            <g fontSize={10} fill={cssColor(CHART_COLORS.axis)}>
+              {valueTicks(geometry.valueDomain, Math.max(2, Math.round(geometry.box.width / 70)))
+                .filter(
+                  (tick) =>
+                    tick.value >= geometry.valueDomain[0] && tick.value <= geometry.valueDomain[1],
+                )
+                .map((tick) => (
                   <text
-                    x={geometry.box.left + geometry.box.width}
-                    y={geometry.box.top}
-                    textAnchor="end"
-                    dominantBaseline="hanging"
-                    fontSize={9}
+                    key={tick.value}
+                    x={geometry.x(tick.value)}
+                    y={geometry.box.top + geometry.box.height + 14}
+                    textAnchor="middle"
                   >
-                    {`${beyond} beyond the frame, piled at its edges`}
+                    {tick.label}
                   </text>
-                )}
-              </g>
-            )}
-          </svg>
+                ))}
+              <line
+                x1={geometry.box.left}
+                x2={geometry.box.left + geometry.box.width}
+                y1={geometry.box.top + geometry.box.height + 0.5}
+                y2={geometry.box.top + geometry.box.height + 0.5}
+                stroke={cssColor(CHART_COLORS.grid)}
+              />
+              {beyond > 0 && (
+                <text
+                  x={geometry.box.left + geometry.box.width}
+                  y={geometry.box.top}
+                  textAnchor="end"
+                  dominantBaseline="hanging"
+                  fontSize={9}
+                >
+                  {`${beyond} beyond the frame, piled at its edges`}
+                </text>
+              )}
+            </g>
+          )}
         </>
       )}
-    </div>
+    </CanvasChartFrame>
   );
 }
 
@@ -384,20 +369,11 @@ function CumulativeMarks({
   return (
     <g>
       <g fontSize={10} fill={cssColor(CHART_COLORS.axis)}>
-        {[0, 0.5, 1].map((tick) => (
-          <g key={tick}>
-            <line
-              x1={box.left}
-              x2={box.left + box.width}
-              y1={y(tick)}
-              y2={y(tick)}
-              stroke={cssColor(CHART_COLORS.grid)}
-            />
-            <text x={box.left - 5} y={y(tick)} textAnchor="end" dominantBaseline="middle">
-              {tick}
-            </text>
-          </g>
-        ))}
+        <ValueGridlines
+          box={box}
+          y={y}
+          ticks={[0, 0.5, 1].map((value) => ({ value, label: String(value) }))}
+        />
       </g>
       {diagonal && (
         <line

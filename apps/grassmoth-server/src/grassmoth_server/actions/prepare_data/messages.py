@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from grassmoth.public import LabeledMeasurement
 from grassmoth_server.actions.prepare_data.prompts import SYSTEM, USER
 
 if TYPE_CHECKING:
@@ -17,24 +18,21 @@ def _format_indicators(measurement_structure: MeasurementContext) -> str:
     for indicator in measurement_structure.indicators:
         name = indicator.observation.name
         how_to_measure = indicator.extraction.how_to_measure
-        dtype = indicator.observation.measurement_dtype
+        measurement = indicator.observation.measurement
         support_kind = indicator.observation.support_kind.value
         summary_operator = indicator.observation.summary_operator.value
         window = measurement_structure.window(indicator)
         details = [
-            dtype,
+            measurement.dtype,
             f"operator={summary_operator}",
             f"support={support_kind}",
             f"window={window}",
         ]
-        levels = (
-            indicator.observation.ordinal_levels
-            if dtype == "ordinal"
-            else indicator.observation.categorical_levels
-        )
-        if dtype in {"ordinal", "categorical"} and levels:
-            codebook = ", ".join(f"{index}={level}" for index, level in enumerate(levels))
-            details.append(f"{dtype}_codes={codebook}")
+        if isinstance(measurement, LabeledMeasurement):
+            codebook = ", ".join(
+                f"{index}={level}" for index, level in enumerate(measurement.levels)
+            )
+            details.append(f"{measurement.dtype}_codes={codebook}")
 
         lines.append(
             f"- {name} [{indicator.observation.id}] ({', '.join(details)}): {how_to_measure}"

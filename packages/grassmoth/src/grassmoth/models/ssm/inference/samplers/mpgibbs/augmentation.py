@@ -24,6 +24,7 @@ from grassmoth.models.ssm.inference.targets.student_precision import draw_studen
 if TYPE_CHECKING:
     from grassmoth.artifacts.sampling import PathUpdateSpec
     from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCState
+    from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import ParameterMoveInputs
     from grassmoth.models.ssm.inference.samplers.particle.contract import (
         SmootherContext,
         SmootherSetup,
@@ -129,20 +130,19 @@ def begin_path_update(
 
 
 def finish_path_update(
-    boundary: PathUpdateBoundary,
+    prepared: ParameterMoveInputs,
     conditional: ConditionalPathScores,
     target: ParticleTarget,
-    parameter_particles: jax.Array,
-    label_correction: jax.Array,
     latent_path: jax.Array,
 ) -> MarginalLabelScores:
     """Discard lambda before selecting a label; only marginal scores may be cached."""
+    boundary = prepared.boundary
     if isinstance(boundary, MarginalPathUpdate):
         return MarginalLabelScores(*conditional.values)
     trajectory = jax.vmap(
         lambda context: target.path_log_prob(context, latent_path, target.observations)
     )(boundary.context.contexts)
-    posterior = jax.vmap(target.log_prior)(parameter_particles) + trajectory
+    posterior = jax.vmap(target.log_prior)(prepared.particles) + trajectory
     return MarginalLabelScores(
-        _normalize_log_probs(posterior + label_correction), trajectory, posterior
+        _normalize_log_probs(posterior + prepared.correction), trajectory, posterior
     )

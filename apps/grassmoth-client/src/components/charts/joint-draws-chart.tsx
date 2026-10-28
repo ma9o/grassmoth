@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { CanvasChartFrame, ValueGridlines } from "./chart-frame";
 import { CHART_COLORS, cssColor, resolveColor } from "./chart-tokens";
-import { type PlotBox, extentOf, linearScale, padDomain, valueTicks } from "./plot-geometry";
+import { extentOf, linearScale, marginBox, padDomain, valueTicks } from "./plot-geometry";
 import { paintCanvas, useChartSize } from "./use-chart-size";
 
 interface Coordinate {
@@ -28,12 +29,7 @@ export function JointDrawsChart({
   const canvas = useRef<HTMLCanvasElement>(null);
   const geometry = useMemo(() => {
     if (!size) return null;
-    const box: PlotBox = {
-      left: MARGIN.left,
-      top: MARGIN.top,
-      width: Math.max(1, size.width - MARGIN.left - MARGIN.right),
-      height: Math.max(1, size.height - MARGIN.top - MARGIN.bottom),
-    };
+    const box = marginBox(size.width, size.height, MARGIN);
     const xDomain = padDomain(extentOf(x.values) ?? [0, 1]);
     const yDomain = padDomain(extentOf(y.values) ?? [0, 1]);
     return {
@@ -72,72 +68,44 @@ export function JointDrawsChart({
   }, [size, geometry, x.values, y.values, flagged]);
 
   return (
-    <div
-      ref={container}
-      className="relative w-full"
-      style={{ height }}
-      role="img"
-      aria-label={`${x.label} against ${y.label}: every retained draw`}
+    <CanvasChartFrame
+      container={container}
+      canvas={canvas}
+      size={size}
+      height={height}
+      label={`${x.label} against ${y.label}: every retained draw`}
     >
-      {size && geometry && (
-        <>
-          <canvas
-            ref={canvas}
-            className="absolute inset-0"
-            style={{ width: size.width, height: size.height }}
+      {geometry && (
+        <g fontSize={10} fill={cssColor(CHART_COLORS.axis)}>
+          <ValueGridlines
+            box={geometry.box}
+            y={geometry.sy}
+            ticks={valueTicks(geometry.yDomain, 4)}
           />
-          <svg
-            className="absolute inset-0 overflow-visible"
-            width={size.width}
-            height={size.height}
-            aria-hidden="true"
-          >
-            <g fontSize={10} fill={cssColor(CHART_COLORS.axis)}>
-              {valueTicks(geometry.yDomain, 4).map((tick) => (
-                <g key={tick.value}>
-                  <line
-                    x1={geometry.box.left}
-                    x2={geometry.box.left + geometry.box.width}
-                    y1={geometry.sy(tick.value)}
-                    y2={geometry.sy(tick.value)}
-                    stroke={cssColor(CHART_COLORS.grid)}
-                  />
-                  <text
-                    x={geometry.box.left - 6}
-                    y={geometry.sy(tick.value)}
-                    textAnchor="end"
-                    dominantBaseline="middle"
-                  >
-                    {tick.label}
-                  </text>
-                </g>
-              ))}
-              {valueTicks(geometry.xDomain, Math.max(2, Math.round(geometry.box.width / 80))).map(
-                (tick) => (
-                  <text
-                    key={tick.value}
-                    x={geometry.sx(tick.value)}
-                    y={geometry.box.top + geometry.box.height + 14}
-                    textAnchor="middle"
-                  >
-                    {tick.label}
-                  </text>
-                ),
-              )}
+          {valueTicks(geometry.xDomain, Math.max(2, Math.round(geometry.box.width / 80))).map(
+            (tick) => (
               <text
-                x={geometry.box.left + geometry.box.width}
-                y={geometry.box.top + geometry.box.height + 28}
-                textAnchor="end"
+                key={tick.value}
+                x={geometry.sx(tick.value)}
+                y={geometry.box.top + geometry.box.height + 14}
+                textAnchor="middle"
               >
-                {x.label}
+                {tick.label}
               </text>
-              <text x={geometry.box.left} y={geometry.box.top - 2} fontSize={9}>
-                {y.label}
-              </text>
-            </g>
-          </svg>
-        </>
+            ),
+          )}
+          <text
+            x={geometry.box.left + geometry.box.width}
+            y={geometry.box.top + geometry.box.height + 28}
+            textAnchor="end"
+          >
+            {x.label}
+          </text>
+          <text x={geometry.box.left} y={geometry.box.top - 2} fontSize={9}>
+            {y.label}
+          </text>
+        </g>
       )}
-    </div>
+    </CanvasChartFrame>
   );
 }

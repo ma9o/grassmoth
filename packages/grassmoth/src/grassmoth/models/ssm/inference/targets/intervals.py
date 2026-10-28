@@ -156,13 +156,8 @@ class ParticleIntervalObservations:
         densities = trajectory_observation_log_probs(
             self.state_projection(context, path),
             observations,
-            None,
-            measurement.lambda_mat,
-            measurement.manifest_means,
-            measurement.manifest_cov,
-            compiled.kernel,
-            compiled.mean_log_prob_fn,
-            self.operator.observation_support,
+            measurement,
+            compiled,
             gradient=gradient,
         )
         return (

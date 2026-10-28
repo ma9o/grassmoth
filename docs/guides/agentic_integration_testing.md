@@ -140,7 +140,7 @@ git --git-dir=data/HEALTHDEMO/study/history.git config grassmoth.format 30
 #### Storage format
 
 The [storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/git_objects.py)
-requires format 30. Start a new study or restore a format-30 bundle. The application
+requires format 31. Start a new study or restore a format-31 bundle. The application
 reads only this format and does not perform automatic migrations.
 
 ### Local stack
@@ -183,8 +183,8 @@ For local-study GPU fits, select `inference.sampler.hardware: L40S` (the default
 Use `local` to fit on this machine; the other
 [hardware enum values](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py)
 select Modal GPUs. Select `inference.sampler.algorithm: {method: nuts_da}` for
-joint parameter/state NUTS. The particle sampler is `method: mpgibbs`; its
-`companion` adds conditional MH or NUTS parameter moves, and its `path_update` settings
+joint parameter/state NUTS. The particle sampler is `method: mpgibbs`; its untempered
+`tempering` takes `companion` moves, conditional MH or NUTS parameter updates, and its `path_update` settings
 select Particle-RWM, aMALA, aMALA+, aGRAD or twisted aGRAD in the [sampler contract](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
 The [Modal compute adapter](../../apps/grassmoth-server/src/grassmoth_server/actions/fit/remote.py)
 uses the installed Modal credentials, creates an ephemeral

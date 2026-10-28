@@ -214,7 +214,7 @@ def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monk
         FitAttempt,
         Raised,
         StudyRevision,
-        failed_attempt,
+        action_attempt,
     )
     from grassmoth_server.study.state import ArtifactRecord, StudyState
     from grassmoth_test_support.git import git_oid
@@ -250,7 +250,7 @@ def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monk
                     outcome=Raised(error_type=f"Arm{index}", error_message=f"arm {index}"),
                 )
             if name == "complete_result_activity":
-                return failed_attempt(payload.attempt.request, payload.attempt.outcome)
+                return action_attempt(payload.attempt.request, payload.attempt.outcome)
             if name == "journal_activity":
                 publications.append(payload.record)
                 return StudyRevision(

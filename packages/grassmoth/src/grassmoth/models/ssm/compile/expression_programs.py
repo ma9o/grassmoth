@@ -91,7 +91,7 @@ def compile_shared_drift(spec: DynamicsSpec) -> DriftProgram:
     providers: dict[_DriftRead, Symbol] = {}
     targets: list[int] = []
     for index, component in enumerate(spec.components):
-        if component.kind == "potential":
+        if component.role == "potential":
             continue
         symbolic = symbolic_expression(component.expression)
         renamed: dict[Symbol, Symbol] = {}

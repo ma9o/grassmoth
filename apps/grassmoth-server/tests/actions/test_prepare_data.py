@@ -14,7 +14,11 @@ from grassmoth.artifacts.observations.preparation import (
     DataVariableSpec,
     SemanticExtractionSpec,
 )
-from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
+from grassmoth.artifacts.observations.spec import (
+    AuthoredObservationSpec,
+    LabeledMeasurement,
+    NumericMeasurement,
+)
 from grassmoth_server.actions.contracts.inputs import PrepareDataInput
 from grassmoth_server.actions.contracts.preparation import FilePreparationSpec, FileSourceRef
 from grassmoth_server.actions.contracts.requests import PrepareDataRequest
@@ -54,7 +58,7 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
                     observation_window=None,
                     id="indicator:steps",
                     name="steps",
-                    measurement_dtype="count",
+                    measurement=NumericMeasurement(dtype="count"),
                     aggregation="sum",
                 ),
                 extraction=ComputedExtractionSpec(
@@ -66,9 +70,10 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
                     observation_window=None,
                     id="indicator:stress",
                     name="stress",
-                    measurement_dtype="ordinal",
+                    measurement=LabeledMeasurement(
+                        dtype="ordinal", levels=("low", "medium", "high")
+                    ),
                     aggregation="last",
-                    ordinal_levels=("low", "medium", "high"),
                 ),
                 extraction=SemanticExtractionSpec(
                     how_to_measure="Score the diary as low, medium or high stress",
@@ -177,7 +182,7 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
         metadata.preparation.variables[1].extraction.how_to_measure
         == preparation.variables[1].extraction.how_to_measure
     )
-    assert metadata.variables[1].ordinal_levels == ("low", "medium", "high")
+    assert metadata.variables[1].levels == ("low", "medium", "high")
     assert set(profile.indicators) == {"indicator:steps", "indicator:stress"}
     from grassmoth.actions.contracts.bodies import PrepareDataOutput
 
@@ -210,9 +215,10 @@ def test_declared_categorical_codebook_validates_and_encodes_normalized_labels(
                     observation_window=None,
                     id="indicator:place",
                     name="place",
-                    measurement_dtype="categorical",
+                    measurement=LabeledMeasurement(
+                        dtype="categorical", levels=("home", "work", " Outside ")
+                    ),
                     aggregation="last",
-                    categorical_levels=("home", "work", " Outside "),
                 ),
                 extraction=SemanticExtractionSpec(how_to_measure="Last stated location"),
             ),

@@ -30,7 +30,7 @@ export function IndicatorScope({ context, id }: { context: ScopeContext; id: Ind
           <div className="mt-2">
             <KeyValue
               rows={[
-                ["Type", indicator.observation.measurement_dtype],
+                ["Type", indicator.observation.measurement.dtype],
                 ["Aggregation", indicator.observation.aggregation],
                 [
                   "Window",

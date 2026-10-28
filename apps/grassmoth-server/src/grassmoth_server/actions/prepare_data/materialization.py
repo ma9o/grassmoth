@@ -57,22 +57,12 @@ def materialize_panel(
         data_for_model = pl.DataFrame(schema=ObservationDataset.row_schema())
 
     if len(data_for_model) > 0:
-        dtype_lookup: dict[str, str] = {
-            indicator.observation.id: indicator.observation.measurement_dtype
-            for indicator in measurement_structure.indicators
-        }
-        ordinal_levels_lookup: dict[str, tuple[str, ...]] = {
-            ind.observation.id: levels
-            for ind in measurement_structure.indicators
-            if (levels := ind.observation.ordinal_levels)
-        }
-        categorical_levels_lookup: dict[str, tuple[str, ...]] = {
-            ind.observation.id: levels
-            for ind in measurement_structure.indicators
-            if (levels := ind.observation.categorical_levels)
-        }
         data_for_model = _encode_non_continuous(
-            data_for_model, dtype_lookup, ordinal_levels_lookup, categorical_levels_lookup
+            data_for_model,
+            {
+                indicator.observation.id: indicator.observation.measurement
+                for indicator in measurement_structure.indicators
+            },
         )
         data_for_model = data_for_model.with_columns(
             pl.col("value").cast(pl.Float64, strict=False).alias("value"),

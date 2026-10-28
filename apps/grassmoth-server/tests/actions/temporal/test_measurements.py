@@ -112,16 +112,14 @@ def test_call_openrouter_activity_reuses_persisted_call_result(monkeypatch, tmp_
         json.dumps({"messages": [{"role": "user", "content": "extract"}]}),
     )
 
-    async def fake_call_model(
-        model_name, messages, *, client, tools=None, config=None, log_label=None
-    ):
-        del client, tools, config, log_label
+    async def fake_call_model(llm, messages, *, client, tools=None, log_label=None):
+        del client, tools, log_label
         calls.append(messages)
         return {
             "message": {"role": "assistant", "content": "", "tool_calls": []},
             "completion": "",
             "usage": {"input_tokens": 3, "output_tokens": 5, "reasoning_tokens": None},
-            "model": model_name,
+            "model": llm.model,
             "time": 0.25,
             "stop_reason": "tool_calls",
         }
@@ -203,7 +201,7 @@ def test_execute_llm_tool_calls_activity_dispatches_by_tool_name(tmp_path):
                             "observation": {
                                 "id": "indicator:steps",
                                 "name": "steps",
-                                "measurement_dtype": "continuous",
+                                "measurement": {"dtype": "continuous"},
                                 "aggregation": "mean",
                             },
                             "extraction": {"kind": "semantic", "how_to_measure": "Measure steps"},
@@ -509,11 +507,9 @@ def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_p
         }
     )
 
-    async def fake_call_model(
-        model_name, messages, *, client, tools=None, config=None, log_label=None
-    ):
+    async def fake_call_model(llm, messages, *, client, tools=None, log_label=None):
         assert not reused, "A retained cache hit must skip the LLM subroutine"
-        del messages, tools, config, log_label
+        del messages, tools, log_label
         return {
             "message": {
                 "role": "assistant",
@@ -531,7 +527,7 @@ def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_p
             },
             "completion": "",
             "usage": {"input_tokens": 3, "output_tokens": 5, "reasoning_tokens": None},
-            "model": model_name,
+            "model": llm.model,
             "time": 0.25,
             "stop_reason": "tool_calls",
         }
@@ -560,7 +556,7 @@ def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_p
                             "observation": {
                                 "id": "indicator:steps",
                                 "name": "steps",
-                                "measurement_dtype": "continuous",
+                                "measurement": {"dtype": "continuous"},
                                 "aggregation": "mean",
                             },
                             "extraction": {"kind": "semantic", "how_to_measure": "Measure steps"},

@@ -117,7 +117,6 @@ def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_re
     bound = bind_panel(
         panel,
         compiled_dynamical_model=compiled_dynamical_model,
-        time_origin=_ORIGIN,
         compiler=compile_program,
     )
     assert isinstance(bound, BoundPanel), bound
@@ -137,7 +136,6 @@ def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_re
     failure = bind_panel(
         contradictory,
         compiled_dynamical_model=compiled_dynamical_model,
-        time_origin=_ORIGIN,
         compiler=compile_program,
     )
     assert isinstance(failure, PanelPreparationFailure)

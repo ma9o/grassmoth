@@ -9,17 +9,14 @@ import jax
 import jax.numpy as jnp
 
 from grassmoth.models.ssm.compile.observation_windows import compile_observation_scan
-from grassmoth.models.ssm.execution.contracts import NUMERICAL_EPSILON
+from grassmoth.models.ssm.execution.contracts import NUMERICAL_EPSILON, MeasurementParams
 
 if TYPE_CHECKING:
     from grassmoth.models.ssm.compile.observation_windows import (
         CompiledObservationScan,
         CompiledWindowPlan,
     )
-    from grassmoth.models.ssm.execution.observation_model import (
-        EmissionLogProbFn,
-        ObservationKernel,
-    )
+    from grassmoth.models.ssm.execution.observation_model import CompiledObservationModel
     from grassmoth.models.ssm.preparation.observations import ObservationSupportRuntime
 
 type ObservationGradient = Literal["full", "current"]
@@ -203,13 +200,12 @@ def expected_observation_mean(
 def summarize_support_observation(
     observation_operator: ObservationOperator,
     response_t: jnp.ndarray,
-    obs_sum: jnp.ndarray,
-    obs_sumsq: jnp.ndarray,
-    obs_weight: jnp.ndarray,
+    statistics: jnp.ndarray,
     obs_mask_t: jnp.ndarray,
     emission_slot_indices: jnp.ndarray,
 ) -> SupportObservationSummary:
     """Summarize one support-aware observation emission at the current step."""
+    obs_sum, obs_sumsq, obs_weight = statistics[..., 0], statistics[..., 1], statistics[..., 2]
     if not observation_operator.requires_interval_summary_handling:
         raise ValueError(
             "summarize_support_observation requires interval-summary observation support"
@@ -328,9 +324,7 @@ def _project_response_trajectory_with_operator(
         summary = summarize_support_observation(
             observation_operator,
             response,
-            statistics[..., 0],
-            statistics[..., 1],
-            statistics[..., 2],
+            statistics,
             full_obs_mask,
             emission,
         )
@@ -361,23 +355,19 @@ def project_response_trajectory(
 def trajectory_observation_log_probs(
     latent_trajectory: jnp.ndarray,
     observations: jnp.ndarray,
-    obs_mask: jnp.ndarray | None,
-    H: jnp.ndarray,
-    d_meas: jnp.ndarray,
-    R: jnp.ndarray,
-    obs_kernel: ObservationKernel,
-    mean_log_prob_fn: EmissionLogProbFn | None = None,
-    observation_support: ObservationSupportRuntime | None = None,
+    measurement: MeasurementParams,
+    compiled: CompiledObservationModel,
     *,
     gradient: ObservationGradient = "full",
 ) -> jnp.ndarray:
     """Return per-timestep log-likelihood contributions for a latent trajectory."""
-    if obs_mask is None:
-        obs_mask = ~jnp.isnan(observations)
+    H, d_meas, R = measurement.lambda_mat, measurement.manifest_means, measurement.manifest_cov
+    obs_kernel, mean_log_prob_fn = compiled.kernel, compiled.mean_log_prob_fn
+    obs_mask = ~jnp.isnan(observations)
 
     clean_obs = jnp.nan_to_num(observations, nan=0.0)
     mask_float = obs_mask.astype(jnp.float32)
-    observation_operator = compile_observation_operator(observation_support)
+    observation_operator = compiled.observation_operator
 
     if observation_operator is None or not observation_operator.requires_interval_summary_handling:
         return jax.vmap(

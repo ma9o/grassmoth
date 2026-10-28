@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth.artifacts.observations.dataset import ObservationDataset
-    from grassmoth.artifacts.reports.identification import IdentificationReport
     from grassmoth.artifacts.reports.model_checks import QuestionAssessment
     from grassmoth.artifacts.simulation import SimulationSpec
 
@@ -61,7 +60,6 @@ def question_findings(
                 ),
             )
         )
-    identification = selection.identification
     states = frozenset(selected_state_ids(selection))
     outcome = _outcome_finding(question, constructs)
     findings: list[QuestionAssessment] = [outcome]
@@ -71,10 +69,7 @@ def question_findings(
             _target_finding(name, target, constructs.get(target), states) for target in targets
         )
         findings.extend(
-            _identification_finding(
-                name, target, outcome, constructs, dynamical_model_spec, identification, states
-            )
-            for target in targets
+            _identification_finding(name, target, outcome, selection) for target in targets
         )
     return tuple(findings)
 
@@ -143,14 +138,11 @@ def _target_finding(
 
 
 def _identification_finding(
-    query: str,
-    target: ConstructId,
-    outcome: QuestionAssessment,
-    constructs: dict[ConstructId, ConstructSpec],
-    dynamical_model_spec: DynamicalModelSpec,
-    identification: IdentificationReport,
-    states: frozenset[ConstructId],
+    query: str, target: ConstructId, outcome: QuestionAssessment, selection: StructuralSelection
 ) -> QuestionAssessment:
+    dynamical_model_spec, identification = selection.dynamical_model_spec, selection.identification
+    constructs = {construct.id: construct for construct in dynamical_model_spec.constructs}
+    states = frozenset(selected_state_ids(selection))
     subject = QueryTargetSubject(query=query, target=ConstructRef(id=target))
     construct = constructs.get(target)
     if construct is None or not isinstance(outcome, Evaluated):

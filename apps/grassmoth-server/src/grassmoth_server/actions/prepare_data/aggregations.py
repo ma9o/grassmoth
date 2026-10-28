@@ -12,6 +12,7 @@ import polars as pl
 
 from grassmoth.public import (
     ComputedExtractionSpec,
+    LabeledMeasurement,
     ObservationInstant,
     SummaryOperator,
     WindowExpression,
@@ -20,10 +21,11 @@ from grassmoth.public import (
 from grassmoth_server.actions.prepare_data.rows import support_window_tick_frame
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Mapping
 
     from polars._typing import FillNullStrategy
 
+    from grassmoth.public import DataVariableSpec, Measurement
     from grassmoth_server.actions.prepare_data.context import MeasurementContext
 
 
@@ -195,7 +197,6 @@ def compute_indicators(
     frames: list[pl.DataFrame] = []
     for ind, extraction in computed:
         agg_name = ind.observation.aggregation
-        measurement_dtype = ind.observation.measurement_dtype
         observation_window = measurement_structure.window(ind).polars_interval
         tick_frame = support_window_tick_frame(
             df, observation_window, time_col, start=start, end=end
@@ -232,8 +233,7 @@ def compute_indicators(
                 time_col=time_col,
                 source_col=source_col,
                 observation_window=observation_window,
-                measurement_dtype=measurement_dtype,
-                ordinal_levels=ind.observation.ordinal_levels,
+                variable=ind,
             )
             prepared = _with_dense_support_rows(prepared, tick_frame)
 
@@ -278,14 +278,11 @@ def _prepare_computed_indicator_frame(
     time_col: str,
     source_col: str,
     observation_window: str,
-    measurement_dtype: str,
-    ordinal_levels: Sequence[str] | None,
+    variable: DataVariableSpec,
 ) -> pl.DataFrame:
     """Prepare a computed indicator's source values for deterministic aggregation."""
     value_expr = _computed_value_expr(
-        source_col,
-        measurement_dtype=measurement_dtype,
-        ordinal_levels=ordinal_levels,
+        source_col, measurement=variable.observation.measurement
     ).alias("__value__")
     return df.select(
         pl.col(time_col).dt.truncate(observation_window).alias("__tick__"),
@@ -315,18 +312,13 @@ def _prepare_computed_rule_frame(
     )
 
 
-def _computed_value_expr(
-    source_col: str,
-    *,
-    measurement_dtype: str,
-    ordinal_levels: Sequence[str] | None,
-) -> pl.Expr:
+def _computed_value_expr(source_col: str, *, measurement: Measurement) -> pl.Expr:
     """Build the deterministic source-value expression for a computed indicator."""
     source = pl.col(source_col)
-    if measurement_dtype == "ordinal":
-        max_code = len(ordinal_levels or []) - 1
+    if isinstance(measurement, LabeledMeasurement) and measurement.dtype == "ordinal":
+        max_code = len(measurement.levels) - 1
         label_map = {
-            normalize_level_label(level): idx for idx, level in enumerate(ordinal_levels or [])
+            normalize_level_label(level): idx for idx, level in enumerate(measurement.levels)
         }
         return source.map_elements(
             lambda value, _max=max_code, _label_map=label_map: _coerce_ordinal_code(
@@ -376,10 +368,7 @@ _BINARY_FALSE = {"false", "no", "0", "0.0", "f", "n"}
 
 
 def _encode_non_continuous(
-    df: pl.DataFrame,
-    dtype_lookup: dict[str, str],
-    ordinal_levels_lookup: Mapping[str, Sequence[str]] | None = None,
-    categorical_levels_lookup: Mapping[str, Sequence[str]] | None = None,
+    df: pl.DataFrame, measurements: Mapping[str, Measurement]
 ) -> pl.DataFrame:
     """Encode non-continuous indicator values to numeric before Float64 cast.
 
@@ -389,16 +378,10 @@ def _encode_non_continuous(
 
     Modifies the 'value' column in-place per indicator partition.
     """
-    if not dtype_lookup:
-        return df
-
-    ordinal_levels_lookup = ordinal_levels_lookup or {}
-    categorical_levels_lookup = categorical_levels_lookup or {}
-
     non_continuous = {
-        name: dtype
-        for name, dtype in dtype_lookup.items()
-        if dtype in ("binary", "ordinal", "categorical")
+        name: measurement
+        for name, measurement in measurements.items()
+        if measurement.dtype in ("binary", "ordinal", "categorical")
     }
     if not non_continuous:
         return df
@@ -410,7 +393,7 @@ def _encode_non_continuous(
     frames = []
     remaining_mask = pl.lit(True)
 
-    for name, dtype in non_continuous.items():
+    for name, measurement in non_continuous.items():
         indicator_mask = pl.col("indicator_id") == name
         subset = df.filter(indicator_mask)
         if subset.is_empty():
@@ -418,7 +401,7 @@ def _encode_non_continuous(
 
         remaining_mask = remaining_mask & ~indicator_mask
 
-        if dtype == "binary":
+        if not isinstance(measurement, LabeledMeasurement):
             subset = subset.with_columns(
                 pl.col("value")
                 .str.to_lowercase()
@@ -429,9 +412,7 @@ def _encode_non_continuous(
                 .alias("value")
             )
         else:
-            levels = (ordinal_levels_lookup if dtype == "ordinal" else categorical_levels_lookup)[
-                name
-            ]
+            levels = measurement.levels
             label_map = {normalize_level_label(label): index for index, label in enumerate(levels)}
             max_code = len(levels) - 1
             subset = subset.with_columns(

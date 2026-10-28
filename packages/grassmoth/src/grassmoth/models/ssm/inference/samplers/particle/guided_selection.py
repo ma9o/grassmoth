@@ -8,9 +8,7 @@ import jax.numpy as jnp
 from jax.scipy.special import logsumexp
 from jax.typing import DTypeLike
 
-from grassmoth.models.ssm.inference.samplers.particle.contract import SmootherContext
 from grassmoth.models.ssm.inference.samplers.particle.math import _masked_normal_log_prob
-from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
 
@@ -120,8 +118,6 @@ def _window_backward(
 
 def select_path(
     selector: PathSelector,
-    target: ParticleTarget,
-    ctx: SmootherContext,
     memory: SequentialObservationRuntime,
     memory_bank: Float[Array, "T P R"],
     bank: Float[Array, "T P D"],
@@ -136,7 +132,6 @@ def select_path(
     mask: Bool[Array, "T D"],
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
     transition: Callable[[jax.Array, jax.Array, jax.Array], jax.Array],
-    log_precisions: Float[Array, "T M"] | None,
     reference_dtype: DTypeLike,
     unroll: int,
 ) -> tuple[Float[Array, "T D"], Int[Array, " T"], Float[Array, " K"]]:
@@ -170,10 +165,10 @@ def select_path(
                 unroll,
             )
         path = bank[jnp.arange(steps), picks]
-        if log_precisions is None:
+        if memory.log_precisions is None:
             trajectory_scores = jax.vmap(
-                lambda bound: target.path_log_prob(bound, path, target.observations)
-            )(ctx.contexts)
+                lambda bound: memory.target.path_log_prob(bound, path, memory.target.observations)
+            )(memory.contexts)
         else:
             trajectory_scores = memory.path_log_probs(path)
     else:

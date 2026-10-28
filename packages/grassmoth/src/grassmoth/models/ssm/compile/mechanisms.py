@@ -8,7 +8,7 @@ from grassmoth.artifacts.model.construct import CausalEdgeSpec
 from grassmoth.artifacts.model.expressions import expression_states, linear_coefficient
 from grassmoth.artifacts.model.parameter_context import coefficient_value
 from grassmoth.compilation_errors import AggregatedCompileError, IncompleteModelError
-from grassmoth.models.ssm.dynamics.expression import ExpressionComponentSpec
+from grassmoth.models.ssm.dynamics.expression import EdgeDrift, ExpressionComponentSpec
 from grassmoth.models.structure import selected_edges, selected_state_ids
 
 if TYPE_CHECKING:
@@ -98,7 +98,8 @@ def iter_mechanism_components(
                 expression=mechanism.expression,
                 target=target,
                 state_ids=tuple(state_order),
-                source=state_index[owner.cause.id] if isinstance(owner, CausalEdgeSpec) else None,
-                kind=mechanism.kind,
+                role=EdgeDrift(state_index[owner.cause.id])
+                if isinstance(owner, CausalEdgeSpec)
+                else mechanism.kind,
             ),
         )

@@ -53,13 +53,14 @@ def component_identity(
             item.observation.name: item for item in structure.dynamical_model_spec.indicators
         }
         indicator = indicators[axes.observation_names(structure)[indices[0]]]
-        levels = (
-            indicator.observation.ordinal_levels
+        codebook = (
+            "ordinal"
             if kind in {SiteKind.OBS_ORDERED_BASE, SiteKind.OBS_ORDERED_GAPS}
-            else indicator.observation.categorical_levels
+            else "categorical"
         )
-        if levels is None:
+        if indicator.observation.measurement.dtype != codebook:
             return None
+        levels = indicator.observation.levels
         if kind == SiteKind.OBS_ORDERED_BASE:
             key = [indicator.observation.id, "first_cutpoint", levels[:2]]
             label = f"{indicator.observation.name}: {levels[0]} | {levels[1]}"

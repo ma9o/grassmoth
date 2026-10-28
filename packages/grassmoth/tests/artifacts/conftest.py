@@ -11,7 +11,11 @@ from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.indicator import IndicatorPolarity, IndicatorSpec
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec
 from grassmoth.artifacts.observations.semantics import SummaryOperator
-from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
+from grassmoth.artifacts.observations.spec import (
+    AuthoredObservationSpec,
+    LabeledMeasurement,
+    NumericMeasurement,
+)
 from grassmoth_test_support.helpers import fixture_entity_id
 
 if TYPE_CHECKING:
@@ -46,7 +50,7 @@ def construct_factory():
                         observation_window=None,
                         id=fixture_entity_id("indicator", name),
                         name=name + "_reading",
-                        measurement_dtype="continuous",
+                        measurement=NumericMeasurement(dtype="continuous"),
                         aggregation="last",
                     ),
                     construct_polarity="positive",
@@ -77,19 +81,16 @@ def indicator_factory():
         dtype: MeasurementDtype = "continuous",
         aggregation: SummaryOperator = SummaryOperator.MEAN,
         construct_polarity: IndicatorPolarity = IndicatorPolarity.POSITIVE,
-        ordinal_levels: list[str] | None = None,
     ) -> IndicatorSpec:
-        # Auto-provide ordinal_levels for ordinal dtype if not specified
-        if dtype == "ordinal" and ordinal_levels is None:
-            ordinal_levels = ["low", "medium", "high"]
         return IndicatorSpec(
             observation=AuthoredObservationSpec(
                 observation_window=None,
                 id=fixture_entity_id("indicator", name),
                 name=name,
-                measurement_dtype=dtype,
+                measurement=LabeledMeasurement(dtype=dtype, levels=("low", "medium", "high"))
+                if dtype in {"ordinal", "categorical"}
+                else NumericMeasurement(dtype=dtype),
                 aggregation=aggregation,
-                ordinal_levels=ordinal_levels,
             ),
             construct_polarity=construct_polarity,
         )

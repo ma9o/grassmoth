@@ -162,7 +162,9 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
                   ),
                 // A local measurement distribution has one state input. It is not a new predictive history.
                 draws.times.slice(0, 1),
-                indicator.observation.ordinal_levels ?? indicator.observation.categorical_levels,
+                "levels" in indicator.observation.measurement
+                  ? indicator.observation.measurement.levels
+                  : null,
               )
             : { kind: "unavailable", label, reason: "No observation law assigned." };
           return [indicator.observation.id, value] as const;

@@ -263,7 +263,6 @@ class SequentialObservationRuntime:
                 noise,
                 state,
                 index,
-                self.target.observations,
                 None if self.log_precisions is None else self.log_precisions[index],
             )
         )(self.contexts, self.noise, states)

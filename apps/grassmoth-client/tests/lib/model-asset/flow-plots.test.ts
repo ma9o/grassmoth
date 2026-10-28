@@ -54,11 +54,9 @@ function authoredModel(): DynamicalModelSpec {
           [indicator]: {
             observation: {
               name: "reading",
-              measurement_dtype: "continuous",
+              measurement: { dtype: "continuous" },
               aggregation: "mean",
               observation_window: null,
-              ordinal_levels: null,
-              categorical_levels: null,
             },
             construct_polarity: "positive",
             likelihood: {

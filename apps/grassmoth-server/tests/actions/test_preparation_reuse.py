@@ -16,7 +16,7 @@ from grassmoth.artifacts.observations.preparation import (
     DataVariableSpec,
     SemanticExtractionSpec,
 )
-from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
+from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
 from grassmoth_server.actions.contracts.preparation import FilePreparationSpec, FileSourceRef
 from grassmoth_server.actions.prepare_data.aggregations import compute_indicators
 from grassmoth_server.actions.prepare_data.context import extraction_context
@@ -68,7 +68,7 @@ def _variable(name):
             observation_window=None,
             id=f"indicator:{name}",
             name=name,
-            measurement_dtype="continuous",
+            measurement=NumericMeasurement(dtype="continuous"),
             aggregation="last",
         ),
         extraction=SemanticExtractionSpec(

@@ -57,16 +57,17 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": null,
             "aggregation": "last",
             "name": "manifest_0",
-            "ordinal_levels": [
-              "0",
-              "1",
-              "2",
-              "3"
-            ],
-            "measurement_dtype": "ordinal",
+            "measurement": {
+              "dtype": "ordinal",
+              "levels": [
+                "0",
+                "1",
+                "2",
+                "3"
+              ]
+            },
             "observation_window": null
           }
         }
@@ -237,14 +238,15 @@
           },
           "construct_polarity": "positive",
           "observation": {
-            "categorical_levels": [
-              "0",
-              "1"
-            ],
             "aggregation": "last",
             "name": "manifest_1",
-            "ordinal_levels": null,
-            "measurement_dtype": "categorical",
+            "measurement": {
+              "dtype": "categorical",
+              "levels": [
+                "0",
+                "1"
+              ]
+            },
             "observation_window": null
           }
         }

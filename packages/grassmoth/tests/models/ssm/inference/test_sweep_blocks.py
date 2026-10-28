@@ -1,7 +1,6 @@
 import json
 import logging
-from datetime import UTC, datetime
-from time import monotonic
+from dataclasses import replace
 from typing import NamedTuple
 
 import jax
@@ -11,7 +10,7 @@ import pytest
 
 from grassmoth.artifacts.reports.checks import Evaluated, NumericCriterionEvidence
 from grassmoth.artifacts.reports.posterior_diagnostics import ConvergenceReport
-from grassmoth.artifacts.sampling import ConvergenceStoppingSpec, DsmcSpec
+from grassmoth.artifacts.sampling import ConvergenceStoppingSpec, DsmcSpec, SamplerSpec
 from grassmoth.compute.budget import (
     AcceleratorMemoryBudget,
     ComputeBudget,
@@ -25,8 +24,9 @@ from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     initialize_adaptation,
     latent_adaptation,
 )
+from grassmoth.models.ssm.inference.samplers.sweep_plan import SweepProgram
 from grassmoth.models.ssm.inference.samplers.sweeps import run_sweeps
-from grassmoth_test_support.compute import COMPUTE_BUDGET, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 
 """Compiled blocks preserve transitions, phase outputs and explicit memory limits."""
 
@@ -57,22 +57,19 @@ def test_block_boundaries_and_padding_preserve_key_stream_and_phase_outputs(
     caplog.set_level(logging.INFO, logger="grassmoth.models.ssm.inference.samplers.progress")
     initial = _Carry(jax.random.key(791), jnp.zeros((3, 4)))
     plan = sweeps.compile_sweeps(
-        _factory,
+        SweepProgram(_factory, label="test", max_batch_size=8),
         initial,
-        num_warmup=warmup,
-        num_samples=samples,
-        max_batch_size=8,
-        budget=COMPUTE_BUDGET,
-        prepare_program=prepare_program,
+        execution_context=EXECUTION_CONTEXT,
+        sampler=SamplerSpec(num_warmup=warmup, num_samples_per_chain=samples),
     )
     assert plan.batch_size == 8
     run = run_sweeps(
         plan,
         initial,
-        clock=monotonic,
-        label="test",
-        logger=logging.getLogger("grassmoth.models.ssm.inference.samplers.progress"),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=replace(
+            EXECUTION_CONTEXT,
+            logger=logging.getLogger("grassmoth.models.ssm.inference.samplers.progress"),
+        ),
     )
     events = [
         json.loads(record.message)
@@ -144,13 +141,10 @@ def test_declared_checkpoints_preserve_prefix_and_never_exceed_ceiling(
 ):
     initial = _Carry(jax.random.key(791), jnp.zeros((3, 4)))
     plan = sweeps.compile_sweeps(
-        _factory,
+        SweepProgram(_factory, label="test", max_batch_size=1),
         initial,
-        num_warmup=11,
-        num_samples=ceiling,
-        max_batch_size=1,
-        budget=COMPUTE_BUDGET,
-        prepare_program=prepare_program,
+        execution_context=EXECUTION_CONTEXT,
+        sampler=SamplerSpec(num_warmup=11, num_samples_per_chain=ceiling),
     )
     observed = []
 
@@ -173,10 +167,7 @@ def test_declared_checkpoints_preserve_prefix_and_never_exceed_ceiling(
             current_plan,
             initial,
             convergence=convergence_check,
-            clock=monotonic,
-            label="test",
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
+            execution_context=EXECUTION_CONTEXT,
         )
 
     full = execute(plan)
@@ -204,13 +195,10 @@ def test_declared_checkpoints_preserve_prefix_and_never_exceed_ceiling(
         assert stopped.stopping_checkpoint is None
     # Same last transition and random stream as a fit whose requested count is this prefix.
     prefix_plan = sweeps.compile_sweeps(
-        _factory,
+        SweepProgram(_factory, label="test", max_batch_size=1),
         initial,
-        num_warmup=11,
-        num_samples=expected,
-        max_batch_size=1,
-        budget=COMPUTE_BUDGET,
-        prepare_program=prepare_program,
+        execution_context=EXECUTION_CONTEXT,
+        sampler=SamplerSpec(num_warmup=11, num_samples_per_chain=expected),
     )
     prefix = execute(prefix_plan)
     np.testing.assert_array_equal(stopped.state.state, prefix.state.state)
@@ -255,13 +243,10 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     )
     initial = jnp.zeros((4, 3))
     plan = sweeps.compile_sweeps(
-        factory,
+        SweepProgram(factory, label="test", max_batch_size=8),
         initial,
-        num_warmup=3,
-        num_samples=5,
-        max_batch_size=8,
-        budget=budget,
-        prepare_program=prepare_program,
+        execution_context=replace(EXECUTION_CONTEXT, budget=budget),
+        sampler=SamplerSpec(num_warmup=3, num_samples_per_chain=5),
     )
     assert compiled_batches == [8, 4, 2]
     assert len(compiled_phases) == 3
@@ -270,26 +255,19 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     assert isinstance(plan.posterior, sweep_plan.CompiledSweepPhase)
     assert plan.warmup.executable is plan.posterior.executable
     assert not executed
-    run = run_sweeps(
-        plan,
-        initial,
-        clock=monotonic,
-        label="test",
-        logger=logging.getLogger("grassmoth.models.ssm.inference.samplers.progress"),
-        wall_clock=lambda: datetime.now(UTC),
-    )
+    run = run_sweeps(plan, initial, execution_context=EXECUTION_CONTEXT)
     np.testing.assert_array_equal(run.state, np.full((4, 3), 8))
     assert run.history.posterior["value"].shape == (4, 5, 3)
     assert len(executed) == 3  # First-step timing, remaining warmup, posterior.
     with pytest.raises(MemoryError, match="One sweep lane"):
         sweeps.compile_sweeps(
-            factory,
+            SweepProgram(factory, label="test", max_batch_size=2),
             initial,
-            num_warmup=3,
-            num_samples=5,
-            max_batch_size=2,
-            budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=100)),
-            prepare_program=prepare_program,
+            execution_context=replace(
+                EXECUTION_CONTEXT,
+                budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=100)),
+            ),
+            sampler=SamplerSpec(num_warmup=3, num_samples_per_chain=5),
         )
 
 

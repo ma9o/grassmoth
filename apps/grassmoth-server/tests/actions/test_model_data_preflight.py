@@ -1,5 +1,4 @@
-import logging
-import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from unittest.mock import Mock
 
@@ -27,7 +26,7 @@ from grassmoth_server_test_support.action import edit_and_check, prepared_profil
 from grassmoth_server_test_support.helpers import write_question
 from grassmoth_server_test_support.model import stress_sleep_causal_model
 from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
-from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import compile_fit_fixture
 from grassmoth_test_support.model import construct_named
 
@@ -77,38 +76,27 @@ def test_noisy_interval_summary_passes_fit_admission_and_dispatches(monkeypatch)
     inputs = compile_fit_fixture(dynamical_model_spec)
     from grassmoth.models.ssm.preparation.panel import PreparedFit, prepare_fit
 
-    prepared = prepare_fit(
-        inputs, panel, time_origin=panel_metadata().time_origin, compiler=compile_program
-    )
+    prepared = prepare_fit(inputs, panel, compiler=compile_program)
     assert isinstance(prepared, PreparedFit)
     assert prepared.inputs is inputs
     assert prepared.panel.compiled_dynamical_model is inputs.compiled_dynamical_model
     sampler = SamplerSpec()
+    execution_context = replace(
+        EXECUTION_CONTEXT, compiler=compile_program, prepare_program=prepare_program
+    )
     result = fit(
         prepared.inputs.prior_runtime_bundle,
         prepared.panel,
         sampler=sampler,
-        reparam=None,
-        clock=time.monotonic,
-        compute_budget=COMPUTE_BUDGET,
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=execution_context,
     )
     assert result is dispatch.return_value
     dispatch.assert_called_once_with(
         prepared.inputs.prior_runtime_bundle,
         prepared.panel,
-        compute_budget=COMPUTE_BUDGET,
         sampler=sampler,
-        reparam=None,
-        clock=time.monotonic,
-        logger=logging.getLogger(__name__),
-        wall_clock=dispatch.call_args.kwargs["wall_clock"],
+        execution_context=execution_context,
         continuation=None,
-        compiler=compile_program,
-        prepare_program=prepare_program,
     )
 
 

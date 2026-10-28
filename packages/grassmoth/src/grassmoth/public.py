@@ -42,6 +42,12 @@ from grassmoth.actions.fit.action import (
 from grassmoth.actions.fit.execution import (
     ModelFitFailure as ModelFitFailure,
 )
+from grassmoth.actions.fit.inputs import (
+    ContinuationRefusal as ContinuationRefusal,
+)
+from grassmoth.actions.fit.inputs import (
+    FitInputs as FitInputs,
+)
 from grassmoth.actions.model_diff import (
     model_diff as model_diff,
 )
@@ -51,6 +57,12 @@ from grassmoth.actions.prepare_data.action import (
 from grassmoth.actions.simulate.action import (
     simulate as simulate,
 )
+from grassmoth.actions.simulate.inputs import (
+    FittedLaw as FittedLaw,
+)
+from grassmoth.actions.simulate.inputs import (
+    SimulationInputs as SimulationInputs,
+)
 from grassmoth.artifacts.arrays import (
     NumericalArray as NumericalArray,
 )
@@ -59,9 +71,6 @@ from grassmoth.artifacts.base import (
 )
 from grassmoth.artifacts.continuation import (
     SamplerCheckpoint as SamplerCheckpoint,
-)
-from grassmoth.artifacts.continuation import (
-    TransferredTuning as TransferredTuning,
 )
 from grassmoth.artifacts.identity import (
     ConstructRef as ConstructRef,
@@ -157,6 +166,15 @@ from grassmoth.artifacts.observations.semantics import (
     SummaryOperator as SummaryOperator,
 )
 from grassmoth.artifacts.observations.spec import (
+    LabeledMeasurement as LabeledMeasurement,
+)
+from grassmoth.artifacts.observations.spec import (
+    Measurement as Measurement,
+)
+from grassmoth.artifacts.observations.spec import (
+    NumericMeasurement as NumericMeasurement,
+)
+from grassmoth.artifacts.observations.spec import (
     ObservationWindow as ObservationWindow,
 )
 from grassmoth.artifacts.observations.spec import (
@@ -196,7 +214,7 @@ from grassmoth.artifacts.reports.data_comparison import (
     DataComparisonReport as DataComparisonReport,
 )
 from grassmoth.artifacts.reports.data_comparison import (
-    PredictiveIndicatorComparison as PredictiveIndicatorComparison,
+    IndicatorComparison as IndicatorComparison,
 )
 from grassmoth.artifacts.reports.data_quality import (
     DataProfileReport as DataProfileReport,
@@ -287,6 +305,9 @@ from grassmoth.compute.budget import (
 )
 from grassmoth.compute.budget import (
     SharedMemoryBudget as SharedMemoryBudget,
+)
+from grassmoth.compute.context import (
+    ModelExecutionContext as ModelExecutionContext,
 )
 from grassmoth.compute.programs import (
     PreparedProgram as PreparedProgram,

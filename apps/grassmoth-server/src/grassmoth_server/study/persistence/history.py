@@ -35,6 +35,7 @@ from grassmoth_server.study.records import (
     Rejected,
     StudyRevision,
     argument_parents,
+    recorded_question,
 )
 from grassmoth_server.study.state import ArtifactRecord, StudyState, apply_effects
 
@@ -185,15 +186,10 @@ class StudyRepository:
 
     def question(self) -> ArtifactRecord:
         """The study's immutable question, independent of its current scientific state."""
-        for revision in self.attempts():
-            attempt = revision.record.attempt
-            if attempt.action == "edit_question" and isinstance(attempt.outcome, Applied):
-                return next(
-                    item
-                    for item in attempt.outcome.effects.produced
-                    if item.artifact_id == "question"
-                )
-        raise StudyLookupError("Set the study question first")
+        question = recorded_question(self.attempts())
+        if question is None:
+            raise StudyLookupError("Set the study question first")
+        return question
 
     def append(
         self,

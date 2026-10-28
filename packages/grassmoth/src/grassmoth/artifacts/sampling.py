@@ -33,9 +33,9 @@ are starting values; adaptation constants not listed here are fixed.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal
 
-from pydantic import AfterValidator, Field, model_validator
+from pydantic import AfterValidator, Field
 
 from grassmoth.artifacts.base import Value
 
@@ -45,6 +45,8 @@ type CompanionMoves = Literal[
 ]
 type LatentBlockSize = Literal[1, 2, "all"]
 type JointParameterization = Literal["centred", "non_centred", "mixed"]
+type ParameterProposal = Literal["random_walk", "pseudo_langevin"]
+type AdaptationScheme = Literal["simple", "dual_averaging"]
 type ParticleDiagnosticMetric = Literal[
     "particle_identity",
     "parameter_movement",
@@ -210,8 +212,29 @@ class NutsDASpec(Value):
     )
 
 
+class UntemperedSpec(Value):
+    """The exact posterior alone, optionally followed by companion moves each sweep."""
+
+    kind: Literal["untempered"] = "untempered"
+    companion: CompanionMoves = Field(
+        default="none",
+        description=(
+            "Exact moves after each sweep, which update the parameters at the current path "
+            "as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). "
+            "centred_mh is a random walk on every parameter, shaped by the sweep's "
+            "preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh "
+            "follows it with a random walk on the diffusion scales that holds the path's "
+            "innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one "
+            "NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step "
+            "towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with "
+            "trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path "
+            "density."
+        ),
+    )
+
+
 class GaussianReferenceTemperingSpec(Value):
-    """Optional replica exchange; each ladder retains only its exact beta-one chain.
+    """Replica exchange; each ladder retains only its exact beta-one chain.
 
     The ladder spans beta one to zero. The reference is fixed at initialization,
     its endpoint is independently refreshed every sweep, and even/odd neighboring
@@ -220,9 +243,11 @@ class GaussianReferenceTemperingSpec(Value):
 
     It is for posteriors whose chains stay in separate modes: states that move freely
     under the reference reach the exact chain through swaps (Syed et al. 2022). Its
-    limits are in docs/assumptions.md, under Model class.
+    limits are in docs/assumptions.md, under Model class. Companion moves are built for
+    the untempered posterior, so a tempered run has none.
     """
 
+    kind: Literal["gaussian_reference"] = "gaussian_reference"
     num_temperatures: int = Field(
         default=48,
         ge=2,
@@ -257,6 +282,11 @@ class GaussianReferenceTemperingSpec(Value):
             "leaves the evenly spaced ladder unadapted."
         ),
     )
+
+
+type TemperingSpec = Annotated[
+    UntemperedSpec | GaussianReferenceTemperingSpec, Field(discriminator="kind")
+]
 
 
 class GaussianInitializationSpec(Value):
@@ -381,15 +411,29 @@ _GUIDED_SCAN_UNROLL = (
 )
 
 
-class ParticleAGradSpec(Value):
+class GuidedPathSpec(Value):
     """Sequential conditional SMC with exact Gaussian transition-informed proposals.
 
-    Particle-aGRAD (Corenflos & Finke 2024, section 4.1) keeps the auxiliary
-    variable in the weights. Parameter labels remain marginalized. Strong future
-    information or multiple modes can reduce mixing; the target stays exact.
+    Corenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear
+    transitions and densities pay every weight, so each method's approximation costs
+    mixing, never the target.
     """
 
-    method: Literal["particle_agrad"] = "particle_agrad"
+    method: Literal["particle_agrad", "twisted_particle_agrad", "particle_mgrad"] = Field(
+        default="particle_agrad",
+        description=(
+            "particle_agrad keeps the auxiliary variable in the weights (section 4.1); strong "
+            "future information or multiple modes can reduce its mixing. "
+            "twisted_particle_agrad adds a Gaussian look-ahead built at the auxiliary path: a "
+            "parallel backward information scan guides the sequential filter, and proposals "
+            "combine exact nonlinear transition means with the approximate twist, whose "
+            "normalized densities and twist ratios are paid in full (section 4.4); poor local "
+            "fits and multiple modes cost efficiency. particle_mgrad integrates the path "
+            "auxiliary out of the particle weights with the untwisted proposal (section 4.2); it "
+            "supports point readings without deterministic recurrences, and separated path "
+            "components and informative future readings can slow its mixing."
+        ),
+    )
     num_particles: int = Field(default=64, ge=2, description=_GUIDED_PARTICLES)
     latent_step: LatentStepSpec = Field(
         default_factory=AdaptedLatentStepSpec, description=_GUIDED_STEP
@@ -398,47 +442,7 @@ class ParticleAGradSpec(Value):
     scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
 
 
-class TwistedParticleAGradSpec(Value):
-    """Particle-aGRAD with a Gaussian look-ahead built at the auxiliary path.
-
-    A parallel backward information scan guides a sequential conditional filter.
-    Proposals combine exact nonlinear transition means with the approximate twist;
-    their normalized densities and twist ratios are paid in full. Poor local fits
-    and multiple modes cost efficiency, never change the target (section 4.4).
-    """
-
-    method: Literal["twisted_particle_agrad"] = "twisted_particle_agrad"
-    num_particles: int = Field(default=64, ge=2, description=_GUIDED_PARTICLES)
-    latent_step: LatentStepSpec = Field(
-        default_factory=AdaptedLatentStepSpec, description=_GUIDED_STEP
-    )
-    kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
-    scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
-
-
-class ParticleMGradSpec(Value):
-    """Particle-mGRAD integrates the path auxiliary out of the particle weights.
-
-    Uses the untwisted Gaussian transition-informed proposal with exact nonlinear
-    corrections (Corenflos & Finke 2024, section 4.2). Parameter labels remain
-    marginalized. Supports point readings without deterministic recurrences;
-    separated path components and informative future readings can slow mixing.
-    """
-
-    method: Literal["particle_mgrad"] = "particle_mgrad"
-    num_particles: int = Field(default=64, ge=2, description=_GUIDED_PARTICLES)
-    latent_step: LatentStepSpec = Field(
-        default_factory=AdaptedLatentStepSpec, description=_GUIDED_STEP
-    )
-    kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
-    scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
-
-
-type GuidedPathSpec = ParticleAGradSpec | TwistedParticleAGradSpec | ParticleMGradSpec
-type PathUpdateSpec = Annotated[
-    DsmcSpec | ParticleAGradSpec | TwistedParticleAGradSpec | ParticleMGradSpec,
-    Field(discriminator="method"),
-]
+type PathUpdateSpec = Annotated[DsmcSpec | GuidedPathSpec, Field(discriminator="method")]
 
 
 class MarginalParticleGibbsSpec(Value):
@@ -462,12 +466,15 @@ class MarginalParticleGibbsSpec(Value):
             "M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024)."
         ),
     )
-    tempering: GaussianReferenceTemperingSpec | None = Field(
-        default=None,
-        description="Gaussian-reference parallel tempering; null runs the exact posterior alone.",
+    tempering: TemperingSpec = Field(
+        default_factory=UntemperedSpec,
+        description=(
+            "untempered runs the exact posterior alone and allows companion moves; "
+            "gaussian_reference runs Gaussian-reference parallel tempering."
+        ),
     )
     path_update: PathUpdateSpec = Field(default_factory=DsmcSpec, description="Exact path update.")
-    parameter_proposal: Literal["random_walk", "pseudo_langevin"] = Field(
+    parameter_proposal: ParameterProposal = Field(
         default="random_walk",
         description=(
             "random_walk splits a preconditioned Gaussian step into two symmetric halves "
@@ -476,21 +483,6 @@ class MarginalParticleGibbsSpec(Value):
             "asymmetry exactly in the selection weights; the current path would break that "
             "correction (Corenflos 2025, section 3.1). It is kept as the control for gradients "
             "within the same kernel."
-        ),
-    )
-    companion: CompanionMoves = Field(
-        default="none",
-        description=(
-            "Exact moves after each sweep, which update the parameters at the current path "
-            "as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). "
-            "centred_mh is a random walk on every parameter, shaped by the sweep's "
-            "preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh "
-            "follows it with a random walk on the diffusion scales that holds the path's "
-            "innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one "
-            "NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step "
-            "towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with "
-            "trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path "
-            "density. Not available with tempering."
         ),
     )
     diagnostic_metrics: ParticleDiagnosticMetrics = Field(
@@ -519,7 +511,7 @@ class MarginalParticleGibbsSpec(Value):
             "dimension (Agrawal et al. 2023)."
         ),
     )
-    adaptation_scheme: Literal["simple", "dual_averaging"] = Field(
+    adaptation_scheme: AdaptationScheme = Field(
         default="simple",
         description=(
             "How warmup adapts the parameter step: simple uses a constant gain and keeps the "
@@ -531,13 +523,6 @@ class MarginalParticleGibbsSpec(Value):
         default_factory=GaussianInitializationSpec,
         description="Independent Gaussian starts, which also set the initial proposal scale.",
     )
-
-    @model_validator(mode="after")
-    def untempered_companions(self) -> Self:
-        """Keep companion moves on the untempered posterior they are built for."""
-        if self.companion != "none" and self.tempering is not None:
-            raise ValueError("Companion moves are not available with tempering")
-        return self
 
 
 type InferenceAlgorithmSpec = Annotated[
@@ -634,11 +619,12 @@ class SamplerSpec(Value):
         algorithm = self.algorithm
         if isinstance(algorithm, NutsDASpec):
             return (algorithm.method, algorithm.trajectory.kind, algorithm.parameterization)
+        tempering = algorithm.tempering
         return (
             algorithm.method,
             algorithm.path_update.method,
             0 if isinstance(algorithm.path_update, DsmcSpec) else algorithm.path_update.kappa,
             algorithm.parameter_proposal,
-            algorithm.companion,
-            1 if algorithm.tempering is None else algorithm.tempering.num_temperatures,
+            tempering.companion if isinstance(tempering, UntemperedSpec) else "none",
+            1 if isinstance(tempering, UntemperedSpec) else tempering.num_temperatures,
         )

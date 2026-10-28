@@ -59,7 +59,7 @@ def compile_dynamics(spec: DynamicsSpec, *, prefix: str = "vf") -> CompiledDynam
         components=components,
         drift_program=compile_shared_drift(spec),
         potential_indices=tuple(
-            i for i, item in enumerate(spec.components) if item.kind == "potential"
+            i for i, item in enumerate(spec.components) if item.role == "potential"
         ),
     )
     component_sites = tuple(

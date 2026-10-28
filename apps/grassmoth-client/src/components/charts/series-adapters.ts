@@ -91,7 +91,7 @@ const CHANGE_COLORS = {
 
 /** Every saved history of one variable on the union of their anchors, with point changes. */
 export function dataComparisonChart(variable: DataVariableView): Omit<DrawsChartProps, "height"> {
-  const referenceSide = "predictive" in variable ? variable.predictive.reference_side : null;
+  const referenceSide = variable.predictive?.reference_side ?? null;
   const histories = [...variable.left, ...variable.right].filter((history) => history !== null);
   const definition = histories.at(0)?.variable;
   const timestamps = (series: NonNullable<DataVariableView["left"][number]>) => {
@@ -202,7 +202,7 @@ export function dataComparisonChart(variable: DataVariableView): Omit<DrawsChart
     timeOrigin: origin === null ? null : new Date(origin).toISOString(),
     layers: [...sides, ...references, ...changes],
     ...(single ? { observed: { label: "Observed", values: align(single) } } : {}),
-    levels: definition?.ordinal_levels ?? definition?.categorical_levels ?? null,
+    levels: definition && "levels" in definition.measurement ? definition.measurement.levels : null,
     xLabel: "Days from first anchor",
   };
 }

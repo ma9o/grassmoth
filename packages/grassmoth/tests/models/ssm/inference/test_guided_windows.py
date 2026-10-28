@@ -12,7 +12,7 @@ from scipy.special import logsumexp
 from scipy.stats import multivariate_normal, nbinom, norm
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import ParticleAGradSpec, TwistedParticleAGradSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import guided_delta_limit
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import (
@@ -56,15 +56,13 @@ def test_memory_guide_matches_dense_auxiliary_conditioning(variance):
 
     _, geometry = jax.jit(
         lambda: _memory_guide(
-            target,
-            context,
             memory,
             observe,
             jnp.zeros(1),
             auxiliary,
             variances,
             mask,
-            TwistedParticleAGradSpec(kappa=1),
+            GuidedPathSpec(method="twisted_particle_agrad", kappa=1),
             "actual_law",
         )
     )()
@@ -108,10 +106,10 @@ def test_memory_guide_matches_dense_auxiliary_conditioning(variance):
 
 
 @pytest.mark.parametrize(
-    ("spec_type", "kappa"),
-    [(TwistedParticleAGradSpec, 1), (TwistedParticleAGradSpec, 0), (ParticleAGradSpec, 1)],
+    ("method", "kappa"),
+    [("twisted_particle_agrad", 1), ("twisted_particle_agrad", 0), ("particle_agrad", 1)],
 )
-def test_guided_windows_preserve_joint_path_and_label_posterior(spec_type, kappa):
+def test_guided_windows_preserve_joint_path_and_label_posterior(method, kappa):
     times = np.arange(4.0)
     observed = np.array([[0.2, np.nan], [-0.15, -0.1], [0.4, 0.25], [-0.1, 0.35]])
     starts = np.column_stack((times, [np.nan, 0.0, 0.5, 1.5]))
@@ -143,7 +141,7 @@ def test_guided_windows_preserve_joint_path_and_label_posterior(spec_type, kappa
     starts = jnp.asarray(
         (means[selected] + rng.normal(size=(4096, 4)) @ np.linalg.cholesky(covariance).T)[..., None]
     )
-    spec = spec_type(num_particles=8, kappa=kappa)
+    spec = GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
     setup = build_smoother_setup(
         target,
         spec,

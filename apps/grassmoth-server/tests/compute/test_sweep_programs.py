@@ -1,5 +1,6 @@
 """Staged sweep programs bind each fit's numerical operands."""
 
+from dataclasses import replace
 from functools import partial
 
 import jax
@@ -8,9 +9,11 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
+from grassmoth.artifacts.sampling import SamplerSpec
 from grassmoth.models.ssm.inference.samplers import sweep_plan, sweeps
+from grassmoth.models.ssm.inference.samplers.sweep_plan import SweepProgram
 from grassmoth_server.compute.compilation_cache import prepare_program
-from grassmoth_test_support.compute import COMPUTE_BUDGET
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -43,13 +46,10 @@ def test_runtime_inputs_rebind_nested_observations_priors_geometry_and_tuning():
     )
     plans = tuple(
         sweeps.compile_sweeps(
-            factory(values),
+            SweepProgram(factory(values), label="test", max_batch_size=1),
             initial,
-            num_warmup=1,
-            num_samples=1,
-            max_batch_size=1,
-            budget=COMPUTE_BUDGET,
-            prepare_program=prepare_program,
+            execution_context=replace(EXECUTION_CONTEXT, prepare_program=prepare_program),
+            sampler=SamplerSpec(num_warmup=1, num_samples_per_chain=1),
         )
         for values in (first, second)
     )

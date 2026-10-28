@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 
 from grassmoth.artifacts.identity import IndicatorId, IndicatorRef
 from grassmoth.artifacts.observations.semantics import SupportKind
-from grassmoth.artifacts.reports.checks import Evaluated, NotEvaluated
+from grassmoth.artifacts.reports.checks import CheckOutcome, Evaluated, NotEvaluated
 from grassmoth.artifacts.reports.data_quality import (
     DataFinding,
     DataProfileReport,
@@ -87,9 +87,7 @@ def indicator_findings(
         )
     findings: list[DataFinding] = []
 
-    def measured(
-        code: str, evidence: str, *, outcome: Literal["passed", "failed"] = "passed"
-    ) -> None:
+    def measured(code: str, evidence: str, *, outcome: CheckOutcome = "passed") -> None:
         findings.append(Evaluated(code=code, subject=subject, outcome=outcome, evidence=evidence))
 
     measured("data_availability", f"{ctx.n_obs} usable observations.")
@@ -175,7 +173,7 @@ def _build_indicator_context(
     variance = cast("float | None", values.var())
 
     indicator_meta = indicator_lookup.get(indicator_id)
-    dtype = indicator_meta.measurement_dtype if indicator_meta is not None else None
+    dtype = indicator_meta.measurement.dtype if indicator_meta is not None else None
     model_clock_hours = (
         ind_data.filter(pl.col("value").is_not_null())
         .select(

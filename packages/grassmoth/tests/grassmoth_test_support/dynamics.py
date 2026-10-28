@@ -16,7 +16,7 @@ from grassmoth.artifacts.model.expressions import (
     restoring_potential,
     state,
 )
-from grassmoth.models.ssm.dynamics.expression import ExpressionComponentSpec
+from grassmoth.models.ssm.dynamics.expression import EdgeDrift, ExpressionComponentSpec
 from grassmoth.models.ssm.dynamics.vector_field import ComponentDrift, VectorField
 
 if TYPE_CHECKING:
@@ -47,14 +47,13 @@ def _state(index):
     return state(ConstructId(f"construct:state{index}"))
 
 
-def _term(expression, target, source=None, *, kind="drift", max_index=None):
-    last = max(target, source if source is not None else target, max_index or 0)
+def _term(expression, target, role="drift", *, max_index=None):
+    last = max(target, role.source if isinstance(role, EdgeDrift) else target, max_index or 0)
     return ExpressionComponentSpec(
         expression=expression,
         target=target,
-        source=source,
+        role=role,
         state_ids=tuple(ConstructId(f"construct:state{i}") for i in range(last + 1)),
-        kind=kind,
     )
 
 
@@ -83,13 +82,15 @@ def potential_term(target, center=None, stiffness=None, quartic=_ZERO):
             quartic=_coefficient(quartic, "quartic"),
         ),
         target,
-        kind="potential",
+        "potential",
     )
 
 
 def linear_term(source, target, weight=None):
     return _term(
-        coefficient(_coefficient(weight, "weight"), "weight") * _state(source), target, source
+        coefficient(_coefficient(weight, "weight"), "weight") * _state(source),
+        target,
+        EdgeDrift(source),
     )
 
 
@@ -102,7 +103,7 @@ def hill_term(source, target, emax=None, ec50=None, n=None):
             n=_coefficient(n, "exponent"),
         ),
         target,
-        source,
+        EdgeDrift(source),
     )
 
 
@@ -110,7 +111,7 @@ def interaction_term(source_a, source_b, target, weight=None):
     return _term(
         coefficient(_coefficient(weight, "weight"), "weight") * _state(source_a) * _state(source_b),
         target,
-        source_a,
+        EdgeDrift(source_a),
         max_index=source_b,
     )
 

@@ -5,8 +5,7 @@ Covers: semantic prior binding and fit-input preparation.
 
 from __future__ import annotations
 
-import logging
-import time
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import jax.numpy as jnp
@@ -35,12 +34,13 @@ from grassmoth.artifacts.model.parameter_spec import (
 )
 from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.observations.semantics import SummaryOperator
-from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
+from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
 from grassmoth.artifacts.sampling import SamplerSpec
 from grassmoth.compute.budget import ComputeBudget, SharedMemoryBudget
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.compile.inputs import compile_priors
 from grassmoth.models.ssm.compile.observation_windows import compile_observation_scan
+from grassmoth.models.ssm.dynamics.expression import EdgeDrift
 from grassmoth.models.ssm.preparation.binding import (
     BoundPanel,
     bind_panel,
@@ -48,7 +48,7 @@ from grassmoth.models.ssm.preparation.binding import (
 )
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
 from grassmoth.models.structure import StructuralSelection
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import COMPUTE_BUDGET, EXECUTION_CONTEXT, compile_program
 from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_fit_fixture,
@@ -220,7 +220,7 @@ def _manifest_standardization_of_constant_column_centers_without_scaling__make_s
                 observation=AuthoredObservationSpec(
                     id=_X_INDICATOR_ID,
                     name="x",
-                    measurement_dtype="continuous",
+                    measurement=NumericMeasurement(dtype="continuous"),
                     aggregation=SummaryOperator.LAST,
                     observation_window=None,
                 ),
@@ -283,7 +283,7 @@ def _stress_interval_model(window="31d") -> DynamicalModelSpec:
                 observation=AuthoredObservationSpec(
                     id=_STRESS_SCORE_INDICATOR_ID,
                     name="stress_score",
-                    measurement_dtype="continuous",
+                    measurement=NumericMeasurement(dtype="continuous"),
                     aggregation=SummaryOperator.MEAN,
                     observation_window=window,
                 ),
@@ -455,11 +455,11 @@ class TestBuilderPriorConversion:
                     if parameter.id in item.coefficients.values()
                 )
                 assert target.target_index == component.target
-                if component.source is None:
-                    assert isinstance(target, CompiledNodeTarget)
-                else:
+                if isinstance(component.role, EdgeDrift):
                     assert isinstance(target, CompiledEdgeTarget)
-                    assert target.source_index == component.source
+                    assert target.source_index == component.role.source
+                else:
+                    assert isinstance(target, CompiledNodeTarget)
 
     def test_cross_lag_prior_requires_the_declared_measurement_clock(self):
         dynamical_model_spec = _stress_mood_model().revised(measurement_clock=None)
@@ -574,7 +574,6 @@ class TestPrepareModelRuntime:
                     ),
                     time_origin=datetime(2024, 1, 1, tzinfo=UTC),
                 ),
-                time_origin=datetime(2024, 1, 1, tzinfo=UTC),
                 compiled_dynamical_model=inputs.compiled_dynamical_model,
                 compiler=compile_program,
             )
@@ -635,7 +634,6 @@ class TestPrepareModelRuntime:
                 tuple(item.observation for item in inputs.compiled_dynamical_model.observations),
                 time_origin=datetime(2024, 1, 1, tzinfo=UTC),
             ),
-            time_origin=datetime(2024, 1, 1, tzinfo=UTC),
             compiled_dynamical_model=inputs.compiled_dynamical_model,
             compiler=compile_program,
         )
@@ -683,7 +681,6 @@ class TestPrepareModelRuntime:
                 tuple(item.observation for item in model.compiled_dynamical_model.observations),
                 time_origin=datetime(2024, 1, 1, tzinfo=UTC),
             ),
-            time_origin=datetime(2024, 1, 1, tzinfo=UTC),
             compiled_dynamical_model=model.compiled_dynamical_model,
             compiler=compile_program,
         )
@@ -769,17 +766,25 @@ def test_fit_resolves_incomplete_model_before_panel_preparation(monkeypatch):
         raise AssertionError("panel prepared before fit capability was resolved")
 
     monkeypatch.setattr(runtime, "bind_panel", unexpected_panel)
+    from grassmoth.actions.fit.inputs import FitInputs
+    from grassmoth.artifacts.model.question import QuestionSpec
+    from grassmoth_test_support.helpers import fixture_entity_id
+
     result = fitting.fit_model(
-        StructuralSelection(DynamicalModelSpec(), None),
-        ObservationDataset(series={}, time_origin=datetime(2024, 1, 1, tzinfo=UTC)),
-        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
-        sampler=SamplerSpec(),
-        budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
-        clock=time.monotonic,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
-        compiler=compile_program,
-        prepare_program=prepare_program,
+        FitInputs(
+            selection=StructuralSelection(DynamicalModelSpec(), None),
+            question=QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
+            data_for_model=ObservationDataset(
+                series={}, time_origin=datetime(2024, 1, 1, tzinfo=UTC)
+            ),
+            sampler=SamplerSpec(),
+            compute_loo_diagnostics=False,
+        ),
+        continuation=None,
+        execution_context=replace(
+            EXECUTION_CONTEXT,
+            budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
+        ),
     )
     assert not isinstance(result, fitting.FittedModelResult)
     assert result.error

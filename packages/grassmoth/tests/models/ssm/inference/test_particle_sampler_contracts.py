@@ -1,6 +1,4 @@
-import logging
-import time
-from datetime import UTC, datetime
+from dataclasses import replace
 from unittest.mock import Mock
 
 import jax.numpy as jnp
@@ -13,11 +11,9 @@ from grassmoth.artifacts.sampling import (
     DsmcSpec,
     FixedLatentStepSpec,
     GaussianReferenceTemperingSpec,
+    GuidedPathSpec,
     MarginalParticleGibbsSpec,
-    ParticleAGradSpec,
-    ParticleMGradSpec,
     SamplerSpec,
-    TwistedParticleAGradSpec,
 )
 from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
 from grassmoth.models.ssm.compile.state_space import (
@@ -35,7 +31,7 @@ from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
 from grassmoth.models.ssm.preparation.binding import BoundPanel
 from grassmoth.models.ssm.preparation.preflight import validate_sampler_support
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.interval_particle import interval_target
 
 """Particle configuration and initialization contracts without compiling a sampler."""
@@ -44,10 +40,8 @@ from grassmoth_test_support.interval_particle import interval_target
 pytestmark = pytest.mark.contract
 
 
-@pytest.mark.parametrize(
-    "spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec, ParticleMGradSpec]
-)
-def test_guided_preflight_rejects_tempering_before_compute(monkeypatch, spec_type):
+@pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad", "particle_mgrad"])
+def test_guided_preflight_rejects_tempering_before_compute(monkeypatch, method):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
@@ -58,7 +52,7 @@ def test_guided_preflight_rejects_tempering_before_compute(monkeypatch, spec_typ
     )
     sampler = SamplerSpec(
         algorithm=MarginalParticleGibbsSpec(
-            path_update=spec_type(), tempering=GaussianReferenceTemperingSpec()
+            path_update=GuidedPathSpec(method=method), tempering=GaussianReferenceTemperingSpec()
         )
     )
     failure = validate_sampler_support(compiled, sampler)
@@ -66,12 +60,12 @@ def test_guided_preflight_rejects_tempering_before_compute(monkeypatch, spec_typ
     assert "tempering" in failure.message
 
 
-@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
+@pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad"])
 @pytest.mark.parametrize(
     "recurrences", [(), (AdditiveRecurrences((0,)),), (SequentialRecurrences((0,)),)]
 )
 def test_guided_preflight_accepts_interval_readings_and_recurrences(
-    monkeypatch, spec_type, recurrences
+    monkeypatch, method, recurrences
 ):
     from grassmoth.models.ssm import compiled_access
 
@@ -81,25 +75,27 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(
         state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
         observations=(Mock(support=Mock(support_kind="interval")),),
     )
-    sampler = SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=spec_type()))
+    sampler = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method=method))
+    )
     assert validate_sampler_support(compiled, sampler) is None
 
 
-@pytest.mark.parametrize(
-    "spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec, ParticleMGradSpec]
-)
-def test_guided_configuration_roundtrip_and_continuation_identity(spec_type):
-    sampler = SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=spec_type(kappa=1)))
+@pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad", "particle_mgrad"])
+def test_guided_configuration_roundtrip_and_continuation_identity(method):
+    sampler = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method=method, kappa=1))
+    )
     assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
     assert sampler.kernel_identity != SamplerSpec().kernel_identity
     assert (
         sampler.kernel_identity
         != SamplerSpec(
-            algorithm=MarginalParticleGibbsSpec(path_update=spec_type(kappa=0))
+            algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method=method, kappa=0))
         ).kernel_identity
     )
     with pytest.raises(ValidationError, match="latent_block_coords"):
-        spec_type.model_validate({"latent_block_coords": 1})
+        GuidedPathSpec.model_validate({"method": method, "latent_block_coords": 1})
 
 
 @pytest.mark.parametrize(
@@ -115,7 +111,9 @@ def test_mgrad_admission_owns_point_only_support(monkeypatch, support, recurrenc
         state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
         observations=(Mock(support=Mock(support_kind=support)),),
     )
-    sampler = SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=ParticleMGradSpec()))
+    sampler = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method="particle_mgrad"))
+    )
     failure = validate_sampler_support(compiled, sampler)
     assert (failure is None) == accepted
     if failure is not None:
@@ -220,22 +218,14 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         runner.run_marginal_particle_gibbs(
             target,
             kernel=kernel,
-            compute_budget=COMPUTE_BUDGET,
-            num_warmup=0,
-            num_samples=1,
-            num_chains=2,
+            sampler=SamplerSpec(num_warmup=0, num_samples_per_chain=1, num_chains=2),
             key=random.PRNGKey(0),
-            adaptation_rate=0.1,
             initialization=Mock(
                 spec=ParticleInitialization,
                 positions=jnp.asarray(positions),
                 paths=jnp.asarray(paths),
             ),
-            clock=time.monotonic,
-            compiler=compiler,
-            prepare_program=prepare_program,
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
+            execution_context=replace(EXECUTION_CONTEXT, compiler=compiler),
         )
     step.assert_not_called()
     target.initial_path.assert_not_called()
@@ -271,13 +261,8 @@ def test_initialization_failure_stops_production_before_sampling(monkeypatch):
                 ),
             ),
         ),
-        compute_budget=COMPUTE_BUDGET,
-        compiler=compile_program,
-        prepare_program=prepare_program,
         sampler=SamplerSpec(),
-        clock=time.monotonic,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=EXECUTION_CONTEXT,
     )
     assert result is failure
     initialize.assert_called_once()

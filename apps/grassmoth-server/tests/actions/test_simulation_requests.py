@@ -112,7 +112,7 @@ def _response(origin: datetime = datetime(2026, 1, 1, tzinfo=UTC)):
                 {
                     "id": "indicator:y",
                     "name": "y",
-                    "measurement_dtype": "continuous",
+                    "measurement": {"dtype": "continuous"},
                     "aggregation": "last",
                     "observation_window": "1d",
                 }

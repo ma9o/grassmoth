@@ -415,7 +415,6 @@ class ParticleTarget:
         noise: ParticleNoiseFactors,
         state: jax.Array,
         index: jax.Array | int,
-        observations: jax.Array,
         log_precision: jax.Array | None = None,
     ) -> jax.Array:
         """Score exact point laws and nonlinear predictors with prepared Gaussian noise."""
@@ -424,10 +423,9 @@ class ParticleTarget:
 
         def exact() -> jax.Array:
             return grouped_density_with_noise(
-                model.density_groups(),
-                self._point_observations(observations)[index],
+                model,
+                self._point_observations(self.observations)[index],
                 predictor,
-                model.measurement.manifest_cov,
                 tuple(factor.at(index) for factor in noise.observations),
                 log_precision,
             ).astype(predictor.dtype)

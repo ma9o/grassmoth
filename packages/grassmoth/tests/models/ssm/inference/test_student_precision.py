@@ -10,7 +10,7 @@ from scipy.stats import gamma, multivariate_normal, norm, t
 
 from grassmoth.artifacts.model.likelihood import StudentTLawSpec
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import TwistedParticleAGradSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.execution.observation_model import precision_normal_log_prob
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import trace_guided_step
@@ -187,7 +187,7 @@ def test_conditional_path_scores_and_guides_preserve_label_permutation(summary):
     context = target.context(labels[0], target.times)
     precision = draw_student_precisions(target, context, reference, jax.random.key(89))
     assert precision is not None
-    spec = TwistedParticleAGradSpec(num_particles=8, kappa=1)
+    spec = GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1)
     setup = build_smoother_setup(
         target,
         spec,

@@ -104,34 +104,24 @@ def test_identification_records_positive_and_absent_queries():
     assert absent.estimable_treatments == ()
 
 
-def test_identification_preserves_negative_findings(monkeypatch):
-    from dataclasses import replace
-
-    from grassmoth.models.causal import analysis as identification
-    from grassmoth.models.causal.identification import UnidentifiedQuery
+def test_identification_preserves_negative_findings():
+    from grassmoth.artifacts.model.construct import replace_constructs
 
     dynamical_model_spec = _model()
-    result = identification.check_identifiability(
-        dynamical_model_spec.constructs,
-        dynamical_model_spec.edges,
-        outcome_id=_outcome(),
-        observed_constructs={construct.name for construct in dynamical_model_spec.constructs},
+    stress, perf = (construct.id for construct in dynamical_model_spec.constructs)
+    unmeasured = dynamical_model_spec.with_entities(
+        edges=replace_constructs(
+            dynamical_model_spec.edges,
+            tuple(
+                construct.revised(indicators=()) if construct.id == perf else construct
+                for construct in dynamical_model_spec.constructs
+            ),
+        )
     )
-
-    monkeypatch.setattr(
-        identification,
-        "check_identifiability",
-        lambda *_, **__: replace(
-            result,
-            identifiable_treatments={},
-            non_identifiable_treatments={
-                "Stress": UnidentifiedQuery(confounders=(), notes="Unidentified")
-            },
-        ),
-    )
-    report = identify_model(StructuralSelection(_model(), _outcome()))
+    report = identify_model(StructuralSelection(unmeasured, perf))
     assert not report.estimable_treatments
-    assert report.non_identifiable[_model().constructs[0].id].notes == "Unidentified"
+    assert report.non_identifiable[stress].confounders == (perf,)
+    assert report.non_identifiable[stress].notes == "outcome is unobserved"
 
 
 @pytest.mark.parametrize("nonempty", [False, True])

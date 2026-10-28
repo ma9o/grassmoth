@@ -11,6 +11,7 @@ from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.identity import ConstructRef, IndicatorId, ParameterRef
 from grassmoth.artifacts.reports.checks import (
     Assessment,
+    CheckStatus,
     ConvergenceSubject,
     Evaluated,
     IndicatorCheckSubject,
@@ -21,7 +22,7 @@ from grassmoth.artifacts.reports.checks import (
 from grassmoth.artifacts.reports.display_frames import central_frame
 from grassmoth.artifacts.reports.effects import HistogramBin
 from grassmoth.artifacts.reports.empirical import EmpiricalPoint
-from grassmoth.artifacts.sampling import ParticleDiagnosticMetric, SamplerSpec
+from grassmoth.artifacts.sampling import LatentBlockSize, ParticleDiagnosticMetric, SamplerSpec
 
 
 class ParameterDiagnostics(Value):
@@ -130,7 +131,7 @@ class ConvergenceReport(Value):
 
     @computed_field
     @property
-    def status(self) -> Literal["passed", "failed", "not_evaluated"]:
+    def status(self) -> CheckStatus:
         """Convergence verdict with failed checks taking precedence over unevaluated checks."""
         if any(isinstance(item, Evaluated) and item.outcome == "failed" for item in self.findings):
             return "failed"
@@ -156,7 +157,7 @@ class ParetoKPoint(Value):
 
     timestep: int
     k: float | Literal["infinity", "-infinity", "undefined"]
-    status: Literal["passed", "failed", "not_evaluated"]
+    status: CheckStatus
 
 
 class LOOPITPoint(Value):
@@ -252,6 +253,9 @@ class PPCOverlay(Value):
         return self
 
 
+type PPCStatistic = Literal["mean", "sd", "min", "max"]
+
+
 class PPCTestStat(Value):
     """An observed summary compared with the same statistic across predictive replicates.
 
@@ -260,7 +264,7 @@ class PPCTestStat(Value):
     """
 
     indicator_id: IndicatorId
-    stat_name: Literal["mean", "sd", "min", "max"]
+    stat_name: PPCStatistic
     observed_value: float
     rep_values: tuple[float, ...]
     p_value: float | None
@@ -425,7 +429,7 @@ class ParticleSamplerDiagnostics(Value):
     parameter_accept_rate: float
     latent_update_fraction: float
     latent_frozen_fraction: float
-    latent_block_coords: Literal[1, 2, "all"]
+    latent_block_coords: LatentBlockSize
     initial_param_step_size: tuple[float, ...]
     final_param_step_size: tuple[float, ...]
     latent_sign_flip_moves: bool | None = None

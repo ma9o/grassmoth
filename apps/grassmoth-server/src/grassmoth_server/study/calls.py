@@ -147,9 +147,7 @@ async def _running_actions(
             asyncio.to_thread(
                 collect_call_log,
                 workspace_id,
-                seq=call.seq,
-                attempt_id=call.attempt_id,
-                messages=call.messages,
+                call,
                 at=datetime.now(UTC),
             )
             for call in running
@@ -254,9 +252,7 @@ async def _progress_response(workspace_id: str, progress: CallProgress) -> Actio
         log = await asyncio.to_thread(
             collect_call_log,
             workspace_id,
-            seq=progress.seq,
-            attempt_id=progress.attempt_id,
-            messages=progress.messages,
+            progress,
             at=datetime.now(UTC),
         )
         return ActionResult.from_poll(
@@ -276,9 +272,7 @@ async def _progress_response(workspace_id: str, progress: CallProgress) -> Actio
     log = await asyncio.to_thread(
         collect_call_log,
         workspace_id,
-        seq=progress.seq,
-        attempt_id=progress.attempt_id,
-        messages=progress.messages,
+        progress,
         at=datetime.now(UTC),
         failure=attempt.outcome,
     )

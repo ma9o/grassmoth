@@ -31,18 +31,17 @@ def _measurement_structure(*indicators):
                     "observation": {
                         "name": name,
                         "id": "indicator:" + name,
-                        "measurement_dtype": dtype,
+                        "measurement": {
+                            "dtype": dtype,
+                            **(
+                                {"levels": ["low", "medium", "high"]}
+                                if dtype == "ordinal"
+                                else {"levels": ["walking", "running"]}
+                                if dtype == "categorical"
+                                else {}
+                            ),
+                        },
                         "aggregation": default_aggregations[dtype],
-                        **(
-                            {"ordinal_levels": ["low", "medium", "high"]}
-                            if dtype == "ordinal"
-                            else {}
-                        ),
-                        **(
-                            {"categorical_levels": ["walking", "running"]}
-                            if dtype == "categorical"
-                            else {}
-                        ),
                     },
                     "extraction": {"kind": "semantic", "how_to_measure": "Measure " + name},
                 }

@@ -138,8 +138,8 @@ it("joins selected source histories in report order and retains computed evidenc
   expect(view.right).toBe(report.right);
   expect(variable.statistics).toBe(report.variables[0]?.statistics);
   const retained = fixtureValue(report.variables[0]);
-  if (!("predictive" in variable) || !("predictive" in retained))
-    throw new Error("Expected the recorded predictive alternative");
+  if (variable.predictive === null || retained.predictive === null)
+    throw new Error("Expected the recorded predictive comparison");
   expect(variable.predictive).toBe(retained.predictive);
   expect(variable.left[0]?.history.values).toEqual([1, 4, null]);
   expect(variable.right.map((series) => series?.history.values)).toEqual([
@@ -180,6 +180,7 @@ it("plots exact point changes against canonical history coordinates without chan
         changes: [
           { kind: "revised", before: { ...point, value: 4 }, after: { ...point, value: 1 } },
         ],
+        predictive: null,
       },
     ],
   };

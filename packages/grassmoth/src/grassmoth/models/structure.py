@@ -21,9 +21,8 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.observations.duration import Duration
     from grassmoth.artifacts.reports.identification import IdentificationReport
 
-type DependencyKey = tuple[
-    ConstructId, ConstructId, Literal["innovation_correlation", "initial_state_correlation"]
-]
+type DependencyKind = Literal["innovation_correlation", "initial_state_correlation"]
+type DependencyKey = tuple[ConstructId, ConstructId, DependencyKind]
 
 
 class StructuralCompilationError(AggregatedCompileError):
@@ -184,7 +183,7 @@ def induced_dependencies(
             },
             key=lambda cid: dynamical_model_spec.get_construct(cid).name,
         )
-        kind: Literal["innovation_correlation", "initial_state_correlation"] = (
+        kind: DependencyKind = (
             "initial_state_correlation"
             if construct.temporal_status == TemporalStatus.TIME_INVARIANT
             else "innovation_correlation"

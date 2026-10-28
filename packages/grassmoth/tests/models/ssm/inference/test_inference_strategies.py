@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import logging
-import time
-from datetime import UTC, datetime
-
 import jax.numpy as jnp
 import jax.random as random
 import numpy as np
@@ -14,6 +10,8 @@ import pytest
 from grassmoth.artifacts.model.likelihood import LinkFunction
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.artifacts.sampling import SamplerSpec
+from grassmoth.models.ssm.execution.contracts import MeasurementParams
+from grassmoth.models.ssm.execution.observation_model import compile_observation_model
 from grassmoth.models.ssm.execution.observation_operator import (
     compile_observation_operator,
     expected_observation_mean,
@@ -23,7 +21,7 @@ from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.parameter_tracing import _discover_sites
 from grassmoth.models.ssm.inference.types import JointPosteriorDraws, MCMCPosterior
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT, compile_program
 from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_fit_fixture,
@@ -127,27 +125,17 @@ class TestSupportAwareTrajectoryObservationLogProb:
         )
         latent = jnp.array([[1.0], [3.0]], dtype=jnp.float32)
         observations = jnp.array([[jnp.nan], [2.0]], dtype=jnp.float32)
-        obs_mask = ~jnp.isnan(observations)
         H = jnp.array([[1.0]], dtype=jnp.float32)
         d_meas = jnp.array([0.0], dtype=jnp.float32)
         R = jnp.array([[0.2]], dtype=jnp.float32)
-        obs_kernel = observation_kernel(
-            [DistributionFamily.GAUSSIAN], [LinkFunction.IDENTITY], None
-        )
-        mean_log_prob_fn = mean_density(
-            observation_laws([DistributionFamily.GAUSSIAN], parameters=None)[0]
-        )
+        laws = observation_laws([DistributionFamily.GAUSSIAN], parameters=None)
+        mean_log_prob_fn = mean_density(laws[0])
 
         ll = trajectory_observation_log_probs(
             latent,
             observations,
-            obs_mask,
-            H,
-            d_meas,
-            R,
-            obs_kernel,
-            mean_log_prob_fn,
-            support,
+            MeasurementParams(lambda_mat=H, manifest_means=d_meas, manifest_cov=R),
+            compile_observation_model(laws, manifest_cov=R, observation_support=support),
         )
 
         manual = mean_log_prob_fn(
@@ -170,27 +158,17 @@ class TestSupportAwareTrajectoryObservationLogProb:
         )
         latent = jnp.array([[1.0], [3.0], [5.0], [7.0]], dtype=jnp.float32)
         observations = jnp.array([[jnp.nan], [jnp.nan], [3.0], [5.0]], dtype=jnp.float32)
-        obs_mask = ~jnp.isnan(observations)
         H = jnp.array([[1.0]], dtype=jnp.float32)
         d_meas = jnp.array([0.0], dtype=jnp.float32)
         R = jnp.array([[0.2]], dtype=jnp.float32)
-        obs_kernel = observation_kernel(
-            [DistributionFamily.GAUSSIAN], [LinkFunction.IDENTITY], None
-        )
-        mean_log_prob_fn = mean_density(
-            observation_laws([DistributionFamily.GAUSSIAN], parameters=None)[0]
-        )
+        laws = observation_laws([DistributionFamily.GAUSSIAN], parameters=None)
+        mean_log_prob_fn = mean_density(laws[0])
 
         ll = trajectory_observation_log_probs(
             latent,
             observations,
-            obs_mask,
-            H,
-            d_meas,
-            R,
-            obs_kernel,
-            mean_log_prob_fn,
-            support,
+            MeasurementParams(lambda_mat=H, manifest_means=d_meas, manifest_cov=R),
+            compile_observation_model(laws, manifest_cov=R, observation_support=support),
         )
 
         manual_0 = mean_log_prob_fn(
@@ -304,12 +282,7 @@ class TestDefaultMethodRouting:
             model.prior_runtime_bundle,
             bind_panel_fixture(model.compiled_dynamical_model, observations, times),
             sampler=SamplerSpec(),
-            clock=time.monotonic,
-            compute_budget=COMPUTE_BUDGET,
-            compiler=compile_program,
-            prepare_program=prepare_program,
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
+            execution_context=EXECUTION_CONTEXT,
         )
         assert not isinstance(result, ObservationPreflightFailure)
 

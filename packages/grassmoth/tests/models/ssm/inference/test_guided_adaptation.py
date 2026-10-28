@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.artifacts.sampling import ParticleAGradSpec, TwistedParticleAGradSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     _curvature_limits,
     adapt_scales,
@@ -49,7 +49,13 @@ def test_non_gaussian_limits_follow_current_warmup_state(kind):
     np.testing.assert_allclose(actual[:, 0], expected, rtol=2e-6)
 
 
-@pytest.mark.parametrize("spec", [ParticleAGradSpec(kappa=1), TwistedParticleAGradSpec(kappa=1)])
+@pytest.mark.parametrize(
+    "spec",
+    [
+        GuidedPathSpec(method="particle_agrad", kappa=1),
+        GuidedPathSpec(method="twisted_particle_agrad", kappa=1),
+    ],
+)
 def test_controller_obeys_changing_parameter_scale_and_freezes(spec):
     settings = latent_adaptation(spec)
 
@@ -74,7 +80,13 @@ def test_controller_obeys_changing_parameter_scale_and_freezes(spec):
     assert final.iteration == 500
 
 
-@pytest.mark.parametrize("spec", [ParticleAGradSpec(kappa=0), TwistedParticleAGradSpec(kappa=0)])
+@pytest.mark.parametrize(
+    "spec",
+    [
+        GuidedPathSpec(method="particle_agrad", kappa=0),
+        GuidedPathSpec(method="twisted_particle_agrad", kappa=0),
+    ],
+)
 def test_zero_drift_retains_existing_unbounded_controller(spec):
     settings = latent_adaptation(spec)
 
@@ -92,11 +104,11 @@ def test_zero_drift_retains_existing_unbounded_controller(spec):
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize("fixed", [False, True])
 def test_runner_initializes_inside_curvature_window_and_keeps_fixed_assignment(fixed):
-    import logging
-    import time
-    from datetime import UTC, datetime
-
-    from grassmoth.artifacts.sampling import FixedLatentStepSpec, GaussianInitializationSpec
+    from grassmoth.artifacts.sampling import (
+        FixedLatentStepSpec,
+        GaussianInitializationSpec,
+        SamplerSpec,
+    )
     from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
         build_marginal_particle_gibbs_kernel,
     )
@@ -105,7 +117,7 @@ def test_runner_initializes_inside_curvature_window_and_keeps_fixed_assignment(f
         ParticleInitialization,
         prepare_particle_initialization,
     )
-    from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+    from grassmoth_test_support.compute import EXECUTION_CONTEXT
     from grassmoth_test_support.interval_particle import interval_target
 
     target = interval_target(
@@ -120,16 +132,18 @@ def test_runner_initializes_inside_curvature_window_and_keeps_fixed_assignment(f
         spec=GaussianInitializationSpec(),
         key=jax.random.key(77),
         num_chains=1,
-        compute_budget=COMPUTE_BUDGET,
-        compiler=compile_program,
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(initialization, ParticleInitialization)
     spec = (
-        TwistedParticleAGradSpec(
-            kappa=1, num_particles=4, latent_step=FixedLatentStepSpec(delta=0.003)
+        GuidedPathSpec(
+            method="twisted_particle_agrad",
+            kappa=1,
+            num_particles=4,
+            latent_step=FixedLatentStepSpec(delta=0.003),
         )
         if fixed
-        else TwistedParticleAGradSpec(kappa=1, num_particles=4)
+        else GuidedPathSpec(method="twisted_particle_agrad", kappa=1, num_particles=4)
     )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
@@ -140,17 +154,10 @@ def test_runner_initializes_inside_curvature_window_and_keeps_fixed_assignment(f
     result = run_marginal_particle_gibbs(
         target,
         kernel=kernel,
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        num_warmup=500,
-        num_samples=2,
-        num_chains=1,
+        sampler=SamplerSpec(num_warmup=500, num_samples_per_chain=2, num_chains=1),
         key=jax.random.key(9),
         initialization=initialization,
-        compute_budget=COMPUTE_BUDGET,
-        clock=time.monotonic,
-        wall_clock=lambda: datetime.now(UTC),
-        logger=logging.getLogger(__name__),
+        execution_context=EXECUTION_CONTEXT,
     )
     if fixed:
         np.testing.assert_allclose(result.initial_latent_delta, 0.003, rtol=1e-6)
@@ -224,10 +231,6 @@ def test_diagonal_curvature_separates_tight_weak_and_missing_directions():
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize("family", ["poisson", "student_t"])
 def test_state_dependent_metric_freezes_and_continues_without_recalibration(family):
-    import logging
-    import time
-    from datetime import UTC, datetime
-
     from grassmoth.artifacts.arrays import NumericalArray
     from grassmoth.artifacts.continuation import SamplerCheckpoint
     from grassmoth.artifacts.probability.families import DistributionFamily
@@ -245,7 +248,7 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
         ParticleInitialization,
         prepare_particle_initialization,
     )
-    from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+    from grassmoth_test_support.compute import EXECUTION_CONTEXT
     from grassmoth_test_support.interval_particle import interval_target
 
     times = np.arange(3.0)
@@ -261,11 +264,10 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
         spec=GaussianInitializationSpec(),
         key=jax.random.key(22),
         num_chains=1,
-        compute_budget=COMPUTE_BUDGET,
-        compiler=compile_program,
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(initialization, ParticleInitialization)
-    spec = TwistedParticleAGradSpec(num_particles=8, kappa=1)
+    spec = GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
         path_update=spec,
@@ -277,17 +279,10 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
         return run_marginal_particle_gibbs(
             target,
             kernel=kernel,
-            compiler=compile_program,
-            prepare_program=prepare_program,
-            num_warmup=warmup,
-            num_samples=draws,
-            num_chains=1,
+            sampler=SamplerSpec(num_warmup=warmup, num_samples_per_chain=draws, num_chains=1),
             key=jax.random.key(31),
             initialization=initialization,
-            compute_budget=COMPUTE_BUDGET,
-            clock=time.monotonic,
-            wall_clock=lambda: datetime.now(UTC),
-            logger=logging.getLogger(__name__),
+            execution_context=EXECUTION_CONTEXT,
             continuation=continuation,
         )
 

@@ -1,6 +1,3 @@
-import logging
-from datetime import UTC, datetime
-from time import perf_counter
 from unittest.mock import Mock
 
 import jax
@@ -12,7 +9,7 @@ import pytest
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec
-from grassmoth.artifacts.sampling import DsmcSpec, GaussianReferenceTemperingSpec
+from grassmoth.artifacts.sampling import DsmcSpec, GaussianReferenceTemperingSpec, SamplerSpec
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
@@ -26,7 +23,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
 )
 from grassmoth.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import compile_fit_fixture
 from grassmoth_test_support.interval_particle import (
     gaussian_interval_case,
@@ -312,12 +309,8 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
     result = run_marginal_particle_gibbs(
         target,
         kernel=_local_kernel(target),
-        compute_budget=COMPUTE_BUDGET,
-        num_warmup=40,
-        num_samples=27,
-        num_chains=2,
+        sampler=SamplerSpec(num_warmup=40, num_samples_per_chain=27, num_chains=2),
         key=jax.random.PRNGKey(711),
-        adaptation_rate=0.05,
         adaptation_scheme=adaptation_scheme,
         initialization=Mock(
             spec=ParticleInitialization,
@@ -326,11 +319,7 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
             parameter_chol=jnp.eye(1),
         ),
         tempering=exchange if tempered else None,
-        clock=perf_counter,
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=EXECUTION_CONTEXT,
     )
     assert result.grouped_positions.shape == (2, 27, 1)
     assert result.latent_paths is not None

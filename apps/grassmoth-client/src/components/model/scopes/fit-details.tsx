@@ -69,7 +69,10 @@ export function FitDetails({ context }: { context: ScopeContext }) {
   const gibbs = sampler && "latent_update_fraction" in sampler ? sampler : null;
   const nuts = sampler && "max_tree_depth_fraction" in sampler ? sampler : null;
   const algorithm = gibbs?.settings.algorithm;
-  const companionNuts = algorithm?.method === "mpgibbs" && algorithm.companion === "centred_nuts";
+  const companionNuts =
+    algorithm?.method === "mpgibbs" &&
+    algorithm.tempering.kind === "untempered" &&
+    algorithm.tempering.companion === "centred_nuts";
   const tempering = sampler && "tempering" in sampler ? sampler.tempering : null;
   const weights = gibbs?.path_weights;
   const stages =

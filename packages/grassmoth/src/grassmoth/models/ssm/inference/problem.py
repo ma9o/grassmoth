@@ -25,7 +25,6 @@ from grassmoth.models.ssm.inference.parameter_tracing import prepare_model_param
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
-from grassmoth.models.ssm.transition_kinds import LATENT_TRANSITION_EULER_MARUYAMA
 
 if TYPE_CHECKING:
     import jax
@@ -56,16 +55,17 @@ def build_particle_problem(
     priors: PriorRuntimeBundle,
     panel: BoundPanel,
     *,
-    scheme: str,
     trace_key: jax.Array,
     reparam: Strategy | None,
     compiler: ProgramCompiler,
 ) -> ParticleProblem:
-    """Prepare the parameter transform and the exact discrete model for sampling."""
+    """Prepare the parameter transform and the exact discrete model for sampling.
+
+    The model is a continuous-time nonlinear SDE; the particle smoother always
+    discretizes it with the nonlinearity-preserving Euler-Maruyama scheme.
+    """
     observations, times = panel.observations, panel.times
     compiled_dynamical_model = panel.compiled_dynamical_model
-    if scheme != LATENT_TRANSITION_EULER_MARUYAMA:
-        raise ValueError(f"Particle inference requires 'euler_maruyama'; got {scheme!r}.")
     exact_constraints = compile_exact_state_constraints(
         compiled_dynamical_model, observations, input_values=panel.input_values
     )

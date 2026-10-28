@@ -177,7 +177,7 @@ class DataVariableSpec(Value):
         if isinstance(self.extraction, ComputedExtractionSpec):
             derive_indicator_observation_semantics(
                 self.observation.aggregation,
-                self.observation.measurement_dtype,
+                self.observation.measurement.dtype,
                 self.extraction.computed_rule,
             )
         return self

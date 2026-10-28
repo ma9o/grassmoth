@@ -372,7 +372,12 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     assert saved_inference.evidence.chain_extra_fields["diverging"] == divergent
     np.testing.assert_array_equal(initial_delta.values, [[1.0, 2.0]])
     np.testing.assert_array_equal(divergent.values, [False, True])
-    assert set(fitted_response.body.model_dump()) == {"dynamical_model_spec", "checks", "inference"}
+    assert set(fitted_response.body.model_dump()) == {
+        "dynamical_model_spec",
+        "checks",
+        "inference",
+        "profile",
+    }
     assert fitted_response.body.revised(dynamical_model_spec=None).dynamical_model_spec is None
     for field in ("checks", "inference"):
         with pytest.raises(ValidationError):

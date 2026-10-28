@@ -7,6 +7,7 @@ export type ActionMessage = components["schemas"]["ActionMessage"];
 export type ActionPoll = components["schemas"]["ActionPoll"];
 export type ActionReportName = components["schemas"]["ActionReportName"];
 export type ActionSuccess = components["schemas"]["ActionSuccess"];
+export type AdaptationScheme = components["schemas"]["AdaptationScheme"];
 export type AdaptedLatentStepSpec = components["schemas"]["AdaptedLatentStepSpec-Output"];
 export type ArrayVector = components["schemas"]["ArrayVector"];
 export type ArtifactFiles = components["schemas"]["ArtifactFiles"];
@@ -25,9 +26,12 @@ export type CausalEdgeSpec = components["schemas"]["CausalEdgeSpec-Output"];
 export type CausalEffectResult = components["schemas"]["CausalEffectResult"];
 export type CentredParameterizationRecord = components["schemas"]["CentredParameterizationRecord"];
 export type ChainDiagnostics = components["schemas"]["ChainDiagnostics"];
+export type CheckOutcome = components["schemas"]["CheckOutcome"];
+export type CheckStatus = components["schemas"]["CheckStatus"];
 export type CoefficientExpression = components["schemas"]["CoefficientExpression-Output"];
 export type CoefficientRole = components["schemas"]["CoefficientRole"];
 export type CompanionMoves = components["schemas"]["CompanionMoves"];
+export type ComparisonSide = components["schemas"]["ComparisonSide"];
 export type CompletedExtractionWorker = components["schemas"]["CompletedExtractionWorker"];
 export type ComputedExtractionSpec = components["schemas"]["ComputedExtractionSpec-Output"];
 export type ConstructId = components["schemas"]["ConstructId-Output"];
@@ -50,7 +54,6 @@ export type DataProfileReport = components["schemas"]["DataProfileReport"];
 export type DataStatisticComparison = components["schemas"]["DataStatisticComparison"];
 export type DataVariableSpec = components["schemas"]["DataVariableSpec"];
 export type DensityCurve = components["schemas"]["DensityCurve"];
-export type DescriptiveIndicatorComparison = components["schemas"]["DescriptiveIndicatorComparison"];
 export type DiagnosticPhase = components["schemas"]["DiagnosticPhase"];
 export type DistributionId = components["schemas"]["DistributionId-Output"];
 export type DriftMechanismSpec = components["schemas"]["DriftMechanismSpec-Output"];
@@ -100,6 +103,7 @@ export type GaussianInitializationDiagnostics = components["schemas"]["GaussianI
 export type GaussianInitializationSpec = components["schemas"]["GaussianInitializationSpec-Output"];
 export type GaussianReferenceTemperingSpec = components["schemas"]["GaussianReferenceTemperingSpec-Output"];
 export type GitOid = components["schemas"]["GitOid-Output"];
+export type GuidedPathSpec = components["schemas"]["GuidedPathSpec-Output"];
 export type HistogramBin = components["schemas"]["HistogramBin"];
 export type IdentificationReport = components["schemas"]["IdentificationReport"];
 export type IdentifiedTreatmentStatus = components["schemas"]["IdentifiedTreatmentStatus"];
@@ -133,6 +137,8 @@ export type JsonScalar = boolean | number | string | null;
 export type LLMTrace = components["schemas"]["LLMTrace"];
 export type LOODiagnostics = components["schemas"]["LOODiagnostics"];
 export type LOOPITPoint = components["schemas"]["LOOPITPoint"];
+export type LabeledDtype = components["schemas"]["LabeledDtype"];
+export type LabeledMeasurement = components["schemas"]["LabeledMeasurement"];
 export type LatentBlockSize = components["schemas"]["LatentBlockSize"];
 export type LatentConvergenceSubject = components["schemas"]["LatentConvergenceSubject"];
 export type LatentDiagnostics = components["schemas"]["LatentDiagnostics"];
@@ -142,7 +148,7 @@ export type LiteralExpression = components["schemas"]["LiteralExpression-Output"
 export type LiteratureSource = components["schemas"]["LiteratureSource-Output"];
 export type MCMCEvidence = components["schemas"]["MCMCEvidence"];
 export type MarginalParticleGibbsSpec = components["schemas"]["MarginalParticleGibbsSpec-Output"];
-export type MeasurementDtype = components["schemas"]["MeasurementDtype"];
+export type Measurement = components["schemas"]["Measurement"];
 export type MechanismId = components["schemas"]["MechanismId-Output"];
 export type MechanismRef = components["schemas"]["MechanismRef"];
 export type MixedLawProvenance = components["schemas"]["MixedLawProvenance"];
@@ -171,6 +177,8 @@ export type NumPyroObject = {
 };
 export type NumPyroValue = JsonScalar | components["schemas"]["NumericalArray"] | NumPyroArray | NumPyroObject;
 export type NumericCriterionEvidence = components["schemas"]["NumericCriterionEvidence"];
+export type NumericDtype = components["schemas"]["NumericDtype"];
+export type NumericMeasurement = components["schemas"]["NumericMeasurement"];
 export type NumericalArray = components["schemas"]["NumericalArray"];
 export type NutsDADiagnostics = components["schemas"]["NutsDADiagnostics"];
 export type NutsDASpec = components["schemas"]["NutsDASpec-Output"];
@@ -182,19 +190,19 @@ export type ObservationLawSpec = components["schemas"]["ObservationLawSpec-Outpu
 export type ObservationWindow = components["schemas"]["ObservationWindow"];
 export type OutcomeSubject = components["schemas"]["OutcomeSubject"];
 export type PPCOverlay = components["schemas"]["PPCOverlay"];
+export type PPCStatistic = components["schemas"]["PPCStatistic"];
 export type PPCTestStat = components["schemas"]["PPCTestStat"];
 export type PairedArmSimulation = components["schemas"]["PairedArmSimulation"];
 export type ParameterDiagnostics = components["schemas"]["ParameterDiagnostics"];
 export type ParameterElementId = components["schemas"]["ParameterElementId-Output"];
 export type ParameterId = components["schemas"]["ParameterId-Output"];
+export type ParameterProposal = components["schemas"]["ParameterProposal"];
 export type ParameterRef = components["schemas"]["ParameterRef"];
 export type ParameterSpec = components["schemas"]["ParameterSpec-Output"];
 export type ParameterTransformSpec = components["schemas"]["ParameterTransformSpec-Output"];
 export type ParetoKPoint = components["schemas"]["ParetoKPoint"];
-export type ParticleAGradSpec = components["schemas"]["ParticleAGradSpec-Output"];
 export type ParticleDiagnosticMetric = components["schemas"]["ParticleDiagnosticMetric"];
 export type ParticleDiagnosticMetrics = components["schemas"]["ParticleDiagnosticMetrics"];
-export type ParticleMGradSpec = components["schemas"]["ParticleMGradSpec-Output"];
 export type ParticleProfileDimensions = components["schemas"]["ParticleProfileDimensions"];
 export type ParticleSamplerDiagnostics = components["schemas"]["ParticleSamplerDiagnostics"];
 export type ParticleTuning = components["schemas"]["ParticleTuning"];
@@ -204,13 +212,13 @@ export type ParticleWeightSummary = components["schemas"]["ParticleWeightSummary
 export type PathUpdateSpec = components["schemas"]["PathUpdateSpec-Output"];
 export type PathWeightDiagnostics = components["schemas"]["PathWeightDiagnostics"];
 export type PersistenceTransformSpec = components["schemas"]["PersistenceTransformSpec-Output"];
+export type PhaseOutcome = components["schemas"]["PhaseOutcome"];
 export type PosteriorMarginal = components["schemas"]["PosteriorMarginal"];
 export type PosteriorPredictiveChecks = components["schemas"]["PosteriorPredictiveChecks"];
 export type PotentialMechanismSpec = components["schemas"]["PotentialMechanismSpec-Output"];
 export type PredictiveAssessment = components["schemas"]["PredictiveAssessment"];
 export type PredictiveCheckReason = components["schemas"]["PredictiveCheckReason"];
 export type PredictiveComparison = components["schemas"]["PredictiveComparison"];
-export type PredictiveIndicatorComparison = components["schemas"]["PredictiveIndicatorComparison"];
 export type PredictiveLawProvenance = components["schemas"]["PredictiveLawProvenance"];
 export type PredictiveSubject = components["schemas"]["PredictiveSubject"];
 export type PrepareDataOutput = components["schemas"]["PrepareDataOutput"];
@@ -267,6 +275,7 @@ export type StudyRevision = components["schemas"]["StudyRevision"];
 export type StudyState = components["schemas"]["StudyState"];
 export type SummaryOperator = components["schemas"]["SummaryOperator"];
 export type TemperingDiagnostics = components["schemas"]["TemperingDiagnostics"];
+export type TemperingSpec = components["schemas"]["TemperingSpec-Output"];
 export type TemporalStatus = components["schemas"]["TemporalStatus"];
 export type TimelineRecord = components["schemas"]["TimelineRecord"];
 export type TimelineResponse = components["schemas"]["TimelineResponse"];
@@ -278,8 +287,8 @@ export type TraceSeries = components["schemas"]["TraceSeries"];
 export type TraceToolCall = components["schemas"]["TraceToolCall"];
 export type TraceUsage = components["schemas"]["TraceUsage"];
 export type TransferredTuning = components["schemas"]["TransferredTuning"];
-export type TwistedParticleAGradSpec = components["schemas"]["TwistedParticleAGradSpec-Output"];
 export type UnknownLawProvenance = components["schemas"]["UnknownLawProvenance"];
+export type UntemperedSpec = components["schemas"]["UntemperedSpec-Output"];
 export type WindowExpression = components["schemas"]["WindowExpression"];
 export type WorstTimeMovement = components["schemas"]["WorstTimeMovement"];
 export type Added<PayloadT> = {
@@ -445,11 +454,7 @@ export type Evaluated<Subject, Evidence> = {
     readonly code: string;
     /** Subject */
     readonly subject: Subject;
-    /**
-     * Outcome
-     * @enum {string}
-     */
-    readonly outcome: "passed" | "failed";
+    readonly outcome: CheckOutcome;
     /** Evidence */
     readonly evidence: Evidence;
 };
@@ -580,8 +585,8 @@ export type ObservationSpec<WindowT> = {
      * @description Indicator name (e.g., 'hrv', 'self_reported_stress')
      */
     readonly name: string;
-    /** @description 'continuous', 'binary', 'count', 'ordinal', 'categorical' */
-    readonly measurement_dtype: MeasurementDtype;
+    /** @description How readings are recorded: {dtype: 'continuous' | 'binary' | 'count'}, or {dtype: 'ordinal' | 'categorical', levels: [...]} for labels coded 0..K-1. */
+    readonly measurement: Measurement;
     /** @description Aggregation function applied when bucketing raw extractions within the indicator support window. Supported operators: first, last, sum, count, mean, std. A computed_rule must produce this same summary. */
     readonly aggregation: SummaryOperator;
     /**
@@ -589,18 +594,6 @@ export type ObservationSpec<WindowT> = {
      * @description Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock.
      */
     readonly observation_window: WindowT;
-    /**
-     * Ordinal Levels
-     * @description Ordered list of level labels from lowest to highest for ordinal indicators (e.g., ['low', 'medium', 'high']). Required when measurement_dtype='ordinal' to ensure correct numeric encoding.
-     * @default null
-     */
-    readonly ordinal_levels: readonly string[] | null;
-    /**
-     * Categorical Levels
-     * @description Exhaustive list of level labels for categorical indicators (e.g., ['home', 'work', 'other']). Required when measurement_dtype='categorical' to ensure correct numeric encoding.
-     * @default null
-     */
-    readonly categorical_levels: readonly string[] | null;
 };
 export type OrderedLogisticLawSpec<A> = {
     /**

@@ -41,7 +41,7 @@ export function useObservationHistory(modelSnapshot: ModelSnapshot, id: Indicato
         ? {
             ...historyView(selected),
             label: variable.name,
-            levels: variable.ordinal_levels ?? variable.categorical_levels,
+            levels: "levels" in variable.measurement ? variable.measurement.levels : null,
             time_origin: owner.time_origin,
           }
         : null,

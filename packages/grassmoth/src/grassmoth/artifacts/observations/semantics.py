@@ -65,19 +65,19 @@ def validate_indicator_observation_semantics(
         return "ordinal indicators currently support only first/last point measurements."
 
     if aggregation == SummaryOperator.COUNT and measurement_dtype != "count":
-        return "aggregation 'count' requires measurement_dtype='count'."
+        return "aggregation 'count' requires measurement.dtype='count'."
 
     if (
         aggregation in {SummaryOperator.MEAN, SummaryOperator.STD}
         and measurement_dtype != "continuous"
     ):
-        return f"aggregation '{aggregation}' requires measurement_dtype='continuous'."
+        return f"aggregation '{aggregation}' requires measurement.dtype='continuous'."
 
     if aggregation == SummaryOperator.SUM and measurement_dtype not in {
         "continuous",
         "count",
     }:
-        return "aggregation 'sum' requires measurement_dtype='continuous' or 'count'."
+        return "aggregation 'sum' requires measurement.dtype='continuous' or 'count'."
 
     return None
 

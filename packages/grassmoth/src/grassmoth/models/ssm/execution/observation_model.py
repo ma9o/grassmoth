@@ -26,6 +26,7 @@ from grassmoth.models.ssm.execution.observation_operator import compile_observat
 
 if TYPE_CHECKING:
     from grassmoth.models.ssm.execution.contracts import ObservationLaws
+    from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
     from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
     from grassmoth.models.ssm.execution.observation_dispatch import PointObservationSampler
     from grassmoth.models.ssm.execution.observation_operator import ObservationOperator
@@ -129,14 +130,14 @@ def prepare_grouped_noise(
 
 
 def grouped_density_with_noise(
-    groups: tuple[LawGroup, ...],
+    model: HeterogeneousObservation,
     y: jax.Array,
     eta: jax.Array,
-    covariance: jax.Array,
     noise: tuple[GaussianNoiseFactors, ...],
     log_precision: jax.Array | None = None,
 ) -> jax.Array:
     """Use fixed Gaussian factors and the ordinary evaluator for all other laws."""
+    groups, covariance = model.density_groups(), model.measurement.manifest_cov
     observed = ~jnp.isnan(y)
     filled = jnp.nan_to_num(y, nan=0.0)
     factors = iter(noise)

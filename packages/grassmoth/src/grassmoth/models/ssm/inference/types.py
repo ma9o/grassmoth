@@ -91,7 +91,6 @@ class UnretainedRun:
     def completed(
         cls,
         settings: SamplerSpec,
-        evidence: MCMCEvidence,
         compiled_step: Compiled,
         phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]],
         parameterization: JointParameterizationRecord | None = None,
@@ -100,7 +99,14 @@ class UnretainedRun:
         """Own a completed interval whose settings retain no posterior samples."""
         if settings.num_samples_per_chain != 0:
             raise ValueError("Unretained runs require zero requested posterior samples")
-        return cls(settings, evidence, compiled_step, phase_extra_fields, parameterization, profile)
+        return cls(
+            settings,
+            MCMCEvidence(method=settings.algorithm.method),
+            compiled_step,
+            phase_extra_fields,
+            parameterization,
+            profile,
+        )
 
     def __post_init__(self) -> None:
         """Freeze telemetry at the execution boundary."""

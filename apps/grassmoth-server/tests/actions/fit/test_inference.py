@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import logging
-import time
 from dataclasses import replace
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
@@ -15,18 +13,22 @@ import pytest
 
 from grassmoth.actions.fit import execution as stage5_inference
 from grassmoth.actions.fit.execution import FittedModelResult
+from grassmoth.actions.fit.inputs import FitInputs
 from grassmoth.artifacts.joint_parameterization import CentredParameterizationRecord
 from grassmoth.artifacts.model.construct import replace_constructs
+from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.sampling import SamplerSpec
 from grassmoth.compute.budget import ComputeBudget, SharedMemoryBudget
 from grassmoth.models.ssm.compile import inputs as compilation
+from grassmoth.models.ssm.inference import fit as inference_fit
 from grassmoth.models.ssm.inference.types import JointPosteriorDraws
 from grassmoth.models.ssm.preparation import panel as runtime_module
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.actions.fit.runtime import fit_runtime
 from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
 from grassmoth_server_test_support.model import load_study_model_fixture
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_fit_fixture,
@@ -101,9 +103,7 @@ def test_fit_model_logs_runtime_summary_and_diagnostic_boundaries(monkeypatch, c
 
     monkeypatch.setattr(compilation, "compile_ssm_inputs_from_model", lambda _selection: fake_model)
     monkeypatch.setattr(runtime_module, "bind_panel", lambda *_args, **_kwargs: runtime)
-    monkeypatch.setattr(
-        stage5_inference, "fit_prepared_model", lambda _prepared, **_kwargs: fake_result
-    )
+    monkeypatch.setattr(inference_fit, "fit", lambda _priors, _panel, **_kwargs: fake_result)
 
     data_for_model = ObservationDataset.from_frame(
         pl.DataFrame(runtime.rows),
@@ -113,16 +113,21 @@ def test_fit_model_logs_runtime_summary_and_diagnostic_boundaries(monkeypatch, c
 
     with caplog.at_level(logging.INFO, logger=__name__):
         result = stage5_inference.fit_model(
-            StructuralSelection(dynamical_model_spec, None),
-            data_for_model,
-            time_origin=datetime(2024, 1, 1, tzinfo=UTC),
-            sampler=SamplerSpec(),
-            budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
-            clock=time.monotonic,
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
-            compiler=compile_program,
-            prepare_program=prepare_program,
+            FitInputs(
+                selection=StructuralSelection(dynamical_model_spec, None),
+                question=QuestionSpec(text="Test", outcome=dynamical_model_spec.constructs[0].id),
+                data_for_model=data_for_model,
+                sampler=SamplerSpec(),
+                compute_loo_diagnostics=False,
+            ),
+            continuation=None,
+            execution_context=replace(
+                EXECUTION_CONTEXT,
+                compiler=compile_program,
+                prepare_program=prepare_program,
+                budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
+                logger=logging.getLogger(__name__),
+            ),
         )
 
     assert isinstance(result, FittedModelResult)
@@ -167,7 +172,6 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         InferenceReportDetail,
     )
     from grassmoth.artifacts.reports.model_checks import QuestionCheckReport
-    from grassmoth.artifacts.reports.posterior_diagnostics import MCMCEvidence
     from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
     from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
     from grassmoth.models.ssm.inference.types import (
@@ -272,19 +276,22 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             ),
         )
         return fit(
-            selection=StructuralSelection(model, None),
-            data_for_model=dataset,
-            time_origin=panel.time_origin,
-            sampler=settings.revised(num_samples_per_chain=count * schedule_multiplier),
-            budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
+            FitInputs(
+                selection=StructuralSelection(model, None),
+                question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
+                data_for_model=dataset,
+                sampler=settings.revised(num_samples_per_chain=count * schedule_multiplier),
+                compute_loo_diagnostics=True,
+                previous=previous,
+            ),
+            continuation=None,
             runtime=fit_runtime(settings),
-            clock=time.monotonic,
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
-            compiler=compile_program,
-            prepare_program=prepare_program,
-            compute_loo_diagnostics=True,
-            previous=previous,
+            execution_context=replace(
+                EXECUTION_CONTEXT,
+                compiler=compile_program,
+                prepare_program=prepare_program,
+                budget=ComputeBudget(memory=SharedMemoryBudget(available_bytes=2**30)),
+            ),
         )
 
     def output(result):
@@ -385,21 +392,23 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
 
     monkeypatch.setattr(remote, "_dispatch_fit", dispatch_without_history_buffers)
 
-    from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth_server.actions.contracts.identity import CallId
     from grassmoth_server.compute.analysis_cache import AnalysisCall
 
     def remotely(count, previous):
         return remote.fit_on_modal(
-            InferenceHardware.L40S,
-            selection=StructuralSelection(model, None),
-            data_for_model=dataset,
-            time_origin=panel.time_origin,
-            sampler=settings.revised(num_samples_per_chain=count * schedule_multiplier),
-            question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
-            compute_loo_diagnostics=True,
+            FitInputs(
+                selection=StructuralSelection(model, None),
+                question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
+                data_for_model=dataset,
+                sampler=settings.revised(
+                    hardware=InferenceHardware.L40S,
+                    num_samples_per_chain=count * schedule_multiplier,
+                ),
+                compute_loo_diagnostics=True,
+                previous=previous,
+            ),
             analysis_call=AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64)),
-            previous=previous,
         )
 
     transported = remotely(1, output(first))
@@ -418,9 +427,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     from jax.stages import Compiled
 
     zero = execute(
-        UnretainedRun.completed(
-            settings.revised(num_samples_per_chain=0), MCMCEvidence(), Mock(spec=Compiled), {}
-        ),
+        UnretainedRun.completed(settings.revised(num_samples_per_chain=0), Mock(spec=Compiled), {}),
         0,
         output(combined),
     )

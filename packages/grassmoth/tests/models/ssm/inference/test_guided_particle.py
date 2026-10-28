@@ -12,11 +12,7 @@ import pytest
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal, norm
 
-from grassmoth.artifacts.sampling import (
-    ParticleAGradSpec,
-    ParticleMGradSpec,
-    TwistedParticleAGradSpec,
-)
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import guided_step, trace_guided_step
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
@@ -148,10 +144,10 @@ def _correlated_gaussian_case():
 
 
 @pytest.mark.parametrize(
-    ("spec_type", "cubic", "kappa", "pinned", "steps", "dimension"),
+    ("method", "cubic", "kappa", "pinned", "steps", "dimension"),
     [
-        (spec_type, *case)
-        for spec_type in (ParticleAGradSpec, TwistedParticleAGradSpec)
+        (method, *case)
+        for method in ("particle_agrad", "twisted_particle_agrad")
         for case in (
             (0.0, 0, False, 3, 1),
             (0.0, 1, False, 3, 1),
@@ -163,18 +159,18 @@ def _correlated_gaussian_case():
         )
     ]
     + [
-        (ParticleMGradSpec, 0.0, 0, False, 3, 2),
-        (ParticleMGradSpec, 0.0, 1, False, 3, 2),
-        (ParticleMGradSpec, 0.7, 1, True, 3, 1),
+        ("particle_mgrad", 0.0, 0, False, 3, 2),
+        ("particle_mgrad", 0.0, 1, False, 3, 2),
+        ("particle_mgrad", 0.7, 1, True, 3, 1),
     ],
 )
 def test_guided_updates_preserve_path_and_label_posterior(
-    spec_type, cubic, kappa, pinned, steps, dimension
+    method, cubic, kappa, pinned, steps, dimension
 ):
     target, labels, starts, expected_mean, expected_second, expected_labels = _case(
         cubic, pinned=pinned, steps=steps, dimension=dimension
     )
-    spec = spec_type(num_particles=8, kappa=kappa)
+    spec = GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
     mask = target.independent_mask
     if pinned:
         mask = mask.at[1, 0].set(False)
@@ -238,8 +234,8 @@ def test_guided_updates_preserve_path_and_label_posterior(
     )
 
 
-@pytest.mark.parametrize("spec_type", [ParticleAGradSpec, TwistedParticleAGradSpec])
-def test_guided_filter_keeps_zero_mass_candidates_out_of_selected_path(monkeypatch, spec_type):
+@pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad"])
+def test_guided_filter_keeps_zero_mass_candidates_out_of_selected_path(monkeypatch, method):
     def bounded_observation(self, context, state, index, observations):
         return dist.Uniform(state[0] - 0.35, state[0] + 0.35, validate_args=True).log_prob(
             observations[index, 0]
@@ -249,13 +245,13 @@ def test_guided_filter_keeps_zero_mass_candidates_out_of_selected_path(monkeypat
     monkeypatch.setattr(
         ParticleTarget,
         "observation_increment_with_noise",
-        lambda self, context, _noise, state, index, observations, _log_precision=None: (
-            bounded_observation(self, context, state, index, observations)
+        lambda self, context, _noise, state, index, _log_precision=None: bounded_observation(
+            self, context, state, index, self.observations
         ),
     )
     times = np.arange(3.0)
     target = interval_target(times, np.zeros((3, 1)), times[:, None], ("last",))
-    spec = spec_type(num_particles=32, kappa=0)
+    spec = GuidedPathSpec(method=method, num_particles=32, kappa=0)
     labels = jnp.array([[-0.45], [0.55]])
     reference = jnp.zeros((3, 1))
     setup = build_smoother_setup(

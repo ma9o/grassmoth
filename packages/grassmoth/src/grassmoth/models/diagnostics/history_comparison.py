@@ -6,14 +6,16 @@ observations and replicates under the contracts in artifacts.reports.data_compar
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 import numpy as np
 
 from grassmoth.artifacts.identity import IndicatorId, IndicatorRef
+from grassmoth.artifacts.observations.spec import LabeledMeasurement
 from grassmoth.artifacts.observations.time import ObservationInstant
 from grassmoth.artifacts.reports.checks import (
     Assessment,
+    CheckOutcome,
     Evaluated,
     IndicatorCheckSubject,
     NotEvaluated,
@@ -22,13 +24,12 @@ from grassmoth.artifacts.reports.checks import (
 from grassmoth.artifacts.reports.data_comparison import (
     Added,
     Change,
+    ComparisonSide,
     DataPoint,
     DataStatistic,
     DataStatisticComparison,
-    DescriptiveIndicatorComparison,
     IndicatorComparison,
     PredictiveComparison,
-    PredictiveIndicatorComparison,
     ProportionComparison,
     Removed,
     Revised,
@@ -38,6 +39,7 @@ from grassmoth.artifacts.reports.histograms import histogram_draws
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     PosteriorPredictiveChecks,
     PPCOverlay,
+    PPCStatistic,
     PPCTestStat,
 )
 
@@ -46,7 +48,6 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from grassmoth.artifacts.observations.comparison import DataSeries, Dataset
-    from grassmoth.artifacts.reports.checks import IndicatorCheck
     from grassmoth.artifacts.reports.data_quality import DataFinding
 
 
@@ -82,23 +83,11 @@ def _indicator_columns(
 
 def _evaluated_indicator(
     subject: IndicatorCheckSubject,
-    *,
-    code: IndicatorCheck,
-    outcome: Literal["passed", "failed"],
-    value: float,
-    lower: float,
-    upper: float,
-    note: str,
+    outcome: CheckOutcome,
+    evidence: NumericCriterionEvidence,
 ) -> Evaluated[IndicatorCheckSubject, NumericCriterionEvidence]:
-    """Construct the criterion evidence from its existing indicator subject."""
-    return Evaluated(
-        code=code,
-        subject=subject,
-        outcome=outcome,
-        evidence=NumericCriterionEvidence(
-            criterion=code, value=value, lower=lower, upper=upper, note=note
-        ),
-    )
+    """Report the criterion evidence under its own criterion code for an indicator subject."""
+    return Evaluated(code=evidence.criterion, subject=subject, outcome=outcome, evidence=evidence)
 
 
 def _check_calibration(
@@ -157,12 +146,14 @@ def _check_calibration(
         warnings.append(
             _evaluated_indicator(
                 subject,
-                code="calibration",
-                outcome=outcome,
-                value=coverage,
-                lower=low_threshold,
-                upper=high_threshold,
-                note=note,
+                outcome,
+                NumericCriterionEvidence(
+                    criterion="calibration",
+                    value=coverage,
+                    lower=low_threshold,
+                    upper=high_threshold,
+                    note=note,
+                ),
             )
         )
 
@@ -235,13 +226,15 @@ def _check_residual_autocorrelation(
         warnings.append(
             _evaluated_indicator(
                 subject,
-                code="autocorrelation",
-                outcome="passed" if passed else "failed",
-                value=rho,
-                lower=-threshold,
-                upper=threshold,
-                note=f"Residual autocorrelation at lag 1: {rho:.2f}"
-                + ("" if passed else f" (|rho| > {threshold})"),
+                "passed" if passed else "failed",
+                NumericCriterionEvidence(
+                    criterion="autocorrelation",
+                    value=rho,
+                    lower=-threshold,
+                    upper=threshold,
+                    note=f"Residual autocorrelation at lag 1: {rho:.2f}"
+                    + ("" if passed else f" (|rho| > {threshold})"),
+                ),
             )
         )
 
@@ -316,12 +309,14 @@ def _check_variance_ratio(
         warnings.append(
             _evaluated_indicator(
                 subject,
-                code="variance",
-                outcome=outcome,
-                value=ratio,
-                lower=low_ratio,
-                upper=high_ratio,
-                note=note,
+                outcome,
+                NumericCriterionEvidence(
+                    criterion="variance",
+                    value=ratio,
+                    lower=low_ratio,
+                    upper=high_ratio,
+                    note=note,
+                ),
             )
         )
 
@@ -418,7 +413,7 @@ def _compute_test_stats(
     test_stats = []
     n_manifest = observations.shape[1]
 
-    stat_fns: dict[Literal["mean", "sd", "min", "max"], Callable[..., jnp.ndarray]] = {
+    stat_fns: dict[PPCStatistic, Callable[..., jnp.ndarray]] = {
         "mean": jnp.nanmean,
         "sd": lambda x, **kw: jnp.nanstd(x, **kw),
         "min": jnp.nanmin,
@@ -517,8 +512,8 @@ def _statistics(
             ("observed_count", None): float(len(values)),
             ("missing_count", None): float(len(series.points) - len(values)),
         }
-        levels = series.variable.categorical_levels or series.variable.ordinal_levels
-        if levels is not None:
+        levels = series.variable.levels
+        if levels:
             statistics.update(
                 {
                     ("proportion", level): float(np.mean(values == index)) if len(values) else None
@@ -555,7 +550,7 @@ def _predictive_comparison(
     identity: IndicatorId,
     reference: DataSeries,
     replicas: tuple[DataSeries, ...],
-    reference_side: Literal["left", "right"],
+    reference_side: ComparisonSide,
     time_origin: datetime,
 ) -> PredictiveComparison | DataFinding:
     """Align reference anchors once; retain compatibility failures with the outer comparison."""
@@ -691,43 +686,36 @@ def compare_data_variables(
                         else Revised(before=old[anchor], after=new[anchor])
                     )
         statistics = _statistics(a, b)
+        predictive: PredictiveComparison | None = None
         if (
             complete
             and same_definition
             and (len(a) == 1) != (len(b) == 1)
-            and present[0].variable.measurement_dtype not in {"categorical", "ordinal"}
+            and not isinstance(present[0].variable.measurement, LabeledMeasurement)
         ):
-            reference_side: Literal["left", "right"] = "left" if len(a) == 1 else "right"
+            reference_side: ComparisonSide = "left" if len(a) == 1 else "right"
             reference_group, replica_group = (
                 (left, right) if reference_side == "left" else (right, left)
             )
             reference_dataset = reference_group[0]
-            predictive = _predictive_comparison(
+            aligned = _predictive_comparison(
                 identity,
                 reference_dataset.series[identity],
                 tuple(dataset.series[identity] for dataset in replica_group),
                 reference_side,
                 reference_dataset.time_origin,
             )
-            if not isinstance(predictive, PredictiveComparison):
-                findings.append(predictive)
+            if isinstance(aligned, PredictiveComparison):
+                predictive = aligned
             else:
-                comparisons.append(
-                    PredictiveIndicatorComparison(
-                        indicator_id=identity,
-                        changes=tuple(changes),
-                        statistics=statistics,
-                        findings=tuple(findings),
-                        predictive=predictive,
-                    )
-                )
-                continue
+                findings.append(aligned)
         comparisons.append(
-            DescriptiveIndicatorComparison(
+            IndicatorComparison(
                 indicator_id=identity,
                 changes=tuple(changes),
                 statistics=statistics,
                 findings=tuple(findings),
+                predictive=predictive,
             )
         )
     return tuple(comparisons)

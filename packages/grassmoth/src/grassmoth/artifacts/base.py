@@ -11,6 +11,7 @@ from pydantic import (
     field_validator,
     model_validator,
 )
+from pydantic_core import CoreSchema, core_schema
 
 from grassmoth.artifacts.immutability import freeze
 
@@ -68,3 +69,19 @@ class Value(BaseModel):
                 key: item for key, item in value.items() if key not in cls.model_computed_fields
             }
         return value
+
+
+def string_wire_schema(
+    owner: type, *, ref: str | None = None, metadata: dict[str, object] | None = None
+) -> CoreSchema:
+    """Parse a scalar from its string wire form and serialize it back to that string."""
+    parsed = core_schema.no_info_after_validator_function(owner, core_schema.str_schema())
+    return core_schema.json_or_python_schema(
+        ref=ref,
+        metadata=metadata,
+        json_schema=parsed,
+        python_schema=core_schema.union_schema([core_schema.is_instance_schema(owner), parsed]),
+        serialization=core_schema.plain_serializer_function_ser_schema(
+            str, return_schema=core_schema.str_schema()
+        ),
+    )

@@ -31,9 +31,8 @@ from grassmoth_server.study.records import (
     Raised,
     Rejected,
     StudyRevision,
-    applied_attempt,
+    action_attempt,
     argument_parents,
-    failed_attempt,
     record_dependencies,
 )
 from scripts.codegen.story_data import (
@@ -166,7 +165,7 @@ def examples() -> tuple[Example, ...]:
             ]
         }
         outcome = Applied[GitOid].model_validate({"result": oid(1000 + seq), "effects": effects})
-        attempt = failed_attempt(request, failure) if failure else applied_attempt(request, outcome)
+        attempt = action_attempt(request, failure or outcome)
         revision = StudyRevision.model_validate(
             {
                 "commit_id": oid(seq),

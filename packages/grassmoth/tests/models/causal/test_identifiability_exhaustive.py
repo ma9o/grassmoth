@@ -23,13 +23,17 @@ from typing import Any
 
 import pytest
 
+from grassmoth.artifacts.identity import ConstructId
 from grassmoth.artifacts.model.construct import (
     CausalEdgeSpec,
     ConstructSpec,
     replace_constructs,
 )
+from grassmoth.artifacts.reports.identification import (
+    IdentificationReport,
+    IdentifiedTreatmentStatus,
+)
 from grassmoth.models.causal.identification import (
-    IdentificationResult,
     check_identifiability,
     dag_to_admg,
     find_blocking_confounders,
@@ -46,16 +50,22 @@ pytestmark = pytest.mark.contract
 # =============================================================================
 
 
-def _get_estimand(result: IdentificationResult, treatment: str) -> str:
-    return result.identifiable_treatments[treatment].estimand
+def _construct(name: str) -> ConstructId:
+    return fixture_entity_id("construct", name)
 
 
-def _get_blockers(result: IdentificationResult, treatment: str) -> tuple[str, ...]:
-    return result.non_identifiable_treatments[treatment].confounders
+def _get_estimand(result: IdentificationReport, treatment: str) -> str:
+    finding = result.treatments[_construct(treatment)]
+    assert isinstance(finding, IdentifiedTreatmentStatus)
+    return finding.estimand
+
+
+def _get_blockers(result: IdentificationReport, treatment: str) -> tuple[ConstructId, ...]:
+    return result.non_identifiable[_construct(treatment)].confounders
 
 
 def _run_checks(
-    result: IdentificationResult,
+    result: IdentificationReport,
     checks: list[tuple[Any, ...]],
 ) -> None:
     """Dispatch a list of check tuples against a check_identifiability result.
@@ -75,20 +85,22 @@ def _run_checks(
         kind = check[0]
         if kind == "identifiable":
             (_, t) = check
-            assert t in result.identifiable_treatments, (
+            assert _construct(t) in result.estimable_treatments, (
                 f"{t} should be identifiable. Result: {result}"
             )
         elif kind == "not_identifiable":
             (_, t) = check
-            assert t in result.non_identifiable_treatments, (
+            assert _construct(t) in result.non_identifiable, (
                 f"{t} should NOT be identifiable. Result: {result}"
             )
         elif kind == "blocked_by":
             (_, t, blocker) = check
-            details = result.non_identifiable_treatments.get(t)
+            details = result.non_identifiable.get(_construct(t))
             assert details, f"{t} should have blocking confounders. Result: {result}"
             blockers = details.confounders
-            assert blocker in blockers, f"{t} should be blocked by {blocker}. Blockers: {blockers}"
+            assert _construct(blocker) in blockers, (
+                f"{t} should be blocked by {blocker}. Blockers: {blockers}"
+            )
         elif kind == "estimand_contains":
             (_, t, sub) = check
             est = _get_estimand(result, t)
@@ -101,19 +113,17 @@ def _run_checks(
             )
         elif kind == "treatment_absent":
             (_, t) = check
-            assert t not in result.identifiable_treatments
-            assert t not in result.non_identifiable_treatments
+            assert _construct(t) not in result.treatments
         elif kind == "blocker_in":
             (_, t, candidates) = check
             blockers = _get_blockers(result, t)
-            assert any(b in blockers for b in candidates), (
+            assert any(_construct(b) in blockers for b in candidates), (
                 f"{t} blockers should include one of {candidates}. Got: {blockers}"
             )
         elif kind == "no_treatments_at_all":
-            assert len(result.identifiable_treatments) == 0
-            assert len(result.non_identifiable_treatments) == 0
+            assert len(result.treatments) == 0
         elif kind == "no_identifiable_treatments":
-            assert len(result.identifiable_treatments) == 0
+            assert len(result.estimable_treatments) == 0
         else:
             raise AssertionError(f"Unknown check kind: {kind}")
 

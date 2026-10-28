@@ -17,17 +17,14 @@ from grassmoth.models.causal.proofs import (
 )
 
 if TYPE_CHECKING:
-    from grassmoth.artifacts.identity import ConstructId, GitRef, IndicatorId
-    from grassmoth.artifacts.reports.inference import InferenceReportCore
-    from grassmoth.artifacts.simulation import SimulationArm, SimulationSpec
-    from grassmoth.models.structure import StructuralSelection
+    from grassmoth.actions.simulate.inputs import SimulationInputs
+    from grassmoth.artifacts.identity import ConstructId, IndicatorId
+    from grassmoth.artifacts.simulation import SimulationArm
 
 
 def summarize_causal_simulation(
-    selection: StructuralSelection,
-    design: SimulationSpec,
+    inputs: SimulationInputs,
     *,
-    fitted: tuple[GitRef, InferenceReportCore] | None,
     action: SimulationArm,
     reference: SimulationArm,
     state_ids: tuple[ConstructId, ...],
@@ -46,6 +43,7 @@ def summarize_causal_simulation(
             detail=detail,
         )
 
+    selection, fitted = inputs.selection, inputs.fitted
     dynamical_model_spec, outcome = selection.dynamical_model_spec, selection.outcome
     if fitted is None or outcome is None or outcome not in state_ids:
         return unavailable(
@@ -66,7 +64,7 @@ def summarize_causal_simulation(
                     treatment=dynamical_model_spec.get_construct(target).name,
                     outcome=dynamical_model_spec.get_construct(outcome).name,
                 )
-                for target in sorted({event.target for event in design.interventions})
+                for target in sorted({event.target for event in inputs.design.interventions})
             ),
             fitted_dynamical_model_spec=dynamical_model_spec,
             report=fit_report,

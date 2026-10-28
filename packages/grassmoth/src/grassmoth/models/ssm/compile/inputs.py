@@ -85,7 +85,7 @@ class CompiledObservation:
     def levels(self) -> tuple[str, ...]:
         """Declared levels for categorical or ordinal likelihoods; empty for other families."""
         return (
-            self.observation.definition.levels
+            self.observation.levels
             if self.law.family
             in {DistributionFamily.ORDERED_LOGISTIC, DistributionFamily.CATEGORICAL}
             else ()
@@ -298,11 +298,7 @@ def compile_model(
                     indicator.likelihood.parsed,
                     binding_index,
                     channel=channel,
-                    category_count=len(
-                        indicator.observation.ordinal_levels
-                        or indicator.observation.categorical_levels
-                        or ()
-                    ),
+                    category_count=len(indicator.observation.levels),
                     sampling_count=max_levels,
                     categorical_anchor=anchor,
                 ),
@@ -340,12 +336,7 @@ def compile_model(
                 blocks[0],
                 blocks[5],
                 static_factors.static_factor_loadings(selection),
-                tuple(index for index, state in enumerate(states) if state.is_input),
-                tuple(
-                    index
-                    for index, state in enumerate(states)
-                    if state.time_invariant and not state.is_input
-                ),
+                states,
                 dynamics_spec,
             ),
         )

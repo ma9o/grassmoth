@@ -21,6 +21,7 @@ from grassmoth.artifacts.probability.native import prior_reference_value
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.compile.bindings import parameter_bindings
 from grassmoth.models.ssm.compile.inputs import compile_priors as compile_ssm_priors
+from grassmoth.models.ssm.dynamics.expression import EdgeDrift
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_test_support.helpers import graph_constructs
 from grassmoth_test_support.inference import compile_fit_fixture, compile_model_fixture
@@ -219,7 +220,7 @@ def _linear_edge_weight(
     for index, component in enumerate(
         compile_model_fixture(dynamical_model_spec).dynamics.spec.components
     ):
-        if component.source == source and component.target == target:
+        if component.role == EdgeDrift(source) and component.target == target:
             for _, site in component.parameter_sites(f"vf_{index}"):
                 if site.site_kind == SiteKind.DYNAMICS_WEIGHT:
                     return _prior_reference_value(prior_registry[site.name])
@@ -245,10 +246,10 @@ def _linear_edge_support(dynamical_model_spec: DynamicalModelSpec) -> np.ndarray
         dtype=bool,
     )
     for component in compile_model_fixture(dynamical_model_spec).dynamics.spec.components:
-        if component.source is not None and any(
+        if isinstance(component.role, EdgeDrift) and any(
             operand.role == "weight" for operand in expression_coefficients(component.expression)
         ):
-            mask[component.target, component.source] = True
+            mask[component.target, component.role.source] = True
     return mask
 
 
@@ -287,7 +288,7 @@ def two_construct_structure() -> DynamicalModelSpec:
                         "indicator:4ff8be7491bd87d28af4": {
                             "observation": {
                                 "name": "stress_self_report",
-                                "measurement_dtype": "continuous",
+                                "measurement": {"dtype": "continuous"},
                                 "aggregation": "mean",
                             },
                             "construct_polarity": "positive",
@@ -295,7 +296,7 @@ def two_construct_structure() -> DynamicalModelSpec:
                         "indicator:522342c2385e38d5e750": {
                             "observation": {
                                 "name": "stress_cortisol",
-                                "measurement_dtype": "continuous",
+                                "measurement": {"dtype": "continuous"},
                                 "aggregation": "mean",
                             },
                             "construct_polarity": "positive",
@@ -311,7 +312,7 @@ def two_construct_structure() -> DynamicalModelSpec:
                         "indicator:e05e217de7f4442abdc5": {
                             "observation": {
                                 "name": "mood_rating",
-                                "measurement_dtype": "continuous",
+                                "measurement": {"dtype": "continuous"},
                                 "aggregation": "mean",
                             },
                             "construct_polarity": "positive",

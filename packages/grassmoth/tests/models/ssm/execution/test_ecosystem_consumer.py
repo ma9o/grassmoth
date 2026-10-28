@@ -65,7 +65,6 @@ def test_nonlinear_mixed_missing_irregular_exact_densities(intervals):
     problem = build_particle_problem(
         model.prior_runtime_bundle,
         panel,
-        scheme="euler_maruyama",
         trace_key=jax.random.key(7),
         reparam=None,
         compiler=compile_program,

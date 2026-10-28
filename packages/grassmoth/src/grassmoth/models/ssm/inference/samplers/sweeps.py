@@ -29,22 +29,20 @@ from grassmoth.models.ssm.inference.samplers.sweep_plan import (
 )
 
 if TYPE_CHECKING:
-    import logging
     from collections.abc import Callable, Mapping
     from concurrent.futures import Future
-    from datetime import datetime
 
     from jax.stages import Compiled
-    from jax.typing import DTypeLike
     from numpy.typing import NDArray
 
     from grassmoth.artifacts.reports.posterior_diagnostics import ConvergenceReport
     from grassmoth.artifacts.reports.profiling import FitProfileReport
-    from grassmoth.artifacts.sampling import ConvergenceStoppingSpec
-    from grassmoth.compute.budget import ComputeBudget
-    from grassmoth.compute.programs import ProgramCompiler, ProgramPreparer
+    from grassmoth.artifacts.sampling import ConvergenceStoppingSpec, SamplerSpec
+    from grassmoth.compute.context import ModelExecutionContext
+    from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
     from grassmoth.models.ssm.inference.problem import ParticleProblem
+    from grassmoth.models.ssm.inference.samplers.sweep_plan import SweepProgram
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 
 
@@ -161,16 +159,12 @@ def retained_convergence_check(
 
 
 def compile_sweeps[Carry](
-    step_factory: Callable[[int], Callable[[Carry, jax.Array], tuple[Carry, dict[str, jax.Array]]]],
+    program: SweepProgram[Carry],
     initial: Carry,
     *,
-    prepare_program: ProgramPreparer,
-    num_warmup: int,
-    num_samples: int,
-    max_batch_size: int,
-    budget: ComputeBudget,
+    execution_context: ModelExecutionContext,
+    sampler: SamplerSpec,
     additional_overhead: MemoryDemand = NO_MEMORY_DEMAND,
-    excluded_history: frozenset[str] = frozenset(),
 ) -> SweepPlan:
     """Check compiled peak memory plus histories, without timing or executing a sweep.
 
@@ -179,6 +173,8 @@ def compile_sweeps[Carry](
     25 sequential sweeps bounds output buffers and host progress latency.
     """
     block_size = SWEEP_BLOCK_SIZE
+    num_warmup, num_samples = sampler.num_warmup, sampler.num_samples_per_chain
+    max_batch_size = program.max_batch_size
 
     def prepare_phase(
         batch: int,
@@ -187,8 +183,8 @@ def compile_sweeps[Carry](
         tuple[jax.Array, ...],
         Mapping[str, jax.ShapeDtypeStruct],
     ]:
-        compile_program, arguments, (_, block_shapes), _ = prepare_program(
-            sweep_block(step_factory(batch), block_size),
+        compile_program, arguments, (_, block_shapes), _ = execution_context.prepare_program(
+            sweep_block(program.step_factory(batch), block_size),
             initial,
             jax.ShapeDtypeStruct((), jnp.int32),
             jax.ShapeDtypeStruct((), jnp.bool_),
@@ -196,7 +192,7 @@ def compile_sweeps[Carry](
         shapes = {
             name: jax.ShapeDtypeStruct(shape.shape[1:], shape.dtype)
             for name, shape in block_shapes.items()
-            if name not in excluded_history
+            if name not in program.excluded_history
         }
         return compile_program, arguments, shapes
 
@@ -221,7 +217,10 @@ def compile_sweeps[Carry](
             if num_samples or num_warmup + num_samples == 0
             else EmptySweepPhase(shapes)
         )
-        return SweepPlan(warmup, posterior, batch, executable), compiled_memory(executable)
+        return (
+            SweepPlan(warmup, posterior, batch, executable, program.label),
+            compiled_memory(executable),
+        )
 
     history_bytes = sum(
         steps * sum(shape.size * shape.dtype.itemsize for shape in shapes.values())
@@ -241,8 +240,8 @@ def compile_sweeps[Carry](
     batch = max_batch_size
     while True:
         plan, memory = compile_plan(batch)
-        if budget.planning_capacity(memory, limit=1, overhead=overhead):
-            if not budget.capacity(memory, limit=1, overhead=overhead):
+        if execution_context.budget.planning_capacity(memory, limit=1, overhead=overhead):
+            if not execution_context.budget.capacity(memory, limit=1, overhead=overhead):
                 raise MemoryError("Compiled sweep exceeds available memory")
             return replace(
                 plan,
@@ -257,22 +256,12 @@ def compile_sweeps[Carry](
 
 
 def compile_projected_sweeps[Carry](
-    step_factory: Callable[[int], Callable[[Carry, jax.Array], tuple[Carry, dict[str, jax.Array]]]],
+    program: SweepProgram[Carry],
     initial: Carry,
     *,
-    prepare_program: ProgramPreparer,
+    execution_context: ModelExecutionContext,
+    sampler: SamplerSpec,
     target: ParticleTarget,
-    path_dtype: DTypeLike,
-    num_chains: int,
-    num_warmup: int,
-    num_samples: int,
-    max_batch_size: int,
-    budget: ComputeBudget,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    label: str,
-    excluded_history: frozenset[str] = frozenset(),
 ) -> SweepPlan:
     """Compile independent exact observation projection while the sampler compiles."""
     block_size = SWEEP_BLOCK_SIZE
@@ -285,16 +274,18 @@ def compile_projected_sweeps[Carry](
         )
 
     positions = jax.ShapeDtypeStruct(
-        (block_size, num_chains, target.initial_position.size), target.initial_position.dtype
+        (block_size, sampler.num_chains, target.initial_position.size),
+        target.initial_position.dtype,
     )
     paths = jax.ShapeDtypeStruct(
-        (block_size, num_chains, len(target.times), target.independent_mask.shape[-1]), path_dtype
+        (block_size, sampler.num_chains, len(target.times), target.independent_mask.shape[-1]),
+        target.observations.dtype,
     )
-    compile_program, projection_arguments, shape, estimate = prepare_program(
+    compile_program, projection_arguments, shape, estimate = execution_context.prepare_program(
         jax.vmap(jax.vmap(observation_projection)), positions, paths
     )
     transfer = shape.size * shape.dtype.itemsize
-    retained = transfer // block_size * num_samples
+    retained = transfer // block_size * sampler.num_samples_per_chain
     overhead = MemoryDemand(
         host_bytes=estimate.host_bytes + retained + transfer,
         device_bytes=estimate.device_bytes + 2 * retained,
@@ -302,11 +293,7 @@ def compile_projected_sweeps[Carry](
 
     def compile_projection() -> Compiled:
         with inference_phase(
-            label,
-            "compiling_observation_projection",
-            clock=clock,
-            logger=logger,
-            wall_clock=wall_clock,
+            program.label, "compiling_observation_projection", execution_context=execution_context
         ):
             return compile_program()
 
@@ -314,15 +301,11 @@ def compile_projected_sweeps[Carry](
         context = copy_context()
         future: Future[Compiled] = executor.submit(lambda: context.run(compile_projection))
         plan = compile_sweeps(
-            step_factory,
+            program,
             initial,
-            num_warmup=num_warmup,
-            num_samples=num_samples,
-            max_batch_size=max_batch_size,
-            budget=budget,
+            execution_context=execution_context,
+            sampler=sampler,
             additional_overhead=overhead,
-            excluded_history=excluded_history,
-            prepare_program=prepare_program,
         )
         projection = future.result()
     actual = compiled_memory(projection)
@@ -330,7 +313,7 @@ def compile_projected_sweeps[Carry](
         host_bytes=plan.memory.host_bytes - estimate.host_bytes + actual.host_bytes,
         device_bytes=plan.memory.device_bytes - estimate.device_bytes + actual.device_bytes,
     )
-    if not budget.capacity(demand, limit=1):
+    if not execution_context.budget.capacity(demand, limit=1):
         raise MemoryError(
             "Sweep and observation projection exceed the numerical execution memory budget"
         )
@@ -343,14 +326,12 @@ def run_sweeps[Carry](
     plan: SweepPlan,
     initial: Carry,
     *,
-    clock: Callable[[], float],
-    wall_clock: Callable[[], datetime],
-    logger: logging.Logger,
-    label: str,
+    execution_context: ModelExecutionContext,
     convergence: RetainedConvergenceCheck | None = None,
     profile: Callable[[Carry, CompiledSweepPhase], FitProfileReport] | None = None,
 ) -> SweepRun[Carry]:
     """Keep only requested phase outputs; padded block slots execute no transition."""
+    clock, label = execution_context.clock, plan.label
     state: Carry = initial
     started = clock()
     first_step_seconds = 0.0
@@ -362,7 +343,7 @@ def run_sweeps[Carry](
 
     def profile_copy(phase: CompiledSweepPhase) -> FitProfileReport:
         assert profile is not None
-        with inference_phase(label, "profiling", clock=clock, logger=logger, wall_clock=wall_clock):
+        with inference_phase(label, "profiling", execution_context=execution_context):
             copied = jax.block_until_ready(jax.tree.map(jnp.copy, state))
             return profile(copied, phase)
 
@@ -385,9 +366,7 @@ def run_sweeps[Carry](
             with inference_phase(
                 label,
                 stage,
-                clock=clock,
-                logger=logger,
-                wall_clock=wall_clock,
+                execution_context=execution_context,
                 total=phase.steps,
                 block_size=SWEEP_BLOCK_SIZE,
                 particle_batch_size=plan.batch_size,
@@ -430,8 +409,7 @@ def run_sweeps[Carry](
                         label,
                         stage,
                         "progress",
-                        logger=logger,
-                        wall_clock=wall_clock,
+                        execution_context=execution_context,
                         completed=phase.steps - remaining,
                         total=phase.steps,
                         elapsed_seconds=clock() - phase_started,
@@ -450,8 +428,7 @@ def run_sweeps[Carry](
                             label,
                             stage,
                             "convergence_checkpoint",
-                            logger=logger,
-                            wall_clock=wall_clock,
+                            execution_context=execution_context,
                             completed=phase_draws,
                             total=phase.steps,
                             convergence_status=report.status,
@@ -466,7 +443,7 @@ def run_sweeps[Carry](
                 profiling = profile_copy(phase)
         else:
             log_inference_event(
-                label, stage, "skipped", logger=logger, wall_clock=wall_clock, total=0
+                label, stage, "skipped", execution_context=execution_context, total=0
             )
         history = {name: jnp.asarray(value[:, :phase_draws]) for name, value in buffers.items()}
         if stage == "sampling":

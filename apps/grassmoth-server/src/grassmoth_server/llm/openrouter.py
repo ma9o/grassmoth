@@ -36,7 +36,7 @@ if TYPE_CHECKING:
 
     from pydantic.json_schema import JsonSchemaValue
 
-    from grassmoth_server.llm.specs import EmbeddedReasoningEffort
+    from grassmoth_server.llm.specs import EmbeddedLLMSpec
 
 
 logger = logging.getLogger(__name__)
@@ -112,15 +112,6 @@ def normalize_openrouter_model_name(model_name: str) -> str:
     if normalized.startswith(OPENROUTER_MODEL_PREFIX):
         return normalized[len(OPENROUTER_MODEL_PREFIX) :]
     return normalized
-
-
-@dataclass(frozen=True)
-class GenerateConfig:
-    """Generation settings shared across model calls."""
-
-    max_tokens: int | None = None
-    timeout: int | None = None
-    reasoning_effort: EmbeddedReasoningEffort | None = None
 
 
 @dataclass
@@ -461,17 +452,15 @@ class ModelCallResult(TypedDict):
 
 
 async def call_model(
-    model_name: str,
+    llm: EmbeddedLLMSpec,
     messages: Sequence[object],
     *,
     client: AsyncOpenAI,
     tools: list[Tool] | None = None,
-    config: GenerateConfig | None = None,
     log_label: str | None = None,
 ) -> ModelCallResult:
-    """Call OpenRouter and normalize the first choice into a plain dict."""
-    request = config or GenerateConfig()
-    normalized_model_name = normalize_openrouter_model_name(model_name)
+    """Call OpenRouter with the spec's generation controls; normalize the first choice."""
+    normalized_model_name = normalize_openrouter_model_name(llm.model)
 
     await acquire_limiter("llm")
 
@@ -480,9 +469,9 @@ async def call_model(
             "sort": "throughput",
         }
     }
-    if request.reasoning_effort is not None:
+    if llm.reasoning_effort is not None:
         extra_body["reasoning"] = {
-            "effort": request.reasoning_effort,
+            "effort": llm.reasoning_effort,
         }
 
     if log_label:
@@ -492,21 +481,21 @@ async def call_model(
             normalized_model_name,
             len(messages),
             len(tools or []),
-            request.timeout,
-            request.max_tokens,
+            llm.timeout,
+            llm.max_tokens,
         )
 
     started_at = perf_counter()
     request_coro = client.chat.completions.create(
         model=normalized_model_name,
         messages=[normalize_message(message) for message in messages],
-        max_tokens=request.max_tokens if request.max_tokens is not None else omit,
-        timeout=request.timeout if request.timeout is not None else NOT_GIVEN,
+        max_tokens=llm.max_tokens if llm.max_tokens is not None else omit,
+        timeout=llm.timeout if llm.timeout is not None else NOT_GIVEN,
         extra_body=extra_body,
         tools=[_tool_schema(tool_obj) for tool_obj in tools] if tools else omit,
     )
-    if request.timeout is not None:
-        response = await asyncio.wait_for(request_coro, timeout=request.timeout)
+    if llm.timeout is not None:
+        response = await asyncio.wait_for(request_coro, timeout=llm.timeout)
     else:
         response = await request_coro
     elapsed = perf_counter() - started_at

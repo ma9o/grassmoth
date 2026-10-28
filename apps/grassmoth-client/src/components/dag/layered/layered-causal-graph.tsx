@@ -775,10 +775,7 @@ export function LayeredCausalGraph({
                           const variable = dataDiff.variables.find(
                             (item) => item.indicator_id === indicator.observation.id,
                           );
-                          const evaluation =
-                            variable && "predictive" in variable
-                              ? variable.predictive.evaluation
-                              : null;
+                          const evaluation = variable?.predictive?.evaluation ?? null;
                           const failures = (
                             evaluation && !("kind" in evaluation) ? evaluation.findings : []
                           ).filter(

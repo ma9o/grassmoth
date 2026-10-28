@@ -7,6 +7,7 @@ import pytest
 
 from grassmoth.artifacts.observations.spec import (
     AuthoredObservationSpec,
+    NumericMeasurement,
     ResolvedObservationSpec,
 )
 from grassmoth.observations.quality.profile import validate_extraction
@@ -30,7 +31,7 @@ def test_one_observation_definition_is_shared_by_preparation_and_model():
     observation = AuthoredObservationSpec(
         id="indicator:dose",
         name="dose",
-        measurement_dtype="continuous",
+        measurement=NumericMeasurement(dtype="continuous"),
         aggregation="last",
         observation_window="1d",
     )
@@ -65,7 +66,7 @@ def _measurement(name="Mood"):
                     "observation": {
                         "id": "indicator:mood",
                         "name": name,
-                        "measurement_dtype": "continuous",
+                        "measurement": {"dtype": "continuous"},
                         "aggregation": "mean",
                     },
                     "extraction": {
@@ -109,7 +110,7 @@ def test_computed_and_semantic_extraction_preserve_the_same_subject_after_rename
                     ResolvedObservationSpec(
                         id="indicator:mood",
                         name=label,
-                        measurement_dtype="continuous",
+                        measurement=NumericMeasurement(dtype="continuous"),
                         aggregation="mean",
                         observation_window="1d",
                     ),
@@ -130,7 +131,7 @@ def test_observation_producers_reject_owners_outside_the_pinned_measurement():
                 ResolvedObservationSpec(
                     id="indicator:mood",
                     name="Mood",
-                    measurement_dtype="continuous",
+                    measurement=NumericMeasurement(dtype="continuous"),
                     aggregation="mean",
                     observation_window="1d",
                 ),

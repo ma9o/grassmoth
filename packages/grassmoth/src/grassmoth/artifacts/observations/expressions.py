@@ -7,8 +7,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import TYPE_CHECKING, assert_never, override
 
-from pydantic_core import core_schema
-
+from grassmoth.artifacts.base import string_wire_schema
 from grassmoth.artifacts.observations.semantics import SummaryOperator
 
 if TYPE_CHECKING:
@@ -352,8 +351,8 @@ class WindowExpression:
         cls, _source_type: object, _handler: GetCoreSchemaHandler
     ) -> CoreSchema:
         """Accept parsed window expressions or source strings and serialize the original rule text."""
-        parsed = core_schema.no_info_after_validator_function(cls, core_schema.str_schema())
-        return core_schema.json_or_python_schema(
+        return string_wire_schema(
+            cls,
             ref=f"{cls.__module__}.{cls.__qualname__}",
             metadata={
                 "pydantic_js_updates": {
@@ -366,11 +365,6 @@ class WindowExpression:
                     )
                 }
             },
-            json_schema=parsed,
-            python_schema=core_schema.union_schema([core_schema.is_instance_schema(cls), parsed]),
-            serialization=core_schema.plain_serializer_function_ser_schema(
-                str, return_schema=core_schema.str_schema()
-            ),
         )
 
     def fold[T](

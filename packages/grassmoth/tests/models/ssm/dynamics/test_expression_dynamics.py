@@ -30,7 +30,7 @@ from grassmoth.artifacts.model.expressions import (
     state,
 )
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec, DynamicsMechanismSpec
-from grassmoth.models.ssm.dynamics.expression import ExpressionComponentSpec
+from grassmoth.models.ssm.dynamics.expression import EdgeDrift, ExpressionComponentSpec
 from grassmoth.models.ssm.dynamics.intervention import (
     ConstantValueFn,
     EdgeInputOverride,
@@ -45,12 +45,12 @@ from grassmoth.models.ssm.dynamics.spec import (
 from grassmoth.models.ssm.dynamics.vector_field import VectorFieldArgs
 
 
-def _component(value, *, source=None):
+def _component(value, role="drift"):
     return ExpressionComponentSpec(
         expression=value,
         target=1,
         state_ids=tuple(ConstructId(f"construct:{name}") for name in ("x", "y", "z")),
-        source=source,
+        role=role,
     )
 
 
@@ -73,15 +73,15 @@ def test_existing_functions_and_composition_preserve_drift_and_intervention_inpu
     components = (
         _component(restoring),
         _component(coefficient(0.4, "intercept")),
-        _component(coefficient(0.6, "weight") * state(ConstructId("construct:x")), source=0),
+        _component(coefficient(0.6, "weight") * state(ConstructId("construct:x")), EdgeDrift(0)),
         _component(
             coefficient(0.5, "weight")
             * state(ConstructId("construct:x"))
             * state(ConstructId("construct:z")),
-            source=0,
+            EdgeDrift(0),
         ),
-        _component(saturation, source=0),
-        _component(saturation * state(ConstructId("construct:z")), source=0),
+        _component(saturation, EdgeDrift(0)),
+        _component(saturation * state(ConstructId("construct:z")), EdgeDrift(0)),
     )
     native = compile_dynamics(DynamicsSpec(n_latent=3, components=components))
     params = tuple({} for _ in components)
@@ -128,7 +128,7 @@ def test_symbolic_compilation_preserves_native_values_gradients_and_domains():
         + CallExpression(function="exp", arguments=(gain * x,))
         - CallExpression(function="sigmoid", arguments=(x,))
     ) / (CallExpression(function="normal_cdf", arguments=(x,)) + 1)
-    component = _component(formula, source=0).build()
+    component = _component(formula, EdgeDrift(0)).build()
 
     def compiled(values):
         return component.evaluate(jnp.array([values[0], 0.0, 0.0]), {identity: values[1]})
@@ -146,7 +146,7 @@ def test_symbolic_compilation_preserves_native_values_gradients_and_domains():
     expected = jax.value_and_grad(native)(values)
     for result, reference in zip(actual, expected, strict=True):
         np.testing.assert_allclose(result, reference, rtol=1e-6, atol=1e-7)
-    quotient = _component(x / x, source=0).build()
+    quotient = _component(x / x, EdgeDrift(0)).build()
     assert np.isnan(quotient.evaluate(jnp.zeros(3), {}))
     assert expression_states(x / x) == {"construct:x"}
 
@@ -160,8 +160,8 @@ def test_shared_drift_preserves_component_parameters_and_edge_ownership(componen
     )
     components = (
         _component(formula),
-        _component(formula, source=0),
-        replace(_component(formula, source=0), target=2),
+        _component(formula, EdgeDrift(0)),
+        replace(_component(formula, EdgeDrift(0)), target=2),
     )[:component_count]
     native = compile_dynamics(DynamicsSpec(n_latent=3, components=components))
     intervention = Intervention(
@@ -204,7 +204,7 @@ def test_multiple_same_role_operands_bind_directly_and_repeated_references_sampl
     value = coefficient(first, "weight") * state(ConstructId("construct:x")) + coefficient(
         second, "weight"
     ) * state(ConstructId("construct:x")) * coefficient(first, "weight")
-    component = _component(value, source=0)
+    component = _component(value, EdgeDrift(0))
     native = compile_dynamics(DynamicsSpec(n_latent=3, components=(component,)))
     assert expression_states(value) == {"construct:x"}
     assert len(expression_coefficients(value)) == 2

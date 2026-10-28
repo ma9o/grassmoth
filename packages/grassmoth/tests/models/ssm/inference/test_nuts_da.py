@@ -1,7 +1,3 @@
-import logging
-import time
-from datetime import UTC, datetime
-
 import jax
 import jax.numpy as jnp
 import numpy as np
@@ -17,7 +13,7 @@ from grassmoth.artifacts.sampling import (
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.samplers.nuts import NutsDARun, run_nuts_da
 from grassmoth.models.ssm.inference.types import MCMCPosterior
-from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program, prepare_program
+from grassmoth_test_support.compute import EXECUTION_CONTEXT, compile_program
 from grassmoth_test_support.inference import (
     nonlinear_fit_fixture,
 )
@@ -47,13 +43,8 @@ def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(
             num_samples_per_chain=num_samples,
             num_chains=4,
         ),
-        compute_budget=COMPUTE_BUDGET,
-        key=jax.random.key(904),
-        clock=time.monotonic,
-        prepare_program=prepare_program,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
-        compiler=compile_program,
+        start=jax.random.key(904),
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(run, NutsDARun)
     assert run.paths is not None
@@ -92,13 +83,7 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior():
             num_samples_per_chain=4,
             num_chains=2,
         ),
-        compute_budget=COMPUTE_BUDGET,
-        reparam=None,
-        clock=time.monotonic,
-        compiler=compile_program,
-        prepare_program=prepare_program,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(result, MCMCPosterior)
     assert result.evidence.method == "nuts_da"
@@ -135,14 +120,8 @@ def test_continuation_matches_uninterrupted_random_stream_and_tuning(
         return run_nuts_da(
             target,
             sampler=options,
-            compute_budget=COMPUTE_BUDGET,
-            key=jax.random.key(17),
-            clock=time.monotonic,
-            continuation=continuation,
-            prepare_program=prepare_program,
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
-            compiler=compile_program,
+            start=jax.random.key(17) if continuation is None else continuation,
+            execution_context=EXECUTION_CONTEXT,
         )
 
     full = run(settings)
@@ -220,13 +199,8 @@ def test_compile_only_executes_neither_sweep(monkeypatch, parameterization):
             num_samples_per_chain=0,
             num_chains=2,
         ),
-        compute_budget=COMPUTE_BUDGET,
-        key=jax.random.key(18),
-        clock=time.monotonic,
-        prepare_program=prepare_program,
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
-        compiler=compile_program,
+        start=jax.random.key(18),
+        execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(run, NutsDARun)
     assert run.positions.shape[:2] == (2, 0)

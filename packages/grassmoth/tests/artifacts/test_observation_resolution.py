@@ -14,7 +14,12 @@ pytestmark = pytest.mark.contract
 
 def test_resolution_preserves_the_definition_and_requires_its_window():
     authored = AuthoredObservationSpec.model_validate(
-        {"id": "indicator:x", "name": "X", "measurement_dtype": "continuous", "aggregation": "last"}
+        {
+            "id": "indicator:x",
+            "name": "X",
+            "measurement": {"dtype": "continuous"},
+            "aggregation": "last",
+        }
     )
     assert authored.observation_window is None
     resolved = authored.resolved(Duration("6h"))

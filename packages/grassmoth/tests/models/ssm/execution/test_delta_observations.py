@@ -17,6 +17,7 @@ from grassmoth.artifacts.model.likelihood import (
     ObservationLawSpec,
 )
 from grassmoth.artifacts.model.parameter_context import iter_coefficient_uses
+from grassmoth.artifacts.observations.spec import LabeledMeasurement, NumericMeasurement
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.artifacts.sampling import DsmcSpec
 from grassmoth.models.ssm import compiled_access as numeric
@@ -172,11 +173,15 @@ def test_exact_measurement_is_available_but_never_selected_by_default(
 ):
     dynamical_model_spec = make_model(["setting", "response"], [("setting", "response")])
     owner = dynamical_model_spec.constructs[0]
-    updates = {"measurement_dtype": dtype, "aggregation": "last"}
-    if dtype in {"ordinal", "categorical"}:
-        updates[f"{dtype}_levels"] = ("low", "high")
+    measurement = (
+        LabeledMeasurement(dtype=dtype, levels=("low", "high"))
+        if dtype in {"ordinal", "categorical"}
+        else NumericMeasurement(dtype=dtype)
+    )
     indicator = owner.indicators[0].revised(
-        observation=owner.indicators[0].observation.revised(**updates)
+        observation=owner.indicators[0].observation.revised(
+            measurement=measurement, aggregation="last"
+        )
     )
     dynamical_model_spec = dynamical_model_spec.with_entities(
         edges=replace_constructs(
@@ -186,7 +191,7 @@ def test_exact_measurement_is_available_but_never_selected_by_default(
     )
     from grassmoth.artifacts.observations.dtypes import VALID_LIKELIHOODS_FOR_DTYPE
 
-    assert VALID_LIKELIHOODS_FOR_DTYPE[indicator.observation.measurement_dtype][0] == default_family
+    assert VALID_LIKELIHOODS_FOR_DTYPE[indicator.observation.measurement.dtype][0] == default_family
     exact = LikelihoodSpec(
         law=TypeAdapter(ObservationLawSpec).validate_json(
             model_fixture_json(observation_law_payload)
@@ -317,7 +322,6 @@ def test_unsupported_delta_constraints_fail_before_parameter_initialization(
                 jnp.array([[jnp.nan, jnp.nan], [1.0, 0.5]]),
                 jnp.array([0.0, 1.0]),
             ),
-            scheme="euler_maruyama",
             trace_key=jax.random.key(0),
             reparam=None,
             compiler=compile_program,
@@ -416,7 +420,6 @@ def point_problem(exact_model):
             jnp.array([[1.0, jnp.nan], [jnp.nan, jnp.nan], [2.0, jnp.nan]]),
             jnp.array([0.0, 0.4, 1.0]),
         ),
-        scheme="euler_maruyama",
         trace_key=jax.random.key(0),
         reparam=None,
         compiler=compile_program,

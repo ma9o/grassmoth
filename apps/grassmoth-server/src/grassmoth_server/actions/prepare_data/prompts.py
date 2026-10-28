@@ -19,7 +19,7 @@ There are two extraction strategies:
 - **Event-derived window statistics**: inspect relevant events inside the window, map each event to a value as instructed, then aggregate across the full window. Example: classify each search as anxiety-related and count them within the day.
 - **Explicit summary mentions**: sometimes the raw data contains a value that already summarizes a wider period (for example a monthly average HRV value mentioned once somewhere in that month). In that case, search anywhere inside the provided support window for that explicit summary mention and extract that value directly. Do **not** recompute the summary from unrelated event-level mentions unless `how_to_measure` explicitly tells you to.
 
-## Data Types (measurement_dtype)
+## Data Types (measurement.dtype)
 
 | Type | Description | Example |
 |------|-------------|---------|
@@ -47,7 +47,7 @@ You output one value per window per indicator. Support-window metadata is added 
 For `ordinal` indicators, output the integer code, not the label text.
 
 - Use the provided `ordinal_codes` mapping.
-- Codes are always `0..K-1` in `ordinal_levels` order from lowest to highest.
+- Codes are always `0..K-1` in the order of the ordinal `levels`, from lowest to highest.
 - Example: if `ordinal_codes=0=poor, 1=fair, 2=good`, then return `2` for `good`.
 - If no relevant evidence exists in the support window, return `null`.
 

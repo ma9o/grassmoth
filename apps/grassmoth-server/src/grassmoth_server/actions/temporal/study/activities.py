@@ -48,8 +48,7 @@ from grassmoth_server.study.records import (
     EditQuestionAttempt,
     Rejected,
     StudyRevision,
-    applied_attempt,
-    failed_attempt,
+    action_attempt,
 )
 from grassmoth_server.study.state import StudyState
 from grassmoth_server.study.sweep import collect_completed_runs
@@ -74,12 +73,12 @@ async def run_action_activity(activity_input: ActionInput) -> ActionAttempt:
             activity_input.workspace_id, activity_input.request, activity_input.state
         )
     except StudyLookupError as exc:
-        return failed_attempt(
+        return action_attempt(
             activity_input.request,
             Rejected(code="INPUT_UNAVAILABLE", subject="inputs", detail=str(exc)),
         )
     except (IncompleteModelError, AggregatedCompileError) as exc:
-        return failed_attempt(
+        return action_attempt(
             activity_input.request,
             Rejected(code="model_execution", subject="model", detail=str(exc)),
         )
@@ -87,7 +86,7 @@ async def run_action_activity(activity_input: ActionInput) -> ActionAttempt:
         raise ApplicationError(
             str(exc), exc.diagnostics, type=type(exc).__name__, non_retryable=True
         ) from exc
-    return applied_attempt(
+    return action_attempt(
         activity_input.request, Applied(result=result.result, effects=result.effects)
     )
 

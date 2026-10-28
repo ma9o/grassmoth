@@ -1,11 +1,13 @@
 """Resolve simulation provenance and delegate the calculation to the library."""
 
 from grassmoth.public import (
+    FittedLaw,
     FittedLawProvenance,
     GitOid,
     MixedLawProvenance,
     ObservationPreflightFailure,
     SimulateOutput,
+    SimulationInputs,
     StructuralSelection,
     simulate,
 )
@@ -32,12 +34,7 @@ def run_simulation(
     model = model_values(store, read_model(store, revision))
     selection = StructuralSelection.for_question(model, read_question(store, question_revision))
     records = StudyRepository(store.workspace_id).attempts()
-    law = law_provenance(store, store.read_meta("model", revision), model, None)
-    law_report = (
-        fitted_law_report(store, records, law.fitted_model_revision)
-        if isinstance(law, (FittedLawProvenance, MixedLawProvenance))
-        else None
-    )
+    provenance = law_provenance(store, store.read_meta("model", revision), model, None)
     inference = inference_record(records, revision)
     fitted = (
         None
@@ -48,12 +45,18 @@ def run_simulation(
         )
     )
     return simulate(
-        selection,
-        request.simulation,
-        seed=request.seed,
-        num_replicates=request.num_replicates,
+        SimulationInputs(
+            selection=selection,
+            design=request.simulation,
+            seed=request.seed,
+            num_replicates=request.num_replicates,
+            law=FittedLaw(
+                provenance=provenance,
+                report=fitted_law_report(store, records, provenance.fitted_model_revision),
+            )
+            if isinstance(provenance, (FittedLawProvenance, MixedLawProvenance))
+            else provenance,
+            fitted=fitted,
+        ),
         budget=read_compute_budget(),
-        law=law,
-        law_report=law_report,
-        fitted=fitted,
     )

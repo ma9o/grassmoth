@@ -2,11 +2,12 @@
 
 import json
 import logging
-from datetime import UTC, datetime
+from dataclasses import replace
 
 import pytest
 
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 
 pytestmark = pytest.mark.contract
 
@@ -17,9 +18,9 @@ def test_compilation_completion_is_emitted_only_after_the_work_finishes(caplog):
     with inference_phase(
         "mpgibbs",
         "compiling_sweeps",
-        clock=lambda: next(ticks),
-        logger=logging.getLogger(__name__),
-        wall_clock=lambda: datetime.now(UTC),
+        execution_context=replace(
+            EXECUTION_CONTEXT, clock=lambda: next(ticks), logger=logging.getLogger(__name__)
+        ),
     ):
         assert [json.loads(record.message)["event"] for record in caplog.records] == ["started"]
     events = [json.loads(record.message) for record in caplog.records]
@@ -38,9 +39,9 @@ def test_compilation_failure_is_reported_without_a_false_completion(caplog):
         inference_phase(
             "mpgibbs",
             "compiling_sweeps",
-            clock=lambda: 1.0,
-            logger=logging.getLogger(__name__),
-            wall_clock=lambda: datetime.now(UTC),
+            execution_context=replace(
+                EXECUTION_CONTEXT, clock=lambda: 1.0, logger=logging.getLogger(__name__)
+            ),
         ),
     ):
         raise failure

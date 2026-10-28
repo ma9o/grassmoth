@@ -73,7 +73,7 @@ with workflow.unsafe.imports_passed_through():
         PrepareAttempt,
         Rejected,
         StudyRevision,
-        failed_attempt,
+        action_attempt,
     )
     from grassmoth_server.study.state import validate_lineage
 _RUN_ACTION_TIMEOUT = timedelta(hours=4)
@@ -148,7 +148,7 @@ class StudyWorkflow:
                 attempt_id=request.attempt_id,
                 seq=running.seq,
                 commit_id=None,
-                attempt=failed_attempt(request.request, failure),
+                attempt=action_attempt(request.request, failure),
                 messages=(
                     *progress.messages,
                     ActionMessage(
@@ -182,7 +182,7 @@ class StudyWorkflow:
                 if failure.error_type == "StudyLookupError"
                 else failure
             )
-            await self._journal(request, running, failed_attempt(action, outcome))
+            await self._journal(request, running, action_attempt(action, outcome))
             return
         if base.saved is not None:
             saved = base.saved
@@ -205,7 +205,7 @@ class StudyWorkflow:
             else None
         )
         if rejection is not None:
-            await self._journal(request, running, failed_attempt(action, rejection))
+            await self._journal(request, running, action_attempt(action, rejection))
             return
         try:
             if isinstance(action, EditQuestionRequest):
@@ -301,7 +301,7 @@ class StudyWorkflow:
                 retry_policy=_ACTIVITY_RETRY,
             )
         except (ActivityError, ChildWorkflowError) as exc:
-            completed = failed_attempt(action, temporal_failure(exc))
+            completed = action_attempt(action, temporal_failure(exc))
         await self._journal(request, running, completed)
 
     async def _prepare_files(
