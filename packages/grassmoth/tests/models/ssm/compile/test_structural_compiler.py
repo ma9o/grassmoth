@@ -30,7 +30,7 @@ from grassmoth_test_support.inference import (
     compile_model_fixture,
     particle_posterior,
 )
-from grassmoth_test_support.model import load_model_fixture, x_y_model
+from grassmoth_test_support.model import load_model_fixture, x_model, x_y_model
 
 
 def _severed_components_do_not_require_priors_or_bind_numerical_parameters_complete_test_model() -> (
@@ -325,6 +325,27 @@ def test_severed_components_do_not_require_priors_or_bind_numerical_parameters()
         "X",
         "Y",
     }
+
+
+@pytest.mark.inference(concern="predictive")
+def test_conditioning_retains_a_construct_without_edges():
+    import jax.numpy as jnp
+
+    from grassmoth.actions.fit.conditioning import condition_model
+    from grassmoth.models.ssm.inference.types import JointPosteriorDraws
+    from grassmoth_test_support.inference import parameter_draws
+
+    x = next(item for item in x_model().constructs if item.name == "X")
+    lone = x_model().with_entities(constructs=(x,), edges=())
+    conditioned, identity = condition_model(
+        lone,
+        compile_model_fixture(lone),
+        particle_posterior(JointPosteriorDraws(parameter_draws(lone, 2), jnp.zeros((2, 2, 1)))),
+        times=jnp.array([0.0, 1.0]),
+        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+    assert conditioned.edges == ()
+    assert conditioned.get_construct(x.id).distribution == identity
 
 
 @pytest.mark.contract

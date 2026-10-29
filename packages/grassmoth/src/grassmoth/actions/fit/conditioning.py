@@ -89,7 +89,14 @@ def condition_model(
         )
         for construct in dynamical_model_spec.constructs
     )
-    edges = replace_constructs(dynamical_model_spec.edges, constructs)
+    # Constructs without edges, such as a lone latent, are retained through `constructs`.
+    endpoints = {
+        endpoint.id for edge in dynamical_model_spec.edges for endpoint in (edge.cause, edge.effect)
+    }
+    edges = replace_constructs(
+        dynamical_model_spec.edges,
+        tuple(construct for construct in constructs if construct.id in endpoints),
+    )
     parameters = tuple(
         parameter if parameter.id not in conditioned_parameters else parameter.conditioned(identity)
         for parameter in dynamical_model_spec.parameters
