@@ -546,8 +546,17 @@ def run_marginal_particle_gibbs(
                     maximum,
                 )
                 updated = updated._replace(latent_delta=tuning.delta)
+                parameter_feedback = info["parameter_accepted"]
+                if use_dual_averaging:
+                    # Rao-Blackwellize the label draw, then pool chains at each
+                    # temperature. Replicas are ordered by chain, then level.
+                    # Identical starts and feedback keep their DA states shared,
+                    # including covariance restarts and the final averaged step.
+                    switch_probability = -jnp.expm1(info["final_label_log_probs"][:, 0])
+                    per_temperature = switch_probability.reshape(num_chains, levels).mean(axis=0)
+                    parameter_feedback = jnp.tile(per_temperature, num_chains)
                 param_step_size, param_da = adapt_steps(
-                    updated.param_step_size, updated.param_da, info["parameter_accepted"]
+                    updated.param_step_size, updated.param_da, parameter_feedback
                 )
                 updated = updated._replace(param_step_size=param_step_size, param_da=param_da)
                 # NUTS adapted itself in its transition; Metropolis steps adapt here.

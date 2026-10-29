@@ -1,3 +1,4 @@
+from dataclasses import replace
 from unittest.mock import Mock
 
 import jax
@@ -5,11 +6,13 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 import pytest
+from blackjax.adaptation.step_size import dual_averaging_adaptation
 
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec
 from grassmoth.artifacts.sampling import DsmcSpec, GaussianReferenceTemperingSpec, SamplerSpec
+from grassmoth.models.ssm.inference.samplers.mpgibbs import runner
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
@@ -23,6 +26,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
 )
 from grassmoth.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
+from grassmoth.models.ssm.inference.warmup.parameter_adaptation import covariance_windows
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import compile_fit_fixture
 from grassmoth_test_support.interval_particle import (
@@ -301,11 +305,34 @@ def test_local_moves_refresh_and_swaps_preserve_all_analytic_bridge_moments():
 
 @pytest.mark.inference(concern="warmup")
 @pytest.mark.parametrize(
-    ("tempered", "adaptation_scheme"), [(False, "dual_averaging"), (True, "simple")]
+    ("tempered", "adaptation_scheme"),
+    [(False, "dual_averaging"), (True, "dual_averaging"), (True, "simple")],
 )
 def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
-    tempered, adaptation_scheme
+    monkeypatch, tempered, adaptation_scheme
 ):
+    levels = 3 if tempered else 1
+    warmup = 120
+    compile_sweeps = runner.compile_projected_sweeps
+
+    def capture_tuning(program, initial, **kwargs):
+        def step_factory(batch_size):
+            step = program.step_factory(batch_size)
+
+            def sweep(current, posterior):
+                updated, record = step(current, posterior)
+                return updated, {
+                    **record,
+                    "steps_before": current.chains.param_step_size.reshape(2, levels),
+                    "steps_after": updated.chains.param_step_size.reshape(2, levels),
+                    "da_after": jnp.stack(updated.chains.param_da, axis=-1).reshape(2, levels, 5),
+                }
+
+            return sweep
+
+        return compile_sweeps(replace(program, step_factory=step_factory), initial, **kwargs)
+
+    monkeypatch.setattr(runner, "compile_projected_sweeps", capture_tuning)
     target, _, _ = gaussian_interval_case()
     reference = _reference(target)
     spec = GaussianReferenceTemperingSpec(num_temperatures=3, adaptation_interval=2)
@@ -313,7 +340,7 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
     result = run_marginal_particle_gibbs(
         target,
         kernel=_local_kernel(target),
-        sampler=SamplerSpec(num_warmup=40, num_samples_per_chain=27, num_chains=2),
+        sampler=SamplerSpec(num_warmup=warmup, num_samples_per_chain=27, num_chains=2),
         key=jax.random.PRNGKey(711),
         adaptation_scheme=adaptation_scheme,
         initialization=Mock(
@@ -330,9 +357,53 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
     assert result.latent_paths.shape == (2, 27, 9, 1)
     assert result.initial_param_step_size.shape == result.final_param_step_size.shape == (2,)
     assert result.final_latent_delta.shape == (2, 9)
+    traces = result.all_chain_extra_fields
+    steps_before = np.asarray(traces["steps_before"])
+    steps_after = np.asarray(traces["steps_after"])
+    da_after = np.asarray(traces["da_after"])
+    np.testing.assert_array_equal(steps_before[:, 1:], steps_after[:, :-1])
+    np.testing.assert_array_equal(
+        steps_before[:, warmup:], np.repeat(steps_after[:, warmup - 1 : warmup], 27, axis=1)
+    )
+    if adaptation_scheme == "dual_averaging":
+        # All five DA fields remain shared at each temperature, including
+        # covariance replacements, the averaged final step and retention.
+        np.testing.assert_array_equal(steps_before[0], steps_before[1])
+        np.testing.assert_array_equal(steps_after[0], steps_after[1])
+        np.testing.assert_array_equal(da_after[0], da_after[1])
+        if tempered:
+            assert not np.array_equal(steps_after[0, :, 0], steps_after[0, :, 1])
+        switch_probability = -np.expm1(np.asarray(traces["final_label_log_probs"])[:, 0, 0])
+        if not tempered:
+            assert switch_probability[0] != switch_probability[1]
+            assert not np.array_equal(
+                switch_probability, np.asarray(traces["parameter_accept_prob"])[:, 0]
+            )
+        # The first cold step must use the conditional probability, pooled
+        # across chains; the selected labels supply a different statistic.
+        initialize, update, _ = dual_averaging_adaptation(target=0.2)
+        expected = update(initialize(steps_before[0, 0, 0]), switch_probability.mean())
+        np.testing.assert_allclose(steps_after[:, 0, 0], jnp.exp(expected.log_step_size), rtol=2e-6)
+        boundaries = np.asarray(covariance_windows(warmup))[:, 1]
+        assert boundaries.size > 0
+        np.testing.assert_array_equal(da_after[:, boundaries][..., 2], 1)
+        np.testing.assert_allclose(
+            da_after[:, boundaries][..., 4], np.log(10 * steps_after[:, boundaries]), rtol=2e-6
+        )
+        np.testing.assert_allclose(
+            steps_after[:, warmup - 1], np.exp(da_after[:, warmup - 1, :, 1]), rtol=2e-6
+        )
+        np.testing.assert_array_equal(
+            da_after[:, warmup:], np.repeat(da_after[:, warmup - 1 : warmup], 27, axis=1)
+        )
+    else:
+        accepted = np.asarray(traces["parameter_accept_prob"])[:, 0]
+        np.testing.assert_allclose(
+            steps_after[:, 0, 0], steps_before[:, 0, 0] * np.exp(0.05 * (accepted - 0.2)), rtol=2e-6
+        )
     if tempered:
         assert result.tempering is not None
-        assert result.tempering.ladder_frozen_at_warmup_step == 20
+        assert result.tempering.ladder_frozen_at_warmup_step == warmup // 2
         assert result.tempering.inverse_temperatures[0] == 1
         assert result.tempering.inverse_temperatures[-1] == 0
         assert tuple(
