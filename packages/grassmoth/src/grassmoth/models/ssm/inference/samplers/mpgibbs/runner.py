@@ -59,11 +59,15 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     DELTA_MAX,
+    CurvatureMoments,
     DsmcAdaptation,
+    adapt_curvature_geometry,
     adapt_scales,
+    guided_curvature,
     guided_delta_limit,
     initial_delta,
     initialize_adaptation,
+    initialize_curvature_moments,
     latent_adaptation,
 )
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
@@ -210,6 +214,7 @@ class _Population(NamedTuple):
     ladder_frozen_at: jax.Array
     companions: CompanionTuning | None
     latent_geometry: jax.Array
+    curvature_moments: CurvatureMoments
 
 
 # Gain of the simple step-size scheme; a fixed property of warmup, not a setting.
@@ -378,6 +383,7 @@ def run_marginal_particle_gibbs(
         if companion is None
         else _initial_companion_tuning(companion, states, key, num_warmup, compiler),
         latent_geometry,
+        initialize_curvature_moments(latent_geometry),
     )
     if continuation is not None and num_warmup == 0:
         initial = restore_state(initial, continuation.native_state)
@@ -517,15 +523,17 @@ def run_marginal_particle_gibbs(
                 )
 
             def adapt(updated: TrajectoryMCMCState) -> _Population:
-                geometry = (
-                    jax.vmap(
-                        lambda state: guided_delta_limit(
+                geometry = current.latent_geometry
+                curvature_moments = current.curvature_moments
+                if curvature_limited:
+                    curvature = jax.vmap(
+                        lambda state: guided_curvature(
                             target, state.latent_context, state.latent_trajectory, latent_free_mask
                         )
                     )(updated)
-                    if curvature_limited
-                    else current.latent_geometry
-                )
+                    curvature_moments, geometry = adapt_curvature_geometry(
+                        curvature_moments, curvature, geometry, current.iteration, windows
+                    )
                 maximum = jnp.full_like(
                     updated.latent_delta, 1.0 if curvature_limited else DELTA_MAX
                 )
@@ -606,6 +614,7 @@ def run_marginal_particle_gibbs(
                     iteration=current.iteration + 1,
                     adaptation=tuning,
                     latent_geometry=geometry,
+                    curvature_moments=curvature_moments,
                     parameter_covariance=covariance,
                     companions=companions,
                 )

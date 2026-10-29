@@ -8,12 +8,86 @@ import pytest
 from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     _curvature_limits,
+    adapt_curvature_geometry,
     adapt_scales,
     initialize_adaptation,
+    initialize_curvature_moments,
     latent_adaptation,
 )
 
 pytestmark = pytest.mark.inference(concern="warmup")
+
+
+def test_curvature_geometry_uses_completed_window_rms_and_freezes():
+    initial = jnp.full((2, 1, 3), 3.0)
+    windows = jnp.array([[2, 5], [7, 10]])
+    # Replicas and coordinates stay separate; large between-window differences
+    # exercise replacement rather than pooling stale transient observations.
+    first = jnp.array([[[0.0, 2.0, 4.0]], [[0.0, 4.0, 8.0]]])
+    last = jnp.array([[[0.0, 2.0, 20.0]], [[0.0, 4.0, 40.0]]])
+
+    def step(carry, index):
+        moments, geometry = carry
+        curvature = jnp.where(index == 5, last, first)
+        curvature = jnp.where(index >= 7, curvature * 2, curvature)
+        updated = adapt_curvature_geometry(moments, curvature, geometry, index, windows)
+        return updated, updated[1]
+
+    (moments, final), history = jax.jit(
+        lambda: jax.lax.scan(step, (initialize_curvature_moments(initial), initial), jnp.arange(16))
+    )()
+    expected_first = 2 / jnp.maximum(jnp.sqrt((3 * first**2 + last**2) / 4), 0.2)
+    expected_last = 2 / jnp.maximum(2 * first, 0.2)
+    np.testing.assert_array_equal(history[:5], jnp.broadcast_to(initial, (5, *initial.shape)))
+    np.testing.assert_allclose(
+        history[5:10], jnp.broadcast_to(expected_first, (5, *initial.shape)), rtol=2e-6
+    )
+    np.testing.assert_allclose(
+        history[10:], jnp.broadcast_to(expected_last, (6, *initial.shape)), rtol=2e-6
+    )
+    np.testing.assert_allclose(final, expected_last, rtol=2e-6)
+    assert int(moments.sample_count) == 0
+    np.testing.assert_array_equal(moments.rms, jnp.zeros_like(initial))
+
+
+def test_curvature_rms_minimizes_fixed_metric_expected_information():
+    hessian = jnp.array([-0.2, -1.0, -4.0, -20.0])
+    initial = jnp.ones((1, 1))
+    windows = jnp.array([[0, 3]])
+
+    def step(carry, index):
+        return adapt_curvature_geometry(
+            carry[0], jnp.abs(hessian[index]).reshape((1, 1)), carry[1], index, windows
+        ), None
+
+    (_, geometry), _ = jax.jit(
+        lambda: jax.lax.scan(step, (initialize_curvature_moments(initial), initial), jnp.arange(4))
+    )()
+    variance = geometry[0, 0] / 2
+    expected = 1 / jnp.sqrt(jnp.mean(hessian**2))
+    np.testing.assert_allclose(variance, expected, rtol=2e-6)
+
+    def information(value):
+        return jnp.mean((1 + value * hessian) ** 2 / value)
+
+    assert abs(float(jax.grad(information)(variance))) < 1e-4
+    for multiplier in (0.5, 0.8, 1.2, 2.0):
+        assert information(variance) < information(variance * multiplier)
+
+
+def test_curvature_rms_handles_float32_extremes_and_constant_curvature():
+    values = jnp.array([[[0.0, 1e-12, 2.0, 1e20]]], dtype=jnp.float32)
+    initial = 2 / jnp.maximum(values, 0.2)
+    windows = jnp.array([[1, 4]])
+
+    def step(carry, index):
+        return adapt_curvature_geometry(carry[0], values, carry[1], index, windows), None
+
+    (_, final), _ = jax.jit(
+        lambda: jax.lax.scan(step, (initialize_curvature_moments(initial), initial), jnp.arange(8))
+    )()
+    assert np.isfinite(final).all()
+    np.testing.assert_allclose(final, initial, rtol=2e-6)
 
 
 @pytest.mark.parametrize("variance", [1e-8, 0.01, 0.04, 0.16])
@@ -300,7 +374,9 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
     np.testing.assert_array_equal(full.latent_paths[:, 2:], continued.latent_paths)
     np.testing.assert_array_equal(full.grouped_positions[:, 2:], continued.grouped_positions)
     np.testing.assert_array_equal(prefix.final_latent_delta, continued.final_latent_delta)
-    # The final native leaf owns the warmup metric; neither a new current path
-    # nor the resumed initialization may replace it during retained sampling.
-    np.testing.assert_array_equal(prefix.final_state[-1].values, continued.final_state[-1].values)
+    # The final native leaves own geometry, count and RMS. Neither the new path
+    # nor resumed initialization may replace any of them during retention.
+    assert prefix.final_state[-3].values.shape == (1, 3, 1)
+    for before, after in zip(prefix.final_state[-3:], continued.final_state[-3:], strict=True):
+        np.testing.assert_array_equal(before.values, after.values)
     assert continued.final_latent_delta.shape == (1, 3)

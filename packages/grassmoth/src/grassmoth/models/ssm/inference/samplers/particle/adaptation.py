@@ -1,7 +1,7 @@
 """Warmup-only path scales, with observation-curvature limits for guided drift."""
 
 from collections.abc import Callable
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
@@ -23,12 +23,29 @@ DELTA_MIN = 1e-5
 DELTA_MAX = 10.0
 
 
+def _curvature_sizes(
+    observe: Callable[[Float[Array, " D"], Int[Array, ""]], Float[Array, ""]],
+    path: Float[Array, "T D"],
+    free_mask: Bool[Array, "T D"],
+) -> Float[Array, "T D"]:
+    """Absolute Hessian row sums on free coordinates, without a step-size floor."""
+
+    def at_time(
+        state: Float[Array, " D"], free: Bool[Array, " D"], index: Int[Array, ""]
+    ) -> Float[Array, " D"]:
+        hessian = jax.hessian(observe)(state, index)
+        hessian = (hessian + hessian.T) * 0.5 * free[:, None] * free[None, :]
+        return jnp.sum(jnp.abs(hessian), axis=-1)
+
+    return jax.vmap(at_time)(path, free_mask, jnp.arange(path.shape[0]))
+
+
 def _curvature_limits(
     observe: Callable[[Float[Array, " D"], Int[Array, ""]], Float[Array, ""]],
     path: Float[Array, "T D"],
     free_mask: Bool[Array, "T D"],
 ) -> Float[Array, "T D"]:
-    """Diagonal warmup limits from the auxiliary's local information.
+    """Initial diagonal limits from the auxiliary's local information.
 
     For a scalar affine score with Hessian H, the auxiliary variance A = delta/2
     adds K = (1 + A*H)**2 / A of information about the current path. A = 1/|H|
@@ -37,20 +54,36 @@ def _curvature_limits(
     finite minimizer; the cap and the movement multiplier are heuristics.
     Absolute row sums extend the scalar rule conservatively to coupled
     coordinates, and one tight channel cannot throttle another coordinate.
-    Curvature is measured at the latest warmup state and frozen before the
-    retained draws. This local rule bounds neither nonlinear nor label-mixture
-    curvature.
+    The initializer uses this pointwise rule. Subsequent geometry comes from
+    completed warmup windows, not the current state. The local rule bounds
+    neither nonlinear nor label-mixture curvature.
     """
+    return 2.0 / jnp.maximum(_curvature_sizes(observe, path, free_mask), 2.0 / DELTA_MAX)
 
-    def at_time(
-        state: Float[Array, " D"], free: Bool[Array, " D"], index: Int[Array, ""]
-    ) -> Float[Array, " D"]:
-        hessian = jax.hessian(observe)(state, index)
-        hessian = (hessian + hessian.T) * 0.5 * free[:, None] * free[None, :]
-        curvature = jnp.sum(jnp.abs(hessian), axis=-1)
-        return 2.0 / jnp.maximum(curvature, 2.0 / DELTA_MAX)
 
-    return jax.vmap(at_time)(path, free_mask, jnp.arange(path.shape[0]))
+def _guided_observation(
+    target: ParticleTarget,
+    context: ParticleContext,
+    path: Float[Array, "T D"],
+) -> Callable[[Float[Array, " D"], Int[Array, ""]], Float[Array, ""]]:
+    """Bind one exact observation-factor projection for curvature measurements."""
+    memory = sequential_observations(
+        target, jax.tree.map(lambda value: value[None], context), context
+    )
+    reference = memory.path(path)
+    return lambda state, index: memory.log_probs(
+        memory.replace_current(reference[index], state, index), index
+    )[0]
+
+
+def guided_curvature(
+    target: ParticleTarget,
+    context: ParticleContext,
+    path: Float[Array, "T D"],
+    free_mask: Bool[Array, "T D"],
+) -> Float[Array, "T D"]:
+    """Measure exact observation curvature without selecting the next transition's metric."""
+    return _curvature_sizes(_guided_observation(target, context, path), path, free_mask)
 
 
 def guided_delta_limit(
@@ -59,17 +92,65 @@ def guided_delta_limit(
     path: Float[Array, "T D"],
     free_mask: Bool[Array, "T D"],
 ) -> Float[Array, "T D"]:
-    """Calibrate warmup limits from the exact observation factor at its parameters."""
-    memory = sequential_observations(
-        target, jax.tree.map(lambda value: value[None], context), context
-    )
-    reference = memory.path(path)
-    return _curvature_limits(
-        lambda state, index: memory.log_probs(
-            memory.replace_current(reference[index], state, index), index
-        )[0],
-        path,
-        free_mask,
+    """Select the initial pointwise metric before learning from warmup history."""
+    return _curvature_limits(_guided_observation(target, context, path), path, free_mask)
+
+
+class CurvatureMoments(NamedTuple):
+    """Per-coordinate RMS observation curvature in the current warmup window."""
+
+    sample_count: Int[Array, ""]
+    rms: Float[Array, "*batch T D"]
+
+
+def initialize_curvature_moments(geometry: Float[Array, "*batch T D"]) -> CurvatureMoments:
+    """Start an empty window independently for each replica, time and free coordinate."""
+    return CurvatureMoments(jnp.asarray(0), jnp.zeros_like(geometry))
+
+
+def adapt_curvature_geometry(
+    moments: CurvatureMoments,
+    curvature: Float[Array, "*batch T D"],
+    geometry: Float[Array, "*batch T D"],
+    iteration: Int[Array, ""],
+    windows: Int[Array, "W 2"],
+) -> tuple[CurvatureMoments, Float[Array, "*batch T D"]]:
+    """Publish only completed-window geometry, retaining it throughout every window.
+
+    For scalar Hessian H and fixed auxiliary variance A, expected local
+    information is E[(1+A*H)**2/A] = 1/A + 2 E[H] + A E[H**2]. Its minimizing
+    A is 1/sqrt(E[H**2]); delta is twice A. Absolute Hessian row sums retain
+    the existing conservative extension to coupled coordinates. The step cap
+    handles zero curvature. Hypot accumulates RMS without squaring large
+    finite float32 curvature. Repeated states count as chain history.
+
+    Expanding windows discard earlier transient moments. Their initial and
+    terminal buffers do not learn geometry, and retention never changes it.
+    Window boundaries are still adaptive warmup, not invariant transitions.
+    A multimodal or poorly explored window can give inefficient geometry;
+    exact particle weights remain unchanged.
+    """
+    active = jnp.any((iteration >= windows[:, 0]) & (iteration <= windows[:, 1]))
+    boundary = jnp.any(iteration == windows[:, 1])
+
+    def accumulate() -> tuple[CurvatureMoments, jax.Array]:
+        count = moments.sample_count + 1
+        weight = moments.sample_count / count
+        rms = jnp.hypot(jnp.sqrt(weight) * moments.rms, curvature / jnp.sqrt(count))
+        updated = CurvatureMoments(count, rms)
+
+        def finish() -> tuple[CurvatureMoments, jax.Array]:
+            learned = 2.0 / jnp.maximum(rms, 2.0 / DELTA_MAX)
+            return initialize_curvature_moments(geometry), learned
+
+        return cast(
+            "tuple[CurvatureMoments, jax.Array]",
+            jax.lax.cond(boundary, finish, lambda: (updated, geometry)),
+        )
+
+    return cast(
+        "tuple[CurvatureMoments, jax.Array]",
+        jax.lax.cond(active, accumulate, lambda: (moments, geometry)),
     )
 
 
