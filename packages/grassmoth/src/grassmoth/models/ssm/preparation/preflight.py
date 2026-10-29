@@ -55,6 +55,18 @@ def validate_sampler_support(
     if isinstance(sampler.algorithm, NutsDASpec):
         return None
     if not isinstance(sampler.algorithm.path_update, DsmcSpec):
+        path_update = sampler.algorithm.path_update
+        if path_update.prefix_mixture:
+            if path_update.method != "twisted_particle_agrad" or path_update.kappa != 1:
+                return ObservationPreflightFailure.rejected(
+                    "Prefix-mixture proposals require twisted Particle-aGRAD with kappa=1."
+                )
+            if compiled.state_space.requires_replay or any(
+                item.support.support_kind == "interval" for item in compiled.observations
+            ):
+                return ObservationPreflightFailure.rejected(
+                    "Prefix-mixture proposals support point readings without replay."
+                )
         if sampler.algorithm.path_update.method == "particle_mgrad" and (
             compiled.state_space.recurrence
             or any(item.support.support_kind == "interval" for item in compiled.observations)

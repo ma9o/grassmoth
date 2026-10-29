@@ -144,9 +144,9 @@ def _correlated_gaussian_case():
 
 
 @pytest.mark.parametrize(
-    ("method", "cubic", "kappa", "pinned", "steps", "dimension"),
+    ("method", "cubic", "kappa", "pinned", "steps", "dimension", "prefix_mixture"),
     [
-        (method, *case)
+        (method, *case, False)
         for method in ("particle_agrad", "twisted_particle_agrad")
         for case in (
             (0.7, 0, False, 3, 1),
@@ -156,17 +156,28 @@ def _correlated_gaussian_case():
         )
     ]
     + [
-        ("particle_mgrad", 0.0, 0, False, 3, 2),
-        ("particle_mgrad", 0.7, 1, True, 3, 1),
+        ("particle_mgrad", 0.0, 0, False, 3, 2, False),
+        ("particle_mgrad", 0.7, 1, True, 3, 1, False),
+        pytest.param(
+            "twisted_particle_agrad", 0.0, 1, False, 3, 2, True, id="prefix_mixture_gaussian"
+        ),
+        pytest.param(
+            "twisted_particle_agrad", 0.7, 1, True, 3, 1, True, id="prefix_mixture_nonlinear_pinned"
+        ),
+        pytest.param(
+            "twisted_particle_agrad", 0.0, 1, False, 1, 1, True, id="prefix_mixture_single_time"
+        ),
     ],
 )
 def test_guided_updates_preserve_path_and_label_posterior(
-    method, cubic, kappa, pinned, steps, dimension
+    method, cubic, kappa, pinned, steps, dimension, prefix_mixture
 ):
     target, labels, starts, expected_mean, expected_second, expected_labels = _case(
         cubic, pinned=pinned, steps=steps, dimension=dimension
     )
-    spec = GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
+    spec = GuidedPathSpec(
+        method=method, num_particles=8, kappa=kappa, prefix_mixture=prefix_mixture
+    )
     mask = target.independent_mask
     if pinned:
         mask = mask.at[1, 0].set(False)

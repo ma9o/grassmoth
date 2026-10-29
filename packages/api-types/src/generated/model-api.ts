@@ -4912,6 +4912,12 @@ export interface components {
              * @default 8
              */
             readonly scan_unroll?: number;
+            /**
+             * Prefix Mixture
+             * @description Opt in to per-parameter-label local Gaussian proposals, mixed with the unfloored prefix label probabilities. Every particle pays the full mixture density; the shared auxiliary law and look-ahead remain unchanged. Requires twisted_particle_agrad with kappa=1 and point readings without replay. Early label collapse, poor shared guidance and separated modes can reduce mixing.
+             * @default false
+             */
+            readonly prefix_mixture?: boolean;
         };
         /**
          * GuidedPathSpec
@@ -4948,6 +4954,12 @@ export interface components {
              * @default 8
              */
             readonly scan_unroll: number;
+            /**
+             * Prefix Mixture
+             * @description Opt in to per-parameter-label local Gaussian proposals, mixed with the unfloored prefix label probabilities. Every particle pays the full mixture density; the shared auxiliary law and look-ahead remain unchanged. Requires twisted_particle_agrad with kappa=1 and point readings without replay. Early label collapse, poor shared guidance and separated modes can reduce mixing.
+             * @default false
+             */
+            readonly prefix_mixture: boolean;
         };
         /** HTTPValidationError */
         readonly HTTPValidationError: {

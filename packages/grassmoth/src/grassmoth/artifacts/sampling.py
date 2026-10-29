@@ -440,6 +440,16 @@ class GuidedPathSpec(Value):
     )
     kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
     scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
+    prefix_mixture: bool = Field(
+        default=False,
+        description=(
+            "Opt in to per-parameter-label local Gaussian proposals, mixed with the "
+            "unfloored prefix label probabilities. Every particle pays the full mixture "
+            "density; the shared auxiliary law and look-ahead remain unchanged. Requires "
+            "twisted_particle_agrad with kappa=1 and point readings without replay. "
+            "Early label collapse, poor shared guidance and separated modes can reduce mixing."
+        ),
+    )
 
 
 type PathUpdateSpec = Annotated[DsmcSpec | GuidedPathSpec, Field(discriminator="method")]
@@ -624,6 +634,9 @@ class SamplerSpec(Value):
             algorithm.method,
             algorithm.path_update.method,
             0 if isinstance(algorithm.path_update, DsmcSpec) else algorithm.path_update.kappa,
+            False
+            if isinstance(algorithm.path_update, DsmcSpec)
+            else algorithm.path_update.prefix_mixture,
             algorithm.parameter_proposal,
             tempering.companion if isinstance(tempering, UntemperedSpec) else "none",
             1 if isinstance(tempering, UntemperedSpec) else tempering.num_temperatures,

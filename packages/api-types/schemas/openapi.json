@@ -17231,6 +17231,12 @@
             "minimum": 1,
             "title": "Scan Unroll",
             "type": "integer"
+          },
+          "prefix_mixture": {
+            "default": false,
+            "description": "Opt in to per-parameter-label local Gaussian proposals, mixed with the unfloored prefix label probabilities. Every particle pays the full mixture density; the shared auxiliary law and look-ahead remain unchanged. Requires twisted_particle_agrad with kappa=1 and point readings without replay. Early label collapse, poor shared guidance and separated modes can reduce mixing.",
+            "title": "Prefix Mixture",
+            "type": "boolean"
           }
         },
         "title": "GuidedPathSpec",
@@ -17281,6 +17287,12 @@
             "minimum": 1,
             "title": "Scan Unroll",
             "type": "integer"
+          },
+          "prefix_mixture": {
+            "default": false,
+            "description": "Opt in to per-parameter-label local Gaussian proposals, mixed with the unfloored prefix label probabilities. Every particle pays the full mixture density; the shared auxiliary law and look-ahead remain unchanged. Requires twisted_particle_agrad with kappa=1 and point readings without replay. Early label collapse, poor shared guidance and separated modes can reduce mixing.",
+            "title": "Prefix Mixture",
+            "type": "boolean"
           }
         },
         "required": [
@@ -17288,7 +17300,8 @@
           "num_particles",
           "latent_step",
           "kappa",
-          "scan_unroll"
+          "scan_unroll",
+          "prefix_mixture"
         ],
         "title": "GuidedPathSpec",
         "type": "object",

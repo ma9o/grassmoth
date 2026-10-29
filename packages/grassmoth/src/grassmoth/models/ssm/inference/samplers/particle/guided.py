@@ -20,7 +20,12 @@ The observation score and Hessian are batched once at u, with noise factors reus
 Kappa=0 and ordinary aGRAD retain their unshifted-auxiliary guide.
 Twisting linearizes only at u; exact nonlinear
 transition means are used in proposals and true densities in every weight.
-Poor Gaussian look-ahead and separated modes can slow mixing, never alter its target.
+The optional prefix mixture uses each label's exact transition mean and covariance
+for local proposals, retaining the common twist and auxiliary law. It samples by
+normalized prefix label weights and pays the full unfloored mixture density for
+every particle, including the reference.
+Poor Gaussian look-ahead, early label collapse and separated modes can slow mixing,
+never alter its target.
 
 With the supported additive diffusion, proposal factorizations are batched over
 time and shared across particles. Prefix label laws are normalized as they advance.
@@ -54,10 +59,14 @@ from grassmoth.models.ssm.inference.samplers.particle.contract import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import (
     GuideGeometry,
+    _build_twist,
     _ProposalGeometry,
     build_guide,
 )
-from grassmoth.models.ssm.inference.samplers.particle.guided_information import InformationRule
+from grassmoth.models.ssm.inference.samplers.particle.guided_information import (
+    InformationRule,
+    point_information,
+)
 from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
     PathSelector,
     select_path,
@@ -68,6 +77,10 @@ from grassmoth.models.ssm.inference.samplers.particle.marginal import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     _masked_normal_log_prob,
+)
+from grassmoth.models.ssm.inference.samplers.particle.prefix_mixture import (
+    _mixture_geometry,
+    _mixture_particles,
 )
 from grassmoth.models.ssm.inference.samplers.particle.weights import (
     requested_weight_statistics,
@@ -184,17 +197,22 @@ def _guided_step(
         reference,
     )
     components = _guided_components(target, spec)
-    twist, geometry = build_guide(
-        components.geometry,
-        components.information,
-        memory,
-        observe,
-        ctx.initial_label_log_probs,
-        auxiliary,
-        variance,
-        mask,
-        spec,
-    )
+    if spec.prefix_mixture:
+        information = point_information(components.information, observe, auxiliary, variance, mask)
+        twist, _ = _build_twist(memory, auxiliary, mask, spec, information)
+        geometry = _mixture_geometry(target, ctx.contexts, auxiliary, mask, information, twist)
+    else:
+        twist, geometry = build_guide(
+            components.geometry,
+            components.information,
+            memory,
+            observe,
+            ctx.initial_label_log_probs,
+            auxiliary,
+            variance,
+            mask,
+            spec,
+        )
     initial_mean = target.initial_moments(guide)[0]
     marginal = (
         jax.vmap(marginal_geometry, in_axes=(0, 0, 0, None))(geometry.chol, variance, mask, count)
@@ -216,6 +234,7 @@ def _guided_step(
         centers: Float[Array, "P D"],
         scores: Float[Array, "P D"],
         index: Int[Array, ""] | int,
+        mixture_density: Float[Array, " P"] | None = None,
     ) -> Float[Array, " P"]:
         proposal: _ProposalGeometry = jax.tree.map(lambda value: value[index], geometry)
         if marginal is not None:
@@ -229,7 +248,11 @@ def _guided_step(
             variance[index],
             mask[index],
         )
-        return density - proposal.log_density(particles - centers, mask[index])
+        return density - (
+            mixture_density
+            if mixture_density is not None
+            else proposal.log_density(particles - centers, mask[index])
+        )
 
     def transition(
         previous: Float[Array, " R"], current: Float[Array, " R"], index: Int[Array, ""]
@@ -237,8 +260,27 @@ def _guided_step(
         return memory.transition_log_probs(previous, current, index).astype(ctx.traj_dtype)
 
     initial_geometry = jax.tree.map(lambda value: value[0], geometry)
-    first_center = initial_geometry.center(initial_mean, mask[0])
-    first = initial_geometry.initial_particles(first_center, first_key, reference, mask, count)
+    if spec.prefix_mixture:
+        initial_means = jax.vmap(lambda context: target.initial_moments(context)[0])(ctx.contexts)
+        initial_centers = initial_geometry.center(initial_means, mask[0])
+        first, first_density, first_centers = _mixture_particles(
+            initial_geometry,
+            jnp.broadcast_to(initial_centers, (count, *initial_centers.shape)),
+            jnp.broadcast_to(ctx.initial_label_log_probs, (count, ctx.num_parameter_particles)),
+            jax.random.normal(first_key, (count - 1, dimension), reference.dtype),
+            jax.random.gumbel(
+                jax.random.fold_in(first_key, 0x4D495854),
+                (count - 1, ctx.num_parameter_particles),
+                dtype=reference.dtype,
+            ),
+            reference[0],
+            mask[0],
+        )
+        first_center = first_centers[0]
+    else:
+        first_center = initial_geometry.center(initial_mean, mask[0])
+        first = initial_geometry.initial_particles(first_center, first_key, reference, mask, count)
+        first_density = None
     first_memory = jax.vmap(memory.initial)(first)
     first_observed, first_gradients = local_factors(first_memory, 0)
     first_scores = (
@@ -254,7 +296,9 @@ def _guided_step(
     first_twists = twist.log_density(first_memory, 0)
     first_weights = (
         first_normalizer
-        + weight_correction(first, jnp.broadcast_to(first_center, first.shape), first_gradients, 0)
+        + weight_correction(
+            first, jnp.broadcast_to(first_center, first.shape), first_gradients, 0, first_density
+        )
         + first_twists
     )
 
@@ -263,7 +307,9 @@ def _guided_step(
             Float[Array, "P R"], Float[Array, " P"], Float[Array, "P K"], Float[Array, " P"]
         ],
         inputs: tuple[
-            Int[Array, ""], tuple[_KillingNoise, Float[Array, "P-1 D"]], _ProposalGeometry
+            Int[Array, ""],
+            tuple[_KillingNoise, Float[Array, "P-1 D"], Float[Array, "P-1 components"]],
+            _ProposalGeometry,
         ],
     ) -> tuple[
         tuple[Float[Array, "P R"], Float[Array, " P"], Float[Array, "P K"], Float[Array, " P"]],
@@ -279,13 +325,31 @@ def _guided_step(
     ]:
         previous, weights, scores, previous_twists = carry
         index, draws, proposal = inputs
-        killing_noise, noise = draws
+        killing_noise, noise, component_noise = draws
         ancestors = _killing(weights, killing_noise)
         parents = previous[ancestors]
         parent_scores = scores[ancestors]
-        means = jax.vmap(lambda value: memory.guide_moments(value, index)[0])(parents)
-        centers = proposal.center(means, mask[index]) + parents @ proposal.parent_map.T
-        current = proposal.next_particles(centers, noise, reference, mask, index)
+        if spec.prefix_mixture:
+            means = jax.vmap(
+                lambda parent: jax.vmap(
+                    lambda context: target.transition_moments(context, parent, index)[0]
+                )(ctx.contexts)
+            )(parents)
+            component_centers = proposal.center(means, mask[index])
+            current, proposal_density, centers = _mixture_particles(
+                proposal,
+                component_centers,
+                parent_scores,
+                noise,
+                component_noise,
+                reference[index],
+                mask[index],
+            )
+        else:
+            means = jax.vmap(lambda value: memory.guide_moments(value, index)[0])(parents)
+            centers = proposal.center(means, mask[index]) + parents @ proposal.parent_map.T
+            current = proposal.next_particles(centers, noise, reference, mask, index)
+            proposal_density = None
         current_memory = jax.vmap(memory.advance, in_axes=(0, 0, None))(parents, current, index)
         observed, current_gradients = local_factors(current_memory, index)
         next_scores = (
@@ -300,7 +364,7 @@ def _guided_step(
         current_twists = twist.log_density(current_memory, index)
         next_weights: jax.Array = (
             increment
-            + weight_correction(current, centers, current_gradients, index)
+            + weight_correction(current, centers, current_gradients, index, proposal_density)
             + current_twists
             - previous_twists[ancestors]
         )
@@ -314,11 +378,20 @@ def _guided_step(
             observed,
         )
 
-    def forward_noise(step_key: PRNGKeyArray) -> tuple[_KillingNoise, Float[Array, "N D"]]:
+    def forward_noise(
+        step_key: PRNGKeyArray,
+    ) -> tuple[_KillingNoise, Float[Array, "N D"], Float[Array, "N K"]]:
         resample_key, proposal_key = jax.random.split(step_key)
         return (
             _killing_noise(resample_key, count, reference.dtype),
             jax.random.normal(proposal_key, (count - 1, dimension), reference.dtype),
+            jax.random.gumbel(
+                jax.random.fold_in(proposal_key, 0x4D495854),
+                (count - 1, ctx.num_parameter_particles),
+                dtype=reference.dtype,
+            )
+            if spec.prefix_mixture
+            else jnp.empty((count - 1, 0), dtype=reference.dtype),
         )
 
     _, (tail, tail_weights, tail_scores, tail_twists, ancestors, centers, tail_observed) = (

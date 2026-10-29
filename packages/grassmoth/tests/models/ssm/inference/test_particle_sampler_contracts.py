@@ -121,6 +121,47 @@ def test_mgrad_admission_owns_point_only_support(monkeypatch, support, recurrenc
 
 
 @pytest.mark.parametrize(
+    ("method", "kappa", "support", "recurrences", "accepted"),
+    [
+        ("twisted_particle_agrad", 1, "point", (), True),
+        ("twisted_particle_agrad", 0, "point", (), False),
+        ("particle_agrad", 1, "point", (), False),
+        ("particle_mgrad", 1, "point", (), False),
+        ("twisted_particle_agrad", 1, "interval", (), False),
+        ("twisted_particle_agrad", 1, "point", (AdditiveRecurrences((0,)),), False),
+    ],
+)
+def test_prefix_mixture_admission(monkeypatch, method, kappa, support, recurrences, accepted):
+    from grassmoth.models.ssm import compiled_access
+
+    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
+    compiled = Mock(
+        spec=CompiledDynamicalModel,
+        state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
+        observations=(Mock(support=Mock(support_kind=support)),),
+    )
+    sampler = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(
+            path_update=GuidedPathSpec(method=method, kappa=kappa, prefix_mixture=True)
+        )
+    )
+    assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
+    assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
+    assert isinstance(sampler.algorithm.path_update, GuidedPathSpec)
+    ordinary = sampler.revised(
+        algorithm=sampler.algorithm.revised(
+            path_update=sampler.algorithm.path_update.revised(prefix_mixture=False)
+        )
+    )
+    assert sampler.kernel_identity != ordinary.kernel_identity
+    assert GuidedPathSpec().prefix_mixture is False
+    failure = validate_sampler_support(compiled, sampler)
+    assert (failure is None) == accepted
+    if failure is not None:
+        assert "Prefix-mixture" in failure.message
+
+
+@pytest.mark.parametrize(
     "settings",
     [
         {"drift": "global"},
