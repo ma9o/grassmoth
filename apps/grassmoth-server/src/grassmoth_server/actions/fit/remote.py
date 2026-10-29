@@ -20,10 +20,13 @@ from grassmoth.public import (
 from grassmoth_server.compute.analysis_cache import (
     ANALYSIS_CACHE_ROOT,
     ANALYSIS_CACHE_VOLUME,
+    AnalysisCacheEntry,
     AnalysisCall,
     cache_fit_result,
     fit_profile_directory,
+    retained_fit_result,
 )
+from grassmoth_server.compute.remote_receipts import RemoteFitReceipt, receipt_for
 from grassmoth_server.compute.resources import HOST_MEMORY_ALLOCATION_ENV
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 
@@ -60,12 +63,12 @@ class FitComputeInput:
     compute_loo_diagnostics: bool
     analysis_call: AnalysisCall
     profile: bool = False
-    previous: bytes | None = None
+    previous: bytes | AnalysisCacheEntry | None = None
 
 
 @dataclass(frozen=True)
 class FitComputeResult:
-    """Complete fitted output to validate and persist through the caller's store."""
+    """Verified compact receipt to persist through the caller's store."""
 
     output: bytes
 
@@ -98,7 +101,7 @@ def decode_fit_result(frame: bytes) -> FitComputeResult:
     return result
 
 
-def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
+def execute_fit_compute(payload: FitComputeInput) -> FitOutput:
     """Use the ordinary fit/report/conditioning code with an in-memory array store."""
     from grassmoth_server.bootstrap import initialize_numerical_runtime
 
@@ -111,7 +114,12 @@ def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
     dynamical_model_spec = DynamicalModelSpec.model_validate(
         unpack_result(payload.dynamical_model_spec_bytes)
     ).materialized()
-    result = run_fit(
+    previous = (
+        retained_fit_result(ANALYSIS_CACHE_ROOT / "retained", payload.previous).read_bytes()
+        if isinstance(payload.previous, AnalysisCacheEntry)
+        else payload.previous
+    )
+    return run_fit(
         FitInputs(
             selection=StructuralSelection.for_question(dynamical_model_spec, payload.question),
             question=payload.question,
@@ -122,15 +130,14 @@ def execute_fit_compute(payload: FitComputeInput) -> FitComputeResult:
             ),
             sampler=payload.sampler,
             compute_loo_diagnostics=payload.compute_loo_diagnostics,
-            previous=FitOutput.model_validate(unpack_result(payload.previous))
-            if payload.previous is not None
+            previous=FitOutput.model_validate(unpack_result(previous))
+            if previous is not None
             else None,
         ),
         profile_dir=fit_profile_directory(ANALYSIS_CACHE_ROOT, payload.analysis_call)
         if payload.profile
         else None,
     )
-    return FitComputeResult(output=pack_result(result))
 
 
 def _claim_fit_attempt(attempt: modal.Dict) -> None:
@@ -167,10 +174,17 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
     volume = modal.Volume.from_name(os.environ[FIT_CACHE_VOLUME_ENV])
     with local_compilation_cache(Path("/cache/jax-bundles"), commit=volume.commit):
         result = execute_fit_compute(payload)
-        cache_fit_result(ANALYSIS_CACHE_ROOT, payload.analysis_call, result.output)
+        from grassmoth_server.study.persistence.arrays import owned_arrays
+        from grassmoth_server.study.persistence.codec import pack_payload, result_payload
+
+        values = result_payload(result)
+        entry = cache_fit_result(
+            ANALYSIS_CACHE_ROOT / "retained", payload.analysis_call, pack_payload(values)
+        )
+        receipt = receipt_for(result, entry, tuple(owned_arrays(values)))
         modal.Volume.from_name(ANALYSIS_CACHE_VOLUME).commit()
-        frame = encode_fit_result(result)
-        del result
+        frame = encode_fit_result(FitComputeResult(pack_result(receipt)))
+        del result, values
     yield from _result_chunks(frame)
 
 
@@ -229,21 +243,13 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
 
 
 def fit_on_modal(
-    inputs: FitInputs, *, analysis_call: AnalysisCall, profile: bool = False
-) -> FitOutput:
-    """Transfer pinned values, compute once on Modal, then retain returned arrays locally."""
-    previous = inputs.previous
-    # Prior phase traces are publication history, never transition inputs. Keep
-    # them at the caller instead of uploading and downloading them unchanged.
-    compute_previous = (
-        None
-        if previous is None
-        else previous.revised(
-            inference=previous.inference.revised(
-                evidence=previous.inference.evidence.revised(phase_extra_fields={})
-            )
-        )
-    )
+    inputs: FitInputs,
+    *,
+    analysis_call: AnalysisCall,
+    profile: bool = False,
+    previous_cache: AnalysisCacheEntry | None = None,
+) -> RemoteFitReceipt:
+    """Compute once on Modal; return reports only after retaining the complete result."""
     panel = io.BytesIO()
     inputs.data_for_model.recorded.frame.write_parquet(panel)
     result = _dispatch_fit(
@@ -257,17 +263,15 @@ def fit_on_modal(
             compute_loo_diagnostics=inputs.compute_loo_diagnostics,
             analysis_call=analysis_call,
             profile=profile,
-            previous=None if compute_previous is None else pack_result(compute_previous),
+            previous=previous_cache
+            if previous_cache is not None
+            else None
+            if inputs.previous is None
+            else pack_result(inputs.previous),
         ),
         hardware=inputs.sampler.hardware,
     )
-    # Validate the complete response before the first local write. Exceptions
-    # propagate to the action's normal error path; there is no local retry.
-    output = FitOutput.model_validate(unpack_result(result.output))
-    if previous is not None:
-        output = output.revised(
-            inference=output.inference.revised(
-                evidence=output.inference.evidence.with_previous_phases(previous.inference.evidence)
-            )
-        )
-    return output
+    receipt = RemoteFitReceipt.model_validate(unpack_result(result.output))
+    if receipt.cache.call != analysis_call:
+        raise ValueError("Remote fit receipt belongs to a different call")
+    return receipt

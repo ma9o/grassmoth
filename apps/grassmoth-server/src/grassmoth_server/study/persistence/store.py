@@ -1,6 +1,6 @@
 """Immutable artifact payloads and access to commit-local execution records.
 
-Git owns complete action results in ``study/history.git``. Published artifacts
+Git owns action results or verified remote receipts in ``study/history.git``. Published artifacts
 select those bodies; ``store/`` holds uploaded tables and temporary execution
 buffers. Git OIDs identify exact scientific inputs.
 """
@@ -127,7 +127,7 @@ class ArtifactStore:
             ref = f"refs/arrays/{identity}"
             target = self.repo.references[ref].resolve().target
             assert isinstance(target, pygit2.Oid)
-            payload = unpack_result(read_blob(self.repo, target))
+            payload = unpack_result(self.read_result_bytes(GitOid(str(target))))
             return owned_arrays(payload)[identity].npy
 
     def write_result(self, result: BaseModel) -> GitOid:
@@ -136,13 +136,22 @@ class ArtifactStore:
 
         return GitOid(str(write_blob(self.repo, pack_result(result, array_loader=self.read_array))))
 
+    def read_result_bytes(self, revision: GitOid) -> bytes:
+        """Resolve the complete retained body, verifying remote receipts on explicit reads."""
+        from grassmoth_server.compute.remote_receipts import complete_remote_body
+
+        return complete_remote_body(
+            read_blob(self.repo, pygit2.Oid(hex=revision)),
+            Path(data_module.cache_dir(self.workspace_id)) / "remote-results",
+        )
+
     def read_result[ResultT: BaseModel](self, revision: GitOid, target: type[ResultT]) -> ResultT:
         """Restore a saved MessagePack body using its action-owned schema."""
         from functools import cache
 
         from grassmoth_server.study.persistence.codec import unpack_result
 
-        payload = read_blob(self.repo, pygit2.Oid(hex=revision))
+        payload = self.read_result_bytes(revision)
         return target.model_validate(
             unpack_result(payload), context={"distribution_array_loader": cache(self.read_array)}
         )
@@ -246,7 +255,7 @@ class ArtifactStore:
         if isinstance(info.source, ArtifactResult):
             from grassmoth_server.study.persistence.codec import unpack_result
 
-            output = unpack_result(read_blob(self.repo, pygit2.Oid(hex=info.source.result)))
+            output = unpack_result(self.read_result_bytes(info.source.result))
             key = {
                 "model": "dynamical_model_spec",
                 "question": "question",

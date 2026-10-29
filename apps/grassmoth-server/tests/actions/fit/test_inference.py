@@ -150,7 +150,7 @@ if TYPE_CHECKING:
     ("schedule_multiplier", "passing_checkpoint"), [(1, None), (10, True), (1, True), (1, False)]
 )
 def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_evidence(
-    monkeypatch, schedule_multiplier, passing_checkpoint
+    monkeypatch, tmp_path, schedule_multiplier, passing_checkpoint
 ):
     from grassmoth.actions.contracts.bodies import FitOutput
     from grassmoth.actions.fit.action import _fit as fit
@@ -382,21 +382,31 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         combined.evidence.observation_log_probs.values[0, :, 0], [1, 1, 5]
     )
     from grassmoth.artifacts.sampling import InferenceHardware
-    from grassmoth_server.actions.fit import remote
-
-    def dispatch_without_history_buffers(payload, *, hardware):
-        assert hardware is InferenceHardware.L40S
-        prior = FitOutput.model_validate(unpack_result(payload.previous))
-        assert not prior.inference.evidence.phase_extra_fields
-        return remote.execute_fit_compute(payload)
-
-    monkeypatch.setattr(remote, "_dispatch_fit", dispatch_without_history_buffers)
-
     from grassmoth_server.actions.contracts.identity import CallId
-    from grassmoth_server.compute.analysis_cache import AnalysisCall
+    from grassmoth_server.actions.fit import remote
+    from grassmoth_server.compute.analysis_cache import AnalysisCall, cache_fit_result
+    from grassmoth_server.compute.remote_receipts import receipt_for
+    from grassmoth_server.study.persistence.arrays import owned_arrays
+
+    monkeypatch.setattr(remote, "ANALYSIS_CACHE_ROOT", tmp_path)
+
+    def dispatch_retained(payload, *, hardware):
+        assert hardware is InferenceHardware.L40S
+        # A remote continuation sends only the retained identity, including prior traces.
+        assert not isinstance(payload.previous, bytes)
+        fitted = remote.execute_fit_compute(payload)
+        body = pack_result(fitted)
+        entry = cache_fit_result(tmp_path / "retained", payload.analysis_call, body)
+        return remote.FitComputeResult(
+            pack_result(receipt_for(fitted, entry, tuple(owned_arrays(unpack_result(body)))))
+        )
+
+    monkeypatch.setattr(remote, "_dispatch_fit", dispatch_retained)
+    analysis_call = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
 
     def remotely(count, previous):
-        return remote.fit_on_modal(
+        parent = cache_fit_result(tmp_path / "retained", analysis_call, pack_result(previous))
+        receipt = remote.fit_on_modal(
             FitInputs(
                 selection=StructuralSelection(model, None),
                 question=QuestionSpec(text="Test", outcome=model.constructs[0].id),
@@ -406,9 +416,15 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
                     num_samples_per_chain=count * schedule_multiplier,
                 ),
                 compute_loo_diagnostics=True,
-                previous=previous,
             ),
-            analysis_call=AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64)),
+            analysis_call=analysis_call,
+            previous_cache=parent,
+        )
+        assert receipt.continuation is not None
+        return FitOutput.model_validate(
+            unpack_result(
+                remote.retained_fit_result(tmp_path / "retained", receipt.cache).read_bytes()
+            )
         )
 
     transported = remotely(1, output(first))

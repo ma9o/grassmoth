@@ -13,7 +13,7 @@ from pydantic import Field
 from grassmoth.public import Value
 from grassmoth_server.actions.contracts.identity import CallId
 
-# Every stack caches into this one Volume, so the daily retention job collects all of it.
+# Every stack shares this Volume; only temporary data is collected by the daily job.
 ANALYSIS_CACHE_VOLUME = "grassmoth-fit-analysis"
 ANALYSIS_CACHE_ROOT = Path("/analysis-cache")
 ANALYSIS_RETENTION_SECONDS = 14 * 24 * 60 * 60
@@ -71,12 +71,25 @@ def cache_fit_result(root: Path, call: AnalysisCall, output: bytes) -> AnalysisC
 
 def cached_fit_result(root: Path, call: AnalysisCall) -> Path:
     """Resolve a call alias and verify the complete cached file with bounded reads."""
+    # Published bodies occupy a separate namespace, outside temporary-cache cleanup.
+    retained = root / "retained"
+    selected = retained if (retained / "calls" / (call.identity + ".json")).exists() else root
     entry = AnalysisCacheEntry.model_validate_json(
-        (root / "calls" / (call.identity + ".json")).read_bytes()
+        (selected / "calls" / (call.identity + ".json")).read_bytes()
     )
     if entry.call != call:
         raise ValueError("Analysis cache call identity does not match")
+    return retained_fit_result(selected, entry)
+
+
+def retained_fit_result(root: Path, entry: AnalysisCacheEntry) -> Path:
+    """Verify content against the immutable receipt, independent of mutable call aliases."""
     path = root / "results" / (entry.sha256 + ".msgpack")
+    return verified_fit_content(path, entry)
+
+
+def verified_fit_content(path: Path, entry: AnalysisCacheEntry) -> Path:
+    """Own byte-length and digest verification for mounted and downloaded bodies."""
     with path.open("rb") as stream:
         digest = hashlib.file_digest(stream, "sha256").hexdigest()
     if path.stat().st_size != entry.size or digest != entry.sha256:
@@ -85,7 +98,7 @@ def cached_fit_result(root: Path, call: AnalysisCall) -> Path:
 
 
 def expire_analysis_cache(root: Path, *, now_seconds: float) -> tuple[int, int]:
-    """Remove call aliases and content whose last cache write is over 14 days old."""
+    """Expire temporary cache data; receipt-backed scientific results are retained."""
     cutoff = now_seconds - ANALYSIS_RETENTION_SECONDS
     files = size = 0
     for profile in (root / "profiles").glob("*"):

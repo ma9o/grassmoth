@@ -281,7 +281,13 @@ class StudyRepository:
                     "result.msgpack", pygit2.Oid(hex=outcome.result), pygit2.GIT_FILEMODE_BLOB
                 )
                 result = unpack_result(read_blob(self.repo, pygit2.Oid(hex=outcome.result)))
-                array_ids = tuple(owned_arrays(result))
+                from grassmoth_server.compute.remote_receipts import RemoteFitReceipt
+
+                array_ids = (
+                    RemoteFitReceipt.model_validate(result).array_ids
+                    if result.get("kind") == "remote_fit"
+                    else tuple(owned_arrays(result))
+                )
                 for identity in array_ids:
                     array_ref = f"refs/arrays/{identity}"
                     if array_ref not in self.repo.references:

@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from grassmoth.public import FitInputs, InferenceHardware, StructuralSelection
+from grassmoth.public import FitInputs, FitOutput, InferenceHardware, StructuralSelection
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import ContinueFitTarget, FitInput
 from grassmoth_server.actions.contracts.requests import (
@@ -23,6 +23,8 @@ from grassmoth_server.actions.contracts.requests import (
     call_identity,
 )
 from grassmoth_server.actions.fit.selection import fit_source, prior_fit
+from grassmoth_server.compute.remote_receipts import RemoteFitReceipt, load_remote_fit
+from grassmoth_server.storage.paths import cache_dir
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 
@@ -61,7 +63,19 @@ def _fit_selected(
         if isinstance(request.target, ContinueFitTarget)
         else None
     )
-    checkpoint = None if previous is None else previous.inference.evidence.checkpoint
+    prior_settings = (
+        previous.continuation
+        if isinstance(previous, RemoteFitReceipt)
+        else None
+        if previous is None or previous.inference.evidence.checkpoint is None
+        else previous.inference.evidence.checkpoint.settings
+    )
+    sampler = resolve_sampler_spec(request.settings, prior_settings)
+    previous_cache = previous.cache if isinstance(previous, RemoteFitReceipt) else None
+    if isinstance(previous, RemoteFitReceipt) and sampler.hardware == InferenceHardware.LOCAL:
+        previous = load_remote_fit(
+            Path(cache_dir(store.workspace_id)) / "remote-results", previous.cache
+        )
 
     from grassmoth_server.study.persistence.store import model_values, read_model, read_question
 
@@ -71,13 +85,10 @@ def _fit_selected(
         selection=StructuralSelection.for_question(dynamical_model_spec, question),
         question=question,
         data_for_model=history.observations,
-        sampler=resolve_sampler_spec(
-            request.settings, None if checkpoint is None else checkpoint.settings
-        ),
+        sampler=sampler,
         compute_loo_diagnostics=get_config().inference.compute_loo_diagnostics,
-        previous=previous,
+        previous=previous if isinstance(previous, FitOutput) else None,
     )
-    sampler = inputs.sampler
 
     from grassmoth_server.compute.analysis_cache import AnalysisCall, fit_profile_directory
 
@@ -85,10 +96,13 @@ def _fit_selected(
     if sampler.hardware != InferenceHardware.LOCAL:
         from grassmoth_server.actions.fit.remote import fit_on_modal
 
-        result = fit_on_modal(inputs, analysis_call=analysis_call, profile=request.settings.profile)
+        result = fit_on_modal(
+            inputs,
+            analysis_call=analysis_call,
+            profile=request.settings.profile,
+            previous_cache=previous_cache,
+        )
     else:
-        from grassmoth_server.storage.paths import cache_dir
-
         result = run_fit(
             inputs,
             profile_dir=fit_profile_directory(Path(cache_dir(store.workspace_id)), analysis_call)
@@ -98,14 +112,26 @@ def _fit_selected(
 
     from grassmoth_server.study.persistence.writes import write_model_revision
 
+    saved = store.write_result(result)
     # A zero-draw continuation reuses the previous model without producing a revision.
-    conditioned = result.dynamical_model_spec
-    produced = (
-        ()
-        if conditioned is None or sampler.num_samples_per_chain == 0
-        else (write_model_revision(store, conditioned, derived_from=pins, produced_by="fit"),)
-    )
-    return Applied(result=store.write_result(result), effects=ActionEffects(produced=produced))
+    if isinstance(result, RemoteFitReceipt):
+        produced = (
+            (
+                store.result_artifact(
+                    store.write_artifact("model", derived_from=pins, produced_by="fit"), saved
+                ),
+            )
+            if result.has_model and sampler.num_samples_per_chain > 0
+            else ()
+        )
+    else:
+        conditioned = result.dynamical_model_spec
+        produced = (
+            ()
+            if conditioned is None or sampler.num_samples_per_chain == 0
+            else (write_model_revision(store, conditioned, derived_from=pins, produced_by="fit"),)
+        )
+    return Applied(result=saved, effects=ActionEffects(produced=produced))
 
 
 async def _run_simulate(

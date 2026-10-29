@@ -112,13 +112,14 @@ async def edit_question_activity(
 @activity.defn
 async def evaluate_model_checks_activity(activity_input: EvaluateChecksInput) -> ChecksResult:
     """Read the action's complete checks and produce its completion messages."""
-    from grassmoth.public import EditModelOutput, FitOutput
+    from grassmoth.public import EditModelOutput
     from grassmoth_server.actions.contracts.requests import FitRequest
+    from grassmoth_server.compute.remote_receipts import published_fit_report
 
     store = ArtifactStore(activity_input.workspace_id)
     if isinstance(activity_input.request, FitRequest):
         fit = await asyncio.to_thread(
-            lambda: store.read_result(activity_input.applied.result, FitOutput)
+            lambda: published_fit_report(store, activity_input.applied.result)
         )
         return ChecksResult(reports={}, messages=fit_check_messages(fit.checks, datetime.now(UTC)))
     if isinstance(activity_input.request, PrepareDataRequest):
@@ -188,17 +189,19 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
     messages = record.messages
     if isinstance(record.attempt.outcome, Applied):
         from grassmoth.public import DataDiffOutput, FitOutput, SimulateOutput
+        from grassmoth_server.compute.remote_receipts import RemoteFitReceipt, published_fit_report
         from grassmoth_server.study.queries.results import read_result
 
-        result = read_result(
-            ArtifactStore(activity_input.workspace_id),
-            record.attempt.action,
-            record.attempt.outcome.result,
+        store = ArtifactStore(activity_input.workspace_id)
+        result = (
+            published_fit_report(store, record.attempt.outcome.result)
+            if record.attempt.action == "fit"
+            else read_result(store, record.attempt.action, record.attempt.outcome.result)
         )
         if messages:
             announcements = (
                 inference_messages(result.inference, messages[-1].timestamp)
-                if isinstance(result, FitOutput)
+                if isinstance(result, (FitOutput, RemoteFitReceipt))
                 else simulation_messages(result.report, messages[-1].timestamp)
                 if isinstance(result, SimulateOutput)
                 else comparison_messages(result.report, messages[-1].timestamp)

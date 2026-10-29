@@ -151,7 +151,7 @@ def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monke
 
 @pytest.mark.parametrize("hardware", [InferenceHardware.LOCAL, InferenceHardware.L40S])
 def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
-    workspace, monkeypatch, hardware
+    workspace, monkeypatch, tmp_path, hardware
 ):
     from dataclasses import replace
     from threading import get_ident
@@ -259,7 +259,26 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
         ),
     )
     local_fit = Mock(side_effect=fit)
-    modal_fit = Mock(side_effect=fit)
+
+    def remote_fit(inputs, **kwargs):
+        import modal
+
+        from grassmoth_server.compute.analysis_cache import cache_fit_result
+        from grassmoth_server.compute.remote_receipts import receipt_for
+        from grassmoth_server.study.persistence.arrays import owned_arrays
+        from grassmoth_server.study.persistence.codec import pack_result, unpack_result
+
+        result = fit(inputs)
+        body = pack_result(result)
+        entry = cache_fit_result(tmp_path / "retained", kwargs["analysis_call"], body)
+        monkeypatch.setattr(
+            modal.Volume,
+            "from_name",
+            lambda _name: Mock(read_file_into_fileobj=lambda _path, stream: stream.write(body)),
+        )
+        return receipt_for(result, entry, tuple(owned_arrays(unpack_result(body))))
+
+    modal_fit = Mock(side_effect=remote_fit)
     monkeypatch.setattr(flow, "run_fit", local_fit)
     monkeypatch.setattr(remote, "fit_on_modal", modal_fit)
     pins: dict[ArtifactId, GitOid] = {

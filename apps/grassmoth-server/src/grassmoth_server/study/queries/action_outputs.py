@@ -33,5 +33,7 @@ def completed_call_msgpack(workspace_id: str, revision: StudyRevision) -> bytes:
         "commit_id": revision.commit_id,
         "messages": log.model_dump(mode="json")["messages"],
     }
-    body = repository.read_file(revision.commit_id, "result.msgpack")
+    from grassmoth_server.study.persistence.store import ArtifactStore
+
+    body = ArtifactStore(workspace_id).read_result_bytes(attempt.outcome.result)
     return pack_envelope(metadata, body)

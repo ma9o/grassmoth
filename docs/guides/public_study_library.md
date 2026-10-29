@@ -67,10 +67,11 @@ exit status return to the caller. Only the script and call metadata are sent fro
 the local machine. Results belong on the Volume, never in an image.
 
 The [cache owner](../../apps/grassmoth-server/src/grassmoth_server/compute/analysis_cache.py)
-keeps the remote fit output by content hash. The study journal still owns whether
-the call was published. For continuations, earlier phase traces remain in the
-study; the cache contains the current container's output. Missing or expired
-entries fail explicitly, without uploading a local result.
+keeps the complete remote fit output by content hash, including earlier phase
+traces on continuations. The study journal owns publication through a
+[compact receipt](../../apps/grassmoth-server/src/grassmoth_server/compute/remote_receipts.py).
+Explicit result reads resolve and verify its complete body. Missing or corrupt
+bodies fail explicitly, without repeating computation.
 
 Deploy the [daily retention job](../../apps/grassmoth-server/src/grassmoth_server/compute/analysis_deployment.py):
 
@@ -78,4 +79,4 @@ Deploy the [daily retention job](../../apps/grassmoth-server/src/grassmoth_serve
 uv run modal deploy apps/grassmoth-server/src/grassmoth_server/compute/analysis_deployment.py
 ```
 
-The cache owner defines its fourteen-day retention policy and the one Volume every stack shares.
+The cache owner defines temporary-data expiry and the retained namespace for receipt-backed results on the shared Volume.

@@ -59,6 +59,15 @@ def test_collection_removes_only_expired_aliases_and_content(tmp_path):
     assert cached_fit_result(tmp_path, current).read_bytes() == b"current"
 
 
+def test_receipt_backed_results_survive_temporary_cache_expiry(tmp_path):
+    call = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
+    cache_fit_result(tmp_path / "retained", call, b"published-evidence")
+    for path in tmp_path.rglob("*"):
+        os.utime(path, (1, 1))
+    assert expire_analysis_cache(tmp_path, now_seconds=ANALYSIS_RETENTION_SECONDS + 2) == (0, 0)
+    assert cached_fit_result(tmp_path, call).read_bytes() == b"published-evidence"
+
+
 def test_cpu_script_receives_verified_path_and_preserves_exit_status(monkeypatch, tmp_path):
     from grassmoth_server.compute import analysis
 
