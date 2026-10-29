@@ -153,12 +153,7 @@ bound and freezes before the retained draws. The `fit` requests pin every settin
 Tournament candidates include:
 - dSMC with Particle-RWM;
 - Particle-aGRAD;
-- κ = 0;
-- the MPGibbs `companion` moves, `centred_mh` and
-  `centred_and_scale_noncentred_mh`, owned by the
-  [sampler spec](../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
-  Their exactness checks are in
-  [`test_mpgibbs_companion.py`](../packages/grassmoth/tests/models/ssm/inference/test_mpgibbs_companion.py).
+- κ = 0.
 
 ## Judging
 
