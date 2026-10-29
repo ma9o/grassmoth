@@ -15,7 +15,6 @@ from grassmoth.artifacts.sampling import (
     NutsDASpec,
     NutsTrajectorySpec,
     SamplerSpec,
-    UntemperedSpec,
 )
 from grassmoth_server.actions.fit.action import run_fit
 from grassmoth_server_test_support.fit_cache import fixture
@@ -33,7 +32,6 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
         algorithm=MarginalParticleGibbsSpec(
             initialization=GaussianInitializationSpec(),
             path_update=GuidedPathSpec(method="particle_agrad", num_particles=4),
-            tempering=UntemperedSpec(companion="centred_nuts"),
         ),
     )
     inputs = FitInputs(
@@ -58,18 +56,10 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
         "full_sweep",
         "parameter_move",
         "path_smoother",
-        "nuts_companion",
-        "conditional_gradient",
     }
     for row in report.components:
         assert 0 < row.timing.min_ms <= row.timing.median_ms <= row.timing.max_ms
     assert report.split_total is not None
-    assert report.nuts is not None
-    assert report.nuts.gradient_count_representative
-    assert len(report.nuts.leapfrog_steps) == 2
-    assert report.nuts.leapfrog_steps[0] > 0
-    assert report.nuts.step_size[0] > 0
-    assert report.nuts.tree_depth[0] > 0
     assert report.particle_dimensions is not None
     assert report.particle_dimensions.particles == 4
     assert report.particle_dimensions.labels == 2
@@ -84,14 +74,11 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
         "production_sweep",
         "observation_projection",
         "particle_chain_initializer",
-        "companion_initializer",
     } <= {entry.name for entry in report.compilation}
     assert {
         "profile_parameter_move",
         "profile_smoother_setup",
         "profile_path_smoother",
-        "profile_companion",
-        "profile_conditional_gradient",
     } == {entry.name for entry in report.profiling_compilation}
     assert all(not entry.name.startswith("profile_") for entry in report.compilation)
     assert all(entry.seconds > 0 and entry.persistent_cache != "unobserved" for entry in entries)
@@ -121,8 +108,6 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
     )
     assert continued.profile is not None
     assert continued.profile.phase == "after_first_sweep"
-    assert continued.profile.nuts is not None
-    assert not continued.profile.nuts.gradient_count_representative
     assert continued.profile.repetitions == 10
 
 
@@ -136,7 +121,7 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
         NutsDASpec(trajectory=NutsTrajectorySpec(max_tree_depth=2)),
     ],
 )
-def test_profile_compile_only_and_without_companion(algorithm, draws, tmp_path):
+def test_profile_compile_only_and_first_sweep(algorithm, draws, tmp_path):
     question, selection, data = fixture()
     result = run_fit(
         FitInputs(
@@ -156,7 +141,6 @@ def test_profile_compile_only_and_without_companion(algorithm, draws, tmp_path):
     )
     report = result.profile
     assert report is not None
-    assert report.nuts is None
     assert report.phase == ("after_first_sweep" if draws else "compile_only")
     assert report.repetitions == (10 if draws else 0)
     expected = {"full_sweep"}

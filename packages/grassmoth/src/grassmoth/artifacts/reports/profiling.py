@@ -35,22 +35,8 @@ class FitComponentTiming(Value):
         "full_sweep",
         "parameter_move",
         "path_smoother",
-        "nuts_companion",
-        "mh_companion",
-        "conditional_gradient",
     ]
     timing: TimingSpread
-
-
-class NutsProfileReport(Value):
-    """Companion work on the fixed timed state, one entry per chain."""
-
-    leapfrog_steps: tuple[int, ...]
-    step_size: tuple[float, ...]
-    tree_depth: tuple[int, ...]
-    gradient_count_representative: bool = Field(
-        description="True only after this execution's warmup; otherwise the tree work is not representative of tuned sampling."
-    )
 
 
 class ParticleProfileDimensions(Value):
@@ -78,8 +64,7 @@ class FitProfileReport(Value):
     Every operation is primed once and measured ten times at fixed state, tuning
     and random keys. Full sweep uses the production executable with count one;
     components are compiled separately. The path timing includes recurrence
-    replay at the fixed selected context. Conditional gradient is one chain's
-    exact conditional density and gradient, including replay. No device-trace
+    replay at the fixed selected context. No device-trace
     kernel times are used. Separately compiled parts need not sum to a full sweep.
     """
 
@@ -103,6 +88,5 @@ class FitProfileReport(Value):
     components: tuple[FitComponentTiming, ...] = ()
     split_total: TimingSpread | None = Field(
         default=None,
-        description="Sum of parameter, path and companion timings per repetition, summarized alongside full_sweep. Other sweep bookkeeping is not part of this sum.",
+        description="Sum of parameter and path timings per repetition, summarized alongside full_sweep. Other sweep bookkeeping is not part of this sum.",
     )
-    nuts: NutsProfileReport | None = None

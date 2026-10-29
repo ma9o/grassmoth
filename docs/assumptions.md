@@ -39,7 +39,6 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 | StudentT precision augmentation, with the final label drawn from the marginal | Adapted | Scale mixtures (Carlin, Polson & Stoffer 1992), with an ordered partial collapse ([van Dyk & Park][vdp]; [Hosszejni][hosszejni] on degrees of freedom) | [student], [augmentation], [kernel] | `52807ada` | [t-student], [t-student-kernel] | Ambiguous outliers switch only through precision updates |
 | Parameter proposal covariance adapted in warmup | Adapted | [C25][c25] §3.4 allows it; its experiments fix Σ = I | [parameter-adaptation] | `868ef169` | [t-parameter-adaptation] | Poor covariance estimates |
 | Bounded pseudo-Langevin drift; invalid candidates get zero label mass | Ours | [C25][c25] §3.1's unbounded drift | [kernel], [context] | `b11c87e6` | [t-langevin] | Its fixed pilot direction goes stale; it gave no gain over the random walk on PARAM |
-| Companion moves after each sweep: `centred_mh`, scale non-centred, `centred_nuts` | Adapted | [C25][c25] has no conditional parameter move; Papaspiliopoulos, Roberts & Sköld (2007); Hoffman & Gelman (2014) | [companion] | `4d424e46`, `e31cb285` | [t-companion] | Scales pinned by the path still move slowly |
 | Parallel tempering to a frozen Gaussian reference, for dSMC path updates | Adapted | [Syed et al.][syed] | [tempering], [gaussian-reference] | `e5d9e87b` | [t-tempering] | Reference quality limits exploration |
 | Noise factorizations prepared once per sweep | Numerical | — | [guided], [particle-target] | `b076b7ad` | [t-particle] | None: exact for additive diffusion |
 | Early stopping at convergence checkpoints | Numerical | — | [sweeps], [runner] | `c839b0ce` | [t-stopping], [t-blocks] | A passing checkpoint is a finite-chain diagnostic |
@@ -72,7 +71,6 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 [adaptation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/adaptation.py
 [context]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/context.py
 [runner]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/runner.py
-[companion]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/companion.py
 [continuation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/continuation.py
 [tempering]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/tempering.py
 [sweeps]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/sweeps.py
@@ -92,7 +90,6 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 [t-student-kernel]: ../packages/grassmoth/tests/models/ssm/inference/test_student_augmented_kernel.py
 [t-parameter-adaptation]: ../packages/grassmoth/tests/models/ssm/inference/test_parameter_adaptation.py
 [t-langevin]: ../packages/grassmoth/tests/models/ssm/inference/test_parameter_langevin.py
-[t-companion]: ../packages/grassmoth/tests/models/ssm/inference/test_mpgibbs_companion.py
 [t-tempering]: ../packages/grassmoth/tests/models/ssm/inference/test_parallel_tempering.py
 [t-stopping]: ../packages/grassmoth/tests/models/ssm/inference/test_convergence_stopping.py
 [t-blocks]: ../packages/grassmoth/tests/models/ssm/inference/test_sweep_blocks.py

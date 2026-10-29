@@ -15,12 +15,10 @@ from grassmoth.artifacts.sampling import FixedLatentStepSpec, GuidedPathSpec
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
-from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import build_companion_kernel
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import _initialize_chain_state
-from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.interval_particle import interval_target
 from grassmoth_test_support.observation import observation_laws
 from grassmoth_test_support.student_reference import student_features, student_quadrature
@@ -97,16 +95,16 @@ def _initialize(target, kernel, joint):
 
 
 @pytest.mark.parametrize(
-    ("method", "kappa", "proposal", "companion"),
+    ("method", "kappa", "proposal"),
     [
-        ("particle_agrad", 0, "random_walk", False),
-        ("twisted_particle_agrad", 0, "pseudo_langevin", False),
-        ("particle_agrad", 1, "random_walk", True),
-        ("twisted_particle_agrad", 1, "pseudo_langevin", True),
+        ("particle_agrad", 0, "random_walk"),
+        ("twisted_particle_agrad", 0, "pseudo_langevin"),
+        ("particle_agrad", 1, "random_walk"),
+        ("twisted_particle_agrad", 1, "pseudo_langevin"),
     ],
 )
 def test_augmented_sweep_preserves_joint_marginal_posterior(
-    marginal_reference, method, kappa, proposal, companion
+    marginal_reference, method, kappa, proposal
 ):
     starts, expected, variance = marginal_reference
     # Round the starts to float32 first, so unmoved coordinates compare equal.
@@ -119,33 +117,11 @@ def test_augmented_sweep_preserves_joint_marginal_posterior(
         parameter_reference_path=jnp.zeros((2, 1)),
         path_update=GuidedPathSpec(method=method, num_particles=8, kappa=kappa),
     )
-    extra = (
-        build_companion_kernel(
-            target,
-            "centred_nuts",
-            diffusion_mask=jnp.zeros(3, dtype=bool),
-            parameter_gradient=kernel.parameter_gradient_fn,
-            compiler=compile_program,
-        )
-        if companion
-        else None
-    )
-    nuts = None if extra is None else extra.nuts
-    if companion:
-        assert nuts is not None
 
     def one(joint, key):
         state = _initialize(target, kernel, joint)
-        init_key, step_key, extra_key = jax.random.split(key, 3)
-        tuning = None if nuts is None else nuts.initialize(state, init_key, 0)
-        if tuning is not None:
-            tuning = tuning._replace(
-                adapt_state=tuning.adapt_state._replace(step_size=jnp.asarray(0.25))
-            )
+        step_key = jax.random.split(key, 3)[1]
         updated, _ = kernel.step_fn(state, step_key)
-        if nuts is not None:
-            assert tuning is not None
-            updated, _, _ = nuts.step(updated, tuning, extra_key)
         complete, trajectory = target.log_posterior_from_context(
             updated.position, updated.latent_context, updated.latent_trajectory, target.observations
         )

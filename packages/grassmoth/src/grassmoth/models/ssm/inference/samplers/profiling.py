@@ -60,14 +60,6 @@ def log_profile(report: FitProfileReport, logger: logging.Logger) -> None:
             report.split_total.min_ms,
             report.split_total.max_ms,
         )
-    if report.nuts is not None:
-        logger.info(
-            "Profile NUTS: leapfrogs=%s step_size=%s tree_depth=%s gradient_count_representative=%s",
-            report.nuts.leapfrog_steps,
-            report.nuts.step_size,
-            report.nuts.tree_depth,
-            report.nuts.gradient_count_representative,
-        )
 
 
 def measure_sweep(

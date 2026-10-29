@@ -11,7 +11,6 @@ from grassmoth.artifacts.sampling import (
     GuidedPathSpec,
     MarginalParticleGibbsSpec,
     SamplerSpec,
-    UntemperedSpec,
 )
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.types import MCMCPosterior
@@ -24,25 +23,18 @@ pytestmark = pytest.mark.inference(concern="sampling")
 
 
 @pytest.mark.parametrize(
-    ("companion", "path_update"),
+    "path_update",
     [
-        ("none", DsmcSpec(num_particles=4)),
-        (
-            "centred_and_scale_noncentred_mh",
-            GuidedPathSpec(method="particle_agrad", num_particles=4),
-        ),
-        ("centred_nuts", GuidedPathSpec(method="twisted_particle_agrad", num_particles=4)),
+        DsmcSpec(num_particles=4),
+        GuidedPathSpec(method="particle_agrad", num_particles=4),
+        GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
     ],
 )
 @pytest.mark.inference(concern="warmup")
-def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(
-    companion, path_update
-):
+def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(path_update):
     prepared, panel = nonlinear_fit_fixture()
     settings = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(
-            tempering=UntemperedSpec(companion=companion), path_update=path_update
-        ),
+        algorithm=MarginalParticleGibbsSpec(path_update=path_update),
         num_warmup=40,
         num_samples_per_chain=4,
         num_chains=2,
@@ -64,11 +56,6 @@ def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundt
 
     full = run(settings)
     assert full.diagnostics.sampler_diagnostics.initialization.source == "gaussian"
-    retained = full.diagnostics.phase_extra_fields["post_warmup"]
-    assert (companion == "centred_and_scale_noncentred_mh") == (
-        "scale_noncentred_mh_step_size" in retained
-    )
-    assert (companion == "centred_nuts") == ("diverging" in retained)
     first = run(settings.revised(num_samples_per_chain=2))
     checkpoint = SamplerCheckpoint.model_validate(
         unpack_result(pack_result(first.diagnostics.checkpoint))

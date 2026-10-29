@@ -21,19 +21,17 @@ def intro(mo):
     over two things at once: the **parameters** θ (effects, noise scales, reading noise)
     and the **paths** x (the unmeasured states on the daily grid).
 
-    **The three configurations shown throughout this notebook:**
+    **The two sampler configurations shown throughout this notebook:**
 
     | configuration | one complete transition | settings |
     |---|---|---|
-    | **MPGibbs alone** | propose parameter labels, update the path under their mixture, select a label | `method: mpgibbs`, `companion: none` |
+    | **MPGibbs alone** | propose parameter labels, update the path under their mixture, select a label | `method: mpgibbs` |
     | **Joint NUTS** | update parameters and all free path coordinates together | `method: nuts_da`, `parameterization: non_centred` |
-    | **MPGibbs + NUTS** | the same MPGibbs transition, then conditional NUTS on θ with the updated path fixed | `method: mpgibbs`, `companion: centred_nuts` |
 
     The [MPGibbs kernel](../../../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/kernel.py),
-    [joint NUTS](../../../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/nuts.py)
-    and [companion](../../../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/companion.py)
-    own these moves. The smoother is inside the MPGibbs transition; adding the companion
-    adds a second parameter update. Part 1 also checks joint NUTS in centred coordinates.
+    and [joint NUTS](../../../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/nuts.py)
+    own these moves. The smoother is inside the MPGibbs transition. Part 1 also checks
+    joint NUTS in centred coordinates.
 
     **What decides between them** is one fact about the posterior, which Part 0 draws:
     some parameters are **loose** (a whole path says little more about them than the
@@ -48,7 +46,7 @@ def intro(mo):
     France and PARAM are nonlinear; the samplers target the exact nonlinear model all the
     same, so nothing here depends on linearity except the answer key.
 
-    The first run fits six models on this machine (about forty minutes); after that
+    The first run fits five models on this machine; after that
     every call replays its saved result.
     """)
     return
@@ -234,11 +232,11 @@ def strategies_md(mo):
     You know the two tools: a particle filter handles the path for a given θ, and
     gradient MCMC (HMC, NUTS) moves continuous coordinates along the gradient of the log
     density. Every SSM sampler uses them to move θ in one of three ways, and each piece of
-    our stack is one of them:
+    our stack can be understood through these strategies:
 
     | strategy | how θ moves | classic form | here |
     |---|---|---|---|
-    | **alternate** | the path within its band, then θ within its slice | particle Gibbs (Andrieu, Doucet & Holenstein 2010) | the smoother (Part 3), then the NUTS companion (Part 4) |
+    | **alternate** | the path within its band, then θ within its slice | particle Gibbs (Andrieu, Doucet & Holenstein 2010) | exact conditional draws on the reference only |
     | **integrate the path out** | θ′ judged with the path averaged out, a fresh path with it | particle marginal Metropolis–Hastings (same paper) | the MPGibbs label move builds on this idea, differently (Part 2) |
     | **move both** | one gradient trajectory through θ and the path together | HMC, NUTS | joint NUTS (Part 1) |
 
@@ -462,7 +460,7 @@ def mpgibbs_reference(lab, shapes):
 
 @app.cell
 def mpgibbs_fit(data, free_model, lab, study):
-    mpgibbs_run = lab.read_fit(study.fit(free_model, data, lab.mpgibbs(companion="none")))
+    mpgibbs_run = lab.read_fit(study.fit(free_model, data, lab.mpgibbs()))
     return (mpgibbs_run,)
 
 
@@ -477,7 +475,7 @@ def mpgibbs_caption(lab, mo, mpgibbs_run, np):
     _scale = lab.effective_per_thousand(mpgibbs_run.column("sigma"), mpgibbs_run.ess["sigma"])
     _odds = np.exp(mpgibbs_run.extra["final_label_log_probs"][..., 1]).mean()
     mo.md(f"""
-    **Measured on the real fit** (`method: mpgibbs`, `companion: none`, twisted
+    **Measured on the real fit** (`method: mpgibbs`, twisted
     Particle-aGRAD with 128 particles): the effects get {min(_effects):.0f}–{max(_effects):.0f}
     effective draws per 1,000 and log σ {_scale:.0f}. θ′ won {_odds:.0%} of the votes,
     the step size having adapted towards a 35% target.
@@ -564,10 +562,10 @@ def smoother_md(mo):
 def smoother_fits(data, lab, study, truth_model):
     smoother_runs = {
         "twisted Particle-aGRAD (policy)": lab.read_fit(
-            study.fit(truth_model, data, lab.mpgibbs(companion="none"))
+            study.fit(truth_model, data, lab.mpgibbs())
         ),
         "dSMC, Particle-RWM": lab.read_fit(
-            study.fit(truth_model, data, lab.mpgibbs(companion="none", path_update="particle_rwm"))
+            study.fit(truth_model, data, lab.mpgibbs(path_update="particle_rwm"))
         ),
     }
     return (smoother_runs,)
@@ -601,7 +599,7 @@ def smoother_caption(mo, smoother_runs):
     {_lines}
 
     At fixed θ the policy's smoother renews almost the whole path every sweep: given θ,
-    the path is the easy part, which is why the hybrid is attractive at all. Two cautions
+    the path is the easy part in this example. Two cautions
     for France: the twisted update runs step by step in time, so one pass over 2,284
     days is sequential; and France's deterministic accumulators make it trace ancestors
     instead of assembling backwards, which renews early times less (C8 measured 38%
@@ -623,85 +621,41 @@ def smoother_evidence(history, lab, mo, smoother_runs):
 
 
 @app.cell(hide_code=True)
-def hybrid_md(mo):
+def comparison_md(mo):
     mo.md(r"""
-    ## Part 4 · The hybrid: MPGibbs with the NUTS companion
+    ## Part 4 · Comparing MPGibbs and joint NUTS
 
-    **What it does.** Each sweep runs the label move (Part 2, with the smoother of Part 3
-    inside it), then one NUTS transition on θ **with the path held fixed**: NUTS on the
-    six parameters only, with gradients through the fixed path's density. It adapts its
-    own step size and diagonal mass in warmup.
-
-    **On the reference.** The companion is the purple move: it reaches across the slice.
-    On β's round cloud that is most of the cloud, so one cheap NUTS transition gives a
-    nearly independent draw. On σ's ridge it is one slice, and the smoother's green move
-    is one band, so together they zigzag. The label move's orange jump is the only move
-    that can carry σ further, when a new path lands in θ′'s band; whether it does so
-    often enough is what the real fit measures.
-
-    This is the setup that passed PARAM at seed 19, and that we agreed today to keep as
-    the reference while we compare it with joint NUTS.
+    MPGibbs proposes parameter labels and updates a path under their mixture. Joint
+    NUTS moves parameters and path coordinates together. Compare retained movement,
+    effective draws and computation on the same exact reference; a draw alone does not
+    measure the work each transition spends.
     """)
     return
 
 
 @app.cell
-def hybrid_reference(lab, moves, shapes):
-    lab.fig_hybrid_schematic(shapes, moves)
-    return
-
-
-@app.cell
-def hybrid_fit(data, free_model, lab, study):
-    hybrid_run = lab.read_fit(study.fit(free_model, data, lab.mpgibbs(companion="centred_nuts")))
-    return (hybrid_run,)
-
-
-@app.cell
-def arms(hybrid_run, joint_runs, lab, mpgibbs_run):
+def arms(joint_runs, lab, mpgibbs_run):
     arm_runs = {
         "MPGibbs alone": (mpgibbs_run, lab.C_LABEL),
-        "MPGibbs + NUTS companion": (hybrid_run, lab.C_HYBRID),
         "joint NUTS, innovation chart": (joint_runs["non_centred"], lab.C_JOINT),
     }
     return (arm_runs,)
 
 
 @app.cell(hide_code=True)
-def hybrid_caption(alternating, hybrid_run, lab, mo, mpgibbs_run, panels):
-    def _rate(run, name):
-        return lab.effective_per_thousand(run.column(name), run.ess[name])
-
-    def _worst(run):
-        return min(_rate(run, f"beta{j + 1}") for j in range(lab.EFFECTS))
-
-    _zigzag = 1000 / lab.sweeps_per_independent_draw(alternating.shown[:, 1:, panels[1].column])
-    mo.md(f"""
-    **Measured on the real fit**: the worst effect gets {_worst(hybrid_run):.0f} and log σ
-    {_rate(hybrid_run, "sigma"):.0f} effective draws per 1,000, against {_worst(mpgibbs_run):.0f}
-    and {_rate(mpgibbs_run, "sigma"):.0f} for MPGibbs alone. The companion did its job on the
-    loose effects. For log σ, a perfect zigzag alone gives about {_zigzag:.0f} per 1,000
-    (Part 0's evidence), so on this model the label jumps add little beyond the zigzag.
-    Whether they can do more is open.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def hybrid_evidence(arm_runs, cloud, exact, history, hybrid_run, lab, mo):
+def comparison_evidence(arm_runs, cloud, exact, history, lab, mo):
     mo.accordion(
         {
-            "Evidence: the three real chains side by side": mo.vstack(
+            "Evidence: the two real chains side by side": mo.vstack(
                 [
                     lab.fig_arm_traces(arm_runs, exact),
                     lab.fig_autocorrelation(arm_runs),
                     lab.fig_plane(exact, arm_runs),
                     mo.md("""
-    The same three chains on the real σ ridge, consecutive retained draws joined; the
+    The same two chains on the real σ ridge, consecutive retained draws joined; the
     lines show how far one draw moves, not trajectories.
     """),
                     lab.fig_ridge_runs(cloud, history, exact.log_scales, arm_runs),
-                    lab.fig_hybrid_moves(hybrid_run),
                 ]
             )
         }
@@ -710,18 +664,16 @@ def hybrid_evidence(arm_runs, cloud, exact, history, hybrid_run, lab, mo):
 
 
 @app.cell
-def summary_table(hybrid_run, joint_runs, lab, mo, mpgibbs_run):
+def summary_table(joint_runs, lab, mo, mpgibbs_run):
     mo.ui.table(
         lab.summary_rows(
             {
                 "MPGibbs alone": mpgibbs_run,
-                "MPGibbs + NUTS companion": hybrid_run,
                 "joint NUTS, innovation": joint_runs["non_centred"],
                 "joint NUTS, centred": joint_runs["centred"],
             },
             gradients={
                 "MPGibbs alone": "",
-                "MPGibbs + NUTS companion": "centred_nuts_num_steps",
                 "joint NUTS, innovation": "num_steps",
                 "joint NUTS, centred": "num_steps",
             },
@@ -732,54 +684,21 @@ def summary_table(hybrid_run, joint_runs, lab, mo, mpgibbs_run):
 
 
 @app.cell(hide_code=True)
-def hybrid_takeaway(hybrid_run, joint_runs, lab, mo, np):
-    def _rate(run, name):
-        return lab.effective_per_thousand(run.column(name), run.ess[name])
-
-    def _worst_effect(run):
-        return min(_rate(run, f"beta{j + 1}") for j in range(lab.EFFECTS))
-
-    _joint = joint_runs["non_centred"]
-    mo.md(f"""
-    **Against joint NUTS in the innovation chart.** Per draw, joint NUTS does better on
-    every column here: log σ {_rate(_joint, "sigma"):.0f} against {_rate(hybrid_run, "sigma"):.0f},
-    worst effect {_worst_effect(_joint):.0f} against {_worst_effect(hybrid_run):.0f}. But a draw is
-    not the same work: joint NUTS spends {np.median(_joint.extra["num_steps"]):.0f} gradients over
-    all 263 coordinates, each rebuilding the path step by step, while a hybrid sweep spends
-    {np.median(hybrid_run.extra["centred_nuts_num_steps"]):.0f} gradients over six parameters with the
-    path fixed, plus one smoother pass.
-
-    **The big picture.** So the toy shows the question, not the answer: per draw, joint
-    NUTS in the right chart wins; per unit of work, it depends on what a gradient and a
-    smoother pass cost. At France scale (50 parameters, 9,136 path values, deterministic
-    accumulators) nobody has measured either, which is exactly what the agreed comparison
-    is for.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
 def closing(mo):
     mo.md(r"""
-    ## What we are deciding
+    ## What remains to measure
 
-    The stack exists to give a trustworthy France posterior faster than joint NUTS. That
-    was never tested against joint NUTS in a working chart. Today's agreement is to test
-    it, with existing code only:
+    The reference separates loose parameters from parameters tightly coupled to the
+    path. MPGibbs must move both kinds through its label move; joint NUTS moves the
+    complete state in its chosen chart. Parts 0, 2 and 3 explain where each spends work.
 
-    1. **Keep the hybrid as the reference** (Part 4) and stop adding new MPGibbs proposals
-       until the comparison is in.
-    2. **Compare it with joint NUTS** (Part 1) on PARAM first, then on France itself in
-       the innovation chart, from cold starts, under one declared budget. The outcome is
-       whether each converges, and at what cost.
-    3. **Decide by the outcome**: if joint NUTS converges at an acceptable extra cost,
-       move to it because it is far simpler; if only the hybrid does, invest in the parts
-       that limit it on France (moving parameters with paths, renewing early stretches of
-       the path); if neither does, diagnose before building anything new.
+    The conditional parameter updates have been removed from MPGibbs. PARAM is expected
+    to fail its convergence gate until joint parameter/path transport inside the label
+    move is implemented. That transport is planned, not part of the sampler shown here.
 
-    On the reference, the question is whether the hybrid's zigzag and jumps travel σ's
-    ridge as cheaply as joint NUTS does in the innovation chart, and Parts 0, 2 and 3
-    explain where each arm spends its work.
+    Compare the current exact samplers on convergence and cost under the same declared
+    budget. This Gaussian example supplies an answer key; it does not establish their
+    relative performance on nonlinear PARAM or France.
     """)
     return
 

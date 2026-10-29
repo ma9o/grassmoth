@@ -862,8 +862,6 @@ export interface components {
          */
         readonly CoefficientRole: "center" | "decay" | "quartic" | "intercept" | "weight" | "emax" | "ec50" | "exponent" | "loading" | "observation_intercept" | "observation_scale" | "degrees_of_freedom" | "shape" | "dispersion" | "concentration" | "cutpoint_base" | "cutpoint_gaps" | "category_intercepts" | "category_slopes" | "diffusion_scale" | "diffusion_loading" | "process_degrees_of_freedom" | "initial_mean" | "initial_scale" | "initial_correlation";
         /** @enum {string} */
-        readonly CompanionMoves: "none" | "centred_mh" | "centred_and_scale_noncentred_mh" | "centred_nuts";
-        /** @enum {string} */
         readonly ComparisonSide: "left" | "right";
         /**
          * CompletedExtractionWorker
@@ -4316,7 +4314,7 @@ export interface components {
              * Component
              * @enum {string}
              */
-            readonly component: "full_sweep" | "parameter_move" | "path_smoother" | "nuts_companion" | "mh_companion" | "conditional_gradient";
+            readonly component: "full_sweep" | "parameter_move" | "path_smoother";
             readonly timing: components["schemas"]["TimingSpread"];
         };
         /**
@@ -4375,8 +4373,7 @@ export interface components {
          *     Every operation is primed once and measured ten times at fixed state, tuning
          *     and random keys. Full sweep uses the production executable with count one;
          *     components are compiled separately. The path timing includes recurrence
-         *     replay at the fixed selected context. Conditional gradient is one chain's
-         *     exact conditional density and gradient, including replay. No device-trace
+         *     replay at the fixed selected context. No device-trace
          *     kernel times are used. Separately compiled parts need not sum to a full sweep.
          */
         readonly FitProfileReport: {
@@ -4422,12 +4419,10 @@ export interface components {
              */
             readonly components: readonly components["schemas"]["FitComponentTiming"][];
             /**
-             * @description Sum of parameter, path and companion timings per repetition, summarized alongside full_sweep. Other sweep bookkeeping is not part of this sum.
+             * @description Sum of parameter and path timings per repetition, summarized alongside full_sweep. Other sweep bookkeeping is not part of this sum.
              * @default null
              */
             readonly split_total: components["schemas"]["TimingSpread"] | null;
-            /** @default null */
-            readonly nuts: components["schemas"]["NutsProfileReport"] | null;
         };
         /** @enum {string} */
         readonly FitReliability: "not_fitted" | "converged" | "unconverged" | "unknown";
@@ -4806,8 +4801,7 @@ export interface components {
          *
          *     It is for posteriors whose chains stay in separate modes: states that move freely
          *     under the reference reach the exact chain through swaps (Syed et al. 2022). Its
-         *     limits are in docs/assumptions.md, under Model class. Companion moves are built for
-         *     the untempered posterior, so a tempered run has none.
+         *     limits are in docs/assumptions.md, under Model class.
          */
         readonly "GaussianReferenceTemperingSpec-Input": {
             /**
@@ -4845,8 +4839,7 @@ export interface components {
          *
          *     It is for posteriors whose chains stay in separate modes: states that move freely
          *     under the reference reach the exact chain through swaps (Syed et al. 2022). Its
-         *     limits are in docs/assumptions.md, under Model class. Companion moves are built for
-         *     the untempered posterior, so a tempered run has none.
+         *     limits are in docs/assumptions.md, under Model class.
          */
         readonly "GaussianReferenceTemperingSpec-Output": {
             /**
@@ -5583,7 +5576,7 @@ export interface components {
              * @default 2
              */
             readonly n_parameter_particles?: number;
-            /** @description untempered runs the exact posterior alone and allows companion moves; gaussian_reference runs Gaussian-reference parallel tempering. */
+            /** @description untempered runs the exact posterior alone; gaussian_reference runs Gaussian-reference parallel tempering. */
             readonly tempering?: components["schemas"]["TemperingSpec-Input"];
             /** @description Exact path update. */
             readonly path_update?: components["schemas"]["PathUpdateSpec-Input"];
@@ -5634,7 +5627,7 @@ export interface components {
              * @default 2
              */
             readonly n_parameter_particles: number;
-            /** @description untempered runs the exact posterior alone and allows companion moves; gaussian_reference runs Gaussian-reference parallel tempering. */
+            /** @description untempered runs the exact posterior alone; gaussian_reference runs Gaussian-reference parallel tempering. */
             readonly tempering: components["schemas"]["TemperingSpec-Output"];
             /** @description Exact path update. */
             readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
@@ -6301,23 +6294,6 @@ export interface components {
             readonly target_accept_prob: number;
             /** @description NUTS chooses each trajectory's length; fixed runs a set number of steps. */
             readonly trajectory: components["schemas"]["JointTrajectorySpec-Output"];
-        };
-        /**
-         * NutsProfileReport
-         * @description Companion work on the fixed timed state, one entry per chain.
-         */
-        readonly NutsProfileReport: {
-            /** Leapfrog Steps */
-            readonly leapfrog_steps: readonly number[];
-            /** Step Size */
-            readonly step_size: readonly number[];
-            /** Tree Depth */
-            readonly tree_depth: readonly number[];
-            /**
-             * Gradient Count Representative
-             * @description True only after this execution's warmup; otherwise the tree work is not representative of tuned sampling.
-             */
-            readonly gradient_count_representative: boolean;
         };
         /**
          * NutsTrajectorySpec
@@ -8203,7 +8179,7 @@ export interface components {
         };
         /**
          * UntemperedSpec
-         * @description The exact posterior alone, optionally followed by companion moves each sweep.
+         * @description The exact posterior without temperature replicas.
          */
         readonly "UntemperedSpec-Input": {
             /**
@@ -8211,15 +8187,10 @@ export interface components {
              * @enum {string}
              */
             readonly kind: "untempered";
-            /**
-             * @description Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density.
-             * @default none
-             */
-            readonly companion?: components["schemas"]["CompanionMoves"];
         };
         /**
          * UntemperedSpec
-         * @description The exact posterior alone, optionally followed by companion moves each sweep.
+         * @description The exact posterior without temperature replicas.
          */
         readonly "UntemperedSpec-Output": {
             /**
@@ -8227,11 +8198,6 @@ export interface components {
              * @enum {string}
              */
             readonly kind: "untempered";
-            /**
-             * @description Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density.
-             * @default none
-             */
-            readonly companion: components["schemas"]["CompanionMoves"];
         };
         /** ValidationError */
         readonly ValidationError: {

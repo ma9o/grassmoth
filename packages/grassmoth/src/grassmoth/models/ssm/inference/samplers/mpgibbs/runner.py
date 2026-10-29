@@ -3,7 +3,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import NamedTuple, cast
+from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -22,7 +22,6 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 from grassmoth.artifacts.reports.profiling import (
     FitComponentTiming,
     FitProfileReport,
-    NutsProfileReport,
     ParticleProfileDimensions,
     TimingSpread,
 )
@@ -34,7 +33,7 @@ from grassmoth.artifacts.sampling import (
     SamplerSpec,
 )
 from grassmoth.compute.context import ModelExecutionContext
-from grassmoth.compute.programs import ProgramCompiler, scalar_operand
+from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
 from grassmoth.models.ssm.inference.continuation import restore_state, retain_state
 from grassmoth.models.ssm.inference.mcmc_state import (
@@ -42,12 +41,8 @@ from grassmoth.models.ssm.inference.mcmc_state import (
     _adapt_scale,
     _clip_dual_averaging_state,
     _clip_scale,
-    trajectory_state,
-)
-from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
-    CompanionKernel,
-    CompanionTuning,
     restarted_dual_averaging,
+    trajectory_state,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
@@ -212,36 +207,12 @@ class _Population(NamedTuple):
     warmup_attempts: jax.Array
     warmup_rejections: jax.Array
     ladder_frozen_at: jax.Array
-    companions: CompanionTuning | None
     latent_geometry: jax.Array
     curvature_moments: CurvatureMoments
 
 
 # Gain of the simple step-size scheme; a fixed property of warmup, not a setting.
 ADAPTATION_RATE = 0.05
-
-
-def _initial_companion_tuning(
-    companion: CompanionKernel,
-    states: TrajectoryMCMCState,
-    key: PRNGKeyArray,
-    num_warmup: int,
-    compiler: ProgramCompiler,
-) -> CompanionTuning:
-    # The NUTS warmup schedule spans this run's warmup; it is frozen when that ends.
-    tuning_key = random.fold_in(key, 1)
-
-    def companion_initializer(
-        chains: TrajectoryMCMCState, draw_key: PRNGKeyArray
-    ) -> CompanionTuning:
-        return companion.initial_tuning(chains, draw_key, num_warmup)
-
-    program = compiler(
-        companion_initializer,
-        states,
-        tuning_key,
-    )
-    return program.call(states, tuning_key)
 
 
 def run_marginal_particle_gibbs(
@@ -255,12 +226,10 @@ def run_marginal_particle_gibbs(
     # Both adaptation policies stop updating after warmup.
     adaptation_scheme: AdaptationScheme = "simple",
     tempering: ReplicaExchangeKernel | None = None,
-    companion: CompanionKernel | None = None,
     continuation: SamplerCheckpoint | None = None,
     convergence: RetainedConvergenceCheck | None = None,
 ) -> ParticleChainResult:
     """Run marginalized Particle Gibbs chains from paired starts."""
-    assert companion is None or tempering is None, "The sampler spec owns this exclusion"
     num_warmup = sampler.num_warmup
     num_chains = sampler.num_chains
     compiler = execution_context.compiler
@@ -379,9 +348,6 @@ def run_marginal_particle_gibbs(
         warmup_attempts,
         warmup_rejections,
         jnp.asarray(0),
-        None
-        if companion is None
-        else _initial_companion_tuning(companion, states, key, num_warmup, compiler),
         latent_geometry,
         initialize_curvature_moments(latent_geometry),
     )
@@ -407,7 +373,7 @@ def run_marginal_particle_gibbs(
             keys = random.split(step_key, replicas)
             # The frozen metric is shared by every label/candidate in the update.
             # Keep its scalar controller in the state and saved response; expand
-            # only the kernel operand, then restore it before companion moves.
+            # only the kernel operand, then restore it before adaptation.
             kernel_states = (
                 current.chains._replace(
                     latent_delta=current.chains.latent_delta[..., None] * current.latent_geometry
@@ -427,16 +393,6 @@ def run_marginal_particle_gibbs(
                 )
             if curvature_limited:
                 updated = updated._replace(latent_delta=current.chains.latent_delta)
-            moved_companions = current.companions
-            companion_accepted = None
-            companion_record: dict[str, jax.Array] = {}
-            if companion is not None and moved_companions is not None:
-                updated, moved_companions, companion_accepted, records = jax.vmap(companion.step)(
-                    updated,
-                    moved_companions,
-                    jax.vmap(lambda draw_key: random.fold_in(draw_key, 1))(keys),
-                )
-                companion_record = {name: values[cold_indices] for name, values in records.items()}
             cold = jax.tree.map(lambda value: value[cold_indices], updated)
             cold_info = jax.tree.map(lambda value: value[cold_indices], info)
             record: dict[str, jax.Array] = {
@@ -476,7 +432,6 @@ def run_marginal_particle_gibbs(
                         "parameter_jump_rms",
                     )
                 },
-                **companion_record,
             }
 
             def adapt_steps(
@@ -559,15 +514,6 @@ def run_marginal_particle_gibbs(
                     updated.param_step_size, updated.param_da, parameter_feedback
                 )
                 updated = updated._replace(param_step_size=param_step_size, param_da=param_da)
-                # NUTS adapted itself in its transition; Metropolis steps adapt here.
-                companions = moved_companions
-                if companions is not None and companion_accepted is not None:
-                    step_size, dual_averaging = jax.vmap(adapt_steps, in_axes=1, out_axes=1)(
-                        companions.step_size, companions.dual_averaging, companion_accepted
-                    )
-                    companions = companions._replace(
-                        step_size=step_size, dual_averaging=dual_averaging
-                    )
                 covariance, parameter_chol, changed = adapt_parameter_covariance(
                     current.parameter_covariance,
                     cold.position,
@@ -576,46 +522,30 @@ def run_marginal_particle_gibbs(
                     windows,
                 )
 
-                def replace_geometry(
-                    chains: TrajectoryMCMCState, companion_tuning: CompanionTuning | None
-                ) -> tuple[TrajectoryMCMCState, CompanionTuning | None]:
+                def replace_geometry(chains: TrajectoryMCMCState) -> TrajectoryMCMCState:
                     if dim == 0:
-                        return chains, companion_tuning
+                        return chains
                     # Covariance estimates posterior geometry; acceptance feedback
                     # tunes its scalar multiplier after the geometry changes.
 
-                    def restart(
-                        step_size: jax.Array,
-                    ) -> tuple[jax.Array, DualAveragingAdaptationState]:
-                        scale = _clip_scale(
-                            step_size,
-                            min_scale=kernel.min_scale[0],
-                            max_scale=kernel.max_scale[0],
-                        )
-                        return scale, restarted_dual_averaging(scale)
-
-                    scale, param_da = restart(chains.param_step_size)
-                    chains = chains._replace(
+                    scale = _clip_scale(
+                        chains.param_step_size,
+                        min_scale=kernel.min_scale[0],
+                        max_scale=kernel.max_scale[0],
+                    )
+                    return chains._replace(
                         parameter_chol=jnp.broadcast_to(
                             parameter_chol, chains.parameter_chol.shape
                         ),
                         param_step_size=scale,
-                        param_da=param_da,
-                    )
-                    if companion_tuning is None:
-                        return chains, None
-                    # NUTS keeps its own mass matrix, so only Metropolis steps restart.
-                    steps, dual_averaging = restart(companion_tuning.step_size)
-                    return chains, companion_tuning._replace(
-                        step_size=steps, dual_averaging=dual_averaging
+                        param_da=restarted_dual_averaging(scale),
                     )
 
-                updated, companions = jax.lax.cond(
+                updated = jax.lax.cond(
                     changed,
                     replace_geometry,
-                    lambda chains, companion_tuning: (chains, companion_tuning),
+                    lambda chains: chains,
                     updated,
-                    companions,
                 )
                 next_state: _Population = current._replace(
                     chains=updated,
@@ -625,7 +555,6 @@ def run_marginal_particle_gibbs(
                     latent_geometry=geometry,
                     curvature_moments=curvature_moments,
                     parameter_covariance=covariance,
-                    companions=companions,
                 )
                 if tempering is not None:
                     exchange_kernel = tempering
@@ -729,59 +658,6 @@ def run_marginal_particle_gibbs(
             FitComponentTiming(component="path_smoother", timing=TimingSpread.from_seconds(path)),
         )
         split = (parameter, path)
-        nuts_report = None
-        if companion is not None and current.companions is not None:
-            # Use the same native companion and keys as production, with frozen
-            # tuning on the copied current state. No output advances the chain.
-            companion_keys = jax.vmap(lambda key: random.fold_in(key, 1))(keys)
-            companion_step = companion.step
-
-            def profile_companion(
-                chains: TrajectoryMCMCState, tuning: CompanionTuning, draw_keys: jax.Array
-            ) -> tuple[TrajectoryMCMCState, CompanionTuning, jax.Array, dict[str, jax.Array]]:
-                return jax.vmap(companion_step)(chains, tuning, draw_keys)
-
-            transition = compiler(
-                profile_companion, current.chains, current.companions, companion_keys
-            )
-            elapsed, (_, _, _, records) = measure(
-                lambda: transition.call(current.chains, current.companions, companion_keys), clock
-            )
-            split = (*split, elapsed)
-            rows = (
-                *rows,
-                FitComponentTiming(
-                    component="nuts_companion" if companion.nuts is not None else "mh_companion",
-                    timing=TimingSpread.from_seconds(elapsed),
-                ),
-            )
-            if companion.nuts is not None:
-                position = current.chains.position[0]
-                latent_path = current.chains.latent_trajectory[0]
-                energy = companion.nuts.energy
-
-                def profile_conditional_gradient(
-                    position: jax.Array, path: jax.Array
-                ) -> tuple[jax.Array, jax.Array]:
-                    return cast(
-                        "tuple[jax.Array, jax.Array]", jax.value_and_grad(energy)(position, path)
-                    )
-
-                gradient = compiler(profile_conditional_gradient, position, latent_path)
-                elapsed_gradient, _ = measure(lambda: gradient.call(position, latent_path), clock)
-                rows = (
-                    *rows,
-                    FitComponentTiming(
-                        component="conditional_gradient",
-                        timing=TimingSpread.from_seconds(elapsed_gradient),
-                    ),
-                )
-                nuts_report = NutsProfileReport(
-                    leapfrog_steps=tuple(int(value) for value in records["centred_nuts_num_steps"]),
-                    step_size=tuple(float(value) for value in records["centred_nuts_step_size"]),
-                    tree_depth=tuple(int(value) for value in records["tree_depth"]),
-                    gradient_count_representative=num_warmup > 0,
-                )
         return FitProfileReport(
             phase="after_warmup" if num_warmup else "after_first_sweep",
             repetitions=REPETITIONS,
@@ -790,7 +666,6 @@ def run_marginal_particle_gibbs(
             particle_dimensions=dimensions,
             components=rows,
             split_total=sum_timings(split),
-            nuts=nuts_report,
         )
 
     run = run_sweeps(

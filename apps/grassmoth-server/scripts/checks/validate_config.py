@@ -121,14 +121,6 @@ _REQUIRED_SHAPE_BOUNDARIES = (
             "return",
         ),
     ),
-    ("samplers.mpgibbs.companion", "build_companion_proposal.propose", ("position", "return")),
-    ("samplers.mpgibbs.companion", "build_conditional_nuts.potential", ("path", "return")),
-    (
-        "samplers.mpgibbs.companion",
-        "build_conditional_nuts.potential.energy",
-        ("position", "return"),
-    ),
-    ("samplers.mpgibbs.companion", "build_conditional_nuts.step", ("key",)),
     (
         "samplers.particle.context",
         "build_smoother_context",

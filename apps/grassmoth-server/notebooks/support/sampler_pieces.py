@@ -41,7 +41,6 @@ if TYPE_CHECKING:
 type Json = dict[str, Any]
 type Chart = Literal["centred", "non_centred"]
 type PathUpdate = Literal["twisted_particle_agrad", "particle_rwm"]
-type Companion = Literal["none", "centred_nuts"]
 
 # ── The study client ────────────────────────────────────────────────────────────────
 
@@ -322,8 +321,8 @@ SCHEDULE: Json = {
 }
 
 
-def mpgibbs(*, companion: Companion, path_update: PathUpdate = "twisted_particle_agrad") -> Json:
-    """The policy sampler (benchmarks/README.md#policy), with a chosen companion and path update."""
+def mpgibbs(*, path_update: PathUpdate = "twisted_particle_agrad") -> Json:
+    """The MPGibbs sampler with a chosen path update."""
     update: Json = (
         {
             "method": path_update,
@@ -337,7 +336,7 @@ def mpgibbs(*, companion: Companion, path_update: PathUpdate = "twisted_particle
     return {
         "method": "mpgibbs",
         "n_parameter_particles": 2,
-        "tempering": {"kind": "untempered", "companion": companion},
+        "tempering": {"kind": "untempered"},
         "path_update": update,
         "parameter_proposal": "random_walk",
         "diagnostic_metrics": ["parameter_movement", "particle_identity", "frequency_refresh"],
@@ -961,7 +960,7 @@ def textbook_moves(shape: Shape, start: tuple[float, float], *, seed: int) -> Mo
 C_JOINT = "#2a78d6"
 C_LABEL = "#eb6834"
 C_SMOOTH = "#1baf7a"
-C_HYBRID = "#6250d6"
+C_CONDITIONAL = "#6250d6"
 C_INK = "#0b0b0b"
 C_INK_2 = "#52514e"
 C_MUTED = "#9aa0a6"
@@ -1310,7 +1309,7 @@ def _slice_bar(fig: go.Figure, shape: Shape, state: Sequence[float], *, row: int
         fig,
         [centre - 2 * shape.width, centre + 2 * shape.width],
         [state[1], state[1]],
-        C_HYBRID,
+        C_CONDITIONAL,
         row=row,
         col=col,
         width=7,
@@ -1391,7 +1390,7 @@ def fig_strategy_overview(shapes: Sequence[Shape], moves: Sequence[Moves]) -> go
                 fig.update_xaxes(title_text="", row=row, col=col)
         points = move.alternate
         for k in range(0, points.shape[0] - 1, 2):
-            _segment(fig, points[k : k + 2, 0], points[k : k + 2, 1], C_HYBRID, row=1, col=col)
+            _segment(fig, points[k : k + 2, 0], points[k : k + 2, 1], C_CONDITIONAL, row=1, col=col)
             _segment(
                 fig, points[k + 1 : k + 3, 0], points[k + 1 : k + 3, 1], C_SMOOTH, row=1, col=col
             )
@@ -1649,55 +1648,6 @@ def fig_smoother_schematic(
     )
 
 
-def fig_hybrid_schematic(shapes: Sequence[Shape], moves: Sequence[Moves]) -> go.Figure:
-    """Part 4 on the reference: the companion's reach, the smoother's, and a label jump (schematic)."""
-    fig = make_subplots(
-        rows=1, cols=len(shapes), subplot_titles=[s.label for s in shapes], horizontal_spacing=0.06
-    )
-    for col, (shape, move) in enumerate(zip(shapes, moves, strict=True), start=1):
-        state = start_state(shape)
-        _reference(fig, shape, row=1, col=col, shadow=False)
-        _slice_bar(fig, shape, state, row=1, col=col)
-        points = move.alternate[:9]
-        for k in range(0, points.shape[0] - 1, 2):
-            _segment(fig, points[k : k + 2, 0], points[k : k + 2, 1], C_HYBRID, row=1, col=col)
-            _segment(
-                fig, points[k + 1 : k + 3, 0], points[k + 1 : k + 3, 1], C_SMOOTH, row=1, col=col
-            )
-        if shape.narrowing < 2:
-            _label(
-                fig,
-                (shape.rho * state[1] + 2 * shape.width + 0.1, state[1]),
-                "the companion's reach:<br>most of the cloud",
-                axis=col,
-            )
-        else:
-            end = points[-1]
-            jump = (end[0] + 1.3, shape.rho * (end[0] + 1.3))
-            _arrow(fig, end, jump, C_LABEL, axis=col)
-            _label(
-                fig,
-                (shape.rho * state[1] + 2 * shape.width + 0.1, state[1] - 0.15),
-                "the companion's reach:<br>one slice",
-                axis=col,
-            )
-            _label(
-                fig,
-                (jump[0] + 0.12, jump[1]),
-                "a label jump, when a new<br>path lands in θ′'s band",
-                axis=col,
-            )
-        _mark_state(fig, state, row=1, col=col)
-    fig.update_yaxes(title_text="x: the whole path, on one axis", row=1, col=1)
-    fig.update_annotations(font={"size": 12})
-    return _layout(
-        fig,
-        title="Part 4 on the reference: one hybrid sweep after another (schematic)",
-        height=440,
-        legend=False,
-    )
-
-
 def _span(panel: Panel) -> list[float]:
     centre = float(panel.grid[np.argmax(panel.shadow)])
     spread = density_sd(panel.grid, panel.shadow)
@@ -1738,7 +1688,7 @@ def fig_shadow_slice(cloud: Cloud, chosen: int, panels: Sequence[Panel]) -> go.F
                 x=span,
                 y=[level, level],
                 mode="lines",
-                line={"color": C_HYBRID, "width": 1, "dash": "dot"},
+                line={"color": C_CONDITIONAL, "width": 1, "dash": "dot"},
                 showlegend=False,
                 hoverinfo="skip",
             ),
@@ -1750,7 +1700,7 @@ def fig_shadow_slice(cloud: Cloud, chosen: int, panels: Sequence[Panel]) -> go.F
                 x=cloud.shown[band, panel.column],
                 y=said[band],
                 mode="markers",
-                marker={"color": C_HYBRID, "size": 5},
+                marker={"color": C_CONDITIONAL, "size": 5},
                 name="draws whose paths say the same: a slice",
                 hoverinfo="skip",
             ),
@@ -1775,7 +1725,7 @@ def fig_shadow_slice(cloud: Cloud, chosen: int, panels: Sequence[Panel]) -> go.F
                 x=panel.grid,
                 y=panel.held,
                 mode="lines",
-                line={"color": C_HYBRID, "width": 2},
+                line={"color": C_CONDITIONAL, "width": 2},
                 name="given that one path: its slice",
             ),
             row=2,
@@ -1831,7 +1781,7 @@ def fig_strategies(
         up[1].extend([ys[s - 1], ys[s], None])
     fig.add_trace(_cloud_trace(cloud, scale.column, legend=False), row=1, col=1)
     for (x, y), colour, name in (
-        (across, C_HYBRID, "θ given the path (the companion's move)"),
+        (across, C_CONDITIONAL, "θ given the path (exact conditional draw)"),
         (up, C_SMOOTH, "the path given θ (the smoother's move)"),
     ):
         fig.add_trace(
@@ -1861,7 +1811,7 @@ def fig_strategies(
         spread = density_sd(panel.grid, panel.shadow)
         _band(fig, sweeps, mean - 2 * spread, mean + 2 * spread, row=2, col=col, name="")
         fig.data[-1].showlegend = False
-        for walk, colour in ((integrated, C_LABEL), (alternating, C_HYBRID)):
+        for walk, colour in ((integrated, C_LABEL), (alternating, C_CONDITIONAL)):
             fig.add_trace(
                 go.Scatter(
                     x=sweeps,
@@ -1960,7 +1910,7 @@ def fig_pin(rows: Sequence[tuple[int, Sequence[Panel]]]) -> go.Figure:
                     x=panel.grid,
                     y=panel.held,
                     mode="lines",
-                    line={"color": C_HYBRID, "width": 2},
+                    line={"color": C_CONDITIONAL, "width": 2},
                     name="given one whole path: its slice",
                 ),
                 row=row,
@@ -2350,56 +2300,6 @@ def fig_autocorrelation(runs: Mapping[str, tuple[FitResult, str]], *, lags: int 
     return _dedupe_legend(
         _layout(fig, title="How fast each sampler forgets (real fits)", height=380)
     )
-
-
-def fig_hybrid_moves(run: FitResult) -> go.Figure:
-    """Inside the hybrid sweep: the label move's parameter jump, the companion's, and the companion's work."""
-    jumps = run.extra["parameter_jump_rms"].ravel()
-    moved = jumps[jumps > 0]
-    nuts = run.extra["centred_nuts_jump_rms"].ravel()
-    fig = make_subplots(
-        rows=1,
-        cols=2,
-        subplot_titles=[
-            f"parameter jump per sweep (label move accepted in {moved.size / jumps.size:.0%} of sweeps)",
-            "NUTS companion: leapfrog steps per sweep",
-        ],
-        horizontal_spacing=0.1,
-    )
-    for values, colour, name in (
-        (moved, C_LABEL, "label move, when it moves"),
-        (nuts, C_HYBRID, "NUTS companion"),
-    ):
-        fig.add_trace(
-            go.Histogram(
-                x=values,
-                nbinsx=60,
-                histnorm="probability",
-                marker={"color": colour},
-                opacity=0.7,
-                name=name,
-            ),
-            row=1,
-            col=1,
-        )
-    fig.add_trace(
-        go.Histogram(
-            x=run.extra["centred_nuts_num_steps"].ravel(),
-            histnorm="probability",
-            marker={"color": C_HYBRID},
-            name="NUTS companion",
-            showlegend=False,
-        ),
-        row=1,
-        col=2,
-    )
-    fig.update_layout(barmode="overlay")
-    fig.update_xaxes(title_text="RMS jump over the six parameters (β, log σ)", row=1, col=1)
-    fig.update_xaxes(title_text="leapfrog steps", row=1, col=2)
-    fig.update_yaxes(title_text="share of sweeps", tickformat=".0%", row=1, col=1)
-    fig.update_yaxes(tickformat=".0%", row=1, col=2)
-    fig.update_annotations(font={"size": 12, "color": C_INK})
-    return _dedupe_legend(_layout(fig, title="Inside one hybrid sweep (real fit)", height=380))
 
 
 def summary_rows(

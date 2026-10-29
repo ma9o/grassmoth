@@ -40,9 +40,6 @@ from pydantic import AfterValidator, Field
 from grassmoth.artifacts.base import Value
 
 type AuxiliaryDrift = Literal["none", "amala", "amala_plus"]
-type CompanionMoves = Literal[
-    "none", "centred_mh", "centred_and_scale_noncentred_mh", "centred_nuts"
-]
 type LatentBlockSize = Literal[1, 2, "all"]
 type JointParameterization = Literal["centred", "non_centred", "mixed"]
 type ParameterProposal = Literal["random_walk", "pseudo_langevin"]
@@ -213,24 +210,9 @@ class NutsDASpec(Value):
 
 
 class UntemperedSpec(Value):
-    """The exact posterior alone, optionally followed by companion moves each sweep."""
+    """The exact posterior without temperature replicas."""
 
     kind: Literal["untempered"] = "untempered"
-    companion: CompanionMoves = Field(
-        default="none",
-        description=(
-            "Exact moves after each sweep, which update the parameters at the current path "
-            "as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). "
-            "centred_mh is a random walk on every parameter, shaped by the sweep's "
-            "preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh "
-            "follows it with a random walk on the diffusion scales that holds the path's "
-            "innovations fixed (Papaspiliopoulos, Roberts & Sköld 2007). centred_nuts is one "
-            "NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step "
-            "towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with "
-            "trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path "
-            "density."
-        ),
-    )
 
 
 class GaussianReferenceTemperingSpec(Value):
@@ -243,8 +225,7 @@ class GaussianReferenceTemperingSpec(Value):
 
     It is for posteriors whose chains stay in separate modes: states that move freely
     under the reference reach the exact chain through swaps (Syed et al. 2022). Its
-    limits are in docs/assumptions.md, under Model class. Companion moves are built for
-    the untempered posterior, so a tempered run has none.
+    limits are in docs/assumptions.md, under Model class.
     """
 
     kind: Literal["gaussian_reference"] = "gaussian_reference"
@@ -479,7 +460,7 @@ class MarginalParticleGibbsSpec(Value):
     tempering: TemperingSpec = Field(
         default_factory=UntemperedSpec,
         description=(
-            "untempered runs the exact posterior alone and allows companion moves; "
+            "untempered runs the exact posterior alone; "
             "gaussian_reference runs Gaussian-reference parallel tempering."
         ),
     )
@@ -638,6 +619,5 @@ class SamplerSpec(Value):
             if isinstance(algorithm.path_update, DsmcSpec)
             else algorithm.path_update.prefix_mixture,
             algorithm.parameter_proposal,
-            tempering.companion if isinstance(tempering, UntemperedSpec) else "none",
             1 if isinstance(tempering, UntemperedSpec) else tempering.num_temperatures,
         )

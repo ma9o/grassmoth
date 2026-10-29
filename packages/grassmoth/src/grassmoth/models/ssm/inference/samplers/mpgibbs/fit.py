@@ -23,7 +23,6 @@ from grassmoth.artifacts.sampling import (
     DsmcSpec,
     GaussianReferenceTemperingSpec,
     MarginalParticleGibbsSpec,
-    UntemperedSpec,
 )
 from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import (
@@ -37,10 +36,6 @@ from grassmoth.models.ssm.inference.extraction import (
 )
 from grassmoth.models.ssm.inference.problem import build_particle_problem
 from grassmoth.models.ssm.inference.reparameterization import AutoReparam
-from grassmoth.models.ssm.inference.samplers.mpgibbs.companion import (
-    build_companion_kernel,
-    diffusion_scale_mask,
-)
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
     build_marginal_particle_gibbs_kernel,
@@ -177,39 +172,29 @@ def fit_marginal_particle_gibbs(
     kernel = make_kernel(bundle.runtime)
     tempering = None
     reference = None
-    companion = None
-    match options.tempering:
-        case UntemperedSpec(companion=moves):
-            if moves != "none":
-                companion = build_companion_kernel(
-                    bundle.runtime,
-                    moves,
-                    diffusion_mask=diffusion_scale_mask(bundle.runtime, priors),
-                    parameter_gradient=kernel.parameter_gradient_fn,
-                    compiler=compiler,
-                )
-        case GaussianReferenceTemperingSpec() as ladder:
-            if (
-                continuation is not None
-                and isinstance(continuation.tuning, ParticleTuning)
-                and continuation.tuning.gaussian_reference
-            ):
-                from grassmoth.models.ssm.inference.targets.gaussian_reference import (
-                    GaussianReference,
-                )
+    if isinstance(options.tempering, GaussianReferenceTemperingSpec):
+        ladder = options.tempering
+        if (
+            continuation is not None
+            and isinstance(continuation.tuning, ParticleTuning)
+            and continuation.tuning.gaussian_reference
+        ):
+            from grassmoth.models.ssm.inference.targets.gaussian_reference import (
+                GaussianReference,
+            )
 
-                reference = GaussianReference(
-                    *(jnp.asarray(value.values) for value in continuation.tuning.gaussian_reference)
-                )
-            else:
-                reference = build_gaussian_reference(
-                    bundle.runtime,
-                    positions=initialization.positions,
-                    paths=initialization.paths,
-                    parameter_chol=initialization.parameter_chol,
-                    scale=ladder.reference_scale,
-                )
-            tempering = ReplicaExchangeKernel(bundle.runtime, reference, make_kernel, ladder)
+            reference = GaussianReference(
+                *(jnp.asarray(value.values) for value in continuation.tuning.gaussian_reference)
+            )
+        else:
+            reference = build_gaussian_reference(
+                bundle.runtime,
+                positions=initialization.positions,
+                paths=initialization.paths,
+                parameter_chol=initialization.parameter_chol,
+                scale=ladder.reference_scale,
+            )
+        tempering = ReplicaExchangeKernel(bundle.runtime, reference, make_kernel, ladder)
     run_result = run_marginal_particle_gibbs(
         bundle.runtime,
         kernel=kernel,
@@ -228,7 +213,6 @@ def fit_marginal_particle_gibbs(
         ),
         adaptation_scheme=options.adaptation_scheme,
         tempering=tempering,
-        companion=companion,
         continuation=continuation,
     )
     tuning = (

@@ -68,11 +68,6 @@ export function FitDetails({ context }: { context: ScopeContext }) {
   const sampler = report.inference_metadata.sampler_diagnostics;
   const gibbs = sampler && "latent_update_fraction" in sampler ? sampler : null;
   const nuts = sampler && "max_tree_depth_fraction" in sampler ? sampler : null;
-  const algorithm = gibbs?.settings.algorithm;
-  const companionNuts =
-    algorithm?.method === "mpgibbs" &&
-    algorithm.tempering.kind === "untempered" &&
-    algorithm.tempering.companion === "centred_nuts";
   const tempering = sampler && "tempering" in sampler ? sampler.tempering : null;
   const weights = gibbs?.path_weights;
   const stages =
@@ -130,16 +125,6 @@ export function FitDetails({ context }: { context: ScopeContext }) {
                 "Final step sizes",
                 nuts.final_step_size.map((value) => formatSignificant(value)).join(", "),
               ],
-            ]}
-          />
-        </Section>
-      )}
-      {companionNuts && (
-        <Section title="Conditional NUTS companion">
-          <KeyValue
-            rows={[
-              ["Divergences", String(mcmc?.num_divergences ?? "Unavailable")],
-              ["Deepest tree", String(mcmc?.tree_depth_max ?? "Unavailable")],
             ]}
           />
         </Section>

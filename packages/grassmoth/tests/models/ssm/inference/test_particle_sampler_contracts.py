@@ -200,6 +200,17 @@ def test_sampler_boundary_rejects_unknown_modes(field):
 
 
 @pytest.mark.parametrize(
+    "move", ["none", "centred_mh", "centred_and_scale_noncentred_mh", "centred_nuts"]
+)
+def test_untempered_boundary_rejects_removed_companion_field(move):
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        MarginalParticleGibbsSpec.model_validate(
+            {"tempering": {"kind": "untempered", "companion": move}}
+        )
+    assert MarginalParticleGibbsSpec().tempering.model_dump() == {"kind": "untempered"}
+
+
+@pytest.mark.parametrize(
     ("invalid", "error"),
     [
         ("position_shape", "initialization.positions must have shape"),

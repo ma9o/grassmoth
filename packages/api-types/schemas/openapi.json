@@ -3125,18 +3125,6 @@
         "x-concern": "scientific_model",
         "description": "A coefficient role identifies an expression operand\u2019s scientific quantity and support."
       },
-      "CompanionMoves": {
-        "enum": [
-          "none",
-          "centred_mh",
-          "centred_and_scale_noncentred_mh",
-          "centred_nuts"
-        ],
-        "type": "string",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "ComparisonSide": {
         "enum": [
           "left",
@@ -15812,10 +15800,7 @@
             "enum": [
               "full_sweep",
               "parameter_move",
-              "path_smoother",
-              "nuts_companion",
-              "mh_companion",
-              "conditional_gradient"
+              "path_smoother"
             ],
             "title": "Component",
             "type": "string"
@@ -15983,7 +15968,7 @@
       },
       "FitProfileReport": {
         "additionalProperties": false,
-        "description": "Wall-clock microbenchmarks on a copied state, never used by inference.\n\nEvery operation is primed once and measured ten times at fixed state, tuning\nand random keys. Full sweep uses the production executable with count one;\ncomponents are compiled separately. The path timing includes recurrence\nreplay at the fixed selected context. Conditional gradient is one chain's\nexact conditional density and gradient, including replay. No device-trace\nkernel times are used. Separately compiled parts need not sum to a full sweep.",
+        "description": "Wall-clock microbenchmarks on a copied state, never used by inference.\n\nEvery operation is primed once and measured ten times at fixed state, tuning\nand random keys. Full sweep uses the production executable with count one;\ncomponents are compiled separately. The path timing includes recurrence\nreplay at the fixed selected context. No device-trace\nkernel times are used. Separately compiled parts need not sum to a full sweep.",
         "properties": {
           "phase": {
             "enum": [
@@ -16071,18 +16056,7 @@
               }
             ],
             "default": null,
-            "description": "Sum of parameter, path and companion timings per repetition, summarized alongside full_sweep. Other sweep bookkeeping is not part of this sum."
-          },
-          "nuts": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/NutsProfileReport"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
+            "description": "Sum of parameter and path timings per repetition, summarized alongside full_sweep. Other sweep bookkeeping is not part of this sum."
           }
         },
         "required": [
@@ -16096,8 +16070,7 @@
           "time_steps",
           "particle_dimensions",
           "components",
-          "split_total",
-          "nuts"
+          "split_total"
         ],
         "title": "FitProfileReport",
         "type": "object",
@@ -17094,7 +17067,7 @@
       },
       "GaussianReferenceTemperingSpec-Input": {
         "additionalProperties": false,
-        "description": "Replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class. Companion moves are built for\nthe untempered posterior, so a tempered run has none.",
+        "description": "Replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class.",
         "properties": {
           "kind": {
             "const": "gaussian_reference",
@@ -17132,7 +17105,7 @@
       },
       "GaussianReferenceTemperingSpec-Output": {
         "additionalProperties": false,
-        "description": "Replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class. Companion moves are built for\nthe untempered posterior, so a tempered run has none.",
+        "description": "Replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class.",
         "properties": {
           "kind": {
             "const": "gaussian_reference",
@@ -19363,7 +19336,7 @@
           },
           "tempering": {
             "$ref": "#/components/schemas/TemperingSpec-Input",
-            "description": "untempered runs the exact posterior alone and allows companion moves; gaussian_reference runs Gaussian-reference parallel tempering."
+            "description": "untempered runs the exact posterior alone; gaussian_reference runs Gaussian-reference parallel tempering."
           },
           "path_update": {
             "$ref": "#/components/schemas/PathUpdateSpec-Input",
@@ -19420,7 +19393,7 @@
           },
           "tempering": {
             "$ref": "#/components/schemas/TemperingSpec-Output",
-            "description": "untempered runs the exact posterior alone and allows companion moves; gaussian_reference runs Gaussian-reference parallel tempering."
+            "description": "untempered runs the exact posterior alone; gaussian_reference runs Gaussian-reference parallel tempering."
           },
           "path_update": {
             "$ref": "#/components/schemas/PathUpdateSpec-Output",
@@ -21295,49 +21268,6 @@
         "title": "NutsDASpec",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "NutsProfileReport": {
-        "additionalProperties": false,
-        "description": "Companion work on the fixed timed state, one entry per chain.",
-        "properties": {
-          "leapfrog_steps": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Leapfrog Steps",
-            "type": "array"
-          },
-          "step_size": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Step Size",
-            "type": "array"
-          },
-          "tree_depth": {
-            "items": {
-              "type": "integer"
-            },
-            "title": "Tree Depth",
-            "type": "array"
-          },
-          "gradient_count_representative": {
-            "description": "True only after this execution's warmup; otherwise the tree work is not representative of tuned sampling.",
-            "title": "Gradient Count Representative",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "leapfrog_steps",
-          "step_size",
-          "tree_depth",
-          "gradient_count_representative"
-        ],
-        "title": "NutsProfileReport",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.profiling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -26964,18 +26894,13 @@
       },
       "UntemperedSpec-Input": {
         "additionalProperties": false,
-        "description": "The exact posterior alone, optionally followed by companion moves each sweep.",
+        "description": "The exact posterior without temperature replicas.",
         "properties": {
           "kind": {
             "const": "untempered",
             "default": "untempered",
             "title": "Kind",
             "type": "string"
-          },
-          "companion": {
-            "$ref": "#/components/schemas/CompanionMoves",
-            "default": "none",
-            "description": "Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density."
           }
         },
         "title": "UntemperedSpec",
@@ -26986,23 +26911,17 @@
       },
       "UntemperedSpec-Output": {
         "additionalProperties": false,
-        "description": "The exact posterior alone, optionally followed by companion moves each sweep.",
+        "description": "The exact posterior without temperature replicas.",
         "properties": {
           "kind": {
             "const": "untempered",
             "default": "untempered",
             "title": "Kind",
             "type": "string"
-          },
-          "companion": {
-            "$ref": "#/components/schemas/CompanionMoves",
-            "default": "none",
-            "description": "Exact moves after each sweep, which update the parameters at the current path as Particle Gibbs does (Andrieu, Doucet & Holenstein 2010, section 2.4.3). centred_mh is a random walk on every parameter, shaped by the sweep's preconditioner with its own warmup-adapted step; centred_and_scale_noncentred_mh follows it with a random walk on the diffusion scales that holds the path's innovations fixed (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). centred_nuts is one NUTS transition on every parameter (Hoffman & Gelman 2014) that adapts its step towards a 0.8 acceptance statistic and its diagonal mass in warmup windows, with trees of at most 2^10 - 1 leapfrog steps; each step evaluates the full path density."
           }
         },
         "required": [
-          "kind",
-          "companion"
+          "kind"
         ],
         "title": "UntemperedSpec",
         "type": "object",

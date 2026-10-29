@@ -7,7 +7,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 import numpy as np
-from blackjax.adaptation.step_size import DualAveragingAdaptationState
+from blackjax.adaptation.step_size import DualAveragingAdaptationState, dual_averaging_adaptation
 
 from grassmoth.artifacts.immutability import freeze_fields
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext
@@ -138,6 +138,13 @@ def _adapt_scale(
     max_scale_arr = jnp.asarray(max_scale, dtype=dtype)
     factor = jnp.exp(adaptation_rate_arr * (accepted_arr - target_accept_arr))
     return jnp.clip(scale * factor, min_scale_arr, max_scale_arr)
+
+
+def restarted_dual_averaging(step_size: Float[Array, " *shape"]) -> DualAveragingAdaptationState:
+    """Start dual averaging at each step scalar, whatever the batch shape."""
+    initialize = dual_averaging_adaptation(target=0.0)[0]
+    flat = jax.vmap(initialize)(step_size.reshape(-1))
+    return jax.tree.map(lambda value: value.reshape(step_size.shape), flat)
 
 
 def _clip_dual_averaging_state(
