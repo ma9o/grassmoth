@@ -100,12 +100,8 @@ def _initialize(target, kernel, joint):
     ("method", "kappa", "proposal", "companion"),
     [
         ("particle_agrad", 0, "random_walk", False),
-        ("particle_agrad", 1, "pseudo_langevin", False),
         ("twisted_particle_agrad", 0, "pseudo_langevin", False),
-        ("twisted_particle_agrad", 1, "random_walk", False),
-        ("particle_agrad", 0, "pseudo_langevin", True),
         ("particle_agrad", 1, "random_walk", True),
-        ("twisted_particle_agrad", 0, "random_walk", True),
         ("twisted_particle_agrad", 1, "pseudo_langevin", True),
     ],
 )

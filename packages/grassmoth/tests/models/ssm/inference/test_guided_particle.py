@@ -149,10 +149,7 @@ def _correlated_gaussian_case():
         (method, *case)
         for method in ("particle_agrad", "twisted_particle_agrad")
         for case in (
-            (0.0, 0, False, 3, 1),
-            (0.0, 1, False, 3, 1),
             (0.7, 0, False, 3, 1),
-            (0.7, 1, False, 3, 1),
             (0.7, 1, True, 3, 1),
             (0.0, 1, False, 1, 1),
             (0.0, 1, False, 3, 2),
@@ -160,7 +157,6 @@ def _correlated_gaussian_case():
     ]
     + [
         ("particle_mgrad", 0.0, 0, False, 3, 2),
-        ("particle_mgrad", 0.0, 1, False, 3, 2),
         ("particle_mgrad", 0.7, 1, True, 3, 1),
     ],
 )

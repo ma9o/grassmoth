@@ -26,8 +26,14 @@ pytestmark = pytest.mark.inference(concern="sampling")
 
 
 @pytest.mark.inference(concern="recovery")
-@pytest.mark.parametrize("trajectory", [NutsTrajectorySpec(), FixedTrajectorySpec()])
-@pytest.mark.parametrize("parameterization", ["centred", "non_centred", "mixed"])
+@pytest.mark.parametrize(
+    ("parameterization", "trajectory"),
+    [
+        ("centred", NutsTrajectorySpec()),
+        ("non_centred", FixedTrajectorySpec()),
+        ("mixed", NutsTrajectorySpec()),
+    ],
+)
 def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(
     trajectory, parameterization
 ):

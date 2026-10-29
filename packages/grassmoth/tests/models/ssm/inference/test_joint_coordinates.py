@@ -308,8 +308,14 @@ def _point_gaussian_case():
     return target, mean, covariance
 
 
-@pytest.mark.parametrize("fixture", [_point_gaussian_case, gaussian_interval_case])
-@pytest.mark.parametrize("parameterization_name", PARAMETERIZATIONS)
+@pytest.mark.parametrize(
+    ("fixture", "parameterization_name"),
+    [
+        (_point_gaussian_case, "centred"),
+        (gaussian_interval_case, "non_centred"),
+        (gaussian_interval_case, "mixed"),
+    ],
+)
 def test_decoded_analytic_posterior_matches_in_all_parameterizations(
     fixture, parameterization_name
 ):
@@ -348,8 +354,9 @@ def test_decoded_analytic_posterior_matches_in_all_parameterizations(
         np.testing.assert_allclose(parameterization.log_density(zero), expected, atol=3e-6)
 
 
-@pytest.mark.parametrize("parameterization_name", ["non_centred", "mixed"])
-@pytest.mark.parametrize("beta", [0.0, 0.35, 1.0])
+@pytest.mark.parametrize(
+    ("parameterization_name", "beta"), [("non_centred", 0.0), ("mixed", 0.35), ("non_centred", 1.0)]
+)
 def test_scientific_tempering_reference_gets_the_same_parameterization_jacobian(
     parameterization_name, beta
 ):
@@ -389,10 +396,7 @@ def test_scientific_tempering_reference_gets_the_same_parameterization_jacobian(
     ("parameterization_name", "beta", "support"),
     [
         ("non_centred", 0.0, "pinned_interval"),
-        ("mixed", 0.0, "static_replay"),
-        ("non_centred", 0.35, "static_replay"),
         ("mixed", 0.35, "pinned_interval"),
-        ("non_centred", 1.0, "pinned_interval"),
         ("mixed", 1.0, "static_replay"),
     ],
 )

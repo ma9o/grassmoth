@@ -1,9 +1,25 @@
 """Require explicit concern owners before pytest applies marker selection."""
 
+from pathlib import Path
+
+import jax
 import pytest
 
 INFERENCE_CONCERNS = ("sampling", "warmup", "simulation", "predictive", "recovery")
 TEST_CONCERNS = frozenset({"contract", "inference", "workflow"})
+
+
+def pytest_configure() -> None:  # noqa: V103 - pytest calls this configuration hook before collection.
+    """Share compiled programs across workers and runs; compilation dominates numerical tests.
+
+    JAX keys each entry by the lowered program, compile options and JAX version, so a
+    code change misses instead of reusing a stale executable. Delete the directory to
+    time a cold run or reclaim disk.
+    """
+    if not jax.config.jax_compilation_cache_dir:
+        cache = Path.home() / ".cache" / "grassmoth" / "jax-tests"
+        jax.config.update("jax_compilation_cache_dir", str(cache))
+    jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
 
 
 @pytest.hookimpl(tryfirst=True)

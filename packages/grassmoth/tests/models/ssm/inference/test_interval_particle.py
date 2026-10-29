@@ -31,37 +31,54 @@ pytestmark = pytest.mark.inference(concern="sampling")
 
 
 def _interval_tree_score(intervals, contexts, bank):
-    stats = intervals.leaf_statistics(contexts, bank)
-    total = jnp.zeros((bank.shape[1], jax.tree.leaves(contexts)[0].shape[0]))
-    for level in intervals.tree.levels[1:]:
-        if level.emission_slots.shape[1]:
-            # Pairwise selection must preserve every crossed path and parameter
-            # label, including zero-padded child slots and joint channel noise.
-            def compare_pairs(left, right, node, level=level):
-                full_left = gather_interval_statistics(left, jnp.asarray(level.left_slots)[node])
-                full_right = gather_interval_statistics(right, jnp.asarray(level.right_slots)[node])
-                expected = jax.vmap(
-                    lambda row: intervals.emission_log_probs(
-                        contexts, row[None] + full_right, level, node
+    @jax.jit
+    def score(contexts, bank):
+        stats = intervals.leaf_statistics(contexts, bank)
+        total = jnp.zeros((bank.shape[1], jax.tree.leaves(contexts)[0].shape[0]))
+        pairs = []
+        for level in intervals.tree.levels[1:]:
+            if level.emission_slots.shape[1]:
+                # Pairwise selection must preserve every crossed path and parameter
+                # label, including zero-padded child slots and joint channel noise.
+                def compare_pairs(left, right, node, level=level):
+                    full_left = gather_interval_statistics(
+                        left, jnp.asarray(level.left_slots)[node]
                     )
-                )(full_left)
-                actual = intervals.pairwise_emission_log_probs(contexts, left, right, level, node)
-                return actual, expected
+                    full_right = gather_interval_statistics(
+                        right, jnp.asarray(level.right_slots)[node]
+                    )
+                    expected = jax.vmap(
+                        lambda row: intervals.emission_log_probs(
+                            contexts, row[None] + full_right, level, node
+                        )
+                    )(full_left)
+                    actual = intervals.pairwise_emission_log_probs(
+                        contexts, left, right, level, node
+                    )
+                    return actual, expected
 
-            actual, expected = jax.vmap(compare_pairs)(
-                stats[::2], stats[1::2], jnp.arange(len(level.left_slots))
-            )
-            np.testing.assert_allclose(actual, expected, atol=2e-5)
-        stats = jax.vmap(
-            lambda left, right, node, level=level: (
-                gather_interval_statistics(left, jnp.asarray(level.left_slots)[node])
-                + gather_interval_statistics(right, jnp.asarray(level.right_slots)[node])
-            )
-        )(stats[::2], stats[1::2], jnp.arange(len(level.left_slots)))
-        if level.emission_slots.shape[1]:
-            total = total + jax.vmap(
-                lambda s, node, level=level: intervals.emission_log_probs(contexts, s, level, node)
-            )(stats, jnp.arange(len(level.left_slots))).sum(axis=0)
+                pairs.append(
+                    jax.vmap(compare_pairs)(
+                        stats[::2], stats[1::2], jnp.arange(len(level.left_slots))
+                    )
+                )
+            stats = jax.vmap(
+                lambda left, right, node, level=level: (
+                    gather_interval_statistics(left, jnp.asarray(level.left_slots)[node])
+                    + gather_interval_statistics(right, jnp.asarray(level.right_slots)[node])
+                )
+            )(stats[::2], stats[1::2], jnp.arange(len(level.left_slots)))
+            if level.emission_slots.shape[1]:
+                total = total + jax.vmap(
+                    lambda s, node, level=level: intervals.emission_log_probs(
+                        contexts, s, level, node
+                    )
+                )(stats, jnp.arange(len(level.left_slots))).sum(axis=0)
+        return total, pairs
+
+    total, pairs = score(contexts, bank)
+    for actual, expected in pairs:
+        np.testing.assert_allclose(actual, expected, atol=2e-5)
     return total
 
 
@@ -122,61 +139,71 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
             factors = factors.at[row].add(density)
         return factors
 
-    expected = independent(position, path)
-    actual = target.observation_log_probs(context, path, target.observations)
+    expected = jax.jit(independent)(position, path)
+    actual = jax.jit(lambda x: target.observation_log_probs(context, x, target.observations))(path)
     np.testing.assert_allclose(actual, expected, atol=1e-5)
-    expected_gradient = jax.grad(lambda z, x: independent(z, x).sum(), argnums=(0, 1))(
+    expected_gradient = jax.jit(jax.grad(lambda z, x: independent(z, x).sum(), argnums=(0, 1)))(
         position, path
     )
-    actual_gradient = jax.grad(
-        lambda z, x: target.observation_log_probs(
-            target.context(z, target.times), x, target.observations
-        ).sum(),
-        argnums=(0, 1),
+    actual_gradient = jax.jit(
+        jax.grad(
+            lambda z, x: target.observation_log_probs(
+                target.context(z, target.times), x, target.observations
+            ).sum(),
+            argnums=(0, 1),
+        )
     )(position, path)
     for actual_grad, expected_grad in zip(actual_gradient, expected_gradient, strict=True):
         np.testing.assert_allclose(actual_grad, expected_grad, atol=2e-5)
 
     intervals = target.intervals
     assert intervals is not None
-    current_gradient = jax.grad(
-        lambda x: intervals.trajectory_log_probs(
-            context, x, target.observations, gradient="current"
-        ).sum()
+    current_gradient = jax.jit(
+        jax.grad(
+            lambda x: intervals.trajectory_log_probs(
+                context, x, target.observations, gradient="current"
+            ).sum()
+        )
     )(path)
-    observation_jacobian = jax.jacrev(lambda x: independent(position, x))(path)
+    observation_jacobian = jax.jit(jax.jacrev(lambda x: independent(position, x)))(path)
     np.testing.assert_allclose(
         current_gradient, observation_jacobian[jnp.arange(7), jnp.arange(7)], atol=2e-5
     )
     # Two parameter labels, two distinct paths, and seven real leaves exercise
     # label-dependent responses, slot reuse, overlapping windows, and padding.
-    contexts = jax.vmap(lambda z: target.context(z, target.times))(jnp.array([[0.15], [-0.4]]))
+    contexts = jax.jit(jax.vmap(lambda z: target.context(z, target.times)))(
+        jnp.array([[0.15], [-0.4]])
+    )
     sequential = sequential_observations(
         target, contexts, target.context(jnp.zeros(1), target.times)
     )
-    memory = sequential.path(path)
-    emitted = jax.vmap(sequential.log_probs)(memory, jnp.arange(len(times)))
-    expected_labels = jax.vmap(
-        lambda bound: target.observation_log_probs(bound, path, target.observations)
+    memory = jax.jit(sequential.path)(path)
+    emitted = jax.jit(jax.vmap(sequential.log_probs))(memory, jnp.arange(len(times)))
+    expected_labels = jax.jit(
+        jax.vmap(lambda bound: target.observation_log_probs(bound, path, target.observations))
     )(contexts)
     np.testing.assert_allclose(emitted.T, expected_labels, atol=2e-5)
-    current_scores = jax.vmap(
-        lambda state, carried, index: jax.grad(
-            lambda value: sequential.log_probs(
-                sequential.replace_current(carried, value, index), index
-            )[0]
-        )(state)
+    current_scores = jax.jit(
+        jax.vmap(
+            lambda state, carried, index: jax.grad(
+                lambda value: sequential.log_probs(
+                    sequential.replace_current(carried, value, index), index
+                )[0]
+            )(state)
+        )
     )(path, memory, jnp.arange(len(times)))
     np.testing.assert_allclose(current_scores, current_gradient, atol=2e-5)
     bank = jnp.stack([path, path + 0.6], axis=1)
     total = _interval_tree_score(intervals, contexts, bank)
-    reference = jax.vmap(
-        lambda x: jax.vmap(
-            lambda bound: (
-                target.observation_log_probs(bound, x, target.observations).sum()
-                - target.observation_increment(bound, x[1], 1, target.observations)
-            )
-        )(contexts)
+    reference = jax.jit(
+        jax.vmap(
+            lambda x: jax.vmap(
+                lambda bound: (
+                    target.observation_log_probs(bound, x, target.observations).sum()
+                    - target.observation_increment(bound, x[1], 1, target.observations)
+                )
+            )(contexts)
+        )
     )(jnp.swapaxes(bank, 0, 1))
     np.testing.assert_allclose(total, reference, atol=2e-5)
     for channels in ((0, 1), (2, 3)):
@@ -185,13 +212,15 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
         selected_observations = jnp.where(
             jnp.asarray(np.isin(np.arange(4), channels)), target.observations, jnp.nan
         )
-        selected_reference = jax.vmap(
-            lambda x, selected_observations=selected_observations: jax.vmap(
-                lambda bound: (
-                    target.observation_log_probs(bound, x, selected_observations).sum()
-                    - target.observation_increment(bound, x[1], 1, selected_observations)
-                )
-            )(contexts)
+        selected_reference = jax.jit(
+            jax.vmap(
+                lambda x, selected_observations=selected_observations: jax.vmap(
+                    lambda bound: (
+                        target.observation_log_probs(bound, x, selected_observations).sum()
+                        - target.observation_increment(bound, x[1], 1, selected_observations)
+                    )
+                )(contexts)
+            )
         )(jnp.swapaxes(bank, 0, 1))
         np.testing.assert_allclose(
             _interval_tree_score(selected, contexts, bank), selected_reference, atol=2e-5

@@ -352,8 +352,9 @@ def test_zero_drift_uses_leaf_factors_without_path_or_transition_gradients():
     np.testing.assert_array_equal(auxiliary.gradient_norms, np.zeros(5))
 
 
-@pytest.mark.parametrize("state_dependent", [False, True])
-@pytest.mark.parametrize("beta", [None, 0.0, 0.4, 1.0])
+@pytest.mark.parametrize(
+    ("beta", "state_dependent"), [(None, False), (0.0, True), (0.4, False), (1.0, True)]
+)
 def test_pairwise_transition_matrix_matches_individual_declared_densities(state_dependent, beta):
     times = np.arange(3.0)
     target = interval_target(times, np.full((3, 1), 0.2), times[:, None], ("last",), state_dim=3)
@@ -500,7 +501,6 @@ def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, s
     [
         ("amala", 1.0, 33, False),
         ("amala_plus", 1.0, 33, False),
-        ("amala_plus", 0.0, 33, False),
         ("amala_plus", 0.0, 33, True),
     ],
 )

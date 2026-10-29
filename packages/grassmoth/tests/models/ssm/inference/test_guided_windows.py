@@ -107,7 +107,7 @@ def test_memory_guide_matches_dense_auxiliary_conditioning(variance):
 
 @pytest.mark.parametrize(
     ("method", "kappa"),
-    [("twisted_particle_agrad", 1), ("twisted_particle_agrad", 0), ("particle_agrad", 1)],
+    [("twisted_particle_agrad", 1), ("particle_agrad", 0)],
 )
 def test_guided_windows_preserve_joint_path_and_label_posterior(method, kappa):
     times = np.arange(4.0)

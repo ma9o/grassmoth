@@ -143,16 +143,19 @@ def test_reference_and_swaps_preserve_static_accumulator_and_exact_coordinates()
     assert not reference.free_mask[:, baseline].any()
     assert not reference.free_mask[:, total].any()
     assert not reference.free_mask[2, driver]
-    parameters, coordinates = jax.vmap(reference.sample)(jax.random.split(jax.random.key(12), 3))
+    parameters, coordinates = jax.jit(jax.vmap(reference.sample))(
+        jax.random.split(jax.random.key(12), 3)
+    )
     kernel = _local_kernel(target)
-    states = jax.vmap(
-        lambda position, path: _initial(target, path, kernel=kernel, position=position)
+    states = jax.jit(
+        jax.vmap(lambda position, path: _initial(target, path, kernel=kernel, position=position))
     )(parameters, coordinates)
     betas = jnp.array([1.0, 0.4, 0.0])
     exchange = ReplicaExchangeKernel(
         target, reference, _local_kernel, GaussianReferenceTemperingSpec(num_temperatures=3)
     )
-    states = exchange.rebind(states, betas)
+    rebind = jax.jit(exchange.rebind)
+    states = rebind(states, betas)
     after, _, _ = jax.jit(exchange.step)(
         states, jax.random.split(jax.random.key(13), 3), betas, jnp.asarray(0)
     )
@@ -170,11 +173,11 @@ def test_reference_and_swaps_preserve_static_accumulator_and_exact_coordinates()
     assert parameters.shape == (3, 1)
     np.testing.assert_array_equal(paths[:, 0, baseline], after.position[:, 0])
     np.testing.assert_allclose(
-        after.trajectory_log_prob, exchange.rebind(after, betas).trajectory_log_prob, atol=2e-5
+        after.trajectory_log_prob, rebind(after, betas).trajectory_log_prob, atol=2e-5
     )
     np.testing.assert_allclose(
         after.complete_log_posterior,
-        exchange.rebind(after, betas).complete_log_posterior,
+        rebind(after, betas).complete_log_posterior,
         atol=2e-5,
     )
     np.testing.assert_array_equal(after.param_step_size, states.param_step_size)
@@ -227,7 +230,7 @@ def test_local_moves_refresh_and_swaps_preserve_all_analytic_bridge_moments():
     def reference_density(q):
         return reference.parameter_log_prob(q[:1]) + reference.path_log_prob(q[1:, None])
 
-    reference_precision = -np.asarray(jax.hessian(reference_density)(jnp.zeros(dimension)))
+    reference_precision = -np.asarray(jax.jit(jax.hessian(reference_density))(jnp.zeros(dimension)))
     posterior_precision = np.linalg.inv(posterior_covariance)
     covariances = np.linalg.inv(
         np.asarray(betas)[:, None, None] * posterior_precision
@@ -248,10 +251,11 @@ def test_local_moves_refresh_and_swaps_preserve_all_analytic_bridge_moments():
         axis=1,
     )
     kernel = _local_kernel(target)
-    states = jax.vmap(lambda q: initialize_interval_chain(target, q, kernel=kernel))(
+    states = jax.jit(jax.vmap(lambda q: initialize_interval_chain(target, q, kernel=kernel)))(
         jnp.asarray(joint.reshape(-1, dimension))
     )
-    states = exchange.rebind(states, betas)
+    rebind = jax.jit(exchange.rebind)
+    states = rebind(states, betas)
     # Tuning is a property of the temperature slot, and must not follow swaps.
     states = states._replace(param_step_size=jnp.tile(jnp.array([0.2, 0.5, 0.9]), repeats))
     step = jax.jit(exchange.step)
@@ -274,7 +278,7 @@ def test_local_moves_refresh_and_swaps_preserve_all_analytic_bridge_moments():
         np.testing.assert_allclose(
             np.cov(samples[:, level], rowvar=False), covariances[level], atol=0.085
         )
-    rebound = exchange.rebind(states, betas)
+    rebound = rebind(states, betas)
     np.testing.assert_allclose(
         states.complete_log_posterior, rebound.complete_log_posterior, atol=2e-4, rtol=2e-5
     )
@@ -282,7 +286,7 @@ def test_local_moves_refresh_and_swaps_preserve_all_analytic_bridge_moments():
     # oracle. Check it after exchanges and after changing the interior beta;
     # gradients must follow the arriving theta and the receiving temperature.
     adapted_betas = jnp.array([1.0, 0.7, 0.0])
-    adapted = exchange.rebind(states, adapted_betas)
+    adapted = rebind(states, adapted_betas)
     for cached, ladder in ((states, betas), (adapted, adapted_betas)):
         position = np.asarray(cached.position[:, 0])
         exact_gradient = (posterior_precision @ posterior_mean)[0] - posterior_precision[
@@ -340,10 +344,12 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
         assert sum(edge.accepted for chain in result.tempering.swaps for edge in chain) > 0
     else:
         assert result.tempering is None
-    score = jax.vmap(
+    score = jax.jit(
         jax.vmap(
-            lambda position, path: target.log_posterior(
-                position, path, target.observations, target.times
+            jax.vmap(
+                lambda position, path: target.log_posterior(
+                    position, path, target.observations, target.times
+                )
             )
         )
     )
@@ -352,10 +358,12 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
         score(result.grouped_positions, result.latent_paths),
         atol=2e-5,
     )
-    observation_scores = jax.vmap(
+    observation_scores = jax.jit(
         jax.vmap(
-            lambda position, path: target.observation_log_probs(
-                target.context(position, target.times), path, target.observations
+            jax.vmap(
+                lambda position, path: target.observation_log_probs(
+                    target.context(position, target.times), path, target.observations
+                )
             )
         )
     )

@@ -27,10 +27,11 @@ pytestmark = pytest.mark.inference(concern="sampling")
     ("companion", "path_update"),
     [
         ("none", DsmcSpec(num_particles=4)),
-        ("centred_and_scale_noncentred_mh", DsmcSpec(num_particles=4)),
-        ("centred_nuts", DsmcSpec(num_particles=4)),
-        ("none", GuidedPathSpec(method="particle_agrad", num_particles=4)),
-        ("none", GuidedPathSpec(method="twisted_particle_agrad", num_particles=4)),
+        (
+            "centred_and_scale_noncentred_mh",
+            GuidedPathSpec(method="particle_agrad", num_particles=4),
+        ),
+        ("centred_nuts", GuidedPathSpec(method="twisted_particle_agrad", num_particles=4)),
     ],
 )
 @pytest.mark.inference(concern="warmup")

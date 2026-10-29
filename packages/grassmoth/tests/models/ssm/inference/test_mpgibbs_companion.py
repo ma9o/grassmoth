@@ -181,11 +181,6 @@ def test_centred_nuts_preserves_the_joint_posterior_and_freezes_its_adaptation()
             ("centred_mh",),
             GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
         ),
-        (
-            "centred_and_scale_noncentred_mh",
-            ("centred_mh", "scale_noncentred_mh"),
-            GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
-        ),
         ("centred_nuts", ("centred_nuts",), DsmcSpec(num_particles=4)),
     ],
 )

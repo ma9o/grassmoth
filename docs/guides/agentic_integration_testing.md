@@ -70,6 +70,8 @@ Add `--collect-only` to inspect a selection without executing it. `test:all`
 includes every concern and requires an explicit request. Use `-n 0` for a serial
 run or `-n N` to limit the worker count. Pytest reports durations separately and rejects
 unregistered markers. Keep test files under their owning workspace’s `tests/` directory.
+Compilation dominates numerical tests, so the [root pytest configuration](../../conftest.py) keeps
+JAX's persistent cache in `~/.cache/grassmoth/jax-tests`; delete it to time a cold run.
 The default selection is `not (inference or workflow)`, which excludes every
 numerical child, including tests that also carry `contract`. Web unit tests belong to the named `contract` Vitest project;
 the separate `visual` project owns screenshot stories.
