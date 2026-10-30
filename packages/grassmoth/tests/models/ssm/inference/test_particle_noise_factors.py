@@ -19,6 +19,7 @@ from grassmoth.models.ssm.execution.observation_distributions import (
     gaussian_distribution,
     masked_law_log_prob,
 )
+from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReference
 from grassmoth_test_support.interval_particle import interval_target
 
 pytestmark = pytest.mark.inference(concern="sampling")
@@ -127,7 +128,10 @@ def test_prepared_noise_matches_native_values_and_gradients(with_interval):
             return total
 
         def prepared_transition(previous, current, index):
-            return target.transition_log_prob_with_noise(bound, factors, previous, current, index)
+            mean = target.prepare_transition_mean(bound, previous, index)
+            return target.transition_log_prob_with_mean(
+                bound, factors, previous, current, index, mean
+            )
 
         def prepared_observation(state, index):
             return target.observation_increment_with_noise(bound, factors, state, index)
@@ -169,3 +173,41 @@ def test_prepared_noise_matches_native_values_and_gradients(with_interval):
     np.testing.assert_allclose(per_call_y, expected_y[0], rtol=1e-5, atol=1e-6)
     np.testing.assert_array_equal(actual_y[0][:, 2], 0.0)
     np.testing.assert_array_equal(actual_y[1][:, 2], 0.0)
+
+
+def test_prepared_transition_means_preserve_bridge_densities():
+    times = np.array([0.0, 0.7, 1.8])
+    base = interval_target(times, np.full((3, 1), 0.2), times[:, None], ("last",), state_dim=2)
+    reference = GaussianReference(
+        parameter_mean=jnp.zeros(1),
+        parameter_chol=jnp.eye(1),
+        path_mean=jnp.zeros((3, 2)),
+        autoregression=jnp.broadcast_to(0.4 * jnp.eye(2), (3, 2, 2)),
+        innovation_chol=jnp.broadcast_to(0.7 * jnp.eye(2), (3, 2, 2)),
+        free_mask=base.independent_mask,
+    )
+    predecessors = jnp.array([[0.2, -0.4], [-0.3, 0.7]])
+    successors = jnp.array([[0.6, 0.1], [-0.2, -0.5]])
+    indices = jnp.arange(1, len(times))
+
+    def compare(beta):
+        target = base.at_temperature(reference, beta)
+        context = target.context(jnp.array([0.45]), target.times)
+        noise = target.prepare_noise_factors(context, target.observations)
+        means = jax.vmap(
+            lambda previous, index: target.prepare_transition_mean(context, previous, index)
+        )(predecessors, indices)
+        prepared = jax.vmap(
+            lambda previous, current, index, mean: target.transition_log_prob_with_mean(
+                context, noise, previous, current, index, mean
+            )
+        )(predecessors, successors, indices, means)
+        declared = jax.vmap(
+            lambda previous, current, index: target.transition_log_prob(
+                context, previous, current, index
+            )
+        )(predecessors, successors, indices)
+        return prepared, declared
+
+    prepared, declared = jax.jit(jax.vmap(compare))(jnp.array([0.0, 0.4, 1.0]))
+    np.testing.assert_allclose(prepared, declared, rtol=1e-5, atol=1e-6)

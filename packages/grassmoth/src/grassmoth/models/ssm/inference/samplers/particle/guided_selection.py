@@ -172,15 +172,26 @@ def select_path(
         else:
             trajectory_scores = memory.path_log_probs(path)
     else:
+        # The point-reading predecessor bank is fixed before backward selection.
+        # Evaluate its exact nonlinear means over all times in parallel; only the
+        # successor choice and label suffix remain sequential. Window replay above
+        # cannot reuse this table because its reconstructed predecessors change.
+        means = jax.vmap(
+            lambda values, index: jax.vmap(memory.transition_means, in_axes=(0, None))(
+                values, index
+            )
+        )(memory_bank[:-1], jnp.arange(1, steps))
 
         def backward(
-            carry: tuple[jax.Array, jax.Array], inputs: tuple[jax.Array, jax.Array]
+            carry: tuple[jax.Array, jax.Array], inputs: tuple[jax.Array, jax.Array, jax.Array]
         ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
             following, suffix = carry
-            index, gumbels = inputs
-            links = jax.vmap(lambda value: transition(value, following, index + 1))(
-                memory_bank[index]
-            )
+            index, gumbels, transition_means = inputs
+            links = jax.vmap(
+                lambda value, mean: memory.transition_log_probs_with_means(
+                    value, following, index + 1, mean
+                )
+            )(memory_bank[index], transition_means).astype(scores.dtype)
             logits = backward_weights[index] + logsumexp(scores[index] + links + suffix, axis=-1)
             pick = jnp.argmax(logits + gumbels).astype(jnp.int32)
             value = memory_bank[index, pick]
@@ -194,6 +205,7 @@ def select_path(
                 jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=reference_dtype))(
                     jax.random.split(earlier_key, steps - 1)
                 ),
+                means[::-1],
             ),
             unroll=unroll,
         )

@@ -198,6 +198,29 @@ class SequentialObservationRuntime:
             index,
         )
 
+    def transition_means(self, previous: jax.Array, index: jax.Array) -> jax.Array:
+        """Prepare each label's nonlinear mean on its exact reconstructed predecessor."""
+        return jax.vmap(self.target.prepare_transition_mean, in_axes=(0, 0, None))(
+            self.contexts, self.replayed_states(previous)[:-1], index
+        )
+
+    def transition_log_probs_with_means(
+        self,
+        previous: jax.Array,
+        current: jax.Array,
+        index: jax.Array,
+        means: jax.Array,
+    ) -> jax.Array:
+        """Score a selected successor without reevaluating the fixed predecessor means."""
+        return jax.vmap(self.target.transition_log_prob_with_mean, in_axes=(0, 0, 0, 0, None, 0))(
+            self.contexts,
+            self.noise,
+            self.replayed_states(previous)[:-1],
+            self.replayed_states(current)[:-1],
+            index,
+            means,
+        )
+
     def initial(self, state: jax.Array) -> jax.Array:
         """Reconstruct each origin and start windows with the canonical zero statistics."""
         indices = jnp.asarray(self.target.state_space.replayed_coordinates, dtype=jnp.int32)

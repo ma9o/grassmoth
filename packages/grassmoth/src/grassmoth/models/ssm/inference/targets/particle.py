@@ -393,12 +393,71 @@ class ParticleTarget:
         index: jax.Array | int,
     ) -> jax.Array:
         """Score the exact nonlinear transition using this context's prepared noise."""
+        return self._transition_log_prob_using_mean(
+            context,
+            noise,
+            previous,
+            current,
+            index,
+            lambda: self._transition_distribution(context, previous, index).mean[
+                jnp.asarray(self.state_space.transition, dtype=jnp.int32)
+            ],
+        )
+
+    def prepare_transition_mean(
+        self, context: ParticleContext, previous: jax.Array, index: jax.Array
+    ) -> jax.Array:
+        """Evaluate the exact nonlinear mean before repeated successor selection.
+
+        The zero-temperature bridge never evaluates the scientific transition;
+        its unused mean has the same fixed stochastic-coordinate shape.
+        """
+        indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
+
+        def exact() -> jax.Array:
+            return jnp.asarray(self._transition_distribution(context, previous, index).mean)[
+                indices
+            ]
+
+        result: jax.Array = (
+            exact()
+            if self.bridge is None
+            else jax.lax.cond(
+                self.bridge.beta == 0,
+                lambda: jnp.zeros(indices.size, dtype=previous.dtype),
+                exact,
+            )
+        )
+        return result
+
+    def transition_log_prob_with_mean(
+        self,
+        context: ParticleContext,
+        noise: ParticleNoiseFactors,
+        previous: jax.Array,
+        current: jax.Array,
+        index: jax.Array,
+        mean: jax.Array,
+    ) -> jax.Array:
+        """Score the same exact transition with its already-evaluated nonlinear mean."""
+        return self._transition_log_prob_using_mean(
+            context, noise, previous, current, index, lambda: mean
+        )
+
+    def _transition_log_prob_using_mean(
+        self,
+        context: ParticleContext,
+        noise: ParticleNoiseFactors,
+        previous: jax.Array,
+        current: jax.Array,
+        index: jax.Array | int,
+        mean: Callable[[], jax.Array],
+    ) -> jax.Array:
         current = self.project_state(context, current)
 
         def exact() -> jax.Array:
             indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
-            mean = self._transition_distribution(context, previous, index).mean
-            return noise.transitions.at(index).log_prob(current[indices] - mean[indices])
+            return noise.transitions.at(index).log_prob(current[indices] - mean())
 
         return (
             exact()
