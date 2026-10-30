@@ -5587,6 +5587,18 @@ export interface components {
             /** @description Exact path update. */
             readonly path_update?: components["schemas"]["PathUpdateSpec-Input"];
             /**
+             * Compiler Reparameterization
+             * @description Translate each eligible stochastic state into the predictor coordinates of its first fixed-loading reading. The compiler derives a constant matrix in the sampler's actual parameter coordinates; only affine intercept replay is eligible. All densities and reported paths retain the exact physical model. With learned_translation enabled, this matrix initializes warmup learning.
+             * @default false
+             */
+            readonly compiler_reparameterization?: boolean;
+            /**
+             * Learned Translation
+             * @description Learn a time-constant state-by-parameter translation matrix in the existing warmup windows, from within-chain centered physical paths and parameters. Only reading-predictor and drift dependencies are fitted, with ridge shrinkage toward zero. Freeze before retained draws and preserve the chart in native continuation state. For a new fit without warmup, use the structural matrix when compiler_reparameterization is enabled, otherwise the identity chart.
+             * @default false
+             */
+            readonly learned_translation?: boolean;
+            /**
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk
              */
@@ -5637,6 +5649,18 @@ export interface components {
             readonly tempering: components["schemas"]["TemperingSpec-Output"];
             /** @description Exact path update. */
             readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
+            /**
+             * Compiler Reparameterization
+             * @description Translate each eligible stochastic state into the predictor coordinates of its first fixed-loading reading. The compiler derives a constant matrix in the sampler's actual parameter coordinates; only affine intercept replay is eligible. All densities and reported paths retain the exact physical model. With learned_translation enabled, this matrix initializes warmup learning.
+             * @default false
+             */
+            readonly compiler_reparameterization: boolean;
+            /**
+             * Learned Translation
+             * @description Learn a time-constant state-by-parameter translation matrix in the existing warmup windows, from within-chain centered physical paths and parameters. Only reading-predictor and drift dependencies are fitted, with ridge shrinkage toward zero. Freeze before retained draws and preserve the chart in native continuation state. For a new fit without warmup, use the structural matrix when compiler_reparameterization is enabled, otherwise the identity chart.
+             * @default false
+             */
+            readonly learned_translation: boolean;
             /**
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk

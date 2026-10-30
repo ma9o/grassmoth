@@ -89,7 +89,7 @@ def interval_target(
     _, static = eqx.partition(model(jnp.zeros(1)), eqx.is_array)
 
     def context(position: jax.Array, grid: jax.Array) -> ParticleContext:
-        return eqx.filter(model(position), eqx.is_array), grid, jnp.zeros(state_dim)
+        return eqx.filter(model(position), eqx.is_array), grid, jnp.zeros(state_dim), None
 
     def declared(bound: ParticleContext) -> dsx.DynamicalModel:
         return eqx.combine(bound[0], static)

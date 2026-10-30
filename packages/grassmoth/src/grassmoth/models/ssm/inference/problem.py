@@ -120,7 +120,7 @@ def build_particle_problem(
                 exact_constraints.free_mask[0], static_values, exact_constraints.values[0]
             )
         dynamical_model_arrays: dsx.DynamicalModel = eqx.filter(model, eqx.is_array)
-        return dynamical_model_arrays, runtime_times, static_values
+        return dynamical_model_arrays, runtime_times, static_values, None
 
     def declared_model(context: ParticleContext) -> dsx.DynamicalModel:
         model = eqx.combine(context[0], static_model)

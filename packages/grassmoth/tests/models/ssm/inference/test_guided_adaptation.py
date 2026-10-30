@@ -258,8 +258,8 @@ def test_target_limit_tracks_parameter_noise_and_missing_readings():
     )
 
     def context(position, times):
-        arrays, grid, _static = base.context(position, times)
-        return arrays, grid, position
+        arrays, grid, _static, _offset = base.context(position, times)
+        return arrays, grid, position, None
 
     def declared(bound):
         model = base.dynamical_model(bound)

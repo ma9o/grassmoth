@@ -19342,6 +19342,18 @@
             "$ref": "#/components/schemas/PathUpdateSpec-Input",
             "description": "Exact path update."
           },
+          "compiler_reparameterization": {
+            "default": false,
+            "description": "Translate each eligible stochastic state into the predictor coordinates of its first fixed-loading reading. The compiler derives a constant matrix in the sampler's actual parameter coordinates; only affine intercept replay is eligible. All densities and reported paths retain the exact physical model. With learned_translation enabled, this matrix initializes warmup learning.",
+            "title": "Compiler Reparameterization",
+            "type": "boolean"
+          },
+          "learned_translation": {
+            "default": false,
+            "description": "Learn a time-constant state-by-parameter translation matrix in the existing warmup windows, from within-chain centered physical paths and parameters. Only reading-predictor and drift dependencies are fitted, with ridge shrinkage toward zero. Freeze before retained draws and preserve the chart in native continuation state. For a new fit without warmup, use the structural matrix when compiler_reparameterization is enabled, otherwise the identity chart.",
+            "title": "Learned Translation",
+            "type": "boolean"
+          },
           "parameter_proposal": {
             "$ref": "#/components/schemas/ParameterProposal",
             "default": "random_walk",
@@ -19399,6 +19411,18 @@
             "$ref": "#/components/schemas/PathUpdateSpec-Output",
             "description": "Exact path update."
           },
+          "compiler_reparameterization": {
+            "default": false,
+            "description": "Translate each eligible stochastic state into the predictor coordinates of its first fixed-loading reading. The compiler derives a constant matrix in the sampler's actual parameter coordinates; only affine intercept replay is eligible. All densities and reported paths retain the exact physical model. With learned_translation enabled, this matrix initializes warmup learning.",
+            "title": "Compiler Reparameterization",
+            "type": "boolean"
+          },
+          "learned_translation": {
+            "default": false,
+            "description": "Learn a time-constant state-by-parameter translation matrix in the existing warmup windows, from within-chain centered physical paths and parameters. Only reading-predictor and drift dependencies are fitted, with ridge shrinkage toward zero. Freeze before retained draws and preserve the chart in native continuation state. For a new fit without warmup, use the structural matrix when compiler_reparameterization is enabled, otherwise the identity chart.",
+            "title": "Learned Translation",
+            "type": "boolean"
+          },
           "parameter_proposal": {
             "$ref": "#/components/schemas/ParameterProposal",
             "default": "random_walk",
@@ -19430,6 +19454,8 @@
           "n_parameter_particles",
           "tempering",
           "path_update",
+          "compiler_reparameterization",
+          "learned_translation",
           "parameter_proposal",
           "diagnostic_metrics",
           "param_target_accept",

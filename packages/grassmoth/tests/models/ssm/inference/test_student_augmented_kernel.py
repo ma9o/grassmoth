@@ -19,6 +19,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import _initialize_chain_state
+from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth_test_support.interval_particle import interval_target
 from grassmoth_test_support.observation import observation_laws
 from grassmoth_test_support.student_reference import student_features, student_quadrature
@@ -67,7 +68,7 @@ def _target():
             lambda z: {"z": z},
             lambda z: dist.Normal(0.0, 1.0).log_prob(z).sum(),
         ),
-        context=lambda z, grid: (eqx.filter(model(z), eqx.is_array), grid, jnp.zeros(1)),
+        context=lambda z, grid: (eqx.filter(model(z), eqx.is_array), grid, jnp.zeros(1), None),
         dynamical_model=lambda context: eqx.combine(context[0], static),
     )
 
@@ -91,20 +92,22 @@ def _initialize(target, kernel, joint):
         param_min_scale=1e-6,
         param_max_scale=1e3,
         initial_latent_trajectory=joint[3:, None],
+        chart=kernel.initial_chart,
     )
 
 
 @pytest.mark.parametrize(
-    ("method", "kappa", "proposal"),
+    ("method", "kappa", "proposal", "translated"),
     [
-        ("particle_agrad", 0, "random_walk"),
-        ("twisted_particle_agrad", 0, "pseudo_langevin"),
-        ("particle_agrad", 1, "random_walk"),
-        ("twisted_particle_agrad", 1, "pseudo_langevin"),
+        ("particle_agrad", 0, "random_walk", False),
+        ("twisted_particle_agrad", 0, "pseudo_langevin", False),
+        ("particle_agrad", 1, "random_walk", False),
+        ("twisted_particle_agrad", 1, "pseudo_langevin", False),
+        ("twisted_particle_agrad", 1, "pseudo_langevin", True),
     ],
 )
 def test_augmented_sweep_preserves_joint_marginal_posterior(
-    marginal_reference, method, kappa, proposal
+    marginal_reference, method, kappa, proposal, translated
 ):
     starts, expected, variance = marginal_reference
     # Round the starts to float32 first, so unmoved coordinates compare equal.
@@ -116,6 +119,9 @@ def test_augmented_sweep_preserves_joint_marginal_posterior(
         parameter_proposal=proposal,
         parameter_reference_path=jnp.zeros((2, 1)),
         path_update=GuidedPathSpec(method=method, num_particles=8, kappa=kappa),
+        initial_chart=TranslationChart(jnp.array([[-0.35, 0.2, 0.15]]), jnp.array([0.1, -0.2, 0.3]))
+        if translated
+        else None,
     )
 
     def one(joint, key):

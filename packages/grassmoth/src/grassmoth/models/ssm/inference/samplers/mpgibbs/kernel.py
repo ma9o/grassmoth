@@ -85,6 +85,7 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
     _select_pytree,
 )
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
+from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth.models.ssm.inference.tracing import (
     CategoricalTraceRecord,
@@ -138,6 +139,8 @@ class ParameterMoveInputs(NamedTuple):
     gradients: jax.Array
     boundary: PathUpdateBoundary
     label_key: jax.Array
+    target: ParticleTarget
+    reference: jax.Array
 
 
 class SelectedParameter(NamedTuple):
@@ -191,6 +194,9 @@ class MarginalParticleGibbsKernel(NamedTuple):
     path_update: PathUpdateSpec
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...]
     exact_constraints: ExactStateConstraints | None
+    initial_chart: TranslationChart | None
+    learn_translation: bool
+    translation_pairs: jax.Array | None
 
 
 def build_marginal_particle_gibbs_kernel(
@@ -206,6 +212,9 @@ def build_marginal_particle_gibbs_kernel(
     parameter_reference_path: Float[Array, "T D"] | None = None,
     exact_constraints: ExactStateConstraints | None = None,
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...] = _DEFAULT_OPTIONS.diagnostic_metrics,
+    initial_chart: TranslationChart | None = None,
+    learn_translation: bool = False,
+    translation_pairs: jax.Array | None = None,
 ) -> MarginalParticleGibbsKernel:
     """Build a marginalized Particle Gibbs joint state update."""
     diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=diagnostic_metrics)
@@ -238,6 +247,17 @@ def build_marginal_particle_gibbs_kernel(
         if exact_constraints is None
         else exact_constraints.free_mask & target.independent_mask
     )
+    if initial_chart is not None:
+        # A shared chart must preserve every label's constrained path support.
+        movable = jnp.all(latent_free_mask, axis=0)
+        initial_chart = TranslationChart(
+            jnp.where(movable[:, None], initial_chart.slopes, 0.0), initial_chart.reference
+        )
+        if translation_pairs is not None:
+            translation_pairs = translation_pairs & movable[:, None]
+    if learn_translation:
+        assert initial_chart is not None
+        assert translation_pairs is not None
 
     def _theta_logpost_grad(z: Float[Array, " U"]) -> Float[Array, " U"]:
         # q(u | theta) uses a theta-only oracle, fixed for every kernel call.
@@ -341,8 +361,35 @@ def build_marginal_particle_gibbs_kernel(
             )
 
         with jax.named_scope("build_context"):
+            chart_target = target if state.chart is None else target.in_coordinates(state.chart)
+            chart_state = (
+                state
+                if state.chart is None
+                else state._replace(
+                    latent_context=chart_target.context(state.position, runtime_times),
+                    latent_trajectory=state.chart.encode(state.position, state.latent_trajectory),
+                )
+            )
+            chart_setup = (
+                static
+                if state.chart is None
+                else build_smoother_setup(
+                    chart_target,
+                    path_update,
+                    num_parameter_particles=num_parameter_particles,
+                    free_mask=latent_free_mask,
+                    paid_mix=paid_mix,
+                    diagnostic_metrics=diagnostic_metrics,
+                )
+            )
             boundary = begin_path_update(
-                target, static, path_update, state, parameter_particles, label_correction, block_key
+                chart_target,
+                chart_setup,
+                path_update,
+                chart_state,
+                parameter_particles,
+                label_correction,
+                block_key,
             )
         return ParameterMoveInputs(
             parameter_particles,
@@ -351,6 +398,8 @@ def build_marginal_particle_gibbs_kernel(
             parameter_gradients,
             boundary,
             label_key,
+            chart_target,
+            chart_state.latent_trajectory,
         )
 
     def _smooth(
@@ -365,15 +414,16 @@ def build_marginal_particle_gibbs_kernel(
         | TracedResult[ParticleSmootherResult, SequentialSmootherTraceRecord]
     ):
         boundary = prepared.boundary
+        chart_target = prepared.target
         ctx = boundary.context
         block_key = boundary.key
         contexts = ctx.contexts
 
         def root_correction(path: jax.Array, local_prior: jax.Array) -> jax.Array:
             return jnp.asarray(
-                jax.vmap(lambda context, prior: target.replay_correction(context, path, prior))(
-                    contexts, local_prior
-                )
+                jax.vmap(
+                    lambda context, prior: chart_target.replay_correction(context, path, prior)
+                )(contexts, local_prior)
             )
 
         with jax.named_scope("particle_smoother_full"):
@@ -386,9 +436,9 @@ def build_marginal_particle_gibbs_kernel(
                     batch_size=batch_size,
                 )
             else:
-                guide = target.context(ctx.guide_position, runtime_times)
+                guide = chart_target.context(ctx.guide_position, runtime_times)
                 smoother = (trace_guided_step if record_trace else guided_step)(
-                    target,
+                    chart_target,
                     ctx,
                     guide,
                     path_update,
@@ -407,7 +457,7 @@ def build_marginal_particle_gibbs_kernel(
             scores = finish_path_update(
                 prepared,
                 ConditionalPathScores(smoother.label_scores),
-                target,
+                prepared.target,
                 smoother.latent_path,
             )
             label = random.categorical(prepared.label_key, scores.log_probs).astype(jnp.int32)
@@ -417,6 +467,45 @@ def build_marginal_particle_gibbs_kernel(
                 _select_pytree(prepared.boundary.context.contexts, label),
                 scores,
             )
+
+    def _physical_path(
+        state: TrajectoryMCMCState,
+        selected: SelectedParameter,
+        latent_path: jax.Array,
+        chart_reference: jax.Array,
+    ) -> tuple[ParticleContext, jax.Array, jax.Array, jax.Array]:
+        """Restore the physical path and its caches in production and profiling."""
+        label, position, context, scores = selected
+        trajectory_dtype = state.trajectory_log_prob.dtype
+        complete_dtype = state.complete_log_posterior.dtype
+        if state.chart is None:
+            return (
+                context,
+                target.replay_path(context, latent_path),
+                scores.trajectory_log_probs[label].astype(trajectory_dtype),
+                scores.log_posteriors[label].astype(complete_dtype),
+            )
+        # Retaining a chart coordinate at the same parameter retains its exact
+        # stored physical value. A float32 round trip must not manufacture movement.
+        retained = (
+            jnp.all(position == state.position)
+            & (latent_path == chart_reference)
+            & target.independent_mask
+        )
+        latent_path = jnp.where(
+            retained, state.latent_trajectory, state.chart.decode(position, latent_path)
+        )
+        context = target.context(position, runtime_times)
+        latent_path = target.replay_path(context, latent_path)
+        # Score the returned physical values without replaying a second time.
+        trajectory_density = jnp.asarray(
+            target.factor_log_prob(context, latent_path, runtime_observations),
+            dtype=trajectory_dtype,
+        )
+        complete = jnp.asarray(
+            target.log_prior(position) + trajectory_density, dtype=complete_dtype
+        )
+        return context, latent_path, trajectory_density, complete
 
     def _step(
         state: TrajectoryMCMCState,
@@ -436,23 +525,27 @@ def build_marginal_particle_gibbs_kernel(
             parameter_gradients,
             boundary,
             _,
+            _chart_target,
+            chart_reference,
         ) = prepared
         ctx = boundary.context
         x_ref = state.latent_trajectory
         traj_dtype = state.trajectory_log_prob.dtype
-        complete_dtype = state.complete_log_posterior.dtype
-        smoother = _smooth(prepared, x_ref, record_trace=record_trace, batch_size=batch_size)
+        smoother = _smooth(
+            prepared, chart_reference, record_trace=record_trace, batch_size=batch_size
+        )
         smoother_result = smoother.result if isinstance(smoother, TracedResult) else smoother
         with jax.named_scope("postprocess"):
             latent_path = smoother_result.latent_path
-            selected_label, next_position, next_context, scores = _select(prepared, smoother_result)
+            selected = _select(prepared, smoother_result)
+            selected_label, next_position, _, scores = selected
             final_label_log_probs = scores.log_probs
             origin_path = smoother_result.origin_path
             zero_scalar = jnp.asarray(0.0, dtype=traj_dtype)
             with jax.named_scope("particle_smoother_full"):
-                latent_path = target.replay_path(next_context, latent_path)
-            next_traj_lp = scores.trajectory_log_probs[selected_label].astype(traj_dtype)
-            next_complete = scores.log_posteriors[selected_label].astype(complete_dtype)
+                next_context, latent_path, next_traj_lp, next_complete = _physical_path(
+                    state, selected, latent_path, chart_reference
+                )
             latent_move = latent_path - x_ref
             latent_move_rms_per_t = jnp.sqrt(
                 _masked_mean(latent_move * latent_move, latent_free_mask, axis=-1)
@@ -479,6 +572,16 @@ def build_marginal_particle_gibbs_kernel(
                 **smoother_result.diagnostics,
                 "parameter_accepted": parameter_accepted,
                 "latent_accepted": latent_updated,
+                # A parameter compensation can move x while leaving z fixed.
+                # Tune the conditional path step using movement in its own chart;
+                # the recorded movement and freeze diagnostics remain physical.
+                "latent_controller_accepted": jnp.any(
+                    (smoother_result.latent_path != chart_reference)
+                    & smoother_result.proposal_mask,
+                    axis=-1,
+                ).astype(state.position.dtype)
+                if state.chart is not None
+                else latent_updated,
                 "latent_proposed": jnp.any(smoother_result.proposal_mask, axis=-1),
                 "latent_frozen_frac": latent_frozen_frac,
                 "latent_frozen_frac_by_d": latent_frozen_frac_by_d,
@@ -534,6 +637,7 @@ def build_marginal_particle_gibbs_kernel(
                 param_step_size=state.param_step_size,
                 parameter_chol=state.parameter_chol,
                 param_da=state.param_da,
+                chart=state.chart,
             ),
             step_info,
         )
@@ -593,7 +697,7 @@ def build_marginal_particle_gibbs_kernel(
         prepared = _prepare(state, keys[0])
         draw_shape = jax.eval_shape(
             lambda path: _smooth(prepared, path, record_trace=False, batch_size=batch_size),
-            state.latent_trajectory,
+            prepared.reference,
         )
         empty_draws = jax.tree.map(
             lambda shape: jnp.zeros((states.position.shape[0], *shape.shape), shape.dtype),
@@ -607,7 +711,7 @@ def build_marginal_particle_gibbs_kernel(
             # This compilation owns both the operand order and the converted
             # smoother. Retracing concrete inputs could deduplicate constants
             # differently, so retain the function from this exact symbolic trace.
-            return smoother_program(prepared, state.latent_trajectory), _select(prepared, draw)
+            return smoother_program(prepared, prepared.reference), _select(prepared, draw)
 
         parameter = compiler(jax.vmap(profile_parameter_move), states, keys, empty_draws)
         smoother, _ = parameter.call(states, keys, empty_draws)
@@ -618,20 +722,26 @@ def build_marginal_particle_gibbs_kernel(
             return smoother.run(path)
 
         smooth_batch = jax.vmap(profile_smoother_setup)
-        draws = compiler(smooth_batch, smoother, states.latent_trajectory).call(
-            smoother, states.latent_trajectory
+        chart_paths = (
+            states.latent_trajectory
+            if states.chart is None
+            else jax.vmap(lambda chart, position, path: chart.encode(position, path))(
+                states.chart, states.position, states.latent_trajectory
+            )
         )
+        draws = compiler(smooth_batch, smoother, chart_paths).call(smoother, chart_paths)
         smoother, selected = jax.block_until_ready(parameter.call(states, keys, draws))
 
         def profile_path_smoother(
-            smoother: SmootherProfileProgram[jax.Array], path: jax.Array, context: ParticleContext
-        ) -> tuple[ParticleSmootherResult, jax.Array]:
-            result = smoother.run(path)
-            return result, target.replay_path(context, result.latent_path)
+            smoother: SmootherProfileProgram[jax.Array],
+            state: TrajectoryMCMCState,
+            selected: SelectedParameter,
+            chart_reference: jax.Array,
+        ) -> tuple[ParticleSmootherResult, tuple[ParticleContext, jax.Array, jax.Array, jax.Array]]:
+            result = smoother.run(chart_reference)
+            return result, _physical_path(state, selected, result.latent_path, chart_reference)
 
-        path = compiler(
-            jax.vmap(profile_path_smoother), smoother, states.latent_trajectory, selected.context
-        )
+        path = compiler(jax.vmap(profile_path_smoother), smoother, states, selected, chart_paths)
 
         def run_parameter() -> tuple[jax.Array, ...]:
             return cast(
@@ -641,9 +751,7 @@ def build_marginal_particle_gibbs_kernel(
         def run_path() -> tuple[jax.Array, ...]:
             return cast(
                 "tuple[jax.Array, ...]",
-                tuple(
-                    jax.tree.leaves(path.call(smoother, states.latent_trajectory, selected.context))
-                ),
+                tuple(jax.tree.leaves(path.call(smoother, states, selected, chart_paths))),
             )
 
         return ParticleProfilePrograms(run_parameter, run_path)
@@ -667,4 +775,7 @@ def build_marginal_particle_gibbs_kernel(
         path_update=path_update,
         diagnostic_metrics=diagnostic_metrics,
         exact_constraints=exact_constraints,
+        initial_chart=initial_chart,
+        learn_translation=learn_translation,
+        translation_pairs=translation_pairs,
     )

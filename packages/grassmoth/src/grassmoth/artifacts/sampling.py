@@ -468,6 +468,27 @@ class MarginalParticleGibbsSpec(Value):
         ),
     )
     path_update: PathUpdateSpec = Field(default_factory=DsmcSpec, description="Exact path update.")
+    compiler_reparameterization: bool = Field(
+        default=False,
+        description=(
+            "Translate each eligible stochastic state into the predictor coordinates of its "
+            "first fixed-loading reading. The compiler derives a constant matrix in the "
+            "sampler's actual parameter coordinates; only affine intercept replay is eligible. "
+            "All densities and reported paths retain the exact physical model. With "
+            "learned_translation enabled, this matrix initializes warmup learning."
+        ),
+    )
+    learned_translation: bool = Field(
+        default=False,
+        description=(
+            "Learn a time-constant state-by-parameter translation matrix in the existing "
+            "warmup windows, from within-chain centered physical paths and parameters. "
+            "Only reading-predictor and drift dependencies are fitted, with ridge shrinkage "
+            "toward zero. Freeze before retained draws and preserve the chart in native "
+            "continuation state. For a new fit without warmup, use the structural matrix when "
+            "compiler_reparameterization is enabled, otherwise the identity chart."
+        ),
+    )
     parameter_proposal: ParameterProposal = Field(
         default="random_walk",
         description=(
@@ -622,5 +643,7 @@ class SamplerSpec(Value):
             if isinstance(algorithm.path_update, DsmcSpec)
             else algorithm.path_update.prefix_mixture,
             algorithm.parameter_proposal,
+            algorithm.compiler_reparameterization,
+            algorithm.learned_translation,
             1 if isinstance(tempering, UntemperedSpec) else tempering.num_temperatures,
         )

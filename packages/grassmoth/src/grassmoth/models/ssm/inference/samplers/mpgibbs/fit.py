@@ -28,6 +28,7 @@ from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
+from grassmoth.models.ssm.inference.coordinate_structure import compile_translation_structure
 from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 from grassmoth.models.ssm.inference.extraction import (
     build_pmcmc_mcmc_result,
@@ -50,6 +51,7 @@ from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixtur
 from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_particle_weights
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.samplers.sweeps import retained_convergence_check
+from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth.models.ssm.inference.types import (
     JointPosteriorDraws,
     MCMCPosterior,
@@ -105,13 +107,14 @@ def fit_marginal_particle_gibbs(
 
     phase_t0 = clock()
     logger.info("phase 1/4: building marginalized Particle Gibbs runtime bundle...")
+    reparam = AutoReparam(centered=0.0)
     with inference_phase("mpgibbs", "building_target", execution_context=execution_context):
         bundle = build_particle_problem(
             priors,
             panel,
             trace_key=trace_key,
             # Fully non-centred; a strategy caches per-site choices, so each fit owns one.
-            reparam=AutoReparam(centered=0.0),
+            reparam=reparam,
             compiler=compiler,
         )
     logger.info(
@@ -138,6 +141,24 @@ def fit_marginal_particle_gibbs(
             )
     if isinstance(initialization, InitializationFailure):
         return initialization
+    chart = None
+    translation_pairs = None
+    if options.compiler_reparameterization or options.learned_translation:
+        structure = compile_translation_structure(
+            panel.compiled_dynamical_model,
+            priors,
+            bundle.runtime.parameters,
+            site_info=bundle.site_info,
+            reparam=reparam,
+            compiler=compiler,
+        )
+        chart = TranslationChart(
+            structure.initial_slopes
+            if options.compiler_reparameterization
+            else jnp.zeros_like(structure.initial_slopes),
+            jnp.mean(initialization.positions, axis=0),
+        )
+        translation_pairs = structure.active_pairs
     paid_mix = (
         PaidMixture(
             initialization.pilot_mean,
@@ -167,6 +188,9 @@ def fit_marginal_particle_gibbs(
             else initialization.paths[0],
             diagnostic_metrics=options.diagnostic_metrics,
             path_update=options.path_update,
+            initial_chart=chart,
+            learn_translation=options.learned_translation,
+            translation_pairs=translation_pairs,
         )
 
     kernel = make_kernel(bundle.runtime)
@@ -215,6 +239,12 @@ def fit_marginal_particle_gibbs(
         tempering=tempering,
         continuation=continuation,
     )
+    if run_result.final_chart is not None:
+        logger.info(
+            "frozen translation chart (sampler coordinates): slopes=%s reference=%s",
+            np.asarray(run_result.final_chart.slopes).tolist(),
+            np.asarray(run_result.final_chart.reference).tolist(),
+        )
     tuning = (
         continuation.tuning
         if continuation is not None and isinstance(continuation.tuning, ParticleTuning)

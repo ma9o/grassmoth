@@ -253,6 +253,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         parameter_gradient_fn=jnp.zeros_like,
         target_accept=jnp.asarray([0.35]),
         exact_constraints=None,
+        initial_chart=None,
         initial_param_step_size=jnp.asarray([0.01]),
         initial_parameter_chol=jnp.eye(1),
         path_update=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.1)),

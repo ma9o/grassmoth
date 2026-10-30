@@ -41,12 +41,13 @@ if TYPE_CHECKING:
     from grassmoth.models.ssm.execution.state_transition import SupportedEulerMaruyama
     from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
     from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
+    from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
     from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 
 
 # Array leaves of the continuous model and its observation grid. Static model
 # metadata is retained by the discrete-model factory, outside the sampler state.
-type ParticleContext = tuple[dsx.DynamicalModel, jax.Array, jax.Array]
+type ParticleContext = tuple[dsx.DynamicalModel, jax.Array, jax.Array, jax.Array | None]
 
 
 def identity_state(_context: ParticleContext, state: jax.Array) -> jax.Array:
@@ -83,6 +84,36 @@ class ParticleTarget:
     exact_constraints: ExactStateConstraints | None = None
     bridge: GaussianReferenceBridge | None = None
     state_projection: Callable[[ParticleContext, jax.Array], jax.Array] = identity_state
+
+    def in_coordinates(self, chart: TranslationChart) -> ParticleTarget:
+        """Compose an exact translation beneath every particle density and proposal.
+
+        Each ensemble label gets its own physical offset. The common particle
+        bank and auxiliaries remain in chart coordinates. No model factor or
+        parameter prior is approximated, and no Jacobian correction is needed.
+        """
+
+        def translated_context(position: jax.Array, times: jax.Array) -> ParticleContext:
+            model, grid, static, _ = self.context(position, times)
+            return model, grid, static, chart.offset(position)
+
+        target = replace(self, context=translated_context)
+        return replace(
+            target,
+            intervals=None
+            if self.intervals is None
+            else replace(self.intervals, state_projection=target.project_state),
+        )
+
+    def decode_state(self, context: ParticleContext, state: jax.Array) -> jax.Array:
+        """Translate chart coordinates to the exact physical model coordinates."""
+        offset = context[3]
+        return state if offset is None else state + offset
+
+    def encode_state(self, context: ParticleContext, state: jax.Array) -> jax.Array:
+        """Translate physical model coordinates to the current frozen chart."""
+        offset = context[3]
+        return state if offset is None else state - offset
 
     def tree_target(self) -> ParticleTarget:
         """Keep replay-independent observations in the exact intermediate tree target."""
@@ -140,6 +171,7 @@ class ParticleTarget:
 
     def project_state(self, context: ParticleContext, state: jax.Array) -> jax.Array:
         """Bind global static coordinates before evaluating a local model factor."""
+        state = self.decode_state(context, state)
         indices = jnp.asarray(self.state_space.static, dtype=jnp.int32)
         state = state.at[..., indices].set(context[2][indices])
         return self.state_projection(context, state)
@@ -150,7 +182,7 @@ class ParticleTarget:
             tuple(index for stage in self.state_space.recurrence for index in stage.indices),
             dtype=jnp.int32,
         )
-        initial = self.initial_moments(context)[0]
+        initial = jnp.asarray(self.dynamical_model(context).initial_condition.mean)
         if self.exact_constraints is not None:
             initial = jnp.where(
                 self.exact_constraints.free_mask[0], initial, self.exact_constraints.values[0]
@@ -183,7 +215,8 @@ class ParticleTarget:
         state = jnp.where(self.independent_mask[0], coordinates, self.initial_moments(context)[0])
         inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
-        return state.at[inputs].set(coordinates[inputs]).at[static].set(context[2][static])
+        fixed = self.encode_state(context, context[2])
+        return state.at[inputs].set(coordinates[inputs]).at[static].set(fixed[static])
 
     def replay_step(
         self,
@@ -193,18 +226,24 @@ class ParticleTarget:
         index: jax.Array,
     ) -> jax.Array:
         """Advance exact recurrences with their declared previous-time dependencies."""
-        mean = self._transition_distribution(context, previous, index).mean
+        mean = self.encode_state(
+            context, self._transition_distribution(context, previous, index).mean
+        )
         state = jnp.where(self.independent_mask[index], coordinates, mean)
         inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
-        return state.at[inputs].set(coordinates[inputs]).at[static].set(context[2][static])
+        fixed = self.encode_state(context, context[2])
+        return state.at[inputs].set(coordinates[inputs]).at[static].set(fixed[static])
 
     def replay_path(self, context: ParticleContext, coordinates: jax.Array) -> jax.Array:
         """Reconstruct exact initial values, static quantities and deterministic recurrences."""
         if self.exact_constraints is not None:
-            coordinates = self.exact_constraints.project(coordinates)
+            coordinates = self.encode_state(
+                context, self.exact_constraints.project(self.decode_state(context, coordinates))
+            )
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
-        coordinates = coordinates.at[:, static].set(context[2][static])
+        fixed = self.encode_state(context, context[2])
+        coordinates = coordinates.at[:, static].set(fixed[static])
         if not self.state_space.requires_replay:
             return coordinates
         initial = self.replay_initial(context, coordinates[0])
@@ -242,17 +281,20 @@ class ParticleTarget:
                     previous: jax.Array, index: jax.Array, deterministic: jax.Array = deterministic
                 ) -> tuple[jax.Array, jax.Array]:
                     zero = previous.at[deterministic].set(0)
-                    offset = jnp.asarray(self._transition_distribution(context, zero, index).mean)[
-                        deterministic
-                    ]
+                    offset = self.encode_state(
+                        context, self._transition_distribution(context, zero, index).mean
+                    )[deterministic]
                     # The compiler proved affine dependence. Basis evaluations recover
                     # its exact coefficients, not a local approximation of nonlinear drift.
                     basis = jnp.eye(deterministic.size, dtype=previous.dtype)
                     columns = jax.vmap(
                         lambda unit: (
-                            self._transition_distribution(
-                                context, zero.at[deterministic].set(unit), index
-                            ).mean[deterministic]
+                            self.encode_state(
+                                context,
+                                self._transition_distribution(
+                                    context, zero.at[deterministic].set(unit), index
+                                ).mean,
+                            )[deterministic]
                             - offset
                         )
                     )(basis)
@@ -278,7 +320,7 @@ class ParticleTarget:
             else self.exact_constraints.values
         )
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
-        fixed = fixed.at[:, static].set(context[2][static])
+        fixed = self.encode_state(context, fixed.at[:, static].set(context[2][static]))
         initial_mean, initial_covariance = self.initial_moments(context)
         # continuous_state_evolution binds the compiled diffusion as an array in
         # FullDiffusion, never a state function. Its EM covariance therefore
@@ -320,7 +362,9 @@ class ParticleTarget:
         assert isinstance(
             distribution, dist.MultivariateNormal
         )  # The exact model producer declares a Gaussian initial law.
-        return jnp.asarray(distribution.mean), jnp.asarray(distribution.covariance_matrix)
+        return self.encode_state(context, jnp.asarray(distribution.mean)), jnp.asarray(
+            distribution.covariance_matrix
+        )
 
     def initial_log_prob(self, context, state):
         """Evaluate initial-state density on the modeled coordinates of the supplied state."""
@@ -465,7 +509,9 @@ class ParticleTarget:
             if self.bridge is None
             else self.bridge.combine(
                 exact,
-                self.bridge.reference.transition_log_prob(previous, current, jnp.asarray(index)),
+                self.bridge.reference.transition_log_prob(
+                    self.decode_state(context, previous), current, jnp.asarray(index)
+                ),
             )
         )
 
@@ -517,7 +563,10 @@ class ParticleTarget:
             exact()
             if self.bridge is None
             else self.bridge.combine(
-                exact, self.bridge.reference.transition_log_prob(previous, current, index)
+                exact,
+                self.bridge.reference.transition_log_prob(
+                    self.decode_state(context, previous), current, index
+                ),
             )
         )
 
@@ -580,7 +629,10 @@ class ParticleTarget:
             result = exact()
         else:
             value, gradient = jax.value_and_grad(
-                bridge.reference.transition_log_prob, argnums=1 if current_gradient else 0
+                lambda left, right, step: bridge.reference.transition_log_prob(
+                    self.decode_state(context, left), self.decode_state(context, right), step
+                ),
+                argnums=1 if current_gradient else 0,
             )(previous, current, index)
             result = bridge.combine(exact, jnp.concatenate((value[None], gradient)))
         return result[0], result[1:]
@@ -592,7 +644,9 @@ class ParticleTarget:
         distribution = cast(
             "dist.MultivariateNormal", self._transition_distribution(context, previous, index)
         )
-        return jnp.asarray(distribution.mean), jnp.asarray(distribution.covariance_matrix)
+        return self.encode_state(context, jnp.asarray(distribution.mean)), jnp.asarray(
+            distribution.covariance_matrix
+        )
 
     def pairwise_transition_log_prob(self, context, previous, current, index):
         """Score all Gaussian pairs with per-ancestor factors and matrix products.
@@ -645,25 +699,35 @@ class ParticleTarget:
             return exact()
         reference = jax.vmap(
             lambda ancestor: jax.vmap(
-                lambda descendant: bridge.reference.transition_log_prob(ancestor, descendant, index)
+                lambda descendant: bridge.reference.transition_log_prob(
+                    self.decode_state(context, ancestor),
+                    self.decode_state(context, descendant),
+                    index,
+                )
             )(current)
         )(previous)
         return bridge.combine(exact, reference)
 
     def initial_path(self, context, *, exact_constraints: ExactStateConstraints | None = None):
         """Build an initialization path from successive transition means and any exact state constraints."""
-        initial = jnp.asarray(self.dynamical_model(context).initial_condition.mean)
-        initial = self.project_state(context, initial)
+        initial = self.initial_moments(context)[0]
+        initial = self.encode_state(context, self.project_state(context, initial))
         if exact_constraints is not None:
             initial = jnp.where(
-                exact_constraints.free_mask[0], initial, exact_constraints.values[0]
+                exact_constraints.free_mask[0],
+                initial,
+                self.encode_state(context, exact_constraints.values[0]),
             )
 
         def step(previous, index):
-            current = self._transition_distribution(context, previous, index).mean
+            current = self.encode_state(
+                context, self._transition_distribution(context, previous, index).mean
+            )
             if exact_constraints is not None:
                 current = jnp.where(
-                    exact_constraints.free_mask[index], current, exact_constraints.values[index]
+                    exact_constraints.free_mask[index],
+                    current,
+                    self.encode_state(context, exact_constraints.values[index]),
                 )
             return current, current
 

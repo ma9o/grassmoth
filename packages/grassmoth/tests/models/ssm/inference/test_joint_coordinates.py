@@ -160,7 +160,7 @@ def _correlated_target(pinned=0.3):
     _, static = eqx.partition(model(jnp.zeros(1)), eqx.is_array)
 
     def context(position, times):
-        return eqx.filter(model(position), eqx.is_array), times, jnp.zeros(2)
+        return eqx.filter(model(position), eqx.is_array), times, jnp.zeros(2), None
 
     def declared(context):
         return eqx.combine(context[0], static)

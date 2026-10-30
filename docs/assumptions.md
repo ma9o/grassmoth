@@ -39,6 +39,8 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 | Deterministic recurrence stages: exact per-label replay, ancestral tracing | Adapted | Plain particle Gibbs path selection (Andrieu, Doucet & Holenstein 2010) | [sequential], [guided-selection] | `5f4484d7` | [t-recurrences] | Weaker movement at early times |
 | StudentT precision augmentation, with the final label drawn from the marginal | Adapted | Scale mixtures (Carlin, Polson & Stoffer 1992), with an ordered partial collapse ([van Dyk & Park][vdp]; [Hosszejni][hosszejni] on degrees of freedom) | [student], [augmentation], [kernel] | `52807ada` | [t-student], [t-student-kernel] | Ambiguous outliers switch only through precision updates |
 | Parameter proposal covariance adapted in warmup | Adapted | [C25][c25] §3.4 allows it; its experiments fix Σ = I | [parameter-adaptation] | `868ef169` | [t-parameter-adaptation] | Poor covariance estimates |
+| Optional compiler translation into an anchored reading predictor | Adapted | Parameterization framework of [Papaspiliopoulos, Roberts & Sköld 2007][prs07]; SV coordinates in [Kastner & Frühwirth-Schnatter 2014][kfs14] | [coordinate-structure], [translation] | Opt-in; off by default | [t-translation-structure], [t-translation] | Recognizes fixed nonzero loadings and intercepts affine in sampler coordinates; the first eligible reading anchors each stochastic state; other readings may favor another chart |
+| Optional learned time-constant translation matrix | Adapted | Partial centering [Tan 2023][tan23]; affine adaptation [Schär et al. 2024][schar24]; this sparse regression is our construction | [translation-adaptation], [runner] | Opt-in; off by default | [t-translation] | One slope per stochastic state and declared coefficient parameter; reading/drift graph sparsity; within-chain window moments and ridge shrinkage toward zero can miss poorly explored, nonlinear or time-varying dependence |
 | Bounded pseudo-Langevin drift; invalid candidates get zero label mass | Ours | [C25][c25] §3.1's unbounded drift | [kernel], [context] | `b11c87e6` | [t-langevin] | Its fixed pilot direction goes stale; it gave no gain over the random walk on PARAM |
 | Parallel tempering to a frozen Gaussian reference, for dSMC path updates | Adapted | [Syed et al.][syed] | [tempering], [gaussian-reference] | `e5d9e87b` | [t-tempering] | Reference quality limits exploration |
 | Noise factorizations prepared once per sweep | Numerical | — | [guided], [particle-target] | `b076b7ad` | [t-particle] | None: exact for additive diffusion |
@@ -51,16 +53,21 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 - **Shape and depth.** Guided path updates exclude coordinate blocks and tempering. Their forward pass has linear depth, and the twist's information scan has logarithmic depth for a fixed augmented dimension.
 - **One shared guide.** A single Gaussian guide is shared symmetrically across the parameter ensemble. Recurrences and window statistics inherit shared state innovations, with no added process noise.
 - **Proposal auxiliaries and continuation.** Auxiliary paths and precisions belong to individual moves. [Native continuation][continuation] retains the [runner]'s tuning and adaptation state, including learned path geometry.
+- **Translation charts.** Both options share one unit-Jacobian translation beneath the parameter ensemble and smoothers. Each label decodes the common chart path into its own physical path before exact density evaluation. Reported paths, conditioning and diagnostics remain physical. Enabling both initializes the learned matrix from the compiler matrix; subsequent window estimates shrink toward zero. Window changes preserve the current physical path, and learning freezes before retention. The matrix and reference remain in private native continuation state; switching the settings requires warmup. Declared coefficient dependencies define the learned sparsity; sampled static-state coordinates are not regressors. A poor chart can cost mixing, never change the target.
 - **dSMC stays marginal.** dSMC path updates take neither the StudentT augmentation nor the guided step limits.
 - **Tempering.** All posterior draws, diagnostics and predictions use only the exact cold replica.
 
-<!-- cspell:ignore Särkkä Andrieu Doucet Holenstein Polson Stoffer Hosszejni Papaspiliopoulos Sköld Syed -- author names. -->
+<!-- cspell:ignore Särkkä Andrieu Doucet Holenstein Polson Stoffer Hosszejni Papaspiliopoulos Sköld Syed Kastner Frühwirth Schnatter Schär -- author names. -->
 
 [c25]: https://arxiv.org/abs/2505.04611v4
 [cf24]: https://arxiv.org/abs/2401.14868v1
 [vdp]: https://www.ma.imperial.ac.uk/~dvandyk/Research/08-jasa-pcg.pdf
 [hosszejni]: https://arxiv.org/abs/2109.01726
 [syed]: https://arxiv.org/abs/1905.02939
+[prs07]: https://doi.org/10.1214/088342307000000014
+[kfs14]: https://doi.org/10.1016/j.csda.2013.01.002
+[tan23]: https://doi.org/10.1214/22-STS867
+[schar24]: https://proceedings.mlr.press/v235/schar24a.html
 [kernel]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/kernel.py
 [guided]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided.py
 [marginal]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py
@@ -83,6 +90,9 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 [initialization]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/initialization.py
 [path-seed]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/ieks.py
 [t-path-seed]: ../packages/grassmoth/tests/models/ssm/inference/test_ieks_initialization.py
+[coordinate-structure]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/coordinate_structure.py
+[translation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/coordinates.py
+[translation-adaptation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/translation_adaptation.py
 [gaussian-reference]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/gaussian_reference.py
 [scorecard]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/diagnostics/scorecard.py
 [t-particle]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_particle.py
@@ -94,6 +104,8 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 [t-student]: ../packages/grassmoth/tests/models/ssm/inference/test_student_precision.py
 [t-student-kernel]: ../packages/grassmoth/tests/models/ssm/inference/test_student_augmented_kernel.py
 [t-parameter-adaptation]: ../packages/grassmoth/tests/models/ssm/inference/test_parameter_adaptation.py
+[t-translation-structure]: ../packages/grassmoth/tests/models/ssm/inference/test_translation_structure.py
+[t-translation]: ../packages/grassmoth/tests/models/ssm/inference/test_translation_chart.py
 [t-langevin]: ../packages/grassmoth/tests/models/ssm/inference/test_parameter_langevin.py
 [t-tempering]: ../packages/grassmoth/tests/models/ssm/inference/test_parallel_tempering.py
 [t-stopping]: ../packages/grassmoth/tests/models/ssm/inference/test_convergence_stopping.py

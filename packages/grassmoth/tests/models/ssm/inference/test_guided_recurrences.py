@@ -29,6 +29,7 @@ from grassmoth.models.ssm.inference.samplers.particle.guided import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import _memory_guide
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
+from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth_test_support.interval_particle import interval_target
 
@@ -74,8 +75,8 @@ def _target(nonlinear, *, random_initial=False, steps=4):
     )
 
     def context(position, grid):
-        arrays, _, _ = base.context(position, grid)
-        return arrays, grid, jnp.pad(position, (0, 2))
+        arrays, _, _, _ = base.context(position, grid)
+        return arrays, grid, jnp.pad(position, (0, 2)), None
 
     def declared(bound):
         original = base.dynamical_model(bound)
@@ -296,8 +297,11 @@ def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa)
         np.testing.assert_allclose(actual, expected, atol=3e-5)
 
 
-def test_replayed_prefix_factors_match_whole_path_and_independent_recurrences():
-    target = _target(1.0)
+@pytest.mark.parametrize("translated", [False, True])
+def test_replayed_prefix_factors_match_whole_path_and_independent_recurrences(translated):
+    physical = _target(1.0)
+    chart = TranslationChart(jnp.array([[-0.8], [0.0], [0.0]]), jnp.array([0.15]))
+    target = physical.in_coordinates(chart) if translated else physical
     labels = jnp.array([[-0.45], [0.55]])
     contexts = jax.vmap(lambda label: target.context(label, target.times))(labels)
     guide = target.context(jnp.array([0.05]), target.times)
@@ -308,13 +312,18 @@ def test_replayed_prefix_factors_match_whole_path_and_independent_recurrences():
     carried = jax.jit(memory.path)(coordinates)
     replayed = jax.vmap(memory.replayed_states)(carried)
     for k, label in enumerate([-0.45, 0.55, 0.05]):
-        expected = np.array(coordinates)
+        expected = np.array(
+            chart.decode(jnp.array([label]), coordinates) if translated else coordinates
+        )
         expected[0, 1:] = [0.2 * label, -0.1 * label]
         for t in range(1, 4):
             x, z, w = expected[t - 1]
             expected[t, 1] = 0.8 * z + (0.4 + 0.2 * label) * x + 0.15 * (np.tanh(z) ** 3 + x**2)
             expected[t, 2] = 0.5 * w + 0.3 * z + 0.1 * np.tanh(w) ** 3
-        np.testing.assert_allclose(replayed[:, k], expected, atol=2e-6)
+        encoded = (
+            chart.encode(jnp.array([label]), jnp.asarray(expected)) if translated else expected
+        )
+        np.testing.assert_allclose(replayed[:, k], encoded, atol=2e-6)
 
     def sequential(path):
         values = memory.path(path)
@@ -331,6 +340,15 @@ def test_replayed_prefix_factors_match_whole_path_and_independent_recurrences():
             contexts
         )
 
+    def physical_density(path):
+        return jax.vmap(
+            lambda label: physical.path_log_prob(
+                physical.context(label, physical.times),
+                chart.decode(label, path) if translated else path,
+                physical.observations,
+            )
+        )(labels)
+
     np.testing.assert_allclose(
         jax.jit(sequential)(coordinates), jax.jit(whole)(coordinates), atol=3e-5
     )
@@ -338,6 +356,9 @@ def test_replayed_prefix_factors_match_whole_path_and_independent_recurrences():
         jax.jit(jax.jacrev(sequential))(coordinates),
         jax.jit(jax.jacrev(whole))(coordinates),
         atol=3e-5,
+    )
+    np.testing.assert_allclose(
+        jax.jit(whole)(coordinates), jax.jit(physical_density)(coordinates), atol=3e-5
     )
 
 
