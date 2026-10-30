@@ -8,6 +8,7 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 import jax.random as random
+import numpy as np
 from blackjax.adaptation.step_size import DualAveragingAdaptationState, dual_averaging_adaptation
 from jax.stages import Compiled
 
@@ -86,10 +87,11 @@ from grassmoth.models.ssm.inference.samplers.sweeps import (
 from grassmoth.models.ssm.inference.targets.coordinates import (
     PathChart,
     ScaleChart,
-    TranslationChart,
 )
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
+from grassmoth.models.ssm.inference.warmup.computed_chart import computed_chart
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
+from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.inference.warmup.parameter_adaptation import (
     ParameterCovariance,
     adapt_parameter_covariance,
@@ -100,11 +102,6 @@ from grassmoth.models.ssm.inference.warmup.scale_adaptation import (
     CenterMoments,
     adapt_center,
     initialize_center_moments,
-)
-from grassmoth.models.ssm.inference.warmup.translation_adaptation import (
-    TranslationMoments,
-    adapt_translation,
-    initialize_translation_moments,
 )
 from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
 
@@ -227,7 +224,6 @@ class _Population(NamedTuple):
     ladder_frozen_at: jax.Array
     latent_geometry: jax.Array
     curvature_moments: CurvatureMoments
-    translation_moments: TranslationMoments | None
     center_moments: CenterMoments | None
 
 
@@ -248,7 +244,7 @@ def run_marginal_particle_gibbs(
     tempering: ReplicaExchangeKernel | None = None,
     continuation: SamplerCheckpoint | None = None,
     convergence: RetainedConvergenceCheck | None = None,
-) -> ParticleChainResult:
+) -> ParticleChainResult | InitializationFailure:
     """Run marginalized Particle Gibbs chains from paired starts."""
     num_warmup = sampler.num_warmup
     num_chains = sampler.num_chains
@@ -371,12 +367,7 @@ def run_marginal_particle_gibbs(
         jnp.asarray(0),
         latent_geometry,
         initialize_curvature_moments(latent_geometry),
-        initialize_translation_moments(
-            chain_init_positions, chain_initial_latents, initialization.parameter_chol
-        )
-        if kernel.learn_translation
-        else None,
-        initialize_center_moments(chain_initial_latents)
+        initialize_center_moments(chain_init_positions, chain_initial_latents)
         if isinstance(kernel.initial_chart, ScaleChart)
         else None,
     )
@@ -507,30 +498,24 @@ def run_marginal_particle_gibbs(
                 )
 
             def adapt(updated: TrajectoryMCMCState) -> _Population:
-                translation_moments = current.translation_moments
                 center_moments = current.center_moments
-                if kernel.learn_translation or center_moments is not None:
+                if kernel.recompute_translation or center_moments is not None:
                     assert updated.chart is not None
                     chart = jax.tree.map(lambda value: value[0], updated.chart)
-                    if kernel.learn_translation:
-                        assert translation_moments is not None
-                        assert kernel.translation_pairs is not None
-                        translation = (
-                            chart if isinstance(chart, TranslationChart) else chart.translation
-                        )
-                        translation_moments, translation = adapt_translation(
-                            translation_moments,
-                            translation,
-                            cold.position,
-                            cold.latent_trajectory,
-                            kernel.translation_pairs,
-                            current.iteration,
-                            windows,
-                        )
-                        chart = (
-                            translation
-                            if isinstance(chart, TranslationChart)
-                            else ScaleChart(translation, chart.exponents, chart.center)
+                    if kernel.recompute_translation:
+
+                        def rebuild() -> PathChart:
+                            translation = computed_chart(
+                                target, cold.position, cold.latent_trajectory
+                            )
+                            return (
+                                ScaleChart(translation, chart.exponents, chart.center)
+                                if isinstance(chart, ScaleChart)
+                                else translation
+                            )
+
+                        chart = jax.lax.cond(
+                            jnp.any(current.iteration == windows[:, 1]), rebuild, lambda: chart
                         )
                     if center_moments is not None:
                         assert isinstance(chart, ScaleChart)
@@ -628,7 +613,6 @@ def run_marginal_particle_gibbs(
                     latent_geometry=geometry,
                     curvature_moments=curvature_moments,
                     parameter_covariance=covariance,
-                    translation_moments=translation_moments,
                     center_moments=center_moments,
                 )
                 if tempering is not None:
@@ -743,13 +727,25 @@ def run_marginal_particle_gibbs(
             split_total=sum_timings(split),
         )
 
+    def chart_failure(current: _Population) -> InitializationFailure | None:
+        chart = current.chains.chart
+        translation = chart.translation if isinstance(chart, ScaleChart) else chart
+        if translation is not None and not np.isfinite(np.asarray(translation.slopes)).all():
+            return InitializationFailure.unavailable(
+                "Computed translation chart rebuild produced non-finite slopes."
+            )
+        return None
+
     run = run_sweeps(
         plan,
         initial,
         execution_context=execution_context,
         convergence=convergence,
         profile=profile_state if execution_context.profile else None,
+        warmup_failure=chart_failure,
     )
+    if isinstance(run, InitializationFailure):
+        return run
     final = run.state
     draw_fields = frozenset(("positions", "paths", "observation_log_probs", "log_posterior"))
     warmup_extra = {

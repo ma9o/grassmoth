@@ -28,7 +28,6 @@ from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
-from grassmoth.models.ssm.inference.coordinate_structure import compile_translation_structure
 from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 from grassmoth.models.ssm.inference.extraction import (
     build_pmcmc_mcmc_result,
@@ -62,6 +61,7 @@ from grassmoth.models.ssm.inference.types import (
     ProductionDiagnostics,
     UnretainedRun,
 )
+from grassmoth.models.ssm.inference.warmup.computed_chart import computed_chart
 from grassmoth.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
 from grassmoth.models.ssm.inference.warmup.initialization import (
     continued_particle_initialization,
@@ -146,35 +146,50 @@ def fit_marginal_particle_gibbs(
     if isinstance(initialization, InitializationFailure):
         return initialization
     translation: TranslationChart | None = None
-    translation_pairs = None
-    if options.compiler_reparameterization or options.learned_translation:
-        structure = compile_translation_structure(
-            panel.compiled_dynamical_model,
-            priors,
-            bundle.runtime.parameters,
-            site_info=bundle.site_info,
-            reparam=reparam,
-            compiler=compiler,
-        )
+    if options.compiler_reparameterization and continuation is not None and sampler.num_warmup == 0:
+        # Shape template only: the runner restores the complete frozen native chart
+        # before any sweep, without rebuilding or revalidating its construction.
+        positions, paths = jnp.asarray(initialization.positions), jnp.asarray(initialization.paths)
         translation = TranslationChart(
-            structure.initial_slopes
-            if options.compiler_reparameterization
-            else jnp.zeros_like(structure.initial_slopes),
-            jnp.mean(initialization.positions, axis=0),
+            jnp.zeros((*paths.shape[1:], positions.shape[-1]), paths.dtype),
+            jnp.mean(positions, axis=0),
         )
-        translation_pairs = structure.active_pairs
+    elif options.compiler_reparameterization:
+        chart_started = clock()
+
+        def construct_chart(positions: jax.Array, paths: jax.Array) -> TranslationChart:
+            return computed_chart(bundle.runtime, positions, paths)
+
+        positions, paths = jnp.asarray(initialization.positions), jnp.asarray(initialization.paths)
+        translation = compiler(construct_chart, positions, paths).call(positions, paths)
+        slopes = np.asarray(translation.slopes)
+        if not np.isfinite(slopes).all():
+            return InitializationFailure.unavailable(
+                "Computed translation chart construction produced non-finite slopes."
+            )
+        logger.info(
+            "computed translation chart: %.3fs shape=%s finite=%s nonzero=%d/%d "
+            "slopes min=%s mean=%s max=%s reference=%s",
+            clock() - chart_started,
+            slopes.shape,
+            bool(np.isfinite(slopes).all()),
+            int(np.count_nonzero(slopes)),
+            int(slopes.size),
+            slopes.min(axis=0).tolist(),
+            slopes.mean(axis=0).tolist(),
+            slopes.max(axis=0).tolist(),
+            np.asarray(translation.reference).tolist(),
+        )
     chart: PathChart | None = translation
     if options.scale_chart:
         reference = jnp.mean(initialization.positions, axis=0)
         paths = jnp.asarray(initialization.paths)
         if translation is None:
             translation = TranslationChart(
-                jnp.zeros((paths.shape[-1], reference.size), paths.dtype), reference
+                jnp.zeros((*paths.shape[1:], reference.size), paths.dtype), reference
             )
         # Warmup windows replace this initial center with mean translated paths.
-        center = jnp.mean(
-            paths - jax.vmap(translation.offset)(initialization.positions)[:, None, :], axis=0
-        )
+        center = jnp.mean(jax.vmap(translation.encode)(initialization.positions, paths), axis=0)
         chart = ScaleChart(translation, bundle.runtime.diffusion_scale_exponents(reference), center)
     paid_mix = (
         PaidMixture(
@@ -206,8 +221,7 @@ def fit_marginal_particle_gibbs(
             diagnostic_metrics=options.diagnostic_metrics,
             path_update=options.path_update,
             initial_chart=chart,
-            learn_translation=options.learned_translation,
-            translation_pairs=translation_pairs,
+            recompute_translation=options.compiler_reparameterization,
         )
 
     kernel = make_kernel(bundle.runtime)
@@ -256,14 +270,19 @@ def fit_marginal_particle_gibbs(
         tempering=tempering,
         continuation=continuation,
     )
+    if isinstance(run_result, InitializationFailure):
+        return run_result
     final_chart = run_result.final_chart
     if final_chart is not None:
         translation = (
             final_chart if isinstance(final_chart, TranslationChart) else final_chart.translation
         )
         logger.info(
-            "frozen translation chart (sampler coordinates): slopes=%s reference=%s",
-            np.asarray(translation.slopes).tolist(),
+            "frozen translation chart (sampler coordinates): shape=%s min=%s mean=%s max=%s reference=%s",
+            translation.slopes.shape,
+            np.asarray(translation.slopes).min(axis=0).tolist(),
+            np.asarray(translation.slopes).mean(axis=0).tolist(),
+            np.asarray(translation.slopes).max(axis=0).tolist(),
             np.asarray(translation.reference).tolist(),
         )
         if isinstance(final_chart, ScaleChart):

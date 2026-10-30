@@ -27,6 +27,7 @@ from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
     prepare_particle_initialization,
 )
+from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.inference.warmup.scale_adaptation import (
     CenterMoments,
     adapt_center,
@@ -39,7 +40,7 @@ from packages.grassmoth.tests.models.ssm.inference.test_translation_chart import
 
 def _chart() -> ScaleChart:
     return ScaleChart(
-        TranslationChart(jnp.array([[-0.85]]), jnp.array([0.3])),
+        TranslationChart(jnp.array([[[-0.85]], [[-0.7]], [[-0.95]]]), jnp.array([0.3])),
         jnp.array([[0.4]]),
         jnp.array([[0.2], [-0.1], [0.3]]),
     )
@@ -186,7 +187,7 @@ def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method
 @pytest.mark.inference(concern="warmup")
 def test_center_adaptation_freezes_each_window_mean_translated_path():
     chart = ScaleChart(
-        TranslationChart(jnp.array([[-1.0], [0.5]]), jnp.array([0.2])),
+        TranslationChart(jnp.broadcast_to(jnp.array([[-1.0], [0.5]]), (3, 2, 1)), jnp.array([0.2])),
         jnp.ones((2, 1)),
         jnp.zeros((3, 2)),
     )
@@ -200,9 +201,9 @@ def test_center_adaptation_freezes_each_window_mean_translated_path():
         return (moments, current), current.center
 
     (moments, learned), centers = jax.lax.scan(
-        advance, (initialize_center_moments(paths[0]), chart), jnp.arange(7)
+        advance, (initialize_center_moments(positions[0], paths[0]), chart), jnp.arange(7)
     )
-    translated = paths - jax.vmap(jax.vmap(chart.translation.offset))(positions)[:, :, None, :]
+    translated = jax.vmap(jax.vmap(chart.translation.encode))(positions, paths)
     window_means = translated.mean(axis=1)
     np.testing.assert_array_equal(centers[:2], 0.0)
     np.testing.assert_allclose(centers[2], window_means[1:3].mean(axis=0), atol=1e-6)
@@ -243,7 +244,7 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
                 )
             )
         )
-        return run_marginal_particle_gibbs(
+        result = run_marginal_particle_gibbs(
             target,
             kernel=resumed_kernel,
             sampler=SamplerSpec(
@@ -254,6 +255,8 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
             execution_context=EXECUTION_CONTEXT,
             continuation=continuation,
         )
+        assert not isinstance(result, InitializationFailure)
+        return result
 
     full = run(120, 4)
     prefix = run(120, 2)

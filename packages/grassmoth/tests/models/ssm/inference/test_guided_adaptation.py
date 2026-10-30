@@ -14,6 +14,7 @@ from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     initialize_curvature_moments,
     latent_adaptation,
 )
+from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 pytestmark = pytest.mark.inference(concern="warmup")
 
@@ -233,6 +234,7 @@ def test_runner_initializes_inside_curvature_window_and_keeps_fixed_assignment(f
         initialization=initialization,
         execution_context=EXECUTION_CONTEXT,
     )
+    assert not isinstance(result, InitializationFailure)
     if fixed:
         np.testing.assert_allclose(result.initial_latent_delta, 0.003, rtol=1e-6)
         np.testing.assert_array_equal(result.initial_latent_delta, result.final_latent_delta)
@@ -350,7 +352,7 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
     )
 
     def run(warmup, draws, continuation=None):
-        return run_marginal_particle_gibbs(
+        result = run_marginal_particle_gibbs(
             target,
             kernel=kernel,
             sampler=SamplerSpec(num_warmup=warmup, num_samples_per_chain=draws, num_chains=1),
@@ -359,6 +361,8 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
             execution_context=EXECUTION_CONTEXT,
             continuation=continuation,
         )
+        assert not isinstance(result, InitializationFailure)
+        return result
 
     full = run(120, 4)
     prefix = run(120, 2)

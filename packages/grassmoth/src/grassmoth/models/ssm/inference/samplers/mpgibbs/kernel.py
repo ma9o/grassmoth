@@ -199,19 +199,22 @@ class MarginalParticleGibbsKernel(NamedTuple):
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...]
     exact_constraints: ExactStateConstraints | None
     initial_chart: PathChart | None
-    learn_translation: bool
-    translation_pairs: jax.Array | None
+    recompute_translation: bool
 
 
 def _restrict_chart(chart: PathChart, movable: jax.Array) -> PathChart:
     """Leave coordinates that some label cannot move in their physical values."""
     translation = chart if isinstance(chart, TranslationChart) else chart.translation
     translation = TranslationChart(
-        jnp.where(movable[:, None], translation.slopes, 0.0), translation.reference
+        jnp.where(movable[..., None], translation.slopes, 0.0), translation.reference
     )
     if isinstance(chart, TranslationChart):
         return translation
-    return ScaleChart(translation, jnp.where(movable[:, None], chart.exponents, 0.0), chart.center)
+    return ScaleChart(
+        translation,
+        jnp.where(jnp.all(movable, axis=0)[:, None], chart.exponents, 0.0),
+        chart.center,
+    )
 
 
 def build_marginal_particle_gibbs_kernel(
@@ -228,8 +231,7 @@ def build_marginal_particle_gibbs_kernel(
     exact_constraints: ExactStateConstraints | None = None,
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...] = _DEFAULT_OPTIONS.diagnostic_metrics,
     initial_chart: PathChart | None = None,
-    learn_translation: bool = False,
-    translation_pairs: jax.Array | None = None,
+    recompute_translation: bool = False,
 ) -> MarginalParticleGibbsKernel:
     """Build a marginalized Particle Gibbs joint state update."""
     diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=diagnostic_metrics)
@@ -264,13 +266,9 @@ def build_marginal_particle_gibbs_kernel(
     )
     if initial_chart is not None:
         # A shared chart must preserve every label's constrained path support.
-        movable = jnp.all(latent_free_mask, axis=0)
-        initial_chart = _restrict_chart(initial_chart, movable)
-        if translation_pairs is not None:
-            translation_pairs = translation_pairs & movable[:, None]
-    if learn_translation:
+        initial_chart = _restrict_chart(initial_chart, latent_free_mask)
+    if recompute_translation:
         assert initial_chart is not None
-        assert translation_pairs is not None
 
     def _theta_logpost_grad(z: Float[Array, " U"]) -> Float[Array, " U"]:
         # q(u | theta) uses a theta-only oracle, fixed for every kernel call.
@@ -789,6 +787,5 @@ def build_marginal_particle_gibbs_kernel(
         diagnostic_metrics=diagnostic_metrics,
         exact_constraints=exact_constraints,
         initial_chart=initial_chart,
-        learn_translation=learn_translation,
-        translation_pairs=translation_pairs,
+        recompute_translation=recompute_translation,
     )

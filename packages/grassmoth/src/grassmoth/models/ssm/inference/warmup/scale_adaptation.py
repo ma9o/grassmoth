@@ -20,11 +20,18 @@ class CenterMoments(NamedTuple):
 
     sample_count: Int[Array, ""]
     path_sum: Float[Array, "T D"]
+    position_sum: Float[Array, " U"]
 
 
-def initialize_center_moments(paths: Float[Array, "C T D"]) -> CenterMoments:
+def initialize_center_moments(
+    positions: Float[Array, "C U"], paths: Float[Array, "C T D"]
+) -> CenterMoments:
     """Start an empty accumulator shaped like one path."""
-    return CenterMoments(jnp.asarray(0), jnp.zeros(paths.shape[1:], dtype=paths.dtype))
+    return CenterMoments(
+        jnp.asarray(0),
+        jnp.zeros(paths.shape[1:], dtype=paths.dtype),
+        jnp.zeros(positions.shape[1:], dtype=positions.dtype),
+    )
 
 
 def adapt_center(
@@ -40,18 +47,26 @@ def adapt_center(
     boundary = jnp.any(iteration == windows[:, 1])
 
     def accumulate() -> tuple[CenterMoments, ScaleChart]:
-        translated = paths - jax.vmap(chart.translation.offset)(positions)[:, None, :]
         updated = CenterMoments(
-            moments.sample_count + 1, moments.path_sum + jnp.mean(translated, axis=0)
+            moments.sample_count + 1,
+            moments.path_sum + jnp.mean(paths, axis=0),
+            moments.position_sum + jnp.mean(positions, axis=0),
         )
 
         def finish() -> tuple[CenterMoments, ScaleChart]:
             return (
                 CenterMoments(
-                    jnp.zeros_like(updated.sample_count), jnp.zeros_like(updated.path_sum)
+                    jnp.zeros_like(updated.sample_count),
+                    jnp.zeros_like(updated.path_sum),
+                    jnp.zeros_like(updated.position_sum),
                 ),
                 ScaleChart(
-                    chart.translation, chart.exponents, updated.path_sum / updated.sample_count
+                    chart.translation,
+                    chart.exponents,
+                    chart.translation.encode(
+                        updated.position_sum / updated.sample_count,
+                        updated.path_sum / updated.sample_count,
+                    ),
                 ),
             )
 

@@ -76,7 +76,9 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(
         observations=(Mock(support=Mock(support_kind="interval")),),
     )
     sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method=method))
+        algorithm=MarginalParticleGibbsSpec(
+            path_update=GuidedPathSpec(method=method), compiler_reparameterization=True
+        )
     )
     assert validate_sampler_support(compiled, sampler) is None
 
@@ -320,3 +322,12 @@ def test_initialization_failure_stops_production_before_sampling(monkeypatch):
     assert result is failure
     initialize.assert_called_once()
     sample.assert_not_called()
+
+
+def test_computed_translation_is_the_only_translation_contract():
+    ordinary = SamplerSpec()
+    computed = ordinary.revised(
+        algorithm=MarginalParticleGibbsSpec(compiler_reparameterization=True)
+    )
+    assert ordinary.kernel_identity != computed.kernel_identity
+    assert SamplerSpec.model_validate_json(computed.model_dump_json()) == computed

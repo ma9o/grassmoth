@@ -57,7 +57,6 @@ MODULE_ROLES: dict[str, ModuleRole] = {
     "models/ssm/dynamics/spec": "domain",
     "models/ssm/inference/samplers/sweep_plan": "compiler",
     "models/ssm/inference/fit": "execution",
-    "models/ssm/inference/coordinate_structure": "compiler",
     "models/ssm/inference/samplers/nuts": "execution",
     "models/ssm/inference/samplers/mpgibbs/fit": "execution",
     "models/ssm/inference/samplers/mpgibbs/runner": "execution",

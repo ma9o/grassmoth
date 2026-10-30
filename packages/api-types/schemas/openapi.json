@@ -19344,14 +19344,8 @@
           },
           "compiler_reparameterization": {
             "default": false,
-            "description": "Translate each eligible stochastic state into the predictor coordinates of its first fixed-loading reading. The compiler derives a constant matrix in the sampler's actual parameter coordinates; only affine intercept replay is eligible. All densities and reported paths retain the exact physical model. With learned_translation enabled, this matrix initializes warmup learning.",
+            "description": "Compute time-indexed path translations from Gauss-Newton mean cross curvature, including deterministic recurrences and interval readings. Build at mean initial parameters and their IEKS path; rebuild at cold-chain mean parameters and their IEKS path at warmup window ends. Freeze before retained draws and preserve the chart in native continuation state. Every density and reported path retains the exact physical model. Local slopes, strong nonlinearity and multiple modes can limit mixing.",
             "title": "Compiler Reparameterization",
-            "type": "boolean"
-          },
-          "learned_translation": {
-            "default": false,
-            "description": "Learn a time-constant state-by-parameter translation matrix in the existing warmup windows, from within-chain centered physical paths and parameters. Only reading-predictor and drift dependencies are fitted, with ridge shrinkage toward zero. Freeze before retained draws and preserve the chart in native continuation state. For a new fit without warmup, use the structural matrix when compiler_reparameterization is enabled, otherwise the identity chart.",
-            "title": "Learned Translation",
             "type": "boolean"
           },
           "scale_chart": {
@@ -19419,14 +19413,8 @@
           },
           "compiler_reparameterization": {
             "default": false,
-            "description": "Translate each eligible stochastic state into the predictor coordinates of its first fixed-loading reading. The compiler derives a constant matrix in the sampler's actual parameter coordinates; only affine intercept replay is eligible. All densities and reported paths retain the exact physical model. With learned_translation enabled, this matrix initializes warmup learning.",
+            "description": "Compute time-indexed path translations from Gauss-Newton mean cross curvature, including deterministic recurrences and interval readings. Build at mean initial parameters and their IEKS path; rebuild at cold-chain mean parameters and their IEKS path at warmup window ends. Freeze before retained draws and preserve the chart in native continuation state. Every density and reported path retains the exact physical model. Local slopes, strong nonlinearity and multiple modes can limit mixing.",
             "title": "Compiler Reparameterization",
-            "type": "boolean"
-          },
-          "learned_translation": {
-            "default": false,
-            "description": "Learn a time-constant state-by-parameter translation matrix in the existing warmup windows, from within-chain centered physical paths and parameters. Only reading-predictor and drift dependencies are fitted, with ridge shrinkage toward zero. Freeze before retained draws and preserve the chart in native continuation state. For a new fit without warmup, use the structural matrix when compiler_reparameterization is enabled, otherwise the identity chart.",
-            "title": "Learned Translation",
             "type": "boolean"
           },
           "scale_chart": {
@@ -19467,7 +19455,6 @@
           "tempering",
           "path_update",
           "compiler_reparameterization",
-          "learned_translation",
           "scale_chart",
           "parameter_proposal",
           "diagnostic_metrics",

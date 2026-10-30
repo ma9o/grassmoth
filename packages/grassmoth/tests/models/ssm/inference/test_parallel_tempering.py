@@ -26,6 +26,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
 )
 from grassmoth.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
+from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.inference.warmup.parameter_adaptation import covariance_windows
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import compile_fit_fixture
@@ -352,6 +353,7 @@ def test_runner_retains_only_cold_chains_and_freezes_ladder_before_retention(
         tempering=exchange if tempered else None,
         execution_context=EXECUTION_CONTEXT,
     )
+    assert not isinstance(result, InitializationFailure)
     assert result.grouped_positions.shape == (2, 27, 1)
     assert result.latent_paths is not None
     assert result.latent_paths.shape == (2, 27, 9, 1)

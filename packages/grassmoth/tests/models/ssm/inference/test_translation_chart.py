@@ -28,15 +28,15 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
 )
 from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
+from grassmoth.models.ssm.inference.warmup.computed_chart import (
+    computed_chart,
+    computed_translation_slopes,
+)
 from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
     prepare_particle_initialization,
 )
-from grassmoth.models.ssm.inference.warmup.translation_adaptation import (
-    TranslationMoments,
-    adapt_translation,
-    initialize_translation_moments,
-)
+from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
 from packages.grassmoth.tests.models.ssm.inference.test_joint_coordinates import _direct_constraints
@@ -81,7 +81,9 @@ def test_translation_preserves_nonlinear_factors_gradients_and_proposal_moments(
 
     target = replace(base, dynamical_model=model)
     readings, times = target.observations, target.times
-    chart = TranslationChart(jnp.array([[-0.85]]), jnp.array([0.3]))
+    chart = TranslationChart(
+        computed_translation_slopes(target, jnp.array([0.3]), jnp.zeros((3, 1))), jnp.array([0.3])
+    )
     translated = target.in_coordinates(chart)
     position = jnp.array([0.6])
     path = jnp.array([[0.1], [-0.5], [0.8]])
@@ -124,7 +126,9 @@ def test_translation_preserves_nonlinear_factors_gradients_and_proposal_moments(
                 context, noise, encoded[index - 1], encoded[index], index
             )
             np.testing.assert_allclose(actual, expected, atol=2e-6)
-        np.testing.assert_allclose(chart.decode(position, shifted_mean), mean, atol=1e-7)
+        np.testing.assert_allclose(
+            chart.frame(position).decode(shifted_mean, index), mean, atol=1e-7
+        )
         np.testing.assert_array_equal(shifted_cov, covariance)
     np.testing.assert_allclose(
         chart.decode(position, translated.replay_path(context, encoded)),
@@ -157,7 +161,9 @@ def test_translation_preserves_nonlinear_factors_gradients_and_proposal_moments(
 )
 def test_charted_joint_kernel_preserves_analytic_physical_posterior(method):
     target, mean, covariance = _gaussian_joint()
-    chart = TranslationChart(jnp.array([[-0.85]]), jnp.array([0.3]))
+    chart = TranslationChart(
+        computed_translation_slopes(target, jnp.array([0.3]), jnp.zeros((3, 1))), jnp.array([0.3])
+    )
     path_update = (
         DsmcSpec(method=method, num_particles=8)
         if method in ("particle_rwm", "particle_amala")
@@ -200,51 +206,28 @@ def test_charted_joint_kernel_preserves_analytic_physical_posterior(method):
 
 
 @pytest.mark.inference(concern="warmup")
-def test_translation_regression_uses_within_chain_moments_and_sparse_normal_equations():
-    parameters = jnp.array([[-2.0, -1.0], [-1.0, 1.0], [1.0, -2.0], [2.0, 2.0]])
-    slopes = jnp.array([[-1.0, 0.5], [0.0, 0.75]])
-    positions = parameters[:, None] + jnp.array([[100.0, -200.0], [-300.0, 400.0]])[None]
-    path_means = parameters @ slopes.T
-    paths = jnp.broadcast_to(path_means[:, None, None], (4, 2, 3, 2))
-    paths = paths + jnp.array([[[[70.0, -30.0]], [[-20.0, 50.0]]]])
-    scale = jnp.diag(jnp.array([0.5, 2.0]))
-    moments = initialize_translation_moments(positions[0], paths[0], scale)
-    chart = TranslationChart(jnp.zeros((2, 2)), jnp.array([0.2, -0.1]))
-    mask = jnp.array([[True, True], [False, True]])
-    windows = jnp.array([[0, 3]])
-
-    def advance(state: tuple[TranslationMoments, TranslationChart], index: jax.Array):
-        return adapt_translation(*state, positions[index], paths[index], mask, index, windows), None
-
-    (moments, learned), _ = jax.jit(
-        lambda: jax.lax.scan(advance, (moments, chart), jnp.arange(4))
-    )()
-    standardized = np.asarray(parameters) / np.array([0.5, 2.0])
-    expected = []
-    for latent, selected in enumerate(np.asarray(mask)):
-        design = standardized[:, selected]
-        response = np.asarray(path_means[:, latent])
-        fitted = np.linalg.solve(
-            design.T @ design + 5 * np.eye(selected.sum()), design.T @ response
-        )
-        row = np.zeros(2)
-        row[selected] = fitted / np.array([0.5, 2.0])[selected]
-        expected.append(row)
-    np.testing.assert_allclose(learned.slopes, expected, atol=2e-5)
-    assert int(moments.sample_count) == 0
-    frozen = adapt_translation(
-        moments, learned, positions[0] * 10, paths[0] * 10, mask, jnp.array(4), windows
-    )
-    for before, after in zip(
-        jax.tree.leaves((moments, learned)), jax.tree.leaves(frozen), strict=True
-    ):
-        np.testing.assert_array_equal(before, after)
-
-
-@pytest.mark.inference(concern="warmup")
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize("learned", [False, True])
-def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_native_state(learned):
+def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_native_state(
+    monkeypatch,
+):
+    from grassmoth.models.ssm.inference.samplers.mpgibbs import runner
+    from grassmoth.models.ssm.inference.warmup.parameter_adaptation import covariance_windows
+
+    compile_sweeps = runner.compile_projected_sweeps
+
+    def capture_charts(program, initial, **kwargs):
+        def step_factory(batch):
+            step = program.step_factory(batch)
+
+            def sweep(current, posterior):
+                updated, record = step(current, posterior)
+                return updated, {**record, "chart_reference": updated.chains.chart.reference}
+
+            return sweep
+
+        return compile_sweeps(replace(program, step_factory=step_factory), initial, **kwargs)
+
+    monkeypatch.setattr(runner, "compile_projected_sweeps", capture_charts)
     target, _, _ = _gaussian_joint()
     initialization = prepare_particle_initialization(
         target,
@@ -254,20 +237,18 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
         execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(initialization, ParticleInitialization)
-    chart = TranslationChart(jnp.array([[0.0 if learned else -1.0]]), jnp.array([0.3]))
+    chart = computed_chart(target, initialization.positions, initialization.paths)
     spec = GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
         path_update=spec,
         num_parameter_particles=2,
         initial_chart=chart,
-        learn_translation=learned,
-        translation_pairs=jnp.ones((1, 1), dtype=bool),
+        recompute_translation=True,
     )
     options = MarginalParticleGibbsSpec(
         path_update=spec,
-        compiler_reparameterization=not learned,
-        learned_translation=learned,
+        compiler_reparameterization=True,
     )
 
     def run(warmup, draws, continuation=None):
@@ -278,7 +259,7 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
                 initial_chart=TranslationChart(chart.slopes + 3.0, chart.reference + 7.0)
             )
         )
-        return run_marginal_particle_gibbs(
+        result = run_marginal_particle_gibbs(
             target,
             kernel=resumed_kernel,
             sampler=SamplerSpec(
@@ -289,9 +270,20 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
             execution_context=EXECUTION_CONTEXT,
             continuation=continuation,
         )
+        assert not isinstance(result, InitializationFailure)
+        return result
 
     full = run(120, 4)
+    references = np.asarray(full.all_chain_extra_fields["chart_reference"])[0]
+    changed = np.any(
+        references != np.concatenate((np.asarray(chart.reference)[None], references[:-1])), axis=1
+    )
+    boundaries = np.asarray(covariance_windows(120))[:, 1]
+    assert changed.any()
+    assert set(np.flatnonzero(changed)) <= set(boundaries)
     prefix = run(120, 2)
+    assert not np.array_equal(prefix.final_chart.reference, chart.reference)
+    np.testing.assert_array_equal(prefix.final_chart.slopes, chart.slopes)
     checkpoint = SamplerCheckpoint(
         settings=SamplerSpec(algorithm=options),
         parameters=NumericalArray.from_numpy(np.asarray(prefix.last_parameters)),
@@ -308,6 +300,23 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
         np.testing.assert_array_equal(actual.values, expected.values)
     np.testing.assert_array_equal(prefix.last_paths, prefix.latent_paths[:, -1])
 
+    def failed_chart(_target, _positions, _paths):
+        return TranslationChart(jnp.full_like(chart.slopes, jnp.nan), chart.reference)
+
+    monkeypatch.setattr(runner, "computed_chart", failed_chart)
+    failed = run_marginal_particle_gibbs(
+        target,
+        kernel=kernel,
+        sampler=SamplerSpec(
+            algorithm=options, num_warmup=120, num_samples_per_chain=2, num_chains=1
+        ),
+        key=jax.random.key(31),
+        initialization=initialization,
+        execution_context=EXECUTION_CONTEXT,
+    )
+    assert isinstance(failed, InitializationFailure)
+    assert "chart rebuild" in failed.message
+
 
 @pytest.mark.inference(concern="sampling")
 def test_partial_exact_observation_excludes_its_coordinate_from_translation():
@@ -322,13 +331,14 @@ def test_partial_exact_observation_excludes_its_coordinate_from_translation():
         path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1),
         num_parameter_particles=2,
         exact_constraints=constraints,
-        initial_chart=TranslationChart(jnp.array([[-1.0], [0.5]]), jnp.zeros(1)),
-        learn_translation=True,
-        translation_pairs=jnp.ones((2, 1), dtype=bool),
+        initial_chart=TranslationChart(
+            jnp.broadcast_to(jnp.array([[-1.0], [0.5]]), (4, 2, 1)), jnp.zeros(1)
+        ),
+        recompute_translation=True,
     )
     assert isinstance(kernel.initial_chart, TranslationChart)
-    np.testing.assert_array_equal(kernel.initial_chart.slopes, [[0.0], [0.5]])
-    np.testing.assert_array_equal(kernel.translation_pairs, [[False], [True]])
+    np.testing.assert_array_equal(kernel.initial_chart.slopes[1], [[0.0], [0.5]])
+    np.testing.assert_array_equal(kernel.initial_chart.slopes[0], [[-1.0], [0.5]])
     path = jnp.array([[0.0, 0.0], [0.25, 0.5], [0.4, 0.2], [0.1, 0.3]])
     state = _initialize_chain_state(
         jnp.array([0.2]),

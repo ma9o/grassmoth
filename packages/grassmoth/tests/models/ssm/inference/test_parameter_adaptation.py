@@ -18,6 +18,7 @@ from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
     prepare_particle_initialization,
 )
+from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.inference.warmup.parameter_adaptation import (
     adapt_parameter_covariance,
     covariance_windows,
@@ -96,6 +97,7 @@ def test_adapted_particle_kernel_recovers_correlated_unequal_scale_gaussian(prop
         initialization=initialization,
         execution_context=EXECUTION_CONTEXT,
     )
+    assert not isinstance(result, InitializationFailure)
     draws = np.asarray(result.grouped_positions).reshape((-1, 2))
     np.testing.assert_allclose(draws.mean(axis=0), mean, atol=0.06)
     np.testing.assert_allclose(np.cov(draws.T), covariance, rtol=0.2, atol=0.012)

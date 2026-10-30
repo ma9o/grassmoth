@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextvars import copy_context
 from dataclasses import dataclass, replace
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 import jax
 import jax.numpy as jnp
@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from grassmoth.models.ssm.inference.problem import ParticleProblem
     from grassmoth.models.ssm.inference.samplers.sweep_plan import SweepProgram
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
+    from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 
 @dataclass(frozen=True)
@@ -322,6 +323,7 @@ def compile_projected_sweeps[Carry](
     )
 
 
+@overload
 def run_sweeps[Carry](
     plan: SweepPlan,
     initial: Carry,
@@ -329,7 +331,31 @@ def run_sweeps[Carry](
     execution_context: ModelExecutionContext,
     convergence: RetainedConvergenceCheck | None = None,
     profile: Callable[[Carry, CompiledSweepPhase], FitProfileReport] | None = None,
-) -> SweepRun[Carry]:
+    warmup_failure: None = None,
+) -> SweepRun[Carry]: ...
+
+
+@overload
+def run_sweeps[Carry](
+    plan: SweepPlan,
+    initial: Carry,
+    *,
+    execution_context: ModelExecutionContext,
+    convergence: RetainedConvergenceCheck | None = None,
+    profile: Callable[[Carry, CompiledSweepPhase], FitProfileReport] | None = None,
+    warmup_failure: Callable[[Carry], InitializationFailure | None],
+) -> SweepRun[Carry] | InitializationFailure: ...
+
+
+def run_sweeps[Carry](
+    plan: SweepPlan,
+    initial: Carry,
+    *,
+    execution_context: ModelExecutionContext,
+    convergence: RetainedConvergenceCheck | None = None,
+    profile: Callable[[Carry, CompiledSweepPhase], FitProfileReport] | None = None,
+    warmup_failure: Callable[[Carry], InitializationFailure | None] | None = None,
+) -> SweepRun[Carry] | InitializationFailure:
     """Keep only requested phase outputs; padded block slots execute no transition."""
     clock, label = execution_context.clock, plan.label
     state: Carry = initial
@@ -392,6 +418,10 @@ def run_sweeps[Carry](
                             ),
                         }
                     host_block = jax.device_get({name: block[name] for name in buffers})
+                    if stage == "warmup" and warmup_failure is not None:
+                        failure = warmup_failure(state)
+                        if failure is not None:
+                            return failure
                     start = phase.steps - remaining
                     for name in buffers:
                         buffers[name][:, start : start + count] = host_block[name][:count].swapaxes(

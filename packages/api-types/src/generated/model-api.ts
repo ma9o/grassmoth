@@ -5588,16 +5588,10 @@ export interface components {
             readonly path_update?: components["schemas"]["PathUpdateSpec-Input"];
             /**
              * Compiler Reparameterization
-             * @description Translate each eligible stochastic state into the predictor coordinates of its first fixed-loading reading. The compiler derives a constant matrix in the sampler's actual parameter coordinates; only affine intercept replay is eligible. All densities and reported paths retain the exact physical model. With learned_translation enabled, this matrix initializes warmup learning.
+             * @description Compute time-indexed path translations from Gauss-Newton mean cross curvature, including deterministic recurrences and interval readings. Build at mean initial parameters and their IEKS path; rebuild at cold-chain mean parameters and their IEKS path at warmup window ends. Freeze before retained draws and preserve the chart in native continuation state. Every density and reported path retains the exact physical model. Local slopes, strong nonlinearity and multiple modes can limit mixing.
              * @default false
              */
             readonly compiler_reparameterization?: boolean;
-            /**
-             * Learned Translation
-             * @description Learn a time-constant state-by-parameter translation matrix in the existing warmup windows, from within-chain centered physical paths and parameters. Only reading-predictor and drift dependencies are fitted, with ridge shrinkage toward zero. Freeze before retained draws and preserve the chart in native continuation state. For a new fit without warmup, use the structural matrix when compiler_reparameterization is enabled, otherwise the identity chart.
-             * @default false
-             */
-            readonly learned_translation?: boolean;
             /**
              * Scale Chart
              * @description Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.
@@ -5657,16 +5651,10 @@ export interface components {
             readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
             /**
              * Compiler Reparameterization
-             * @description Translate each eligible stochastic state into the predictor coordinates of its first fixed-loading reading. The compiler derives a constant matrix in the sampler's actual parameter coordinates; only affine intercept replay is eligible. All densities and reported paths retain the exact physical model. With learned_translation enabled, this matrix initializes warmup learning.
+             * @description Compute time-indexed path translations from Gauss-Newton mean cross curvature, including deterministic recurrences and interval readings. Build at mean initial parameters and their IEKS path; rebuild at cold-chain mean parameters and their IEKS path at warmup window ends. Freeze before retained draws and preserve the chart in native continuation state. Every density and reported path retains the exact physical model. Local slopes, strong nonlinearity and multiple modes can limit mixing.
              * @default false
              */
             readonly compiler_reparameterization: boolean;
-            /**
-             * Learned Translation
-             * @description Learn a time-constant state-by-parameter translation matrix in the existing warmup windows, from within-chain centered physical paths and parameters. Only reading-predictor and drift dependencies are fitted, with ridge shrinkage toward zero. Freeze before retained draws and preserve the chart in native continuation state. For a new fit without warmup, use the structural matrix when compiler_reparameterization is enabled, otherwise the identity chart.
-             * @default false
-             */
-            readonly learned_translation: boolean;
             /**
              * Scale Chart
              * @description Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.

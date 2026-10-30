@@ -471,22 +471,13 @@ class MarginalParticleGibbsSpec(Value):
     compiler_reparameterization: bool = Field(
         default=False,
         description=(
-            "Translate each eligible stochastic state into the predictor coordinates of its "
-            "first fixed-loading reading. The compiler derives a constant matrix in the "
-            "sampler's actual parameter coordinates; only affine intercept replay is eligible. "
-            "All densities and reported paths retain the exact physical model. With "
-            "learned_translation enabled, this matrix initializes warmup learning."
-        ),
-    )
-    learned_translation: bool = Field(
-        default=False,
-        description=(
-            "Learn a time-constant state-by-parameter translation matrix in the existing "
-            "warmup windows, from within-chain centered physical paths and parameters. "
-            "Only reading-predictor and drift dependencies are fitted, with ridge shrinkage "
-            "toward zero. Freeze before retained draws and preserve the chart in native "
-            "continuation state. For a new fit without warmup, use the structural matrix when "
-            "compiler_reparameterization is enabled, otherwise the identity chart."
+            "Compute time-indexed path translations from Gauss-Newton mean cross curvature, "
+            "including deterministic recurrences and interval readings. Build at mean initial "
+            "parameters and their IEKS path; rebuild at cold-chain mean parameters and their "
+            "IEKS path at warmup window ends. Freeze before retained draws and preserve the "
+            "chart in native continuation state. Every density and reported path retains "
+            "the exact physical model. Local slopes, strong nonlinearity and multiple modes "
+            "can limit mixing."
         ),
     )
     scale_chart: bool = Field(
@@ -657,7 +648,6 @@ class SamplerSpec(Value):
             else algorithm.path_update.prefix_mixture,
             algorithm.parameter_proposal,
             algorithm.compiler_reparameterization,
-            algorithm.learned_translation,
             algorithm.scale_chart,
             1 if isinstance(tempering, UntemperedSpec) else tempering.num_temperatures,
         )

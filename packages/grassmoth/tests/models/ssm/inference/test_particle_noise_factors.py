@@ -311,9 +311,13 @@ def test_prepared_transition_means_preserve_bridge_densities(translated):
     successors = jnp.array([[0.6, 0.1], [-0.2, -0.5]])
     indices = jnp.arange(1, len(times))
     position = jnp.array([0.45])
-    chart = TranslationChart(jnp.array([[-0.8], [0.3]]), jnp.array([-0.2]))
-    chart_previous = chart.encode(position, predecessors) if translated else predecessors
-    chart_current = chart.encode(position, successors) if translated else successors
+    chart = TranslationChart(
+        jnp.broadcast_to(jnp.array([[-0.8], [0.3]]), (3, 2, 1)), jnp.array([-0.2])
+    )
+    chart_previous = (
+        chart.frame(position).encode(predecessors, indices - 1) if translated else predecessors
+    )
+    chart_current = chart.frame(position).encode(successors, indices) if translated else successors
     physical_path = jnp.concatenate((predecessors[:1], successors))
     path = chart.encode(position, physical_path) if translated else physical_path
 

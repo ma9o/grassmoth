@@ -359,7 +359,9 @@ def test_calendar_totals_and_grid_refinement_preserve_response_scale():
         context = target.context(jnp.zeros(1), target.times)
         # Integral exp(t/366) dt = 366(e - 1), not exp(mean(t/366))*366.
         path = jnp.asarray(times[:, None] / 366)
-        response = jax.vmap(target.intervals.response, in_axes=(None, 0))(context, path)
+        response = jax.vmap(target.intervals.response, in_axes=(None, 0, 0))(
+            context, path, jnp.arange(path.shape[0])
+        )
         means, _ = target.intervals.operator.project_response_trajectory(response)
         errors.append(abs(float(means[-1, 0]) - 366 * np.expm1(1)))
         constant, _ = target.intervals.operator.project_response_trajectory(

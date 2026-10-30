@@ -12,10 +12,15 @@ from typing import TYPE_CHECKING, cast
 
 import jax
 import jax.numpy as jnp
+from jax.scipy.sparse.linalg import cg
 
 from grassmoth.models.ssm.execution.affine import compose_affine_maps
 from grassmoth.models.ssm.execution.innovations import conditional_gaussian_factors
-from grassmoth.models.ssm.execution.observation_model import grouped_density_with_noise
+from grassmoth.models.ssm.execution.observation_groups import compile_law_groups
+from grassmoth.models.ssm.execution.observation_model import (
+    grouped_density_with_noise,
+    prepare_mean_density,
+)
 from grassmoth.models.ssm.inference.samplers.particle.twist import (
     GaussianTwist,
     future_information,
@@ -133,6 +138,15 @@ class PathCurvature:
             self.conditioned_matrices, conditioned_offsets, self.covariances, information
         )
 
+    def covariance_product(self, rhs: jax.Array) -> jax.Array:
+        """Apply the point-conditioned path covariance without inverting process noise."""
+        return smoothing_mean(
+            self.conditioned_matrices,
+            jnp.zeros_like(rhs),
+            self.covariances,
+            GaussianTwist(self.precision, rhs),
+        )
+
 
 def linearize_path(
     target: ParticleTarget, context: ParticleContext, path: jax.Array
@@ -215,3 +229,80 @@ def linearize_path(
         precision,
         gradient,
     )
+
+
+def interval_means(target: ParticleTarget, context: ParticleContext, path: jax.Array) -> jax.Array:
+    """Project exact authored responses through the compiled overlapping windows."""
+    assert target.intervals is not None
+    observation = cast(
+        "HeterogeneousObservation", target.dynamical_model(context).observation_model
+    )
+    responses = jax.vmap(
+        lambda state, index: (
+            observation(target.project_state(context, state, index), None, 0).response
+        )
+    )(path, jnp.arange(path.shape[0]))
+    return target.intervals.operator.project_response_trajectory(responses)[0]
+
+
+def interval_translation(
+    target: ParticleTarget,
+    position: jax.Array,
+    path: jax.Array,
+    curvature: PathCurvature,
+    point_slopes: jax.Array,
+) -> jax.Array:
+    """Solve interval Gauss--Newton cross terms using the point path preconditioner.
+
+    Woodbury's identity reduces the system to I + W½ L C Lᵀ W½, where C is
+    the singular point-conditioned path covariance. CG uses only products of
+    the exact window operator's Jacobian L, never a dense time-by-time matrix.
+    This is the block-tridiagonal path preconditioner in reading coordinates;
+    deterministic stages retain their zero process noise and full propagation.
+    A failed residual check produces non-finite slopes for the typed boundary.
+    """
+    assert target.intervals is not None
+    context = target.context(position, target.times)
+    observation = cast(
+        "HeterogeneousObservation", target.dynamical_model(context).observation_model
+    )
+    groups = compile_law_groups(
+        observation.laws, target.intervals.operator.interval_summary_indices, interval=True
+    )
+    means, project = jax.linearize(lambda value: interval_means(target, context, value), path)
+    transpose = jax.linear_transpose(project, jnp.zeros_like(path))
+    readings = target.observations
+
+    def root(mean: jax.Array, reading: jax.Array) -> jax.Array:
+        density = prepare_mean_density(
+            groups,
+            jnp.nan_to_num(reading, nan=0.0),
+            observation.measurement.manifest_cov,
+            ~jnp.isnan(reading),
+        )
+        eigenvalues, eigenvectors = jnp.linalg.eigh(positive_curvature(-jax.hessian(density)(mean)))
+        return symmetric((eigenvectors * jnp.sqrt(jnp.maximum(eigenvalues, 0.0))) @ eigenvectors.T)
+
+    roots = jax.vmap(root)(means, readings)
+    parameter_means = jax.jacfwd(
+        lambda value: interval_means(target, target.context(value, target.times), path)
+    )(position)
+
+    def weight(value: jax.Array) -> jax.Array:
+        return jnp.einsum("tij,tj->ti", roots, value)
+
+    def correction(value: jax.Array) -> jax.Array:
+        return curvature.covariance_product(transpose(weight(value))[0])
+
+    def system(value: jax.Array) -> jax.Array:
+        return value + weight(project(correction(value)))
+
+    def column(slope: jax.Array, parameter_mean: jax.Array) -> jax.Array:
+        rhs = weight(project(slope) + parameter_mean)
+        solved, _ = cg(system, rhs, tol=1e-5, atol=1e-6, maxiter=256)
+        error = jnp.linalg.norm(system(solved) - rhs)
+        converged = error <= 5e-5 * jnp.linalg.norm(rhs) + 5e-6
+        result = slope - correction(solved)
+        return jnp.where(converged, result, jnp.full_like(result, jnp.nan))
+
+    return jax.vmap(column, in_axes=(2, 2), out_axes=2)(point_slopes, parameter_means)

@@ -23,6 +23,7 @@ from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
     prepare_particle_initialization,
 )
+from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth_server.compute.compilation_cache import (
     compile_program,
     local_compilation_cache,
@@ -105,20 +106,18 @@ def test_particle_fit_settings_reuse_jax_executable_and_preserve_transitions(tmp
             else DsmcSpec(num_particles=4),
         )
         with local_compilation_cache(tmp_path, commit=lambda: None):
-            results.append(
-                run_marginal_particle_gibbs(
-                    target,
-                    kernel=kernel,
-                    sampler=SamplerSpec(
-                        num_warmup=warmup, num_samples_per_chain=samples, num_chains=2
-                    ),
-                    key=jax.random.key(123),
-                    initialization=initialization,
-                    execution_context=replace(
-                        EXECUTION_CONTEXT, compiler=compile_program, prepare_program=prepare
-                    ),
-                )
+            result = run_marginal_particle_gibbs(
+                target,
+                kernel=kernel,
+                sampler=SamplerSpec(num_warmup=warmup, num_samples_per_chain=samples, num_chains=2),
+                key=jax.random.key(123),
+                initialization=initialization,
+                execution_context=replace(
+                    EXECUTION_CONTEXT, compiler=compile_program, prepare_program=prepare
+                ),
             )
+            assert not isinstance(result, InitializationFailure)
+            results.append(result)
     assert len(keys) == 3
     assert len(set(keys)) == 1
     assert len(compilations) == 1

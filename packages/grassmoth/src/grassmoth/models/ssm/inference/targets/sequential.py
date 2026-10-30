@@ -43,9 +43,9 @@ class WindowMemoryRuntime:
     shape: tuple[int, int, int, int]
     noise: tuple[GaussianNoiseFactors, ...]
 
-    def moments(self, contexts: ParticleContext, states: jax.Array) -> jax.Array:
+    def moments(self, contexts: ParticleContext, states: jax.Array, index: jax.Array) -> jax.Array:
         """Evaluate the authored response before any window aggregation."""
-        response = jax.vmap(self.intervals.response)(contexts, states)
+        response = jax.vmap(self.intervals.response, in_axes=(0, 0, None))(contexts, states, index)
         response = response[:, jnp.asarray(self.channels, dtype=jnp.int32)]
         return jnp.stack((response, response**2) if self.shape[-1] == 2 else (response,), axis=-1)[
             :, :, None, :
@@ -78,7 +78,7 @@ class WindowMemoryRuntime:
                 self.intervals.dynamical_model(context).observation_model,
             )
             groups = compile_law_groups(model.laws, self.channels, interval=True)
-            response = self.intervals.response(context, state)
+            response = self.intervals.response(context, state, index)
             sums = jnp.zeros_like(response).at[channels].set(moments[:, 0])
             squares = jnp.zeros_like(response)
             if self.shape[-1] == 2:
@@ -284,9 +284,9 @@ class SequentialObservationRuntime:
         statistics = (
             statistics
             + window.previous[index][None, ..., None]
-            * window.moments(self.contexts, self.replayed_states(previous)[:-1])
+            * window.moments(self.contexts, self.replayed_states(previous)[:-1], index - 1)
             + window.current[index][None, ..., None]
-            * window.moments(self.contexts, self.replayed_states(current)[:-1])
+            * window.moments(self.contexts, self.replayed_states(current)[:-1], index)
         )
         return jnp.concatenate((current, statistics.reshape(-1)))
 
@@ -303,8 +303,8 @@ class SequentialObservationRuntime:
         window = self.windows
         statistics = value[self.model_dimension :].reshape(window.shape)
         difference = window.moments(
-            self.contexts, self.replayed_states(current)[:-1]
-        ) - window.moments(self.contexts, self.replayed_states(value)[:-1])
+            self.contexts, self.replayed_states(current)[:-1], index
+        ) - window.moments(self.contexts, self.replayed_states(value)[:-1], index)
         statistics = statistics + window.current[index][None, ..., None] * difference
         return jnp.concatenate((current, statistics.reshape(-1)))
 

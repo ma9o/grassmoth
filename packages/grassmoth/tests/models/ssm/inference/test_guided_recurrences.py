@@ -300,7 +300,9 @@ def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa)
 @pytest.mark.parametrize("translated", [False, True])
 def test_replayed_prefix_factors_match_whole_path_and_independent_recurrences(translated):
     physical = _target(1.0)
-    chart = TranslationChart(jnp.array([[-0.8], [0.0], [0.0]]), jnp.array([0.15]))
+    chart = TranslationChart(
+        jnp.broadcast_to(jnp.array([[-0.8], [0.0], [0.0]]), (4, 3, 1)), jnp.array([0.15])
+    )
     target = physical.in_coordinates(chart) if translated else physical
     labels = jnp.array([[-0.45], [0.55]])
     contexts = jax.vmap(lambda label: target.context(label, target.times))(labels)

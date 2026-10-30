@@ -25,7 +25,6 @@ from grassmoth.models.ssm.execution.observation_model import (
 )
 from grassmoth.models.ssm.inference.targets.coordinates import (
     ScaledDeviationFrame,
-    TranslationChart,
 )
 from grassmoth.models.ssm.inference.targets.gaussian_reference import (
     GaussianReference,
@@ -52,12 +51,12 @@ if TYPE_CHECKING:
 # Array leaves of the continuous model and its observation grid. Static model
 # metadata is retained by the discrete-model factory, outside the sampler state.
 # The last leaf is the label's chart: a translation offset or a scaled-deviation frame.
-type ParticleContext = tuple[
-    dsx.DynamicalModel, jax.Array, jax.Array, jax.Array | ScaledDeviationFrame | None
-]
+type ParticleContext = tuple[dsx.DynamicalModel, jax.Array, jax.Array, ScaledDeviationFrame | None]
 
 
-def identity_state(_context: ParticleContext, state: jax.Array) -> jax.Array:
+def identity_state(
+    _context: ParticleContext, state: jax.Array, _index: jax.Array | int | None = None
+) -> jax.Array:
     """Leave a supplied state unchanged when evaluating the exact model factors."""
     return state
 
@@ -104,11 +103,7 @@ class ParticleTarget:
 
         def chart_context(position: jax.Array, times: jax.Array) -> ParticleContext:
             model, grid, static, _ = self.context(position, times)
-            frame = (
-                chart.offset(position)
-                if isinstance(chart, TranslationChart)
-                else chart.frame(position)
-            )
+            frame = chart.frame(position)
             return model, grid, static, frame
 
         target = replace(self, context=chart_context)
@@ -126,10 +121,8 @@ class ParticleTarget:
         frame = context[3]
         if frame is None:
             return state
-        if isinstance(frame, ScaledDeviationFrame):
-            assert index is not None, "Scaled deviations decode each state at its own time."
-            return frame.decode(state, index)
-        return state + frame
+        assert index is not None, "Path charts decode each state at its own time."
+        return frame.decode(state, index)
 
     def encode_state(
         self, context: ParticleContext, state: jax.Array, index: jax.Array | int | None = None
@@ -138,10 +131,8 @@ class ParticleTarget:
         frame = context[3]
         if frame is None:
             return state
-        if isinstance(frame, ScaledDeviationFrame):
-            assert index is not None, "Scaled deviations encode each state at its own time."
-            return frame.encode(state, index)
-        return state - frame
+        assert index is not None, "Path charts encode each state at its own time."
+        return frame.encode(state, index)
 
     def _encode_covariance(self, context: ParticleContext, covariance: jax.Array) -> jax.Array:
         """Express a physical Gaussian covariance in chart units."""

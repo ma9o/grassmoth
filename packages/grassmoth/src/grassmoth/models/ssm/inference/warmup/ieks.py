@@ -4,8 +4,8 @@ Each Gauss--Newton iteration smooths an affine approximation of the dynamics
 and a positive-semidefinite quadratic approximation of the exact point reading
 densities. Neither approximation enters a sampling target or a diagnostic.
 Strong nonlinearity, separated modes and clipped curvature can leave a poor
-start. Interval readings are omitted: their cross-time information would
-require window-memory augmentation, rather than independent point factors.
+start. Interval readings are omitted from this seed; the shared curvature owner
+incorporates their cross-time information only when constructing a chart.
 """
 
 from __future__ import annotations

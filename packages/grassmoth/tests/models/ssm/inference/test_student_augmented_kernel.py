@@ -119,7 +119,10 @@ def test_augmented_sweep_preserves_joint_marginal_posterior(
         parameter_proposal=proposal,
         parameter_reference_path=jnp.zeros((2, 1)),
         path_update=GuidedPathSpec(method=method, num_particles=8, kappa=kappa),
-        initial_chart=TranslationChart(jnp.array([[-0.35, 0.2, 0.15]]), jnp.array([0.1, -0.2, 0.3]))
+        initial_chart=TranslationChart(
+            jnp.broadcast_to(jnp.array([[-0.35, 0.2, 0.15]]), (2, 1, 3)),
+            jnp.array([0.1, -0.2, 0.3]),
+        )
         if translated
         else None,
     )

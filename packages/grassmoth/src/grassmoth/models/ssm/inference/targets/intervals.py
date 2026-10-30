@@ -109,7 +109,7 @@ class ParticleIntervalObservations:
     dynamical_model: Callable[[ParticleContext], dsx.DynamicalModel]
     operator: ObservationOperator
     tree: CompiledIntervalTree
-    state_projection: Callable[[ParticleContext, jax.Array], jax.Array]
+    state_projection: Callable[[ParticleContext, jax.Array, jax.Array | int], jax.Array]
     power: jax.Array | None = None
 
     def select_channels(self, channels: tuple[int, ...]) -> ParticleIntervalObservations | None:
@@ -128,12 +128,14 @@ class ParticleIntervalObservations:
             ),
         )
 
-    def response(self, context: ParticleContext, state: jax.Array) -> jax.Array:
+    def response(
+        self, context: ParticleContext, state: jax.Array, index: jax.Array | int
+    ) -> jax.Array:
         """Evaluate the authored response before temporal aggregation or noise."""
         observation = cast(
             "HeterogeneousObservation", self.dynamical_model(context).observation_model
         )
-        return observation(self.state_projection(context, state), None, 0).response
+        return observation(self.state_projection(context, state, index), None, 0).response
 
     def trajectory_log_probs(
         self,
@@ -154,7 +156,7 @@ class ParticleIntervalObservations:
             observation_support=self.operator.observation_support,
         )
         densities = trajectory_observation_log_probs(
-            self.state_projection(context, path),
+            self.state_projection(context, path, jnp.arange(path.shape[0])),
             observations,
             measurement,
             compiled,
@@ -169,10 +171,12 @@ class ParticleIntervalObservations:
     def leaf_statistics(self, contexts: ParticleContext, particles: jax.Array) -> jax.Array:
         """Build sparse response statistics with axes time, particle, parameter, slot, channel, moment."""
         response = jax.vmap(
-            lambda bank: jax.vmap(
-                lambda state: jax.vmap(self.response, in_axes=(0, None))(contexts, state)
+            lambda bank, index: jax.vmap(
+                lambda state: jax.vmap(self.response, in_axes=(0, None, None))(
+                    contexts, state, index
+                )
             )(bank)
-        )(particles)
+        )(particles, jnp.arange(particles.shape[0]))
         moments = (response, response**2) if self.tree.statistic_count == 2 else (response,)
         statistics = jnp.stack(moments, axis=-1)[:, :, :, None, :, :]
         weights = jnp.asarray(self.tree.leaf_weights, dtype=particles.dtype)
