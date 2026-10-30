@@ -42,6 +42,7 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 | Optional computed time-indexed translation | Adapted | Parameterization framework of [Papaspiliopoulos, Roberts & Sköld 2007][prs07]; local Gauss–Newton cross solve is our construction | [computed-chart], [path-curvature], [translation] | Opt-in; off by default | [t-computed-chart], [t-translation] | A local slope can miss strong nonlinearity or multimodality; PSD clipping and iterative interval solves can limit efficiency; covariance-only Gaussian coupling is left to the scale chart |
 | Optional scale chart of path deviations | Adapted | Non-centring of the diffusion in [Papaspiliopoulos, Roberts & Sköld 2007][prs07]; scaling about a warmup center path is our construction | [translation], [scale-adaptation], [runner] | Opt-in; off by default | [t-scale] | Each stochastic state's exponents are the local slope of its log diffusion scale in sampler coordinates; deviations that are data-pinned rather than diffusion-driven, a poor center or a state-dependent diffusion cost mixing; guided path updates with point readings and no deterministic recurrences only |
 | Bounded pseudo-Langevin drift; invalid candidates get zero label mass | Ours | [C25][c25] §3.1's unbounded drift | [kernel], [context] | `b11c87e6` | [t-langevin] | Its fixed pilot direction goes stale; it gave no gain over the random walk on PARAM |
+| Conditional dSMC with exact local auxiliary pair/triple factors | Adapted | [CF24][cf24] §§3.1–3.3 auxiliary laws within the conditional divide-and-conquer tree | [particle-tree], [auxiliary] | Exact leaf-score reuse and shared tree-level programs | [t-auxiliary], [t-interval] | Pairwise work is quadratic in particle count; bounded node batches trade concurrency for memory |
 | Parallel tempering to a frozen Gaussian reference, for dSMC path updates | Adapted | [Syed et al.][syed] | [tempering], [gaussian-reference] | `e5d9e87b` | [t-tempering] | Reference quality limits exploration |
 | Noise factorizations prepared once per sweep | Numerical | — | [guided], [particle-target] | `b076b7ad` | [t-particle] | None: exact for additive diffusion |
 | Early stopping at convergence checkpoints | Numerical | — | [sweeps], [runner] | `c839b0ce` | [t-stopping], [t-blocks] | A passing checkpoint is a finite-chain diagnostic |
@@ -67,6 +68,8 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 [syed]: https://arxiv.org/abs/1905.02939
 [prs07]: https://doi.org/10.1214/088342307000000014
 [kernel]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/kernel.py
+[particle-tree]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/dsmc.py
+[auxiliary]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary.py
 [guided]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided.py
 [marginal]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py
 [preflight]: ../packages/grassmoth/src/grassmoth/models/ssm/preparation/preflight.py
@@ -93,6 +96,7 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 [translation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/coordinates.py
 [gaussian-reference]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/gaussian_reference.py
 [scorecard]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/diagnostics/scorecard.py
+[t-auxiliary]: ../packages/grassmoth/tests/models/ssm/inference/test_auxiliary_dsmc.py
 [t-particle]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_particle.py
 [t-information]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_information.py
 [t-adaptation]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_adaptation.py

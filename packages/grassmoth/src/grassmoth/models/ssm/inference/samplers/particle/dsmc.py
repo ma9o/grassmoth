@@ -38,6 +38,7 @@ from grassmoth.models.ssm.inference.samplers.particle.contract import (
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     _normalize_log_probs,
     _observation_log_probs_by_param,
+    _value_and_grad_by_param,
     coordinate_proposal_mask,
     multinomial,
 )
@@ -63,7 +64,8 @@ if TYPE_CHECKING:
 
 
 # Bound each label-specific pair-score array to 4 GiB per chain in float32.
-# This controls merge workspace independently of full-path replay batching.
+# Keep broad node concurrency when memory permits; the sweep planner verifies
+# actual executable memory and can request smaller batches.
 _PAIRWISE_BATCH_ELEMENTS = 1 << 30
 
 
@@ -150,13 +152,41 @@ def _step(
     )
     with jax.named_scope("dsmc_leaves"):
         particles, proposal_log_prob = auxiliary.propose(leaf_key)
-
-    observations = jax.vmap(
-        lambda index, bank: _observation_log_probs_by_param(
-            ctx.contexts, bank, index, ctx.runtime_observations, ctx.obs_increment_fn
+        # Every tree level gathers from this same bank. Materialize it once so
+        # random draws and pilot-mixture arithmetic cannot be cloned into each
+        # boundary gather and its differentiated transition graph.
+        proposed: tuple[jax.Array, jax.Array] = jax.lax.optimization_barrier(
+            (particles, proposal_log_prob)
         )
-    )(jnp.arange(steps), particles)
-    initial = jax.vmap(lambda value: ctx.initial_value_grad_by_param(value)[0])(particles[0])
+        particles, proposal_log_prob = proposed
+
+    def observation_scores(index: jax.Array, bank: jax.Array) -> tuple[jax.Array, jax.Array]:
+        if method == "none":
+            values = _observation_log_probs_by_param(
+                ctx.contexts, bank, index, ctx.runtime_observations, ctx.obs_increment_fn
+            )
+            return values, jnp.zeros((*values.shape, 0), dtype=ctx.latent_dtype)
+        return jax.vmap(
+            lambda state: _value_and_grad_by_param(
+                ctx.contexts,
+                state,
+                lambda bound, value: ctx.obs_increment_fn(
+                    bound, value, index, ctx.runtime_observations
+                ),
+                value_dtype=ctx.traj_dtype,
+                grad_dtype=ctx.latent_dtype,
+            )
+        )(bank)
+
+    observations, observation_gradients = jax.vmap(observation_scores)(jnp.arange(steps), particles)
+    initial, initial_gradient = jax.vmap(ctx.initial_value_grad_by_param)(particles[0])
+    leaf_values = observations.at[0].add(initial)
+    leaf_gradients = (
+        observation_gradients
+        if method == "none"
+        else observation_gradients.at[0].add(initial_gradient)
+    )
+    leaf_values, leaf_gradients = jax.lax.optimization_barrier((leaf_values, leaf_gradients))
     paid_auxiliary = jax.vmap(auxiliary.guide_log_density)(particles, jnp.arange(steps)).astype(
         ctx.traj_dtype
     )
@@ -165,9 +195,7 @@ def _step(
             lambda value: local_log_density(value, value, value, jnp.asarray(0))
         )(particles[0]).astype(ctx.traj_dtype)
         paid_auxiliary = paid_auxiliary.at[0].set(initial_auxiliary)
-    evidence = (
-        observations.at[0].add(initial) - proposal_log_prob[..., None] + paid_auxiliary[..., None]
-    )
+    evidence = leaf_values - proposal_log_prob[..., None] + paid_auxiliary[..., None]
     # Carry only selected scientific prior factors; observations and auxiliary
     # densities remain in evidence. Targets without replay need no score storage.
     prior = jnp.zeros(
@@ -196,49 +224,88 @@ def _step(
             return zeros
 
         def real_seam() -> jax.Array:
+            # Cache all leaf scores once and evaluate within-segment neighbors
+            # once per retained boundary particle, before expanding the seam pair.
+            right_values = leaf_values[seam, right.boundary[:, 0]]
+            right_gradients = leaf_gradients[seam, right.boundary[:, 0]]
+            cross_values, cross_current = jax.vmap(
+                lambda before: jax.vmap(
+                    lambda current: ctx.transition_current_value_grad_by_param(
+                        before, current, seam
+                    )
+                )(right.first)
+            )(left.last)
+            cross_values, cross_current = jax.lax.optimization_barrier(
+                (cross_values, cross_current)
+            )
+
+            def correction(
+                current: jax.Array,
+                values: jax.Array,
+                gradients: jax.Array,
+                index: jax.Array,
+                guide: jax.Array,
+            ) -> jax.Array:
+                weights = jax.nn.softmax(ctx.initial_label_log_probs + values, axis=-1)
+                gradient = jnp.sum(weights[..., None] * gradients, axis=-2)
+                return auxiliary.log_density_from_gradient(current, gradient, index) - guide
+
             if method == "amala":
-                seam_density: jax.Array = jax.vmap(
-                    lambda previous: jax.vmap(
-                        lambda current: (
-                            local_log_density(previous, current, current, seam)
-                            - auxiliary.guide_log_density(current, seam)
-                        )
+                return correction(
+                    right.first[None],
+                    cross_values + right_values[None],
+                    cross_current + right_gradients[None],
+                    seam,
+                    paid_auxiliary[seam, right.boundary[:, 0]][None],
+                ).astype(ctx.traj_dtype)
+
+            def left_correction() -> jax.Array:
+                previous = particles[jnp.maximum(seam - 2, 0), left.boundary[:, -2]]
+                values, gradients = jax.lax.cond(
+                    seam > 1,
+                    lambda: jax.vmap(
+                        ctx.transition_current_value_grad_by_param, in_axes=(0, 0, None)
+                    )(previous, left.last, seam - 1),
+                    lambda: (jnp.zeros_like(right_values), jnp.zeros_like(right_gradients)),
+                )
+                values = values + leaf_values[seam - 1, left.boundary[:, -1]]
+                gradients = gradients + leaf_gradients[seam - 1, left.boundary[:, -1]]
+                future, future_gradient = jax.vmap(
+                    lambda current: jax.vmap(
+                        lambda after: ctx.transition_next_value_grad_by_param(current, after, seam)
                     )(right.first)
-                )(left.last).astype(ctx.traj_dtype)
-                return seam_density
-            previous = jnp.where(
-                width > 1,
-                particles[jnp.maximum(seam - 2, 0), left.boundary[:, -2]],
-                left.last,
-            )
-            following = jnp.where(
-                width > 1,
-                particles[jnp.minimum(seam + 1, steps - 1), right.boundary[:, 1]],
-                right.first,
-            )
+                )(left.last)
+                future, future_gradient = jax.lax.optimization_barrier((future, future_gradient))
+                return correction(
+                    left.last[:, None],
+                    values[:, None] + future,
+                    gradients[:, None] + future_gradient,
+                    seam - 1,
+                    paid_auxiliary[seam - 1, left.boundary[:, -1]][:, None],
+                ).astype(ctx.traj_dtype)
+
+            def right_correction() -> jax.Array:
+                following = particles[jnp.minimum(seam + 1, steps - 1), right.boundary[:, 1]]
+                future, future_gradient = jax.lax.cond(
+                    seam + 1 < steps,
+                    lambda: jax.vmap(ctx.transition_next_value_grad_by_param, in_axes=(0, 0, None))(
+                        right.first, following, jnp.minimum(seam + 1, steps - 1)
+                    ),
+                    lambda: (jnp.zeros_like(right_values), jnp.zeros_like(right_gradients)),
+                )
+                return correction(
+                    right.first[None],
+                    cross_values + right_values[None] + future[None],
+                    cross_current + right_gradients[None] + future_gradient[None],
+                    seam,
+                    paid_auxiliary[seam, right.boundary[:, 0]][None],
+                ).astype(ctx.traj_dtype)
+
             left_factor: jax.Array = jax.lax.cond(
-                (width > 1) | (seam == 1),
-                lambda: jax.vmap(
-                    lambda before, current: jax.vmap(
-                        lambda after: (
-                            local_log_density(before, current, after, seam - 1)
-                            - auxiliary.guide_log_density(current, seam - 1)
-                        )
-                    )(right.first)
-                )(previous, left.last).astype(ctx.traj_dtype),
-                lambda: zeros,
+                (width > 1) | (seam == 1), left_correction, lambda: zeros
             )
             right_factor: jax.Array = jax.lax.cond(
-                (width > 1) | (seam == steps - 1),
-                lambda: jax.vmap(
-                    lambda before: jax.vmap(
-                        lambda current, after: (
-                            local_log_density(before, current, after, seam)
-                            - auxiliary.guide_log_density(current, seam)
-                        )
-                    )(right.first, following)
-                )(left.last).astype(ctx.traj_dtype),
-                lambda: zeros,
+                (width > 1) | (seam == steps - 1), right_correction, lambda: zeros
             )
             return left_factor + right_factor
 
@@ -254,6 +321,11 @@ def _step(
     ) -> tuple[jax.Array, jax.Array, jax.Array]:
         transition = ctx.pairwise_transition_log_probs(left.last, right.first, seam)
         paid = seam_auxiliary(left, right, seam, width)
+        # These exact factors are reused by weighting and retained evidence.
+        # Materializing them prevents the GPU fusion pass from repeatedly
+        # cloning the full auxiliary-gradient graph into both consumers.
+        factors: tuple[jax.Array, jax.Array] = jax.lax.optimization_barrier((transition, paid))
+        transition, paid = factors
         joint = (
             left.evidence[:, None]
             + right.evidence[None]
@@ -282,6 +354,8 @@ def _step(
         width: jax.Array,
         emission: jax.Array,
     ) -> _CombinedSegment:
+        boundaries: tuple[_Segment, _Segment] = jax.lax.optimization_barrier((left, right))
+        left, right = boundaries
         logits, joint, transition = join(left, right, seam, width, emission)
         selected = jnp.concatenate(
             (jnp.zeros(1, dtype=jnp.int32), multinomial(draw_key, logits.reshape(-1), count - 1))
@@ -480,8 +554,11 @@ def _step(
             moved, metrics, children = combined
             return moved, (children, metrics)
 
-        # Share the full-width body across lower levels, then specialize the
-        # smaller upper levels. Their node IDs and random keys stay unchanged.
+        # Two shared merge bodies bound GPU fusion-compiler work independently
+        # of tree depth. One specialization per upper level duplicates the full
+        # aMALA+ gradient graph and makes priority fusion prohibitively slow.
+        # The smaller upper tile limits padded work without serializing nodes.
+        # Both scans preserve the original per-node random keys.
         with jax.named_scope("dsmc_tree"):
             shared_depth = depth - (block.bit_length() - 1)
             segments, history = jax.lax.scan(
@@ -490,10 +567,13 @@ def _step(
                 jnp.arange(shared_depth),
             )
             histories = (history,)
-            for level in range(shared_depth, depth):
-                nodes = (steps + (1 << (level + 1)) - 1) >> (level + 1)
-                segments, history = level_step(segments, jnp.asarray(level), nodes)
-                histories = (*histories, jax.tree.map(lambda value: value[None], history))
+            if shared_depth < depth:
+                segments, history = jax.lax.scan(
+                    lambda current, level: level_step(current, level, min(block, 128)),
+                    segments,
+                    jnp.arange(shared_depth, depth),
+                )
+                histories = (*histories, history)
             (left_history, right_history), history_metrics = jax.tree.map(
                 lambda *parts: jnp.concatenate(parts), *histories
             )

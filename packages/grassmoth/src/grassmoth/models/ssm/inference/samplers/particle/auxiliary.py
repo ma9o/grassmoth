@@ -120,6 +120,12 @@ class AuxiliaryKernel:
         if ctx.drift == "none":
             return self.guide_log_density(current, index)
         gradient = _local_gradient(ctx, previous, current, following, index)
+        return self.log_density_from_gradient(current, gradient, index)
+
+    def log_density_from_gradient(
+        self, current: jax.Array, gradient: jax.Array, index: jax.Array
+    ) -> jax.Array:
+        """Score the auxiliary after assembling its exact local mixture score."""
         drift, _ = _drift(
             gradient,
             self.variance[index],
