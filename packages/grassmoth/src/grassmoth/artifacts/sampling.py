@@ -489,6 +489,19 @@ class MarginalParticleGibbsSpec(Value):
             "compiler_reparameterization is enabled, otherwise the identity chart."
         ),
     )
+    scale_chart: bool = Field(
+        default=False,
+        description=(
+            "Rescale each stochastic state's deviations from a center path by the change in "
+            "its own diffusion scale, in the sampler's actual parameter coordinates: structural "
+            "non-centring of the diffusion. The center is the mean warmup path in the translated "
+            "chart, learned in the existing warmup windows and frozen before retained draws. "
+            "Every label pays the exact log-Jacobian, and all densities and reported paths "
+            "retain the exact physical model. Requires a guided path update and point readings "
+            "without deterministic recurrences. Data-pinned deviations, a poor center or a "
+            "state-dependent diffusion cost efficiency, never the target."
+        ),
+    )
     parameter_proposal: ParameterProposal = Field(
         default="random_walk",
         description=(
@@ -645,5 +658,6 @@ class SamplerSpec(Value):
             algorithm.parameter_proposal,
             algorithm.compiler_reparameterization,
             algorithm.learned_translation,
+            algorithm.scale_chart,
             1 if isinstance(tempering, UntemperedSpec) else tempering.num_temperatures,
         )

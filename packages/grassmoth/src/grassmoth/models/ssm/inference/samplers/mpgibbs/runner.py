@@ -83,7 +83,11 @@ from grassmoth.models.ssm.inference.samplers.sweeps import (
     compile_projected_sweeps,
     run_sweeps,
 )
-from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
+from grassmoth.models.ssm.inference.targets.coordinates import (
+    PathChart,
+    ScaleChart,
+    TranslationChart,
+)
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
 from grassmoth.models.ssm.inference.warmup.parameter_adaptation import (
@@ -91,6 +95,11 @@ from grassmoth.models.ssm.inference.warmup.parameter_adaptation import (
     adapt_parameter_covariance,
     covariance_windows,
     initialize_parameter_covariance,
+)
+from grassmoth.models.ssm.inference.warmup.scale_adaptation import (
+    CenterMoments,
+    adapt_center,
+    initialize_center_moments,
 )
 from grassmoth.models.ssm.inference.warmup.translation_adaptation import (
     TranslationMoments,
@@ -126,7 +135,7 @@ class ParticleChainResult:
     random_key: jax.Array
     last_parameters: jax.Array
     last_paths: jax.Array
-    final_chart: TranslationChart | None
+    final_chart: PathChart | None
     retained_draws: int
     stopping_checkpoint: ConvergenceCheckpoint | None
     tempering: TemperingDiagnostics | None = None
@@ -167,7 +176,7 @@ def _initialize_chain_state(
     param_max_scale: float | Float[Array, ""],
     initial_latent_trajectory: Float[Array, "T D"],
     exact_constraints: ExactStateConstraints | None = None,
-    chart: TranslationChart | None = None,
+    chart: PathChart | None = None,
 ) -> TrajectoryMCMCState:
     context = target.context(init_position, times)
     latent_trajectory = jnp.asarray(
@@ -219,6 +228,7 @@ class _Population(NamedTuple):
     latent_geometry: jax.Array
     curvature_moments: CurvatureMoments
     translation_moments: TranslationMoments | None
+    center_moments: CenterMoments | None
 
 
 # Gain of the simple step-size scheme; a fixed property of warmup, not a setting.
@@ -366,6 +376,9 @@ def run_marginal_particle_gibbs(
         )
         if kernel.learn_translation
         else None,
+        initialize_center_moments(chain_initial_latents)
+        if isinstance(kernel.initial_chart, ScaleChart)
+        else None,
     )
     if continuation is not None and num_warmup == 0:
         initial = restore_state(initial, continuation.native_state)
@@ -495,22 +508,42 @@ def run_marginal_particle_gibbs(
 
             def adapt(updated: TrajectoryMCMCState) -> _Population:
                 translation_moments = current.translation_moments
-                if kernel.learn_translation:
-                    assert translation_moments is not None
+                center_moments = current.center_moments
+                if kernel.learn_translation or center_moments is not None:
                     assert updated.chart is not None
-                    assert kernel.translation_pairs is not None
                     chart = jax.tree.map(lambda value: value[0], updated.chart)
-                    translation_moments, chart = adapt_translation(
-                        translation_moments,
-                        chart,
-                        cold.position,
-                        cold.latent_trajectory,
-                        kernel.translation_pairs,
-                        current.iteration,
-                        windows,
-                    )
+                    if kernel.learn_translation:
+                        assert translation_moments is not None
+                        assert kernel.translation_pairs is not None
+                        translation = (
+                            chart if isinstance(chart, TranslationChart) else chart.translation
+                        )
+                        translation_moments, translation = adapt_translation(
+                            translation_moments,
+                            translation,
+                            cold.position,
+                            cold.latent_trajectory,
+                            kernel.translation_pairs,
+                            current.iteration,
+                            windows,
+                        )
+                        chart = (
+                            translation
+                            if isinstance(chart, TranslationChart)
+                            else ScaleChart(translation, chart.exponents, chart.center)
+                        )
+                    if center_moments is not None:
+                        assert isinstance(chart, ScaleChart)
+                        center_moments, chart = adapt_center(
+                            center_moments,
+                            chart,
+                            cold.position,
+                            cold.latent_trajectory,
+                            current.iteration,
+                            windows,
+                        )
                     # The durable state is physical. Each next sweep encodes it
-                    # anew, so changing B preserves x and all physical caches.
+                    # anew, so changing the chart preserves x and all physical caches.
                     updated = updated._replace(
                         chart=jax.tree.map(
                             lambda value, old: jnp.broadcast_to(value, old.shape),
@@ -596,6 +629,7 @@ def run_marginal_particle_gibbs(
                     curvature_moments=curvature_moments,
                     parameter_covariance=covariance,
                     translation_moments=translation_moments,
+                    center_moments=center_moments,
                 )
                 if tempering is not None:
                     exchange_kernel = tempering

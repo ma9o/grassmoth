@@ -5599,6 +5599,12 @@ export interface components {
              */
             readonly learned_translation?: boolean;
             /**
+             * Scale Chart
+             * @description Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.
+             * @default false
+             */
+            readonly scale_chart?: boolean;
+            /**
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk
              */
@@ -5661,6 +5667,12 @@ export interface components {
              * @default false
              */
             readonly learned_translation: boolean;
+            /**
+             * Scale Chart
+             * @description Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.
+             * @default false
+             */
+            readonly scale_chart: boolean;
             /**
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk

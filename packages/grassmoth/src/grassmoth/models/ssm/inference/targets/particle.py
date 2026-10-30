@@ -23,6 +23,10 @@ from grassmoth.models.ssm.execution.observation_model import (
     grouped_density_with_noise,
     prepare_grouped_density,
 )
+from grassmoth.models.ssm.inference.targets.coordinates import (
+    ScaledDeviationFrame,
+    TranslationChart,
+)
 from grassmoth.models.ssm.inference.targets.gaussian_reference import (
     GaussianReference,
     GaussianReferenceBridge,
@@ -41,13 +45,16 @@ if TYPE_CHECKING:
     from grassmoth.models.ssm.execution.state_transition import SupportedEulerMaruyama
     from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
     from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
-    from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
+    from grassmoth.models.ssm.inference.targets.coordinates import PathChart
     from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 
 
 # Array leaves of the continuous model and its observation grid. Static model
 # metadata is retained by the discrete-model factory, outside the sampler state.
-type ParticleContext = tuple[dsx.DynamicalModel, jax.Array, jax.Array, jax.Array | None]
+# The last leaf is the label's chart: a translation offset or a scaled-deviation frame.
+type ParticleContext = tuple[
+    dsx.DynamicalModel, jax.Array, jax.Array, jax.Array | ScaledDeviationFrame | None
+]
 
 
 def identity_state(_context: ParticleContext, state: jax.Array) -> jax.Array:
@@ -85,19 +92,26 @@ class ParticleTarget:
     bridge: GaussianReferenceBridge | None = None
     state_projection: Callable[[ParticleContext, jax.Array], jax.Array] = identity_state
 
-    def in_coordinates(self, chart: TranslationChart) -> ParticleTarget:
-        """Compose an exact translation beneath every particle density and proposal.
+    def in_coordinates(self, chart: PathChart) -> ParticleTarget:
+        """Compose an exact chart beneath every particle density and proposal.
 
-        Each ensemble label gets its own physical offset. The common particle
-        bank and auxiliaries remain in chart coordinates. No model factor or
-        parameter prior is approximated, and no Jacobian correction is needed.
+        Each ensemble label gets its own physical map. The common particle bank and
+        auxiliaries remain in chart coordinates. No model factor or parameter prior
+        is approximated. A translation needs no Jacobian correction; scaled
+        deviations pay their exact log-Jacobian in every initial and transition
+        density, and their proposal moments are expressed in chart units.
         """
 
-        def translated_context(position: jax.Array, times: jax.Array) -> ParticleContext:
+        def chart_context(position: jax.Array, times: jax.Array) -> ParticleContext:
             model, grid, static, _ = self.context(position, times)
-            return model, grid, static, chart.offset(position)
+            frame = (
+                chart.offset(position)
+                if isinstance(chart, TranslationChart)
+                else chart.frame(position)
+            )
+            return model, grid, static, frame
 
-        target = replace(self, context=translated_context)
+        target = replace(self, context=chart_context)
         return replace(
             target,
             intervals=None
@@ -105,15 +119,67 @@ class ParticleTarget:
             else replace(self.intervals, state_projection=target.project_state),
         )
 
-    def decode_state(self, context: ParticleContext, state: jax.Array) -> jax.Array:
-        """Translate chart coordinates to the exact physical model coordinates."""
-        offset = context[3]
-        return state if offset is None else state + offset
+    def decode_state(
+        self, context: ParticleContext, state: jax.Array, index: jax.Array | int | None = None
+    ) -> jax.Array:
+        """Map chart coordinates at these times to the exact physical model coordinates."""
+        frame = context[3]
+        if frame is None:
+            return state
+        if isinstance(frame, ScaledDeviationFrame):
+            assert index is not None, "Scaled deviations decode each state at its own time."
+            return frame.decode(state, index)
+        return state + frame
 
-    def encode_state(self, context: ParticleContext, state: jax.Array) -> jax.Array:
-        """Translate physical model coordinates to the current frozen chart."""
-        offset = context[3]
-        return state if offset is None else state - offset
+    def encode_state(
+        self, context: ParticleContext, state: jax.Array, index: jax.Array | int | None = None
+    ) -> jax.Array:
+        """Map physical model coordinates at these times to the current frozen chart."""
+        frame = context[3]
+        if frame is None:
+            return state
+        if isinstance(frame, ScaledDeviationFrame):
+            assert index is not None, "Scaled deviations encode each state at its own time."
+            return frame.encode(state, index)
+        return state - frame
+
+    def _encode_covariance(self, context: ParticleContext, covariance: jax.Array) -> jax.Array:
+        """Express a physical Gaussian covariance in chart units."""
+        frame = context[3]
+        if not isinstance(frame, ScaledDeviationFrame):
+            return covariance
+        inverse = jnp.exp(-frame.log_scale)
+        return covariance * inverse[:, None] * inverse[None, :]
+
+    def _chart_log_jacobian(
+        self, context: ParticleContext, coordinates: tuple[int, ...]
+    ) -> jax.Array | float:
+        """Log-determinant of one time slice's chart map over the modeled coordinates."""
+        frame = context[3]
+        if not isinstance(frame, ScaledDeviationFrame) or not coordinates:
+            return 0.0
+        return jnp.sum(frame.log_scale[jnp.asarray(coordinates, dtype=jnp.int32)])
+
+    def diffusion_scale_exponents(self, reference: jax.Array) -> jax.Array:
+        """Differentiate each stochastic state's log diffusion scale at a parameter position.
+
+        Scaled-deviation charts use these slopes as structural exponents. Any exponents
+        keep the target exact, so a state-dependent or nonlinear diffusion only costs
+        mixing through its local slope.
+        """
+        exponents = jnp.zeros((self.state_space.size, reference.size), dtype=reference.dtype)
+        if self.times.size < 2 or not self.state_space.transition:
+            return exponents
+        indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
+
+        def log_scale(position: jax.Array) -> jax.Array:
+            context = self.context(position, self.times)
+            covariance = self.transition_moments(
+                context, self.initial_moments(context)[0], jnp.asarray(1)
+            )[1]
+            return 0.5 * jnp.log(jnp.diagonal(covariance)[indices])
+
+        return exponents.at[indices].set(jax.jacfwd(log_scale)(reference))
 
     def tree_target(self) -> ParticleTarget:
         """Keep replay-independent observations in the exact intermediate tree target."""
@@ -155,23 +221,29 @@ class ParticleTarget:
                 ).select_channels(channels)
                 readings = self.observations[:, jnp.asarray(channels, dtype=jnp.int32)]
 
-                def point_density(state: jax.Array, reading: jax.Array) -> jax.Array:
+                def point_density(
+                    state: jax.Array, reading: jax.Array, index: jax.Array
+                ) -> jax.Array:
                     def exact() -> jax.Array:
-                        return observation(self.project_state(context, state), None, 0).log_prob(
-                            reading
-                        )
+                        return observation(
+                            self.project_state(context, state, index), None, 0
+                        ).log_prob(reading)
 
                     return exact() if self.bridge is None else self.bridge.observation(exact)
 
-                densities = jax.vmap(point_density)(replayed, readings)
+                densities = jax.vmap(point_density)(
+                    replayed, readings, jnp.arange(replayed.shape[0])
+                )
             else:
                 densities = deferred.observation_log_probs(context, replayed, deferred.observations)
             correction = correction + jnp.sum(densities)
         return jnp.asarray(correction)
 
-    def project_state(self, context: ParticleContext, state: jax.Array) -> jax.Array:
-        """Bind global static coordinates before evaluating a local model factor."""
-        state = self.decode_state(context, state)
+    def project_state(
+        self, context: ParticleContext, state: jax.Array, index: jax.Array | int | None = None
+    ) -> jax.Array:
+        """Bind global static coordinates before evaluating a local model factor at these times."""
+        state = self.decode_state(context, state, index)
         indices = jnp.asarray(self.state_space.static, dtype=jnp.int32)
         state = state.at[..., indices].set(context[2][indices])
         return self.state_projection(context, state)
@@ -215,7 +287,7 @@ class ParticleTarget:
         state = jnp.where(self.independent_mask[0], coordinates, self.initial_moments(context)[0])
         inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
-        fixed = self.encode_state(context, context[2])
+        fixed = self.encode_state(context, context[2], 0)
         return state.at[inputs].set(coordinates[inputs]).at[static].set(fixed[static])
 
     def replay_step(
@@ -227,22 +299,25 @@ class ParticleTarget:
     ) -> jax.Array:
         """Advance exact recurrences with their declared previous-time dependencies."""
         mean = self.encode_state(
-            context, self._transition_distribution(context, previous, index).mean
+            context, self._transition_distribution(context, previous, index).mean, index
         )
         state = jnp.where(self.independent_mask[index], coordinates, mean)
         inputs = jnp.asarray(self.state_space.inputs, dtype=jnp.int32)
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
-        fixed = self.encode_state(context, context[2])
+        fixed = self.encode_state(context, context[2], index)
         return state.at[inputs].set(coordinates[inputs]).at[static].set(fixed[static])
 
     def replay_path(self, context: ParticleContext, coordinates: jax.Array) -> jax.Array:
         """Reconstruct exact initial values, static quantities and deterministic recurrences."""
+        times = jnp.arange(coordinates.shape[0])
         if self.exact_constraints is not None:
             coordinates = self.encode_state(
-                context, self.exact_constraints.project(self.decode_state(context, coordinates))
+                context,
+                self.exact_constraints.project(self.decode_state(context, coordinates, times)),
+                times,
             )
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
-        fixed = self.encode_state(context, context[2])
+        fixed = self.encode_state(context, context[2], 0)
         coordinates = coordinates.at[:, static].set(fixed[static])
         if not self.state_space.requires_replay:
             return coordinates
@@ -267,7 +342,7 @@ class ParticleTarget:
                 def increment(
                     previous: jax.Array, index: jax.Array, deterministic: jax.Array = deterministic
                 ) -> jax.Array:
-                    state = self.project_state(context, previous)
+                    state = self.project_state(context, previous, index - 1)
                     start, stop = context[1][index - 1], context[1][index]
                     drift = evolution.continuous.total_drift(x=state, u=None, t=start)
                     return (stop - start) * drift[deterministic]
@@ -282,7 +357,7 @@ class ParticleTarget:
                 ) -> tuple[jax.Array, jax.Array]:
                     zero = previous.at[deterministic].set(0)
                     offset = self.encode_state(
-                        context, self._transition_distribution(context, zero, index).mean
+                        context, self._transition_distribution(context, zero, index).mean, index
                     )[deterministic]
                     # The compiler proved affine dependence. Basis evaluations recover
                     # its exact coefficients, not a local approximation of nonlinear drift.
@@ -294,6 +369,7 @@ class ParticleTarget:
                                 self._transition_distribution(
                                     context, zero.at[deterministic].set(unit), index
                                 ).mean,
+                                index,
                             )[deterministic]
                             - offset
                         )
@@ -320,7 +396,9 @@ class ParticleTarget:
             else self.exact_constraints.values
         )
         static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
-        fixed = self.encode_state(context, fixed.at[:, static].set(context[2][static]))
+        fixed = self.encode_state(
+            context, fixed.at[:, static].set(context[2][static]), jnp.arange(fixed.shape[0])
+        )
         initial_mean, initial_covariance = self.initial_moments(context)
         # continuous_state_evolution binds the compiled diffusion as an array in
         # FullDiffusion, never a state function. Its EM covariance therefore
@@ -362,24 +440,25 @@ class ParticleTarget:
         assert isinstance(
             distribution, dist.MultivariateNormal
         )  # The exact model producer declares a Gaussian initial law.
-        return self.encode_state(context, jnp.asarray(distribution.mean)), jnp.asarray(
-            distribution.covariance_matrix
-        )
+        return self.encode_state(
+            context, jnp.asarray(distribution.mean), 0
+        ), self._encode_covariance(context, jnp.asarray(distribution.covariance_matrix))
 
     def initial_log_prob(self, context, state):
         """Evaluate initial-state density on the modeled coordinates of the supplied state."""
-        state = self.project_state(context, state)
+        state = self.project_state(context, state, 0)
 
         def exact():
             return self._modeled_log_prob(
                 self.dynamical_model(context).initial_condition, state, self.state_space.initial
             )
 
-        return (
+        density = (
             exact()
             if self.bridge is None
             else self.bridge.combine(exact, self.bridge.reference.initial_log_prob(state))
         )
+        return density + self._chart_log_jacobian(context, self.state_space.initial)
 
     def _modeled_log_prob(self, distribution, state, density_indices):
         if not density_indices:
@@ -498,22 +577,25 @@ class ParticleTarget:
         index: jax.Array | int,
         mean: Callable[[], jax.Array],
     ) -> jax.Array:
-        current = self.project_state(context, current)
+        current = self.project_state(context, current, index)
 
         def exact() -> jax.Array:
             indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
             return noise.transitions.at(index).log_prob(current[indices] - mean())
 
-        return (
+        density = (
             exact()
             if self.bridge is None
             else self.bridge.combine(
                 exact,
                 self.bridge.reference.transition_log_prob(
-                    self.decode_state(context, previous), current, jnp.asarray(index)
+                    self.decode_state(context, previous, jnp.asarray(index) - 1),
+                    current,
+                    jnp.asarray(index),
                 ),
             )
         )
+        return density + self._chart_log_jacobian(context, self.state_space.transition)
 
     def observation_increment_with_noise(
         self,
@@ -525,7 +607,7 @@ class ParticleTarget:
     ) -> jax.Array:
         """Score exact point laws and nonlinear predictors with prepared Gaussian noise."""
         model = cast("HeterogeneousObservation", self.dynamical_model(context).observation_model)
-        predictor = model.linear_predictor(self.project_state(context, state))
+        predictor = model.linear_predictor(self.project_state(context, state, index))
 
         def exact() -> jax.Array:
             return grouped_density_with_noise(
@@ -542,7 +624,7 @@ class ParticleTarget:
         times = context[1]
         evolution = cast("DiscreteStateTransition", self.dynamical_model(context).state_evolution)
         return evolution(
-            self.project_state(context, previous),
+            self.project_state(context, previous, jnp.maximum(jnp.asarray(index) - 1, 0)),
             None,
             times[jnp.maximum(index - 1, 0)],
             times[index],
@@ -550,7 +632,7 @@ class ParticleTarget:
 
     def transition_log_prob(self, context, previous, current, index):
         """Evaluate the current state's modeled transition density from its predecessor."""
-        current = self.project_state(context, current)
+        current = self.project_state(context, current, index)
 
         def exact():
             return self._modeled_log_prob(
@@ -559,16 +641,17 @@ class ParticleTarget:
                 self.state_space.transition,
             )
 
-        return (
+        density = (
             exact()
             if self.bridge is None
             else self.bridge.combine(
                 exact,
                 self.bridge.reference.transition_log_prob(
-                    self.decode_state(context, previous), current, index
+                    self.decode_state(context, previous, jnp.asarray(index) - 1), current, index
                 ),
             )
         )
+        return density + self._chart_log_jacobian(context, self.state_space.transition)
 
     def _transition_value_and_grad(
         self,
@@ -600,7 +683,7 @@ class ParticleTarget:
                 mean, precision, constant = factors(previous)
 
                 def density(state: jax.Array) -> jax.Array:
-                    residual = self.project_state(context, state)[indices] - mean
+                    residual = self.project_state(context, state, index)[indices] - mean
                     return jnp.asarray(constant - 0.5 * residual @ precision @ residual)
 
                 value, gradient = jax.value_and_grad(density)(current)
@@ -614,7 +697,7 @@ class ParticleTarget:
                     previous
                 )
                 mean_jacobian, precision_jacobian, constant_gradient = derivatives
-                residual = self.project_state(context, current)[indices] - mean
+                residual = self.project_state(context, current, index)[indices] - mean
                 score = precision @ residual
                 value = constant - 0.5 * residual @ score
                 gradient = (
@@ -630,12 +713,17 @@ class ParticleTarget:
         else:
             value, gradient = jax.value_and_grad(
                 lambda left, right, step: bridge.reference.transition_log_prob(
-                    self.decode_state(context, left), self.decode_state(context, right), step
+                    self.decode_state(context, left, jnp.asarray(step) - 1),
+                    self.decode_state(context, right, step),
+                    step,
                 ),
                 argnums=1 if current_gradient else 0,
             )(previous, current, index)
             result = bridge.combine(exact, jnp.concatenate((value[None], gradient)))
-        return result[0], result[1:]
+        # The chart's Jacobian depends on parameters only, so no state gradient changes.
+        return result[0] + self._chart_log_jacobian(context, self.state_space.transition), result[
+            1:
+        ]
 
     def transition_moments(
         self, context: ParticleContext, previous: jax.Array, index: jax.Array
@@ -644,9 +732,9 @@ class ParticleTarget:
         distribution = cast(
             "dist.MultivariateNormal", self._transition_distribution(context, previous, index)
         )
-        return self.encode_state(context, jnp.asarray(distribution.mean)), jnp.asarray(
-            distribution.covariance_matrix
-        )
+        return self.encode_state(
+            context, jnp.asarray(distribution.mean), index
+        ), self._encode_covariance(context, jnp.asarray(distribution.covariance_matrix))
 
     def pairwise_transition_log_prob(self, context, previous, current, index):
         """Score all Gaussian pairs with per-ancestor factors and matrix products.
@@ -660,7 +748,7 @@ class ParticleTarget:
             if not self.state_space.transition:
                 return jnp.zeros((previous.shape[0], current.shape[0]), dtype=current.dtype)
             indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
-            values = self.project_state(context, current)[:, indices]
+            values = self.project_state(context, current, index)[:, indices]
             anchor = jnp.mean(values, axis=0)
             centered = values - anchor
             dimension = len(self.state_space.transition)
@@ -694,40 +782,41 @@ class ParticleTarget:
 
             return jax.vmap(row)(previous)
 
+        jacobian = self._chart_log_jacobian(context, self.state_space.transition)
         bridge = self.bridge
         if bridge is None:
-            return exact()
+            return exact() + jacobian
         reference = jax.vmap(
             lambda ancestor: jax.vmap(
                 lambda descendant: bridge.reference.transition_log_prob(
-                    self.decode_state(context, ancestor),
-                    self.decode_state(context, descendant),
+                    self.decode_state(context, ancestor, jnp.asarray(index) - 1),
+                    self.decode_state(context, descendant, index),
                     index,
                 )
             )(current)
         )(previous)
-        return bridge.combine(exact, reference)
+        return bridge.combine(exact, reference) + jacobian
 
     def initial_path(self, context, *, exact_constraints: ExactStateConstraints | None = None):
         """Build an initialization path from successive transition means and any exact state constraints."""
         initial = self.initial_moments(context)[0]
-        initial = self.encode_state(context, self.project_state(context, initial))
+        initial = self.encode_state(context, self.project_state(context, initial, 0), 0)
         if exact_constraints is not None:
             initial = jnp.where(
                 exact_constraints.free_mask[0],
                 initial,
-                self.encode_state(context, exact_constraints.values[0]),
+                self.encode_state(context, exact_constraints.values[0], 0),
             )
 
         def step(previous, index):
             current = self.encode_state(
-                context, self._transition_distribution(context, previous, index).mean
+                context, self._transition_distribution(context, previous, index).mean, index
             )
             if exact_constraints is not None:
                 current = jnp.where(
                     exact_constraints.free_mask[index],
                     current,
-                    self.encode_state(context, exact_constraints.values[index]),
+                    self.encode_state(context, exact_constraints.values[index], index),
                 )
             return current, current
 
@@ -744,7 +833,7 @@ class ParticleTarget:
         """Score point factors at one leaf; interval factors belong to enclosing tree nodes."""
         observations = self._point_observations(observations)
         distribution = self.dynamical_model(context).observation_model(
-            self.project_state(context, state), None, context[1][index]
+            self.project_state(context, state, index), None, context[1][index]
         )
 
         def exact() -> jax.Array:

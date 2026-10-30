@@ -98,7 +98,8 @@ class StudentTPrecisions:
                         return cast(
                             "StudentTLawSpec[jax.Array]",
                             group.evaluate(
-                                model.linear_predictor(target.project_state(context, state)), scales
+                                model.linear_predictor(target.project_state(context, state, 0)),
+                                scales,
                             ),
                         )
 
@@ -134,8 +135,8 @@ def draw_student_precisions(
         return None
     path = target.replay_path(context, path)
     predictors = jax.vmap(
-        lambda state: model.linear_predictor(target.project_state(context, state))
-    )(path)
+        lambda state, index: model.linear_predictor(target.project_state(context, state, index))
+    )(path, jnp.arange(path.shape[0]))
     responses = jax.vmap(
         lambda eta: grouped_response(model.density_groups(), eta, model.measurement.manifest_cov)
     )(predictors)

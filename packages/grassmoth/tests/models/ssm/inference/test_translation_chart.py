@@ -326,7 +326,7 @@ def test_partial_exact_observation_excludes_its_coordinate_from_translation():
         learn_translation=True,
         translation_pairs=jnp.ones((2, 1), dtype=bool),
     )
-    assert kernel.initial_chart is not None
+    assert isinstance(kernel.initial_chart, TranslationChart)
     np.testing.assert_array_equal(kernel.initial_chart.slopes, [[0.0], [0.5]])
     np.testing.assert_array_equal(kernel.translation_pairs, [[False], [True]])
     path = jnp.array([[0.0, 0.0], [0.25, 0.5], [0.4, 0.2], [0.1, 0.3]])

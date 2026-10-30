@@ -51,7 +51,11 @@ from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixtur
 from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_particle_weights
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.samplers.sweeps import retained_convergence_check
-from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
+from grassmoth.models.ssm.inference.targets.coordinates import (
+    PathChart,
+    ScaleChart,
+    TranslationChart,
+)
 from grassmoth.models.ssm.inference.types import (
     JointPosteriorDraws,
     MCMCPosterior,
@@ -141,7 +145,7 @@ def fit_marginal_particle_gibbs(
             )
     if isinstance(initialization, InitializationFailure):
         return initialization
-    chart = None
+    translation: TranslationChart | None = None
     translation_pairs = None
     if options.compiler_reparameterization or options.learned_translation:
         structure = compile_translation_structure(
@@ -152,13 +156,26 @@ def fit_marginal_particle_gibbs(
             reparam=reparam,
             compiler=compiler,
         )
-        chart = TranslationChart(
+        translation = TranslationChart(
             structure.initial_slopes
             if options.compiler_reparameterization
             else jnp.zeros_like(structure.initial_slopes),
             jnp.mean(initialization.positions, axis=0),
         )
         translation_pairs = structure.active_pairs
+    chart: PathChart | None = translation
+    if options.scale_chart:
+        reference = jnp.mean(initialization.positions, axis=0)
+        paths = jnp.asarray(initialization.paths)
+        if translation is None:
+            translation = TranslationChart(
+                jnp.zeros((paths.shape[-1], reference.size), paths.dtype), reference
+            )
+        # Warmup windows replace this initial center with mean translated paths.
+        center = jnp.mean(
+            paths - jax.vmap(translation.offset)(initialization.positions)[:, None, :], axis=0
+        )
+        chart = ScaleChart(translation, bundle.runtime.diffusion_scale_exponents(reference), center)
     paid_mix = (
         PaidMixture(
             initialization.pilot_mean,
@@ -239,12 +256,25 @@ def fit_marginal_particle_gibbs(
         tempering=tempering,
         continuation=continuation,
     )
-    if run_result.final_chart is not None:
+    final_chart = run_result.final_chart
+    if final_chart is not None:
+        translation = (
+            final_chart if isinstance(final_chart, TranslationChart) else final_chart.translation
+        )
         logger.info(
             "frozen translation chart (sampler coordinates): slopes=%s reference=%s",
-            np.asarray(run_result.final_chart.slopes).tolist(),
-            np.asarray(run_result.final_chart.reference).tolist(),
+            np.asarray(translation.slopes).tolist(),
+            np.asarray(translation.reference).tolist(),
         )
+        if isinstance(final_chart, ScaleChart):
+            center = np.asarray(final_chart.center)
+            logger.info(
+                "frozen scale chart (sampler coordinates): exponents=%s center min=%s mean=%s max=%s",
+                np.asarray(final_chart.exponents).tolist(),
+                center.min(axis=0).tolist(),
+                center.mean(axis=0).tolist(),
+                center.max(axis=0).tolist(),
+            )
     tuning = (
         continuation.tuning
         if continuation is not None and isinstance(continuation.tuning, ParticleTuning)

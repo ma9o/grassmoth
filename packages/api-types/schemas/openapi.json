@@ -19354,6 +19354,12 @@
             "title": "Learned Translation",
             "type": "boolean"
           },
+          "scale_chart": {
+            "default": false,
+            "description": "Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.",
+            "title": "Scale Chart",
+            "type": "boolean"
+          },
           "parameter_proposal": {
             "$ref": "#/components/schemas/ParameterProposal",
             "default": "random_walk",
@@ -19423,6 +19429,12 @@
             "title": "Learned Translation",
             "type": "boolean"
           },
+          "scale_chart": {
+            "default": false,
+            "description": "Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.",
+            "title": "Scale Chart",
+            "type": "boolean"
+          },
           "parameter_proposal": {
             "$ref": "#/components/schemas/ParameterProposal",
             "default": "random_walk",
@@ -19456,6 +19468,7 @@
           "path_update",
           "compiler_reparameterization",
           "learned_translation",
+          "scale_chart",
           "parameter_proposal",
           "diagnostic_metrics",
           "param_target_accept",

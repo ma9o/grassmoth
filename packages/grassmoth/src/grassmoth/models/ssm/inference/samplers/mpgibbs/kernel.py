@@ -85,7 +85,11 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
     _select_pytree,
 )
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
-from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
+from grassmoth.models.ssm.inference.targets.coordinates import (
+    PathChart,
+    ScaleChart,
+    TranslationChart,
+)
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth.models.ssm.inference.tracing import (
     CategoricalTraceRecord,
@@ -194,9 +198,20 @@ class MarginalParticleGibbsKernel(NamedTuple):
     path_update: PathUpdateSpec
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...]
     exact_constraints: ExactStateConstraints | None
-    initial_chart: TranslationChart | None
+    initial_chart: PathChart | None
     learn_translation: bool
     translation_pairs: jax.Array | None
+
+
+def _restrict_chart(chart: PathChart, movable: jax.Array) -> PathChart:
+    """Leave coordinates that some label cannot move in their physical values."""
+    translation = chart if isinstance(chart, TranslationChart) else chart.translation
+    translation = TranslationChart(
+        jnp.where(movable[:, None], translation.slopes, 0.0), translation.reference
+    )
+    if isinstance(chart, TranslationChart):
+        return translation
+    return ScaleChart(translation, jnp.where(movable[:, None], chart.exponents, 0.0), chart.center)
 
 
 def build_marginal_particle_gibbs_kernel(
@@ -212,7 +227,7 @@ def build_marginal_particle_gibbs_kernel(
     parameter_reference_path: Float[Array, "T D"] | None = None,
     exact_constraints: ExactStateConstraints | None = None,
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...] = _DEFAULT_OPTIONS.diagnostic_metrics,
-    initial_chart: TranslationChart | None = None,
+    initial_chart: PathChart | None = None,
     learn_translation: bool = False,
     translation_pairs: jax.Array | None = None,
 ) -> MarginalParticleGibbsKernel:
@@ -250,9 +265,7 @@ def build_marginal_particle_gibbs_kernel(
     if initial_chart is not None:
         # A shared chart must preserve every label's constrained path support.
         movable = jnp.all(latent_free_mask, axis=0)
-        initial_chart = TranslationChart(
-            jnp.where(movable[:, None], initial_chart.slopes, 0.0), initial_chart.reference
-        )
+        initial_chart = _restrict_chart(initial_chart, movable)
         if translation_pairs is not None:
             translation_pairs = translation_pairs & movable[:, None]
     if learn_translation:
