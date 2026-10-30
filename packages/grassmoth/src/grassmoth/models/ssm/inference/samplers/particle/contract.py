@@ -9,6 +9,7 @@ import jax.numpy as jnp
 from jax.typing import DTypeLike
 
 from grassmoth.artifacts.sampling import AuxiliaryDrift, LatentBlockSize
+from grassmoth.models.ssm.inference.targets.coordinates import PathChart, ScaleChart
 from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int
@@ -47,6 +48,16 @@ class PaidMixture(NamedTuple):
     mean: jnp.ndarray
     variance: jnp.ndarray
     enabled: jnp.ndarray
+
+    def in_coordinates(self, chart: PathChart, position: jnp.ndarray) -> "PaidMixture":
+        """Express the physical pilot at one symmetric ensemble guide position."""
+        return PaidMixture(
+            chart.encode(position, self.mean),
+            self.variance * jnp.exp(-2 * chart.log_scale(position))
+            if isinstance(chart, ScaleChart)
+            else self.variance,
+            self.enabled,
+        )
 
 
 class TrajectoryLabelScores(NamedTuple):

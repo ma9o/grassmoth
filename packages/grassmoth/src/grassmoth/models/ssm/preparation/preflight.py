@@ -55,13 +55,11 @@ def validate_sampler_support(
     if isinstance(sampler.algorithm, NutsDASpec):
         return None
     if sampler.algorithm.scale_chart and (
-        isinstance(sampler.algorithm.path_update, DsmcSpec)
-        or compiled.state_space.recurrence
+        compiled.state_space.recurrence
         or any(item.support.support_kind == "interval" for item in compiled.observations)
     ):
         return ObservationPreflightFailure.rejected(
-            "The scale chart requires a guided path update and point readings without "
-            "deterministic recurrences."
+            "The scale chart requires point readings without deterministic recurrences."
         )
     if not isinstance(sampler.algorithm.path_update, DsmcSpec):
         path_update = sampler.algorithm.path_update

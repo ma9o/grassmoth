@@ -112,6 +112,10 @@ def begin_path_update(
         if precisions is None
         else lambda context: precisions.log_prior(target, context),
     )
+    if state.chart is not None and ctx.paid_mix is not None:
+        # The pilot is shared by every label. Its chart must therefore use the
+        # symmetric ensemble guide, never the distinguished reference label.
+        ctx = ctx._replace(paid_mix=ctx.paid_mix.in_coordinates(state.chart, ctx.guide_position))
     if (
         precisions is not None
         and not isinstance(path_update, DsmcSpec)

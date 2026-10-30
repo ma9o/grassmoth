@@ -26,6 +26,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
     run_marginal_particle_gibbs,
 )
+from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth.models.ssm.inference.warmup.computed_chart import (
@@ -150,28 +151,33 @@ def test_translation_preserves_nonlinear_factors_gradients_and_proposal_moments(
 
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize(
-    "method",
+    ("method", "paid_pilot"),
     [
-        "particle_rwm",
-        "particle_amala",
-        "particle_agrad",
-        "twisted_particle_agrad",
-        "particle_mgrad",
+        ("particle_rwm", False),
+        ("particle_amala", False),
+        ("particle_amala_plus", False),
+        ("particle_amala_plus", True),
+        ("particle_agrad", False),
+        ("twisted_particle_agrad", False),
+        ("particle_mgrad", False),
     ],
 )
-def test_charted_joint_kernel_preserves_analytic_physical_posterior(method):
+def test_charted_joint_kernel_preserves_analytic_physical_posterior(method, paid_pilot):
     target, mean, covariance = _gaussian_joint()
     chart = TranslationChart(
         computed_translation_slopes(target, jnp.array([0.3]), jnp.zeros((3, 1))), jnp.array([0.3])
     )
     path_update = (
         DsmcSpec(method=method, num_particles=8)
-        if method in ("particle_rwm", "particle_amala")
+        if method in ("particle_rwm", "particle_amala", "particle_amala_plus")
         else GuidedPathSpec(method=method, num_particles=8, kappa=1)
     )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
         path_update=path_update,
+        paid_mix=PaidMixture(jnp.full((3, 1), 0.2), jnp.full((3, 1), 0.7), jnp.array([True]))
+        if paid_pilot
+        else None,
         num_parameter_particles=2,
         param_step_size=0.3,
         initial_chart=chart,

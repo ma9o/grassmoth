@@ -122,6 +122,31 @@ def test_mgrad_admission_owns_point_only_support(monkeypatch, support, recurrenc
         assert "Particle-mGRAD" in failure.message
 
 
+@pytest.mark.parametrize("method", ["particle_rwm", "particle_amala", "particle_amala_plus"])
+@pytest.mark.parametrize(
+    ("support", "recurrences", "accepted"),
+    [("point", (), True), ("interval", (), False), ("point", (AdditiveRecurrences((0,)),), False)],
+)
+def test_dsmc_scale_chart_admission(monkeypatch, method, support, recurrences, accepted):
+    from grassmoth.models.ssm import compiled_access
+
+    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
+    compiled = Mock(
+        spec=CompiledDynamicalModel,
+        state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
+        observations=(Mock(support=Mock(support_kind=support)),),
+    )
+    sampler = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(
+            path_update=DsmcSpec(method=method), compiler_reparameterization=True, scale_chart=True
+        )
+    )
+    failure = validate_sampler_support(compiled, sampler)
+    assert (failure is None) == accepted
+    if failure is not None:
+        assert "scale chart" in failure.message
+
+
 @pytest.mark.parametrize(
     ("method", "kappa", "support", "recurrences", "accepted"),
     [

@@ -12,6 +12,7 @@ import pytest
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
+    DsmcSpec,
     GaussianInitializationSpec,
     GuidedPathSpec,
     MarginalParticleGibbsSpec,
@@ -22,7 +23,10 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import run_marginal_particle_gibbs
+from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.targets.coordinates import ScaleChart, TranslationChart
+from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReference
+from grassmoth.models.ssm.inference.warmup.computed_chart import computed_translation_slopes
 from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
     prepare_particle_initialization,
@@ -141,16 +145,68 @@ def test_scale_chart_pays_its_jacobian_and_expresses_moments_in_chart_units():
         ),
         atol=3e-6,
     )
+    pilot = PaidMixture(path, jnp.full_like(path, 0.4), jnp.array([True]))
+    chart_pilot = pilot.in_coordinates(chart, position)
+    np.testing.assert_allclose(chart.decode(position, chart_pilot.mean), pilot.mean, atol=1e-6)
+    np.testing.assert_allclose(chart_pilot.variance * scale**2, pilot.variance, atol=1e-6)
+    physical_map = target.innovation_map(physical_context, target.independent_mask)
+    chart_map = scaled.innovation_map(context, target.independent_mask)
+    innovations = chart_map.encode(encoded)
+    np.testing.assert_allclose(innovations, physical_map.encode(path), atol=1e-6)
+    restored, chart_logdet = chart_map.decode(innovations)
+    physical, physical_logdet = physical_map.decode(innovations)
+    np.testing.assert_allclose(restored, encoded, atol=1e-6)
+    np.testing.assert_allclose(chart.decode(position, restored), physical, atol=1e-6)
+    np.testing.assert_allclose(chart_logdet + log_jacobian, physical_logdet, atol=1e-6)
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad", "particle_mgrad"])
-def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method):
+@pytest.mark.parametrize(
+    ("method", "beta"),
+    [
+        ("particle_agrad", None),
+        ("twisted_particle_agrad", None),
+        ("particle_mgrad", None),
+        ("particle_rwm", None),
+        ("particle_amala", None),
+        ("particle_amala_plus", None),
+        ("particle_amala_plus", 0.0),
+        ("particle_amala_plus", 0.4),
+    ],
+)
+def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method, beta):
     target, mean, covariance = _gaussian_joint()
-    chart = _chart()
+    chart = replace(
+        _chart(),
+        translation=TranslationChart(
+            computed_translation_slopes(target, jnp.array([0.3]), jnp.zeros((3, 1))),
+            jnp.array([0.3]),
+        ),
+    )
+    if beta is not None:
+        reference = GaussianReference(
+            jnp.zeros(1),
+            jnp.eye(1),
+            jnp.zeros((3, 1)),
+            jnp.zeros((3, 1, 1)),
+            jnp.ones((3, 1, 1)),
+            target.independent_mask,
+        )
+        target = target.at_temperature(reference, jnp.asarray(beta))
+        precision = np.linalg.inv(covariance)
+        covariance = np.linalg.inv(beta * precision + (1 - beta) * np.eye(4))
+        mean = covariance @ (beta * precision @ mean)
+    path_update = (
+        DsmcSpec(method=method, num_particles=8, latent_block_coords=1)
+        if method in ("particle_rwm", "particle_amala", "particle_amala_plus")
+        else GuidedPathSpec(method=method, num_particles=8, kappa=1)
+    )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=GuidedPathSpec(method=method, num_particles=8, kappa=1),
+        path_update=path_update,
+        paid_mix=PaidMixture(jnp.full((3, 1), 0.2), jnp.full((3, 1), 0.7), jnp.array([True]))
+        if isinstance(path_update, DsmcSpec)
+        else None,
         num_parameter_particles=2,
         param_step_size=0.3,
         initial_chart=chart,
