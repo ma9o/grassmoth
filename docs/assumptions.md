@@ -50,7 +50,7 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 
 **Rules every piece above follows:**
 
-- **Initialization.** The [path seed][path-seed] uses point-reading scores and clipped negative Hessians at the fixed initial parameter center. Exact replay preserves deterministic recurrences, static states and constraints. Interval readings remain in the exact target but do not inform this seed: their cross-time dependence needs augmented window state. The seed changes only MPGibbs starts, not the joint NUTS chart, retained target or diagnostics; a non-finite seed returns an initialization failure.
+- **Initialization.** The [path seed][path-seed] uses point-reading scores and PSD curvature in predictor space from the [shared path curvature][path-curvature] at the fixed initial parameter center. Exact replay preserves deterministic recurrences, static states and constraints. Interval readings remain in the exact target but do not inform this seed: their cross-time dependence needs augmented window state. The seed changes only MPGibbs starts, not the joint NUTS chart, retained target or diagnostics; a non-finite seed returns an initialization failure.
 - **Shape and depth.** Guided path updates exclude coordinate blocks and tempering. Their forward pass has linear depth, and the twist's information scan has logarithmic depth for a fixed augmented dimension.
 - **One shared guide.** A single Gaussian guide is shared symmetrically across the parameter ensemble. Recurrences and window statistics inherit shared state innovations, with no added process noise.
 - **Proposal auxiliaries and continuation.** Auxiliary paths and precisions belong to individual moves. [Native continuation][continuation] retains the [runner]'s tuning and adaptation state, including learned path geometry.
@@ -91,6 +91,7 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 [parameter-adaptation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/parameter_adaptation.py
 [initialization]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/initialization.py
 [path-seed]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/ieks.py
+[path-curvature]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/path_curvature.py
 [t-path-seed]: ../packages/grassmoth/tests/models/ssm/inference/test_ieks_initialization.py
 [coordinate-structure]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/coordinate_structure.py
 [translation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/coordinates.py
