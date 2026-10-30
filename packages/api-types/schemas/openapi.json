@@ -17028,7 +17028,7 @@
       },
       "GaussianInitializationSpec-Input": {
         "additionalProperties": false,
-        "description": "Independent Gaussian starts in the native affine chart, without adaptation.\n\nThis proposal is only an initializer. The subsequent particle transitions\nand every retained diagnostic use the exact nonlinear target.",
+        "description": "Gaussian starts around a data-conditioned MPGibbs path center.\n\nA damped iterated extended Kalman smoother conditions the path center on\npoint readings at the initial parameter center, preserving the native\nGaussian jitter and parameter starts. Interval readings are omitted from\nthis seed. Exact replay restores recurrences, static values and constraints;\nsubsequent particle transitions and diagnostics use the exact nonlinear target.",
         "properties": {
           "scale": {
             "default": 0.1,
@@ -17046,7 +17046,7 @@
       },
       "GaussianInitializationSpec-Output": {
         "additionalProperties": false,
-        "description": "Independent Gaussian starts in the native affine chart, without adaptation.\n\nThis proposal is only an initializer. The subsequent particle transitions\nand every retained diagnostic use the exact nonlinear target.",
+        "description": "Gaussian starts around a data-conditioned MPGibbs path center.\n\nA damped iterated extended Kalman smoother conditions the path center on\npoint readings at the initial parameter center, preserving the native\nGaussian jitter and parameter starts. Interval readings are omitted from\nthis seed. Exact replay restores recurrences, static values and constraints;\nsubsequent particle transitions and diagnostics use the exact nonlinear target.",
         "properties": {
           "scale": {
             "default": 0.1,

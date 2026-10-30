@@ -4762,10 +4762,13 @@ export interface components {
         };
         /**
          * GaussianInitializationSpec
-         * @description Independent Gaussian starts in the native affine chart, without adaptation.
+         * @description Gaussian starts around a data-conditioned MPGibbs path center.
          *
-         *     This proposal is only an initializer. The subsequent particle transitions
-         *     and every retained diagnostic use the exact nonlinear target.
+         *     A damped iterated extended Kalman smoother conditions the path center on
+         *     point readings at the initial parameter center, preserving the native
+         *     Gaussian jitter and parameter starts. Interval readings are omitted from
+         *     this seed. Exact replay restores recurrences, static values and constraints;
+         *     subsequent particle transitions and diagnostics use the exact nonlinear target.
          */
         readonly "GaussianInitializationSpec-Input": {
             /**
@@ -4777,10 +4780,13 @@ export interface components {
         };
         /**
          * GaussianInitializationSpec
-         * @description Independent Gaussian starts in the native affine chart, without adaptation.
+         * @description Gaussian starts around a data-conditioned MPGibbs path center.
          *
-         *     This proposal is only an initializer. The subsequent particle transitions
-         *     and every retained diagnostic use the exact nonlinear target.
+         *     A damped iterated extended Kalman smoother conditions the path center on
+         *     point readings at the initial parameter center, preserving the native
+         *     Gaussian jitter and parameter starts. Interval readings are omitted from
+         *     this seed. Exact replay restores recurrences, static values and constraints;
+         *     subsequent particle transitions and diagnostics use the exact nonlinear target.
          */
         readonly "GaussianInitializationSpec-Output": {
             /**

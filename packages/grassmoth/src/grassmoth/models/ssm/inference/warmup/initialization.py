@@ -21,6 +21,7 @@ from grassmoth.models.ssm.inference.joint_coordinates import (
     build_joint_coordinates,
 )
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
+from grassmoth.models.ssm.inference.warmup.ieks import ieks_path
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
 
@@ -58,6 +59,24 @@ def prepare_particle_initialization(
     coordinates = build_joint_coordinates(target, "centred", compiler=execution_context.compiler)
     assert isinstance(coordinates.parameterization, CentredParameterization)
 
+    def seeded_chart(chart: JointChart) -> JointChart:
+        assert chart.affine is not None
+        context = target.context(chart.parameter_center, target.times)
+        center = ieks_path(target, context, chart.affine.path_center)
+        return JointChart(
+            chart.parameter_center, CentredParameterization(center, chart.affine.path_chol)
+        )
+
+    seed_program = execution_context.compiler(seeded_chart, coordinates.chart)
+    if not execution_context.budget.capacity(compiled_memory(seed_program.executable), limit=1):
+        raise MemoryError("IEKS initialization exceeds the numerical execution memory budget")
+    chart = seed_program.call(coordinates.chart)
+    assert chart.affine is not None
+    if not np.isfinite(np.asarray(chart.affine.path_center)).all():
+        return InitializationFailure.unavailable(
+            "The IEKS initializer produced a non-finite path seed"
+        )
+
     def gaussian_initialization(
         chart: JointChart, draw_key: PRNGKeyArray
     ) -> tuple[
@@ -79,12 +98,10 @@ def prepare_particle_initialization(
             jnp.var(paths, axis=0),
         )
 
-    program = execution_context.compiler(gaussian_initialization, coordinates.chart, key)
+    program = execution_context.compiler(gaussian_initialization, chart, key)
     if not execution_context.budget.capacity(compiled_memory(program.executable), limit=1):
         raise MemoryError("Gaussian initialization exceeds the numerical execution memory budget")
-    positions, paths, parameter_chol, pilot_mean, pilot_variance = program.call(
-        coordinates.chart, key
-    )
+    positions, paths, parameter_chol, pilot_mean, pilot_variance = program.call(chart, key)
     if not all(np.isfinite(np.asarray(value)).all() for value in (positions, paths)):
         return InitializationFailure.unavailable(
             "The Gaussian initializer produced non-finite starting coordinates"
