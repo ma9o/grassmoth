@@ -11,7 +11,13 @@ import numpyro.distributions as dist
 import pytest
 from dynestyx.observation_missingness import masked_observation_log_prob
 
-from grassmoth.artifacts.model.likelihood import NormalLawSpec
+from grassmoth.artifacts.model.expressions import coefficient
+from grassmoth.artifacts.model.likelihood import (
+    GammaLawSpec,
+    NegativeBinomial2LawSpec,
+    NormalLawSpec,
+    PoissonLawSpec,
+)
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
@@ -19,10 +25,123 @@ from grassmoth.models.ssm.execution.observation_distributions import (
     gaussian_distribution,
     masked_law_log_prob,
 )
+from grassmoth.models.ssm.execution.observation_model import (
+    grouped_density,
+    grouped_density_with_noise,
+    prepare_grouped_density,
+)
 from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReference
 from grassmoth_test_support.interval_particle import interval_target
+from grassmoth_test_support.observation import observation_laws
 
 pytestmark = pytest.mark.inference(concern="sampling")
+
+
+@pytest.mark.parametrize(
+    ("family", "state_concentration"),
+    [
+        (DistributionFamily.GAMMA, False),
+        (DistributionFamily.GAMMA, True),
+        (DistributionFamily.NEGATIVE_BINOMIAL, False),
+        (DistributionFamily.NEGATIVE_BINOMIAL, True),
+        (DistributionFamily.POISSON, False),
+    ],
+)
+def test_prepared_point_terms_preserve_authored_operands_and_derivatives(
+    family, state_concentration
+):
+    """Fixed event terms retain learned parameters, arbitrary responses and missingness."""
+    values = jnp.array([[0.2, jnp.nan], [2.0, 1.0], [jnp.nan, jnp.nan]])
+    if family != DistributionFamily.GAMMA:
+        values = values.at[0, 0].set(0).at[1, 0].set(3)
+
+    def scores(parameters, readings, prepared):
+        laws = observation_laws(
+            (family, family),
+            parameters={"obs_shape": jnp.exp(parameters[0]), "obs_r": jnp.exp(parameters[0])},
+        )
+        authored = []
+        for law in laws:
+            assert isinstance(law, (GammaLawSpec, NegativeBinomial2LawSpec, PoissonLawSpec))
+            if isinstance(law, (GammaLawSpec, NegativeBinomial2LawSpec)):
+                concentration = replace(
+                    law.concentration,
+                    expression=law.concentration.expression
+                    if state_concentration
+                    else coefficient(None, "shape"),
+                    evaluate_fn=(lambda eta, _scale, values: values[0] * jnp.exp(0.2 * eta))
+                    if state_concentration
+                    else law.concentration.evaluate_fn,
+                )
+                law = (
+                    GammaLawSpec(concentration=concentration, rate=law.rate)
+                    if isinstance(law, GammaLawSpec)
+                    else NegativeBinomial2LawSpec(concentration=concentration, mean=law.mean)
+                )
+            # This response is invalid at the preparation placeholder, yet valid at
+            # the scored states. Its arbitrary expression must not be replaced by a link.
+            operand = law.mean if isinstance(law, NegativeBinomial2LawSpec) else law.rate
+            operand = replace(
+                operand,
+                expression=laws[0].operands()[0][1].expression - 2,
+                evaluate_fn=lambda eta, _scale, _values: eta - 2,
+            )
+            if isinstance(law, GammaLawSpec):
+                authored.append(GammaLawSpec(concentration=law.concentration, rate=operand))
+            elif isinstance(law, NegativeBinomial2LawSpec):
+                authored.append(
+                    NegativeBinomial2LawSpec(concentration=law.concentration, mean=operand)
+                )
+            else:
+                authored.append(PoissonLawSpec(rate=operand))
+        model = HeterogeneousObservation(
+            MeasurementParams(jnp.eye(2), jnp.zeros(2), jnp.eye(2)), tuple(authored)
+        )
+        groups = model.density_groups()
+        factors = prepare_grouped_density(groups, model.measurement.manifest_cov, readings)
+        predictors = jnp.array(
+            [
+                [parameters[1], jnp.nan],
+                [parameters[1] + 0.5, parameters[1] + 0.2],
+                [jnp.nan, jnp.nan],
+            ]
+        )
+
+        def density(index):
+            y, eta = readings[index], predictors[index]
+            if prepared:
+                return grouped_density_with_noise(model, y, eta, factors.at(index))
+            return grouped_density(
+                groups,
+                jnp.nan_to_num(y, nan=0.0),
+                eta,
+                model.measurement.manifest_cov,
+                ~jnp.isnan(y),
+            )
+
+        return jax.vmap(density)(jnp.arange(3))
+
+    parameters = jnp.array([0.4, 2.6])
+    actual = jax.jit(jax.value_and_grad(lambda p: scores(p, values, True).sum()))(parameters)
+    expected = jax.jit(jax.value_and_grad(lambda p: scores(p, values, False).sum()))(parameters)
+    for result, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        np.testing.assert_allclose(result, reference, atol=2e-5, rtol=2e-5)
+    np.testing.assert_allclose(
+        jax.hessian(lambda p: scores(p, values, True).sum())(parameters),
+        jax.hessian(lambda p: scores(p, values, False).sum())(parameters),
+        atol=3e-5,
+        rtol=3e-5,
+    )
+    for readings, invalid_parameters in (
+        (values.at[0, 0].set(-1), parameters),
+        (values, parameters.at[1].set(1.0)),
+    ):
+        np.testing.assert_allclose(
+            scores(invalid_parameters, readings, True),
+            scores(invalid_parameters, readings, False),
+            atol=2e-5,
+            rtol=2e-5,
+        )
 
 
 @pytest.mark.parametrize("with_interval", [False, True])

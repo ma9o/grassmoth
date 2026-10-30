@@ -10,11 +10,15 @@ import jax.numpy as jnp
 import numpy as np
 
 from grassmoth.models.ssm.execution.observation_groups import compile_law_groups
-from grassmoth.models.ssm.execution.observation_model import prepare_mean_density
+from grassmoth.models.ssm.execution.observation_model import (
+    prepare_grouped_noise,
+    prepare_mean_density_with_noise,
+)
 from grassmoth.models.ssm.execution.observation_operator import expected_observation_mean
 
 if TYPE_CHECKING:
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
+    from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
     from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
     from grassmoth.models.ssm.inference.targets.particle import (
         ParticleContext,
@@ -37,6 +41,7 @@ class WindowMemoryRuntime:
     replay_stops: jax.Array
     max_replay: int
     shape: tuple[int, int, int, int]
+    noise: tuple[GaussianNoiseFactors, ...]
 
     def moments(self, contexts: ParticleContext, states: jax.Array) -> jax.Array:
         """Evaluate the authored response before any window aggregation."""
@@ -62,7 +67,12 @@ class WindowMemoryRuntime:
             statistics, jnp.maximum(slots, 0)[None, :, None, None], axis=2
         )[:, :, 0, :]
 
-        def density(context: ParticleContext, state: jax.Array, moments: jax.Array) -> jax.Array:
+        def density(
+            context: ParticleContext,
+            state: jax.Array,
+            moments: jax.Array,
+            noise: tuple[GaussianNoiseFactors, ...],
+        ) -> jax.Array:
             model = cast(
                 "HeterogeneousObservation",
                 self.intervals.dynamical_model(context).observation_model,
@@ -81,19 +91,24 @@ class WindowMemoryRuntime:
             means = jnp.where(index == 0, response, means)
             mask = jnp.zeros_like(response, dtype=bool).at[channels].set(slots >= 0)
             mask = mask & jnp.isfinite(observations[index])
-            score = prepare_mean_density(
+            score = prepare_mean_density_with_noise(
                 groups,
                 jnp.nan_to_num(observations[index]),
                 model.measurement.manifest_cov,
                 mask,
+                tuple(factor.at(index) for factor in noise),
                 log_precision,
             )
             return score(means)
 
-        return jax.vmap(density)(contexts, states, selected)
+        return jax.vmap(density)(contexts, states, selected, self.noise)
 
 
-def _window_memory(intervals: ParticleIntervalObservations, labels: int) -> WindowMemoryRuntime:
+def _window_memory(
+    intervals: ParticleIntervalObservations,
+    contexts: ParticleContext,
+    observations: jax.Array,
+) -> WindowMemoryRuntime:
     operator = intervals.operator
     scan = operator.scan
     channels = operator.interval_summary_indices
@@ -108,6 +123,21 @@ def _window_memory(intervals: ParticleIntervalObservations, labels: int) -> Wind
         stops[window.start_index : window.anchor_index] = np.maximum(
             stops[window.start_index : window.anchor_index], window.anchor_index
         )
+    observed = jnp.zeros_like(observations, dtype=bool).at[:, jnp.asarray(channels)].set(slots >= 0)
+    observed = observed & jnp.isfinite(observations)
+    readings = jnp.where(observed, observations, jnp.nan)
+
+    def noise(context: ParticleContext) -> tuple[GaussianNoiseFactors, ...]:
+        model = cast(
+            "HeterogeneousObservation", intervals.dynamical_model(context).observation_model
+        )
+        return prepare_grouped_noise(
+            compile_law_groups(model.laws, channels, interval=True),
+            model.measurement.manifest_cov,
+            readings,
+        )
+
+    labels = jax.tree.leaves(contexts)[0].shape[0]
     return WindowMemoryRuntime(
         intervals,
         channels,
@@ -119,6 +149,7 @@ def _window_memory(intervals: ParticleIntervalObservations, labels: int) -> Wind
         jnp.asarray(stops),
         max(1, int(np.max(stops - np.arange(len(stops))))),
         (labels, len(channels), scan.max_active_windows, intervals.tree.statistic_count),
+        jax.vmap(noise)(contexts),
     )
 
 
@@ -334,12 +365,13 @@ def sequential_observations(
     noise = jax.vmap(lambda context: target.prepare_noise_factors(context, target.observations))(
         contexts
     )
-    labels = jax.tree.leaves(contexts)[0].shape[0]
     return SequentialObservationRuntime(
         target,
         contexts,
         guide,
         noise,
-        None if target.intervals is None else _window_memory(target.intervals, labels),
+        None
+        if target.intervals is None
+        else _window_memory(target.intervals, contexts, target.observations),
         log_precisions,
     )

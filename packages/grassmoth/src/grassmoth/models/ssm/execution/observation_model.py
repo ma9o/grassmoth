@@ -9,22 +9,30 @@ from typing import TYPE_CHECKING, cast
 import jax
 import jax.numpy as jnp
 
+from grassmoth.artifacts.model.expressions import expression_states
 from grassmoth.artifacts.model.likelihood import (
     CategoricalLawSpec,
+    GammaLawSpec,
+    NegativeBinomial2LawSpec,
     NormalLawSpec,
     OrderedLogisticLawSpec,
+    PoissonLawSpec,
     StudentTLawSpec,
 )
 from grassmoth.models.ssm.execution import emissions
 from grassmoth.models.ssm.execution.observation_distributions import (
+    FixedLawTerms,
+    fixed_law_log_prob,
     law_response,
     masked_law_log_prob,
+    prepare_fixed_law_terms,
     prepare_response_log_prob,
 )
 from grassmoth.models.ssm.execution.observation_groups import LawGroup, compile_law_groups
 from grassmoth.models.ssm.execution.observation_operator import compile_observation_operator
 
 if TYPE_CHECKING:
+    from grassmoth.models.ssm.dynamics.expression import BoundExpression
     from grassmoth.models.ssm.execution.contracts import ObservationLaws
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
     from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
@@ -60,6 +68,19 @@ class CompiledObservationModel:
             self.observation_operator is not None
             and self.observation_operator.requires_interval_summary_handling
         )
+
+
+@jax.tree_util.register_dataclass
+@dataclass(frozen=True, eq=False)
+class ObservationDensityFactors:
+    """Gaussian noise and fixed scalar event terms on the same observation grid."""
+
+    gaussian: tuple[GaussianNoiseFactors, ...]
+    scalar: tuple[FixedLawTerms | None, ...]
+
+    def at(self, index: jax.Array | int) -> ObservationDensityFactors:
+        """Select one time while preserving the static law grouping."""
+        return cast("ObservationDensityFactors", jax.tree.map(lambda value: value[index], self))
 
 
 def _group_density(
@@ -129,20 +150,78 @@ def prepare_grouped_noise(
     return tuple(prepare(group) for group in groups if isinstance(group.laws[0], NormalLawSpec))
 
 
+def prepare_grouped_density(
+    groups: tuple[LawGroup, ...], covariance: jax.Array, observations: jax.Array
+) -> ObservationDensityFactors:
+    """Hoist only event terms whose authored concentration has no state operands."""
+    scales = jnp.sqrt(jnp.diag(covariance))
+
+    def prepare(group: LawGroup) -> FixedLawTerms | None:
+        first = group.laws[0]
+        if isinstance(first, (GammaLawSpec, NegativeBinomial2LawSpec)):
+            if any(
+                expression_states(
+                    cast(
+                        "GammaLawSpec[BoundExpression] | NegativeBinomial2LawSpec[BoundExpression]",
+                        law,
+                    ).concentration.expression
+                )
+                for law in group.laws
+            ):
+                return None
+        elif not isinstance(first, PoissonLawSpec):
+            return None
+        indices = jnp.asarray(group.indices, dtype=jnp.int32)
+
+        def terms(values: jax.Array) -> FixedLawTerms:
+            observed = ~jnp.isnan(values)
+            if isinstance(first, PoissonLawSpec):
+                law = PoissonLawSpec(rate=jnp.ones(len(group.indices), dtype=values.dtype))
+            else:
+                concentration = jnp.stack(
+                    tuple(
+                        cast(
+                            "GammaLawSpec[BoundExpression] | NegativeBinomial2LawSpec[BoundExpression]",
+                            bound,
+                        ).concentration.evaluate(
+                            jnp.ones((), dtype=values.dtype), scales[index], observed[index]
+                        )
+                        for index, bound in zip(group.indices, group.laws, strict=True)
+                    )
+                )
+                law = (
+                    GammaLawSpec(concentration=concentration, rate=jnp.ones_like(concentration))
+                    if isinstance(first, GammaLawSpec)
+                    else NegativeBinomial2LawSpec(
+                        concentration=concentration, mean=jnp.ones_like(concentration)
+                    )
+                )
+            return prepare_fixed_law_terms(
+                law, jnp.nan_to_num(values, nan=0.0)[indices], observed[indices]
+            )
+
+        return jax.vmap(terms)(observations)
+
+    return ObservationDensityFactors(
+        prepare_grouped_noise(groups, covariance, observations),
+        tuple(prepare(group) for group in groups),
+    )
+
+
 def grouped_density_with_noise(
     model: HeterogeneousObservation,
     y: jax.Array,
     eta: jax.Array,
-    noise: tuple[GaussianNoiseFactors, ...],
+    noise: ObservationDensityFactors,
     log_precision: jax.Array | None = None,
 ) -> jax.Array:
-    """Use fixed Gaussian factors and the ordinary evaluator for all other laws."""
+    """Use prepared factors without changing any predictor-dependent law operands."""
     groups, covariance = model.density_groups(), model.measurement.manifest_cov
     observed = ~jnp.isnan(y)
     filled = jnp.nan_to_num(y, nan=0.0)
-    factors = iter(noise)
+    factors = iter(noise.gaussian)
     total = jnp.zeros((), dtype=eta.dtype)
-    for group in groups:
+    for group, terms in zip(groups, noise.scalar, strict=True):
         if isinstance(group.laws[0], NormalLawSpec):
             indices = jnp.asarray(group.indices, dtype=jnp.int32)
             law = cast(
@@ -151,6 +230,11 @@ def grouped_density_with_noise(
             )
             residual = jnp.where(observed[indices], filled[indices] - law.loc, 0.0)
             total = total + next(factors).log_prob(residual)
+        elif terms is not None:
+            indices = jnp.asarray(group.indices, dtype=jnp.int32)
+            law = group.evaluate(eta, jnp.sqrt(jnp.diag(covariance)), mask=observed)
+            assert isinstance(law, (GammaLawSpec, NegativeBinomial2LawSpec, PoissonLawSpec))
+            total = total + fixed_law_log_prob(law, filled[indices], observed[indices], terms)
         else:
             total = total + _group_density(
                 group, filled, eta, covariance, observed, log_precision=log_precision
@@ -185,7 +269,23 @@ def prepare_mean_density(
     mask: jax.Array,
     log_precision: jax.Array | None = None,
 ) -> ResponseFn:
+    """Bind one row's exact noise and scalar laws before mapping candidate means."""
+    noise = prepare_grouped_noise(groups, R, jnp.where(mask > 0.5, y, jnp.nan)[None])
+    return prepare_mean_density_with_noise(
+        groups, y, R, mask, tuple(factor.at(0) for factor in noise), log_precision
+    )
+
+
+def prepare_mean_density_with_noise(
+    groups: tuple[LawGroup, ...],
+    y: jax.Array,
+    R: jax.Array,
+    mask: jax.Array,
+    noise: tuple[GaussianNoiseFactors, ...],
+    log_precision: jax.Array | None = None,
+) -> ResponseFn:
     """Bind each interval law before mapping across candidate response means."""
+    factors = iter(noise)
 
     def bind(group: LawGroup) -> ResponseFn:
         if isinstance(group.laws[0], StudentTLawSpec) and log_precision is not None:
@@ -193,7 +293,11 @@ def prepare_mean_density(
                 group, y, jnp.zeros_like(means), R, mask, means, log_precision
             )
         if isinstance(group.laws[0], NormalLawSpec):
-            return lambda means: _group_density(group, y, jnp.zeros_like(means), R, mask, means)
+            factor = next(factors)
+            indices = jnp.asarray(group.indices, dtype=jnp.int32)
+            return lambda means: factor.log_prob(
+                jnp.where(mask[indices] > 0.5, y[indices] - means[indices], 0.0)
+            )
         indices = jnp.asarray(group.indices)
         law = group.evaluate(jnp.zeros_like(y), jnp.sqrt(jnp.diag(R)), jnp.ones_like(y), mask)
         score = prepare_response_log_prob(law, y[indices], mask[indices])

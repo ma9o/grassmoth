@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, ClassVar, assert_never, override
 
@@ -265,6 +266,63 @@ def masked_law_log_prob(law: Law[jax.Array], values: jax.Array, mask: jax.Array)
     """Missing factors/derivatives are zero; invalid observed events have zero mass."""
     feasible, valid, observed, safe_values = _masked_law_inputs(law, values, mask)
     log_probs = to_native(feasible).log_prob(safe_values)
+    total = jnp.sum(jnp.where(valid & observed, log_probs, 0.0))
+    return jnp.where(jnp.any(observed & ~valid), -jnp.inf, total)
+
+
+type FixedTermLaw = (
+    GammaLawSpec[jax.Array] | NegativeBinomial2LawSpec[jax.Array] | PoissonLawSpec[jax.Array]
+)
+
+
+@jax.tree_util.register_dataclass
+@dataclass(frozen=True, eq=False)
+class FixedLawTerms:
+    """Additive event terms independent of the changing rate or response mean."""
+
+    constant: jax.Array
+
+
+def prepare_fixed_law_terms(law: FixedTermLaw, values: jax.Array, mask: jax.Array) -> FixedLawTerms:
+    """Prepare exact event normalizers while retaining fixed-parameter derivatives."""
+    feasible, _, _, safe_values = _masked_law_inputs(law, values, mask)
+    match feasible:
+        case GammaLawSpec():
+            constant = jax.scipy.special.xlogy(feasible.concentration - 1, safe_values)
+            constant = constant - jax.scipy.special.gammaln(feasible.concentration)
+        case NegativeBinomial2LawSpec():
+            constant = -_negative_binomial_normalizer(feasible.concentration, safe_values)
+        case PoissonLawSpec():
+            constant = -jax.scipy.special.gammaln(safe_values + 1)
+        case _:
+            raise AssertionError("Fixed event terms require a Gamma, NB2 or Poisson law")
+    return FixedLawTerms(constant)
+
+
+def fixed_law_log_prob(
+    law: FixedTermLaw, values: jax.Array, mask: jax.Array, terms: FixedLawTerms
+) -> jax.Array:
+    """Evaluate the full authored law using only its state-independent cached terms."""
+    feasible, valid, observed, safe_values = _masked_law_inputs(law, values, mask)
+    match feasible:
+        case GammaLawSpec():
+            log_probs = (
+                terms.constant
+                - feasible.rate * safe_values
+                + feasible.concentration * jnp.log(feasible.rate)
+            )
+        case NegativeBinomial2LawSpec():
+            log_probs = _negative_binomial_log_prob(
+                feasible.mean, feasible.concentration, safe_values, -terms.constant
+            )
+        case PoissonLawSpec():
+            log_probs = (
+                jax.scipy.special.xlogy(safe_values.astype(feasible.rate.dtype), feasible.rate)
+                - feasible.rate
+                + terms.constant
+            )
+        case _:
+            raise AssertionError("Fixed event terms require a Gamma, NB2 or Poisson law")
     total = jnp.sum(jnp.where(valid & observed, log_probs, 0.0))
     return jnp.where(jnp.any(observed & ~valid), -jnp.inf, total)
 

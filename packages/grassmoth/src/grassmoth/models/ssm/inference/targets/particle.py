@@ -19,8 +19,9 @@ from grassmoth.models.ssm.execution.affine import compose_affine_maps
 from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
 from grassmoth.models.ssm.execution.innovations import GaussianPathMap
 from grassmoth.models.ssm.execution.observation_model import (
+    ObservationDensityFactors,
     grouped_density_with_noise,
-    prepare_grouped_noise,
+    prepare_grouped_density,
 )
 from grassmoth.models.ssm.inference.targets.gaussian_reference import (
     GaussianReference,
@@ -59,7 +60,7 @@ class ParticleNoiseFactors:
     """Exact noise factors for one fixed parameter context and its observation grid."""
 
     transitions: GaussianNoiseFactors
-    observations: tuple[GaussianNoiseFactors, ...]
+    observations: ObservationDensityFactors
 
 
 @dataclass(frozen=True, eq=False)
@@ -377,7 +378,7 @@ class ParticleTarget:
         model = cast("HeterogeneousObservation", self.dynamical_model(context).observation_model)
         return ParticleNoiseFactors(
             transitions,
-            prepare_grouped_noise(
+            prepare_grouped_density(
                 model.density_groups(),
                 model.measurement.manifest_cov,
                 self._point_observations(observations),
@@ -485,7 +486,7 @@ class ParticleTarget:
                 model,
                 self._point_observations(self.observations)[index],
                 predictor,
-                tuple(factor.at(index) for factor in noise.observations),
+                noise.observations.at(index),
                 log_precision,
             ).astype(predictor.dtype)
 
