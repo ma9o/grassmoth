@@ -502,6 +502,7 @@ def test_local_auxiliary_mixture_requires_no_root_auxiliary_correction(method, s
         ("amala", 1.0, 33, False),
         ("amala_plus", 1.0, 33, False),
         ("amala_plus", 0.0, 33, True),
+        ("amala_plus", 0.0, 1025, True),
     ],
 )
 def test_dsmc_batching_preserves_nonlocal_mixture_transition(
@@ -518,6 +519,10 @@ def test_dsmc_batching_preserves_nonlocal_mixture_transition(
         observations[:, 0], starts[:, 0] = 0.2, times
         for row, start, value in ((7, 1, 2), (15, 9, 3), (31, 17, 4), (32, 28, 2)):
             observations[row, 1], starts[row, 1] = value, start
+        if steps > 513:
+            # The second merge level emits in upper-tile node 128, beyond
+            # the first 128-node tile but within the wider leaf-level tile.
+            observations[515, 1], starts[515, 1] = 3, 513
         target = interval_target(
             times,
             observations,

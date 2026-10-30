@@ -436,14 +436,11 @@ def _step(
         if batch_size is not None:
             block = min(block, batch_size)
         block = 1 << (block.bit_length() - 1)
-        if intervals is None:
-            plans = None
-        else:
+        if intervals is not None:
             levels = intervals.tree.levels[1:]
             slots = max(
                 segments.statistics.shape[-3], *(plan.left_slots.shape[1] for plan in levels)
             )
-            plans = stack_interval_tree_levels(levels, max_nodes, slots, block)
             statistics = jnp.pad(
                 segments.statistics,
                 (
@@ -483,7 +480,21 @@ def _step(
             width = 1 << level
             active_children = (steps + width - 1) // width
             pairs = (active_children + 1) // 2
-            plan = None if plans is None else jax.tree.map(lambda value: value[level], plans)
+            # Emitting-node groups must use this merge body's actual tile.
+            # Upper levels share a smaller tile than the leaf-level merge.
+            plan = (
+                None
+                if intervals is None
+                else jax.tree.map(
+                    lambda value: value[level],
+                    stack_interval_tree_levels(
+                        intervals.tree.levels[1:],
+                        max_nodes,
+                        current.statistics.shape[-3],
+                        node_batch,
+                    ),
+                )
+            )
             children = (jnp.zeros((max_nodes, count), jnp.int32),) * 2
             metrics = {
                 metric: jnp.zeros(max_nodes, dtype=values.dtype)
