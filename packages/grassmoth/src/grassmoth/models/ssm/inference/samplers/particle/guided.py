@@ -45,11 +45,10 @@ before execution; intervals and recurrence are not part of this construction.
 """
 
 from types import MappingProxyType
-from typing import NamedTuple
+from typing import NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
-from jax.scipy.special import logsumexp
 from jax.typing import DTypeLike
 
 from grassmoth.artifacts.sampling import GuidedPathSpec
@@ -77,6 +76,7 @@ from grassmoth.models.ssm.inference.samplers.particle.marginal import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     _masked_normal_log_prob,
+    label_logsumexp,
 )
 from grassmoth.models.ssm.inference.samplers.particle.prefix_mixture import (
     _mixture_geometry,
@@ -113,7 +113,7 @@ def _killing_noise(key: PRNGKeyArray, count: int, dtype: DTypeLike) -> _KillingN
     )
 
 
-def _killing(logits: Float[Array, " P"], noise: _KillingNoise) -> Int[Array, " P"]:
+def _killing_reference(logits: Float[Array, " P"], noise: _KillingNoise) -> Int[Array, " P"]:
     """Killing with cyclic conditioning on ancestor[0] = 0.
 
     Karppinen, Singh & Vihola's conditional resampling, as used by the paper:
@@ -131,6 +131,58 @@ def _killing(logits: Float[Array, " P"], noise: _KillingNoise) -> Int[Array, " P
     rotation_mass = rotation_mass.at[0].set(1.0 - jnp.sum(rotation_mass))
     rotation = jnp.argmax(jnp.log(rotation_mass) + noise.rotation)
     return jnp.roll(indices, -rotation).at[0].set(0).astype(jnp.int32)
+
+
+def _killing_fused(
+    logits: Float[Array, " P"], noise: _KillingNoise, *, interpret: bool = False
+) -> Int[Array, " P"]:
+    """Fuse conditional resampling's reductions in a single particle block."""
+    from jax.experimental import pallas as pl
+    from jax.experimental.pallas import triton as plt
+
+    count = logits.size
+    block = pl.next_power_of_2(count)
+
+    def kernel(logits_ref, survival_ref, replacement_ref, rotation_ref, output_ref):
+        p = jnp.arange(block)
+        values = plt.load(logits_ref.at[p], mask=p < count, other=-jnp.inf)
+        maximum = jnp.max(values)
+        survival = jnp.exp(values - maximum)
+        cumulative = jnp.cumsum(survival / jnp.sum(survival))
+        rotation_mass = jnp.where((p > 0) & (p < count), (1.0 - survival) / count, 0.0)
+        rotation_mass = jnp.where(p == 0, 1.0 - jnp.sum(rotation_mass), rotation_mass)
+        rotation_noise = plt.load(rotation_ref.at[p], mask=p < count, other=-jnp.inf)
+        rotation_logits = jnp.log(rotation_mass) + rotation_noise
+        rotation = jnp.min(jnp.where(rotation_logits == jnp.max(rotation_logits), p, block))
+        source = (p + rotation) % count
+        chosen_logits = plt.load(logits_ref.at[source])
+        survival_noise = plt.load(survival_ref.at[source])
+        replacement_noise = plt.load(replacement_ref.at[source])
+        replacements = jnp.minimum(
+            jnp.sum(
+                (cumulative[None, :] <= replacement_noise[:, None]) & (p[None, :] < count), axis=1
+            ),
+            count - 1,
+        )
+        indices = jnp.where(survival_noise < jnp.exp(chosen_logits - maximum), source, replacements)
+        indices = jnp.where(p == 0, 0, indices).astype(jnp.int32)
+        plt.store(output_ref.at[p], indices, mask=p < count)
+
+    result = pl.pallas_call(
+        kernel,
+        out_shape=jax.ShapeDtypeStruct(logits.shape, jnp.int32),
+        interpret=interpret,
+        compiler_params=plt.CompilerParams(num_warps=4),
+        name="conditional_killing",
+    )(logits, noise.survival, noise.replacement, noise.rotation)
+    return cast("jax.Array", result)
+
+
+def _killing(logits: Float[Array, " P"], noise: _KillingNoise) -> Int[Array, " P"]:
+    return cast(
+        "jax.Array",
+        jax.lax.platform_dependent(logits, noise, cpu=_killing_reference, cuda=_killing_fused),
+    )
 
 
 class _GuidedComponents(NamedTuple):
@@ -183,7 +235,7 @@ def _guided_step(
         def mixture(state: Float[Array, " D"]) -> tuple[Float[Array, ""], Float[Array, " K"]]:
             current = memory.replace_current(value, state, jnp.asarray(index))
             per_label = memory.log_probs(current, jnp.asarray(index)).astype(ctx.traj_dtype)
-            return logsumexp(ctx.initial_label_log_probs + per_label), per_label
+            return label_logsumexp(ctx.initial_label_log_probs + per_label), per_label
 
         (_, per_label), gradient = jax.value_and_grad(mixture, has_aux=True)(memory.state(value))
         return jnp.asarray(per_label), jnp.asarray(gradient)
@@ -288,7 +340,7 @@ def _guided_step(
         + jax.vmap(memory.initial_log_probs)(first_memory)
         + first_observed
     )
-    first_normalizer = logsumexp(first_scores, axis=-1)
+    first_normalizer = label_logsumexp(first_scores)
     # A zero-mass prefix stays all -inf; it has no normalized label law.
     first_scores = (
         first_scores - jnp.where(jnp.isneginf(first_normalizer), 0.0, first_normalizer)[:, None]
@@ -359,7 +411,7 @@ def _guided_step(
         )
         # Normalized prefix label laws remove repeated prefix reductions and avoid
         # subtracting two increasingly large log densities as the time grid grows.
-        increment = logsumexp(next_scores, axis=-1)
+        increment = label_logsumexp(next_scores)
         next_scores = next_scores - jnp.where(jnp.isneginf(increment), 0.0, increment)[:, None]
         current_twists = twist.log_density(current_memory, index)
         next_weights: jax.Array = (

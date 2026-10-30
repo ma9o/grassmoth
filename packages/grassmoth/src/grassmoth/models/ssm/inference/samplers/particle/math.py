@@ -10,6 +10,15 @@ from grassmoth.artifacts.sampling import LatentBlockSize
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
 
 
+def label_logsumexp(values: Float[Array, "*batch K"]) -> Float[Array, " *batch"]:
+    """Sum tiny label mixtures without a separate parallel reduction kernel."""
+    if values.shape[-1] == 1:
+        return values[..., 0]
+    if values.shape[-1] == 2:
+        return jnp.logaddexp(values[..., 0], values[..., 1])
+    return jax.scipy.special.logsumexp(values, axis=-1)
+
+
 def multinomial(
     key: PRNGKeyArray, logits: Float[Array, " P"], count: int
 ) -> Int[Array, " {count}"]:

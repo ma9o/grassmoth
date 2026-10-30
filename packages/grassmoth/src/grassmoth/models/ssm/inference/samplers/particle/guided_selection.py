@@ -5,14 +5,107 @@ from typing import Literal, cast
 
 import jax
 import jax.numpy as jnp
-from jax.scipy.special import logsumexp
 from jax.typing import DTypeLike
 
-from grassmoth.models.ssm.inference.samplers.particle.math import _masked_normal_log_prob
+from grassmoth.models.ssm.inference.samplers.particle.math import (
+    _masked_normal_log_prob,
+    label_logsumexp,
+)
 from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
 
 type PathSelector = Literal["backward", "window_replay", "ancestral"]
+
+
+def _cached_backward(
+    weights: Float[Array, "T P"],
+    links: Float[Array, "T-1 P P K"],
+    scores: Float[Array, "T P K"],
+    observations: Float[Array, "T P K"],
+    gumbels: Float[Array, "T-1 P"],
+    last: Int[Array, ""],
+) -> tuple[Int[Array, " T"], Float[Array, " K"]]:
+    """Keep the exact label suffix on device for the complete backward traversal."""
+    from functools import partial
+
+    from jax.experimental import pallas as pl
+    from jax.experimental.pallas import triton as pltriton
+
+    steps, count, labels = scores.shape
+    if steps == 1:
+        return last[None], observations[0, last]
+    particle_block = pl.next_power_of_2(count)
+    label_block = pl.next_power_of_2(labels)
+
+    def kernel(
+        links_ref,
+        weights_ref,
+        scores_ref,
+        observations_ref,
+        gumbels_ref,
+        last_ref,
+        picks_ref,
+        suffix_ref,
+    ):
+        p = jnp.arange(particle_block)
+        k = jnp.arange(label_block)
+        last_pick = last_ref[()]
+        initial_suffix = pltriton.load(
+            observations_ref.at[steps - 1, last_pick, k], mask=k < labels, other=0.0
+        )
+        picks_ref[steps - 1] = last_pick
+
+        def body(offset, carry):
+            following, suffix = carry
+            index = steps - 2 - offset
+            valid = (p[:, None] < count) & (k[None, :] < labels)
+            edge = pltriton.load(
+                links_ref.at[index, following, p[:, None], k[None, :]], mask=valid, other=0.0
+            )
+            prefix = pltriton.load(
+                scores_ref.at[index, p[:, None], k[None, :]], mask=valid, other=-jnp.inf
+            )
+            total = prefix + edge + suffix[None, :]
+            maximum = jnp.max(total, axis=1)
+            shift = jnp.where(jnp.isfinite(maximum), maximum, 0.0)
+            mixed = jnp.log(jnp.sum(jnp.exp(total - shift[:, None]), axis=1)) + shift
+            weight = pltriton.load(weights_ref.at[index, p], mask=p < count, other=-jnp.inf)
+            noise = pltriton.load(gumbels_ref.at[index, p], mask=p < count, other=0.0)
+            value = mixed + weight + noise
+            pick = jnp.min(jnp.where(value == jnp.max(value), p, particle_block))
+            chosen_edge = jnp.sum(jnp.where(p[:, None] == pick, edge, 0.0), axis=0)
+            observed = pltriton.load(
+                observations_ref.at[index, pick, k], mask=k < labels, other=0.0
+            )
+            picks_ref[index] = pick
+            return pick, suffix + chosen_edge + observed
+
+        _, suffix = jax.lax.fori_loop(0, steps - 1, body, (last_pick, initial_suffix))
+        pltriton.store(suffix_ref.at[k], suffix, mask=k < labels)
+
+    def run(*args, interpret):
+        return pl.pallas_call(
+            kernel,
+            out_shape=(
+                jax.ShapeDtypeStruct((steps,), jnp.int32),
+                jax.ShapeDtypeStruct((labels,), scores.dtype),
+            ),
+            interpret=interpret,
+            compiler_params=pltriton.CompilerParams(num_warps=4),
+            name="exact_cached_backward",
+        )(*args)
+
+    result = jax.lax.platform_dependent(
+        links,
+        weights,
+        scores,
+        observations,
+        gumbels,
+        last,
+        cpu=partial(run, interpret=True),
+        cuda=partial(run, interpret=False),
+    )
+    return cast("tuple[jax.Array, jax.Array]", result)
 
 
 def _window_backward(
@@ -81,7 +174,7 @@ def _window_backward(
         logits = (
             weights[index]
             + auxiliary_sum
-            + logsumexp(scores[index] + label_sum + suffix_scores[stop + 1], axis=-1)
+            + label_logsumexp(scores[index] + label_sum + suffix_scores[stop + 1])
         )
         pick = jnp.argmax(logits + gumbels).astype(jnp.int32)
 
@@ -182,36 +275,38 @@ def select_path(
             )
         )(memory_bank[:-1], jnp.arange(1, steps))
 
-        def backward(
-            carry: tuple[jax.Array, jax.Array], inputs: tuple[jax.Array, jax.Array, jax.Array]
-        ) -> tuple[tuple[jax.Array, jax.Array], jax.Array]:
-            following, suffix = carry
-            index, gumbels, transition_means = inputs
-            links = jax.vmap(
-                lambda value, mean: memory.transition_log_probs_with_means(
-                    value, following, index + 1, mean
-                )
-            )(memory_bank[index], transition_means).astype(scores.dtype)
-            logits = backward_weights[index] + logsumexp(scores[index] + links + suffix, axis=-1)
-            pick = jnp.argmax(logits + gumbels).astype(jnp.int32)
-            value = memory_bank[index, pick]
-            return (value, suffix + links[pick] + observation_bank[index, pick]), pick
+        # All candidate successors are known after filtering. Materialize exact
+        # links over time and both particle axes before the suffix recursion.
+        # This trades O(T P^2 K) storage for parallel transition scoring.
+        def pairwise(
+            previous: Float[Array, "P R"],
+            current: Float[Array, "P R"],
+            index: Int[Array, ""],
+            transition_means: Float[Array, "P K D"],
+        ) -> Float[Array, "P P K"]:
+            return jax.vmap(
+                lambda following: jax.vmap(
+                    lambda value, mean: memory.transition_log_probs_with_means(
+                        value, following, index, mean
+                    )
+                )(previous, transition_means)
+            )(current)
 
-        (initial_selected, suffix), earlier = jax.lax.scan(
-            backward,
-            (memory_bank[-1, last], observation_bank[-1, last]),
-            (
-                jnp.arange(steps - 2, -1, -1),
-                jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=reference_dtype))(
-                    jax.random.split(earlier_key, steps - 1)
-                ),
-                means[::-1],
-            ),
-            unroll=unroll,
+        links_bank = jax.lax.optimization_barrier(
+            jax.vmap(pairwise)(
+                memory_bank[:-1], memory_bank[1:], jnp.arange(1, steps), means
+            ).astype(scores.dtype)
         )
-        picks = jnp.concatenate((earlier[::-1], last[None]))
+
+        gumbels = jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=reference_dtype))(
+            jax.random.split(earlier_key, steps - 1)
+        )[::-1]
+        picks, suffix = _cached_backward(
+            backward_weights, links_bank, scores, observation_bank, gumbels, last
+        )
+        initial_selected = picks[0]
         # The backward suffix already contains every selected exact observation and
         # transition factor. Only the initial density remains; do not rescore the path.
-        trajectory_scores = suffix + memory.initial_log_probs(initial_selected)
+        trajectory_scores = suffix + memory.initial_log_probs(memory_bank[0, initial_selected])
         path = bank[jnp.arange(steps), picks]
     return path, picks, cast("jax.Array", trajectory_scores)
