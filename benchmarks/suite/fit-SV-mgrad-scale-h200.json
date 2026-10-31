@@ -1,0 +1,60 @@
+{
+  "action": "fit",
+  "input": {
+    "target": {
+      "kind": "new",
+      "dynamical_model_spec_ref": "36ac730a68bca32987ffb9b283fe14a6f283544c",
+      "data_ref": {
+        "revision": "59b993c22c8f8db004eacd74fd05215f7624594b",
+        "replicate_index": 0
+      }
+    },
+    "settings": {
+      "num_warmup": 2000,
+      "num_samples_per_chain": 4000,
+      "num_chains": 4,
+      "seed": 19,
+      "hardware": "H200",
+      "time_limit_seconds": 1200,
+      "profile": true,
+      "stop_when_converged": {
+        "checkpoint_draws": 1000,
+        "min_draws": 1000
+      },
+      "algorithm": {
+        "method": "mpgibbs",
+        "n_parameter_particles": 2,
+        "tempering": {
+          "kind": "untempered"
+        },
+        "path_update": {
+          "method": "particle_mgrad",
+          "num_particles": 128,
+          "latent_step": {
+            "kind": "adapted",
+            "target": 0.5
+          },
+          "kappa": 1,
+          "scan_unroll": 8,
+          "prefix_mixture": false
+        },
+        "parameter_proposal": "random_walk",
+        "diagnostic_metrics": [
+          "parameter_movement",
+          "particle_identity",
+          "frequency_refresh",
+          "regional_movement"
+        ],
+        "param_target_accept": 0.2,
+        "adaptation_scheme": "simple",
+        "initialization": {
+          "scale": 0.1
+        },
+        "compiler_reparameterization": true,
+        "learned_translation": false,
+        "scale_chart": true
+      }
+    },
+    "repeat": 1
+  }
+}

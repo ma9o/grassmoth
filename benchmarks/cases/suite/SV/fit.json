@@ -1,0 +1,210 @@
+{
+  "constructs": {
+    "construct:h": {
+      "name": "log_variance",
+      "description": "Daily log-variance of percent returns around its long-run level",
+      "role": "endogenous",
+      "temporal_status": "time_varying",
+      "coefficients": [
+        {
+          "kind": "coefficient",
+          "role": "diffusion_scale",
+          "value": "parameter:f1ffd89daa71e4eb82bffebfcbb3d0d14f07a311cb81517a1936558916dd12a0",
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_mean",
+          "value": 0.0,
+          "construct_ids": []
+        },
+        {
+          "kind": "coefficient",
+          "role": "initial_scale",
+          "value": 1.0,
+          "construct_ids": []
+        }
+      ],
+      "dynamics": {
+        "mechanism:self-h": {
+          "kind": "drift",
+          "expression": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                  "kind": "literal",
+                  "value": -1.0
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "decay",
+                  "value": "parameter:13f16533dcd0153daa8294893366e785f98ce83bd4cc5b17cf046406a3711b96",
+                  "construct_ids": []
+                }
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                  "kind": "state",
+                  "construct_id": "construct:h"
+                },
+                "right": {
+                  "kind": "coefficient",
+                  "role": "center",
+                  "value": 0.0,
+                  "construct_ids": []
+                }
+              }
+            },
+            "right": {
+              "kind": "binary",
+              "operator": "multiply",
+              "left": {
+                "kind": "coefficient",
+                "role": "quartic",
+                "value": 0.0,
+                "construct_ids": []
+              },
+              "right": {
+                "kind": "binary",
+                "operator": "power",
+                "left": {
+                  "kind": "binary",
+                  "operator": "subtract",
+                  "left": {
+                    "kind": "state",
+                    "construct_id": "construct:h"
+                  },
+                  "right": {
+                    "kind": "coefficient",
+                    "role": "center",
+                    "value": 0.0,
+                    "construct_ids": []
+                  }
+                },
+                "right": {
+                  "kind": "literal",
+                  "value": 3.0
+                }
+              }
+            }
+          }
+        }
+      },
+      "indicators": {
+        "indicator:squared_return": {
+          "observation": {
+            "name": "squared_return",
+            "measurement": {
+              "dtype": "continuous"
+            },
+            "aggregation": "last",
+            "observation_window": "1d"
+          },
+          "likelihood": {
+            "law": {
+              "distribution": "Gamma",
+              "concentration": {
+                "kind": "coefficient",
+                "role": "shape",
+                "value": 0.5,
+                "construct_ids": []
+              },
+              "rate": {
+                "kind": "binary",
+                "operator": "divide",
+                "left": {
+                  "kind": "coefficient",
+                  "role": "shape",
+                  "value": 0.5,
+                  "construct_ids": []
+                },
+                "right": {
+                  "kind": "call",
+                  "function": "exp",
+                  "arguments": [
+                    {
+                      "kind": "binary",
+                      "operator": "add",
+                      "left": {
+                        "kind": "coefficient",
+                        "role": "observation_intercept",
+                        "value": "parameter:880c309512b418fec2f84448c184ed176e09ee71a5f08228997383837b1deeb8",
+                        "construct_ids": []
+                      },
+                      "right": {
+                        "kind": "binary",
+                        "operator": "multiply",
+                        "left": {
+                          "kind": "coefficient",
+                          "role": "loading",
+                          "value": 1.0,
+                          "construct_ids": []
+                        },
+                        "right": {
+                          "kind": "state",
+                          "construct_id": "construct:h"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            },
+            "standardized": false,
+            "reasoning": "A Normal(0, exp(p/2)) return has square Gamma(1/2, rate 1/(2 exp(p))); |r| depends on no parameter, so the posterior is unchanged."
+          },
+          "construct_polarity": "positive"
+        }
+      }
+    }
+  },
+  "edges": {},
+  "parameters": {
+    "parameter:880c309512b418fec2f84448c184ed176e09ee71a5f08228997383837b1deeb8": {
+      "name": "level",
+      "description": "Long-run log-variance of daily percent returns",
+      "distribution": "distribution:prior-sv-level"
+    },
+    "parameter:13f16533dcd0153daa8294893366e785f98ce83bd4cc5b17cf046406a3711b96": {
+      "name": "decay",
+      "description": "Daily mean-reversion rate of the log-variance; persistence is 1 - decay",
+      "distribution": "distribution:prior-sv-decay"
+    },
+    "parameter:f1ffd89daa71e4eb82bffebfcbb3d0d14f07a311cb81517a1936558916dd12a0": {
+      "name": "vol_of_vol",
+      "description": "Diffusion scale of the log-variance per square-root day",
+      "distribution": "distribution:prior-sv-vol_of_vol"
+    }
+  },
+  "distributions": {
+    "distribution:prior-sv-level": {
+      "distribution": "Normal",
+      "params": {
+        "loc": 0.0,
+        "scale": 2.0
+      }
+    },
+    "distribution:prior-sv-decay": {
+      "distribution": "HalfNormal",
+      "params": {
+        "scale": 0.1
+      }
+    },
+    "distribution:prior-sv-vol_of_vol": {
+      "distribution": "HalfNormal",
+      "params": {
+        "scale": 0.5
+      }
+    }
+  },
+  "law_layouts": {},
+  "measurement_clock": "1d"
+}

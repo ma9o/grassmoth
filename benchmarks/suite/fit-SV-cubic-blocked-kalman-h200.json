@@ -1,0 +1,47 @@
+{
+ "action": "fit",
+ "input": {
+  "target": {
+   "kind": "new",
+   "dynamical_model_spec_ref": "b97a542579593a3c026f02ed90417b2a41e74307",
+   "data_ref": {
+    "revision": "46bfc223b3b7aa841695fee93e9dd4fae239c79e",
+    "replicate_index": 0
+   }
+  },
+  "settings": {
+   "num_warmup": 2000,
+   "num_samples_per_chain": 10000,
+   "num_chains": 80,
+   "seed": 19,
+   "hardware": "H200",
+   "time_limit_seconds": 3600,
+   "profile": false,
+   "algorithm": {
+    "method": "mpgibbs",
+    "n_parameter_particles": 2,
+    "tempering": {
+     "kind": "untempered"
+    },
+    "path_update": {
+     "method": "auxiliary_kalman",
+     "latent_step": {
+      "kind": "adapted",
+      "target": 0.5
+     },
+     "block_length": 300
+    },
+    "parameter_proposal": "random_walk",
+    "diagnostic_metrics": [],
+    "param_target_accept": 0.2,
+    "adaptation_scheme": "simple",
+    "initialization": {
+     "scale": 0.1
+    },
+    "compiler_reparameterization": true,
+    "scale_chart": true
+   }
+  },
+  "repeat": 0
+ }
+}

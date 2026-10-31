@@ -1,0 +1,36 @@
+{
+ "action": "fit",
+ "input": {
+  "target": {
+   "kind": "new",
+   "dynamical_model_spec_ref": "6604d70b3d98b06a66b53bc2b21001fc7006acba",
+   "data_ref": {
+    "revision": "1a8e511dc5f826da6d490da3262a22475c9d46fc",
+    "replicate_index": 0
+   }
+  },
+  "settings": {
+   "num_warmup": 2000,
+   "num_samples_per_chain": 4000,
+   "num_chains": 80,
+   "seed": 19,
+   "hardware": "H200",
+   "time_limit_seconds": 7200,
+   "profile": false,
+   "stop_when_converged": {
+    "checkpoint_draws": 1000,
+    "min_draws": 1000
+   },
+   "algorithm": {
+    "method": "nuts_da",
+    "parameterization": "centred",
+    "target_accept_prob": 0.8,
+    "trajectory": {
+     "kind": "nuts",
+     "max_tree_depth": 10
+    }
+   }
+  },
+  "repeat": 0
+ }
+}
