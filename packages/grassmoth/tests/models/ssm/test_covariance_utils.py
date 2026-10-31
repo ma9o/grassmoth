@@ -1,8 +1,9 @@
+import jax
 import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.models.ssm.covariance import symmetrize, symmetrize_with_jitter
+from grassmoth.models.ssm.covariance import symmetric_eigh, symmetrize, symmetrize_with_jitter
 
 pytestmark = pytest.mark.contract
 
@@ -43,3 +44,14 @@ def test_symmetrize_handles_batched_covariances():
         ]
     )
     np.testing.assert_allclose(np.asarray(result), expected)
+
+
+@pytest.mark.parametrize("dimension", [1, 3, 40])
+def test_symmetric_eigenpairs_preserve_batched_indefinite_matrices(dimension):
+    values = np.random.default_rng(17).normal(size=(2, dimension, dimension)).astype(np.float32)
+    matrices = jnp.asarray((values + values.swapaxes(-1, -2)) / 2)
+    eigenvalues, eigenvectors = jax.jit(symmetric_eigh)(matrices)
+    reconstructed = (eigenvectors * eigenvalues[..., None, :]) @ jnp.swapaxes(eigenvectors, -1, -2)
+    np.testing.assert_allclose(reconstructed, matrices, atol=2e-5, rtol=2e-5)
+    np.testing.assert_allclose(eigenvalues, np.linalg.eigvalsh(matrices), atol=2e-5, rtol=2e-5)
+    assert eigenvalues.dtype == matrices.dtype == jnp.float32

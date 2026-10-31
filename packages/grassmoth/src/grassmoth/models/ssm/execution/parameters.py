@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpyro
 
 from grassmoth.models.ssm import compiled_access as numeric
-from grassmoth.models.ssm.covariance import symmetrize
+from grassmoth.models.ssm.covariance import symmetric_eigh, symmetrize
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -55,7 +55,7 @@ def assemble_model_matrices(
     endogenous = jnp.asarray(compiled_dynamical_model.state_space.initial, dtype=jnp.int32)
     endogenous_covariance = symmetrize(covariance[jnp.ix_(endogenous, endogenous)])
     min_eigenvalue = (
-        jnp.min(jnp.linalg.eigvalsh(endogenous_covariance))
+        jnp.min(symmetric_eigh(endogenous_covariance)[0])
         if compiled_dynamical_model.state_space.initial
         else jnp.asarray(jnp.inf, dtype=covariance.dtype)
     )

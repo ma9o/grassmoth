@@ -14,6 +14,7 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.sparse.linalg import cg
 
+from grassmoth.models.ssm.covariance import symmetric_eigh
 from grassmoth.models.ssm.execution.affine import compose_affine_maps
 from grassmoth.models.ssm.execution.innovations import conditional_gaussian_factors
 from grassmoth.models.ssm.execution.observation_groups import compile_law_groups
@@ -36,7 +37,7 @@ from grassmoth.models.ssm.shapes import Array, Float
 
 def positive_curvature(hessian: Float[Array, "N N"]) -> Float[Array, "N N"]:
     """Project a reading's negative log-density Hessian onto the PSD cone."""
-    eigenvalues, eigenvectors = jnp.linalg.eigh(symmetric(hessian))
+    eigenvalues, eigenvectors = symmetric_eigh(symmetric(hessian))
     return symmetric((eigenvectors * jnp.maximum(eigenvalues, 0.0)) @ eigenvectors.T)
 
 
@@ -280,7 +281,7 @@ def interval_translation(
             observation.measurement.manifest_cov,
             ~jnp.isnan(reading),
         )
-        eigenvalues, eigenvectors = jnp.linalg.eigh(positive_curvature(-jax.hessian(density)(mean)))
+        eigenvalues, eigenvectors = symmetric_eigh(positive_curvature(-jax.hessian(density)(mean)))
         return symmetric((eigenvectors * jnp.sqrt(jnp.maximum(eigenvalues, 0.0))) @ eigenvectors.T)
 
     roots = jax.vmap(root)(means, readings)

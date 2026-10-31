@@ -7,6 +7,7 @@ checks, hence no ``from __future__ import annotations`` (eager annotations keep
 the jaxtyping imports resolvable for beartype).
 """
 
+import jax
 import jax.numpy as jnp
 
 from grassmoth.models.ssm.shapes import Array, Float
@@ -28,3 +29,22 @@ def symmetrize_with_jitter(
     """Symmetrize a square matrix or stack of square matrices and add diagonal jitter."""
     eye = jnp.eye(M.shape[-1], dtype=M.dtype)
     return symmetrize(M) + eye * jitter
+
+
+def symmetric_eigh(
+    matrix: Float[Array, "*batch N N"],
+) -> tuple[Float[Array, "*batch N"], Float[Array, "*batch N N"]]:
+    """Use CUDA Jacobi and the native CPU/TPU symmetric eigensolver.
+
+    The H200 benchmark encountered an illegal instruction in the CUDA QR path.
+    Jacobi supplies an alternative decomposition without changing precision,
+    clipping eigenvalues, or changing any target density.
+    """
+    vectors, values = jax.lax.platform_dependent(
+        matrix,
+        cuda=lambda value: jax.lax.linalg.eigh(
+            value, implementation=jax.lax.linalg.EighImplementation.JACOBI
+        ),
+        default=jax.lax.linalg.eigh,
+    )
+    return jnp.asarray(values), jnp.asarray(vectors)

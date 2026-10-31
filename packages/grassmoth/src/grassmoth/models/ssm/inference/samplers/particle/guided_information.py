@@ -12,6 +12,7 @@ import jax
 import jax.numpy as jnp
 from jax.scipy.special import logsumexp
 
+from grassmoth.models.ssm.covariance import symmetric_eigh
 from grassmoth.models.ssm.inference.samplers.particle.twist import GaussianTwist, symmetric
 from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int
@@ -62,7 +63,7 @@ def _guided_information(
         residual = jnp.where(free, value - v * gradient + v * (hessian @ value), 0.0)
         auxiliary_precision = symmetric(matrix.T @ (matrix / v[:, None]))
         auxiliary_shift = matrix.T @ (residual / v)
-        eigenvalues, eigenvectors = jnp.linalg.eigh(-hessian)
+        eigenvalues, eigenvectors = symmetric_eigh(-hessian)
         observed_precision = symmetric(
             (eigenvectors * jnp.maximum(eigenvalues, 0.0)) @ eigenvectors.T
         )
@@ -109,7 +110,7 @@ def memory_information(
 
         hessian = symmetric(jax.hessian(reading)(value)) * active[:, None] * active[None, :]
         gradient = jnp.where(active, jax.grad(reading)(value), 0.0)
-        eigenvalues, eigenvectors = jnp.linalg.eigh(-hessian)
+        eigenvalues, eigenvectors = symmetric_eigh(-hessian)
         observed = symmetric((eigenvectors * jnp.maximum(eigenvalues, 0.0)) @ eigenvectors.T)
 
         def auxiliary_mean(state):
