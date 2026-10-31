@@ -25,18 +25,6 @@ The user supplies a scientific question and observational data. The agent carrie
 - **Fast and accurate parameter and state estimation in `jax`** - [Marginalized particle Gibbs with twisted Particle-aGRAD path updates](docs/assumptions.md#inference-policy) samples the exact nonlinear posterior on GPU in minutes. Efficient caching ensures that we never waste time waiting for compilation.
 - **Compatible with `codex` and `claude-code`** - Use your existing agent subscription to drive the study through its public actions.
 
-## Web UI
-
-The web UI lays out a study's actions on a timeline and shows the state each one leaves, in two views of the same model.
-
-![Mechanism map of the FRANCE1940 model as written, with each construct's laws and each mechanism's response curves](docs/assets/screenshots/france1940-model.jpg)
-
-*The mechanism map of the model as written: construct cards show their laws, and each mechanism ƒ shows its response, one curve per draw of the saved laws.*
-
-![Calendar lanes of the FRANCE1940 prepared data, with 16 indicators on one calendar and a profile of each](docs/assets/screenshots/france1940-data.jpg)
-
-*Calendar lanes put the 16 prepared indicators on one calendar, grouped by the constructs they measure, beside a profile of each indicator's values.*
-
 ## Benchmarks
 
 grassmoth samples a nonlinear state-space model's parameters and latent paths jointly with [marginalized particle Gibbs](docs/assumptions.md#inference-policy). Two of its path updates compete here:
