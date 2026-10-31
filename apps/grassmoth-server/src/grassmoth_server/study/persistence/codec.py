@@ -1,13 +1,16 @@
 """MessagePack persistence and transport for domain-owned numerical values.
 
-NPY payloads are ordinary binary values. Extension 42 references an earlier binary
-value by its zero-based traversal index, encoded as an unsigned 64-bit big-endian
-integer. Decoding restores shared bytes before scientific owners parse the result.
+NPY payloads are logical binary values. Extension 42 references an earlier value
+by its zero-based traversal index, encoded as an unsigned 64-bit big-endian integer.
+Large values are arrays containing an extension-43 total byte length followed by
+bounded binary chunks. Their chunks count as one logical value for references.
+Decoding restores shared bytes before scientific owners parse the result.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from io import BytesIO
 from typing import TYPE_CHECKING, cast
 
 import msgpack
@@ -23,6 +26,8 @@ if TYPE_CHECKING:
     from grassmoth.public import JsonObject
 
 _BUFFER_REFERENCE = 42
+_BUFFER_CHUNKS = 43
+_BINARY_CHUNK_BYTES = 64 * 1024**2
 
 
 def _metadata(value: object) -> object:
@@ -36,15 +41,20 @@ def _metadata(value: object) -> object:
 
 
 def pack_payload(value: object) -> bytes:
-    """Encode a payload and deduplicate array buffers in the binary envelope."""
+    """Encode shared buffers with bounded packer copies and binary chunk lengths."""
     buffers: dict[bytes, int] = {}
     identities: dict[int, tuple[bytes, int]] = {}
+    output = BytesIO()
+    packer = msgpack.Packer(use_bin_type=True)
 
-    def share(item: object) -> object:
+    def write(item: object) -> None:
         if isinstance(item, bytes):
             prior = identities.get(id(item))
             if prior is not None:
-                return msgpack.ExtType(_BUFFER_REFERENCE, prior[1].to_bytes(8, "big"))
+                output.write(
+                    packer.pack(msgpack.ExtType(_BUFFER_REFERENCE, prior[1].to_bytes(8, "big")))
+                )
+                return
             index = buffers.get(item)
             first = index is None
             if index is None:
@@ -53,14 +63,35 @@ def pack_payload(value: object) -> bytes:
             # Keep equal-but-distinct owners alive and remember their aliases;
             # repeated views must not compare multi-GB buffers for every visit.
             identities[id(item)] = (item, index)
-            return item if first else msgpack.ExtType(_BUFFER_REFERENCE, index.to_bytes(8, "big"))
-        if isinstance(item, Mapping):
-            return {key: share(child) for key, child in item.items()}
-        if isinstance(item, (list, tuple)):
-            return [share(child) for child in item]
-        return item
+            if not first:
+                output.write(
+                    packer.pack(msgpack.ExtType(_BUFFER_REFERENCE, index.to_bytes(8, "big")))
+                )
+            elif len(item) <= _BINARY_CHUNK_BYTES:
+                output.write(packer.pack(item))
+            else:
+                count = (len(item) + _BINARY_CHUNK_BYTES - 1) // _BINARY_CHUNK_BYTES
+                output.write(packer.pack_array_header(count + 1))
+                output.write(
+                    packer.pack(msgpack.ExtType(_BUFFER_CHUNKS, len(item).to_bytes(8, "big")))
+                )
+                view = memoryview(item)
+                for start in range(0, len(item), _BINARY_CHUNK_BYTES):
+                    output.write(packer.pack(view[start : start + _BINARY_CHUNK_BYTES]))
+        elif isinstance(item, Mapping):
+            output.write(packer.pack_map_header(len(item)))
+            for key, child in item.items():
+                output.write(packer.pack(key))
+                write(child)
+        elif isinstance(item, (list, tuple)):
+            output.write(packer.pack_array_header(len(item)))
+            for child in item:
+                write(child)
+        else:
+            output.write(packer.pack(item))
 
-    return cast("bytes", msgpack.packb(share(value), use_bin_type=True))
+    write(value)
+    return output.getvalue()
 
 
 def result_payload(
@@ -89,6 +120,24 @@ def unpack_result(payload: bytes) -> Mapping[str, object]:
     buffers: list[bytes] = []
 
     def restore(value: object) -> object:
+        if (
+            isinstance(value, list)
+            and value
+            and isinstance(value[0], msgpack.ExtType)
+            and value[0].code == _BUFFER_CHUNKS
+        ):
+            marker, *chunks = value
+            if (
+                len(marker.data) != 8
+                or not chunks
+                or any(not isinstance(chunk, bytes) or not chunk for chunk in chunks)
+            ):
+                raise ValueError("Invalid numerical buffer chunks")
+            restored = b"".join(chunks)
+            if len(restored) != int.from_bytes(marker.data, "big"):
+                raise ValueError("Numerical buffer chunks do not match their byte length")
+            buffers.append(restored)
+            return restored
         if isinstance(value, bytes):
             buffers.append(value)
             return value

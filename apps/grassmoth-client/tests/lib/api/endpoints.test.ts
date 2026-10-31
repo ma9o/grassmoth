@@ -195,6 +195,39 @@ it("restores shared buffers in wire order when JavaScript reorders numeric objec
   expect(() => decodeModelMessage(forwardReference)).toThrow("earlier value");
 });
 
+it("restores chunked NPY buffers as one shared logical value among ordinary buffers", () => {
+  const npy = new Uint8Array(dump(new Float32Array([1, 2, 3, 4]), [2, 2]));
+  const length = new Uint8Array(8);
+  new DataView(length.buffer).setUint32(4, npy.byteLength);
+  const parts = Array.from({ length: Math.ceil(npy.byteLength / 17) }, (_, index) =>
+    npy.subarray(index * 17, (index + 1) * 17),
+  );
+  const reference = (index: number) => {
+    const data = new Uint8Array(8);
+    new DataView(data.buffer).setUint32(4, index);
+    return new ExtData(42, data);
+  };
+  const decoded = decodeModelMessage(
+    encode([
+      new Uint8Array([9]),
+      [new ExtData(43, length), ...parts],
+      reference(1),
+      new Uint8Array([8]),
+      reference(2),
+    ]),
+  );
+  if (!Array.isArray(decoded)) throw new Error("Expected decoded array");
+  const buffer: unknown = decoded[1];
+  if (!(buffer instanceof Uint8Array)) throw new Error("Expected restored numerical buffer");
+  expect(buffer).toEqual(npy);
+  expect(decoded[2]).toBe(buffer);
+  expect(decoded[4]).toBe(decoded[3]);
+  expect(Array.from(readNumericalArray({ npy: buffer }).values)).toEqual([1, 2, 3, 4]);
+  expect(() =>
+    decodeModelMessage(encode([[new ExtData(43, length), new Uint8Array([1])]])),
+  ).toThrow("byte length");
+});
+
 it("keeps JSON requests, timeline responses and HTTP errors alongside binary action responses", async () => {
   const client = createModelClient({ baseUrl: "http://viewer", fetch: fetcher });
   fetcher.mockResolvedValueOnce(messagePack({ status: "running", body: null, messages: [] }));

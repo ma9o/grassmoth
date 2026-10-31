@@ -223,3 +223,52 @@ def test_buffer_identity_memo_preserves_content_deduplication_and_wire_bytes():
     assert decoded == value["arrays"]
     assert decoded[0] is decoded[2] is decoded[3] is decoded[4]
     assert decoded[1] is decoded[5]
+
+
+def test_chunked_buffers_preserve_wire_order_aliases_and_json(monkeypatch):
+    import msgpack
+
+    from grassmoth.public import NumericalArray
+    from grassmoth_server.study.persistence import codec
+
+    monkeypatch.setattr(codec, "_BINARY_CHUNK_BYTES", 17)
+    owner = NumericalArray.from_numpy(np.arange(24, dtype=np.float32).reshape(4, 6))
+    equal = bytes(bytearray(owner.npy))
+    value = {
+        "before": b"a",
+        "array": {"npy": owner.npy},
+        "equal": {"npy": equal},
+        "after": b"b",
+        "again": b"b",
+    }
+    packed = codec.pack_payload(value)
+    wire = msgpack.unpackb(packed, raw=False)
+    marker, *parts = wire["array"]["npy"]
+    assert marker == msgpack.ExtType(43, len(owner.npy).to_bytes(8, "big"))
+    assert all(len(part) <= 17 for part in parts)
+    assert b"".join(parts) == owner.npy
+    assert wire["equal"]["npy"] == msgpack.ExtType(42, (1).to_bytes(8, "big"))
+    assert wire["again"] == msgpack.ExtType(42, (2).to_bytes(8, "big"))
+    restored = codec.unpack_result(packed)
+    assert restored == value
+    array, alias = restored["array"], restored["equal"]
+    assert isinstance(array, dict)
+    assert isinstance(alias, dict)
+    assert array["npy"] is alias["npy"]
+    numerical = codec.pack_payload({"array": {"npy": owner.npy}, "equal": {"npy": equal}})
+    assert json.loads(codec.json_result(numerical)) == {
+        "array": owner.values.tolist(),
+        "equal": owner.values.tolist(),
+    }
+
+
+@pytest.mark.parametrize("parts", [[], [b""], [123], [b"short"]])
+def test_invalid_numerical_buffer_chunks_are_rejected(parts):
+    import msgpack
+
+    from grassmoth_server.study.persistence.codec import unpack_result
+
+    marker = msgpack.ExtType(43, (100).to_bytes(8, "big"))
+    payload = msgpack.packb({"array": [marker, *parts]}, use_bin_type=True)
+    with pytest.raises(ValueError, match=r"[Nn]umerical buffer chunks"):
+        unpack_result(payload)
