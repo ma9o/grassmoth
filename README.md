@@ -60,7 +60,7 @@ This is a nonlinear version of the Gaussian stochastic volatility model of [Kim,
 
 - **Model:** the log-variance follows a continuous-time diffusion with drift −θh − 0.03h³. Its cubic term pulls large excursions back faster than the original's Ornstein–Uhlenbeck drift.
 - **Data:** 3,000 simulated daily returns ([model and data](benchmarks/cases/suite/SV-cubic)).
-- **Worst quantity:** vol-of-vol σ, in every fit.
+- **Worst bulk ESS:** vol-of-vol σ, in every fit.
 
 | | mGRAD | Aux Kalman | Aux Kalman, blocked | NUTS |
 | --- | --- | --- | --- | --- |
@@ -84,7 +84,7 @@ This is a nonlinear version of the Gaussian stochastic volatility model of [Kim,
   - A whole-path Kalman sweep costs a seventh of mGRAD's. But one accept/reject for all 3,000 days forces small moves, so it needs 13 times the draws per effective sample and delivers half mGRAD's ESS per second.
   - Blocks of 300 days, each accepted separately, close most of that gap. On warmup and sampling together they edge ahead, partly because 10,000 draws spread a warmup that was already 8 times shorter.
 - **NUTS mixes best per draw.** On eight CPU cores it needs 3.4 draws per effective sample and leads on sampling 3 to 1, but warmup takes 84% of its time.
-- **NUTS can't use the GPU on this model.** Non-centred NUTS rebuilds the path from its innovations in a [sequential scan](packages/grassmoth/src/grassmoth/models/ssm/execution/innovations.py) at every leapfrog step. On the H200 it reached 101 of 2,000 warmup sweeps in 44 minutes, about 23 s per sweep. Centred NUTS avoids the scan but mixes poorly: 171 draws per effective sample and 1,897 divergences in warmup.
+- **NUTS can't use the GPU on this model.** Non-centred NUTS rebuilds the path from its innovations in a [sequential scan](packages/grassmoth/src/grassmoth/models/ssm/execution/innovations.py) at every leapfrog step. On the H200 it reached 101 of 2,000 warmup sweeps in 44 minutes, about 26 s per sweep. Centred NUTS avoids the scan but mixes poorly: 171 draws per effective sample and 1,897 divergences in warmup.
 
 | Parameter | Truth | mGRAD | NUTS, non-centred |
 | ---: | ---: | ---: | ---: |

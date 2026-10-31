@@ -328,9 +328,9 @@ Every retained transition had tree depth 6, or 63 leapfrog steps. Mean acceptanc
 | vol-of-vol σ | 0.194 [0.150, 0.237] | 0.2 | 1.016 | 4,800 | 7,040 |
 | latent h | — | — | 1.003 | 26,573 | 26,617 |
 
-**Timing on the H200.** 42.7 s to the start of warmup, including 20.2 s of sweep compilation; 136.5 s of warmup at 68 ms per sweep; and 275.9 s of sampling sweeps at 68.9 ms each. The README counts these 455.0 s. The convergence checks added 419.9 s, taking 41, 84, 126 and 169 s at the four checkpoints because each recomputes every diagnostic from scratch on the CPU. The native fit took 880.4 s, and reporting and saving another 241.5 s.
+**Timing on the H200.** 42.7 s to the start of warmup, including 20.2 s of sweep compilation; 136.5 s of warmup at 68 ms per sweep; and 275.9 s of sampling sweeps at 68.9 ms each. The README counts warmup and sampling, 412.0 s, and lists compilation separately. The convergence checks added 419.9 s, taking 41, 84, 126 and 169 s at the four checkpoints because each recomputes every diagnostic from scratch on the CPU. The native fit took 880.4 s, and reporting and saving another 241.5 s.
 
-**Cost.** $2.015 billed: the fit $2.003 (H200 $1.409, memory $0.477, CPU $0.117) and a Modal CPU analysis $0.012. The README's $0.65 prices its 455.0 s at Modal's rates for the H200, 8 CPU cores and 32 GiB.
+**Cost.** $2.015 billed: the fit $2.003 (H200 $1.409, memory $0.477, CPU $0.117) and a Modal CPU analysis $0.012. The README's $0.59 prices its 412.0 s of warmup and sampling at Modal's rates for the H200, 8 CPU cores and 32 GiB.
 
 ## SV with a cubic drift: NUTS with 32 chains on an M1 Max — 2026-10-31
 
@@ -351,9 +351,9 @@ Every retained transition had tree depth 6, or 63 leapfrog steps. Mean acceptanc
 
 Every retained transition took 31 leapfrog steps. Mean acceptance was 0.87, with no divergence in retention and 682 in warmup, 17–25 per chain.
 
-**Timing.** 3.0 s to the start of warmup, 975.7 s of warmup, and 179.4 s of sampling sweeps at 178.2 ms each, against 156.0 ms for the 4-chain fit on one device. The README counts these 1,158.2 s. The convergence check added 5.7 s, so the native fit took 1,164.3 s; reporting and saving took another 26.5 s.
+**Timing.** 3.0 s to the start of warmup, 975.7 s of warmup, and 179.4 s of sampling sweeps at 178.2 ms each, against 156.0 ms for the 4-chain fit on one device. The README counts warmup and sampling, 1,155.1 s. The convergence check added 5.7 s, so the native fit took 1,164.3 s; reporting and saving took another 26.5 s.
 
-**Against mGRAD.** On the README's timing, worst bulk ESS per second is 8.1 against mGRAD's 10.5, and worst tail ESS per second 11.3 against 15.5. On sampling sweeps alone, NUTS leads 52.4 against 17.4. The posterior means agree with mGRAD's within 1.2 combined MCSEs for level and decay and 2.0 for vol-of-vol, and with the other cubic-drift NUTS fits within 0.9. [Comparison](../../scratchpad/sv-nuts-local32-20261031/comparison.json).
+**Against mGRAD.** Over warmup and sampling, worst bulk ESS per second is 8.1 against mGRAD's 11.7, and worst tail ESS per second 11.3 against 17.1. On sampling sweeps alone, NUTS leads 52.4 against 17.4. The posterior means agree with mGRAD's within 1.2 combined MCSEs for level and decay and 2.0 for vol-of-vol, and with the other cubic-drift NUTS fits within 0.9. [Comparison](../../scratchpad/sv-nuts-local32-20261031/comparison.json).
 
 **Cost.** The fit has no Modal charge. The Modal CPU analysis cost $0.006.
 
@@ -378,7 +378,7 @@ Every retained transition took 31 leapfrog steps. Mean acceptance was 0.87, with
   - Timing: 16.8 s of warmup and 41.3 s of sampling sweeps at 10.3 ms each.
   - Movement: the physical path changed in 54.7% of sweeps, a figure that also counts moves made by parameter updates. Parameter acceptance was 18.6%. The step tuning shrinks every time step's scale together, because all 3,000 days share one accept/reject.
   - Means: all three agree with the mGRAD and NUTS fits within one combined MCSE.
-  - Earlier attempts: one ran out of its 32 GiB of host memory after sampling, and one failed to save a 5.76 GB per-time trace. The successful fit used 192 GiB. [Findings](../../scratchpad/sv-aux-kalman80-20261031/findings.md).
+  - Earlier attempts: three failed after sampling. `call:192e05c7` ran out of its 32 GiB of host memory, `call:d411a03e` failed to save a 5.76 GB per-time trace, and `call:25ec0fc6` saved remotely but was never published when its local coordinator was interrupted. The successful fit used 192 GiB. [Findings](../../scratchpad/sv-aux-kalman80-20261031/findings.md).
 - **Blocked Kalman:**
   - Timing: 17.4 s of warmup and 97.2 s of sampling at 9.7 ms per sweep.
   - Block acceptance: 50.3%.
@@ -390,9 +390,9 @@ Every retained transition took 31 leapfrog steps. Mean acceptance was 0.87, with
   - Means: agree with the other fits within 0.9 combined MCSEs.
   - Cost: Modal billed $4.09 including analysis. [Findings](../../scratchpad/sv-nuts80-centred-20261031/findings.md).
 - **Two other GPU NUTS attempts left no result:**
-  - A non-centred run reached 101 of 2,000 warmup sweeps in 44 minutes, about 23 s per sweep, before it was lost. Its chains advanced independently, with parallel U-turn checks. [Findings](../../scratchpad/sv-nuts-cpu80-20261031/findings.md).
-  - An earlier centred run was stopped at warmup sweep 126.
-- **One more auxiliary Kalman fit was lost:** 40 chains × 40,000 draws sampled in 234 s and computed its diagnostics in 93 s, then hit a 480 s time limit while saving. [Findings](../../scratchpad/sv-aux-kalman80-long-20261031/findings.md).
+  - A non-centred run (`call:d5f21bd8` in `SV_NUTS_H200_20261031`) reached 101 of 2,000 warmup sweeps in 2,655 s. That averages 26 s per sweep; its last 25-sweep block took 23 s per sweep. It was lost when the Mac running the client slept. Its chains advanced independently, with parallel U-turn checks. [Findings](../../scratchpad/sv-nuts-cpu80-20261031/findings.md).
+  - An earlier centred run (`call:e7d560dd` in `SV_CUBIC_NUTS80_20261031`) was stopped at warmup sweep 126.
+- **One more auxiliary Kalman fit was lost:** `call:8ab3cb8b`, with 40 chains × 40,000 draws, sampled in 234 s and computed its diagnostics in 93 s, then hit a 480 s time limit while saving. [Findings](../../scratchpad/sv-aux-kalman80-long-20261031/findings.md).
 
 ## Lorenz-96 — 2026-10-31
 
