@@ -47,6 +47,7 @@ def excluded_particle_diagnostics(
             "selected_particle_unique_count",
         ),
         "parameter_movement": ("parameter_jump_rms",),
+        "regional_movement": ("latent_move_rms_per_t",),
         "particle_weights": tuple(metric.history_key for metric in ParticleWeightMetric),
     }
     return frozenset(

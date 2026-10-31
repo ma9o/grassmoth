@@ -213,3 +213,51 @@ def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
         if index >= ADAPTATION_WINDOW + 4:
             for before, after in zip(frozen, state, strict=True):
                 np.testing.assert_array_equal(before, after)
+
+
+def test_optional_particle_histories_preserve_draws_and_random_stream():
+    from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
+        excluded_particle_diagnostics,
+    )
+
+    def factory(batch):
+        base = _factory(batch)
+
+        def step(carry, posterior):
+            updated, record = base(carry, posterior)
+            return updated, {
+                **record,
+                "latent_move_rms_per_t": updated.state,
+                "selected_particle_per_t": updated.state,
+            }
+
+        return step
+
+    initial = _Carry(jax.random.key(791), jnp.zeros((3, 4)))
+    runs = []
+    for enabled in (False, True):
+        excluded = excluded_particle_diagnostics(
+            ("regional_movement", "particle_identity") if enabled else ()
+        )
+        plan = sweeps.compile_sweeps(
+            SweepProgram(
+                factory, label="optional-history", max_batch_size=8, excluded_history=excluded
+            ),
+            initial,
+            execution_context=EXECUTION_CONTEXT,
+            sampler=SamplerSpec(num_warmup=2, num_samples_per_chain=3),
+        )
+        run = run_sweeps(plan, initial, execution_context=EXECUTION_CONTEXT)
+        for history in (run.history.warmup, run.history.posterior):
+            assert ("latent_move_rms_per_t" in history) is enabled
+            assert ("selected_particle_per_t" in history) is enabled
+        assert run.retained_draws == 3
+        runs.append(run)
+
+    np.testing.assert_array_equal(
+        runs[0].history.posterior["paths"], runs[1].history.posterior["paths"]
+    )
+    np.testing.assert_array_equal(runs[0].state.state, runs[1].state.state)
+    np.testing.assert_array_equal(
+        jax.random.key_data(runs[0].state.key), jax.random.key_data(runs[1].state.key)
+    )
