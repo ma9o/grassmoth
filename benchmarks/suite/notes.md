@@ -359,20 +359,21 @@ Every retained transition took 31 leapfrog steps. Mean acceptance was 0.87, with
 
 ## SV with a cubic drift: auxiliary Kalman and centred NUTS on the H200 — 2026-10-31
 
-**Three more arms of the [README comparison](../../README.md#stochastic-volatility). None passes the check.** The model and data are the mGRAD fit's above. All three use seed 19, 2,000 warmup sweeps and float32 on one H200, with profiling, optional diagnostics and LOO off.
+**More arms of the [README comparison](../../README.md#stochastic-volatility). None passes the check.** The model and data are the mGRAD fit's above. All four fits use seed 19, 2,000 warmup sweeps and float32 on one H200, with profiling, optional diagnostics and LOO off. The README's blocked column is the rerun on master.
 
 | Fit | Study and call | Request | Source |
 | --- | --- | --- | --- |
-| Auxiliary Kalman, whole path, 80 × 4,000 | `SV_AUX_KALMAN80_20261031`, `call:35b457af242a9fe737b00c78dfb945c506f4cfc18ddc618ffdf65cbd6e1b4f1e` | [fit-SV-cubic-aux-kalman-h200.json](fit-SV-cubic-aux-kalman-h200.json) | `ca79f464` plus the uncommitted auxiliary Kalman candidate and a fix for a per-time trace saved with optional diagnostics off. [Patch](../../scratchpad/sv-aux-kalman80-20261031/candidate.patch) |
-| Auxiliary Kalman, 300-day blocks, 80 × 10,000 | `SV_AUX_KALMAN80_20261031`, `call:93439ebbd2b948329e7c16410590e1c4b70c02ebb19401e61b82382656db6a50` | [fit-SV-cubic-blocked-kalman-h200.json](fit-SV-cubic-blocked-kalman-h200.json) | `8efe81d8` plus the candidate with blocks. [Patch](../../scratchpad/blocked-kalman-20261031/candidate.patch) |
+| Auxiliary Kalman, whole path, 80 × 4,000 | `SV_AUX_KALMAN80_20261031`, `call:35b457af242a9fe737b00c78dfb945c506f4cfc18ddc618ffdf65cbd6e1b4f1e` | [fit-SV-cubic-aux-kalman-h200.json](fit-SV-cubic-aux-kalman-h200.json) | `ca79f464` plus the uncommitted auxiliary Kalman candidate and a fix for a per-time trace saved with optional diagnostics off, on CUDA 12 with XLA autotuning off. [Patch](../../scratchpad/sv-aux-kalman80-20261031/candidate.patch) |
+| Auxiliary Kalman, 300-day blocks, 80 × 10,000 | `SV_AUX_KALMAN80_20261031`, `call:93439ebbd2b948329e7c16410590e1c4b70c02ebb19401e61b82382656db6a50` | [fit-SV-cubic-blocked-kalman-h200.json](fit-SV-cubic-blocked-kalman-h200.json) | `8efe81d8` plus the candidate with blocks, on CUDA 12 with XLA autotuning off. [Patch](../../scratchpad/blocked-kalman-20261031/candidate-run.patch) |
+| Auxiliary Kalman, 300-day blocks, 80 × 10,000, on master | A copy of `SV_AUX_KALMAN80_20261031` in its own checkout, `call:531125b7b6d074cab2995e9f33a0db0a0d99722d9f983909ef9ca099dd999359` | [fit-SV-cubic-blocked-kalman-master-h200.json](fit-SV-cubic-blocked-kalman-master-h200.json) | Master `6aebcf79` plus 192 GiB of fit host memory, on master's CUDA 13 with XLA autotuning on. [Patch](../../scratchpad/blocked-rerun-20261031/host-memory.patch) |
 | NUTS, centred, 80 × 4,000 | `SV_NUTS80_CENTRED_20261031`, `call:7eaa16ced5a9a4844864a001a6e6cba02cba68e10c9d6944a7164e07282c876e` | [fit-SV-cubic-nuts-centred-h200.json](fit-SV-cubic-nuts-centred-h200.json) | `a7cb357b` plus the 80-chain experiment patch of the mGRAD fit above |
 
-| R̂ / bulk ESS / tail ESS | Kalman, whole path | Kalman, blocked | NUTS, centred |
-| --- | --- | --- | --- |
-| level μ | 1.019 / 4,523 / 8,723 | 1.007 / 13,975 / 24,861 | 1.003 / 26,543 / 51,854 |
-| decay θ | 1.073 / 761 / 1,163 | 1.023 / 3,134 / 6,850 | 1.014 / 5,814 / 11,344 |
-| vol-of-vol σ | 1.160 / 368 / 644 | 1.038 / 1,492 / 3,336 | 1.041 / 1,869 / 3,194 |
-| latent h | 1.049 / 1,183 / 2,184 | 1.011 / 6,993 / 13,911 | 1.003 / 26,952 / 57,703 |
+| R̂ / bulk ESS / tail ESS | Kalman, whole path | Kalman, blocked | Kalman, blocked, on master | NUTS, centred |
+| --- | --- | --- | --- | --- |
+| level μ | 1.019 / 4,523 / 8,723 | 1.007 / 13,975 / 24,861 | 1.006 / 12,295 / 22,730 | 1.003 / 26,543 / 51,854 |
+| decay θ | 1.073 / 761 / 1,163 | 1.023 / 3,134 / 6,850 | 1.021 / 2,861 / 6,400 | 1.014 / 5,814 / 11,344 |
+| vol-of-vol σ | 1.160 / 368 / 644 | 1.038 / 1,492 / 3,336 | 1.037 / 2,020 / 3,364 | 1.041 / 1,869 / 3,194 |
+| latent h | 1.049 / 1,183 / 2,184 | 1.011 / 6,993 / 13,911 | 1.011 / 7,211 / 13,845 | 1.003 / 26,952 / 57,703 |
 
 - **Whole-path Kalman:**
   - Timing: 16.8 s of warmup and 41.3 s of sampling sweeps at 10.3 ms each.
@@ -384,6 +385,14 @@ Every retained transition took 31 leapfrog steps. Mean acceptance was 0.87, with
   - Block acceptance: 50.3%.
   - Blocks: each sweep first draws the parameter label from its exact conditional given the path, then accepts or rejects alternating 300-day blocks in parallel under that label.
   - Block length: chosen from 4-chain CPU probes of 30, 100 and 300 days. Those probes had only 300 warmup sweeps, and the 30- and 100-day blocks were still below the 50% acceptance target. [Findings](../../scratchpad/blocked-kalman-20261031/findings.md).
+- **Blocked Kalman on master:**
+  - Why: the fit above ran before the speedups that landed with the sampler. This rerun replaces it in the README.
+  - Timing: 16.4 s of compilation from an empty cache, then 12.2 s of warmup and 76.4 s of sampling at 7.6 ms per sweep. Warmup is 30% shorter and sampling 21% shorter.
+  - Same sampler: the speedups factor each block's Gaussian law once per sweep, propose only the blocks being updated, and cache density terms. The proposals and random keys are unchanged, so mixing changes only through rounding.
+  - ESS: vol-of-vol bulk ESS rose from 1,492 to 2,020 while decay and level fell 9–12%, which is run-to-run variation.
+  - Block acceptance: 48.7%.
+  - Runtime: master's CUDA 13 with autotuning ran without the CUDA errors that the earlier Kalman fits worked around.
+  - Cost: the fit app ran 310 s, at most $0.57, and the analysis about $0.01. [Findings](../../scratchpad/blocked-rerun-20261031/findings.md).
 - **Centred NUTS:**
   - Timing: 932.3 s of warmup and about 884 s of sampling sweeps at 221 ms each.
   - Mean acceptance: 0.84, with no divergence in retention and 1,897 across the chains in warmup.
