@@ -18,7 +18,13 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 from numpyro.distributions import constraints, transforms
-from pydantic import GetCoreSchemaHandler, GetPydanticSchema, SerializationInfo, ValidationInfo
+from pydantic import (
+    GetCoreSchemaHandler,
+    GetPydanticSchema,
+    PlainSerializer,
+    SerializationInfo,
+    ValidationInfo,
+)
 from pydantic_core import core_schema
 
 from grassmoth.artifacts.arrays import NumericalArray
@@ -34,7 +40,24 @@ _NATIVE_MODULES = {
 }
 
 type ArrayLoader = Callable[[str], np.ndarray]
-type NumPyroValue = JsonScalar | NumericalArray | NumPyroArray | NumPyroObject
+
+
+def _serialize_value(  # noqa: ANN202 -- Preserve the recursive constructor's owned schema, including NumericalArray.
+    value: NumPyroValue, info: SerializationInfo
+):
+    """Dispatch by owned type without speculative union warnings rendering binary buffers."""
+    if isinstance(value, NumericalArray):
+        return value.model_dump(mode=info.mode, context=info.context)
+    if isinstance(value, Mapping):
+        return {key: _serialize_value(item, info) for key, item in value.items()}
+    if isinstance(value, Sequence) and not isinstance(value, str):
+        return [_serialize_value(item, info) for item in value]
+    return value
+
+
+type NumPyroValue = Annotated[
+    JsonScalar | NumericalArray | NumPyroArray | NumPyroObject, PlainSerializer(_serialize_value)
+]
 type NumPyroArray = Sequence[NumPyroValue]
 type NumPyroObject = Mapping[str, NumPyroValue]
 _NO_BUFFERS: Mapping[str, NumericalArray] = MappingProxyType({})

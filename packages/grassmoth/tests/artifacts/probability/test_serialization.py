@@ -196,3 +196,25 @@ def test_law_memberships_reject_dangling_unused_and_accidentally_shared_scalar_l
                 if k != second.distribution
             },
         )
+
+
+@pytest.mark.contract
+def test_nested_numerical_law_serialization_never_formats_array_representations(monkeypatch):
+    from grassmoth.artifacts.arrays import NumericalArray
+    from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from grassmoth.artifacts.probability.serialization import empirical_distribution
+
+    represented = []
+
+    def observe_repr(value):
+        represented.append(value)
+        return "unexpected array representation"
+
+    monkeypatch.setattr(NumericalArray, "__repr__", observe_repr)
+    identity = DistributionId("distribution:posterior")
+    values = np.arange(12, dtype=np.float32).reshape(4, 3)
+    model = DynamicalModelSpec(distributions={identity: empirical_distribution(values)})
+    payload = model.model_dump(context={"binary_arrays": True}, warnings="error")
+    restored = _ADAPTER.validate_python(payload["distributions"][identity])
+    assert not represented
+    np.testing.assert_array_equal(restored.component_distribution.v, values)

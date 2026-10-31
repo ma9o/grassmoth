@@ -196,3 +196,30 @@ def test_http_errors_stay_json(monkeypatch):
     assert response.status_code == 404
     assert response.headers["content-type"] == "application/json"
     assert response.json() == {"detail": "No saved call"}
+
+
+def test_buffer_identity_memo_preserves_content_deduplication_and_wire_bytes():
+    import msgpack
+
+    from grassmoth_server.study.persistence.codec import unpack_result
+
+    first = bytes(bytearray(b"first array"))
+    equal = bytes(bytearray(first))
+    second = b"second array"
+    assert first == equal
+    assert first is not equal
+    value = {"arrays": [first, second, equal, equal, first, second]}
+
+    def reference(index):
+        return msgpack.ExtType(42, index.to_bytes(8, "big"))
+
+    expected = msgpack.packb(
+        {"arrays": [first, second, reference(0), reference(0), reference(0), reference(1)]},
+        use_bin_type=True,
+    )
+    assert pack_payload(value) == expected
+    decoded = unpack_result(expected)["arrays"]
+    assert isinstance(decoded, list)
+    assert decoded == value["arrays"]
+    assert decoded[0] is decoded[2] is decoded[3] is decoded[4]
+    assert decoded[1] is decoded[5]

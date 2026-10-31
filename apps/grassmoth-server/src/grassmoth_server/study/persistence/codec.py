@@ -38,13 +38,22 @@ def _metadata(value: object) -> object:
 def pack_payload(value: object) -> bytes:
     """Encode a payload and deduplicate array buffers in the binary envelope."""
     buffers: dict[bytes, int] = {}
+    identities: dict[int, tuple[bytes, int]] = {}
 
     def share(item: object) -> object:
         if isinstance(item, bytes):
-            if item in buffers:
-                return msgpack.ExtType(_BUFFER_REFERENCE, buffers[item].to_bytes(8, "big"))
-            buffers[item] = len(buffers)
-            return item
+            prior = identities.get(id(item))
+            if prior is not None:
+                return msgpack.ExtType(_BUFFER_REFERENCE, prior[1].to_bytes(8, "big"))
+            index = buffers.get(item)
+            first = index is None
+            if index is None:
+                index = len(buffers)
+                buffers[item] = index
+            # Keep equal-but-distinct owners alive and remember their aliases;
+            # repeated views must not compare multi-GB buffers for every visit.
+            identities[id(item)] = (item, index)
+            return item if first else msgpack.ExtType(_BUFFER_REFERENCE, index.to_bytes(8, "big"))
         if isinstance(item, Mapping):
             return {key: share(child) for key, child in item.items()}
         if isinstance(item, (list, tuple)):

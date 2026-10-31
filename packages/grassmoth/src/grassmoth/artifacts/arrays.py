@@ -22,6 +22,7 @@ class NumericalArray(Value):
     """
 
     npy: bytes = Field(
+        repr=False,  # Diagnostic representations must not stringify multi-GB binary payloads.
         description=(
             "Lossless NPY bytes, including dtype and dimensions, in MessagePack. "
             "JSON action responses replace the entire NumericalArray with nested lists "
