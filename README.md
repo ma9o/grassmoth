@@ -62,21 +62,22 @@ This is a nonlinear version of the Gaussian stochastic volatility model of [Kim,
 - **Data:** 3,000 simulated daily returns ([model and data](benchmarks/cases/suite/SV-cubic)).
 - **Worst quantity:** vol-of-vol σ, in every fit.
 
-| | mGRAD | Aux Kalman | Aux Kalman, blocked | NUTS | NUTS |
-| --- | --- | --- | --- | --- | --- |
-| Path update or parameterization | 128 particles | Whole path | 300-day blocks | Non-centred | Centred |
-| Hardware | H200 | H200 | H200 | M1 Max CPU, 8 performance cores | H200 |
-| Chains × retained draws | 80 × 4,000 | 80 × 4,000 | 80 × 10,000 | 32 × 1,000 | 80 × 4,000 |
-| Warmup | 136 s | **16.8 s** | 17.4 s | 976 s | 932 s |
-| Sampling | 276 s | **41 s** | 97 s | 179 s | 884 s |
-| One sweep of all chains | 68.9 ms | 10.3 ms | **9.7 ms** | 179.4 ms | 221.0 ms |
-| Draws per effective sample | 67 | 868 | 536 | **3.4** | 171 |
-| Worst bulk ESS | 4,800 | 368 | 1,492 | **9,395** | 1,869 |
-| Worst R̂ | 1.016 | 1.160 | 1.038 | **1.003** | 1.041 |
-| Convergence check | ESS below 8,000 | R̂ and ESS fail | ESS below 8,000 | **Passes, against 3,200** | ESS below 8,000 |
-| Worst bulk ESS per second of sampling | 17.4 | 8.9 | 15.4 | **52.4** | 2.1 |
-| Worst bulk ESS per second of warmup and sampling | 11.7 | 6.3 | **13.0** | 8.1 | 1.0 |
-| Cost of that time at Modal rates | $0.59 | $0.08 | $0.16 | **No cloud charge** | $2.60 |
+| | mGRAD | Aux Kalman | Aux Kalman, blocked | NUTS |
+| --- | --- | --- | --- | --- |
+| Path update or parameterization | 128 particles | Whole path | 300-day blocks | Non-centred |
+| Hardware | H200 | H200 | H200 | M1 Max CPU, 8 performance cores |
+| Chains × retained draws | 80 × 4,000 | 80 × 4,000 | 80 × 10,000 | 32 × 1,000 |
+| Warmup | 136 s | **16.8 s** | 17.4 s | 976 s |
+| Sampling | 276 s | **41 s** | 97 s | 179 s |
+| Duration: warmup and sampling | 6 min 52 s | **58 s** | 1 min 55 s | 19 min 15 s |
+| One sweep of all chains | 68.9 ms | 10.3 ms | **9.7 ms** | 179.4 ms |
+| Draws per effective sample | 67 | 868 | 536 | **3.4** |
+| Worst bulk ESS | 4,800 | 368 | 1,492 | **9,395** |
+| Worst R̂ | 1.016 | 1.160 | 1.038 | **1.003** |
+| Convergence check | ESS below 8,000 | R̂ and ESS fail | ESS below 8,000 | **Passes, against 3,200** |
+| Worst bulk ESS per second of sampling | 17.4 | 8.9 | 15.4 | **52.4** |
+| Worst bulk ESS per second of warmup and sampling | 11.7 | 6.3 | **13.0** | 8.1 |
+| Cost of that time at Modal rates | $0.59 | $0.08 | $0.16 | **No cloud charge** |
 
 - **Kalman sweeps fastest, but each sweep moves less.**
   - A whole-path Kalman sweep costs a seventh of mGRAD's. But one accept/reject for all 3,000 days forces small moves, so it needs 13 times the draws per effective sample and delivers half mGRAD's ESS per second.
@@ -106,6 +107,7 @@ The table shows posterior means with 94% HDIs. The two samplers' means differ by
 | Chains × retained draws | 2 × 4,000 | 2 × 4,000 | 2 × 10,000 | 32 × none: stopped in warmup |
 | Warmup | 534 s | 17.0 s | **15.8 s** | 26 of 51 probe sweeps in 49 min |
 | Sampling | 1,064 s | **34 s** | 77 s | — |
+| Duration: warmup and sampling | 26 min 38 s | **51 s** | 1 min 33 s | Stopped after 78 min |
 | One sweep of all chains | 266 ms | 8.5 ms | **7.7 ms** | — |
 | Worst bulk ESS | 2.4 | **63** | 31 | — |
 | Worst R̂ | 2.51 | **1.059** | 1.076 | — |

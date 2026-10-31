@@ -1,13 +1,11 @@
 # Project words
 acyclicity
 Acyclicity
-Anki
 autodiff
 backpropagation
 bidirected
 Biometrika
 blockwise
-cardiometabolic
 codegen
 compilability
 Corenflos
@@ -16,7 +14,6 @@ cutpoint
 cutpoints
 Dagster
 docstrings
-Duolingo
 Dynamax
 Dynestyx
 Diffrax
@@ -35,7 +32,7 @@ Megaprompt
 Maruyama
 Mokhov
 nondegenerate
-Oura
+Ornstein
 parameterizations
 promptable
 Psychometrika
@@ -45,8 +42,9 @@ recentered
 reopenable
 reweights
 statecharts
-Strava
+Särkkä
 Turso
+Uhlenbeck
 unmodeled
 vmap
 vmapped
