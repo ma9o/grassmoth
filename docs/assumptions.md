@@ -45,7 +45,6 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 | Conditional dSMC with exact local auxiliary pair/triple factors | Adapted | [CF24][cf24] §§3.1–3.3 auxiliary laws within the conditional divide-and-conquer tree | [particle-tree], [auxiliary] | Exact leaf-score reuse and shared tree-level programs | [t-auxiliary], [t-interval] | Pairwise work is quadratic in particle count; bounded node batches trade concurrency for memory |
 | Parallel tempering to a frozen Gaussian reference, for dSMC path updates | Adapted | [Syed et al.][syed] | [tempering], [gaussian-reference] | `e5d9e87b` | [t-tempering] | Reference quality limits exploration |
 | Noise factorizations prepared once per sweep | Numerical | — | [guided], [particle-target] | `b076b7ad` | [t-particle] | None: exact for additive diffusion |
-| Early stopping at convergence checkpoints | Numerical | — | [sweeps], [runner] | `c839b0ce` | [t-stopping], [t-blocks] | A passing checkpoint is a finite-chain diagnostic |
 | Native mixing diagnostics: frequency refresh, regional movement | Numerical | — | [scorecard] | `ac5ec9e5` | [t-scorecard] | Report only; they never alter sampling |
 
 **Rules every piece above follows:**
@@ -83,7 +82,6 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 [runner]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/runner.py
 [continuation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/continuation.py
 [tempering]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/tempering.py
-[sweeps]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/sweeps.py
 [sequential]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/sequential.py
 [student]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/student_precision.py
 [particle-target]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/particle.py
@@ -112,8 +110,6 @@ The optional [Particle-mGRAD path update][marginal] integrates out the path auxi
 [t-scale]: ../packages/grassmoth/tests/models/ssm/inference/test_scale_chart.py
 [t-langevin]: ../packages/grassmoth/tests/models/ssm/inference/test_parameter_langevin.py
 [t-tempering]: ../packages/grassmoth/tests/models/ssm/inference/test_parallel_tempering.py
-[t-stopping]: ../packages/grassmoth/tests/models/ssm/inference/test_convergence_stopping.py
-[t-blocks]: ../packages/grassmoth/tests/models/ssm/inference/test_sweep_blocks.py
 [t-scorecard]: ../packages/grassmoth/tests/models/ssm/inference/test_scorecard_diagnostics.py
 
 ## Causal graph

@@ -79,8 +79,6 @@ from grassmoth.models.ssm.inference.samplers.profiling import (
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase, SweepProgram
 from grassmoth.models.ssm.inference.samplers.sweeps import (
-    ConvergenceCheckpoint,
-    RetainedConvergenceCheck,
     compile_projected_sweeps,
     run_sweeps,
 )
@@ -134,7 +132,6 @@ class ParticleChainResult:
     last_paths: jax.Array
     final_chart: PathChart | None
     retained_draws: int
-    stopping_checkpoint: ConvergenceCheckpoint | None
     tempering: TemperingDiagnostics | None = None
     profile: FitProfileReport | None = None
 
@@ -243,7 +240,6 @@ def run_marginal_particle_gibbs(
     adaptation_scheme: AdaptationScheme = "simple",
     tempering: ReplicaExchangeKernel | None = None,
     continuation: SamplerCheckpoint | None = None,
-    convergence: RetainedConvergenceCheck | None = None,
 ) -> ParticleChainResult | InitializationFailure:
     """Run marginalized Particle Gibbs chains from paired starts."""
     num_warmup = sampler.num_warmup
@@ -740,7 +736,6 @@ def run_marginal_particle_gibbs(
         plan,
         initial,
         execution_context=execution_context,
-        convergence=convergence,
         profile=profile_state if execution_context.profile else None,
         warmup_failure=chart_failure,
     )
@@ -766,7 +761,6 @@ def run_marginal_particle_gibbs(
             "log_joint": initial.chains.complete_log_posterior[cold_indices],
         },
         retained_draws=run.retained_draws,
-        stopping_checkpoint=run.stopping_checkpoint,
         grouped_positions=run.history.posterior["positions"],
         observation_log_probs=run.history.posterior["observation_log_probs"],
         chain_extra_fields=posterior_extra,

@@ -317,7 +317,6 @@ SCHEDULE: Json = {
     "num_chains": 4,
     "seed": 1,
     "hardware": "local",
-    "stop_when_converged": None,
 }
 
 

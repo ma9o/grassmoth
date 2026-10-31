@@ -26,7 +26,6 @@ const extraction = {
 const source = { files: ["input/test.csv"] as const, hashes: {}, start: null, end: null };
 const design = { start: "2026-01-01", horizon: "1d", interventions: [] };
 const settings = {
-  stop_when_converged: null,
   profile: false,
   hardware: null,
   time_limit_seconds: null,

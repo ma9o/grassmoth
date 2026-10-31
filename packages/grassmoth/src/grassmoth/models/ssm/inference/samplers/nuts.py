@@ -33,10 +33,7 @@ from grassmoth.models.ssm.inference.samplers.profiling import REPETITIONS, measu
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.samplers.sweep_plan import SweepProgram
 from grassmoth.models.ssm.inference.samplers.sweeps import (
-    ConvergenceCheckpoint,
-    RetainedConvergenceCheck,
     compile_projected_sweeps,
-    retained_convergence_check,
     run_sweeps,
 )
 from grassmoth.models.ssm.inference.types import (
@@ -72,7 +69,6 @@ class NutsDARun:
     compiled_step: Compiled
     checkpoint: SamplerCheckpoint
     retained_draws: int
-    stopping_checkpoint: ConvergenceCheckpoint | None
     profile: FitProfileReport | None = None
 
     def __post_init__(self) -> None:
@@ -113,7 +109,6 @@ def run_nuts_da(
     sampler: SamplerSpec,
     start: jax.Array | SamplerCheckpoint,
     execution_context: ModelExecutionContext,
-    convergence: RetainedConvergenceCheck | None = None,
 ) -> NutsDARun | InitializationFailure:
     """Advance independent chains together, then retain only post-adaptation joint draws.
 
@@ -301,7 +296,6 @@ def run_nuts_da(
         plan,
         (states, key, chart),
         execution_context=execution_context,
-        convergence=convergence,
         profile=profile_state if execution_context.profile else None,
     )
     states, next_key, _ = run.state
@@ -316,7 +310,6 @@ def run_nuts_da(
     }
     return NutsDARun(
         retained_draws=run.retained_draws,
-        stopping_checkpoint=run.stopping_checkpoint,
         positions=run.history.posterior["positions"],
         paths=run.history.posterior["paths"],
         observation_log_probs=run.history.posterior["observation_log_probs"],
@@ -372,15 +365,6 @@ def fit_nuts_da(
     started = clock()
     run = run_nuts_da(
         bundle.runtime,
-        convergence=retained_convergence_check(
-            sampler.stop_when_converged,
-            bundle=bundle,
-            compiled_dynamical_model=panel.compiled_dynamical_model,
-            free_mask=bundle.runtime.independent_mask
-            if bundle.exact_constraints is None
-            else bundle.runtime.independent_mask & bundle.exact_constraints.free_mask,
-            compiler=compiler,
-        ),
         sampler=sampler,
         start=sampling_key if continuation is None else continuation,
         execution_context=execution_context,
@@ -422,7 +406,6 @@ def fit_nuts_da(
         ),
         diagnostics=ProductionDiagnostics(
             profile=run.profile,
-            stopping_checkpoint=run.stopping_checkpoint,
             checkpoint=run.checkpoint,
             parameterization=parameterization_record,
             mcmc=mcmc,

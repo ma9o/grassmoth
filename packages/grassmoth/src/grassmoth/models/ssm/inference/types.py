@@ -16,7 +16,6 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
     from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
-    from grassmoth.models.ssm.inference.samplers.sweeps import ConvergenceCheckpoint
 
 
 from collections.abc import Mapping
@@ -118,7 +117,6 @@ class ProductionDiagnostics:
     """The exact producer's native buffers, separate from serialized report values."""
 
     mcmc: TrajectoryMCMCResult
-    stopping_checkpoint: ConvergenceCheckpoint | None = None
     checkpoint: SamplerCheckpoint | None = None
     profile: FitProfileReport | None = None
     parameterization: JointParameterizationRecord | None = None

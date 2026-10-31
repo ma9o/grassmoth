@@ -1060,18 +1060,6 @@ export interface components {
         };
         readonly ConvergenceAssessmentSubject: components["schemas"]["ConvergenceSubject"] | components["schemas"]["LatentConvergenceSubject"] | ("recorded_parameter_chains" | "recorded_latent_chains");
         /**
-         * ConvergenceCheckpointReport
-         * @description The passing native production check that ended this execution's retained phase.
-         */
-        readonly ConvergenceCheckpointReport: {
-            /**
-             * Draws
-             * @description New retained draws per chain at the declared checkpoint.
-             */
-            readonly draws: number;
-            readonly report: components["schemas"]["ConvergenceReport"];
-        };
-        /**
          * ConvergenceReport
          * @description Recorded-chain criteria cover parameters and independent latent coordinates.
          */
@@ -1095,35 +1083,6 @@ export interface components {
              * @description Explanations for convergence checks that failed or could not be evaluated.
              */
             readonly messages: readonly string[];
-        };
-        /**
-         * ConvergenceStoppingReport
-         * @description Actual stopping point and its passing evidence for an opted-in execution.
-         */
-        readonly ConvergenceStoppingReport: {
-            /**
-             * Retained Draws
-             * @description Actual newly retained draws per chain in this segment.
-             */
-            readonly retained_draws: number;
-            /** @description Null when no eligible checkpoint passed, including zero-draw execution. */
-            readonly checkpoint: components["schemas"]["ConvergenceCheckpointReport"] | null;
-        };
-        /**
-         * ConvergenceStoppingSpec
-         * @description Declared retained-draw checkpoints for the native production convergence gate.
-         */
-        readonly ConvergenceStoppingSpec: {
-            /**
-             * Checkpoint Draws
-             * @description Check after each multiple of this many newly retained draws per chain.
-             */
-            readonly checkpoint_draws: number;
-            /**
-             * Min Draws
-             * @description Minimum newly retained draws per chain before a passing checkpoint may stop this execution. The requested sample count remains the ceiling.
-             */
-            readonly min_draws: number;
         };
         /**
          * ConvergenceSubject
@@ -4507,23 +4466,16 @@ export interface components {
             readonly convergence: components["schemas"]["ConvergenceReport"];
             /** @default null */
             readonly parameterization: components["schemas"]["JointParameterizationRecord"] | null;
-            /** @default null */
-            readonly convergence_stopping: components["schemas"]["ConvergenceStoppingReport"] | null;
         };
         /**
          * FitSettingsSpec
          * @description Optional numerical controls applied to the configured joint sampler.
          *
          *     Each field means what the SamplerSpec field of the same name means. Null keeps the
-         *     server's configured value, or the continued fit's, except convergence stopping,
-         *     which is opt-in for each execution. Profiling also applies only to this execution.
+         *     server's configured value, or the continued fit's. Profiling applies only to
+         *     this execution.
          */
         readonly "FitSettingsSpec-Input": {
-            /**
-             * @description Opt in for this execution only; absent/null keeps the fixed schedule, including continuations.
-             * @default null
-             */
-            readonly stop_when_converged?: components["schemas"]["ConvergenceStoppingSpec"] | null;
             /**
              * Profile
              * @description Profile this execution only, including continuations. Time native compiled parts on frozen copies after warmup, or after the first sweep without warmup. Report named production and profiling-only compile requests with cache status; save named compiled analysis beside the cached fit after timing completes.
@@ -4565,15 +4517,10 @@ export interface components {
          * @description Optional numerical controls applied to the configured joint sampler.
          *
          *     Each field means what the SamplerSpec field of the same name means. Null keeps the
-         *     server's configured value, or the continued fit's, except convergence stopping,
-         *     which is opt-in for each execution. Profiling also applies only to this execution.
+         *     server's configured value, or the continued fit's. Profiling applies only to
+         *     this execution.
          */
         readonly "FitSettingsSpec-Output": {
-            /**
-             * @description Opt in for this execution only; absent/null keeps the fixed schedule, including continuations.
-             * @default null
-             */
-            readonly stop_when_converged: components["schemas"]["ConvergenceStoppingSpec"] | null;
             /**
              * Profile
              * @description Profile this execution only, including continuations. Time native compiled parts on frozen copies after warmup, or after the first sweep without warmup. Report named production and profiling-only compile requests with cache status; save named compiled analysis beside the cached fit after timing completes.
@@ -7377,7 +7324,7 @@ export interface components {
             readonly num_warmup: number;
             /**
              * Num Samples Per Chain
-             * @description Requested retained draws per chain after warmup, or a ceiling when stop_when_converged is set. A continued fit appends its actual retained draws. Zero returns checks without a conditioned model.
+             * @description Retained draws per chain after warmup. Every fit runs this exact count; a continued fit appends this many draws to each chain. Zero returns checks without a conditioned model.
              * @default 1000
              */
             readonly num_samples_per_chain: number;
@@ -7387,11 +7334,6 @@ export interface components {
              * @default 4
              */
             readonly num_chains: number;
-            /**
-             * @description Optional production convergence checks at declared retained-draw checkpoints. Warmup is unchanged; the first passing checkpoint at or above min_draws stops sampling. None retains the full requested count. Each continued execution checks only its newly retained draws.
-             * @default null
-             */
-            readonly stop_when_converged: components["schemas"]["ConvergenceStoppingSpec"] | null;
             /**
              * Seed
              * @description Seeds initialization and sampling; another seed is an independent replicate.

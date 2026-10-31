@@ -262,9 +262,6 @@ from grassmoth.artifacts.reports.predictive_provenance import (
     UnknownLawProvenance as UnknownLawProvenance,
 )
 from grassmoth.artifacts.sampling import (
-    ConvergenceStoppingSpec as ConvergenceStoppingSpec,
-)
-from grassmoth.artifacts.sampling import (
     InferenceAlgorithmSpec as InferenceAlgorithmSpec,
 )
 from grassmoth.artifacts.sampling import (

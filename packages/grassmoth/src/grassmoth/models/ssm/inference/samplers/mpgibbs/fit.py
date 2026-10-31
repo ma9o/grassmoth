@@ -49,7 +49,6 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
 from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_particle_weights
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
-from grassmoth.models.ssm.inference.samplers.sweeps import retained_convergence_check
 from grassmoth.models.ssm.inference.targets.coordinates import (
     PathChart,
     ScaleChart,
@@ -257,15 +256,6 @@ def fit_marginal_particle_gibbs(
         key=sampling_key,
         initialization=initialization,
         execution_context=execution_context,
-        convergence=retained_convergence_check(
-            sampler.stop_when_converged,
-            bundle=bundle,
-            compiled_dynamical_model=panel.compiled_dynamical_model,
-            free_mask=bundle.runtime.state_density_mask
-            if bundle.exact_constraints is None
-            else bundle.runtime.state_density_mask & bundle.exact_constraints.free_mask,
-            compiler=compiler,
-        ),
         adaptation_scheme=options.adaptation_scheme,
         tempering=tempering,
         continuation=continuation,
@@ -410,7 +400,6 @@ def fit_marginal_particle_gibbs(
     )
     diagnostics = ProductionDiagnostics(
         profile=run_result.profile,
-        stopping_checkpoint=run_result.stopping_checkpoint,
         checkpoint=checkpoint,
         compiled_step=run_result.compiled_step,
         mcmc=mcmc,
