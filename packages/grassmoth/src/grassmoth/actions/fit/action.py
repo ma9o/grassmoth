@@ -28,7 +28,7 @@ from grassmoth.artifacts.reports.profiling import ProgramCompileReport
 from grassmoth.artifacts.sampling import MarginalParticleGibbsSpec
 from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
 from grassmoth.models.ssm.inference.samplers.profiling import compilation_seconds, log_profile
-from grassmoth.models.ssm.inference.samplers.progress import capture_phases
+from grassmoth.models.ssm.inference.samplers.progress import capture_phases, inference_phase
 from grassmoth.models.ssm.inference.types import UnretainedRun
 
 if TYPE_CHECKING:
@@ -148,13 +148,14 @@ def _fit(
     def retain(values: jax.Array | np.ndarray | None) -> NumericalArray | None:
         return encode(values) if values is not None else None
 
-    conditioned, identity = condition_model(
-        selection.dynamical_model_spec,
-        fitted.panel.compiled_dynamical_model,
-        result,
-        times=fitted.panel.times,
-        time_origin=inputs.data_for_model.time_origin,
-    )
+    with inference_phase("fit", "conditioning", execution_context=execution_context):
+        conditioned, identity = condition_model(
+            selection.dynamical_model_spec,
+            fitted.panel.compiled_dynamical_model,
+            result,
+            times=fitted.panel.times,
+            time_origin=inputs.data_for_model.time_origin,
+        )
     layout = conditioned.law_layouts[identity]
     latent_indices = (
         tuple(
@@ -195,15 +196,15 @@ def _fit(
         initial_latent_delta=retain(result.initial_latent_delta),
         final_latent_delta=retain(result.final_latent_delta),
     )
+    with inference_phase("fit", "segment_diagnostics", execution_context=execution_context):
+        diagnostics = segment_diagnostics(
+            conditioned, identity, evidence, sampler.num_chains, result.evidence
+        )
     metadata = InferenceMetadata(
         distribution=identity,
         segments=(
             *(previous.inference.core.inference_metadata.segments if previous is not None else ()),
-            segment(
-                segment_diagnostics(
-                    conditioned, identity, evidence, sampler.num_chains, result.evidence
-                )
-            ),
+            segment(diagnostics),
         ),
         engine=result.evidence,
         duration_seconds=fitted.duration_seconds,
@@ -269,13 +270,15 @@ def _fit(
 
 
 def inference_report(
-    dynamical_model_spec: DynamicalModelSpec,
+    result: FitResult,
     input_model: DynamicalModelSpec,
-    evidence: InferenceEvidence,
-    metadata: InferenceMetadata,
     windows: tuple[MovementWindow, ...],
+    *,
+    execution_context: ModelExecutionContext,
 ) -> InferenceReport:
-    """Compute exact-chain diagnostics from this fit's atoms and native telemetry."""
+    """Render this fit's atoms, native telemetry and production diagnostics."""
+    dynamical_model_spec = result.dynamical_model_spec or input_model
+    evidence, metadata = result.evidence, result.metadata
     if metadata.distribution is None:
         return InferenceReport(
             evidence=evidence,
@@ -324,7 +327,8 @@ def inference_report(
             for parameter, elements in layout.parameters
             for element in elements
         }
-        marginals = compute_posterior_marginals(samples, references)
+        with inference_phase("fit", "report_marginals", execution_context=execution_context):
+            marginals = compute_posterior_marginals(samples, references)
         extra = {name: ref.values for name, ref in evidence.chain_extra_fields.items()}
         diagnostics = None
         traces, ranks, loo = (), (), None
@@ -380,12 +384,14 @@ def inference_report(
                 if len(metadata.segments) == 1
                 else posterior.get_inference_diagnostics(references)
             )
-            traces, ranks = posterior.get_chain_detail(references)
+            with inference_phase("fit", "report_chain_detail", execution_context=execution_context):
+                traces, ranks = posterior.get_chain_detail(references)
             if evidence.observation_log_probs is not None:
                 assert evidence.observed_rows is not None
-                loo = posterior.get_loo_diagnostics(
-                    observed_rows=np.asarray(evidence.observed_rows.values)
-                )
+                with inference_phase("fit", "report_loo", execution_context=execution_context):
+                    loo = posterior.get_loo_diagnostics(
+                        observed_rows=np.asarray(evidence.observed_rows.values)
+                    )
 
         from grassmoth.study.projections.priors import quantity_prior_densities
 
@@ -409,21 +415,14 @@ def inference_report(
             identity: dynamical_model_spec.get_construct(identity).name
             for identity in layout.constructs
         }
-        return InferenceReport(
-            evidence=evidence,
-            core=InferenceReportCore(
-                inference_metadata=metadata,
-                inference_diagnostics=diagnostics,
-                convergence=chain_convergence(diagnostics),
-                loo_diagnostics=loo[0] if loo is not None else None,
-                posterior_marginals=marginals,
-                prior_densities=priors,
-                frequency_refresh=frequency_refresh(
-                    atoms[metadata.distribution], layout, labels, metadata.num_chains
-                )
+        with inference_phase("fit", "report_scorecard", execution_context=execution_context):
+            refresh = (
+                frequency_refresh(atoms[metadata.distribution], layout, labels, metadata.num_chains)
                 if "frequency_refresh" in metrics
-                else (),
-                regional_movement=regional_movement(
+                else ()
+            )
+            movement = (
+                regional_movement(
                     atoms[metadata.distribution],
                     layout,
                     labels,
@@ -438,7 +437,19 @@ def inference_report(
                 if "regional_movement" in metrics
                 and evidence.latent_free_mask is not None
                 and evidence.observed_rows is not None
-                else (),
+                else ()
+            )
+        return InferenceReport(
+            evidence=evidence,
+            core=InferenceReportCore(
+                inference_metadata=metadata,
+                inference_diagnostics=diagnostics,
+                convergence=chain_convergence(diagnostics),
+                loo_diagnostics=loo[0] if loo is not None else None,
+                posterior_marginals=marginals,
+                prior_densities=priors,
+                frequency_refresh=refresh,
+                regional_movement=movement,
             ),
             detail=InferenceReportDetail(
                 trace_data=tuple(
@@ -534,27 +545,27 @@ def fit(
     if isinstance(result, ModelFitFailure):
         return result
     conditioned = result.dynamical_model_spec
-    report = (
-        previous.inference.revised(
-            evidence=result.evidence,
-            core=previous.inference.core.revised(inference_metadata=result.metadata),
+    with inference_phase("fit", "report_rendering", execution_context=execution_context):
+        report = (
+            previous.inference.revised(
+                evidence=result.evidence,
+                core=previous.inference.core.revised(inference_metadata=result.metadata),
+            )
+            if conditioned is None and previous is not None
+            else inference_report(
+                result,
+                selection.dynamical_model_spec,
+                tuple(
+                    MovementWindow(
+                        name=name,
+                        start_day=query.start_day(time_origin),
+                        end_day=query.end_day(time_origin),
+                    )
+                    for name, query in question.queries.items()
+                ),
+                execution_context=execution_context,
+            )
         )
-        if conditioned is None and previous is not None
-        else inference_report(
-            conditioned or selection.dynamical_model_spec,
-            selection.dynamical_model_spec,
-            result.evidence,
-            result.metadata,
-            tuple(
-                MovementWindow(
-                    name=name,
-                    start_day=query.start_day(time_origin),
-                    end_day=query.end_day(time_origin),
-                )
-                for name, query in question.queries.items()
-            ),
-        )
-    )
     profiling = (
         None
         if result.profile is None

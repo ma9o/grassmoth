@@ -7,6 +7,7 @@ import io
 import logging
 import os
 import pickle
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -170,20 +171,45 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
     initialize_numerical_runtime()
     if jax.default_backend() != "gpu":
         raise RuntimeError("Modal fit requires a GPU backend")
-    logging.getLogger(__name__).info("Fit compute devices: %s", jax.devices())
+    logger = logging.getLogger(__name__)
+    logger.info("Fit compute devices: %s", jax.devices())
     volume = modal.Volume.from_name(os.environ[FIT_CACHE_VOLUME_ENV])
     with local_compilation_cache(Path("/cache/jax-bundles"), commit=volume.commit):
         result = execute_fit_compute(payload)
         from grassmoth_server.study.persistence.arrays import owned_arrays
         from grassmoth_server.study.persistence.codec import pack_payload, result_payload
 
+        started = time.perf_counter()
         values = result_payload(result)
-        entry = cache_fit_result(
-            ANALYSIS_CACHE_ROOT / "retained", payload.analysis_call, pack_payload(values)
+        logger.info(
+            "Fit result_payload complete: elapsed_seconds=%.6f", time.perf_counter() - started
         )
+        started = time.perf_counter()
+        packed = pack_payload(values)
+        logger.info(
+            "Fit pack_payload complete: elapsed_seconds=%.6f", time.perf_counter() - started
+        )
+        started = time.perf_counter()
+        entry = cache_fit_result(ANALYSIS_CACHE_ROOT / "retained", payload.analysis_call, packed)
+        logger.info(
+            "Fit cache_fit_result complete: elapsed_seconds=%.6f", time.perf_counter() - started
+        )
+        del packed
+        started = time.perf_counter()
         receipt = receipt_for(result, entry, tuple(owned_arrays(values)))
+        logger.info(
+            "Fit result_receipt complete: elapsed_seconds=%.6f", time.perf_counter() - started
+        )
+        started = time.perf_counter()
         modal.Volume.from_name(ANALYSIS_CACHE_VOLUME).commit()
+        logger.info(
+            "Fit volume_commit complete: elapsed_seconds=%.6f", time.perf_counter() - started
+        )
+        started = time.perf_counter()
         frame = encode_fit_result(FitComputeResult(pack_result(receipt)))
+        logger.info(
+            "Fit result_frame_encode complete: elapsed_seconds=%.6f", time.perf_counter() - started
+        )
         del result, values
     yield from _result_chunks(frame)
 

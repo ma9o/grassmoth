@@ -284,6 +284,8 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
 
     first = execute(posterior(2, 1), 2)
     assert first.metadata.segments[0].settings.num_samples_per_chain == 2
+    # Post-sampling timing is log-only; the stubbed sampler recorded no phases.
+    assert first.metadata.segments[0].phases == ()
     for name, retained in first.evidence.chain_extra_fields.items():
         assert retained is first.evidence.phase_extra_fields["post_warmup"][name]
         np.testing.assert_array_equal(

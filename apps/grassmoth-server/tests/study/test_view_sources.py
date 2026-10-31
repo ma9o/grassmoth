@@ -9,6 +9,7 @@ from grassmoth_server.study.records import Applied, inference_record
 from grassmoth_server_test_support.action import applied_record
 from grassmoth_server_test_support.git import artifact_revision
 from grassmoth_server_test_support.helpers import write_question
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.model import x_y_model
 
 
@@ -37,7 +38,7 @@ def test_authored_model_has_no_inference_report(monkeypatch, tmp_path):
 @pytest.mark.inference(concern="sampling")
 def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(monkeypatch, tmp_path):
     from grassmoth.actions.contracts.bodies import FitOutput
-    from grassmoth.actions.fit.action import inference_report
+    from grassmoth.actions.fit.action import FitResult, inference_report
     from grassmoth.artifacts.observations.reference import DataRef
     from grassmoth.artifacts.reports.inference import InferenceEvidence
     from grassmoth_server.actions.contracts.inputs import FitInput, NewFitTarget
@@ -85,14 +86,17 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
                     reports={
                         "inference": store.write_result(
                             inference_report(
-                                read_model(store, info.revision),
+                                FitResult(
+                                    dynamical_model_spec=read_model(store, info.revision),
+                                    evidence=result,
+                                    metadata=inference_metadata(dynamical_model_spec),
+                                ),
                                 read_model(
                                     store,
                                     store.read_meta("model", info.revision).derived_from["model"],
                                 ),
-                                result,
-                                inference_metadata(dynamical_model_spec),
                                 windows=(),
+                                execution_context=EXECUTION_CONTEXT,
                             )
                         )
                     },

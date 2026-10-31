@@ -30,6 +30,7 @@ from grassmoth_server_test_support.git import artifact_revision, commit_id
 from grassmoth_server_test_support.helpers import write_question
 from grassmoth_server_test_support.model import stress_sleep_causal_model, stress_sleep_model
 from grassmoth_server_test_support.runner_fixtures import panel_metadata
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.inference import (
     compile_model_fixture,
@@ -165,7 +166,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
         )
         pins["model"] = fitted.revision
         produced.append(fitted)
-        from grassmoth.actions.fit.action import inference_report
+        from grassmoth.actions.fit.action import FitResult, inference_report
         from grassmoth_server.study.persistence.store import read_model
 
         evidence = InferenceEvidence()
@@ -177,14 +178,17 @@ def test_durable_replication_preserves_current_laws_without_comparison(
                 reports={
                     "inference": store.write_result(
                         inference_report(
-                            read_model(store, fitted.revision),
+                            FitResult(
+                                dynamical_model_spec=read_model(store, fitted.revision),
+                                evidence=retained,
+                                metadata=inference_metadata(dynamical_model_spec),
+                            ),
                             read_model(
                                 store,
                                 store.read_meta("model", fitted.revision).derived_from["model"],
                             ),
-                            retained,
-                            inference_metadata(dynamical_model_spec),
                             windows=(),
+                            execution_context=EXECUTION_CONTEXT,
                         )
                     )
                 },
