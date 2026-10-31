@@ -30,27 +30,15 @@ The user supplies a scientific question and observational data. The agent carrie
 grassmoth samples a nonlinear state-space model's parameters and latent paths jointly with [marginalized particle Gibbs](docs/assumptions.md#inference-policy). Two of its path updates compete here:
 
 - [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) proposes a cloud of particles at every time step.
-- The auxiliary Kalman sampler of [Corenflos & Särkkä](https://arxiv.org/abs/2303.00301) proposes a whole Gaussian path, or one block of time at a time, and corrects it with a Metropolis–Hastings step against the exact model.
+- The [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä](https://arxiv.org/abs/2303.00301) proposes a Gaussian path, whole or one block of time at a time, and corrects it with a Metropolis–Hastings step against the exact model.
 
-NUTS, with NumPyro's default adaptation, is the reference. Its path rebuild runs faster on CPU cores than on a GPU, so it ran on a CPU and is discussed after each table instead of in it.
+NUTS, with NumPyro's default adaptation, is the reference. It runs on CPU cores, where its [sequential path rebuild](packages/grassmoth/src/grassmoth/models/ssm/execution/innovations.py) is faster than on a GPU.
 
-Every fit runs through the same `fit` action on the same model and data, in float32, with seed 19 and 2,000 warmup sweeps. None replaces the nonlinear model it targets with an approximation.
-
-- **Convergence check:** the [production convergence check](packages/grassmoth/src/grassmoth/models/ssm/inference/diagnostics/convergence.py) requires R̂ below 1.05, and bulk and tail ESS of at least 100 per chain, for every parameter and the worst latent time point.
-- **Time:** durations and rates count warmup and sampling. Compilation is listed separately, because it depends on what the compilation cache already holds: the whole-path Kalman SV fit partly reused programs that its earlier attempts compiled in 15–16 s. Setup, convergence checks and saving are left out.
-- **Worst ESS:** the lowest over every parameter and latent time point.
-- **Bold:** the best value in each row of the comparison tables.
-- **Runs:** each column is one fit on one seed. The [run records](benchmarks/suite/notes.md) hold the fits behind every number.
-- **Code:** the blocked SV fit ran on master. The other Kalman fits ran just before the sampler landed, on CUDA 12 with XLA's compile-time autotuning off, which can also shorten their compilation.
+Within each benchmark, every fit runs the same `fit` action on the same model and data, in float32, with seed 19 and 2,000 warmup sweeps, and none approximates the nonlinear target. Worst ESS and R̂ are taken over every parameter and latent time point, and bold marks the best value in each row. Each column is one fit on one seed; the [run records](benchmarks/suite/notes.md) hold them all.
 
 ### Stochastic volatility
 
-This is a nonlinear version of the Gaussian stochastic volatility model of [Kim, Shephard & Chib (1998)](https://doi.org/10.1111/1467-937X.00050), one of the four test models in the [NUTS paper](https://jmlr.org/papers/v15/hoffman14a.html).
-
-- **Model:** the log-variance follows a continuous-time diffusion with drift −θh − 0.03h³. Its cubic term pulls large excursions back faster than the original's Ornstein–Uhlenbeck drift.
-- **Data:** 3,000 simulated daily returns ([model and data](benchmarks/cases/suite/SV-cubic)).
-- **Hardware:** each fit runs 80 chains on one NVIDIA H200.
-- **Worst bulk ESS:** vol-of-vol σ, in every fit.
+A nonlinear version of the stochastic volatility model of [Kim, Shephard & Chib (1998)](https://doi.org/10.1111/1467-937X.00050), one of the four test models in the [NUTS paper](https://jmlr.org/papers/v15/hoffman14a.html). The log-variance follows a continuous-time diffusion with drift −θh − 0.03h³, whose cubic term pulls large excursions back faster than the original Ornstein–Uhlenbeck drift. The data are 3,000 simulated daily returns ([model and data](benchmarks/cases/suite/SV-cubic)), and each fit runs 80 chains on one NVIDIA H200.
 
 | | mGRAD | Aux Kalman | Aux Kalman, blocked |
 | --- | --- | --- | --- |
@@ -59,7 +47,7 @@ This is a nonlinear version of the Gaussian stochastic volatility model of [Kim,
 | Compilation | 20.2 s | **5.9 s** | 16.4 s |
 | Warmup | 136 s | 16.8 s | **12.2 s** |
 | Sampling | 276 s | **41 s** | 76 s |
-| Duration: warmup and sampling | 6 min 52 s | **58 s** | 1 min 29 s |
+| Warmup and sampling | 6 min 52 s | **58 s** | 1 min 29 s |
 | One sweep of all chains | 68.9 ms | 10.3 ms | **7.6 ms** |
 | Draws per effective sample | **67** | 868 | 396 |
 | Worst bulk ESS | **4,800** | 368 | 2,020 |
@@ -67,19 +55,13 @@ This is a nonlinear version of the Gaussian stochastic volatility model of [Kim,
 | Worst R̂ | **1.016** | 1.160 | 1.037 |
 | Worst bulk ESS per second of sampling | 17.4 | 8.9 | **26.4** |
 | Worst bulk ESS per second of warmup and sampling | 11.7 | 6.3 | **22.8** |
-| Cost of that time at Modal rates | $0.59 | **$0.08** | $0.13 |
+| Cost of warmup and sampling on Modal | $0.59 | **$0.08** | $0.13 |
 
-- **Kalman sweeps fastest, but each sweep moves less.**
-  - A whole-path Kalman sweep costs a seventh of mGRAD's. But one accept/reject for all 3,000 days forces small moves, so it needs 13 times the draws per effective sample and delivers half mGRAD's ESS per second.
-  - Blocks of 300 days, each accepted separately, more than close that gap. They deliver 1.5 times mGRAD's ESS per second of sampling, and about twice its rate over warmup and sampling, partly because 10,000 draws spread a warmup that was already 11 times shorter.
-  - That lead rests on one fit's ESS. An earlier fit of the same blocked sampler, before its speedups, reached a worst bulk ESS of 1,492; at that ESS the lead would be 1.1 times.
+Vol-of-vol σ has the worst bulk ESS in every fit. The whole-path fit's compilation partly reused cached programs.
 
-**Against NUTS.** NUTS took about 20 minutes: 19 min 15 s of warmup and sampling, with 32 non-centred chains on the eight performance cores of an Apple M1 Max.
+A whole-path Kalman sweep costs a seventh of mGRAD's, but one accept/reject for all 3,000 days forces small moves, so it needs 13 times mGRAD's draws per effective sample. Accepting 300-day blocks separately more than halves that, and blocked Kalman delivers 1.5 times mGRAD's ESS per second of sampling.
 
-- **What it reached:** worst bulk ESS 9,395, tail ESS 13,050 and R̂ 1.003.
-- **Why the CPU:** each NUTS gradient rebuilds the path from its innovations in a [sequential scan](packages/grassmoth/src/grassmoth/models/ssm/execution/innovations.py). On the H200 it reached only 101 of 2,000 warmup sweeps in 44 minutes.
-- **What grassmoth gets in a fraction of that time:** mGRAD and blocked Kalman both reach R̂ below 1.05, in about a third and a thirteenth of NUTS's time. Their worst bulk ESS, 4,800 and 2,020, puts the Monte Carlo error of every posterior mean under 3% of its posterior standard deviation.
-- **Whole-path Kalman** is faster still, but its R̂ of 1.16 is not acceptable.
+**Against NUTS.** NUTS takes about 20 minutes: 19 min 15 s for 32 non-centred chains on the eight performance cores of an Apple M1 Max, reaching worst bulk ESS 9,395, tail ESS 13,050 and R̂ 1.003. On the H200 it managed only 101 of 2,000 warmup sweeps in 44 minutes. mGRAD and blocked Kalman reach R̂ below 1.05 in about a third and a thirteenth of NUTS's time, with every posterior mean's Monte Carlo error under 3% of its posterior standard deviation. Whole-path Kalman is faster still, but its R̂ of 1.16 is too high.
 
 | Parameter | Truth | mGRAD | NUTS |
 | ---: | ---: | ---: | ---: |
@@ -87,14 +69,11 @@ This is a nonlinear version of the Gaussian stochastic volatility model of [Kim,
 | Decay θ | 0.02 | 0.0150 [0.0000, 0.0301] | 0.0152 [0.0000, 0.0305] |
 | Vol-of-vol σ | 0.2 | 0.194 [0.150, 0.237] | 0.195 [0.151, 0.238] |
 
-The table shows posterior means with 94% HDIs. The two samplers' means differ by at most 2.0 combined Monte Carlo standard errors, for vol-of-vol.
+Posterior means with 94% HDIs. mGRAD's and NUTS's means agree within 2.0 combined Monte Carlo standard errors.
 
 ### Lorenz-96
 
-- **Model:** the stochastic [Lorenz-96 system](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html), with 40 coupled states and forcing 8, at 300 time points 0.01 apart.
-- **Data:** every other state is observed with Gaussian noise, giving 6,000 readings ([model and data](benchmarks/cases/suite/L96)).
-- **No parameters to learn:** the forcing and both noise scales are known, so each fit smooths 12,000 latent coordinates per chain.
-- **Hardware:** each fit runs 2 chains on one NVIDIA H200.
+The stochastic [Lorenz-96 system](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html) here has 40 coupled states with forcing 8, at 300 time points 0.01 apart. Every other state is observed with Gaussian noise, giving 6,000 readings ([model and data](benchmarks/cases/suite/L96)). The forcing and noise scales are known, so each fit smooths 12,000 latent coordinates per chain, with 2 chains on one NVIDIA H200.
 
 | | mGRAD | Aux Kalman | Aux Kalman, blocked |
 | --- | --- | --- | --- |
@@ -103,7 +82,7 @@ The table shows posterior means with 94% HDIs. The two samplers' means differ by
 | Compilation | 155.1 s | 31.7 s | **25.3 s** |
 | Warmup | 534 s | 17.0 s | **15.8 s** |
 | Sampling | 1,064 s | **34 s** | 77 s |
-| Duration: warmup and sampling | 26 min 38 s | **51 s** | 1 min 33 s |
+| Warmup and sampling | 26 min 38 s | **51 s** | 1 min 33 s |
 | One sweep of all chains | 266 ms | 8.5 ms | **7.7 ms** |
 | Worst bulk ESS | 2.4 | **63** | 31 |
 | Worst tail ESS | 4.8 | **99** | 49 |
@@ -111,26 +90,11 @@ The table shows posterior means with 94% HDIs. The two samplers' means differ by
 | Worst bulk ESS per second of sampling | 0.002 | **1.86** | 0.41 |
 | Worst bulk ESS per second of warmup and sampling | 0.0015 | **1.24** | 0.34 |
 
-None of these fits has converged, so they measure relative speed, not a posterior.
+No fit reaches R̂ below 1.05, so the table compares speed, not posteriors.
 
-- **The whole-path Kalman sampler wins by about 800 times.**
-  - On identical source and settings, its sweep takes 13.5 ms against mGRAD's 280 ms.
-  - mGRAD scores 39 million particle pairs per sweep in its backward pass.
-  - 256 particles can't cover 40 dimensions: every state's worst bulk ESS stays between 2.4 and 3.0.
-- **Blocking hurts here.**
-  - 25-step blocks moved each stretch of the path more per sweep, but cut ESS per second 4.6 times.
-  - This blocked fit predates the speedups that landed with the sampler. In a separate test they cut Lorenz-96 sweep time by about a quarter, which would narrow the gap to about 3.3 times.
-  - Blocks held in place by their neighbours can't shift the slow, path-wide components.
-  - The series is short and its 0.01 steps nearly linear, which suits whole-path proposals.
-- **These fits ran before master could fit this model.** Master now keeps unobserved coupled states and handles a model with no free parameters. The mGRAD fit also scored backward particle pairs one time point at a time, which removes a 467 GiB allocation at 80 chains and isn't on master.
+Whole-path Kalman delivers about 800 times mGRAD's ESS per second. mGRAD's 256 particles can't cover 40 dimensions: every state's worst bulk ESS stays between 2.4 and 3.0, while its backward pass scores 39 million particle pairs per sweep. Blocking hurts here: 25-step blocks, held in place by their neighbours, can't shift the slow components that span the path, and the short series with nearly linear 0.01 steps suits whole-path proposals.
 
-  80-chain mGRAD fits failed on the H200 with CUDA errors. So these fits use two chains, CUDA 12 and a Jacobi eigenvalue solver.
-
-**Against NUTS.** By extrapolation, NUTS would have needed about 9 hours, against 51 s of warmup and sampling for whole-path Kalman.
-
-- **The probe:** 32 non-centred chains on the M1 Max's eight performance cores finished 26 of their first 51 warmup sweeps in 49 minutes, 113 s per sweep. The probe was then stopped.
-- **The 9 hours:** that assumes later sweeps speed up as much as they did on SV once adaptation settled, and covers 2,000 warmup sweeps and 1,000 draws.
-- **Without that speed-up:** at the early rate, warmup alone would take 63 hours.
+**Against NUTS.** By extrapolation, NUTS would need about 9 hours, against 51 s for whole-path Kalman. A 32-chain probe on the M1 Max ran 26 warmup sweeps in 49 minutes before it was stopped. The 9 hours assume its later sweeps speed up as they did on SV; at the early rate, warmup alone would take 63 hours.
 
 ## Modeling
 
