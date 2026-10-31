@@ -46,9 +46,10 @@ def _ess(values: jax.Array) -> jax.Array:
     fft_size = 1 << (2 * draws - 1).bit_length()
     centered = values - values.mean(axis=-1, keepdims=True)
     spectrum = jnp.fft.rfft(centered, n=fft_size, axis=-1)
-    acov = (
-        jnp.fft.irfft(spectrum * jnp.conj(spectrum), n=fft_size, axis=-1)[..., :draws] / draws
-    ).mean(axis=-2)
+    # The inverse transform is linear. Average the chain power spectra first,
+    # so only one inverse FFT per coordinate is needed, not one per split chain.
+    mean_power = (spectrum * jnp.conj(spectrum)).mean(axis=-2)
+    acov = jnp.fft.irfft(mean_power, n=fft_size, axis=-1)[..., :draws] / draws
     mean_var = acov[:, 0] * draws / (draws - 1)
     var_plus = mean_var * (draws - 1) / draws
     if chains > 1:
