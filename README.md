@@ -27,37 +27,37 @@ The user supplies a scientific question and observational data. The agent carrie
 
 ## Benchmarks
 
-grassmoth's [marginalized particle Gibbs](docs/assumptions.md#inference-policy) sampler updates latent paths with [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) or with the [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä](https://arxiv.org/abs/2303.00301), whole-path or in blocks. Both are exact for the nonlinear model, and NUTS is the reference. The tables report worst cases: the smallest bulk ESS and the largest R̂ over all parameters and all time points of the latent paths. Bold marks the best value in each row. The [run records](benchmarks/suite/notes.md) give each fit's settings and full diagnostics.
+grassmoth's [marginalized particle Gibbs](docs/assumptions.md#inference-policy) sampler updates latent paths with [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) or with the [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä](https://arxiv.org/abs/2303.00301), whole-path or in blocks. Both are exact for the nonlinear model, and NUTS is the reference.
 
 ### Stochastic volatility
 
-This is the stochastic volatility model of [Kim, Shephard & Chib (1998)](https://doi.org/10.1111/1467-937X.00050), a test model in the [NUTS paper](https://jmlr.org/papers/v15/hoffman14a.html), with a cubic drift on the log-variance, fit to 3,000 simulated daily returns ([case](benchmarks/cases/suite/SV-cubic)). Each fit runs 80 chains on one H200.
+This is the stochastic volatility model of [Kim, Shephard & Chib (1998)](https://doi.org/10.1111/1467-937X.00050), a test model in the [NUTS paper](https://jmlr.org/papers/v15/hoffman14a.html), with a cubic drift on the log-variance, fit to 3,000 simulated daily returns ([case](benchmarks/cases/suite/SV-cubic), [runs](benchmarks/suite/notes.md)). Each fit runs 80 chains on one H200.
 
 | | mGRAD, 128 particles | Aux Kalman, whole path | Aux Kalman, 300-day blocks |
 | --- | --- | --- | --- |
 | Draws per chain | 4,000 | 4,000 | 10,000 |
 | Compilation | 20.2 s | 5.9 s, partly cached | 16.4 s |
 | Warmup and sampling | 6 min 52 s | **58 s** | 1 min 29 s |
-| Bulk ESS | **4,800** | 368 | 2,020 |
-| R̂ | **1.016** | 1.160 | 1.037 |
-| Bulk ESS per second of warmup and sampling | 11.7 | 6.3 | **22.8** |
+| Worst bulk ESS | **4,800** | 368 | 2,020 |
+| Worst R̂ | **1.016** | 1.160 | 1.037 |
+| Worst bulk ESS per second | 11.7 | 6.3 | **22.8** |
 
-NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003; on the H200 it is far slower, at 101 warmup sweeps in 44 minutes. mGRAD and blocked Kalman reach R̂ below 1.05 in a third and a thirteenth of that time, and mGRAD's posterior means match NUTS's within two Monte Carlo standard errors. Whole-path Kalman is fastest, but a single accept/reject for all 3,000 days leaves its R̂ at 1.16.
+NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003; on the H200 it completes only 101 of 2,000 warmup sweeps in 44 minutes. mGRAD and blocked Kalman reach R̂ below 1.05 in a third and a thirteenth of that time, and mGRAD's posterior means match NUTS's within two Monte Carlo standard errors. Whole-path Kalman is fastest, but a single accept/reject for all 3,000 days leaves its R̂ at 1.16.
 
 ### Lorenz-96
 
-The stochastic [Lorenz-96 system](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html) has 40 states, every other one observed at 300 time points ([case](benchmarks/cases/suite/L96)). Forcing and noise are known, so each fit smooths 12,000 latent coordinates per chain, with 2 chains on one H200.
+The stochastic [Lorenz-96 system](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html) has 40 states, every other one observed at 300 time points ([case](benchmarks/cases/suite/L96), [runs](benchmarks/suite/notes.md)). Forcing and noise are known, so each fit smooths 12,000 latent coordinates per chain, with 2 chains on one H200.
 
 | | mGRAD, 256 particles | Aux Kalman, whole path | Aux Kalman, 25-step blocks |
 | --- | --- | --- | --- |
 | Draws per chain | 4,000 | 4,000 | 10,000 |
 | Compilation | 155.1 s | 31.7 s | **25.3 s** |
 | Warmup and sampling | 26 min 38 s | **51 s** | 1 min 33 s |
-| Bulk ESS | 2.4 | **63** | 31 |
-| R̂ | 2.51 | **1.059** | 1.076 |
-| Bulk ESS per second of warmup and sampling | 0.0015 | **1.24** | 0.34 |
+| Worst bulk ESS | 2.4 | **63** | 31 |
+| Worst R̂ | 2.51 | **1.059** | 1.076 |
+| Worst bulk ESS per second | 0.0015 | **1.24** | 0.34 |
 
-No fit reaches R̂ below 1.05, but whole-path Kalman delivers about 800 times mGRAD's ESS per second, because 256 particles can't cover 40 dimensions. NUTS would need about 9 hours, by extrapolation from a stopped CPU probe.
+No fit reaches R̂ below 1.05, but whole-path Kalman delivers about 800 times mGRAD's ESS per second, because 256 particles can't cover 40 dimensions. NUTS would need about 9 hours on the M1 Max, by extrapolation from a partial run.
 
 ## Modeling
 
