@@ -143,7 +143,7 @@ def _killing_fused(
     count = logits.size
     block = pl.next_power_of_2(count)
 
-    def kernel(logits_ref, survival_ref, replacement_ref, rotation_ref, output_ref):
+    def kernel(logits_ref, survival_ref, replacement_ref, rotation_ref, output_ref, cumulative_ref):
         p = jnp.arange(block)
         values = plt.load(logits_ref.at[p], mask=p < count, other=-jnp.inf)
         maximum = jnp.max(values)
@@ -158,19 +158,34 @@ def _killing_fused(
         chosen_logits = plt.load(logits_ref.at[source])
         survival_noise = plt.load(survival_ref.at[source])
         replacement_noise = plt.load(replacement_ref.at[source])
-        replacements = jnp.minimum(
-            jnp.sum(
-                (cumulative[None, :] <= replacement_noise[:, None]) & (p[None, :] < count), axis=1
-            ),
-            count - 1,
+        plt.store(cumulative_ref.at[p], cumulative, mask=p < count)
+        if not interpret:
+            plt.debug_barrier()
+
+        def search_step(_, bounds):
+            lower, upper = bounds
+            middle = (lower + upper) // 2
+            value = plt.load(cumulative_ref.at[jnp.minimum(middle, count - 1)])
+            right = (middle < count) & (value <= replacement_noise)
+            return jnp.where(right, middle + 1, lower), jnp.where(right, upper, middle)
+
+        lower, _ = jax.lax.fori_loop(
+            0,
+            count.bit_length(),
+            search_step,
+            (jnp.zeros((block,), dtype=jnp.int32), jnp.full((block,), count, dtype=jnp.int32)),
         )
+        replacements = jnp.minimum(lower, count - 1)
         indices = jnp.where(survival_noise < jnp.exp(chosen_logits - maximum), source, replacements)
         indices = jnp.where(p == 0, 0, indices).astype(jnp.int32)
         plt.store(output_ref.at[p], indices, mask=p < count)
 
-    result = pl.pallas_call(
+    result, _ = pl.pallas_call(
         kernel,
-        out_shape=jax.ShapeDtypeStruct(logits.shape, jnp.int32),
+        out_shape=(
+            jax.ShapeDtypeStruct(logits.shape, jnp.int32),
+            jax.ShapeDtypeStruct(logits.shape, logits.dtype),
+        ),
         interpret=interpret,
         compiler_params=plt.CompilerParams(num_warps=4),
         name="conditional_killing",

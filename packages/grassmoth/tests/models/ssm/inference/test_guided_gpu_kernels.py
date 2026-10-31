@@ -19,7 +19,7 @@ from grassmoth.models.ssm.inference.samplers.particle.math import label_logsumex
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
-@pytest.mark.parametrize("count", [7, 16, 128])
+@pytest.mark.parametrize("count", [7, 16, 128, 512])
 def test_fused_killing_preserves_conditional_ancestors(count):
     keys = jax.random.split(jax.random.key(38), 64)
     noise = jax.vmap(lambda key: _killing_noise(key, count, jnp.float32))(keys)
@@ -27,6 +27,16 @@ def test_fused_killing_preserves_conditional_ancestors(count):
     logits = logits.at[0].set(0.0)
     logits = logits.at[1].set(-jnp.inf).at[1, 0].set(0.0)
     logits = logits.at[2].set(jnp.linspace(-1000.0, 0.0, count))
+
+    if count == 512:
+        # Interval interiors avoid float32 CDF-rounding ambiguity at this larger size.
+        cumulative = jnp.cumsum(jax.nn.softmax(logits), axis=-1)
+        ranks = jax.vmap(jnp.searchsorted)(cumulative, noise.replacement)
+        left = jnp.take_along_axis(
+            jnp.concatenate((jnp.zeros((64, 1)), cumulative), axis=-1), ranks, axis=-1
+        )
+        right = jnp.take_along_axis(cumulative, jnp.minimum(ranks, count - 1), axis=-1)
+        noise = noise._replace(replacement=(left + right) / 2)
 
     expected = jax.jit(jax.vmap(_killing_reference))(logits, noise)
     actual = jax.jit(jax.vmap(partial(_killing_fused, interpret=True)))(logits, noise)
