@@ -704,12 +704,18 @@ def build_marginal_particle_gibbs_kernel(
                 cast("Callable[[list[jax.Array], jax.Array], ParticleSmootherResult]", converted),
             )
 
+        def smoother_shape(state: TrajectoryMCMCState, key: jax.Array) -> ParticleSmootherResult:
+            # This pass only discovers the result tree. Running preparation
+            # eagerly would compile and execute each array primitive on GPU.
+            prepared = _prepare(state, key)
+            result = _smooth(
+                prepared, prepared.reference, record_trace=False, batch_size=batch_size
+            )
+            assert not isinstance(result, TracedResult)
+            return result
+
         state = jax.tree.map(lambda value: value[0], states)
-        prepared = _prepare(state, keys[0])
-        draw_shape = jax.eval_shape(
-            lambda path: _smooth(prepared, path, record_trace=False, batch_size=batch_size),
-            prepared.reference,
-        )
+        draw_shape = jax.eval_shape(smoother_shape, state, keys[0])
         empty_draws = jax.tree.map(
             lambda shape: jnp.zeros((states.position.shape[0], *shape.shape), shape.dtype),
             draw_shape,
