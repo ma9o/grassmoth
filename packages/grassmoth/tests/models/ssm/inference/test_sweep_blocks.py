@@ -186,6 +186,30 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
         )
 
 
+def test_history_budget_counts_posterior_paths_once_and_combined_diagnostics_twice(monkeypatch):
+    monkeypatch.setattr(
+        sweeps, "compiled_memory", lambda _: MemoryDemand(host_bytes=0, device_bytes=64)
+    )
+    initial = _Carry(jax.random.key(791), jnp.zeros((2, 1024)))
+    program = SweepProgram(_factory, label="test", max_batch_size=1)
+    sampler = SamplerSpec(num_warmup=1, num_samples_per_chain=100)
+
+    def context(device_bytes):
+        return replace(
+            EXECUTION_CONTEXT,
+            budget=ComputeBudget(
+                memory=AcceleratorMemoryBudget(host_bytes=1_100_000, device_bytes=device_bytes)
+            ),
+        )
+
+    plan = sweeps.compile_sweeps(
+        program, initial, execution_context=context(900_000), sampler=sampler
+    )
+    assert plan.memory.device_bytes == 64 + 100 * 2 * 1024 * 4 + 2 * 101 * 2 * 4
+    with pytest.raises(MemoryError, match="One sweep lane"):
+        sweeps.compile_sweeps(program, initial, execution_context=context(800_000), sampler=sampler)
+
+
 def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
     spec = latent_adaptation(DsmcSpec())
     state = initialize_adaptation(jnp.ones((2, 3)))

@@ -132,16 +132,20 @@ def compile_sweeps[Carry](
         steps * sum(shape.size * shape.dtype.itemsize for shape in shapes.values())
         for steps, shapes in ((num_warmup, warmup_shapes), (num_samples, history_shapes))
     )
+    combined_diagnostic_bytes = (num_warmup + num_samples) * sum(
+        shape.size * shape.dtype.itemsize for shape in warmup_shapes.values()
+    )
     transfer_bytes = block_size * sum(
         shape.size * shape.dtype.itemsize for shape in history_shapes.values()
     )
     # Host assembly buffers coexist with one device_get block, including its
-    # padded tail. XLA accounts for device block buffers; returned phases and
-    # combined diagnostics can also coexist on device. These do not scale with
-    # node concurrency and must be reserved only once.
+    # padded tail. XLA accounts for device block buffers. Returned phases and
+    # their combined diagnostics coexist on device, but posterior paths and
+    # positions are never concatenated with warmup and have only one copy.
+    # These do not scale with node concurrency and are reserved only once.
     overhead = MemoryDemand(
         host_bytes=history_bytes + transfer_bytes + additional_overhead.host_bytes,
-        device_bytes=2 * history_bytes + additional_overhead.device_bytes,
+        device_bytes=history_bytes + combined_diagnostic_bytes + additional_overhead.device_bytes,
     )
     batch = max_batch_size
     while True:
@@ -194,7 +198,7 @@ def compile_projected_sweeps[Carry](
     retained = transfer // block_size * sampler.num_samples_per_chain
     overhead = MemoryDemand(
         host_bytes=estimate.host_bytes + retained + transfer,
-        device_bytes=estimate.device_bytes + 2 * retained,
+        device_bytes=estimate.device_bytes + retained,
     )
 
     def compile_projection() -> Compiled:
