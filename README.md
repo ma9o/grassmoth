@@ -27,7 +27,7 @@ The user supplies a scientific question and observational data. The agent carrie
 
 ## Benchmarks
 
-grassmoth's [marginalized particle Gibbs](docs/assumptions.md#inference-policy) sampler updates latent paths with [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) or with the [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä](https://arxiv.org/abs/2303.00301), whole-path or in blocks. Both are exact for the nonlinear model, and NUTS is the reference. ESS and R̂ are the worst over all parameters and latent time points, bold marks each row's best, and the [run records](benchmarks/suite/notes.md) hold every fit.
+grassmoth's [marginalized particle Gibbs](docs/assumptions.md#inference-policy) sampler updates latent paths with [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) or with the [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä](https://arxiv.org/abs/2303.00301), whole-path or in blocks. Both are exact for the nonlinear model, and NUTS is the reference. The tables report worst cases: the smallest bulk ESS and the largest R̂ over all parameters and all time points of the latent paths. Bold marks the best value in each row. The [run records](benchmarks/suite/notes.md) give each fit's settings and full diagnostics.
 
 ### Stochastic volatility
 
@@ -36,7 +36,7 @@ This is the stochastic volatility model of [Kim, Shephard & Chib (1998)](https:/
 | | mGRAD, 128 particles | Aux Kalman, whole path | Aux Kalman, 300-day blocks |
 | --- | --- | --- | --- |
 | Draws per chain | 4,000 | 4,000 | 10,000 |
-| Compilation | 20.2 s | 5.9 s, partly cached | **16.4 s** |
+| Compilation | 20.2 s | 5.9 s, partly cached | 16.4 s |
 | Warmup and sampling | 6 min 52 s | **58 s** | 1 min 29 s |
 | Bulk ESS | **4,800** | 368 | 2,020 |
 | R̂ | **1.016** | 1.160 | 1.037 |
