@@ -9,13 +9,42 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.models.ssm.inference.warmup.computed_chart import computed_translation_slopes
+from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
+from grassmoth.models.ssm.inference.warmup.computed_chart import (
+    computed_chart,
+    computed_translation_slopes,
+)
 from grassmoth_test_support.interval_particle import gaussian_interval_case
 from packages.grassmoth.tests.models.ssm.inference.test_guided_recurrences import WINDOWS, _target
 from packages.grassmoth.tests.models.ssm.inference.test_joint_coordinates import _correlated_target
 from packages.grassmoth.tests.models.ssm.inference.test_translation_chart import _gaussian_joint
 
 pytestmark = pytest.mark.inference(concern="warmup")
+
+
+def test_fixed_parameter_target_has_identity_translation_and_no_scale_exponents():
+    base, _, _ = _gaussian_joint()
+    position = jnp.empty((0,), dtype=jnp.float32)
+    target = replace(
+        base,
+        parameters=ParameterTransform(
+            position, lambda _: {}, lambda _: {}, lambda _: jnp.asarray(0.0)
+        ),
+        context=lambda _, times: base.context(jnp.zeros(1), times),
+    )
+    path = jnp.array([[0.2], [-0.1], [0.4]])
+    chart = jax.jit(lambda: computed_chart(target, position[None], path[None]))()
+    slopes = jax.jit(lambda: computed_translation_slopes(target, position, path))()
+    exponents = jax.jit(target.diffusion_scale_exponents)(position)
+    assert slopes.shape == (3, 1, 0)
+    assert exponents.shape == (1, 0)
+    np.testing.assert_array_equal(chart.encode(position, path), path)
+    np.testing.assert_array_equal(chart.decode(position, path), path)
+    translated = target.in_coordinates(chart)
+    np.testing.assert_allclose(
+        translated.log_posterior(position, path, target.observations, target.times),
+        target.log_posterior(position, path, target.observations, target.times),
+    )
 
 
 @pytest.mark.parametrize("nonlinear", [False, True])

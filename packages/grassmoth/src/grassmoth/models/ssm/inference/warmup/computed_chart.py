@@ -21,6 +21,8 @@ def computed_translation_slopes(
     target: ParticleTarget, position: Float[Array, " U"], path: Float[Array, "T D"]
 ) -> Float[Array, "T D U"]:
     """Solve the mean cross curvature, including deterministic stages and intervals."""
+    if position.size == 0:
+        return jnp.zeros((*path.shape, 0), dtype=path.dtype)
     context = target.context(position, target.times)
     curvature = linearize_path(target, context, path)
     slopes = jax.jacfwd(
@@ -36,6 +38,8 @@ def computed_chart(
 ) -> TranslationChart:
     """Build at mean cold parameters and their IEKS path, retaining only free shifts."""
     reference = jnp.mean(positions, axis=0)
+    if reference.size == 0:
+        return TranslationChart(jnp.zeros((*paths.shape[1:], 0), dtype=paths.dtype), reference)
     context = target.context(reference, target.times)
     path = ieks_path(target, context, target.replay_path(context, jnp.mean(paths, axis=0)))
     slopes = computed_translation_slopes(target, reference, path)

@@ -159,7 +159,7 @@ class ParticleTarget:
         mixing through its local slope.
         """
         exponents = jnp.zeros((self.state_space.size, reference.size), dtype=reference.dtype)
-        if self.times.size < 2 or not self.state_space.transition:
+        if reference.size == 0 or self.times.size < 2 or not self.state_space.transition:
             return exponents
         indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
 
