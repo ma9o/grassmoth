@@ -49,7 +49,7 @@ NUTS, with NumPyro's default adaptation, is the reference.
 Every fit runs through the same `fit` action on the same model and data, in float32, with seed 19 and 2,000 warmup sweeps. None replaces the nonlinear model it targets with an approximation.
 
 - **Convergence check:** the [production convergence check](packages/grassmoth/src/grassmoth/models/ssm/inference/diagnostics/convergence.py) requires R̂ below 1.05, and bulk and tail ESS of at least 100 per chain, for every parameter and the worst latent time point.
-- **Time:** counts warmup and sampling only. It leaves out setup and compilation, which depend on the compilation cache, as well as the convergence checks and saving.
+- **Time:** durations and rates count warmup and sampling. Compilation is listed separately, because it depends on what the compilation cache already holds: the whole-path Kalman SV fit partly reused programs that its earlier attempts compiled in 15–16 s. Setup, convergence checks and saving are left out.
 - **Worst ESS:** the lowest over every parameter and latent time point.
 - **Bold:** the best value in each row of the comparison tables.
 - **Runs:** each column is one fit on one seed. The [run records](benchmarks/suite/notes.md) hold the fits behind every number.
@@ -67,14 +67,15 @@ This is a nonlinear version of the Gaussian stochastic volatility model of [Kim,
 | Path update or parameterization | 128 particles | Whole path | 300-day blocks | Non-centred |
 | Hardware | H200 | H200 | H200 | M1 Max CPU, 8 performance cores |
 | Chains × retained draws | 80 × 4,000 | 80 × 4,000 | 80 × 10,000 | 32 × 1,000 |
+| Compilation | 20.2 s | 5.9 s | 18.9 s | **2.2 s** |
 | Warmup | 136 s | **16.8 s** | 17.4 s | 976 s |
 | Sampling | 276 s | **41 s** | 97 s | 179 s |
 | Duration: warmup and sampling | 6 min 52 s | **58 s** | 1 min 55 s | 19 min 15 s |
 | One sweep of all chains | 68.9 ms | 10.3 ms | **9.7 ms** | 179.4 ms |
 | Draws per effective sample | 67 | 868 | 536 | **3.4** |
 | Worst bulk ESS | 4,800 | 368 | 1,492 | **9,395** |
+| Worst tail ESS | 7,040 | 644 | 3,336 | **13,050** |
 | Worst R̂ | 1.016 | 1.160 | 1.038 | **1.003** |
-| Convergence check | ESS below 8,000 | R̂ and ESS fail | ESS below 8,000 | **Passes, against 3,200** |
 | Worst bulk ESS per second of sampling | 17.4 | 8.9 | 15.4 | **52.4** |
 | Worst bulk ESS per second of warmup and sampling | 11.7 | 6.3 | **13.0** | 8.1 |
 | Cost of that time at Modal rates | $0.59 | $0.08 | $0.16 | **No cloud charge** |
@@ -84,7 +85,6 @@ This is a nonlinear version of the Gaussian stochastic volatility model of [Kim,
   - Blocks of 300 days, each accepted separately, close most of that gap. On warmup and sampling together they edge ahead, partly because 10,000 draws spread a warmup that was already 8 times shorter.
 - **NUTS mixes best per draw.** On eight CPU cores it needs 3.4 draws per effective sample and leads on sampling 3 to 1, but warmup takes 84% of its time.
 - **NUTS can't use the GPU on this model.** Non-centred NUTS rebuilds the path from its innovations in a [sequential scan](packages/grassmoth/src/grassmoth/models/ssm/execution/innovations.py) at every leapfrog step. On the H200 it reached 101 of 2,000 warmup sweeps in 44 minutes, about 23 s per sweep. Centred NUTS avoids the scan but mixes poorly: 171 draws per effective sample and 1,897 divergences in warmup.
-- **The ESS bar scales with chains.** The check asks the 80-chain fits for 8,000 ESS and the 32-chain NUTS fit for 3,200.
 
 | Parameter | Truth | mGRAD | NUTS, non-centred |
 | ---: | ---: | ---: | ---: |
@@ -105,16 +105,18 @@ The table shows posterior means with 94% HDIs. The two samplers' means differ by
 | Path update or parameterization | 256 particles | Whole path | 25-step blocks | Non-centred |
 | Hardware | H200 | H200 | H200 | M1 Max CPU, 8 performance cores |
 | Chains × retained draws | 2 × 4,000 | 2 × 4,000 | 2 × 10,000 | 32 × none: stopped in warmup |
+| Compilation | 155.1 s | 31.7 s | 25.3 s | **6.2 s** |
 | Warmup | 534 s | 17.0 s | **15.8 s** | 26 of 51 probe sweeps in 49 min |
 | Sampling | 1,064 s | **34 s** | 77 s | — |
 | Duration: warmup and sampling | 26 min 38 s | **51 s** | 1 min 33 s | Stopped after 78 min |
 | One sweep of all chains | 266 ms | 8.5 ms | **7.7 ms** | — |
 | Worst bulk ESS | 2.4 | **63** | 31 | — |
+| Worst tail ESS | 4.8 | **99** | 49 | — |
 | Worst R̂ | 2.51 | **1.059** | 1.076 | — |
 | Worst bulk ESS per second of sampling | 0.002 | **1.86** | 0.41 | — |
 | Worst bulk ESS per second of warmup and sampling | 0.0015 | **1.24** | 0.34 | — |
 
-No fit passes the check, which asks two chains for 200 ESS. These fits measure relative speed, not a posterior.
+None of these fits has converged, so they measure relative speed, not a posterior.
 
 - **The whole-path Kalman sampler wins by about 800 times.**
   - On identical source and settings, its sweep takes 13.5 ms against mGRAD's 280 ms.
