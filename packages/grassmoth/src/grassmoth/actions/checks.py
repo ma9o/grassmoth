@@ -63,7 +63,7 @@ def check_specification(
             code="model_execution",
             subject="model",
             outcome="passed",
-            evidence="Model definitions, references, and measurements support execution.",
+            evidence="Model definitions, references, measurements and latent states support execution.",
         )
     ]
     match inputs:

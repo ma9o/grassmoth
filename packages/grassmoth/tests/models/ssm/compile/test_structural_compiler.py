@@ -18,6 +18,7 @@ from grassmoth.models.ssm.compile.layout.static_factors import _build_static_fac
 from grassmoth.models.structure import (
     StructuralCompilationError,
     StructuralSelection,
+    StructuralSelectionError,
     reference_indicators,
     selected_edges,
     selected_indicators,
@@ -231,24 +232,26 @@ def test_execution_checks_preserve_the_scientific_model():
 
 
 @pytest.mark.contract
-def test_required_unmeasured_mediator_cannot_be_silently_excluded():
+def test_required_unmeasured_mediator_stays_a_latent_state():
     dynamical_model_spec = make_model(
-        ["X", "Mediator", "Y"], [("X", "Mediator"), ("Mediator", "Y")]
+        ["X", "Mediator", "Y", "Leaf"], [("X", "Mediator"), ("Mediator", "Y"), ("Y", "Leaf")]
     )
-    x, mediator, y = dynamical_model_spec.constructs
+    nodes = {item.name: item for item in dynamical_model_spec.constructs}
     dynamical_model_spec = dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
-            (
-                x,
-                mediator.revised(indicators=()),
-                y,
-            ),
+            tuple(nodes[name].revised(indicators=()) for name in ("Mediator", "Leaf")),
         ),
     )
-    selection = StructuralSelection(dynamical_model_spec, y.id)
-    with pytest.raises(StructuralCompilationError, match="Required constructs"):
+    for outcome in (nodes["Y"].id, None):
+        selection = StructuralSelection(dynamical_model_spec, outcome)
         validate_execution_structure(selection)
+        assert set(selected_state_ids(selection)) == {
+            nodes[name].id for name in ("X", "Mediator", "Y")
+        }
+    # Nothing measured depends on the leaf, so only a question about it retains it.
+    asked = StructuralSelection(dynamical_model_spec, nodes["Leaf"].id)
+    assert nodes["Leaf"].id in selected_state_ids(asked)
 
 
 @pytest.mark.inference(concern="predictive")
@@ -363,3 +366,47 @@ def test_projected_latent_dependencies_keep_their_connected_states():
     )
     assert nodes["U"].id in selected.marginalized_construct_ids
     assert set(selected_state_ids(selected)) == {nodes[name].id for name in ("X", "Y", "A")}
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize(
+    ("restoring", "initial_scale", "diffusion", "error"),
+    [
+        (True, 1.0, 1.0, None),
+        (False, 0.0, 0.0, None),
+        (False, 1.0, 1.0, "no location anchor"),
+        (True, 1.0, 0.0, "no scale anchor"),
+    ],
+    ids=["restoring-center", "exact-deterministic-start", "no-location", "no-scale"],
+)
+def test_coupled_unmeasured_states_stay_in_the_target_when_anchored(
+    restoring, initial_scale, diffusion, error
+):
+    """Half-observed Lorenz-96: projecting out x01 or x03 would change the nonlinear law."""
+    import json
+
+    from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from grassmoth.models.ssm import compiled_access as numeric
+    from grassmoth_test_support.fixtures import model_fixture_json
+    from grassmoth_test_support.helpers import graph_constructs
+
+    payload = json.loads(model_fixture_json("structural_compiler/partially_observed_lorenz.json"))
+    x01 = next(item for item in graph_constructs(payload) if item["name"] == "x01")
+    fixed = {"initial_scale": initial_scale, "diffusion_scale": diffusion}
+    for operand in x01["coefficients"]:
+        operand["value"] = fixed.get(operand["role"], operand["value"])
+    if not restoring:
+        (mechanism,) = x01["dynamics"].values()
+        mechanism["expression"] = coefficient(8.0, "intercept").model_dump(mode="json")
+    model = DynamicalModelSpec.model_validate(payload).materialized()
+    if error is not None:
+        with pytest.raises(StructuralSelectionError, match=f"'x01' has {error}"):
+            StructuralSelection(model, model.constructs[0].id)
+        return
+    selection = StructuralSelection(model, model.constructs[0].id)
+    validate_execution_structure(selection)
+    assert set(selected_state_ids(selection)) == {state.id for state in model.constructs}
+    assert len(selected_edges(selection)) == 15
+    compiled = compile_model_fixture(model)
+    assert numeric.state_names(compiled) == ("x00", "x01", "x02", "x03", "x04")
+    assert numeric.observation_names(compiled) == ("y00", "y02", "y04")

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from grassmoth.artifacts.identity import ConstructId, IndicatorId
+    from grassmoth.artifacts.model.construct import ConstructSpec
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.model.indicator import IndicatorSpec
     from grassmoth.artifacts.model.question import QuestionSpec
@@ -40,7 +41,8 @@ class StructuralSelection:
     """One model's executable structure, scoped by the question's outcome.
 
     The outcome keeps its connected component as states; without one, every
-    measured construct is a state. The rest of the DAG stays for identification.
+    measured construct and every latent state they depend on is a state. The
+    rest of the DAG stays for identification.
     Construction checks what the scope decides: the retained constructs' anchors
     only.
     """
@@ -85,14 +87,19 @@ class StructuralSelection:
         return induced_dependencies(self)
 
 
-def marginalized_construct_ids(selection: StructuralSelection) -> frozenset[ConstructId]:
-    """Identify eligible unmeasured roots without changing the scientific DAG."""
-    dynamical_model_spec = selection.dynamical_model_spec
-    observed = {
+def measured_construct_ids(dynamical_model_spec: DynamicalModelSpec) -> frozenset[ConstructId]:
+    """Constructs with indicators, and inputs whose trajectory law supplies their values."""
+    return frozenset(
         construct.id
         for construct in dynamical_model_spec.constructs
         if construct.indicators or construct.role == "exogenous"
-    }
+    )
+
+
+def marginalized_construct_ids(selection: StructuralSelection) -> frozenset[ConstructId]:
+    """Identify eligible unmeasured roots without changing the scientific DAG."""
+    dynamical_model_spec = selection.dynamical_model_spec
+    observed = measured_construct_ids(dynamical_model_spec)
     blocked = {
         confounder
         for treatment, finding in selection.identification.non_identifiable.items()
@@ -105,6 +112,43 @@ def marginalized_construct_ids(selection: StructuralSelection) -> frozenset[Cons
         for construct in dynamical_model_spec.constructs
         if construct.id not in observed | blocked and construct.id not in children
     )
+
+
+def latent_state_ids(selection: StructuralSelection) -> frozenset[ConstructId]:
+    """Keep an unmeasured evolving outcome and the constructs measured states depend on.
+
+    Projecting such a construct out would change a nonlinear law, so it stays an
+    explicit latent state, anchored by its own law. Unmeasured roots are still
+    marginalized, and an unmeasured construct nothing measured depends on stays out.
+    """
+    dynamical_model_spec = selection.dynamical_model_spec
+    measured = measured_construct_ids(dynamical_model_spec)
+    candidates = {
+        construct.id
+        for construct in dynamical_model_spec.constructs
+        if construct.is_dynamic
+        and construct.id not in measured
+        and construct.id not in selection.marginalized_construct_ids
+    }
+    # A construct depends on its causal parents, on constructs its coefficients
+    # name, and on constructs its indicators load.
+    dependencies: dict[ConstructId, set[ConstructId]] = defaultdict(set)
+    for edge in dynamical_model_spec.edges:
+        dependencies[edge.effect.id].add(edge.cause.id)
+    for construct in dynamical_model_spec.constructs:
+        dependencies[construct.id].update(
+            identity for operand in construct.coefficients for identity in operand.construct_ids
+        )
+        for indicator in construct.indicators:
+            if indicator.likelihood is not None:
+                dependencies[construct.id].update(indicator.likelihood.parsed.loadings)
+    latent = {identity for identity in candidates if identity == selection.outcome}
+    frontier = [*measured, *latent]
+    while frontier:
+        found = (dependencies[frontier.pop()] & candidates) - latent
+        latent |= found
+        frontier.extend(found)
+    return frozenset(latent)
 
 
 def selected_state_ids(selection: StructuralSelection) -> tuple[ConstructId, ...]:
@@ -208,32 +252,28 @@ def retained_construct_ids(selection: StructuralSelection) -> frozenset[Construc
     import networkx as nx
 
     dynamical_model_spec = selection.dynamical_model_spec
-    measured = {
-        construct.id
-        for construct in dynamical_model_spec.constructs
-        if construct.indicators or construct.role == "exogenous"
-    }
+    states = measured_construct_ids(dynamical_model_spec) | latent_state_ids(selection)
     if selection.outcome is None:
         # A model-wide operation has no outcome against which to discard a component.
-        return frozenset(measured)
+        return states
 
     graph = nx.Graph()
-    graph.add_nodes_from((*measured, selection.outcome))
+    graph.add_nodes_from((*states, selection.outcome))
     marginalized = selection.marginalized_construct_ids
     graph.add_edges_from(
         (edge.cause.id, edge.effect.id)
         for edge in dynamical_model_spec.edges
-        if edge.effect.id in measured
+        if edge.effect.id in states
         and (
             edge.cause.id in marginalized
             or (
-                edge.cause.id in measured
+                edge.cause.id in states
                 and edge.effect.temporal_status != TemporalStatus.TIME_INVARIANT
             )
         )
     )
     for construct in dynamical_model_spec.constructs:
-        if construct.id not in measured:
+        if construct.id not in states:
             continue
         dependencies = {
             identity for operand in construct.coefficients for identity in operand.construct_ids
@@ -241,18 +281,18 @@ def retained_construct_ids(selection: StructuralSelection) -> frozenset[Construc
         for indicator in construct.indicators:
             if indicator.likelihood is not None:
                 dependencies.update(indicator.likelihood.parsed.loadings)
-        graph.add_edges_from((construct.id, identity) for identity in dependencies & measured)
+        graph.add_edges_from((construct.id, identity) for identity in dependencies & states)
 
     # Shared parameters and joint laws can connect components without a direct causal edge.
     law_members: dict[str, set[ConstructId]] = defaultdict(set)
     for construct in dynamical_model_spec.constructs:
-        if construct.distribution is not None and construct.id in measured:
+        if construct.distribution is not None and construct.id in states:
             law_members[construct.distribution].add(construct.id)
     for parameter in dynamical_model_spec.parameters:
         owners = {
             owner.id
             for owner in dynamical_model_spec.parameter_context(parameter.id).owners
-            if owner.kind == "construct" and owner.id in measured
+            if owner.kind == "construct" and owner.id in states
         }
         nx.add_path(graph, sorted(owners))
         if parameter.distribution is not None:
@@ -260,7 +300,7 @@ def retained_construct_ids(selection: StructuralSelection) -> frozenset[Construc
     for members in law_members.values():
         nx.add_path(graph, sorted(members))
     component = nx.node_connected_component(graph, selection.outcome)
-    return frozenset(identity for identity in measured if identity in component)
+    return frozenset(identity for identity in states if identity in component)
 
 
 def unsupported_construct_ids(selection: StructuralSelection) -> frozenset[ConstructId]:
@@ -285,7 +325,7 @@ def validate_execution_structure(selection: StructuralSelection) -> None:
     states = set(selected_state_ids(selection))
     errors = []
     if selection.outcome is not None and selection.outcome not in states:
-        errors.append("The question's outcome requires retained measurement indicators.")
+        errors.append("The question's outcome must be measured or an evolving latent state.")
     for edge in selected_edges(selection):
         if edge.effect.temporal_status == TemporalStatus.TIME_INVARIANT:
             errors.append(
@@ -316,6 +356,9 @@ def validate_parameter_anchors(selection: StructuralSelection) -> None:
 
     for identity in selected_state_ids(selection):
         construct = dynamical_model_spec.get_construct(identity)
+        if not construct.indicators and construct.role != "exogenous":
+            validate_latent_anchors(dynamical_model_spec, construct)
+            continue
         initial_mean = construct.coefficient("initial_mean")
         channels = [
             (indicator, indicator.likelihood)
@@ -377,6 +420,54 @@ def validate_parameter_anchors(selection: StructuralSelection) -> None:
                 f"Construct {construct.name!r} has no scale anchor "
                 f"(reference indicator {reference.observation.name!r})"
             )
+
+
+def validate_latent_anchors(
+    dynamical_model_spec: DynamicalModelSpec, construct: ConstructSpec
+) -> None:
+    """Anchor an unmeasured state by its own law once that law is authored.
+
+    Without a reference loading, location comes from a fixed restoring center or
+    an exact initial value, and scale from a fixed nonzero diffusion. A
+    deterministic state needs no scale anchor when its start is exact and its
+    dynamics have no free coefficient: it is then a fixed function of its parents.
+    """
+    from grassmoth.artifacts.model.expressions import (
+        expression_coefficients,
+        restoring_coefficients,
+    )
+
+    mechanisms = tuple(
+        mechanism
+        for owner, mechanism in dynamical_model_spec.iter_mechanisms()
+        if (owner.effect.id if isinstance(owner, CausalEdgeSpec) else owner.id) == construct.id
+    )
+    operands = tuple(
+        operand
+        for mechanism in mechanisms
+        for operand in expression_coefficients(mechanism.expression)
+    )
+    initial_mean, initial_scale, diffusion = (
+        construct.coefficient(role) for role in ("initial_mean", "initial_scale", "diffusion_scale")
+    )
+    if any(value is None for value in (initial_mean, initial_scale, diffusion)) or any(
+        operand.value is None for operand in operands
+    ):
+        return
+    centers = [
+        operand.value
+        for mechanism in mechanisms
+        for operand in restoring_coefficients(
+            mechanism.expression, construct.id, kind=mechanism.kind
+        )
+        if operand.role == "center"
+    ]
+    exact_start = not isinstance(initial_mean, str) and initial_scale == 0.0
+    if not exact_start and all(isinstance(center, str) for center in centers):
+        raise StructuralSelectionError(f"Construct {construct.name!r} has no location anchor")
+    determined = exact_start and not any(isinstance(operand.value, str) for operand in operands)
+    if isinstance(diffusion, str) or (diffusion == 0.0 and not determined):
+        raise StructuralSelectionError(f"Construct {construct.name!r} has no scale anchor")
 
 
 def get_reference_indicator_lookup(selection: StructuralSelection) -> dict[str, str]:
