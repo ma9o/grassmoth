@@ -49,6 +49,7 @@ dev = [
     "xarray>=2026.9.0",
     "complexipy>=8.0.1",
     "pydoclint==0.11.0", # scripts/checks/run_pydoclint.py extends its Visitor
+    "kaleido>=1.5.0",
 ]
 gpu = [
     "jax[cuda13]; sys_platform == 'linux'",
