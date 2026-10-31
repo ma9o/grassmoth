@@ -10,7 +10,10 @@ import numpy as np
 from grassmoth.artifacts.identity import ConstructRef, ParameterRef
 from grassmoth.artifacts.model.parameter import ParameterCoordinate
 from grassmoth.artifacts.probability.serialization import empirical_atoms
-from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
+from grassmoth.models.ssm.inference.diagnostics.latent import (
+    LatentChainEvidence,
+    joint_latent_paths,
+)
 from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from grassmoth.models.ssm.inference.types import (
     JointPosteriorDraws,
@@ -67,9 +70,7 @@ def segment_diagnostics(
             ),
             observation_log_probs=jnp.empty((chains, count, 0)),
             latent_chains=LatentChainEvidence(
-                paths=np.stack(
-                    tuple(atoms[:, span] for span in layout.trajectory_slices.values()), axis=-1
-                ).reshape(chains, count, len(layout.time_points), len(layout.constructs)),
+                paths=joint_latent_paths(layout, atoms, chains),
                 free_mask=np.asarray(evidence.latent_free_mask.values),
                 states=tuple(
                     (ConstructRef(id=identity), model.get_construct(identity).name)

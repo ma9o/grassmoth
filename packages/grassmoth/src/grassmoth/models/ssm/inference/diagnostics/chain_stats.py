@@ -114,6 +114,12 @@ def _chunk_statistics(samples: jax.Array, tail_probability: float) -> jax.Array:
     return jnp.where(jnp.isnan(samples).any(axis=(-2, -1))[:, None], jnp.nan, result)
 
 
+def chain_statistic_batch_size(chains: int, draws: int) -> int:
+    """Bound coordinate batches by their padded FFT chain-lag workspace."""
+    fft_size = 1 << (2 * (draws // 2) - 1).bit_length()
+    return min(256, max(1, 2**23 // (2 * chains * fft_size)))
+
+
 def chain_statistics(samples: NDArray) -> NDArray:
     """Summarize (chain, draw, coordinate) inputs on JAX's default device.
 
@@ -130,15 +136,18 @@ def chain_statistics(samples: NDArray) -> NDArray:
     # The xarray diagnostics resolve omitted tail probabilities through ArviZ's
     # configured interval probability, which need not be the conventional 0.95.
     tail_probability = validate_ci_prob(None)
-    fft_size = 1 << (2 * (samples.shape[1] // 2) - 1).bit_length()
-    batch_size = min(256, max(1, 2**23 // (2 * samples.shape[0] * fft_size)))
+    batch_size = chain_statistic_batch_size(*samples.shape[:2])
     batches = []
     for start in range(0, samples.shape[-1], batch_size):
         batch = np.ascontiguousarray(
             samples[:, :, start : start + batch_size].transpose(2, 0, 1), dtype=np.float32
         )
         count = batch.shape[0]
-        padded = np.pad(batch, ((0, batch_size - count), (0, 0), (0, 0)))
+        padded = (
+            np.pad(batch, ((0, batch_size - count), (0, 0), (0, 0)))
+            if count < batch_size
+            else batch
+        )
         # Synchronize each small result before enqueueing another large workspace.
         batches.append(np.asarray(_chunk_statistics(jnp.asarray(padded), tail_probability))[:count])
     return np.concatenate(batches, axis=0)

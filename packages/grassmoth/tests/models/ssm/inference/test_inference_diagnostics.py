@@ -269,3 +269,91 @@ def test_production_gate_detects_stationary_sd_chain_shift():
     shifted = chains.copy()
     shifted[0] += 0.6
     assert gate(shifted).status == "failed"
+
+
+@pytest.mark.contract
+def test_joint_latent_paths_share_owned_atoms_with_parameter_stride():
+    from grassmoth.artifacts.arrays import NumericalArray
+    from grassmoth.artifacts.identity import ConstructId, ConstructRef
+    from grassmoth.artifacts.probability.joint_layout import JointLawLayout
+    from grassmoth.models.ssm.inference.diagnostics.latent import (
+        LatentChainEvidence,
+        joint_latent_paths,
+    )
+
+    element = ParameterElementId("element:" + "a" * 64)
+    layout = JointLawLayout(
+        parameters=((ParameterId("parameter:" + "a" * 64), (element,)),),
+        constructs=(ConstructId("construct:a"), ConstructId("construct:b")),
+        time_points=(0.0, 1.0, 2.0),
+        labels={element: "scale"},
+    )
+    owner = NumericalArray.from_numpy(np.arange(14 * 7, dtype=np.float32).reshape(14, 7))
+    paths = joint_latent_paths(layout, owner.values, 2)
+    evidence = LatentChainEvidence(
+        paths,
+        np.ones((3, 2), dtype=bool),
+        tuple((ConstructRef(id=identity), str(identity)) for identity in layout.constructs),
+    )
+    assert evidence.paths.shape == (2, 7, 3, 2)
+    assert np.shares_memory(evidence.paths, owner.values)
+    assert not evidence.paths.flags.writeable
+    for dimension, span in enumerate(layout.trajectory_slices.values()):
+        np.testing.assert_array_equal(
+            evidence.paths[..., dimension], owner.values[:, span].reshape(2, 7, 3)
+        )
+
+
+@pytest.mark.inference(concern="sampling")
+@pytest.mark.parametrize("frozen", [False, True])
+def test_latent_diagnostics_bound_selection_and_detect_late_frozen_coordinate(monkeypatch, frozen):
+    from grassmoth.artifacts.identity import ConstructId, ConstructRef
+    from grassmoth.models.ssm.inference.diagnostics import latent
+    from grassmoth.models.ssm.inference.diagnostics.chain_stats import chain_statistics
+
+    rng = np.random.default_rng(137)
+    paths = rng.normal(size=(2, 64, 263, 2)).astype(np.float32)
+    paths[:, :, 1, 0] = np.nan
+    if frozen:
+        paths[0, :, -1, 0] = 1.0
+    free = np.zeros((263, 2), dtype=bool)
+    free[:, 0] = True
+    free[1, 0] = False
+    selected_shapes = []
+
+    def record_selection(samples):
+        selected_shapes.append(samples.shape)
+        return chain_statistics(samples)
+
+    monkeypatch.setattr(latent, "chain_statistics", record_selection)
+    evidence = latent.LatentChainEvidence(
+        paths,
+        free,
+        tuple(
+            (ConstructRef(id=ConstructId("construct:" + name)), name)
+            for name in ("state", "observed")
+        ),
+    )
+    (report,) = latent.latent_chain_diagnostics(evidence)
+    assert report.coordinates == 262
+    assert selected_shapes
+    assert max(shape[-1] for shape in selected_shapes) <= 256
+    if frozen:
+        assert report.ess_bulk == report.ess_tail == 0
+        assert report.r_hat is report.mcse_mean is None
+    else:
+        expected = chain_statistics(paths[:, :, free[:, 0], 0])
+        assert report.r_hat is not None
+        assert report.ess_bulk is not None
+        assert report.ess_tail is not None
+        assert report.mcse_mean is not None
+        np.testing.assert_allclose(
+            (report.r_hat, report.ess_bulk, report.ess_tail, report.mcse_mean),
+            (
+                expected[:, 0].max(),
+                expected[:, 1].min(),
+                expected[:, 2].min(),
+                expected[:, 3].max(),
+            ),
+            rtol=5e-5,
+        )

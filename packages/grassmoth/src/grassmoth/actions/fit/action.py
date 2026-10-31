@@ -294,7 +294,10 @@ def inference_report(
 
     def render() -> InferenceReport:
         from grassmoth.artifacts.probability.serialization import empirical_atoms
-        from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
+        from grassmoth.models.ssm.inference.diagnostics.latent import (
+            LatentChainEvidence,
+            joint_latent_paths,
+        )
         from grassmoth.models.ssm.inference.diagnostics.plots import (
             compute_posterior_marginals,
         )
@@ -341,15 +344,7 @@ def inference_report(
                 draws=JointPosteriorDraws(parameters=samples),
                 diagnostics=ProductionDiagnostics(
                     latent_chains=LatentChainEvidence(
-                        paths=np.stack(
-                            tuple(
-                                atoms[metadata.distribution][:, span]
-                                for span in layout.trajectory_slices.values()
-                            ),
-                            axis=-1,
-                        ).reshape(
-                            chains, count // chains, len(layout.time_points), len(layout.constructs)
-                        ),
+                        paths=joint_latent_paths(layout, atoms[metadata.distribution], chains),
                         free_mask=np.asarray(evidence.latent_free_mask.values),
                         states=tuple(
                             (
