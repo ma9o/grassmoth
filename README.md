@@ -30,7 +30,7 @@ The user supplies a scientific question and observational data. The agent carrie
 grassmoth samples a nonlinear state-space model's parameters and latent paths jointly with [marginalized particle Gibbs](docs/assumptions.md#inference-policy). Two of its path updates compete here:
 
 - [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) proposes a cloud of particles at every time step.
-- The auxiliary Kalman sampler of [Corenflos & Särkkä](https://arxiv.org/abs/2303.00301) proposes a whole Gaussian path, or one block of time at a time, and corrects it with a Metropolis–Hastings step against the exact model. It is a candidate that isn't on master yet.
+- The auxiliary Kalman sampler of [Corenflos & Särkkä](https://arxiv.org/abs/2303.00301) proposes a whole Gaussian path, or one block of time at a time, and corrects it with a Metropolis–Hastings step against the exact model.
 
 NUTS, with NumPyro's default adaptation, is the reference. Its path rebuild runs faster on CPU cores than on a GPU, so it ran on a CPU and is discussed after each table instead of in it.
 
@@ -41,6 +41,7 @@ Every fit runs through the same `fit` action on the same model and data, in floa
 - **Worst ESS:** the lowest over every parameter and latent time point.
 - **Bold:** the best value in each row of the comparison tables.
 - **Runs:** each column is one fit on one seed. The [run records](benchmarks/suite/notes.md) hold the fits behind every number.
+- **Code:** the blocked SV fit ran on master. The other Kalman fits ran just before the sampler landed, on CUDA 12 with XLA's compile-time autotuning off, which can also shorten their compilation.
 
 ### Stochastic volatility
 
@@ -55,28 +56,29 @@ This is a nonlinear version of the Gaussian stochastic volatility model of [Kim,
 | --- | --- | --- | --- |
 | Path update | 128 particles | Whole path | 300-day blocks |
 | Chains × retained draws | 80 × 4,000 | 80 × 4,000 | 80 × 10,000 |
-| Compilation | 20.2 s | **5.9 s** | 18.9 s |
-| Warmup | 136 s | **16.8 s** | 17.4 s |
-| Sampling | 276 s | **41 s** | 97 s |
-| Duration: warmup and sampling | 6 min 52 s | **58 s** | 1 min 55 s |
-| One sweep of all chains | 68.9 ms | 10.3 ms | **9.7 ms** |
-| Draws per effective sample | **67** | 868 | 536 |
-| Worst bulk ESS | **4,800** | 368 | 1,492 |
-| Worst tail ESS | **7,040** | 644 | 3,336 |
-| Worst R̂ | **1.016** | 1.160 | 1.038 |
-| Worst bulk ESS per second of sampling | **17.4** | 8.9 | 15.4 |
-| Worst bulk ESS per second of warmup and sampling | 11.7 | 6.3 | **13.0** |
-| Cost of that time at Modal rates | $0.59 | **$0.08** | $0.16 |
+| Compilation | 20.2 s | **5.9 s** | 16.4 s |
+| Warmup | 136 s | 16.8 s | **12.2 s** |
+| Sampling | 276 s | **41 s** | 76 s |
+| Duration: warmup and sampling | 6 min 52 s | **58 s** | 1 min 29 s |
+| One sweep of all chains | 68.9 ms | 10.3 ms | **7.6 ms** |
+| Draws per effective sample | **67** | 868 | 396 |
+| Worst bulk ESS | **4,800** | 368 | 2,020 |
+| Worst tail ESS | **7,040** | 644 | 3,364 |
+| Worst R̂ | **1.016** | 1.160 | 1.037 |
+| Worst bulk ESS per second of sampling | 17.4 | 8.9 | **26.4** |
+| Worst bulk ESS per second of warmup and sampling | 11.7 | 6.3 | **22.8** |
+| Cost of that time at Modal rates | $0.59 | **$0.08** | $0.13 |
 
 - **Kalman sweeps fastest, but each sweep moves less.**
   - A whole-path Kalman sweep costs a seventh of mGRAD's. But one accept/reject for all 3,000 days forces small moves, so it needs 13 times the draws per effective sample and delivers half mGRAD's ESS per second.
-  - Blocks of 300 days, each accepted separately, close most of that gap. On warmup and sampling together they edge ahead, partly because 10,000 draws spread a warmup that was already 8 times shorter.
+  - Blocks of 300 days, each accepted separately, more than close that gap. They deliver 1.5 times mGRAD's ESS per second of sampling, and about twice its rate over warmup and sampling, partly because 10,000 draws spread a warmup that was already 11 times shorter.
+  - That lead rests on one fit's ESS. An earlier fit of the same blocked sampler, before its speedups, reached a worst bulk ESS of 1,492; at that ESS the lead would be 1.1 times.
 
 **Against NUTS.** NUTS took about 20 minutes: 19 min 15 s of warmup and sampling, with 32 non-centred chains on the eight performance cores of an Apple M1 Max.
 
 - **What it reached:** worst bulk ESS 9,395, tail ESS 13,050 and R̂ 1.003.
 - **Why the CPU:** each NUTS gradient rebuilds the path from its innovations in a [sequential scan](packages/grassmoth/src/grassmoth/models/ssm/execution/innovations.py). On the H200 it reached only 101 of 2,000 warmup sweeps in 44 minutes.
-- **What grassmoth gets in a fraction of that time:** mGRAD and blocked Kalman both reach R̂ below 1.05, in about a third and a tenth of NUTS's time. Their worst bulk ESS, 4,800 and 1,492, puts the Monte Carlo error of every posterior mean under 3% of its posterior standard deviation.
+- **What grassmoth gets in a fraction of that time:** mGRAD and blocked Kalman both reach R̂ below 1.05, in about a third and a thirteenth of NUTS's time. Their worst bulk ESS, 4,800 and 2,020, puts the Monte Carlo error of every posterior mean under 3% of its posterior standard deviation.
 - **Whole-path Kalman** is faster still, but its R̂ of 1.16 is not acceptable.
 
 | Parameter | Truth | mGRAD | NUTS |
@@ -117,12 +119,10 @@ None of these fits has converged, so they measure relative speed, not a posterio
   - 256 particles can't cover 40 dimensions: every state's worst bulk ESS stays between 2.4 and 3.0.
 - **Blocking hurts here.**
   - 25-step blocks moved each stretch of the path more per sweep, but cut ESS per second 4.6 times.
+  - This blocked fit predates the speedups that landed with the sampler. In a separate test they cut Lorenz-96 sweep time by about a quarter, which would narrow the gap to about 3.3 times.
   - Blocks held in place by their neighbours can't shift the slow, path-wide components.
   - The series is short and its 0.01 steps nearly linear, which suits whole-path proposals.
-- **This model needs changes that aren't on master yet:**
-  - keeping unobserved coupled states;
-  - charts for a model with no free parameters;
-  - mGRAD's backward-pair scoring bounded to one time point, which removes a 467 GiB allocation.
+- **These fits ran before master could fit this model.** Master now keeps unobserved coupled states and handles a model with no free parameters. The mGRAD fit also scored backward particle pairs one time point at a time, which removes a 467 GiB allocation at 80 chains and isn't on master.
 
   80-chain mGRAD fits failed on the H200 with CUDA errors. So these fits use two chains, CUDA 12 and a Jacobi eigenvalue solver.
 
