@@ -46,6 +46,7 @@ from jax import random
 from jax.scipy.linalg import solve_triangular
 
 from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanSpec,
     DsmcSpec,
     MarginalParticleGibbsSpec,
     ParameterProposal,
@@ -67,6 +68,10 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.augmentation import (
     PrecisionPathUpdate,
     begin_path_update,
     finish_path_update,
+)
+from grassmoth.models.ssm.inference.samplers.particle.auxiliary_kalman import (
+    auxiliary_kalman_step,
+    trace_auxiliary_kalman_step,
 )
 from grassmoth.models.ssm.inference.samplers.particle.contract import (
     PaidMixture,
@@ -92,6 +97,7 @@ from grassmoth.models.ssm.inference.targets.coordinates import (
 )
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth.models.ssm.inference.tracing import (
+    AuxiliaryKalmanTraceRecord,
     CategoricalTraceRecord,
     MarginalParticleTraceRecord,
     ParameterProposalTraceRecord,
@@ -423,6 +429,7 @@ def build_marginal_particle_gibbs_kernel(
         ParticleSmootherResult
         | TracedResult[ParticleSmootherResult, SmootherTraceRecord]
         | TracedResult[ParticleSmootherResult, SequentialSmootherTraceRecord]
+        | TracedResult[ParticleSmootherResult, AuxiliaryKalmanTraceRecord]
     ):
         boundary = prepared.boundary
         chart_target = prepared.target
@@ -445,6 +452,16 @@ def build_marginal_particle_gibbs_kernel(
                     x_ref,
                     root_correction if target.state_space.requires_replay else None,
                     batch_size=batch_size,
+                )
+            elif isinstance(path_update, AuxiliaryKalmanSpec):
+                guide = chart_target.context(ctx.guide_position, runtime_times)
+                smoother = (trace_auxiliary_kalman_step if record_trace else auxiliary_kalman_step)(
+                    chart_target,
+                    ctx,
+                    guide,
+                    block_key,
+                    x_ref,
+                    block_length=path_update.block_length,
                 )
             else:
                 guide = chart_target.context(ctx.guide_position, runtime_times)
@@ -615,7 +632,10 @@ def build_marginal_particle_gibbs_kernel(
             )
 
             def particle_identity() -> dict[str, jax.Array]:
-                particle_ids = jnp.arange(path_update.num_particles, dtype=origin_path.dtype)
+                candidate_count = (
+                    2 if isinstance(path_update, AuxiliaryKalmanSpec) else path_update.num_particles
+                )
+                particle_ids = jnp.arange(candidate_count, dtype=origin_path.dtype)
                 return {
                     "selected_particle_per_t": origin_path.astype(jnp.float32),
                     "reference_path_hit_rate": jnp.mean((origin_path == 0).astype(jnp.float32)),

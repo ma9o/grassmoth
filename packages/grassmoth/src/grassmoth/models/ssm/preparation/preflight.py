@@ -15,6 +15,7 @@ from grassmoth.artifacts.model.likelihood import (
 )
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanSpec,
     DsmcSpec,
     GaussianReferenceTemperingSpec,
     NutsDASpec,
@@ -61,6 +62,23 @@ def validate_sampler_support(
         return ObservationPreflightFailure.rejected(
             "The scale chart requires point readings without deterministic recurrences."
         )
+    if isinstance(sampler.algorithm.path_update, AuxiliaryKalmanSpec):
+        if compiled.state_space.recurrence or any(
+            item.support.support_kind == "interval" for item in compiled.observations
+        ):
+            return ObservationPreflightFailure.rejected(
+                "Auxiliary Kalman supports point readings without deterministic recurrences."
+            )
+        if isinstance(sampler.algorithm.tempering, GaussianReferenceTemperingSpec):
+            return ObservationPreflightFailure.rejected(
+                "Auxiliary Kalman path updates do not support tempering."
+            )
+        if {"particle_identity", "particle_weights"} & set(sampler.algorithm.diagnostic_metrics):
+            return ObservationPreflightFailure.rejected(
+                "Auxiliary Kalman has no particle bank; particle identity and weight diagnostics "
+                "require a particle path update."
+            )
+        return None
     if not isinstance(sampler.algorithm.path_update, DsmcSpec):
         path_update = sampler.algorithm.path_update
         if path_update.prefix_mixture:

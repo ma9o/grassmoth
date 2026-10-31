@@ -436,7 +436,37 @@ class GuidedPathSpec(Value):
     )
 
 
-type PathUpdateSpec = Annotated[DsmcSpec | GuidedPathSpec, Field(discriminator="method")]
+class AuxiliaryKalmanSpec(Value):
+    """Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.
+
+    Corenflos & Särkkä (2025), https://arxiv.org/abs/2303.00301, sections 2.2–2.4.
+    Whole-path forward and reverse approximations are rebuilt at their respective
+    paths. Blocks instead linearize at the fixed auxiliary under a sampled label.
+    Normalized proposal densities correct to the true nonlinear target.
+    """
+
+    method: Literal["auxiliary_kalman"] = "auxiliary_kalman"
+    block_length: int | None = Field(
+        default=None,
+        ge=1,
+        description="Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities.",
+    )
+    latent_step: LatentStepSpec = Field(
+        default_factory=AdaptedLatentStepSpec,
+        description=(
+            "Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point "
+            "acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. "
+            "Poor local Gaussian fits, strong nonlinearity and separated parameter or "
+            "path modes can lower acceptance. Exact nonlinear Metropolis corrections "
+            "preserve the target. Supports point readings without deterministic recurrences; "
+            "parameter proposals and final parameter-label selection remain MPGibbs."
+        ),
+    )
+
+
+type PathUpdateSpec = Annotated[
+    DsmcSpec | GuidedPathSpec | AuxiliaryKalmanSpec, Field(discriminator="method")
+]
 
 
 class MarginalParticleGibbsSpec(Value):
@@ -488,7 +518,7 @@ class MarginalParticleGibbsSpec(Value):
             "non-centring of the diffusion. The center is the mean warmup path in the translated "
             "chart, learned in the existing warmup windows and frozen before retained draws. "
             "Every label pays the exact log-Jacobian, and all densities and reported paths "
-            "retain the exact physical model. Requires a guided path update and point readings "
+            "retain the exact physical model. Requires point readings "
             "without deterministic recurrences. Data-pinned deviations, a poor center or a "
             "state-dependent diffusion cost efficiency, never the target."
         ),
@@ -617,10 +647,10 @@ class SamplerSpec(Value):
         return (
             algorithm.method,
             algorithm.path_update.method,
-            0 if isinstance(algorithm.path_update, DsmcSpec) else algorithm.path_update.kappa,
-            False
-            if isinstance(algorithm.path_update, DsmcSpec)
-            else algorithm.path_update.prefix_mixture,
+            algorithm.path_update.kappa if isinstance(algorithm.path_update, GuidedPathSpec) else 0,
+            algorithm.path_update.prefix_mixture
+            if isinstance(algorithm.path_update, GuidedPathSpec)
+            else False,
             algorithm.parameter_proposal,
             algorithm.compiler_reparameterization,
             algorithm.scale_chart,

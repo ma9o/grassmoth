@@ -1,10 +1,11 @@
-"""Local positive path curvature shared by initialization and translation charts.
+"""Local positive path curvature for initialization, charts and path proposals.
 
 Dynamics are affine linearizations with their exact, possibly singular noise.
 Reading curvature is clipped to PSD in predictor space before pulling it back
 through the predictor Jacobian. Parameter cross terms differentiate means and
 predictors, holding this geometry fixed: Gaussian covariance parameters therefore
-have no mean cross term. These approximations shape coordinates and starts only.
+have no mean cross term. These approximations shape coordinates, starts and
+proposals only; auxiliary Kalman moves correct against the exact target.
 """
 
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from grassmoth.models.ssm.execution.observation_model import (
     grouped_density_with_noise,
     prepare_mean_density,
 )
+from grassmoth.models.ssm.inference.samplers.particle.kalman import GaussianPathTerms
 from grassmoth.models.ssm.inference.samplers.particle.twist import (
     GaussianTwist,
     future_information,
@@ -105,8 +107,10 @@ class PathCurvature:
         pinned = jnp.swapaxes(self.matrices, -1, -2) @ self.pinned_precision @ self.matrices
         return observed.at[:-1].add(pinned[1:])
 
-    def mean(self, target: ParticleTarget, context: ParticleContext, path: jax.Array) -> jax.Array:
-        """Smooth affine means; derivatives in context give the parameter cross solve.
+    def proposal_terms(
+        self, target: ParticleTarget, context: ParticleContext, path: jax.Array
+    ) -> GaussianPathTerms:
+        """Form affine means; derivatives in context give the parameter cross solve.
 
         Covariances, transition Jacobians and reading quadratics belong to this
         frozen geometry. Only transition means and predictors vary with context.
@@ -135,9 +139,13 @@ class PathCurvature:
             self.reading_gradient + jnp.einsum("tij,tj->ti", self.reading_precision, residual),
         )
         information = GaussianTwist(self.precision, observed_shift.at[:-1].add(pinned_shift[1:]))
-        return smoothing_mean(
+        return GaussianPathTerms(
             self.conditioned_matrices, conditioned_offsets, self.covariances, information
         )
+
+    def mean(self, target: ParticleTarget, context: ParticleContext, path: jax.Array) -> jax.Array:
+        """Smooth the shared Gaussian proposal terms for initialization and charts."""
+        return smoothing_mean(*self.proposal_terms(target, context, path))
 
     def covariance_product(self, rhs: jax.Array) -> jax.Array:
         """Apply the point-conditioned path covariance without inverting process noise."""

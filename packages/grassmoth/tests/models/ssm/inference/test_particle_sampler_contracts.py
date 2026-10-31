@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 
 from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanSpec,
     DsmcSpec,
     FixedLatentStepSpec,
     GaussianReferenceTemperingSpec,
@@ -38,6 +39,54 @@ from grassmoth_test_support.interval_particle import interval_target
 
 
 pytestmark = pytest.mark.contract
+
+
+@pytest.mark.parametrize(
+    "step", [{"kind": "fixed", "delta": 0.1}, {"kind": "adapted", "target": 0.5}]
+)
+def test_auxiliary_kalman_request_roundtrip_and_identity(step):
+    sampler = SamplerSpec.model_validate(
+        {
+            "algorithm": {
+                "method": "mpgibbs",
+                "path_update": {"method": "auxiliary_kalman", "latent_step": step},
+            }
+        }
+    )
+    assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
+    assert isinstance(sampler.algorithm.path_update, AuxiliaryKalmanSpec)
+    assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
+    assert sampler.kernel_identity != SamplerSpec().kernel_identity
+    with pytest.raises(ValidationError, match="num_particles"):
+        AuxiliaryKalmanSpec.model_validate({"method": "auxiliary_kalman", "num_particles": 256})
+
+
+@pytest.mark.parametrize(
+    ("support", "recurrences", "metrics", "accepted"),
+    [
+        ("point", (), (), True),
+        ("interval", (), (), False),
+        ("point", (AdditiveRecurrences((0,)),), (), False),
+        ("point", (), ("particle_weights",), False),
+        ("point", (), ("particle_identity",), False),
+    ],
+)
+def test_auxiliary_kalman_admission(monkeypatch, support, recurrences, metrics, accepted):
+    from grassmoth.models.ssm import compiled_access
+
+    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
+    compiled = Mock(
+        spec=CompiledDynamicalModel,
+        state_space=StateSpace(1, (), (0,), (0,), (), recurrences),
+        observations=(Mock(support=Mock(support_kind=support)),),
+    )
+    sampler = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(
+            path_update=AuxiliaryKalmanSpec(), diagnostic_metrics=metrics
+        )
+    )
+    failure = validate_sampler_support(compiled, sampler)
+    assert (failure is None) == accepted
 
 
 @pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad", "particle_mgrad"])

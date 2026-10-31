@@ -68,9 +68,20 @@ class SequentialSmootherTraceRecord:
 
 @jax.tree_util.register_dataclass
 @dataclass(frozen=True)
+class AuxiliaryKalmanTraceRecord:
+    """Gaussian proposals and MH decisions; blocked traces retain both colour passes."""
+
+    auxiliary: jax.Array
+    proposed: jax.Array
+    log_acceptance: jax.Array
+    accepted: jax.Array
+
+
+@jax.tree_util.register_dataclass
+@dataclass(frozen=True)
 class MarginalParticleTraceRecord:
     """A joint transition composed of its parameter proposal, smoother and final label draw."""
 
     parameters: ParameterProposalTraceRecord
-    smoother: SmootherTraceRecord | SequentialSmootherTraceRecord
+    smoother: SmootherTraceRecord | SequentialSmootherTraceRecord | AuxiliaryKalmanTraceRecord
     label_selection: CategoricalTraceRecord  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.

@@ -15,7 +15,7 @@ import jax
 import jax.numpy as jnp
 from jax import random
 
-from grassmoth.artifacts.sampling import DsmcSpec, FixedLatentStepSpec
+from grassmoth.artifacts.sampling import FixedLatentStepSpec, GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import DELTA_MAX
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.math import _normalize_log_probs
@@ -85,7 +85,7 @@ def begin_path_update(
     keep their existing behavior. No augmentation enters the persisted state.
     """
     precisions = None
-    if not isinstance(path_update, DsmcSpec):
+    if isinstance(path_update, GuidedPathSpec):
         precision_key, conditional_block_key = random.split(block_key)
         precisions = draw_student_precisions(
             target, state.latent_context, state.latent_trajectory, precision_key
@@ -118,7 +118,7 @@ def begin_path_update(
         ctx = ctx._replace(paid_mix=ctx.paid_mix.in_coordinates(state.chart, ctx.guide_position))
     if (
         precisions is not None
-        and not isinstance(path_update, DsmcSpec)
+        and isinstance(path_update, GuidedPathSpec)
         and path_update.kappa == 1
         and not isinstance(path_update.latent_step, FixedLatentStepSpec)
     ):

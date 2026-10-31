@@ -45,8 +45,8 @@ class TestSamplerSpec:
         options = result.algorithm
         assert isinstance(options, MarginalParticleGibbsSpec)
         assert options.n_parameter_particles == 2
-        assert options.path_update.num_particles == 64
         assert isinstance(options.path_update, DsmcSpec)
+        assert options.path_update.num_particles == 64
         assert options.path_update.drift == "none"
         assert options.path_update.pilot_mixture is True
         assert options.path_update.latent_block_coords == 1
@@ -226,6 +226,7 @@ class TestLoadConfig:
         assert cfg.inference.sampler.seed == 123
         assert cfg.inference.compute_loo_diagnostics is False
         assert isinstance(cfg.inference.sampler.algorithm, MarginalParticleGibbsSpec)
+        assert isinstance(cfg.inference.sampler.algorithm.path_update, DsmcSpec)
         assert cfg.inference.sampler.algorithm.path_update.num_particles == 24
         assert cfg.inference.sampler.algorithm.n_parameter_particles == 3
         assert cfg.inference.sampler.algorithm.path_update.latent_step == FixedLatentStepSpec(

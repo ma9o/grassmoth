@@ -12,16 +12,96 @@ import pytest
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal, norm
 
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.model.construct import replace_constructs
+from grassmoth.artifacts.model.expressions import state
+from grassmoth.artifacts.model.likelihood import DeltaLawSpec
+from grassmoth.artifacts.model.parameter import SiteKind
+from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanSpec,
+    FixedLatentStepSpec,
+    GaussianInitializationSpec,
+    GuidedPathSpec,
+    MarginalParticleGibbsSpec,
+    SamplerSpec,
+)
+from grassmoth.models.ssm.inference.conditioning import compile_exact_state_constraints
+from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
+    build_marginal_particle_gibbs_kernel,
+)
+from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import run_marginal_particle_gibbs
+from grassmoth.models.ssm.inference.samplers.particle.auxiliary_kalman import (
+    auxiliary_kalman_move,
+    auxiliary_kalman_step,
+    trace_auxiliary_kalman_step,
+)
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import guided_step, trace_guided_step
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
 from grassmoth.models.ssm.inference.samplers.particle.twist import GaussianTwist, future_information
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 from grassmoth.models.ssm.inference.tracing import SequentialSmootherTraceRecord, TracedResult
-from grassmoth_test_support.interval_particle import interval_target
+from grassmoth.models.ssm.inference.warmup.initialization import (
+    ParticleInitialization,
+    prepare_particle_initialization,
+)
+from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
+from grassmoth_test_support.compute import EXECUTION_CONTEXT
+from grassmoth_test_support.inference import compile_model_fixture
+from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
+from grassmoth_test_support.model import one_state_gaussian_model, without_parameters
 
 pytestmark = pytest.mark.inference(concern="sampling")
+
+
+@pytest.mark.inference(concern="warmup")
+@pytest.mark.parametrize("fixed", [True, False])
+@pytest.mark.parametrize("block_length", [None, 1])
+def test_auxiliary_kalman_runner_retains_paths_and_freezes_step(fixed, block_length):
+    target = interval_target(
+        np.arange(2.0), np.array([[0.1], [-0.1]]), np.arange(2.0)[:, None], ("last",)
+    )
+    initialization = prepare_particle_initialization(
+        target,
+        spec=GaussianInitializationSpec(),
+        key=jax.random.key(77),
+        num_chains=1,
+        execution_context=EXECUTION_CONTEXT,
+    )
+    assert isinstance(initialization, ParticleInitialization)
+    spec = (
+        AuxiliaryKalmanSpec(latent_step=FixedLatentStepSpec(delta=0.1), block_length=block_length)
+        if fixed
+        else AuxiliaryKalmanSpec(block_length=block_length)
+    )
+    kernel = build_marginal_particle_gibbs_kernel(
+        target, path_update=spec, num_parameter_particles=2
+    )
+    result = run_marginal_particle_gibbs(
+        target,
+        kernel=kernel,
+        sampler=SamplerSpec(
+            num_warmup=0 if fixed else 110,
+            num_samples_per_chain=3,
+            num_chains=1,
+            algorithm=MarginalParticleGibbsSpec(path_update=spec, diagnostic_metrics=()),
+        ),
+        key=jax.random.key(9),
+        initialization=initialization,
+        execution_context=replace(EXECUTION_CONTEXT, profile=True),
+    )
+    assert not isinstance(result, InitializationFailure)
+    assert result.retained_draws == 3
+    assert np.isfinite(result.latent_paths).all()
+    assert np.isfinite(result.chain_extra_fields["path_block_acceptance"]).all()
+    assert not any(name.startswith("particle_weight_") for name in result.chain_extra_fields)
+    assert result.profile is not None
+    assert result.profile.repetitions == 10
+    assert result.profile.particle_dimensions is None
+    if fixed:
+        np.testing.assert_allclose(result.initial_latent_delta, 0.1)
+        np.testing.assert_array_equal(result.initial_latent_delta, result.final_latent_delta)
+    else:
+        assert not np.array_equal(result.initial_latent_delta, result.final_latent_delta)
 
 
 def _case(cubic, *, pinned=False, steps=3, dimension=1):
@@ -72,7 +152,7 @@ def _case(cubic, *, pinned=False, steps=3, dimension=1):
     )
 
 
-def _correlated_gaussian_case():
+def _correlated_gaussian_case(sample_count=4096):
     """Dense Gaussian conditioning, independent of the particle proposal algebra."""
     steps, dimension = 3, 2
     times = np.arange(float(steps))
@@ -126,9 +206,9 @@ def _correlated_gaussian_case():
     label_weights = np.exp(evidence - logsumexp(evidence))
     means, covariances = np.asarray(means), np.asarray(covariances)
     rng = np.random.default_rng(732)
-    selected = rng.choice(len(labels), 4096, p=label_weights)
+    selected = rng.choice(len(labels), sample_count, p=label_weights)
     starts = means[selected] + np.einsum(
-        "nij,nj->ni", np.linalg.cholesky(covariances[selected]), rng.normal(size=(4096, 6))
+        "nij,nj->ni", np.linalg.cholesky(covariances[selected]), rng.normal(size=(sample_count, 6))
     )
     seconds = np.einsum(
         "k,kij->ij", label_weights, covariances + np.einsum("ki,kj->kij", means, means)
@@ -241,6 +321,159 @@ def test_guided_updates_preserve_path_and_label_posterior(
     )
 
 
+@pytest.mark.parametrize(
+    ("cubic", "dimension", "pinned"), [(0.7, 1, False), (0.0, 2, False), (0.7, 1, True)]
+)
+@pytest.mark.parametrize("block_length", [None, 1, 2])
+def test_auxiliary_kalman_preserves_complete_parameter_mixture(
+    cubic, dimension, pinned, block_length
+):
+    target, labels, starts, expected_mean, expected_second, expected_labels = _case(
+        cubic, dimension=dimension, pinned=pinned
+    )
+    if block_length is not None and dimension == 2:
+        target, labels, starts, expected_mean, expected_second, expected_labels = (
+            _correlated_gaussian_case(16384)
+        )
+    mask = target.independent_mask
+    if pinned:
+        model = one_state_gaussian_model()
+        construct = next(value for value in model.constructs if value.indicators)
+        (indicator,) = construct.indicators
+        assert indicator.likelihood is not None
+        updated = (
+            construct.revised(
+                indicators=(
+                    indicator.revised(
+                        likelihood=indicator.likelihood.revised(
+                            law=DeltaLawSpec(v=state(construct.id))
+                        )
+                    ),
+                )
+            ),
+        )
+        parameters, distributions = without_parameters(
+            model,
+            next(
+                parameter
+                for parameter in model.parameters
+                if model.parameter_context(parameter.id).quantity == SiteKind.MANIFEST_VAR_DIAG
+            ),
+        )
+        model = model.with_entities(
+            edges=replace_constructs(model.edges, updated),
+            parameters=parameters,
+            distributions=distributions,
+        )
+        constraints = compile_exact_state_constraints(
+            compile_model_fixture(model), jnp.full_like(starts[0], jnp.nan).at[1, 0].set(0.2)
+        )
+        assert constraints is not None
+        target = replace(target, exact_constraints=constraints)
+        mask = mask & constraints.free_mask
+    # This test exercises the shared context and independent smoother, not routing.
+    static = build_smoother_setup(
+        target,
+        AuxiliaryKalmanSpec(),
+        num_parameter_particles=2,
+        free_mask=mask,
+        paid_mix=None,
+        diagnostic_metrics=(),
+    )
+    ctx = build_smoother_context(
+        static,
+        labels,
+        jnp.zeros(2),
+        reference=starts[0],
+        delta=jnp.full((3,), 0.55),
+        trajectory_dtype=starts.dtype,
+    )
+    guide = target.context(jnp.mean(labels, axis=0), target.times)
+
+    def advance(path, key):
+        return auxiliary_kalman_step(
+            target, ctx, guide, key, path, block_length=block_length
+        ).latent_path
+
+    @jax.jit
+    def run(paths):
+        def sweep(current, key):
+            return jax.vmap(advance)(current, jax.random.split(key, len(current))), None
+
+        return jax.lax.scan(sweep, paths, jax.random.split(jax.random.key(417), 8))[0]
+
+    paths = run(starts)
+    draws = np.asarray(paths).reshape(len(starts), -1)
+    np.testing.assert_allclose(draws.mean(axis=0), expected_mean, atol=0.04)
+    np.testing.assert_allclose(
+        np.einsum("ni,nj->ij", draws, draws) / len(draws), expected_second, atol=0.04
+    )
+    probabilities = jax.jit(jax.vmap(lambda path: jnp.exp(ctx.score_labels(path).log_probs)))(paths)
+    np.testing.assert_allclose(np.asarray(probabilities).mean(axis=0), expected_labels, atol=0.025)
+    # Guard against the identity kernel passing a stationarity test. MH rejection
+    # is expected; this is not the eight-particle filter's movement requirement.
+    assert np.mean(np.any(draws != np.asarray(starts).reshape(len(starts), -1), axis=-1)) > 0.5
+    if pinned:
+        np.testing.assert_array_equal(draws[:, 1], np.asarray(starts)[:, 1, 0])
+    result = jax.jit(
+        lambda: auxiliary_kalman_step(
+            target, ctx, guide, jax.random.key(94), starts[0], block_length=block_length
+        )
+    )()
+    for cached, exact in zip(
+        result.label_scores, ctx.score_labels(result.latent_path), strict=True
+    ):
+        np.testing.assert_allclose(cached, exact, rtol=2e-6, atol=2e-6)
+
+
+@pytest.mark.parametrize("block_length", [None, 1, 2])
+def test_auxiliary_kalman_gaussian_limit_accepts_the_exact_conditional(block_length):
+    target, labels, starts, *_ = _case(0.0, dimension=2)
+    labels = jnp.full_like(labels, 0.05)
+    static = build_smoother_setup(
+        target,
+        AuxiliaryKalmanSpec(),
+        num_parameter_particles=2,
+        free_mask=target.independent_mask,
+        paid_mix=None,
+        diagnostic_metrics=(),
+    )
+    ctx = build_smoother_context(
+        static,
+        labels,
+        jnp.zeros(2),
+        reference=starts[0],
+        delta=jnp.full((3,), 0.55),
+        trajectory_dtype=starts.dtype,
+    )
+    guide = target.context(jnp.mean(labels, axis=0), target.times)
+    if block_length is not None:
+        traced = jax.jit(
+            lambda: trace_auxiliary_kalman_step(
+                target, ctx, guide, jax.random.key(947), starts[0], block_length=block_length
+            )
+        )()
+        np.testing.assert_allclose(traced.result.diagnostics["path_block_acceptance"], 1.0)
+        np.testing.assert_allclose(
+            np.asarray(traced.trace.log_acceptance)[np.asarray(traced.trace.accepted)],
+            0.0,
+            atol=2e-5,
+        )
+        return
+    move = jax.jit(
+        lambda: auxiliary_kalman_move(
+            target,
+            ctx,
+            guide,
+            starts[0],
+            starts[0] + 0.2,
+            jnp.full(starts.shape[1:], 0.275),
+            jax.random.key(947),
+        )
+    )()
+    np.testing.assert_allclose(move.log_acceptance, 0.0, atol=2e-5)
+
+
 @pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad"])
 def test_guided_filter_keeps_zero_mass_candidates_out_of_selected_path(monkeypatch, method):
     def bounded_observation(self, context, state, index, observations):
@@ -342,3 +575,39 @@ def test_parallel_twist_matches_dense_correlated_gaussian_future_law():
             np.testing.assert_allclose(
                 twist.log_density(jnp.asarray(value), index), expected, atol=2e-6
             )
+
+
+def test_auxiliary_kalman_keeps_mpgibbs_parameter_proposal_and_label_law():
+    target, *_ = _case(0.7)
+    reference = jnp.array([0.1, 0.2, -0.1, 0.3])
+    key = jax.random.key(49)
+    traces = []
+    for spec in (GuidedPathSpec(method="particle_mgrad", num_particles=8), AuxiliaryKalmanSpec()):
+        kernel = build_marginal_particle_gibbs_kernel(
+            target, num_parameter_particles=2, path_update=spec
+        )
+        state = initialize_interval_chain(target, reference, kernel=kernel)
+        traced = jax.jit(kernel.trace_step_fn)(state, key)
+        plain = jax.jit(kernel.step_fn)(state, key)
+        for actual, expected in zip(
+            jax.tree.leaves(traced.result), jax.tree.leaves(plain), strict=True
+        ):
+            np.testing.assert_allclose(actual, expected, rtol=2e-6, atol=2e-6)
+        traces.append(traced)
+    for left, right in zip(
+        jax.tree.leaves(traces[0].trace.parameters),
+        jax.tree.leaves(traces[1].trace.parameters),
+        strict=True,
+    ):
+        np.testing.assert_array_equal(left, right)
+    result, info = traces[1].result
+    candidates = traces[1].trace.parameters.candidates
+    expected = jax.nn.log_softmax(
+        jax.vmap(
+            lambda position: target.log_posterior(
+                position, result.latent_trajectory, target.observations, target.times
+            )
+        )(candidates)
+    )
+    np.testing.assert_allclose(info["final_label_log_probs"], expected, atol=3e-6)
+    assert np.isfinite(result.complete_log_posterior)

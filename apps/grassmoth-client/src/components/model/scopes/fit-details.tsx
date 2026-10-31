@@ -27,6 +27,7 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
               particle_agrad: "Particle-aGRAD",
               particle_mgrad: "Particle-mGRAD",
               twisted_particle_agrad: "Twisted Particle-aGRAD",
+              auxiliary_kalman: "Auxiliary Kalman",
             }[algorithm.path_update.method]
           : {
               nuts_da: "Joint NUTS-DA",

@@ -17,6 +17,7 @@ export type ArtifactResult = components["schemas"]["ArtifactResult"];
 export type ArtifactSource = components["schemas"]["ArtifactSource"];
 export type AttemptRecord = components["schemas"]["AttemptRecord"];
 export type AuthoredLawProvenance = components["schemas"]["AuthoredLawProvenance"];
+export type AuxiliaryKalmanSpec = components["schemas"]["AuxiliaryKalmanSpec-Output"];
 export type BinaryExpression = components["schemas"]["BinaryExpression-Output"];
 export type BinaryOperator = components["schemas"]["BinaryOperator"];
 export type CallExpression = components["schemas"]["CallExpression-Output"];

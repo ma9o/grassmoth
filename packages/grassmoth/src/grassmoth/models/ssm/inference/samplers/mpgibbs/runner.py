@@ -28,6 +28,7 @@ from grassmoth.artifacts.reports.profiling import (
 )
 from grassmoth.artifacts.sampling import (
     AdaptationScheme,
+    AuxiliaryKalmanSpec,
     DsmcSpec,
     FixedLatentStepSpec,
     GuidedPathSpec,
@@ -435,9 +436,21 @@ def run_marginal_particle_gibbs(
             }
             record = {
                 **record,
+                **(
+                    {
+                        "path_block_acceptance": cold_info["path_block_acceptance"],
+                        "path_update_rms": cold_info["path_update_rms"],
+                    }
+                    if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
+                    else {}
+                ),
                 **{
                     metric.history_key: cold_info[metric.history_key]
-                    for metric in ParticleWeightMetric
+                    for metric in (
+                        ()
+                        if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
+                        else ParticleWeightMetric
+                    )
                 },
                 **{
                     name: cold_info[name]
@@ -669,10 +682,14 @@ def run_marginal_particle_gibbs(
             sampler=sampler,
             target=target,
         )
-    dimensions = ParticleProfileDimensions(
-        particles=kernel.path_update.num_particles,
-        labels=kernel.num_parameter_particles,
-        replicas=replicas,
+    dimensions = (
+        None
+        if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
+        else ParticleProfileDimensions(
+            particles=kernel.path_update.num_particles,
+            labels=kernel.num_parameter_particles,
+            replicas=replicas,
+        )
     )
 
     def profile_state(current: _Population, phase: CompiledSweepPhase) -> FitProfileReport:

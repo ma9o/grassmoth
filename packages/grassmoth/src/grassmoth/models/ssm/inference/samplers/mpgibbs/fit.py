@@ -20,6 +20,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     ParticleSamplerDiagnostics,
 )
 from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanSpec,
     DsmcSpec,
     GaussianReferenceTemperingSpec,
     MarginalParticleGibbsSpec,
@@ -95,13 +96,16 @@ def fit_marginal_particle_gibbs(
     overall_t0 = clock()
     logger.info(
         "marginal_particle_gibbs entry: chains=%d warmup=%d samples=%d T=%d "
-        "n_manifest=%d num_particles=%d n_parameter_particles=%d",
+        "n_manifest=%d path_update=%s num_particles=%s n_parameter_particles=%d",
         sampler.num_chains,
         sampler.num_warmup,
         sampler.num_samples_per_chain,
         int(observations.shape[0]),
         int(observations.shape[1]) if observations.ndim >= 2 else 0,
-        options.path_update.num_particles,
+        options.path_update.method,
+        None
+        if isinstance(options.path_update, AuxiliaryKalmanSpec)
+        else options.path_update.num_particles,
         options.n_parameter_particles,
     )
 
@@ -352,7 +356,11 @@ def fit_marginal_particle_gibbs(
         mcmc_phase_seconds=float(mcmc_phase_seconds),
         drift=kernel.path_update.drift
         if isinstance(kernel.path_update, DsmcSpec)
-        else ("observation" if kernel.path_update.kappa else "none"),
+        else (
+            "none"
+            if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
+            else ("observation" if kernel.path_update.kappa else "none")
+        ),
         diagnostic_metrics=kernel.diagnostic_metrics,
         param_target_accept=float(kernel.target_accept[0]),
         parameter_preconditioned=bool(kernel.preconditioned),
@@ -377,6 +385,7 @@ def fit_marginal_particle_gibbs(
             sequential=not isinstance(options.path_update, DsmcSpec),
         )
         if "particle_weights" in kernel.diagnostic_metrics
+        and not isinstance(options.path_update, AuxiliaryKalmanSpec)
         else None,
         tempering=run_result.tempering,
         latent_move_rms_mean=float(jnp.mean(summary_extra_fields["latent_move_rms"]))

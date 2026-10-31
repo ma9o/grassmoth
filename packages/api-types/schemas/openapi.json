@@ -1984,6 +1984,81 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
+      "AuxiliaryKalmanSpec-Input": {
+        "additionalProperties": false,
+        "description": "Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.\n\nCorenflos & S\u00e4rkk\u00e4 (2025), https://arxiv.org/abs/2303.00301, sections 2.2\u20132.4.\nWhole-path forward and reverse approximations are rebuilt at their respective\npaths. Blocks instead linearize at the fixed auxiliary under a sampled label.\nNormalized proposal densities correct to the true nonlinear target.",
+        "properties": {
+          "method": {
+            "const": "auxiliary_kalman",
+            "default": "auxiliary_kalman",
+            "title": "Method",
+            "type": "string"
+          },
+          "block_length": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities.",
+            "title": "Block Length"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Input",
+            "description": "Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Supports point readings without deterministic recurrences; parameter proposals and final parameter-label selection remain MPGibbs."
+          }
+        },
+        "title": "AuxiliaryKalmanSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "AuxiliaryKalmanSpec-Output": {
+        "additionalProperties": false,
+        "description": "Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.\n\nCorenflos & S\u00e4rkk\u00e4 (2025), https://arxiv.org/abs/2303.00301, sections 2.2\u20132.4.\nWhole-path forward and reverse approximations are rebuilt at their respective\npaths. Blocks instead linearize at the fixed auxiliary under a sampled label.\nNormalized proposal densities correct to the true nonlinear target.",
+        "properties": {
+          "method": {
+            "const": "auxiliary_kalman",
+            "default": "auxiliary_kalman",
+            "title": "Method",
+            "type": "string"
+          },
+          "block_length": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities.",
+            "title": "Block Length"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Output",
+            "description": "Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Supports point readings without deterministic recurrences; parameter proposals and final parameter-label selection remain MPGibbs."
+          }
+        },
+        "required": [
+          "method",
+          "block_length",
+          "latent_step"
+        ],
+        "title": "AuxiliaryKalmanSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "BernoulliLogitsLawSpec_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
         "description": "The BernoulliLogits conditional law.",
@@ -19230,7 +19305,7 @@
           },
           "scale_chart": {
             "default": false,
-            "description": "Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.",
+            "description": "Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.",
             "title": "Scale Chart",
             "type": "boolean"
           },
@@ -19299,7 +19374,7 @@
           },
           "scale_chart": {
             "default": false,
-            "description": "Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.",
+            "description": "Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.",
             "title": "Scale Chart",
             "type": "boolean"
           },
@@ -22719,6 +22794,7 @@
       "PathUpdateSpec-Input": {
         "discriminator": {
           "mapping": {
+            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanSpec-Input",
             "particle_agrad": "#/components/schemas/GuidedPathSpec-Input",
             "particle_amala": "#/components/schemas/DsmcSpec-Input",
             "particle_amala_plus": "#/components/schemas/DsmcSpec-Input",
@@ -22734,6 +22810,9 @@
           },
           {
             "$ref": "#/components/schemas/GuidedPathSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/AuxiliaryKalmanSpec-Input"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -22743,6 +22822,7 @@
       "PathUpdateSpec-Output": {
         "discriminator": {
           "mapping": {
+            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanSpec-Output",
             "particle_agrad": "#/components/schemas/GuidedPathSpec-Output",
             "particle_amala": "#/components/schemas/DsmcSpec-Output",
             "particle_amala_plus": "#/components/schemas/DsmcSpec-Output",
@@ -22758,6 +22838,9 @@
           },
           {
             "$ref": "#/components/schemas/GuidedPathSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/AuxiliaryKalmanSpec-Output"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",

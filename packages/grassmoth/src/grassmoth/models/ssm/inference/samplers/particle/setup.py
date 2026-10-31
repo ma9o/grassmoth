@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 
-from grassmoth.artifacts.sampling import DsmcSpec
+from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, DsmcSpec
 from grassmoth.models.ssm.inference.samplers.particle.contract import SmootherSetup
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
     build_particle_diagnostic_flags,
@@ -51,7 +51,7 @@ def build_smoother_setup(
         runtime_observations=target.observations,
         runtime_times=target.times,
         latent_free_mask=free_mask,
-        num_particles=spec.num_particles,
+        num_particles=2 if isinstance(spec, AuxiliaryKalmanSpec) else spec.num_particles,
         num_parameter_particles=num_parameter_particles,
         drift=spec.drift if isinstance(spec, DsmcSpec) else "none",
         latent_block_coords=spec.latent_block_coords if isinstance(spec, DsmcSpec) else "all",

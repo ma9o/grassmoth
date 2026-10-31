@@ -605,6 +605,54 @@ export interface components {
             readonly interpretation: "prior_predictive";
         };
         /**
+         * AuxiliaryKalmanSpec
+         * @description Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.
+         *
+         *     Corenflos & Särkkä (2025), https://arxiv.org/abs/2303.00301, sections 2.2–2.4.
+         *     Whole-path forward and reverse approximations are rebuilt at their respective
+         *     paths. Blocks instead linearize at the fixed auxiliary under a sampled label.
+         *     Normalized proposal densities correct to the true nonlinear target.
+         */
+        readonly "AuxiliaryKalmanSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "auxiliary_kalman";
+            /**
+             * Block Length
+             * @description Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities.
+             * @default null
+             */
+            readonly block_length?: number | null;
+            /** @description Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Supports point readings without deterministic recurrences; parameter proposals and final parameter-label selection remain MPGibbs. */
+            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
+        };
+        /**
+         * AuxiliaryKalmanSpec
+         * @description Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.
+         *
+         *     Corenflos & Särkkä (2025), https://arxiv.org/abs/2303.00301, sections 2.2–2.4.
+         *     Whole-path forward and reverse approximations are rebuilt at their respective
+         *     paths. Blocks instead linearize at the fixed auxiliary under a sampled label.
+         *     Normalized proposal densities correct to the true nonlinear target.
+         */
+        readonly "AuxiliaryKalmanSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "auxiliary_kalman";
+            /**
+             * Block Length
+             * @description Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities.
+             * @default null
+             */
+            readonly block_length: number | null;
+            /** @description Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Supports point readings without deterministic recurrences; parameter proposals and final parameter-label selection remain MPGibbs. */
+            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
+        };
+        /**
          * BernoulliLogitsLawSpec[Expression]
          * @description The BernoulliLogits conditional law.
          */
@@ -5541,7 +5589,7 @@ export interface components {
             readonly compiler_reparameterization?: boolean;
             /**
              * Scale Chart
-             * @description Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.
+             * @description Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.
              * @default false
              */
             readonly scale_chart?: boolean;
@@ -5604,7 +5652,7 @@ export interface components {
             readonly compiler_reparameterization: boolean;
             /**
              * Scale Chart
-             * @description Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires a guided path update and point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.
+             * @description Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.
              * @default false
              */
             readonly scale_chart: boolean;
@@ -6683,8 +6731,8 @@ export interface components {
             /** Nonfinite Fraction */
             readonly nonfinite_fraction: number;
         };
-        readonly "PathUpdateSpec-Input": components["schemas"]["DsmcSpec-Input"] | components["schemas"]["GuidedPathSpec-Input"];
-        readonly "PathUpdateSpec-Output": components["schemas"]["DsmcSpec-Output"] | components["schemas"]["GuidedPathSpec-Output"];
+        readonly "PathUpdateSpec-Input": components["schemas"]["DsmcSpec-Input"] | components["schemas"]["GuidedPathSpec-Input"] | components["schemas"]["AuxiliaryKalmanSpec-Input"];
+        readonly "PathUpdateSpec-Output": components["schemas"]["DsmcSpec-Output"] | components["schemas"]["GuidedPathSpec-Output"] | components["schemas"]["AuxiliaryKalmanSpec-Output"];
         readonly PathWeightDiagnostics: components["schemas"]["DsmcWeightDiagnostics"] | components["schemas"]["SequentialWeightDiagnostics"];
         /**
          * PersistenceTransformSpec
