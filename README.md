@@ -24,21 +24,21 @@ Finally, application state is all declarative and abstracted at the level of mod
 
 ## Benchmarks
 
-grassmoth's [marginalized particle Gibbs](docs/assumptions.md#inference-policy) sampler, from [Corenflos (2025)](https://arxiv.org/abs/2505.04611), updates latent paths with the [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) sampler of [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) or with the [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301), whole-path or in blocks. Both are exact for the nonlinear model, and NUTS is the reference.
+grassmoth's [marginalized particle Gibbs](docs/assumptions.md#inference-policy) sampler, from [Corenflos (2025)](https://arxiv.org/abs/2505.04611), updates latent paths with the [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) sampler of [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) or with the [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301). Both are exact for the nonlinear model, and NUTS is the reference.
 
 ### Stochastic volatility
 
 This is the stochastic volatility model of [Kim, Shephard & Chib (1998)](https://doi.org/10.1111/1467-937X.00050), a test model in the [NUTS paper](https://jmlr.org/papers/v15/hoffman14a.html), with a cubic drift on the log-variance, fit to 3,000 simulated daily returns ([case](benchmarks/cases/suite/SV-cubic), [runs](benchmarks/suite/notes.md)). Each fit runs 80 chains on one H200.
 
-| | mGRAD, 128 particles | Aux Kalman, whole path | Aux Kalman, 300-day blocks |
-| --- | --- | --- | --- |
-| Draws per chain | 4,000 | 4,000 | 10,000 |
-| Warmup and sampling | 6 min 52 s | **58 s** | 1 min 29 s |
-| Worst bulk ESS | **4,800** | 368 | 2,020 |
-| Worst R̂ | **1.016** | 1.160 | 1.037 |
-| Worst bulk ESS per second | 11.7 | 6.3 | **22.8** |
+| | mGRAD, 128 particles | Aux Kalman, 300-day blocks |
+| --- | --- | --- |
+| Draws per chain | 4,000 | 10,000 |
+| Warmup and sampling | 6 min 52 s | **1 min 29 s** |
+| Worst bulk ESS | **4,800** | 2,020 |
+| Worst R̂ | **1.016** | 1.037 |
+| Worst bulk ESS per second | 11.7 | **22.8** |
 
-NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003; on the H200 it completes only 101 of 2,000 warmup sweeps in 44 minutes. mGRAD and blocked Kalman reach R̂ below 1.05 in a third and a thirteenth of that time, and mGRAD's posterior means match NUTS's within two Monte Carlo standard errors. Whole-path Kalman is fastest, but a single accept/reject for all 3,000 days leaves its R̂ at 1.16.
+NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003; on the H200 it completes only 101 of 2,000 warmup sweeps in 44 minutes. mGRAD and blocked Kalman reach R̂ below 1.05 in a third and a thirteenth of that time, and mGRAD's posterior means match NUTS's within two Monte Carlo standard errors.
 
 ### Lorenz-96
 
@@ -48,15 +48,15 @@ The stochastic [Lorenz-96 system](https://docs.dart.ucar.edu/en/latest/models/lo
 
 We didn't attemp NUTS here because the dimensionality is unfeasible.
 
-| | mGRAD, 256 particles | Aux Kalman, whole path | Aux Kalman, 25-step blocks |
-| --- | --- | --- | --- |
-| Draws per chain | 4,000 | 4,000 | 10,000 |
-| Warmup and sampling | 26 min 38 s | **51 s** | 1 min 33 s |
-| Worst bulk ESS | 2.4 | **63** | 31 |
-| Worst R̂ | 2.51 | **1.04** | 1.076 |
-| Worst bulk ESS per second | 0.0015 | **1.24** | 0.34 |
+| | mGRAD, 256 particles | Aux Kalman, 25-step blocks |
+| --- | --- | --- |
+| Draws per chain | 4,000 | 10,000 |
+| Warmup and sampling | 26 min 38 s | **1 min 33 s** |
+| Worst bulk ESS | 2.4 | **31** |
+| Worst R̂ | 2.51 | **1.076** |
+| Worst bulk ESS per second | 0.0015 | **0.34** |
 
-No fit reaches R̂ below 1.05, but whole-path Kalman delivers about 800 times mGRAD's ESS per second, because 256 particles can't cover 40 dimensions. NUTS would need about 9 hours on the M1 Max, by extrapolation from a partial run.
+NUTS would need about 9 hours on the M1 Max, by extrapolation from a partial run.
 
 ## Modeling
 
