@@ -38,15 +38,20 @@ ORIGIN = datetime(2020, 1, 1, tzinfo=UTC)
 
 
 def fixture(scale=1.0, offset=0.0):
-    document = json.loads(
-        (ROOT / "benchmarks/00_current_sampler/03-edit_model-C0.json").read_text()
-    )
-    model = document["input"]["dynamical_model_spec"]
+    model = json.loads((ROOT / "benchmarks/cases/suite/C0/fit.json").read_text())
     model["distributions"]["distribution:tiny-beta"]["params"]["scale"] = scale
     question = QuestionSpec.model_validate(
-        json.loads((ROOT / "benchmarks/00_current_sampler/00-edit_question.json").read_text())[
-            "input"
-        ]["question"]
+        {
+            "text": "Identify the input effect on y.",
+            "outcome": "construct:y",
+            "queries": {
+                "input contrast": {
+                    "start": "2020-01-01",
+                    "horizon": "16d",
+                    "interventions": [{"target": "construct:u", "value": 1.0}],
+                }
+            },
+        }
     )
     selection = StructuralSelection.for_question(DynamicalModelSpec.model_validate(model), question)
     compiled = compile_executable_model(selection)

@@ -55,13 +55,6 @@ so:
 - A smaller run may check that code executes or measure time per sweep. Its
   numbers are never stage results.
 - A run below the schedule doesn't count, whatever it shows.
-- **The retained-draw schedule is a ceiling.** A fit may declare
-  `stop_when_converged`. The production convergence check then runs only at
-  multiples of `checkpoint_draws`, never before `min_draws` per chain, and
-  sampling stops at the first pass. Warmup is unchanged. Report the stopping
-  draw, the passing checkpoint and the time to reach it, and label comparisons
-  with fixed-length runs. A passing checkpoint is a finite-chain diagnostic, not
-  a guarantee against optional-stopping bias.
 
 ## Cases
 
@@ -113,12 +106,11 @@ priors, seeds, observation masks, validity evidence and contrast. The rules:
 - **Untested interactions stay explicit**, such as learned diffusion under
   sparse readings.
 
-**Model documents.** C0's are in [`cases/stage00`](cases/stage00):
-[`truth.json`](cases/stage00/truth.json) sets every coefficient,
-[`fixed.json`](cases/stage00/fixed.json) frees only the input effect and
-[`learned.json`](cases/stage00/learned.json) also frees both diffusion scales.
-The other cases' documents are in [`cases/suite`](cases/suite), and the scorecard
-requests and run notes are in [`suite`](suite). Their status:
+**Model documents.** They are in [`cases/suite`](cases/suite), one folder per
+case. C0's [`truth.json`](cases/suite/C0/truth.json) sets every coefficient and
+its [`fit.json`](cases/suite/C0/fit.json) frees only the input effect. The
+folder also holds SV-cubic and L96, the root README's comparison cases. The
+scorecard requests and run notes are in [`suite`](suite). Their status:
 - **NL and MODE are valid** after a redesign. NL uses a bounded-slope drift.
   MODE's two same-well readings leave about 0.70 of the posterior mass on
   staying and 0.30 on visiting the other well and returning, under the exact
@@ -249,37 +241,5 @@ schedule, on the code before those commits.
 **Diagnostic fits after the fixes.** These used a shorter schedule, so they are
 not results under this README's schedule. Twisted κ = 1 reached about 15
 worst-latent samples per second on C0 and on three one-change variants, against
-about 2–3 for κ = 0. Run records are in
-[00_current_sampler/notes.md](00_current_sampler/notes.md).
-
-**First scorecard.** It is recorded in [suite/notes.md](suite/notes.md). C0 and
-NL passed, and OBS, MODE and PARAM failed. PRIOR and HD finished sampling but
-lost their results to a transport fault, fixed in `dcfb3698`.
-
-### Workflow — 2026-10-22
-
-Benchmarks run as one study through the server's public actions, as described in
-[Running](#running). The library runner (`stage.py` with its declarations,
-runtimes, fixtures and tests) is retired once stage 00's C0 work is finished; the
-C0 runs it made stand. In the same change this folder moves out of the library to
-a top-level `benchmarks/`: the study needs the server running, and the folder
-holds no code, so it isn't a package.
-
-### 00 — blocked at C0, superseded by the suite on 2026-10-24
-
-At the full schedule on an A10, C0 fails only on latent effective sample size:
-worst-coordinate bulk ESS 338 for x and 230 for y against the required 400. Every
-R̂ is under 1.05, and the input effect is 0.60 [0.44, 0.77] against a truth of
-0.7. This run predates covariance adaptation in A0. Later stages stay blocked
-while C0's latent-chain dependence is diagnosed. The schedule stays fixed, and
-C0's one NUTS diagnostic is available. Runs, costs and the earlier
-below-schedule run are in [00_current_sampler/notes.md](00_current_sampler/notes.md).
-
-### 01 — adaptation accepted into A0, 2026-10-23
-
-The user accepted
-[covariance adaptation](../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/parameter_adaptation.py),
-always on since 868ef169, into the policy and dropped the fixed-versus-adapted
-comparison. The one C0 comparison, run on 2026-10-22 at 256 particles, failed in
-both arms with mixed ESS changes ([notes](00_current_sampler/notes.md)). C6 moved
-to stage 03.
+about 2–3 for κ = 0. Run records are in the
+[stage-00 notes at `f6eaba3d`](https://github.com/ma9o/grassmoth/blob/f6eaba3df8398ae4395969662484e5d3a15af533/benchmarks/00_current_sampler/notes.md).

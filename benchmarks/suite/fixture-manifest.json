@@ -189,17 +189,6 @@
     "MODE-prepared-anchor0": "call:d00802e236ee55c5887007bc90ef1efbe14e316b05e65af2b46ef2b84e35de73"
   },
   "redesign_record": "../../scratchpad/nl-mode-redesign-20261024/findings.md",
-  "scorecard_status": "Execution report complete: C0/NL pass; OBS/PARAM/MODE fail convergence; PRIOR/HD infrastructure errors, statistical coverage incomplete",
-  "scorecard_results": {
-    "C0": "passed",
-    "NL": "passed",
-    "MODE": "failed",
-    "HD": "infrastructure_error_no_verdict",
-    "OBS": "failed",
-    "PRIOR": "infrastructure_error_no_verdict",
-    "PARAM": "failed"
-  },
-  "scorecard_report": "../../scratchpad/suite-scorecard-20261024/findings.md",
   "mode_fixture_repair": {
     "record": "../../scratchpad/suite-fixes-a-20261024/findings.md",
     "change": "Fix downstream input effect to literal 0.7; no learned nuisance parameter.",
