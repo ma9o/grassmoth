@@ -12,20 +12,12 @@
 
 > Would the Battle of France have gone differently had the French not limited the work week to 40 hours? [blog post](https://juliawillemyns.substack.com/p/nobody-decides-to-decline)
 
-The harness exposes a DSL of seven actions over a [dependency graph of versioned artifacts](apps/grassmoth-server/src/grassmoth_server/study/state.py): the agent declares what it wants, and the framework works out the process and enforces every check.
+The harness exposes a DSL of seven actions over a [dependency graph of versioned artifacts](apps/grassmoth-server/src/grassmoth_server/study/state.py): the agent declares the desired next state, the framework resolves the dependencies and constraints to reach it, and the user follows progress and inspects results in the web UI.
 
-The framework transparently incorporates existing scientific knowledge, where available, as prior distributions and modeling assumptions. It uses defaults and a constrained modeling language to limit ad hoc choices made to fit the wording of a question. Its [assumptions and limits](docs/assumptions.md) make those scientific commitments explicit.
-
-The user supplies a scientific question and observational data. The agent carries out the scientific work through seven public actions: [edit the question](docs/assets/action-flows/edit-question.svg), [edit the model](docs/assets/action-flows/edit-model.svg), [prepare data](docs/assets/action-flows/prepare-data.svg), [fit](docs/assets/action-flows/fit.svg), [simulate](docs/assets/action-flows/simulate.svg), [compare data](docs/assets/action-flows/data-diff.svg), and [compare models](docs/assets/action-flows/model-diff.svg). Every study starts by setting its question, whose outcome and queries the model is built to answer. Constructs, causal structure, measurements, fixed or estimable parameters, and probability laws can be revised together or incrementally. Fitting conditions the selected continuous-time nonlinear state-space model; simulation samples its current laws before or after fitting. [Numeric causal claims](docs/assumptions.md#numeric-causal-claims) require identification and matching evidence from a converged production fit.
-
-## Features
-
-- **Methodological rigor without friction** - Provide a dataset and a question, and grassmoth gives the most rigorous answer it can without pushing any methodological decision onto you.
-- **Interpretability and interactivity** - Every model revision, check and result is recorded and can be inspected in the read-only web UI; users steer the agent in conversation through its CLI harness.
-- **Support for large datasets, irregular timestamps and semantic heterogeneity** - via a continuous-discrete nonlinear state-space model — continuous-time latent dynamics observed at discrete, irregular timestamps — with non-Gaussian indicator-specific likelihoods (Poisson, Bernoulli, Beta, etc.).
-- **Incremental numerical modeling and prior elicitation** - model revisions can be small and interleaved; the [model-edit chart](docs/assets/action-flows/edit-model.svg) shows the checks performed on each specification.
-- **Fast and accurate parameter and state estimation in `jax`** - [Marginalized particle Gibbs with twisted Particle-aGRAD path updates](docs/assumptions.md#inference-policy) samples the exact nonlinear posterior on GPU in minutes. Efficient caching ensures that we never waste time waiting for compilation.
-- **Compatible with `codex` and `claude-code`** - Use your existing agent subscription to drive the study through its public actions.
+- A [continuous-time nonlinear state-space model](#modeling) that handles irregular timestamps and missing observations, with its [assumptions](docs/assumptions.md) stated up front.
+- blazing fast gpu inference automatically dispatched based on model type (see below); this is necessary for the agentic workflow as the model can make multiple fits quickly and support SBC
+- inference targeting always the exact posterior -> important because?
+- git based, declarative workflow with isolated effects; the llm does no state management
 
 ## Benchmarks
 
