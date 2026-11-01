@@ -24,6 +24,7 @@ estimand
 evals
 Excalidraw
 Gaussianity
+Gelman
 hessmc
 Langevin
 linearizations
@@ -49,6 +50,7 @@ unmodeled
 vmap
 vmapped
 warmstart
+Willemyns
 worktree
 writability
 
