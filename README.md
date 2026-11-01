@@ -8,7 +8,7 @@
 
 **grassmoth** is an opinionated LLM harness for end-to-end Bayesian causal inference on longitudinal data.
 
-![Mechanism map of the FRANCE1940 model as written, with industrial output open to show its decay law, structure, drift equation and laws](docs/assets/screenshots/france1940-model.png)
+![Mechanism map of the FRANCE1940 model as written, with combat aircraft output open to show its diffusion scale law, structure, drift equation and laws](docs/assets/screenshots/france1940-model.png)
 
 > Would the Battle of France have gone differently had the French not limited the work week to 40 hours? ([Willemyns & McClements, 2026](https://juliawillemyns.substack.com/p/nobody-decides-to-decline))
 
