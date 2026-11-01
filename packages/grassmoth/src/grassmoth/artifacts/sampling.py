@@ -446,8 +446,12 @@ class AuxiliaryKalmanSpec(Value):
     """
 
     method: Literal["auxiliary_kalman"] = "auxiliary_kalman"
+    # 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic
+    # volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second;
+    # the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps,
+    # 25-step blocks gave a quarter of the whole path's, so retune per model.
     block_length: int | None = Field(
-        default=None,
+        default=300,
         ge=1,
         description="Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities.",
     )

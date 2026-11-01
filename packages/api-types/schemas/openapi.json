@@ -2004,7 +2004,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
+            "default": 300,
             "description": "Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities.",
             "title": "Block Length"
           },
@@ -2039,7 +2039,7 @@
                 "type": "null"
               }
             ],
-            "default": null,
+            "default": 300,
             "description": "Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities.",
             "title": "Block Length"
           },
