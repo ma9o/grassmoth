@@ -22,7 +22,7 @@ The only available samplers always target the exact posterior. Gelman's [folk th
 
 ### [Stochastic volatility](https://doi.org/10.1111/1467-937X.00050)
 
-Long path (3,000 steps of one state), nonlinear in the observation (the state sets each return's variance), with unknown parameters (persistence and noise scale). See the [case](benchmarks/cases/suite/SV-cubic).
+Long path (3,000 steps of one state), nonlinear in both the observation (the state sets each return's variance) and the dynamics (a cubic drift pulls the log-variance back), with unknown parameters (persistence and noise scale). See the [case](benchmarks/cases/suite/SV-cubic).
 
 | | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
