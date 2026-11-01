@@ -10,14 +10,17 @@
 
 ![Mechanism map of the FRANCE1940 study, with simulated draws along the reference course and under the question's interventions](docs/assets/screenshots/france1940-simulate.jpg)
 
-> Would the Battle of France have gone differently had the French not limited the work week to 40 hours? [blog post](https://juliawillemyns.substack.com/p/nobody-decides-to-decline)
+> Would the Battle of France have gone differently had the French not limited the work week to 40 hours? ([Willemyns & McClements, 2026](https://juliawillemyns.substack.com/p/nobody-decides-to-decline))
 
 The harness exposes a DSL of seven actions over a [dependency graph of versioned artifacts](apps/grassmoth-server/src/grassmoth_server/study/state.py): the agent declares the desired next state, the framework resolves the dependencies and constraints to reach it, and the user follows progress and inspects results in the web UI.
 
-- A [continuous-time nonlinear state-space model](#modeling) that handles irregular timestamps and missing observations, with its [assumptions](docs/assumptions.md) stated up front.
-- blazing fast gpu inference automatically dispatched based on model type (see below); this is necessary for the agentic workflow as the model can make multiple fits quickly and support SBC
-- inference targeting always the exact posterior -> important because?
-- git based, declarative workflow with isolated effects; the llm does no state management
+Such restrictions applied to the [Bayesian Workflow](https://users.aalto.fi/~ave/Bayesian-Workflow.pdf) aim to address the tendency of LLMs to adopt different ad-hoc machinery and vocabulary across studies - often chosen with the answer or existing literature in mind - rendering modeling choices hard to compare.
+
+Every study is a [continuous-time nonlinear state-space model](#modeling), with support for irregular observations - either pointwise or window aggregates - and popular transition functions, likelihood and distribution families. We enforce [first-order Markov](docs/assumptions.md#a3-markov-dynamics) dynamics with no explicit delays or higher-order lags. This can seem overly restrictive in complex scenarios and overly pedantic in simpler ones, but nonethelss enforces a common structure that fundamentally enables comparisons between different levels of model complexity for the same problem.
+
+The only available samplers always target the exact posterior. Gelman's [folk theorem](https://statmodeling.stat.columbia.edu/2008/05/13/the_folk_theore/) holds that computational trouble often signals a problem with the model, and the agent can't switch to an approximation that hides it (unless translated into model specification). This results in a workflow where the LLM frequantly cycles between specification and fitting. To keep fitting interactive we implemented [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) and [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301), which leverage model properties and GPU parallelism to obtain inference times on the order of minutes for representative classes of problems (see [Benchmarks](#benchmarks)).
+
+Finally, application state is all declarative and abstracted at the level of modeling actions so that the LLM does no state management and the UI can reliably extract modeling choices and motivations.
 
 ## Benchmarks
 
@@ -30,7 +33,6 @@ This is the stochastic volatility model of [Kim, Shephard & Chib (1998)](https:/
 | | mGRAD, 128 particles | Aux Kalman, whole path | Aux Kalman, 300-day blocks |
 | --- | --- | --- | --- |
 | Draws per chain | 4,000 | 4,000 | 10,000 |
-| Compilation | 20.2 s | 5.9 s, partly cached | 16.4 s |
 | Warmup and sampling | 6 min 52 s | **58 s** | 1 min 29 s |
 | Worst bulk ESS | **4,800** | 368 | 2,020 |
 | Worst R̂ | **1.016** | 1.160 | 1.037 |
@@ -40,15 +42,18 @@ NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003; o
 
 ### Lorenz-96
 
+
+
 The stochastic [Lorenz-96 system](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html) has 40 states, every other one observed at 300 time points ([case](benchmarks/cases/suite/L96), [runs](benchmarks/suite/notes.md)). Forcing and noise are known, so each fit smooths 12,000 latent coordinates per chain, with 2 chains on one H200.
+
+We didn't attemp NUTS here because the dimensionality is unfeasible.
 
 | | mGRAD, 256 particles | Aux Kalman, whole path | Aux Kalman, 25-step blocks |
 | --- | --- | --- | --- |
 | Draws per chain | 4,000 | 4,000 | 10,000 |
-| Compilation | 155.1 s | 31.7 s | **25.3 s** |
 | Warmup and sampling | 26 min 38 s | **51 s** | 1 min 33 s |
 | Worst bulk ESS | 2.4 | **63** | 31 |
-| Worst R̂ | 2.51 | **1.059** | 1.076 |
+| Worst R̂ | 2.51 | **1.04** | 1.076 |
 | Worst bulk ESS per second | 0.0015 | **1.24** | 0.34 |
 
 No fit reaches R̂ below 1.05, but whole-path Kalman delivers about 800 times mGRAD's ESS per second, because 256 particles can't cover 40 dimensions. NUTS would need about 9 hours on the M1 Max, by extrapolation from a partial run.
