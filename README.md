@@ -22,7 +22,7 @@ The only available samplers always target the exact posterior. Gelman's [folk th
 
 ### [Stochastic volatility](https://doi.org/10.1111/1467-937X.00050)
 
-Long path (3,000 steps of one state), nonlinear in the observation (the state sets each return's variance), with unknown parameters (persistence and noise scale). See the [case](benchmarks/cases/suite/SV-cubic) and its [runs](benchmarks/suite/notes.md#sv-with-a-cubic-drift-particle-mgrad-with-80-chains--2026-10-31).
+Long path (3,000 steps of one state), nonlinear in the observation (the state sets each return's variance), with unknown parameters (persistence and noise scale). See the [case](benchmarks/cases/suite/SV-cubic).
 
 | | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003. m
 
 ### [Lorenz-96](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html)
 
-Wide path (40 states per step), nonlinear in the dynamics (chaotic coupling), with unknown states (half never observed). See the [case](benchmarks/cases/suite/L96) and its [runs](benchmarks/suite/notes.md#lorenz-96--2026-10-31).
+Wide path (40 states per step), nonlinear in the dynamics (chaotic coupling), with unknown states (half never observed). See the [case](benchmarks/cases/suite/L96).
 
 | | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
