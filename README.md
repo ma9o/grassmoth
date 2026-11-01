@@ -10,7 +10,7 @@
 
 ![Mechanism map of the FRANCE1940 study, with simulated draws along the reference course and under the question's interventions](docs/assets/screenshots/france1940-simulate.jpg)
 
-*The FRANCE1940 study asks how many more combat aircraft French factories would have built from January 1937 to May 1940 had France worked British hours without the 1936 labour settlement. Its mechanism map shows a simulation of one contrast, with draws along the reference course in blue and under the interventions in orange.*
+> Would the Battle of France have gone differently had the French not limited the work week to 40 hours? [blog post](https://juliawillemyns.substack.com/p/nobody-decides-to-decline)
 
 The framework transparently incorporates existing scientific knowledge, where available, as prior distributions and modeling assumptions. It uses defaults and a constrained modeling language to limit ad hoc choices made to fit the wording of a question. Its [assumptions and limits](docs/assumptions.md) make those scientific commitments explicit.
 
