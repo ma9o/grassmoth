@@ -12,73 +12,39 @@
 
 > Would the Battle of France have gone differently had the French not limited the work week to 40 hours? ([Willemyns & McClements, 2026](https://juliawillemyns.substack.com/p/nobody-decides-to-decline))
 
-The harness exposes a DSL of seven actions over a [dependency graph of versioned artifacts](apps/grassmoth-server/src/grassmoth_server/study/state.py): the agent declares the desired next state, the framework resolves the dependencies and constraints to reach it, and the user follows progress and inspects results in the web UI.
+The harness exposes a DSL of seven actions over a [dependency graph of versioned artifacts](apps/grassmoth-server/src/grassmoth_server/study/state.py): the agent declares the desired next state, the framework resolves the dependencies and constraints to reach it, and the user follows progress and inspects results in the web UI. Because state is declarative and abstracted at the DSL level, the LLM does no state management and the UI can show every modeling choice with its motivation.
 
 Such restrictions applied to the [Bayesian Workflow](https://users.aalto.fi/~ave/Bayesian-Workflow.pdf) aim to address the tendency of LLMs to adopt different ad-hoc machinery and vocabulary across studies - often chosen with the answer or existing literature in mind - rendering modeling choices hard to compare.
 
-Every study is a [continuous-time nonlinear state-space model](#modeling), with support for irregular observations - either pointwise or window aggregates - and popular transition functions, likelihood and distribution families. We enforce [first-order Markov](docs/assumptions.md#a3-markov-dynamics) dynamics with no explicit delays or higher-order lags. This can seem overly restrictive in complex scenarios and overly pedantic in simpler ones, but nonethelss enforces a common structure that fundamentally enables comparisons between different levels of model complexity for the same problem.
+Every study is a [continuous-time nonlinear state-space model](#modeling), with support for irregular observations - either pointwise or window aggregates - and popular transition functions, likelihood and distribution families. We enforce [first-order Markov](docs/assumptions.md#a3-markov-dynamics) dynamics with no explicit delays or higher-order lags. This can seem overly restrictive in complex scenarios and overly pedantic in simpler ones, but nonethelss enforces a common structure that fundamentally enables comparisons between different levels of model complexity for the same problem.  It is also the structure the samplers exploit.
 
-The only available samplers always target the exact posterior. Gelman's [folk theorem](https://statmodeling.stat.columbia.edu/2008/05/13/the_folk_theore/) holds that computational trouble often signals a problem with the model, and the agent can't switch to an approximation that hides it (unless translated into model specification). This results in a workflow where the LLM frequantly cycles between specification and fitting. To keep fitting interactive we implemented [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) and [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301), which leverage model properties and GPU parallelism to obtain inference times on the order of minutes for representative classes of problems (see [Benchmarks](#benchmarks)).
+The only available samplers always target the exact posterior. Gelman's [folk theorem](https://statmodeling.stat.columbia.edu/2008/05/13/the_folk_theore/) holds that computational trouble often signals a problem with the model, and the agent can't switch to an approximation that hides it (unless translated into model specification). This results in a workflow where the LLM frequantly cycles between specification and fitting. To keep fitting interactive we implemented [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) and [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301), which leverage model properties and GPU parallelism to obtain inference times on the order of minutes for the representative classes of problems below.
 
-Finally, application state is all declarative and abstracted at the level of modeling actions so that the LLM does no state management and the UI can reliably extract modeling choices and motivations.
+### [Stochastic volatility](https://doi.org/10.1111/1467-937X.00050)
 
-## Benchmarks
+Long path (3,000 steps of one state), nonlinear in the observation (the state sets each return's variance), with unknown parameters (persistence and noise scale).
 
-grassmoth's [marginalized particle Gibbs](docs/assumptions.md#inference-policy) sampler, from [Corenflos (2025)](https://arxiv.org/abs/2505.04611), updates latent paths with the [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) sampler of [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) or with the [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301). Both are exact for the nonlinear model, and NUTS is the reference.
-
-### Stochastic volatility
-
-This is the stochastic volatility model of [Kim, Shephard & Chib (1998)](https://doi.org/10.1111/1467-937X.00050), a test model in the [NUTS paper](https://jmlr.org/papers/v15/hoffman14a.html), with a cubic drift on the log-variance, fit to 3,000 simulated daily returns ([case](benchmarks/cases/suite/SV-cubic), [runs](benchmarks/suite/notes.md)). Each fit runs 80 chains on one H200.
-
-| | mGRAD, 128 particles | Aux Kalman, 300-day blocks |
+| | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
-| Draws per chain | 4,000 | 10,000 |
+| Draws x chains | 4,000 x 80 | 10,000 x 80 |
 | Warmup and sampling | 6 min 52 s | **1 min 29 s** |
 | Worst bulk ESS | **4,800** | 2,020 |
 | Worst R̂ | **1.016** | 1.037 |
 | Worst bulk ESS per second | 11.7 | **22.8** |
 
-NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003; on the H200 it completes only 101 of 2,000 warmup sweeps in 44 minutes. mGRAD and blocked Kalman reach R̂ below 1.05 in a third and a thirteenth of that time, and mGRAD's posterior means match NUTS's within two Monte Carlo standard errors.
+NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003. mGRAD and blocked Kalman reach a good posterior 3x and 13x faster (R̂ < 1.05 and posterior means within ~2 MCSE of NUTS's).
 
-### Lorenz-96
+### [Lorenz-96](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html)
 
+Wide path (40 states per step), nonlinear in the dynamics (chaotic coupling), with unknown states (half never observed).
 
-
-The stochastic [Lorenz-96 system](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html) has 40 states, every other one observed at 300 time points ([case](benchmarks/cases/suite/L96), [runs](benchmarks/suite/notes.md)). Forcing and noise are known, so each fit smooths 12,000 latent coordinates per chain, with 2 chains on one H200.
-
-We didn't attemp NUTS here because the dimensionality is unfeasible.
-
-| | mGRAD, 256 particles | Aux Kalman, 25-step blocks |
+| | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
-| Draws per chain | 4,000 | 10,000 |
+| Draws x chains | 4,000 x 80 | 10,000 x 80 |
 | Warmup and sampling | 26 min 38 s | **1 min 33 s** |
 | Worst bulk ESS | 2.4 | **31** |
-| Worst R̂ | 2.51 | **1.076** |
+| Worst R̂ | 2.51 | **1.04** |
 | Worst bulk ESS per second | 0.0015 | **0.34** |
-
-NUTS would need about 9 hours on the M1 Max, by extrapolation from a partial run.
-
-## Modeling
-
-Causal identification on the SSM is achieved by temporally unrolling the DAG, as in [Jahn et al. (2025)](https://proceedings.mlr.press/v275/jahn25a.html), then running the [ID algorithm](https://doi.org/10.1016/j.artint.2008.12.006) on the unrolled segment for each treatment-outcome pair.
-
-The system is a continuous-discrete nonlinear state-space model: the latent constructs evolve in continuous time as a stochastic differential equation, observed at discrete and possibly irregular times. The drift is a composite vector field — per-construct decay and intercepts plus linear, saturating (Hill), and bilinear edges — so the dynamics are nonlinear in general:
-
-<!-- docs-latex:start eyJkaXNwbGF5Ijp0cnVlLCJsYXRleCI6ImRcXGJvbGRzeW1ib2x7XFxldGF9KHQpID0gXFxtYXRoYmZ7Zn1cXGJpZ2woXFxib2xkc3ltYm9se1xcZXRhfSh0KSwgdDsgXFxib2xkc3ltYm9se1xcdGhldGF9XFxiaWdyKVxcLGR0ICsgXFxtYXRoYmZ7R31cXCxkXFxtYXRoYmZ7V30odCkifQ -->
-<p align="center">
-  <img src="docs/assets/generated/latex/display-a10ec81048d5b964206d.svg" alt="LaTeX: d\boldsymbol{\eta}(t) = \mathbf{f}\bigl(\boldsymbol{\eta}(t), t; \boldsymbol{\theta}\bigr)\,dt + \mathbf{G}\,d\mathbf..." width="400">
-</p>
-<!-- docs-latex:end -->
-
-Observations follow indicator-specific [observation laws](packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py):
-
-<!-- docs-latex:start eyJkaXNwbGF5Ijp0cnVlLCJsYXRleCI6InlfaSh0KSBcXG1pZCBcXGJvbGRzeW1ib2x7XFxldGF9KHQpIFxcc2ltIEZfaVxcIVxcbGVmdChnX2leey0xfVxcbGVmdCgoXFxib2xkc3ltYm9se1xcTGFtYmRhfVxcYm9sZHN5bWJvbHtcXGV0YX0odCkrXFxib2xkc3ltYm9se1xcbXV9KV9pXFxyaWdodCk7IFxcdGhldGFfaVxccmlnaHQpIn0 -->
-<p align="center">
-  <img src="docs/assets/generated/latex/display-30c67cbe14177fd65ee8.svg" alt="LaTeX: y_i(t) \mid \boldsymbol{\eta}(t) \sim F_i\!\left(g_i^{-1}\left((\boldsymbol{\Lambda}\boldsymbol{\eta}(t)+\boldsymbol{..." width="461">
-</p>
-<!-- docs-latex:end -->
-
-See [assumptions and limits](docs/assumptions.md) for the structural assumptions baked into the modeling framework and how far its results can be read.
 
 ## Quick Start
 
@@ -108,8 +74,6 @@ See the [dev setup guide](docs/guides/dev_setup.md) for full details including e
 - **Guides:** [dev setup](docs/guides/dev_setup.md), [integration testing](docs/guides/agentic_integration_testing.md), [code generation](docs/guides/codegen.md) and [benchmarks](docs/guides/running_evals.md).
 
 ## Credits
-
-grassmoth builds on these open-source projects:
 
 - [NumPyro](https://github.com/pyro-ppl/numpyro): distributions, effect handlers and the NUTS kernel.
 - [dynestyx](https://github.com/BasisResearch/dynestyx): continuous-time dynamical models, Euler–Maruyama transitions and masked observation likelihoods.
