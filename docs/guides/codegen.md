@@ -33,7 +33,7 @@ schema names are never parsed to recover them.
 
 The library owns the [parameter and prior definitions](../reference/statistical-model-spec/parameters.md) and [observation laws](../../packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py). Documentation links to those owners for their definitions.
 
-`bun run docs:codegen` rewrites math in `README.md` and `docs/` (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`) as SVG embeds under [`docs/assets/generated/latex`](../assets/generated/latex). The source is retained in nearby `docs-latex` metadata comments because GitHub math rendering is unreliable across Markdown contexts.
+`bun run docs:codegen` rewrites math in `README.md` and `docs/` (`$...$`, `$$...$$`, `\(...\)`, `\[...\]`) as SVG embeds under `docs/assets/generated/latex`. The source is retained in nearby `docs-latex` metadata comments because GitHub math rendering is unreliable across Markdown contexts.
 
 ```bash
 bun run docs:codegen # regenerate documentation artifacts
