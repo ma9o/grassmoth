@@ -1,3 +1,7 @@
+# Portions adapted from Pyro's tests/infer/reparam/test_strategies.py.
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """Comprehensive tests for AutoReparam: automatic reparameterization strategies.
 
 Check project strategy selection, trace structure, and exact location-scale

@@ -1,6 +1,9 @@
+# Copyright Contributors to the Pyro project.
+# SPDX-License-Identifier: Apache-2.0
+
 """Automatic reparameterization strategies for NumPyro models.
 
-Ported from Pyro's pyro.infer.reparam.strategies module.
+Ported from Pyro's pyro.infer.reparam.strategies module and modified for NumPyro.
 
 Reference: Gorinova, Moore & Hoffman (2019) "Automatic Reparameterisation
 of Probabilistic Programs" https://arxiv.org/abs/1906.03028
