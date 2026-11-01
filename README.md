@@ -112,11 +112,9 @@ See the [dev setup guide](docs/guides/dev_setup.md) for full details including e
 
 grassmoth builds on these open-source projects:
 
-- [JAX](https://github.com/jax-ml/jax): compilation, automatic differentiation and GPU execution.
 - [NumPyro](https://github.com/pyro-ppl/numpyro): distributions, effect handlers and the NUTS kernel.
 - [dynestyx](https://github.com/BasisResearch/dynestyx): continuous-time dynamical models, Euler–Maruyama transitions and masked observation likelihoods.
 - [Diffrax](https://github.com/patrick-kidger/diffrax): SDE and ODE solvers for predictive and counterfactual simulation.
-- [Equinox](https://github.com/patrick-kidger/equinox): pytree modules and filtered transformations.
 - [BlackJAX](https://github.com/blackjax-devs/blackjax): step-size adaptation.
 - [y0](https://github.com/y0-causal-inference/y0): the ID algorithm behind each identification check.
 - [ArviZ](https://github.com/arviz-devs/arviz-stats): ESS, R̂, MCSE and LOO.
