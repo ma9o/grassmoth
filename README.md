@@ -16,13 +16,13 @@ The harness exposes a DSL of seven actions over a [dependency graph of versioned
 
 Such restrictions applied to the [Bayesian Workflow](https://users.aalto.fi/~ave/Bayesian-Workflow.pdf) aim to address the tendency of LLMs to adopt different ad-hoc machinery and vocabulary across studies - often chosen with the answer or existing literature in mind - rendering modeling choices hard to compare.
 
-Every study is a [continuous-time nonlinear state-space model](#modeling), with support for irregular observations - either pointwise or window aggregates - and popular transition functions, likelihood and distribution families. We enforce [first-order Markov](docs/assumptions.md#a3-markov-dynamics) dynamics with no explicit delays or higher-order lags. This can seem overly restrictive in complex scenarios and overly pedantic in simpler ones, but nonethelss enforces a common structure that fundamentally enables comparisons between different levels of model complexity for the same problem.  It is also the structure the samplers exploit.
+Every study is a [continuous-time nonlinear state-space model](docs/assumptions.md#model-class), with support for irregular observations - either pointwise or window aggregates - and popular transition functions, likelihood and distribution families. We enforce [first-order Markov](docs/assumptions.md#a3-markov-dynamics) dynamics with no explicit delays or higher-order lags. This can seem overly restrictive in complex scenarios and overly pedantic in simpler ones, but nonethelss enforces a common structure that fundamentally enables comparisons between different levels of model complexity for the same problem.  It is also the structure the samplers exploit.
 
 The only available samplers always target the exact posterior. Gelman's [folk theorem](https://statmodeling.stat.columbia.edu/2008/05/13/the_folk_theore/) holds that computational trouble often signals a problem with the model, and the agent can't switch to an approximation that hides it (unless translated into model specification). This results in a workflow where the LLM frequantly cycles between specification and fitting. To keep fitting interactive we implemented [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) and [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301), which leverage model properties and GPU parallelism to obtain inference times on the order of minutes for the representative classes of problems below.
 
 ### [Stochastic volatility](https://doi.org/10.1111/1467-937X.00050)
 
-Long path (3,000 steps of one state), nonlinear in the observation (the state sets each return's variance), with unknown parameters (persistence and noise scale).
+Long path (3,000 steps of one state), nonlinear in the observation (the state sets each return's variance), with unknown parameters (persistence and noise scale). See the [case](benchmarks/cases/suite/SV-cubic) and its [runs](benchmarks/suite/notes.md#sv-with-a-cubic-drift-particle-mgrad-with-80-chains--2026-10-31).
 
 | | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
@@ -37,7 +37,7 @@ NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003. m
 
 ### [Lorenz-96](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html)
 
-Wide path (40 states per step), nonlinear in the dynamics (chaotic coupling), with unknown states (half never observed).
+Wide path (40 states per step), nonlinear in the dynamics (chaotic coupling), with unknown states (half never observed). See the [case](benchmarks/cases/suite/L96) and its [runs](benchmarks/suite/notes.md#lorenz-96--2026-10-31).
 
 | | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
@@ -68,12 +68,13 @@ See the [dev setup guide](docs/guides/dev_setup.md) for full details including e
 
 ## Documentation
 
-- **How each action works:** [`edit_question`](docs/assets/action-flows/edit-question.svg), [edit_model](docs/assets/action-flows/edit-model.svg), [prepare_data](docs/assets/action-flows/prepare-data.svg), [fit](docs/assets/action-flows/fit.svg), [simulate](docs/assets/action-flows/simulate.svg), [data_diff](docs/assets/action-flows/data-diff.svg) and [model_diff](docs/assets/action-flows/model-diff.svg).
+- **How each action works:** [`edit_question`](docs/assets/action-flows/edit-question.svg), [`edit_model`](docs/assets/action-flows/edit-model.svg), [`prepare_data`](docs/assets/action-flows/prepare-data.svg), [`fit`](docs/assets/action-flows/fit.svg), [`simulate`](docs/assets/action-flows/simulate.svg), [`data_diff`](docs/assets/action-flows/data-diff.svg) and [`model_diff`](docs/assets/action-flows/model-diff.svg).
 - **[Bayesian workflow](docs/assets/bayesian-workflow.svg):** the workflow of [Gelman, Vehtari & McElreath (2026)](https://users.aalto.fi/~ave/Bayesian-Workflow.pdf) mapped onto the seven actions.
 - **[Assumptions and limits](docs/assumptions.md):** the modeling commitments behind every result.
-- **Supported laws:** the library's [observation laws](packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py) and [prior authoring definitions](packages/grassmoth/src/grassmoth/artifacts/probability/native.py).
+- **Supported laws:** the [observation law](docs/reference/statistical-model-spec/likelihoods.md) and [parameter and prior](docs/reference/statistical-model-spec/parameters.md) references.
 - **API:** one POST per action returns running progress or the complete saved result; the remaining routes serve the slim timeline, workspaces and uploads. See the Swagger UI at `http://localhost:8100/api/docs` while the tool server runs, and the generated [study API reference](docs/reference/study-api.md).
-- **Guides:** [dev setup](docs/guides/dev_setup.md), [integration testing](docs/guides/agentic_integration_testing.md), [code generation](docs/guides/codegen.md) and [benchmarks](docs/guides/running_evals.md).
+- **Guides:** [dev setup](docs/guides/dev_setup.md), [integration testing](docs/guides/agentic_integration_testing.md), [code generation](docs/guides/codegen.md), [public study library](docs/guides/public_study_library.md) and [benchmarks](docs/guides/running_evals.md).
+- **Local references:** the [reference papers](docs/papers/README.md) and a searchable [Bayesian Workflow wiki](docs/wiki/README.md), downloaded and built on demand.
 
 ## Credits
 
