@@ -27,7 +27,7 @@ The user supplies a scientific question and observational data. The agent carrie
 
 ## Benchmarks
 
-grassmoth's [marginalized particle Gibbs](docs/assumptions.md#inference-policy) sampler updates latent paths with [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) or with the [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä](https://arxiv.org/abs/2303.00301), whole-path or in blocks. Both are exact for the nonlinear model, and NUTS is the reference.
+grassmoth's [marginalized particle Gibbs](docs/assumptions.md#inference-policy) sampler, from [Corenflos (2025)](https://arxiv.org/abs/2505.04611), updates latent paths with the [Particle-mGRAD](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py) sampler of [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) or with the [auxiliary Kalman sampler](packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/auxiliary_kalman.py) of [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301), whole-path or in blocks. Both are exact for the nonlinear model, and NUTS is the reference.
 
 ### Stochastic volatility
 
@@ -102,8 +102,24 @@ See the [dev setup guide](docs/guides/dev_setup.md) for full details including e
 ## Documentation
 
 - **How each action works:** [`edit_question`](docs/assets/action-flows/edit-question.svg), [edit_model](docs/assets/action-flows/edit-model.svg), [prepare_data](docs/assets/action-flows/prepare-data.svg), [fit](docs/assets/action-flows/fit.svg), [simulate](docs/assets/action-flows/simulate.svg), [data_diff](docs/assets/action-flows/data-diff.svg) and [model_diff](docs/assets/action-flows/model-diff.svg).
-- **[Bayesian workflow](docs/assets/bayesian-workflow.svg):** the book's workflow mapped onto the seven actions.
+- **[Bayesian workflow](docs/assets/bayesian-workflow.svg):** the workflow of [Gelman, Vehtari & McElreath (2026)](https://users.aalto.fi/~ave/Bayesian-Workflow.pdf) mapped onto the seven actions.
 - **[Assumptions and limits](docs/assumptions.md):** the modeling commitments behind every result.
 - **Supported laws:** the library's [observation laws](packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py) and [prior authoring definitions](packages/grassmoth/src/grassmoth/artifacts/probability/native.py).
 - **API:** one POST per action returns running progress or the complete saved result; the remaining routes serve the slim timeline, workspaces and uploads. See the Swagger UI at `http://localhost:8100/api/docs` while the tool server runs, and the generated [study API reference](docs/reference/study-api.md).
 - **Guides:** [dev setup](docs/guides/dev_setup.md), [integration testing](docs/guides/agentic_integration_testing.md), [code generation](docs/guides/codegen.md) and [benchmarks](docs/guides/running_evals.md).
+
+## Credits
+
+grassmoth builds on these open-source projects:
+
+- [JAX](https://github.com/jax-ml/jax): compilation, automatic differentiation and GPU execution.
+- [NumPyro](https://github.com/pyro-ppl/numpyro): distributions, effect handlers and the NUTS kernel.
+- [dynestyx](https://github.com/BasisResearch/dynestyx): continuous-time dynamical models, Euler–Maruyama transitions and masked observation likelihoods.
+- [Diffrax](https://github.com/patrick-kidger/diffrax): SDE and ODE solvers for predictive and counterfactual simulation.
+- [Equinox](https://github.com/patrick-kidger/equinox): pytree modules and filtered transformations.
+- [BlackJAX](https://github.com/blackjax-devs/blackjax): step-size adaptation.
+- [y0](https://github.com/y0-causal-inference/y0): the ID algorithm behind each identification check.
+- [ArviZ](https://github.com/arviz-devs/arviz-stats): ESS, R̂, MCSE and LOO.
+- [Pyro](https://github.com/pyro-ppl/pyro): the automatic reparameterization strategies, ported to NumPyro.
+
+The papers behind its methods are cited where those methods appear, above and in [assumptions and limits](docs/assumptions.md).
