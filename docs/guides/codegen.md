@@ -167,7 +167,7 @@ the payload or its absence reason.
 
 ## Client Version
 
-`openapi-fetch` is pinned to 0.16.0 because [0.17.0's response mapping](https://github.com/openapi-ts/openapi-typescript/blob/main/packages/openapi-typescript-helpers/index.d.ts) widens fixed
+`openapi-fetch` is pinned to 0.16.0 because [0.17.0's response mapping](https://github.com/openapi-ts/openapi-typescript/blob/openapi-fetch@0.17.0/packages/openapi-typescript-helpers/src/index.ts) widens fixed
 tuples into arrays. The client type test checks that a fetched batch retains the
 canonical `ModelSnapshot` contract, including posterior draw dimensions.
 
