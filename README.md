@@ -26,8 +26,9 @@ Long path (3,000 steps of one state), nonlinear in the observation (the state se
 
 | | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
+| Hardware | H200 | L40S |
 | Draws x chains | 4,000 x 80 | 10,000 x 80 |
-| Warmup and sampling | 6 min 52 s | **1 min 29 s** |
+| Warmup and sampling | 4 min 52 s | **1 min 29 s** |
 | Worst bulk ESS | **4,800** | 2,020 |
 | Worst R̂ | **1.016** | 1.037 |
 | Worst bulk ESS per second | 11.7 | **22.8** |
@@ -40,8 +41,9 @@ Wide path (40 states per step), nonlinear in the dynamics (chaotic coupling), wi
 
 | | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
+| Hardware | H200 | L40S |
 | Draws x chains | 4,000 x 80 | 10,000 x 80 |
-| Warmup and sampling | 26 min 38 s | **1 min 33 s** |
+| Warmup and sampling | 18 min 38 s | **1 min 33 s** |
 | Worst bulk ESS | 2.4 | **31** |
 | Worst R̂ | 2.51 | **1.04** |
 | Worst bulk ESS per second | 0.0015 | **0.34** |
