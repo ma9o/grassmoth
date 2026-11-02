@@ -555,7 +555,7 @@ def test_latest_does_not_resurrect_retracted_or_stale_panel(study, client, inval
 def test_edit_model_parent_pins_question_for_identity_checks_and_provenance(
     study, client, parent_kind
 ):
-    from grassmoth.actions.contracts.bodies import EditModelOutput
+    from grassmoth.actions.contracts.io import EditModelOutput
     from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth_server.actions.edit_model import edit_model
     from grassmoth_server.study.records import record_dependencies

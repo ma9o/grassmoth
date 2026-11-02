@@ -11,9 +11,8 @@ from time import monotonic
 import jax
 import polars as pl
 
-from grassmoth.actions.contracts.bodies import FitOutput
+from grassmoth.actions.contracts.io import FitInputs, FitOutput
 from grassmoth.actions.fit.action import fit
-from grassmoth.actions.fit.inputs import FitInputs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset

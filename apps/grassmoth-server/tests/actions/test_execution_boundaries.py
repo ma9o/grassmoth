@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import polars as pl
 import pytest
 
-from grassmoth.actions.contracts.bodies import EditModelOutput
+from grassmoth.actions.contracts.io import EditModelOutput
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.sampling import InferenceHardware
@@ -237,7 +237,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
             time_origin=datetime(2024, 1, 1, tzinfo=UTC),
         )
         from grassmoth.actions.checks import fit_check_report
-        from grassmoth.actions.contracts.bodies import FitOutput
+        from grassmoth.actions.contracts.io import FitOutput
         from grassmoth_test_support.inference import _report
 
         return FitOutput(

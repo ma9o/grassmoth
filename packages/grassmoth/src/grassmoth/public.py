@@ -1,28 +1,45 @@
-"""The scientific actions and the value types crossing their service boundary.
+"""The scientific actions, the value types crossing their service boundary, and two helpers.
 
-All exports retain their implementation and type owners; this module has no logic.
+``support_windows`` and ``normalize_level_label`` let the service's extraction workers
+use the windows and level labels that ``prepare_data`` applies. All exports retain
+their implementation and type owners; this module has no logic.
 """
 
-from grassmoth.actions.contracts.bodies import (
+from grassmoth.actions.contracts.io import (
     DataDiffOutput as DataDiffOutput,
 )
-from grassmoth.actions.contracts.bodies import (
+from grassmoth.actions.contracts.io import (
     EditModelOutput as EditModelOutput,
 )
-from grassmoth.actions.contracts.bodies import (
+from grassmoth.actions.contracts.io import (
     EditQuestionOutput as EditQuestionOutput,
 )
-from grassmoth.actions.contracts.bodies import (
+from grassmoth.actions.contracts.io import (
+    ExtractedValue as ExtractedValue,
+)
+from grassmoth.actions.contracts.io import (
+    FitInputs as FitInputs,
+)
+from grassmoth.actions.contracts.io import (
     FitOutput as FitOutput,
 )
-from grassmoth.actions.contracts.bodies import (
+from grassmoth.actions.contracts.io import (
+    FittedLaw as FittedLaw,
+)
+from grassmoth.actions.contracts.io import (
     ModelDiffOutput as ModelDiffOutput,
 )
-from grassmoth.actions.contracts.bodies import (
+from grassmoth.actions.contracts.io import (
     PrepareDataOutput as PrepareDataOutput,
 )
-from grassmoth.actions.contracts.bodies import (
+from grassmoth.actions.contracts.io import (
     SimulateOutput as SimulateOutput,
+)
+from grassmoth.actions.contracts.io import (
+    SimulationInputs as SimulationInputs,
+)
+from grassmoth.actions.contracts.io import (
+    SourceTable as SourceTable,
 )
 from grassmoth.actions.data_diff import (
     data_diff as data_diff,
@@ -39,14 +56,11 @@ from grassmoth.actions.edit_question import (
 from grassmoth.actions.fit.action import (
     fit as fit,
 )
-from grassmoth.actions.fit.execution import (
-    ModelFitFailure as ModelFitFailure,
-)
-from grassmoth.actions.fit.inputs import (
+from grassmoth.actions.fit.continuation import (
     ContinuationRefusal as ContinuationRefusal,
 )
-from grassmoth.actions.fit.inputs import (
-    FitInputs as FitInputs,
+from grassmoth.actions.fit.execution import (
+    ModelFitFailure as ModelFitFailure,
 )
 from grassmoth.actions.model_diff import (
     model_diff as model_diff,
@@ -54,14 +68,14 @@ from grassmoth.actions.model_diff import (
 from grassmoth.actions.prepare_data.action import (
     prepare_data as prepare_data,
 )
+from grassmoth.actions.prepare_data.aggregations import (
+    normalize_level_label as normalize_level_label,
+)
+from grassmoth.actions.prepare_data.rows import (
+    support_windows as support_windows,
+)
 from grassmoth.actions.simulate.action import (
     simulate as simulate,
-)
-from grassmoth.actions.simulate.inputs import (
-    FittedLaw as FittedLaw,
-)
-from grassmoth.actions.simulate.inputs import (
-    SimulationInputs as SimulationInputs,
 )
 from grassmoth.artifacts.arrays import (
     NumericalArray as NumericalArray,

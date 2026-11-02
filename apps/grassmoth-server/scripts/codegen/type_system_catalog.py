@@ -234,7 +234,7 @@ CONCERNS = {
             "actions.contracts.timeline",
             "actions.contracts.requests",
             "actions.contracts.polling",
-            "actions.contracts.bodies",
+            "actions.contracts.io",
             "actions.contracts.inputs",
             "actions.model_diff",
             "actions.data_diff",

@@ -1,11 +1,15 @@
 """Preparation and simulation resolve the same calendar support, without invented counts."""
 
-from datetime import datetime
+from datetime import date, datetime
 
 import polars as pl
 import pytest
 
+from grassmoth.actions.contracts.io import SourceTable
+from grassmoth.actions.prepare_data.aggregations import compute_indicators
+from grassmoth.actions.prepare_data.rows import annotate_observation_rows
 from grassmoth.artifacts.observations.duration import CalendarDuration
+from grassmoth.artifacts.observations.preparation import DataPreparationSpec
 from grassmoth.artifacts.observations.rows import validate_observation_rows
 from grassmoth.artifacts.observations.semantics import AnchorPolicy
 from grassmoth.artifacts.observations.spec import (
@@ -13,12 +17,6 @@ from grassmoth.artifacts.observations.spec import (
 )
 from grassmoth.artifacts.observations.time import ObservationInstant
 from grassmoth.observations.rows import observation_window_boundaries
-from grassmoth_server.actions.contracts.preparation import FilePreparationSpec
-from grassmoth_server.actions.prepare_data.aggregations import compute_indicators
-from grassmoth_server.actions.prepare_data.context import extraction_context
-from grassmoth_server.actions.prepare_data.rows import (
-    annotate_observation_rows,
-)
 
 pytestmark = pytest.mark.contract
 
@@ -40,35 +38,34 @@ pytestmark = pytest.mark.contract
     ],
 )
 def test_period_counts_keep_exact_bounds_and_missing_windows(window, start, missing, end, days):
-    preparation = FilePreparationSpec.model_validate(
+    definition = DataPreparationSpec.model_validate(
         {
-            "source": {"files": ["counts.csv"], "start": start, "end": end},
-            "definition": {
-                "default_window": "1d",
-                "variables": [
-                    {
-                        "observation": {
-                            "id": "indicator:count",
-                            "name": "Count",
-                            "measurement": {"dtype": "count"},
-                            "aggregation": "sum",
-                            "observation_window": window,
-                        },
-                        "extraction": {
-                            "kind": "computed",
-                            "how_to_measure": "Retain each reported period count.",
-                            "source_columns": ["count"],
-                        },
-                    }
-                ],
-            },
+            "default_window": "1d",
+            "variables": [
+                {
+                    "observation": {
+                        "id": "indicator:count",
+                        "name": "Count",
+                        "measurement": {"dtype": "count"},
+                        "aggregation": "sum",
+                        "observation_window": window,
+                    },
+                    "extraction": {
+                        "kind": "computed",
+                        "how_to_measure": "Retain each reported period count.",
+                        "source_columns": ["count"],
+                    },
+                }
+            ],
         }
     )
-    context = extraction_context(preparation)
-    variable = context.indicators[0].observation.resolved(context.window(context.indicators[0]))
+    (variable,) = definition.observation_schema()
     raw = pl.DataFrame({"timestamp": [start, missing], "count": [10, None]})
+    source = SourceTable(
+        rows=raw.to_arrow(), start=date.fromisoformat(start), end=date.fromisoformat(end)
+    )
     rows = validate_observation_rows(
-        annotate_observation_rows(compute_indicators(raw, context, "timestamp"), (variable,)),
+        annotate_observation_rows(compute_indicators(source, definition), (variable,)),
         (variable,),
     )
     assert rows["value"].to_list() == [10, None]

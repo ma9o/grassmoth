@@ -44,13 +44,13 @@ def applied_record(
     from pydantic import TypeAdapter
 
     from grassmoth.actions.checks import model_check_report
-    from grassmoth.actions.contracts.bodies import (
+    from grassmoth.actions.contracts.io import (
         EditModelOutput,
         EditQuestionOutput,
         FitOutput,
         SimulateOutput,
     )
-    from grassmoth.actions.prepare_data.action import prepare_data
+    from grassmoth.actions.prepare_data.action import prepared_output
     from grassmoth.artifacts.model.dynamical_model_spec import ModelEditResult
     from grassmoth.artifacts.observations.preparation import DataPreparationResult
     from grassmoth.artifacts.reports.identification import IdentificationReport
@@ -94,7 +94,7 @@ def applied_record(
                 revision = state.current["panel"].revision
                 data = read_data_metadata(store, revision)
                 frame = store.read_parquet_file("panel", revision, "panel.parquet")
-                output = prepare_data(
+                output = prepared_output(
                     ObservationDataset.from_frame(
                         frame, data.variables, time_origin=data.time_origin
                     ),

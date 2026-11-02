@@ -10,23 +10,21 @@ from typing import TYPE_CHECKING, assert_never
 
 import polars as pl
 
-from grassmoth.public import (
-    ComputedExtractionSpec,
-    LabeledMeasurement,
-    ObservationInstant,
-    SummaryOperator,
-    WindowExpression,
-    WindowOperator,
-)
-from grassmoth_server.actions.prepare_data.rows import support_window_tick_frame
+from grassmoth.actions.contracts.io import SourceTable
+from grassmoth.actions.prepare_data.rows import EXTRACTION_ROW_SCHEMA, support_window_tick_frame
+from grassmoth.artifacts.observations.expressions import WindowExpression, WindowOperator
+from grassmoth.artifacts.observations.preparation import ComputedExtractionSpec
+from grassmoth.artifacts.observations.semantics import SummaryOperator
+from grassmoth.artifacts.observations.spec import LabeledMeasurement
+from grassmoth.artifacts.observations.time import ObservationInstant
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from polars._typing import FillNullStrategy
 
-    from grassmoth.public import DataVariableSpec, Measurement
-    from grassmoth_server.actions.prepare_data.context import MeasurementContext
+    from grassmoth.artifacts.observations.preparation import DataPreparationSpec, DataVariableSpec
+    from grassmoth.artifacts.observations.spec import Measurement
 
 
 def _compile_computed_rule_expr(window_expr: WindowExpression) -> pl.Expr:
@@ -157,16 +155,12 @@ def _build_agg_expr(operator: SummaryOperator, col_name: str = "value") -> pl.Ex
     return expr.alias("value")
 
 
-def compute_indicators(
-    raw_df: pl.DataFrame,
-    measurement_structure: MeasurementContext,
-    time_col: str,
-) -> pl.DataFrame:
+def compute_indicators(source: SourceTable, definition: DataPreparationSpec) -> pl.DataFrame:
     """Compute indicator values directly via Polars aggregation.
 
     For variables with a computed extraction recipe, applies a deterministic
     support-window computation grouped by each indicator's effective
-    observation window (explicit observation_window or fallback model_clock).
+    observation window (explicit observation_window or the default window).
     Direct single-column aggregations are supported, along with computed_rule
     expressions that deterministically derive one scalar per support window
     from one or more source columns. Non-numeric direct columns are supported
@@ -174,30 +168,30 @@ def compute_indicators(
     converted to their declared integer codes before emission.
 
     Args:
-        raw_df: Raw wide-format DataFrame with actual column names.
-        measurement_structure: Owned variable definitions, fallback clock and source span.
-        time_col: Name of the datetime column in raw_df.
+        source: Captured source rows and their coverage span.
+        definition: Owned variable definitions and their default window.
 
     Returns:
         Long-format DataFrame with columns: indicator (Utf8), value (Utf8),
         timestamp (Utf8). Matches the schema produced by the semantic path.
     """
-    start, end = measurement_structure.source.start, measurement_structure.source.end
-    output_schema = {"indicator_id": pl.Utf8, "value": pl.Utf8, "timestamp": pl.Utf8}
+    start, end, time_col = source.start, source.end, SourceTable.TIME_COLUMN
     computed = tuple(
-        (ind, extraction)
-        for ind in measurement_structure.indicators
+        (ind, observation, extraction)
+        for ind, observation in zip(
+            definition.variables, definition.observation_schema(), strict=True
+        )
         if isinstance(extraction := ind.extraction, ComputedExtractionSpec)
     )
     if not computed:
-        return pl.DataFrame(schema=output_schema)
+        return pl.DataFrame(schema=EXTRACTION_ROW_SCHEMA)
 
-    df = ObservationInstant.normalize_column(raw_df, time_col).sort(time_col)
+    df = ObservationInstant.normalize_column(pl.DataFrame(source.rows), time_col).sort(time_col)
 
     frames: list[pl.DataFrame] = []
-    for ind, extraction in computed:
+    for ind, observation, extraction in computed:
         agg_name = ind.observation.aggregation
-        observation_window = measurement_structure.window(ind).polars_interval
+        observation_window = observation.observation_window.polars_interval
         tick_frame = support_window_tick_frame(
             df, observation_window, time_col, start=start, end=end
         )
@@ -252,7 +246,7 @@ def compute_indicators(
         frames.append(agg_df)
 
     if not frames:
-        return pl.DataFrame(schema=output_schema)
+        return pl.DataFrame(schema=EXTRACTION_ROW_SCHEMA)
 
     return pl.concat(frames, how="vertical").sort("timestamp", "indicator_id")
 

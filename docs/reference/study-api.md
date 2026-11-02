@@ -55,7 +55,7 @@ retained observations without generating new draws or changing scientific state.
 | `left_ref` | [`DataSelection<RevisionSelector>`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/inputs.py) | required | References on the left side. Each reference selects one replicate by index, or all its retained histories when the index is omitted. |
 | `right_ref` | [`DataSelection<RevisionSelector>`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/inputs.py) | required | References on the right side, using the same selection rule. |
 
-**Success body: [`DataDiffOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py)**
+**Success body: [`DataDiffOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
 The computed comparison report; original histories remain in their producing results.
 
@@ -109,7 +109,7 @@ Create or revise a model from a question or model parent.
 | `parent_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. |
 | `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. The action retains the merged spec and its findings. |
 
-**Success body: [`EditModelOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py)**
+**Success body: [`EditModelOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
 The produced model and its recorded scientific findings.
 
@@ -207,7 +207,7 @@ The study question, its required outcome, and any named intervention queries.
 |---|---|---|---|
 | `question` | [`QuestionSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/question.py) | required | The replacement study question, including the required outcome and any intervention queries to assess against candidate models. |
 
-**Success body: [`EditQuestionOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py)**
+**Success body: [`EditQuestionOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
 The question saved by this action.
 
@@ -251,7 +251,7 @@ Start or continue a fit; sample counts always mean additional retained draws.
 | `settings` | [`FitSettingsSpec`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/settings.py) | optional | Sampler overrides for this call. |
 | `repeat` | `integer` (≥ 0) | optional; default `0` | Timing repeat identity; identical repeats reuse their saved result. |
 
-**Success body: [`FitOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py)**
+**Success body: [`FitOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
 A conditioned model, its completed checks, and self-contained inference evidence.
 
@@ -322,7 +322,7 @@ Before/after determine patch direction; ModelDiffOutput defines its contract.
 | `before_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Question or model revision used as the base; a question denotes an empty spec. |
 | `after_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Question or model revision reconstructed by applying the patch to the base. |
 
-**Success body: [`ModelDiffOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py)**
+**Success body: [`ModelDiffOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
 Directional changes between saved specs, expressed in the model's editing language.
 
@@ -370,7 +370,7 @@ Extract observations using the definitions of the selected model.
 | `extraction` | map<[`IndicatorId`](../../packages/grassmoth/src/grassmoth/artifacts/identity.py), [`ExtractionSpec`](../../packages/grassmoth/src/grassmoth/artifacts/observations/preparation.py) (`kind`: `computed`, `recorded`, `semantic`)> (min entries 1) | required | Computed, recorded-reading or semantic extraction instructions keyed by the model's observation IDs. |
 | `context` | `string` | optional; default `""` | Additional background for interpreting the uploaded source tables. |
 
-**Success body: [`PrepareDataOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py)**
+**Success body: [`PrepareDataOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
 Prepared observations, their resolved metadata, and data-quality findings.
 
@@ -428,7 +428,7 @@ Generate histories from a selected model and an explicit simulation design.
 | `seed` | `integer` (≥ 0) | optional; default `0` | Generation seed, retained with the histories. |
 | `num_replicates` | `integer` (≥ 1) | optional; default `100` | Number of independent histories. |
 
-**Success body: [`SimulateOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py)**
+**Success body: [`SimulateOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
 Generated histories and their complete scientific report, including owned numerical evidence.
 

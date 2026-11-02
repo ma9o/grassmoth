@@ -6,7 +6,7 @@ from dataclasses import replace
 import numpy as np
 import pytest
 
-from grassmoth.actions.fit.inputs import FitInputs
+from grassmoth.actions.contracts.io import FitInputs
 from grassmoth.artifacts.sampling import (
     GaussianInitializationSpec,
     GuidedPathSpec,

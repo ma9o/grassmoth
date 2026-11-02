@@ -39,7 +39,7 @@ def test_fit_shell_attributes_cache_events_and_defers_dumps(monkeypatch, tmp_pat
 
     from jax.stages import Compiled
 
-    from grassmoth.actions.fit.inputs import FitInputs
+    from grassmoth.actions.contracts.io import FitInputs
     from grassmoth.artifacts.reports.profiling import FitProfileReport, ProgramCompileReport
     from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.compute.budget import NO_MEMORY_DEMAND

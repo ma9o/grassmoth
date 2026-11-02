@@ -5,14 +5,17 @@ The service lives in `grassmoth_server` beside the scientific library,
 [ARCH012 import contract](../../pyproject.toml)
 forbids library imports of the service, including type-only imports.
 Library actions receive resolved values and return complete scientific outputs.
-The service owns reference resolution, extraction workers, runtime configuration,
-compute dispatch and persistence. Fit receives its clocks, logger and compilation
-functions from the service; the on-disk compilation cache stays there.
+The service owns reference resolution, the LLM extraction workers, runtime
+configuration, compute dispatch and persistence. `prepare_data` itself extracts the
+recorded and computed variables from the captured source table, then adds the
+workers' values. Fit receives its clocks, logger and compilation functions from the
+service; the on-disk compilation cache stays there.
 
 Callers import the library only through
 [`grassmoth.public`](../../packages/grassmoth/src/grassmoth/public.py).
-This module re-exports only the seven actions and their input, output and failure
-types. The
+This module re-exports only the seven actions, their input, output and failure
+types, and two helpers that keep the workers' support windows and level labels
+identical to `prepare_data`'s. The
 [public import checker](../../apps/grassmoth-server/scripts/checks/check_public_imports.py)
 enforces this boundary with ARCH011 for external callers and ARCH013 for the
 service, including its maintenance tools. Both rules check type-only and dynamic

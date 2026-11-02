@@ -58,7 +58,7 @@ def prepare_semantic_chunks(
     max_events_per_window: int,
 ) -> tuple[list[str], list[list[str]], list[MeasurementContext], WorkerOutput]:
     """Plan requests with source values; empty windows yield deterministic null rows."""
-    from grassmoth_server.actions.prepare_data.rows import bucket_by_clock
+    from grassmoth.public import support_windows
     from grassmoth_server.actions.prepare_data.window_text import format_window_chunk
     from grassmoth_server.actions.prepare_data.worker_output import (
         WindowExtraction,
@@ -82,7 +82,7 @@ def prepare_semantic_chunks(
         if time_col not in projected.columns:
             projected = projected.with_columns(raw_df[time_col])
 
-        windows = bucket_by_clock(
+        windows = support_windows(
             projected,
             observation_window.polars_interval,
             time_col,

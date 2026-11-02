@@ -11,9 +11,9 @@ import numpy as np
 import polars as pl
 import pytest
 
+from grassmoth.actions.contracts.io import FitInputs
 from grassmoth.actions.fit import execution as stage5_inference
 from grassmoth.actions.fit.execution import FittedModelResult
-from grassmoth.actions.fit.inputs import FitInputs
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
@@ -148,7 +148,7 @@ if TYPE_CHECKING:
 def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_evidence(
     monkeypatch, tmp_path
 ):
-    from grassmoth.actions.contracts.bodies import FitOutput
+    from grassmoth.actions.contracts.io import FitOutput
     from grassmoth.actions.fit.action import _fit as fit
     from grassmoth.artifacts.reports.posterior_diagnostics import ChainDiagnostics
 

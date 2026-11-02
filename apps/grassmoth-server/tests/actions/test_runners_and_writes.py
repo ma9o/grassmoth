@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import polars as pl
@@ -18,7 +19,6 @@ from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.models.causal.analysis import identify_model
 from grassmoth.models.structure import StructuralSelection, selected_state_ids
 from grassmoth_server.actions.contracts.effects import ActionEffects
-from grassmoth_server.actions.contracts.preparation import FileSourceRef
 from grassmoth_server.actions.contracts.requests import EditModelRequest, EditQuestionRequest
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
@@ -133,41 +133,37 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
 
     store = ArtifactStore(workspace)
     dynamical_model_spec = _model()
-    raw = store.write_artifact("raw_data", derived_from={}, produced_by="prepare_data")
+    raw = store.write_artifact(
+        "raw_data",
+        derived_from={},
+        produced_by="prepare_data",
+        parquet_files={"raw.parquet": pl.DataFrame({"timestamp": [datetime(2026, 1, 1)]})},
+    )
     state = StudyState().with_artifacts(
         [raw, _write(store, "model", dynamical_model_spec.model_dump(mode="json"))]
     )
     pins: dict[ArtifactId, GitOid] = {"raw_data": raw.revision}
-    from grassmoth_server.actions.prepare_data.context import MeasurementContext
-
-    metadata = metadata_for_model(dynamical_model_spec)
-    context = MeasurementContext(
-        source=FileSourceRef(files=("input/test.csv",), hashes={}),
-        model_clock=dynamical_model_spec.measurement_clock,
-        indicators=metadata.preparation.variables,
-    )
     path = tmp_path / "plan.json"
     path.write_text(
         json.dumps(
             {
-                "measurement_structure": context.model_dump(mode="json"),
                 "preparation": {
                     "source": {"files": ["observations.csv"]},
                     "definition": metadata_for_model(dynamical_model_spec).preparation.model_dump(
                         mode="json"
                     ),
                 },
-                "recorded_dicts": [],
-                "computed_dicts": [
-                    {
-                        "indicator_id": dynamical_model_spec.indicators[0].observation.id,
-                        "value": "3.0",
-                        "timestamp": "2026-01-01",
-                    }
-                ]
-                if nonempty
-                else [],
-                "empty_output": {"extractions": []},
+                "empty_output": {
+                    "extractions": [
+                        {
+                            "indicator_id": dynamical_model_spec.indicators[0].observation.id,
+                            "value": "3.0",
+                            "window_start": "2026-01-01",
+                        }
+                    ]
+                    if nonempty
+                    else []
+                },
                 "chunks": [{"worker_id": 7, "n_windows": 1, "spec_ref": "unused.json"}],
             }
         )
@@ -199,7 +195,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
 
     assert ("panel" in {info.artifact_id for info in effects.effects.produced}) == nonempty
     assert "measurements" not in {info.artifact_id for info in effects.effects.produced}
-    from grassmoth.actions.contracts.bodies import PrepareDataOutput
+    from grassmoth.actions.contracts.io import PrepareDataOutput
 
     prepared_result = store.read_result(effects.result, PrepareDataOutput)
     assert len(prepared_result.extraction.workers) == 1

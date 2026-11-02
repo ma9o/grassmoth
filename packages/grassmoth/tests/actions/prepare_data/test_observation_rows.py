@@ -1,4 +1,4 @@
-"""Tests for storage/paths.py dataframe utility functions."""
+"""Extraction rows take their support and anchors from the observation definitions."""
 
 import polars as pl
 import pytest
@@ -15,7 +15,7 @@ pytestmark = pytest.mark.contract
 
 class TestAnnotateObservationRows:
     def test_adds_observation_metadata_from_indicator_specs(self):
-        from grassmoth_server.actions.prepare_data.rows import annotate_observation_rows
+        from grassmoth.actions.prepare_data.rows import annotate_observation_rows
 
         raw = pl.DataFrame(
             {
@@ -45,7 +45,7 @@ class TestAnnotateObservationRows:
         assert annotated["support_end"][0] == "2024-01-02T00:00:00"
 
     def test_uses_indicator_specific_observation_window_when_present(self):
-        from grassmoth_server.actions.prepare_data.rows import annotate_observation_rows
+        from grassmoth.actions.prepare_data.rows import annotate_observation_rows
 
         raw = pl.DataFrame(
             {
@@ -73,7 +73,7 @@ class TestAnnotateObservationRows:
         assert annotated["support_end"][0] == "2024-01-08T00:00:00"
 
     def test_point_last_observations_anchor_at_window_end(self):
-        from grassmoth_server.actions.prepare_data.rows import annotate_observation_rows
+        from grassmoth.actions.prepare_data.rows import annotate_observation_rows
 
         raw = pl.DataFrame(
             {

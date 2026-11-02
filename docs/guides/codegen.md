@@ -68,8 +68,8 @@ TypeScript exports use the same names.
 
 Public action inputs live in the service
 [`actions/contracts/inputs.py`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/inputs.py);
-scientific outputs live in the library
-[`actions/contracts/bodies.py`](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py).
+the library's resolved inputs and scientific outputs live in
+[`actions/contracts/io.py`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py).
 Request and polling envelopes belong to the service.
 
 The scientific definition types are `DynamicalModelSpec`, `ConstructSpec`, `CausalEdgeSpec`,
@@ -128,7 +128,7 @@ records own their input references and produced artifact revisions.
 Workflow: **edit Python → `bun run codegen` → commit both**.
 
 Follow the [type naming conventions](#type-naming-conventions). `DynamicalModelSpec` is the
-scientific definition retained inside the owning [action result](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py); `ConstructSpec`, `IndicatorSpec`, and
+scientific definition retained inside the owning [action result](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py); `ConstructSpec`, `IndicatorSpec`, and
 `ParameterSpec` retain their canonical ownership inside it, while [`Value`](../../packages/grassmoth/src/grassmoth/artifacts/base.py) supplies the shared immutable
 base. Server-composed views and study records share this export. Frontend code
 owns presentation and [display-only law composition](../../apps/grassmoth-client/AGENTS.md).

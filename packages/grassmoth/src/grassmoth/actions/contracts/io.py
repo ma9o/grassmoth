@@ -1,16 +1,21 @@
-"""Complete scientific outputs of the seven library actions.
+"""Resolved inputs and complete scientific outputs of the seven library actions.
 
-The service supplies HTTP request and polling envelopes; these values contain
-scientific results independently of their transport or persistence.
+Fit and simulate take input records, and prepare_data takes its source table and the
+values its workers extracted; the other actions take artifact values directly. Typed
+failures stay with the modules that construct them. The service resolves saved
+references into these inputs and supplies HTTP request and polling envelopes; these
+values are independent of their transport or persistence.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, ClassVar
 
 from pydantic import ConfigDict, Field
 
 from grassmoth.artifacts.base import Value
+from grassmoth.artifacts.identity import IndicatorId
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec, ModelEditResult
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.history import ObservationData
@@ -27,9 +32,23 @@ from grassmoth.artifacts.reports.profiling import FitProfileReport
 from grassmoth.artifacts.simulation import SimulationReport
 
 if TYPE_CHECKING:
-    from datetime import datetime
+    from datetime import date, datetime
 
     import polars as pl
+    import pyarrow as pa
+
+    from grassmoth.artifacts.identity import GitRef
+    from grassmoth.artifacts.observations.dataset import ObservationDataset
+    from grassmoth.artifacts.reports.inference import InferenceReportCore
+    from grassmoth.artifacts.reports.predictive_provenance import (
+        AuthoredLawProvenance,
+        FittedLawProvenance,
+        MixedLawProvenance,
+        UnknownLawProvenance,
+    )
+    from grassmoth.artifacts.sampling import SamplerSpec
+    from grassmoth.artifacts.simulation import SimulationSpec
+    from grassmoth.models.structure import StructuralSelection
 
 # edit_question
 
@@ -59,6 +78,33 @@ class EditModelOutput(Value):
 
 
 # prepare_data
+
+
+@dataclass(frozen=True)
+class SourceTable:
+    """Captured source rows and the span of support windows they cover.
+
+    The service guarantees a non-null date or datetime ``timestamp`` column when it
+    captures the files. ``start`` is an inclusive and ``end`` an exclusive UTC date.
+    """
+
+    TIME_COLUMN: ClassVar[str] = "timestamp"
+
+    rows: pa.Table
+    start: date | None
+    end: date | None
+
+
+class ExtractedValue(Value):
+    """A single extracted observation for an indicator within a support window."""
+
+    window_start: str = Field(
+        description="The support-window start time (e.g. '2024-01-15T00:00:00')"
+    )
+    indicator_id: IndicatorId = Field(description="Persistent identity of the indicator")
+    value: int | float | bool | str | None = Field(
+        description="Extracted value of the correct datatype"
+    )
 
 
 class PrepareDataOutput(Value):
@@ -130,6 +176,21 @@ class PrepareDataOutput(Value):
 # fit
 
 
+@dataclass(frozen=True)
+class FitInputs:
+    """The scoped model, its question, the data and sampler, and any fit this one continues.
+
+    ``compute_loo_diagnostics`` retains pointwise log-likelihoods for LOO.
+    """
+
+    selection: StructuralSelection
+    question: QuestionSpec
+    data_for_model: ObservationDataset
+    sampler: SamplerSpec
+    compute_loo_diagnostics: bool
+    previous: FitOutput | None = None
+
+
 class FitOutput(Value):
     """A conditioned model, its completed checks, and self-contained inference evidence."""
 
@@ -148,6 +209,32 @@ class FitOutput(Value):
 
 
 # simulate
+
+
+@dataclass(frozen=True)
+class FittedLaw:
+    """Laws retained from a committed fit, with that fit's report."""
+
+    provenance: FittedLawProvenance | MixedLawProvenance
+    report: InferenceReportCore
+
+
+type PredictiveLaw = AuthoredLawProvenance | UnknownLawProvenance | FittedLaw
+
+
+@dataclass(frozen=True)
+class SimulationInputs:
+    """The scoped model, the design with its seed and replicate count, and its laws' ancestry.
+
+    ``fitted`` pairs this revision with its own fit report when a fit produced it.
+    """
+
+    selection: StructuralSelection
+    design: SimulationSpec
+    seed: int
+    num_replicates: int
+    law: PredictiveLaw
+    fitted: tuple[GitRef, InferenceReportCore] | None = None
 
 
 class SimulateOutput(Value):

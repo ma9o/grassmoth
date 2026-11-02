@@ -8,11 +8,11 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from grassmoth.actions.contracts.bodies import FitOutput
+from grassmoth.actions.contracts.io import FitOutput
 from grassmoth.actions.fit.conditioning import condition_model
+from grassmoth.actions.fit.continuation import ContinuationRefusal, resumed_checkpoint
 from grassmoth.actions.fit.diagnostics import segment_diagnostics
 from grassmoth.actions.fit.execution import ModelFitFailure
-from grassmoth.actions.fit.inputs import ContinuationRefusal, resumed_checkpoint
 from grassmoth.artifacts.arrays import ArrayVector, NumericalArray
 from grassmoth.artifacts.identity import ConstructRef, ParameterRef
 from grassmoth.artifacts.model.parameter import ParameterCoordinate
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     import jax
     from jax.stages import Compiled
 
-    from grassmoth.actions.fit.inputs import FitInputs
+    from grassmoth.actions.contracts.io import FitInputs
     from grassmoth.artifacts.continuation import SamplerCheckpoint
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.reports.inference import FitRuntime

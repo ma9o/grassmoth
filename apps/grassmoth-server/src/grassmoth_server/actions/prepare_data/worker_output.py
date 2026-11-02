@@ -3,24 +3,16 @@
 import math
 from typing import assert_never
 
-import polars as pl
 from pydantic import Field, ValidationError
-from typing_extensions import TypedDict
 
-from grassmoth.public import IndicatorId, MeasurementDtype, Value
-from grassmoth_server.actions.prepare_data.aggregations import normalize_level_label
+from grassmoth.public import (
+    ExtractedValue,
+    IndicatorId,
+    MeasurementDtype,
+    Value,
+    normalize_level_label,
+)
 from grassmoth_server.actions.prepare_data.context import MeasurementContext
-
-
-class ExtractionRow(TypedDict):
-    """Pre-annotation dataframe row emitted by both extraction engines."""
-
-    indicator_id: str
-    value: str | None
-    timestamp: str
-
-
-EXTRACTION_ROW_SCHEMA = {"indicator_id": pl.Utf8, "value": pl.Utf8, "timestamp": pl.Utf8}
 
 
 class WindowExtraction(Value):
@@ -43,28 +35,16 @@ class WorkerOutput(Value):
         description="Extracted observations for indicators (one per support window per indicator)",
     )
 
-    def to_dataframe(self) -> pl.DataFrame:
-        """Convert extractions to a Polars DataFrame.
-
-        Returns:
-            DataFrame with columns: indicator (Utf8), value (Utf8), timestamp (Utf8).
-            The timestamp column contains the support-window start time.
-            Value column is stored as string for downstream encoding.
-        """
-        if not self.extractions:
-            return pl.DataFrame(schema=EXTRACTION_ROW_SCHEMA)
-
-        rows = []
-        for e in self.extractions:
-            rows.append(
-                {
-                    "indicator_id": e.indicator_id,
-                    "value": str(e.value) if e.value is not None else None,
-                    "timestamp": e.window_start,
-                }
+    def extracted(self) -> tuple[ExtractedValue, ...]:
+        """The validated values as prepare_data receives them."""
+        return tuple(
+            ExtractedValue(
+                window_start=extraction.window_start,
+                indicator_id=extraction.indicator_id,
+                value=extraction.value,
             )
-
-        return pl.DataFrame(rows, schema=EXTRACTION_ROW_SCHEMA)
+            for extraction in self.extractions
+        )
 
 
 def _check_dtype_match(value: object, expected_dtype: MeasurementDtype) -> bool:

@@ -37,7 +37,7 @@ def test_authored_model_has_no_inference_report(monkeypatch, tmp_path):
 
 @pytest.mark.inference(concern="sampling")
 def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(monkeypatch, tmp_path):
-    from grassmoth.actions.contracts.bodies import FitOutput
+    from grassmoth.actions.contracts.io import FitOutput
     from grassmoth.actions.fit.action import FitResult, inference_report
     from grassmoth.artifacts.observations.reference import DataRef
     from grassmoth.artifacts.reports.inference import InferenceEvidence

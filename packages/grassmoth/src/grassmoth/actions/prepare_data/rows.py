@@ -7,15 +7,33 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from grassmoth.public import (
-    AnchorPolicy,
-    ObservationDataset,
-    ObservationInstant,
-    ResolvedObservationSpec,
-)
+from grassmoth.artifacts.observations.dataset import ObservationDataset
+from grassmoth.artifacts.observations.semantics import AnchorPolicy
+from grassmoth.artifacts.observations.time import ObservationInstant
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+    from grassmoth.actions.contracts.io import ExtractedValue
+    from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
+
+# Computed and worker extraction both emit one value per indicator and support-window start.
+EXTRACTION_ROW_SCHEMA = {"indicator_id": pl.Utf8, "value": pl.Utf8, "timestamp": pl.Utf8}
+
+
+def extracted_rows(values: Sequence[ExtractedValue]) -> pl.DataFrame:
+    """Lay out the workers' values as extraction rows, as text for label encoding."""
+    return pl.DataFrame(
+        [
+            {
+                "indicator_id": value.indicator_id,
+                "value": None if value.value is None else str(value.value),
+                "timestamp": value.window_start,
+            }
+            for value in values
+        ],
+        schema=EXTRACTION_ROW_SCHEMA,
+    )
 
 
 def prepared_time_origin(data: pl.DataFrame, start: date | None) -> datetime:
@@ -71,7 +89,7 @@ def support_window_tick_frame(
     return ticks
 
 
-def bucket_by_clock(
+def support_windows(
     df: pl.DataFrame,
     model_clock: str,
     time_col: str,

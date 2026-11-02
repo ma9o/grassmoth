@@ -1,35 +1,15 @@
-"""One fit's resolved inputs and the rules for continuing a previous fit."""
+"""The rules for continuing a previous fit."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.continuation import TransferredTuning
 
 if TYPE_CHECKING:
-    from grassmoth.actions.contracts.bodies import FitOutput
+    from grassmoth.actions.contracts.io import FitInputs
     from grassmoth.artifacts.continuation import SamplerCheckpoint
-    from grassmoth.artifacts.model.question import QuestionSpec
-    from grassmoth.artifacts.observations.dataset import ObservationDataset
-    from grassmoth.artifacts.sampling import SamplerSpec
-    from grassmoth.models.structure import StructuralSelection
-
-
-@dataclass(frozen=True)
-class FitInputs:
-    """The scoped model, its question, the data and sampler, and any fit this one continues.
-
-    ``compute_loo_diagnostics`` retains pointwise log-likelihoods for LOO.
-    """
-
-    selection: StructuralSelection
-    question: QuestionSpec
-    data_for_model: ObservationDataset
-    sampler: SamplerSpec
-    compute_loo_diagnostics: bool
-    previous: FitOutput | None = None
 
 
 class ContinuationRefusal(Value):

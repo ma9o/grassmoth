@@ -5,15 +5,17 @@ from datetime import datetime
 import polars as pl
 import pytest
 
+from grassmoth.actions.contracts.io import SourceTable
+from grassmoth.actions.prepare_data.aggregations import compute_indicators
+from grassmoth.actions.prepare_data.rows import annotate_observation_rows, extracted_rows
+from grassmoth.artifacts.observations.preparation import DataPreparationSpec
 from grassmoth.artifacts.observations.spec import (
     AuthoredObservationSpec,
     NumericMeasurement,
     ResolvedObservationSpec,
 )
 from grassmoth.observations.quality.profile import validate_extraction
-from grassmoth_server.actions.prepare_data.aggregations import compute_indicators
 from grassmoth_server.actions.prepare_data.context import MeasurementContext
-from grassmoth_server.actions.prepare_data.rows import annotate_observation_rows
 from grassmoth_server.actions.prepare_data.worker_output import validate_worker_output
 from grassmoth_test_support.helpers import make_model
 
@@ -85,7 +87,12 @@ def test_computed_and_semantic_extraction_preserve_the_same_subject_after_rename
     outputs = []
     for label in ("Mood", "Renamed mood"):
         measurement = _measurement(label)
-        computed = compute_indicators(raw, measurement, "timestamp")
+        computed = compute_indicators(
+            SourceTable(rows=raw.to_arrow(), start=None, end=None),
+            DataPreparationSpec(
+                default_window=measurement.model_clock, variables=measurement.indicators
+            ),
+        )
         assert computed["indicator_id"].to_list() == ["indicator:mood"]
         worker, errors = validate_worker_output(
             {
@@ -101,7 +108,7 @@ def test_computed_and_semantic_extraction_preserve_the_same_subject_after_rename
         )
         assert errors == []
         assert worker is not None
-        semantic = worker.to_dataframe()
+        semantic = extracted_rows(worker.extracted())
         assert semantic["indicator_id"].to_list() == ["indicator:mood"]
         outputs.append(
             annotate_observation_rows(

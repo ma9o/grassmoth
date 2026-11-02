@@ -1,6 +1,6 @@
 """Retain the authored question as a complete scientific action result."""
 
-from grassmoth.actions.contracts.bodies import EditQuestionOutput
+from grassmoth.actions.contracts.io import EditQuestionOutput
 from grassmoth.artifacts.model.question import QuestionSpec
 
 

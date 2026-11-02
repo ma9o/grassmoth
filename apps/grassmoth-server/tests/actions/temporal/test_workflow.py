@@ -12,7 +12,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from grassmoth.actions.contracts.bodies import EditModelOutput, PrepareDataOutput
+from grassmoth.actions.contracts.io import EditModelOutput, PrepareDataOutput
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.question import QuestionSpec

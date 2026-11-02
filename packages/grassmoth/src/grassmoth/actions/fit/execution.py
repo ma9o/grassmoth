@@ -18,7 +18,7 @@ from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailu
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
-    from grassmoth.actions.fit.inputs import FitInputs
+    from grassmoth.actions.contracts.io import FitInputs
     from grassmoth.artifacts.continuation import SamplerCheckpoint
     from grassmoth.compute.context import ModelExecutionContext
     from grassmoth.models.ssm.inference.types import MCMCPosterior

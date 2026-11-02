@@ -130,11 +130,11 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
             result_path,
             json.dumps(
                 {
-                    "dataframe": [
+                    "extractions": [
                         {
                             "indicator_id": indicator["observation"]["id"],
                             "value": scores[window_start],
-                            "timestamp": window_start,
+                            "window_start": window_start,
                         },
                     ]
                 }
@@ -184,7 +184,7 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
     )
     assert metadata.variables[1].levels == ("low", "medium", "high")
     assert set(profile.indicators) == {"indicator:steps", "indicator:stress"}
-    from grassmoth.actions.contracts.bodies import PrepareDataOutput
+    from grassmoth.actions.contracts.io import PrepareDataOutput
 
     labels = preparation_messages(
         profile, store.read_result(effects.result, PrepareDataOutput).extraction, datetime.now(UTC)
@@ -203,8 +203,8 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
 def test_declared_categorical_codebook_validates_and_encodes_normalized_labels(
     value, expected_code
 ):
-    from grassmoth_server.actions.prepare_data.materialization import materialize_panel
-    from grassmoth_server.actions.prepare_data.rows import annotate_observation_rows
+    from grassmoth.actions.prepare_data.materialization import materialize_panel
+    from grassmoth.actions.prepare_data.rows import annotate_observation_rows, extracted_rows
     from grassmoth_server.actions.prepare_data.worker_output import validate_worker_output
 
     preparation = DataPreparationSpec(
@@ -224,10 +224,6 @@ def test_declared_categorical_codebook_validates_and_encodes_normalized_labels(
             ),
         ),
     )
-    from pydantic import TypeAdapter
-
-    from grassmoth_server.actions.prepare_data.records import ObservationRecord
-
     context = extraction_context(
         FilePreparationSpec(source=FileSourceRef(files=("source.csv",)), definition=preparation)
     )
@@ -252,8 +248,6 @@ def test_declared_categorical_codebook_validates_and_encodes_normalized_labels(
     assert errors == []
     assert output is not None
     rows = annotate_observation_rows(
-        output.to_dataframe(), preparation.observation_schema()
-    ).to_dicts()
-    assert materialize_panel(TypeAdapter(list[ObservationRecord]).validate_python(rows), context)[
-        "value"
-    ].to_list() == [expected_code]
+        extracted_rows(output.extracted()), preparation.observation_schema()
+    )
+    assert materialize_panel(rows, preparation)["value"].to_list() == [expected_code]

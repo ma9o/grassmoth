@@ -4,6 +4,7 @@ import polars as pl
 import pytest
 from polars.testing import assert_frame_equal
 
+from grassmoth.actions.prepare_data.rows import extracted_rows
 from grassmoth_server.actions.prepare_data.context import MeasurementContext
 from grassmoth_server.actions.prepare_data.worker_output import (
     _check_dtype_match,
@@ -78,7 +79,7 @@ def test_empty_output_keeps_typed_frame_columns(payload):
     assert errors == []
     assert output is not None
     assert_frame_equal(
-        output.to_dataframe(),
+        extracted_rows(output.extracted()),
         pl.DataFrame(
             schema={"indicator_id": pl.String, "value": pl.String, "timestamp": pl.String}
         ),
@@ -117,7 +118,7 @@ def test_mixed_output_preserves_identity_windows_missingness_and_normalized_valu
     assert errors == []
     assert output is not None
     assert_frame_equal(
-        output.to_dataframe(),
+        extracted_rows(output.extracted()),
         pl.DataFrame(
             {
                 "indicator_id": [f"indicator:{name}" for name, _, _ in rows],

@@ -7,7 +7,7 @@ from unittest.mock import Mock
 import modal
 import pytest
 
-from grassmoth.actions.fit.inputs import FitInputs
+from grassmoth.actions.contracts.io import FitInputs
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.sampling import (
     GuidedPathSpec,

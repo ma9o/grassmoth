@@ -224,7 +224,7 @@ def test_an_off_path_model_edit_retains_its_pruning_evidence(tmp_path, monkeypat
     from grassmoth_server.study.records import Applied
 
     assert isinstance(result, Applied)
-    from grassmoth.actions.contracts.bodies import EditModelOutput
+    from grassmoth.actions.contracts.io import EditModelOutput
 
     assert store.read_result(result.result, EditModelOutput).pruning.constructs == (
         dynamical_model_spec.constructs[2].id,

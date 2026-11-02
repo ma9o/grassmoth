@@ -5,7 +5,7 @@ from typing import Any, cast
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from grassmoth_server.actions.prepare_data.worker_output import ExtractionRow, WorkerOutput
+from grassmoth_server.actions.prepare_data.worker_output import WindowExtraction, WorkerOutput
 from grassmoth_server.actions.temporal.extraction.activities import OpenRouterActivities
 from grassmoth_server.actions.temporal.extraction.messages import (
     ExtractionChunkWorkflowInput,
@@ -607,10 +607,10 @@ def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_p
     assert result.reused is reused
     assert result.result_ref is not None
     assert (
-        TypeAdapter[list[ExtractionRow]](list[ExtractionRow]).validate_python(
-            storage.read_json(result.result_ref)["dataframe"]
-        )[0]["value"]
-        == "1000"
+        TypeAdapter(list[WindowExtraction])
+        .validate_python(storage.read_json(result.result_ref)["extractions"])[0]
+        .value
+        == 1000
     )
     from grassmoth_server.llm.traces import LLMTrace
 

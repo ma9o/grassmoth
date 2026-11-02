@@ -220,7 +220,7 @@ def _identity_owners(model):
 
 
 def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monkeypatch):
-    from grassmoth.actions.contracts.bodies import EditModelOutput
+    from grassmoth.actions.contracts.io import EditModelOutput
     from grassmoth_server.study.records import AttemptRecord, EditAttempt
 
     dynamical_model_spec = (
@@ -522,7 +522,7 @@ def _identification():
 
 
 def test_identification_keeps_entity_ids_after_rename(workspace):
-    from grassmoth.actions.contracts.bodies import EditModelOutput
+    from grassmoth.actions.contracts.io import EditModelOutput
     from grassmoth.artifacts.reports.model_checks import ModelCheckReport
 
     store, repository = ArtifactStore(workspace), StudyRepository(workspace)

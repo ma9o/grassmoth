@@ -99,7 +99,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
         "panel": panel.revision,
         "question": question.revision,
     }
-    from grassmoth.actions.contracts.bodies import FitOutput
+    from grassmoth.actions.contracts.io import FitOutput
     from grassmoth_server.study.queries import data
     from grassmoth_server_test_support.action import model_findings
 

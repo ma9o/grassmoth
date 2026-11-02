@@ -3892,7 +3892,7 @@
         ],
         "title": "DataDiffOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14168,7 +14168,7 @@
         ],
         "title": "EditModelOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -14348,7 +14348,7 @@
         ],
         "title": "EditQuestionOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -15662,7 +15662,7 @@
         ],
         "title": "FitOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -19062,7 +19062,7 @@
         ],
         "title": "ModelDiffOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -22610,7 +22610,7 @@
         ],
         "title": "PrepareDataOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -24243,7 +24243,7 @@
         ],
         "title": "SimulateOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -35521,7 +35521,7 @@
         ],
         "title": "EditModelOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -35569,7 +35569,7 @@
         ],
         "title": "FitOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -35821,7 +35821,7 @@
         ],
         "title": "ModelDiffOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -36099,7 +36099,7 @@
         ],
         "title": "PrepareDataOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
@@ -36192,7 +36192,7 @@
         ],
         "title": "SimulateOutput",
         "type": "object",
-        "x-python-module": "grassmoth.actions.contracts.bodies",
+        "x-python-module": "grassmoth.actions.contracts.io",
         "x-layer": "transport",
         "x-concern": "api_tools"
       },

@@ -3,7 +3,7 @@
 from pydantic import ValidationError
 
 from grassmoth.actions.checks import model_check_report
-from grassmoth.actions.contracts.bodies import EditModelOutput
+from grassmoth.actions.contracts.io import EditModelOutput
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.model.dynamical_model_spec import (
     DynamicalModelSpec,

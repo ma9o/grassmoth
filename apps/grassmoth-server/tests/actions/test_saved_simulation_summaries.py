@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 import numpy as np
 import pytest
 
-from grassmoth.actions.contracts.bodies import SimulateOutput
+from grassmoth.actions.contracts.io import SimulateOutput
 from grassmoth.actions.simulate.summaries import simulation_summary
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.model.construct import replace_constructs

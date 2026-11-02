@@ -1,4 +1,4 @@
-"""Request envelopes and call identity for the bodies in ``actions.contracts.bodies``."""
+"""Request envelopes and call identity for the outputs in ``grassmoth.actions.contracts.io``."""
 
 from __future__ import annotations
 

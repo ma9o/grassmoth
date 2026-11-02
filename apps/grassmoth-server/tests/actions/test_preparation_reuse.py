@@ -10,6 +10,9 @@ import polars as pl
 import pytest
 from pydantic import TypeAdapter
 
+from grassmoth.actions.contracts.io import SourceTable
+from grassmoth.actions.prepare_data.aggregations import compute_indicators
+from grassmoth.actions.prepare_data.rows import annotate_observation_rows, prepared_time_origin
 from grassmoth.artifacts.observations.preparation import (
     ComputedExtractionSpec,
     DataPreparationSpec,
@@ -18,9 +21,8 @@ from grassmoth.artifacts.observations.preparation import (
 )
 from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
 from grassmoth_server.actions.contracts.preparation import FilePreparationSpec, FileSourceRef
-from grassmoth_server.actions.prepare_data.aggregations import compute_indicators
 from grassmoth_server.actions.prepare_data.context import extraction_context
-from grassmoth_server.actions.prepare_data.worker_output import ExtractionRow
+from grassmoth_server.actions.prepare_data.worker_output import WindowExtraction
 from grassmoth_server.actions.temporal.extraction.activities import (
     finalize_extraction_chunk_activity,
     plan_measurements_activity,
@@ -150,14 +152,14 @@ def test_extraction_cache_is_shared_and_only_changed_effective_requests_miss(tmp
         )
         again = run_async(finalize_extraction_chunk_activity(request))
         assert (
-            storage.read_json(again.result_ref)["dataframe"]
-            == storage.read_json(completed.result_ref)["dataframe"]
+            storage.read_json(again.result_ref)["extractions"]
+            == storage.read_json(completed.result_ref)["extractions"]
         )
         assert (
-            TypeAdapter[list[ExtractionRow]](list[ExtractionRow]).validate_python(
-                storage.read_json(again.result_ref)["dataframe"]
-            )[0]["value"]
-            == "7"
+            TypeAdapter(list[WindowExtraction])
+            .validate_python(storage.read_json(again.result_ref)["extractions"])[0]
+            .value
+            == 7
         )
     same = plan("second", (_variable("x"),), "2026-01-03")
     assert all(chunk.cached_result_ref for chunk in same.chunks)
@@ -201,22 +203,18 @@ def test_span_keeps_complete_windows_and_never_fills_from_excluded_history():
             how_to_measure="Read the daily score", source_columns=("x",), fill_null="forward"
         )
     )
-    context = extraction_context(
-        FilePreparationSpec(
-            source=FileSourceRef(
-                files=("source.csv",), start=date(2026, 1, 2), end=date(2026, 1, 4)
-            ),
-            definition=DataPreparationSpec(default_window="1d", variables=(variable,)),
-        )
+    span = FileSourceRef(files=("source.csv",), start=date(2026, 1, 2), end=date(2026, 1, 4))
+    bounded = compute_indicators(
+        SourceTable(rows=raw.to_arrow(), start=span.start, end=span.end),
+        DataPreparationSpec(default_window="1d", variables=(variable,)),
     )
-    bounded = compute_indicators(raw, context, "timestamp")
     assert bounded["timestamp"].to_list() == ["2026-01-02T00:00:00", "2026-01-03T00:00:00"]
     assert bounded["value"].to_list() == [None, "2"]
     from grassmoth_server.actions.prepare_data.planning import prepare_semantic_chunks
 
     semantic_context = extraction_context(
         FilePreparationSpec(
-            source=context.source,
+            source=span,
             definition=DataPreparationSpec(default_window="1d", variables=(_variable("x"),)),
         )
     )
@@ -228,11 +226,11 @@ def test_span_keeps_complete_windows_and_never_fills_from_excluded_history():
     )
     assert windows == [["2026-01-03T00:00:00"]]
     assert len(texts) == 1
-    assert empty_output.to_dataframe().to_dicts() == [
-        {"indicator_id": "indicator:x", "timestamp": "2026-01-02T00:00:00", "value": None}
-    ]
-    from grassmoth_server.actions.prepare_data.rows import prepared_time_origin
-
+    assert empty_output.extractions == (
+        WindowExtraction(
+            indicator_id="indicator:x", window_start="2026-01-02T00:00:00", value=None
+        ),
+    )
     assert prepared_time_origin(pl.DataFrame(), date(2026, 1, 2)) == datetime(
         2026, 1, 2, tzinfo=UTC
     )
@@ -339,15 +337,12 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
             source_columns=variable.extraction.source_columns,
         ),
     )
-    computed_context = extraction_context(
-        FilePreparationSpec(
-            source=preparation.source,
-            definition=DataPreparationSpec(default_window="2d", variables=(computed_variable,)),
-        )
+    computed = compute_indicators(
+        SourceTable(
+            rows=raw.to_arrow(), start=preparation.source.start, end=preparation.source.end
+        ),
+        DataPreparationSpec(default_window="2d", variables=(computed_variable,)),
     )
-    computed = compute_indicators(raw, computed_context, "timestamp")
-    from grassmoth_server.actions.prepare_data.rows import annotate_observation_rows
-
     rows = annotate_observation_rows(computed, preparation.definition.observation_schema())
     assert rows["anchor_time"].to_list() == [value.isoformat() for value in panel["anchor_time"]]
     assert computed["value"].to_list() == [None, "2", None]

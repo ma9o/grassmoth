@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from grassmoth.actions.contracts.bodies import EditModelOutput
+from grassmoth.actions.contracts.io import EditModelOutput
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.reference import DataRef
@@ -101,7 +101,7 @@ def test_fit_checks_reuse_the_retained_input_report_without_rebuilding(tmp_path,
         question=QuestionCheckReport(findings=()),
     )
     from grassmoth.actions import checks as library_checks
-    from grassmoth.actions.contracts.bodies import FitOutput
+    from grassmoth.actions.contracts.io import FitOutput
     from grassmoth_server.actions.contracts.inputs import FitInput, NewFitTarget
     from grassmoth_server.actions.contracts.requests import FitRequest
     from grassmoth_server.actions.temporal.study.activities import evaluate_model_checks_activity

@@ -1,4 +1,4 @@
-"""Server preparation preserves one origin across selected model indicators."""
+"""Preparation preserves one origin across selected model indicators."""
 
 from datetime import UTC, datetime
 
@@ -14,10 +14,10 @@ from grassmoth_test_support.model import one_state_gaussian_model
 
 @pytest.mark.contract
 def test_selected_indicators_keep_the_panel_origin_and_initial_grid_point():
+    from grassmoth.actions.prepare_data.rows import prepared_time_origin
     from grassmoth.models.ssm.preparation.observations import (
         augment_wide_data_with_support_boundaries,
     )
-    from grassmoth_server.actions.prepare_data.rows import prepared_time_origin
 
     early = one_state_gaussian_model()
     late = DynamicalModelSpec.model_validate_json(

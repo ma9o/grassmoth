@@ -229,7 +229,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
         assert inputs.data_for_model.recorded.frame.equals(panel)
         assert inputs.data_for_model.time_origin == selected.time_origin
         from grassmoth.actions.checks import fit_check_report
-        from grassmoth.actions.contracts.bodies import FitOutput
+        from grassmoth.actions.contracts.io import FitOutput
 
         return FitOutput(
             dynamical_model_spec=dynamical_model_spec,

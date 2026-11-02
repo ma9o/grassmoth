@@ -3,18 +3,18 @@
 import polars as pl
 import pytest
 
+from grassmoth.actions.contracts.io import SourceTable
+from grassmoth.actions.prepare_data.materialization import (
+    materialize_panel,
+    recorded_observations,
+)
 from grassmoth.artifacts.observations.preparation import (
+    DataPreparationSpec,
     DataVariableSpec,
     RecordedExtractionSpec,
 )
 from grassmoth.artifacts.observations.rows import validate_observation_rows
 from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
-from grassmoth_server.actions.contracts.preparation import FileSourceRef
-from grassmoth_server.actions.prepare_data.context import MeasurementContext
-from grassmoth_server.actions.prepare_data.materialization import (
-    materialize_panel,
-    recorded_observations,
-)
 
 pytestmark = pytest.mark.contract
 
@@ -38,9 +38,7 @@ def test_recorded_readings_preserve_irregular_overlapping_support_and_missing_va
             ("interval", "mean", "start"),
         )
     )
-    context = MeasurementContext(
-        source=FileSourceRef(files=("input/recorded.csv",)), model_clock="1d", indicators=variables
-    )
+    definition = DataPreparationSpec(default_window="1d", variables=variables)
     data = pl.DataFrame(
         {
             "timestamp": [
@@ -53,10 +51,11 @@ def test_recorded_readings_preserve_irregular_overlapping_support_and_missing_va
             "interval": [1.0, 2.0, 3.0],
         }
     )
-    rows = recorded_observations(data, context)
+    rows = recorded_observations(
+        SourceTable(rows=data.to_arrow(), start=None, end=None), definition
+    )
     panel = validate_observation_rows(
-        materialize_panel(rows, context),
-        tuple(v.observation.resolved(context.window(v)) for v in variables),
+        materialize_panel(rows, definition), definition.observation_schema()
     )
     assert panel.height == 6
     point = panel.filter(pl.col("indicator_id") == "indicator:point")

@@ -17,7 +17,7 @@ from grassmoth.models.causal.proofs import (
 )
 
 if TYPE_CHECKING:
-    from grassmoth.actions.simulate.inputs import SimulationInputs
+    from grassmoth.actions.contracts.io import SimulationInputs
     from grassmoth.artifacts.identity import ConstructId, IndicatorId
     from grassmoth.artifacts.simulation import SimulationArm
 

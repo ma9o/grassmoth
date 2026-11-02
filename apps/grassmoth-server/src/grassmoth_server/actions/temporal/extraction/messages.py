@@ -13,8 +13,7 @@ from grassmoth_server.actions.contracts.inputs import PrepareDataInput
 from grassmoth_server.actions.contracts.preparation import FilePreparationSpec, FileSourceRef
 from grassmoth_server.actions.contracts.progress import ProgressEvent
 from grassmoth_server.actions.prepare_data.context import MeasurementContext
-from grassmoth_server.actions.prepare_data.records import ObservationRecord
-from grassmoth_server.actions.prepare_data.worker_output import ExtractionRow, WorkerOutput
+from grassmoth_server.actions.prepare_data.worker_output import WorkerOutput
 from grassmoth_server.llm.specs import EmbeddedLLMSpec
 
 
@@ -142,9 +141,6 @@ class MeasurementChunkContext(BaseModel):
 class MeasurementsFile(BaseModel):
     """Materialization inputs retained by the existing plan's scratch transport."""
 
-    measurement_structure: MeasurementContext
     preparation: FilePreparationSpec
-    computed_dicts: list[ExtractionRow]
-    recorded_dicts: list[ObservationRecord]
     empty_output: WorkerOutput
     chunks: list[MeasurementChunkRef]

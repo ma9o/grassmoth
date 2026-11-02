@@ -189,7 +189,7 @@ def test_question_publication_admits_one_call_and_reuses_its_result(study):
 def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, comparison_action):
     from temporalio.exceptions import ActivityError, ApplicationError
 
-    from grassmoth.actions.contracts.bodies import DataDiffOutput, ModelDiffOutput
+    from grassmoth.actions.contracts.io import DataDiffOutput, ModelDiffOutput
     from grassmoth.artifacts.identity import IndicatorRef
     from grassmoth.artifacts.reports.checks import Evaluated
     from grassmoth.artifacts.reports.data_comparison import (

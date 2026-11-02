@@ -766,7 +766,7 @@ def test_fit_resolves_incomplete_model_before_panel_preparation(monkeypatch):
         raise AssertionError("panel prepared before fit capability was resolved")
 
     monkeypatch.setattr(runtime, "bind_panel", unexpected_panel)
-    from grassmoth.actions.fit.inputs import FitInputs
+    from grassmoth.actions.contracts.io import FitInputs
     from grassmoth.artifacts.model.question import QuestionSpec
     from grassmoth_test_support.helpers import fixture_entity_id
 

@@ -8,9 +8,8 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.actions.contracts.bodies import SimulateOutput
+from grassmoth.actions.contracts.io import SimulateOutput, SimulationInputs
 from grassmoth.actions.fit.conditioning import condition_model
-from grassmoth.actions.simulate.inputs import SimulationInputs
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance

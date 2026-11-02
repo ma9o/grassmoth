@@ -1,6 +1,6 @@
 """Directional comparison of two supplied scientific documents."""
 
-from grassmoth.actions.contracts.bodies import ModelDiffOutput
+from grassmoth.actions.contracts.io import ModelDiffOutput
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 
 

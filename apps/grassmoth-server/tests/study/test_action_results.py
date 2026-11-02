@@ -8,7 +8,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from grassmoth.actions.contracts.bodies import EditQuestionOutput
+from grassmoth.actions.contracts.io import EditQuestionOutput
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth_server.actions.contracts.effects import ActionEffects
@@ -186,10 +186,10 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
             },
         )
     )
-    from grassmoth.actions.prepare_data.action import prepare_data
+    from grassmoth.actions.prepare_data.action import prepared_output
     from grassmoth.artifacts.observations.dataset import ObservationDataset
 
-    prepared = prepare_data(
+    prepared = prepared_output(
         ObservationDataset.from_frame(
             expected, metadata.variables, time_origin=metadata.time_origin
         ),
@@ -278,7 +278,7 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
 def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
     monkeypatch, tmp_path, values
 ):
-    from grassmoth.actions.contracts.bodies import EditModelOutput
+    from grassmoth.actions.contracts.io import EditModelOutput
     from grassmoth.artifacts.identity import GitOid
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth_server.actions.contracts.inputs import EditModelInput

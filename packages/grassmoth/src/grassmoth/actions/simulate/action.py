@@ -6,8 +6,7 @@ from typing import TYPE_CHECKING, cast
 
 import numpy as np
 
-from grassmoth.actions.contracts.bodies import SimulateOutput
-from grassmoth.actions.simulate.inputs import FittedLaw
+from grassmoth.actions.contracts.io import FittedLaw, SimulateOutput
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.simulation import (
     FitReliability,
@@ -29,7 +28,7 @@ if TYPE_CHECKING:
     import dynestyx as dsx
     from jax import Array
 
-    from grassmoth.actions.simulate.inputs import PredictiveLaw, SimulationInputs
+    from grassmoth.actions.contracts.io import PredictiveLaw, SimulationInputs
     from grassmoth.compute.budget import ComputeBudget
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
     from grassmoth.models.structure import StructuralSelection

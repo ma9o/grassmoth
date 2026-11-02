@@ -1,6 +1,6 @@
 """Compare supplied observation histories without generation or persistence."""
 
-from grassmoth.actions.contracts.bodies import DataDiffOutput
+from grassmoth.actions.contracts.io import DataDiffOutput
 from grassmoth.artifacts.identity import IndicatorId
 from grassmoth.artifacts.observations.comparison import Dataset
 from grassmoth.artifacts.reports.data_comparison import DataComparisonReport

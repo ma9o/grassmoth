@@ -155,7 +155,7 @@ def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeyp
     )
     assert checks.question is not None
     assert all(finding.code not in {"window", "range"} for finding in checks.question.findings)
-    from grassmoth.actions.contracts.bodies import EditModelOutput
+    from grassmoth.actions.contracts.io import EditModelOutput
 
     messages = edit_messages(
         checks,

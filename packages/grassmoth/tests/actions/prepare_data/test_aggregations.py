@@ -8,23 +8,23 @@ from datetime import datetime
 import polars as pl
 import pytest
 
-from grassmoth.artifacts.identity import IndicatorId
-from grassmoth.artifacts.observations.semantics import SummaryOperator
-from grassmoth.artifacts.observations.spec import LabeledMeasurement, NumericMeasurement
-from grassmoth_server.actions.contracts.preparation import FilePreparationSpec
-from grassmoth_server.actions.prepare_data.aggregations import (
+from grassmoth.actions.contracts.io import SourceTable
+from grassmoth.actions.prepare_data.aggregations import (
     _build_agg_expr,
     _encode_non_continuous,
 )
-from grassmoth_server.actions.prepare_data.aggregations import (
+from grassmoth.actions.prepare_data.aggregations import (
     compute_indicators as _compute_indicators,
 )
-from grassmoth_server.actions.prepare_data.context import extraction_context
+from grassmoth.artifacts.identity import IndicatorId
+from grassmoth.artifacts.observations.preparation import DataPreparationSpec
+from grassmoth.artifacts.observations.semantics import SummaryOperator
+from grassmoth.artifacts.observations.spec import LabeledMeasurement, NumericMeasurement
 
 pytestmark = pytest.mark.contract
 
 
-def compute_indicators(raw_df, indicators, model_clock, time_col, **kwargs):
+def compute_indicators(raw_df, indicators, model_clock):
     variables = indicators
     if not variables:
         variables = [
@@ -38,13 +38,12 @@ def compute_indicators(raw_df, indicators, model_clock, time_col, **kwargs):
                 "extraction": {"kind": "semantic", "how_to_measure": "Unused semantic variable"},
             }
         ]
-    preparation = FilePreparationSpec.model_validate(
-        {
-            "source": {"files": ["source.csv"], **kwargs},
-            "definition": {"default_window": model_clock, "variables": variables},
-        }
+    definition = DataPreparationSpec.model_validate(
+        {"default_window": model_clock, "variables": variables}
     )
-    return _compute_indicators(raw_df, extraction_context(preparation), time_col)
+    return _compute_indicators(
+        SourceTable(rows=raw_df.to_arrow(), start=None, end=None), definition
+    )
 
 
 def _make_df(values: list[float]) -> pl.DataFrame:
@@ -248,7 +247,7 @@ class TestComputeIndicators:
                 },
             },
         ]
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
         assert result.columns == ["indicator_id", "value", "timestamp"]
         assert result["indicator_id"].to_list() == ["indicator:c21b43949b3712e734c8"] * 3
         # Day 1: mean(72, 85, 68) = 75.0
@@ -273,7 +272,7 @@ class TestComputeIndicators:
                 },
             },
         ]
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
         values = [float(v) for v in result["value"].to_list()]
         # Day 1: 1000+3000+500=4500, Day 2: 2000+4000=6000, Day 3: 1500
         assert values == [4500.0, 6000.0, 1500.0]
@@ -309,7 +308,7 @@ class TestComputeIndicators:
                 },
             },
         ]
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
         # 3 ticks * 2 indicators = 6 rows
         assert len(result) == 6
         assert set(result["indicator_id"].to_list()) == {
@@ -335,7 +334,7 @@ class TestComputeIndicators:
                 },
             },
         ]
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
         assert result.columns == ["indicator_id", "value", "timestamp"]
         assert result.schema["indicator_id"] == pl.Utf8
         assert result.schema["value"] == pl.Utf8
@@ -344,7 +343,7 @@ class TestComputeIndicators:
     def test_empty_indicators(self):
         """Empty indicator list returns empty DataFrame with correct schema."""
         df = _make_raw_df()
-        result = compute_indicators(df, [], "1d", "timestamp")
+        result = compute_indicators(df, [], "1d")
         assert result.columns == ["indicator_id", "value", "timestamp"]
         assert len(result) == 0
 
@@ -376,7 +375,7 @@ class TestComputeIndicators:
             }
         ]
         with pytest.raises(ValueError, match="aggregation"):
-            compute_indicators(df, indicators, "1d", "timestamp")
+            compute_indicators(df, indicators, "1d")
 
     def test_missing_source_column(self):
         """Missing source column is skipped with warning, not crash."""
@@ -396,7 +395,7 @@ class TestComputeIndicators:
                 },
             },
         ]
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
         assert len(result) == 0
 
     def test_null_source_values(self):
@@ -426,7 +425,7 @@ class TestComputeIndicators:
                 },
             }
         ]
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
         assert len(result) == 1
         # mean(72, 68) = 70.0 (null ignored)
         assert abs(float(result["value"][0]) - 70.0) < 0.01
@@ -459,7 +458,7 @@ class TestComputeIndicators:
             }
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert result["value"].to_list() == ["home"]
 
@@ -490,7 +489,7 @@ class TestComputeIndicators:
             }
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert result["value"].to_list() == ["clinic"]
 
@@ -521,7 +520,7 @@ class TestComputeIndicators:
             }
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert result["value"].to_list() == ["2"]
 
@@ -553,7 +552,7 @@ class TestComputeIndicators:
             }
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert result["value"].to_list() == ["2"]
 
@@ -587,7 +586,7 @@ class TestComputeIndicators:
             }
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         values = [float(value) for value in result["value"].to_list()]
         assert values[0] == pytest.approx((80 + (120 - 80) / 3 + 90 + (150 - 90) / 3) / 2)
@@ -625,7 +624,7 @@ class TestComputeIndicators:
             }
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert result["timestamp"].to_list() == [
             "2024-01-01T00:00:00",
@@ -675,7 +674,7 @@ class TestComputeIndicators:
             },
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         counts = result.filter(pl.col("indicator_id") == "indicator:e8bcfd4304d709a5cce3")
         means = result.filter(pl.col("indicator_id") == "indicator:422841bed8b563beeec0")
@@ -716,7 +715,7 @@ class TestComputeIndicators:
             }
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert result["timestamp"].to_list() == [
             "2024-01-01T00:00:00",
@@ -759,7 +758,7 @@ class TestComputeIndicators:
         ]
 
         with pytest.raises(ValueError, match="no supported observation semantics"):
-            compute_indicators(df, indicators, "1d", "timestamp")
+            compute_indicators(df, indicators, "1d")
 
     def test_computed_rule_cannot_bypass_summary_validation_with_a_dict(self):
         df = pl.DataFrame({"timestamp": [datetime(2024, 1, 1)], "reading": [1.0]})
@@ -783,7 +782,6 @@ class TestComputeIndicators:
                     }
                 ],
                 "1d",
-                "timestamp",
             )
 
     def test_computed_rule_contains_any_literal_list(self):
@@ -819,7 +817,7 @@ class TestComputeIndicators:
             }
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert result["timestamp"].to_list() == ["2024-01-01T00:00:00", "2024-01-02T00:00:00"]
         assert result["value"].to_list() == ["1", "1"]
@@ -868,7 +866,7 @@ class TestComputeIndicators:
             }
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert result["timestamp"].to_list() == [
             "2024-01-01T00:00:00",
@@ -877,8 +875,8 @@ class TestComputeIndicators:
         ]
         assert result["value"].to_list() == ["1", "1", "0"]
 
-    def test_timestamp_format_matches_bucket_by_clock(self):
-        """Computed timestamps match the ISO format from bucket_by_clock."""
+    def test_timestamp_format_matches_support_windows(self):
+        """Computed timestamps match the ISO format from support_windows."""
         df = _make_raw_df()
         indicators = [
             {
@@ -895,7 +893,7 @@ class TestComputeIndicators:
                 },
             },
         ]
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
         # Should be ISO format: YYYY-MM-DDTHH:MM:SS
         assert result["timestamp"][0] == "2024-01-01T00:00:00"
 
@@ -927,7 +925,7 @@ class TestComputeIndicators:
             },
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert result["timestamp"].to_list() == ["2025-03-03T00:00:00", "2025-03-04T00:00:00"]
         assert [float(v) for v in result["value"].to_list()] == [78.0, 90.0]
@@ -950,7 +948,7 @@ class TestComputeIndicators:
                 },
             },
         ]
-        result = compute_indicators(df, indicators, "1h", "timestamp")
+        result = compute_indicators(df, indicators, "1h")
         assert len(result) == 51
         assert result["timestamp"][0] == "2024-01-01T08:00:00"
         assert result["timestamp"][-1] == "2024-01-03T10:00:00"
@@ -976,7 +974,7 @@ class TestComputeIndicators:
             },
         ]
 
-        result = compute_indicators(df, indicators, "1d", "timestamp")
+        result = compute_indicators(df, indicators, "1d")
 
         assert len(result) == 1
         assert result["timestamp"].to_list() == ["2024-01-01T00:00:00"]
@@ -1056,12 +1054,12 @@ def test_fill_null_uses_polars_after_window_aggregation(fields, aggregation, exp
             "reading": [8.0, None, 2.0, None, 4.0],
         }
     )
-    result = compute_indicators(raw, [indicator.model_dump(mode="json")], "1d", "timestamp")
+    result = compute_indicators(raw, [indicator.model_dump(mode="json")], "1d")
     assert result["value"].cast(pl.Float64).to_list() == expected
     # Conversions precede filling, which also covers explicit null readings.
     if fields == {"fill_null": "forward"} and aggregation == "last":
         converted = indicator.revised(
             extraction=indicator.extraction.revised(computed_rule="last(reading) / 2")
         )
-        result = compute_indicators(raw, [converted.model_dump(mode="json")], "1d", "timestamp")
+        result = compute_indicators(raw, [converted.model_dump(mode="json")], "1d")
         assert result["value"].cast(pl.Float64).to_list() == [None, 2.0, 2.0, 2.0, 2.0, 2.0, 4.0]

@@ -13,16 +13,11 @@ from typing import TYPE_CHECKING
 from pydantic import TypeAdapter
 from temporalio import activity
 
-from grassmoth.public import DataPreparationResult, GitOid, JsonObject, PreparedDataMetadata
+from grassmoth.public import DataPreparationResult, GitOid, JsonObject, SourceTable
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.identity import ArtifactId
 from grassmoth_server.actions.errors import execution_failure_handler
 from grassmoth_server.actions.prepare_data.context import extraction_context
-from grassmoth_server.actions.prepare_data.records import ObservationRecord
-from grassmoth_server.actions.prepare_data.worker_output import (
-    EXTRACTION_ROW_SCHEMA,
-    ExtractionRow,
-)
 from grassmoth_server.actions.temporal.errors import as_non_retryable_application_error
 from grassmoth_server.actions.temporal.extraction.messages import (
     CompletedExtractionChunk,
@@ -74,11 +69,9 @@ async def emit_progress_event_activity(activity_input: ProgressEventInput) -> No
 
 @activity.defn
 async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) -> MeasurementsPlan:
-    """Compute deterministic measurements and plan cached or LLM-backed extraction chunks."""
+    """Plan cached or LLM-backed extraction chunks for the semantic variables."""
     import polars as pl
 
-    from grassmoth_server.actions.prepare_data.aggregations import compute_indicators
-    from grassmoth_server.actions.prepare_data.materialization import recorded_observations
     from grassmoth_server.actions.prepare_data.planning import prepare_semantic_chunks
     from grassmoth_server.actions.prepare_data.worker_output import WorkerOutput
     from grassmoth_server.config import get_config
@@ -106,16 +99,6 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
 
     config = get_config()
     extraction_workers = config.extraction_workers
-    time_col = "timestamp"
-
-    computed_dicts: list[ExtractionRow] = []
-    if any(ind.extraction.kind == "computed" for ind in measurement_structure.indicators):
-        computed_df = compute_indicators(
-            raw_df,
-            measurement_structure,
-            time_col,
-        )
-        computed_dicts = TypeAdapter(list[ExtractionRow]).validate_python(computed_df.to_dicts())
 
     extraction_llm = extraction_workers.llm
     embedded_defaults = config.llm.embedded
@@ -135,7 +118,7 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
         chunk_texts, chunk_window_starts, chunk_contexts, empty_output = prepare_semantic_chunks(
             raw_df=raw_df,
             measurement_structure=measurement_structure,
-            time_col=time_col,
+            time_col=SourceTable.TIME_COLUMN,
             max_events_per_window=extraction_workers.max_events_per_window,
         )
         for worker_id, (chunk_text, window_starts, chunk_context) in enumerate(
@@ -186,10 +169,7 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
             "run_id": run_id,
             "pins": pins,
             "question": question,
-            "measurement_structure": measurement_structure.model_dump(mode="json"),
             "preparation": resolved.model_dump(mode="json"),
-            "computed_dicts": computed_dicts,
-            "recorded_dicts": recorded_observations(raw_df, measurement_structure),
             "empty_output": empty_output.model_dump(mode="json"),
             "chunks": [chunk.model_dump(mode="json") for chunk in chunks],
         },
@@ -302,7 +282,6 @@ async def finalize_extraction_chunk_activity(
     output = WorkerOutput.model_validate_json(
         publish(spec.cache_ref, output.model_dump_json().encode())
     )
-    dataframe = output.to_dataframe()
 
     result_ref = storage.join(
         _run_root(activity_input.workspace_id, activity_input.run_id),
@@ -312,7 +291,7 @@ async def finalize_extraction_chunk_activity(
     _write_json(
         result_ref,
         {
-            "dataframe": dataframe.to_dicts(),
+            "extractions": [value.model_dump(mode="json") for value in output.extractions],
             "n_extractions": len(output.extractions),
             "status": "completed",
         },
@@ -333,70 +312,47 @@ async def finalize_extraction_chunk_activity(
 async def finalize_measurements_activity(
     activity_input: MeasurementsFinalizeInput,
 ) -> Applied[GitOid]:
-    """Assemble computed and extracted rows into a validated panel with preparation metadata."""
-    import polars as pl
-
-    from grassmoth.public import ObservationDataset, prepare_data
-    from grassmoth_server.actions.prepare_data.materialization import materialize_panel
-    from grassmoth_server.actions.prepare_data.rows import (
-        annotate_observation_rows,
-        prepared_time_origin,
-    )
+    """Hand the source table and the workers' values to prepare_data and stage its panel."""
+    from grassmoth.public import prepare_data
+    from grassmoth_server.actions.prepare_data.worker_output import WorkerOutput
 
     try:
         plan = MeasurementsFile.model_validate(_read_json(activity_input.plan_ref))
-        measurement_structure = plan.measurement_structure
-        computed_dicts = plan.computed_dicts
         chunk_specs = plan.chunks
         results_by_worker = {result.worker_id: result for result in activity_input.chunk_results}
-
-        semantic_dicts: list[ExtractionRow] = TypeAdapter(list[ExtractionRow]).validate_python(
-            plan.empty_output.to_dataframe().to_dicts()
-        )
-
+        extracted = list(plan.empty_output.extracted())
         for chunk_spec in chunk_specs:
-            worker_id = chunk_spec.worker_id
-            result = results_by_worker[worker_id]
+            result = results_by_worker[chunk_spec.worker_id]
             if result.status == "completed":
-                chunk_payload = _read_json(result.result_ref)
-                semantic_dicts.extend(
-                    TypeAdapter(list[ExtractionRow]).validate_python(chunk_payload["dataframe"])
+                extracted.extend(
+                    WorkerOutput.model_validate(
+                        {"extractions": _read_json(result.result_ref)["extractions"]}
+                    ).extracted()
                 )
 
         preparation = plan.preparation
-        variables = preparation.definition.observation_schema()
-        all_dicts = computed_dicts + semantic_dicts
-        observation_rows = TypeAdapter(list[ObservationRecord]).validate_python(
-            annotate_observation_rows(
-                pl.DataFrame(all_dicts, schema=EXTRACTION_ROW_SCHEMA), variables
-            ).to_dicts()
-            if all_dicts
-            else [],
-        )
-        panel = materialize_panel(observation_rows + plan.recorded_dicts, measurement_structure)
-        if len(panel) == 0:
-            raise ValueError("Extraction produced no observations")
-        metadata = PreparedDataMetadata(
-            preparation=preparation.definition,
-            time_origin=prepared_time_origin(panel, preparation.source.start),
-        )
-        observations = ObservationDataset.from_frame(
-            panel, metadata.variables, time_origin=metadata.time_origin
-        )
         store = ArtifactStore(activity_input.workspace_id)
-        return Applied(
-            result=store.write_result(
-                prepare_data(
-                    observations,
-                    metadata,
-                    DataPreparationResult(
-                        workers=tuple(results_by_worker[spec.worker_id] for spec in chunk_specs),
-                        extraction_reused=sum(
-                            result.reused is True for result in activity_input.chunk_results
-                        ),
-                    ),
-                )
+        output = prepare_data(
+            preparation.definition,
+            SourceTable(
+                rows=store.read_parquet_table(
+                    "raw_data",
+                    activity_input.pins["raw_data"],
+                    parquet_filename("raw_data", "raw"),
+                ),
+                start=preparation.source.start,
+                end=preparation.source.end,
             ),
+            tuple(extracted),
+            DataPreparationResult(
+                workers=tuple(results_by_worker[spec.worker_id] for spec in chunk_specs),
+                extraction_reused=sum(
+                    result.reused is True for result in activity_input.chunk_results
+                ),
+            ),
+        )
+        return Applied(
+            result=store.write_result(output),
             effects=ActionEffects(
                 produced=(
                     store.write_artifact(
@@ -404,12 +360,12 @@ async def finalize_measurements_activity(
                         derived_from=activity_input.pins,
                         produced_by="prepare_data",
                         parquet_files={
-                            parquet_filename("panel", "panel"): observations.recorded.frame.sort(
-                                "indicator_id", "anchor_time"
-                            )
+                            parquet_filename("panel", "panel"): output.observation_frame()
                         },
                         json_files={
-                            json_filename("panel", "metadata"): metadata.model_dump(mode="json")
+                            json_filename("panel", "metadata"): output.metadata.model_dump(
+                                mode="json"
+                            )
                         },
                     ),
                 )

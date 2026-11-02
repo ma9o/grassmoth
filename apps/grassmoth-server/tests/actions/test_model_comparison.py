@@ -5,7 +5,7 @@ from itertools import product
 import numpyro.distributions as dist
 import pytest
 
-from grassmoth.actions.contracts.bodies import ModelDiffOutput
+from grassmoth.actions.contracts.io import ModelDiffOutput
 from grassmoth.artifacts.model.document import diff_fields, merge_fields
 from grassmoth.artifacts.model.dynamical_model_spec import (
     DynamicalModelSpec,
