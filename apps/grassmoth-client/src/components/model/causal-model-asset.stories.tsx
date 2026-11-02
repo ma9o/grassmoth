@@ -35,7 +35,7 @@ function WorkbenchStory() {
 }
 
 const meta = {
-  title: "V2/Model/Workbench",
+  title: "Model/Workbench",
   component: WorkbenchStory,
   parameters: {
     layout: "fullscreen",

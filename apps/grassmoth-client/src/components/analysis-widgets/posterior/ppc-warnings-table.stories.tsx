@@ -12,7 +12,7 @@ const ppc = comparison.predictive.evaluation;
 
 const meta = {
   args: { indicators },
-  title: "V2/Model/Findings/PPCWarningsTable",
+  title: "Model/Findings/PPCWarningsTable",
   component: PPCWarningsTable,
   decorators: [withContainer()],
 } satisfies Meta<typeof PPCWarningsTable>;

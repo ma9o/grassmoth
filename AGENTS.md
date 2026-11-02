@@ -41,7 +41,7 @@
 
 - Keep domain logic and statistical computations in the backend, except for frontend visualization: evaluate or sample saved probability laws, evaluate saved model expressions, and transform aligned draws. Preserve joint dependence and declared parameter transforms. These display evaluations never feed inference, trajectory generation, diagnostics, predictive checks, or scientific decisions, which remain backend-owned.
 
-- v2 (`/v2/{workspaceId}`) is the only interface. v1 lives at the annotated `v1-reference` tag as a reference for things v2 might surface; run it from a separate checkout of that tag with its own fixtures.
+- The workbench (`/workspaces/{workspaceId}`) is the only interface.
 
 # Data Pipeline
 

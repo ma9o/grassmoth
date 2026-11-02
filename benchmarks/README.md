@@ -174,7 +174,7 @@ describes. Start the stack as the
 [integration testing guide](../docs/guides/agentic_integration_testing.md)
 says. The server saves every result with its logs, phase timings and code hash,
 keeps a fit running if the caller stops, and shows the study in the viewer at
-`/v2/{workspaceId}`. There is no benchmark runner or harness of our own.
+`/workspaces/{workspaceId}`. There is no benchmark runner or harness of our own.
 
 - **Each case is a model revision** made by `edit_model`. Its data comes from
   `simulate`, or from `prepare_data` for thinned readings.

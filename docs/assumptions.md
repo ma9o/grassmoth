@@ -143,7 +143,7 @@ Static relationships form a DAG. Relationships between evolving states connect s
 
 ### A4b. Effects between evolving states act through the drift
 
-Edge mechanisms evaluate the current state in the continuous-time drift. A cross-slice arrow expresses state evolution; it does not impose a measurement-clock delay on those equations. Identification and the v2 graph retain the declared direct relationships. Same-time co-movement can arise from explicit latent confounders or diffusion correlation.
+Edge mechanisms evaluate the current state in the continuous-time drift. A cross-slice arrow expresses state evolution; it does not impose a measurement-clock delay on those equations. Identification and the workbench graph retain the declared direct relationships. Same-time co-movement can arise from explicit latent confounders or diffusion correlation.
 
 ### A5. Time-invariant constructs are static subject-level states
 

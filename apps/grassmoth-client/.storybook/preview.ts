@@ -21,11 +21,10 @@ const preview: Preview = {
       },
     },
     options: {
-      // Keep the old pipeline and new workbench in separate namespaces.
       // Everything unlisted falls back to alphabetical.
       storySort: {
         method: "alphabetical",
-        order: ["V1", ["Pipeline", "*"], "V2", ["Model", "*"], "Charts", "UI", "Landing", "*"],
+        order: ["Model", "Charts", "UI", "Landing", "*"],
       },
     },
   },

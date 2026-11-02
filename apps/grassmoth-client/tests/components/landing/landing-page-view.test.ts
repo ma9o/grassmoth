@@ -11,7 +11,7 @@ it("offers existing study navigation without creation or upload controls", () =>
       isLoading: false,
     }),
   );
-  expect(html).toContain('href="/v2/STUDY"');
+  expect(html).toContain('href="/workspaces/STUDY"');
   expect(html).toContain("Does exercise improve sleep?");
   expect(html).not.toMatch(/<(?:input|textarea|form|button)\b/);
   const empty = renderToStaticMarkup(

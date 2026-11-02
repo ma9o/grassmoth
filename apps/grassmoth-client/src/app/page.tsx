@@ -20,7 +20,7 @@ export default function LandingPage() {
   useEffect(() => {
     if (isMockMode() && !sessionStorage.getItem("mock-landed")) {
       sessionStorage.setItem("mock-landed", "true");
-      router.push(`/v2/${getMockFixture()}`);
+      router.push(`/workspaces/${getMockFixture()}`);
     }
   }, [router]);
 

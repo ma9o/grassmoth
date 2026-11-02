@@ -269,9 +269,9 @@ curl -s "http://localhost:8100/api/studies/$WORKSPACE_ID/$ACTION/$CALL_ID" \
 
 ### 3. Verify via browser automation
 
-- `http://localhost:3000/v2/{WORKSPACE_ID}` is the model workbench, the default destination from the workspace list.
+- `http://localhost:3000/workspaces/{WORKSPACE_ID}` is the model workbench, the default destination from the workspace list.
 - After each backend action, check that the workbench shows the question, graph, entity details, data, findings, history and action log. The workbench is read-only: the agent submits every change through the backend API.
-- Storybook's **V2 / Model / Workbench / Complete** story covers the workbench with [server-validated synthetic responses](codegen.md#story-scenarios), served through MSW and the production API reader. It needs no running study. Extend it rather than adding separate stories.
+- Storybook's **Model / Workbench / Complete** story covers the workbench with [server-validated synthetic responses](codegen.md#story-scenarios), served through MSW and the production API reader. It needs no running study. Extend it rather than adding separate stories.
 
 If the UI behaves unexpectedly, check Next.js devtools MCP errors before debugging the browser script.
 

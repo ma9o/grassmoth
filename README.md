@@ -62,7 +62,7 @@ cp .env.example.dev .env
 bun run dev
 ```
 
-Then open the repository in Claude Code or Codex and give the agent your question and data. The [study API skill](.agents/skills/grassmoth-study-api/SKILL.md) teaches it the seven actions; follow the study in the web UI at `http://localhost:3000/v2/<workspace-id>`.
+Then open the repository in Claude Code or Codex and give the agent your question and data. The [study API skill](.agents/skills/grassmoth-study-api/SKILL.md) teaches it the seven actions; follow the study in the web UI at `http://localhost:3000/workspaces/<workspace-id>`.
 
 See the [dev setup guide](docs/guides/dev_setup.md) for full details including environment variables and optional dependencies.
 

@@ -53,7 +53,7 @@ function WorkspaceCard({
 }) {
   return (
     <Link
-      href={`/v2/${workspaceId}`}
+      href={`/workspaces/${workspaceId}`}
       className="block rounded-lg border bg-card px-4 py-3 shadow-sm transition-colors hover:bg-accent/50"
     >
       <p className="font-mono text-xs font-semibold tracking-wider text-muted-foreground">
