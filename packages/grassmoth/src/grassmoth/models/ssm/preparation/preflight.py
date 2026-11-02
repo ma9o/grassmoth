@@ -54,9 +54,10 @@ def validate_sampler_support(
         )
     path_update = sampler.path_update
     if isinstance(path_update, AuxiliaryKalmanSpec):
-        if not point_readings:
+        if path_update.block_length is not None and not point_readings:
             return ObservationPreflightFailure.rejected(
-                "Auxiliary Kalman supports point readings without deterministic recurrences."
+                "Blocked auxiliary Kalman supports point readings without deterministic "
+                "recurrences; set block_length to null to update the whole path."
             )
         if {"particle_identity", "particle_weights"} & set(sampler.diagnostic_metrics):
             return ObservationPreflightFailure.rejected(

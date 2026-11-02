@@ -8,8 +8,13 @@ the sum of complete nonlinear path densities over the same corrected parameter
 labels as every other MPGibbs smoother. The auxiliary is label-independent, so
 the final parameter-label law remains unchanged, including on path rejection.
 
-Gaussian approximations to nonlinear dynamics, non-Gaussian observations or
-separated label modes can cause rejection. They never replace the target.
+Deterministic recurrences and window memory are never proposed. Each direction
+linearizes at the guide's exact replay of its own independent coordinates, the
+Gaussian carries those coordinates as noise-free affine rows, and its density
+reads only the free coordinates. Every label then replays them exactly.
+
+Gaussian approximations to nonlinear dynamics, non-Gaussian observations, long
+memory or separated label modes can cause rejection. They never replace the target.
 """
 
 from types import MappingProxyType
@@ -53,12 +58,15 @@ def _proposal(
     variance: jax.Array,
     free: jax.Array,
 ) -> GaussianPathProposal:
-    curvature = linearize_path(target, guide, reference)
-    terms = curvature.proposal_terms(target, guide, reference)
+    path = target.replay_path(guide, reference)
+    curvature = linearize_path(target, guide, path)
+    terms = curvature.proposal_terms(target, guide, path)
     local = terms.information
+    free = curvature.augment(free, fill=False)
+    variance = curvature.augment(variance, fill=1.0)
     information = GaussianTwist(
         local.precision + jax.vmap(jnp.diag)(free / variance),
-        local.shift + jnp.where(free, auxiliary / variance, 0.0),
+        local.shift + jnp.where(free, curvature.augment(auxiliary, fill=0.0) / variance, 0.0),
     )
     return gaussian_path_proposal(
         GaussianPathTerms(terms.matrices, terms.offsets, terms.covariances, information), free
@@ -78,11 +86,15 @@ def auxiliary_kalman_move(
     free = ctx.latent_free_mask
     with jax.named_scope("kalman_forward_proposal"):
         forward = _proposal(target, guide, reference, auxiliary, variance, free)
-        proposed = forward.sample(sampling_key)
-        forward_density = forward.log_density(proposed)
+        draw = forward.sample(sampling_key)
+        proposed = draw[:, : reference.shape[-1]]
+        forward_density = forward.log_density(draw)
     with jax.named_scope("kalman_reverse_proposal"):
         reverse = _proposal(target, guide, proposed, auxiliary, variance, free)
-        reverse_density = reverse.log_density(reference)
+        # Memory rows are replayed by the reverse proposal itself; their entries are unread.
+        reverse_density = reverse.log_density(
+            jnp.concatenate((reference, jnp.zeros_like(draw[:, reference.shape[-1] :])), axis=-1)
+        )
     with jax.named_scope("kalman_exact_correction"):
         proposal_scores = ctx.score_labels(proposed)
         reference_scores = ctx.score_labels(reference)

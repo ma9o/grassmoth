@@ -105,11 +105,8 @@ def test_memory_guide_matches_dense_auxiliary_conditioning(variance):
     np.testing.assert_allclose(limits[:, 0], [10.0, 10.0, 6.4], atol=2e-5)
 
 
-@pytest.mark.parametrize(
-    ("method", "kappa"),
-    [("twisted_particle_agrad", 1), ("twisted_particle_agrad", 0)],
-)
-def test_guided_windows_preserve_joint_path_and_label_posterior(method, kappa):
+def _window_posterior():
+    """Dense Gaussian path and label posterior of point readings and overlapping means."""
     times = np.arange(4.0)
     observed = np.array([[0.2, np.nan], [-0.15, -0.1], [0.4, 0.25], [-0.1, 0.35]])
     starts = np.column_stack((times, [np.nan, 0.0, 0.5, 1.5]))
@@ -141,6 +138,15 @@ def test_guided_windows_preserve_joint_path_and_label_posterior(method, kappa):
     starts = jnp.asarray(
         (means[selected] + rng.normal(size=(4096, 4)) @ np.linalg.cholesky(covariance).T)[..., None]
     )
+    return target, labels, starts, expected_mean, expected_second, probabilities
+
+
+@pytest.mark.parametrize(
+    ("method", "kappa"),
+    [("twisted_particle_agrad", 1), ("twisted_particle_agrad", 0)],
+)
+def test_guided_windows_preserve_joint_path_and_label_posterior(method, kappa):
+    target, labels, starts, expected_mean, expected_second, probabilities = _window_posterior()
     spec = GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
     setup = build_smoother_setup(
         target,

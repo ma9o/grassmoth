@@ -48,6 +48,10 @@ from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
 from grassmoth_test_support.model import one_state_gaussian_model, without_parameters
+from packages.grassmoth.tests.models.ssm.inference.test_guided_recurrences import (
+    _recurrence_posterior,
+)
+from packages.grassmoth.tests.models.ssm.inference.test_guided_windows import _window_posterior
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -419,6 +423,61 @@ def test_auxiliary_kalman_preserves_complete_parameter_mixture(
         result.label_scores, ctx.score_labels(result.latent_path), strict=True
     ):
         np.testing.assert_allclose(cached, exact, rtol=2e-6, atol=2e-6)
+
+
+@pytest.mark.parametrize("case", ["windows", "recurrences"])
+def test_auxiliary_kalman_replays_memory_and_preserves_joint_posterior(case):
+    """Window memory and nonlinear recurrences are replayed, never proposed."""
+    target, labels, starts, expected_mean, expected_second, expected_labels = (
+        _window_posterior() if case == "windows" else _recurrence_posterior()
+    )
+    static = build_smoother_setup(
+        target,
+        num_parameter_particles=2,
+        free_mask=target.independent_mask,
+        diagnostic_metrics=(),
+    )
+    ctx = build_smoother_context(
+        static,
+        jnp.asarray(labels[:, None]),
+        jnp.zeros(2),
+        reference=starts[0],
+        delta=jnp.full((starts.shape[1],), 0.3),
+        trajectory_dtype=starts.dtype,
+    )
+    guide = target.context(jnp.asarray([labels.mean()]), target.times)
+
+    def advance(path, key):
+        return auxiliary_kalman_step(target, ctx, guide, key, path).latent_path
+
+    @jax.jit
+    def run(paths):
+        def sweep(current, key):
+            return jax.vmap(advance)(current, jax.random.split(key, len(current))), None
+
+        return jax.lax.scan(sweep, paths, jax.random.split(jax.random.key(523), 6))[0]
+
+    paths = run(starts)
+    draws = np.asarray(paths[..., 0])
+    np.testing.assert_allclose(draws.mean(axis=0), expected_mean, atol=0.035)
+    np.testing.assert_allclose(draws.T @ draws / len(draws), expected_second, atol=0.035)
+    probabilities = jax.jit(jax.vmap(lambda path: jnp.exp(ctx.score_labels(path).log_probs)))(paths)
+    np.testing.assert_allclose(np.asarray(probabilities).mean(axis=0), expected_labels, atol=0.025)
+    assert np.mean(np.any(draws != np.asarray(starts[..., 0]), axis=-1)) > 0.5
+    if case == "recurrences":
+        # Both directions linearize at the guide's replay and score only free coordinates,
+        # so the move cannot read whatever recurrence values a path happens to store.
+        reference = starts[0]
+        auxiliary = reference.at[:, 0].add(0.1)
+
+        def move(path):
+            return auxiliary_kalman_move(
+                target, ctx, guide, path, auxiliary, jnp.full(path.shape, 0.15), jax.random.key(61)
+            )
+
+        exact, stale = (jax.jit(move)(path) for path in (reference, reference.at[:, 1:].add(0.7)))
+        np.testing.assert_allclose(stale.proposed[:, 0], exact.proposed[:, 0], atol=1e-6)
+        np.testing.assert_allclose(stale.log_acceptance, exact.log_acceptance, atol=1e-5)
 
 
 @pytest.mark.parametrize("block_length", [None, 1, 2])

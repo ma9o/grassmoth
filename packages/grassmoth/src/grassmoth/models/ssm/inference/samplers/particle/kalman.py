@@ -45,8 +45,18 @@ class GaussianPathProposal(NamedTuple):
         return jnp.asarray(path)
 
     def log_density(self, path: jax.Array) -> jax.Array:
-        """Use the exact factors used to draw, including their determinants."""
-        previous = jnp.concatenate((jnp.zeros_like(path[:1]), path[:-1]))
+        """Use the exact factors used to draw, including their determinants.
+
+        Only free coordinates are read. Every other row, including deterministic
+        recurrences and window memory, is replayed through this proposal's own
+        affine maps, so the density is that of the free coordinates alone.
+        """
+        replay = (~self.free).astype(path.dtype)
+        _, replayed = jax.lax.associative_scan(
+            compose_affine_maps,
+            (self.matrices * replay[:, :, None], jnp.where(self.free, path, self.offsets)),
+        )
+        previous = jnp.concatenate((jnp.zeros_like(path[:1]), replayed[:-1]))
         mean = self.offsets + jnp.einsum("tij,tj->ti", self.matrices, previous)
         residual = jnp.where(self.free, path - mean, 0.0)
         white = jax.vmap(
@@ -62,8 +72,9 @@ class GaussianPathProposal(NamedTuple):
 def gaussian_path_proposal(terms: GaussianPathTerms, free: jax.Array) -> GaussianPathProposal:
     """Condition every transition on all later information, then factor once.
 
-    Zero-variance fixed coordinates get independent unit dummy noise solely for
-    factorization. It is never sampled or scored, and contributes log(det)=0.
+    Zero-variance coordinates get independent unit dummy noise solely for
+    factorization. It is never sampled or scored, and contributes log(det)=0;
+    those rows follow the conditioned affine maps from the free coordinates.
     """
     matrices, offsets, covariances, information = terms
     future = future_information(matrices[1:], offsets[1:], covariances[1:], information)

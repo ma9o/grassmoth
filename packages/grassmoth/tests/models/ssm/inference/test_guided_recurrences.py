@@ -221,16 +221,8 @@ def test_recurrence_guide_matches_dense_gaussian_conditioning(steps, random_init
         )
 
 
-@pytest.mark.parametrize(
-    ("method", "kappa"),
-    [
-        ("twisted_particle_agrad", 1),
-        ("twisted_particle_agrad", 0),
-        ("particle_mgrad", 1),
-        ("particle_mgrad", 0),
-    ],
-)
-def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa):
+def _recurrence_posterior():
+    """Quadrature posterior of nonlinear recurrences read through overlapping means."""
     target = _target(1.0)
     labels = np.array([-0.45, 0.55])
     label_prior = np.exp(norm.logpdf(labels) - logsumexp(norm.logpdf(labels)))
@@ -254,6 +246,20 @@ def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa)
         paths = _prior(rng.normal(size=(8192, 4)), labels[selected], 1.0)
         accepted.append(paths[np.log(rng.uniform(size=8192)) < _likelihood(paths)])
     starts = jnp.asarray(np.concatenate(accepted)[:4096])
+    return target, labels, starts, expected_mean, expected_second, masses.sum(1)
+
+
+@pytest.mark.parametrize(
+    ("method", "kappa"),
+    [
+        ("twisted_particle_agrad", 1),
+        ("twisted_particle_agrad", 0),
+        ("particle_mgrad", 1),
+        ("particle_mgrad", 0),
+    ],
+)
+def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa):
+    target, labels, starts, expected_mean, expected_second, label_masses = _recurrence_posterior()
     spec = GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
     setup = build_smoother_setup(
         target,
@@ -286,7 +292,7 @@ def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa)
     np.testing.assert_allclose(draws.mean(0), expected_mean, atol=0.035)
     np.testing.assert_allclose(draws.T @ draws / len(draws), expected_second, atol=0.035)
     actual_labels = jax.jit(jax.vmap(lambda path: jnp.exp(ctx.score_labels(path).log_probs)))(paths)
-    np.testing.assert_allclose(np.asarray(actual_labels).mean(0), masses.sum(1), atol=0.025)
+    np.testing.assert_allclose(np.asarray(actual_labels).mean(0), label_masses, atol=0.025)
     assert np.min(np.mean(draws != np.asarray(starts[..., 0]), axis=0)) > 0.3
     traced = jax.jit(
         lambda path: trace_guided_step(target, ctx, guide, spec, jax.random.key(88), path)

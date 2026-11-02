@@ -53,16 +53,20 @@ def test_auxiliary_kalman_request_roundtrip_and_identity(step):
 
 
 @pytest.mark.parametrize(
-    ("support", "recurrences", "metrics", "accepted"),
+    ("support", "recurrences", "metrics", "block_length", "accepted"),
     [
-        ("point", (), (), True),
-        ("interval", (), (), False),
-        ("point", (AdditiveRecurrences((0,)),), (), False),
-        ("point", (), ("particle_weights",), False),
-        ("point", (), ("particle_identity",), False),
+        ("point", (), (), 300, True),
+        ("interval", (), (), 300, False),
+        ("point", (AdditiveRecurrences((0,)),), (), 300, False),
+        ("interval", (), (), None, True),
+        ("point", (AdditiveRecurrences((0,)),), (), None, True),
+        ("point", (), ("particle_weights",), None, False),
+        ("point", (), ("particle_identity",), None, False),
     ],
 )
-def test_auxiliary_kalman_admission(monkeypatch, support, recurrences, metrics, accepted):
+def test_auxiliary_kalman_admission(
+    monkeypatch, support, recurrences, metrics, block_length, accepted
+):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
@@ -71,7 +75,9 @@ def test_auxiliary_kalman_admission(monkeypatch, support, recurrences, metrics, 
         state_space=StateSpace(1, (), (0,), (0,), (), recurrences),
         observations=(Mock(support=Mock(support_kind=support)),),
     )
-    sampler = SamplerSpec(path_update=AuxiliaryKalmanSpec(), diagnostic_metrics=metrics)
+    sampler = SamplerSpec(
+        path_update=AuxiliaryKalmanSpec(block_length=block_length), diagnostic_metrics=metrics
+    )
     failure = validate_sampler_support(compiled, sampler)
     assert (failure is None) == accepted
 

@@ -625,7 +625,7 @@ export interface components {
              * @default 300
              */
             readonly block_length?: number | null;
-            /** @description Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Supports point readings without deterministic recurrences; parameter proposals and final parameter-label selection remain MPGibbs. */
+            /** @description Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. The whole path also supports interval readings and deterministic recurrences, which every label replays exactly; blocks support point readings without recurrences. Parameter proposals and final parameter-label selection remain MPGibbs. */
             readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
         };
         /**
@@ -649,7 +649,7 @@ export interface components {
              * @default 300
              */
             readonly block_length: number | null;
-            /** @description Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Supports point readings without deterministic recurrences; parameter proposals and final parameter-label selection remain MPGibbs. */
+            /** @description Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. The whole path also supports interval readings and deterministic recurrences, which every label replays exactly; blocks support point readings without recurrences. Parameter proposals and final parameter-label selection remain MPGibbs. */
             readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
         };
         /**

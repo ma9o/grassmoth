@@ -132,3 +132,62 @@ def test_fixed_coordinate_has_no_sampling_noise_or_density_cost():
     assert path[0, 1] == terms.offsets[0, 1]
     expected = multivariate_normal.logpdf(np.asarray(path[0, :1]), mean=[0.3], cov=[[0.4]])
     np.testing.assert_allclose(proposal.log_density(path), expected, atol=1e-6)
+
+
+def test_deterministic_row_is_replayed_by_the_proposal_and_never_read():
+    """A noise-free accumulator scores only through the free path that drives it."""
+    steps = 4
+    # x_t = 0.7 x_(t-1) + noise; memory m_t = 0.9 m_(t-1) + 0.5 x_(t-1) feeds x_t back.
+    transition = np.array([[0.7, 0.3], [0.5, 0.9]])
+    matrices = np.broadcast_to(transition, (steps, 2, 2)).copy()
+    matrices[0] = 0
+    offsets = np.tile([0.1, 0.2], (steps, 1))
+    covariances = np.zeros((steps, 2, 2))
+    covariances[:, 0, 0] = 0.3
+    precision = np.zeros((steps, 2, 2))
+    precision[:, 0, 0] = 1.5
+    precision[:, 1, 1] = 0.8
+    shift = np.tile([0.2, -0.4], (steps, 1))
+    free = np.tile([True, False], (steps, 1))
+    proposal = gaussian_path_proposal(
+        GaussianPathTerms(
+            jnp.asarray(matrices),
+            jnp.asarray(offsets),
+            jnp.asarray(covariances),
+            GaussianTwist(jnp.asarray(precision), jnp.asarray(shift)),
+        ),
+        jnp.asarray(free),
+    )
+    path = proposal.sample(jax.random.key(5))
+    # Dense law of the free coordinates: memory is affine in them, and the Gaussian
+    # tilt applies to the augmented state at every time.
+    memory_map = np.zeros((steps, steps))
+    memory_offset = np.zeros(steps)
+    memory_offset[0] = offsets[0, 1]
+    for t in range(1, steps):
+        memory_map[t] = transition[1, 1] * memory_map[t - 1]
+        memory_map[t, t - 1] += transition[1, 0]
+        memory_offset[t] = transition[1, 1] * memory_offset[t - 1] + offsets[t, 1]
+    innovation = np.eye(steps)
+    innovation_offset = offsets[:, 0].copy()
+    for t in range(1, steps):
+        innovation[t, t - 1] = -transition[0, 0]
+        innovation[t] -= transition[0, 1] * memory_map[t - 1]
+        innovation_offset[t] += transition[0, 1] * memory_offset[t - 1]
+    prior_precision = innovation.T @ np.diag(1 / covariances[:, 0, 0]) @ innovation
+    tilted = (
+        prior_precision
+        + np.diag(precision[:, 0, 0])
+        + memory_map.T @ np.diag(precision[:, 1, 1]) @ memory_map
+    )
+    linear = (
+        innovation.T @ (innovation_offset / covariances[:, 0, 0])
+        + shift[:, 0]
+        + memory_map.T @ (shift[:, 1] - precision[:, 1, 1] * memory_offset)
+    )
+    covariance = np.linalg.inv(tilted)
+    expected = multivariate_normal.logpdf(np.asarray(path[:, 0]), covariance @ linear, covariance)
+    np.testing.assert_allclose(proposal.log_density(path), expected, atol=2e-5)
+    np.testing.assert_allclose(
+        proposal.log_density(path.at[:, 1].set(-7.0)), proposal.log_density(path), atol=1e-6
+    )

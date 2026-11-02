@@ -235,8 +235,10 @@ class AuxiliaryKalmanSpec(Value):
             "acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. "
             "Poor local Gaussian fits, strong nonlinearity and separated parameter or "
             "path modes can lower acceptance. Exact nonlinear Metropolis corrections "
-            "preserve the target. Supports point readings without deterministic recurrences; "
-            "parameter proposals and final parameter-label selection remain MPGibbs."
+            "preserve the target. The whole path also supports interval readings and "
+            "deterministic recurrences, which every label replays exactly; blocks support "
+            "point readings without recurrences. Parameter proposals and final "
+            "parameter-label selection remain MPGibbs."
         ),
     )
 
