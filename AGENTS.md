@@ -22,6 +22,8 @@ Keep scope-specific guidance in its directory's `AGENTS.md` and link it from the
 
 - `cp` means "commit and push". Split commits atomically, but prioritize shared-workspace safety: never disrupt another agent's work with stashing or rebasing.
 
+- Work in the shared checkout. Don't create a git worktree or a separate clone unless a task strictly requires an isolated checkout.
+
 - Never add backwards compatibility code or defensive fallbacks.
 
 - There is no baselining in this repo. Never record existing lint, type or test failures in a baseline, a bulk suppression or a "known failures" list. A new check ships with all its findings fixed, and a failing check gets fixed, not recorded. The only exception is an inline suppression of a genuine false positive, with its reason on the same line.
