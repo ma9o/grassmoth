@@ -14,7 +14,6 @@ from grassmoth.models.ssm.execution.observation_model import (
     prepare_grouped_noise,
     prepare_mean_density_with_noise,
 )
-from grassmoth.models.ssm.execution.observation_operator import expected_observation_mean
 
 if TYPE_CHECKING:
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
@@ -29,27 +28,38 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class WindowMemoryRuntime:
-    """Fixed window schedule, with exact label-specific response statistics."""
+    """The compiled window schedule bound to each label's exact response."""
 
     intervals: ParticleIntervalObservations
-    channels: tuple[int, ...]
-    previous: jax.Array
-    current: jax.Array
-    reset: jax.Array
-    emission_slots: jax.Array
-    emission_weights: jax.Array
-    replay_stops: jax.Array
-    max_replay: int
-    shape: tuple[int, int, int, int]
+    labels: int
     noise: tuple[GaussianNoiseFactors, ...]
 
-    def moments(self, contexts: ParticleContext, states: jax.Array, index: jax.Array) -> jax.Array:
-        """Evaluate the authored response before any window aggregation."""
-        response = jax.vmap(self.intervals.response, in_axes=(0, 0, None))(contexts, states, index)
-        response = response[:, jnp.asarray(self.channels, dtype=jnp.int32)]
-        return jnp.stack((response, response**2) if self.shape[-1] == 2 else (response,), axis=-1)[
-            :, :, None, :
-        ]
+    @property
+    def shape(self) -> tuple[int, int, int, int]:
+        """Labels, channels, slots and moments of the carried memory."""
+        return self.labels, *self.intervals.memory.shape
+
+    @property
+    def replay_stops(self) -> jax.Array:
+        """Last time whose factors the memory carried out of each time can reach."""
+        return jnp.asarray(self.intervals.memory.replay_stops)
+
+    @property
+    def max_replay(self) -> int:
+        """Longest bounded replay after one splice."""
+        return self.intervals.memory.max_replay
+
+    def advance(
+        self,
+        contexts: ParticleContext,
+        statistics: jax.Array,
+        previous: jax.Array,
+        index: jax.Array,
+    ) -> jax.Array:
+        """Carry each label's memory forward from its own earlier state."""
+        return jax.vmap(self.intervals.advance, in_axes=(0, 0, 0, None))(
+            contexts, statistics, previous, index
+        )
 
     def log_probs(
         self,
@@ -61,47 +71,31 @@ class WindowMemoryRuntime:
         log_precision: jax.Array | None = None,
     ) -> jax.Array:
         """Emit each recorded window once, preserving its joint channel law."""
-        slots = self.emission_slots[index]
-        channels = jnp.asarray(self.channels, dtype=jnp.int32)
-        selected = jnp.take_along_axis(
-            statistics, jnp.maximum(slots, 0)[None, :, None, None], axis=2
-        )[:, :, 0, :]
+        channels = self.intervals.memory.channels
 
         def density(
             context: ParticleContext,
             state: jax.Array,
-            moments: jax.Array,
+            memory: jax.Array,
             noise: tuple[GaussianNoiseFactors, ...],
         ) -> jax.Array:
             model = cast(
                 "HeterogeneousObservation",
                 self.intervals.dynamical_model(context).observation_model,
             )
-            groups = compile_law_groups(model.laws, self.channels, interval=True)
-            response = self.intervals.response(context, state, index)
-            sums = jnp.zeros_like(response).at[channels].set(moments[:, 0])
-            squares = jnp.zeros_like(response)
-            if self.shape[-1] == 2:
-                squares = squares.at[channels].set(moments[:, 1])
-            weights = jnp.ones_like(response).at[channels].set(self.emission_weights[index])
-            means = expected_observation_mean(
-                response, sums, squares, weights, self.intervals.operator.summary_operator_codes
-            )
-            # The canonical trajectory operator emits its origin row on the response scale.
-            means = jnp.where(index == 0, response, means)
-            mask = jnp.zeros_like(response, dtype=bool).at[channels].set(slots >= 0)
-            mask = mask & jnp.isfinite(observations[index])
+            groups = compile_law_groups(model.laws, channels, interval=True)
+            means, emitted = self.intervals.expected_means(context, memory, state, index)
             score = prepare_mean_density_with_noise(
                 groups,
                 jnp.nan_to_num(observations[index]),
                 model.measurement.manifest_cov,
-                mask,
+                emitted & jnp.isfinite(observations[index]),
                 tuple(factor.at(index) for factor in noise),
                 log_precision,
             )
             return score(means)
 
-        return jax.vmap(density)(contexts, states, selected, self.noise)
+        return jax.vmap(density)(contexts, states, statistics, self.noise)
 
 
 def _window_memory(
@@ -109,47 +103,27 @@ def _window_memory(
     contexts: ParticleContext,
     observations: jax.Array,
 ) -> WindowMemoryRuntime:
-    operator = intervals.operator
-    scan = operator.scan
-    channels = operator.interval_summary_indices
-    slots = scan.emission_slots[:, channels]
-    reset = (slots[:, :, None] >= 0) & (
-        np.arange(scan.max_active_windows)[None, None, :] == slots[:, :, None]
+    memory = intervals.memory
+    channels = jnp.asarray(memory.channels, dtype=jnp.int32)
+    observed = (
+        jnp.zeros_like(observations, dtype=bool)
+        .at[:, channels]
+        .set(jnp.asarray(memory.emission_slots) >= 0)
     )
-    weights = np.ones((len(slots), len(channels)))
-    stops = np.minimum(np.arange(len(slots)) + 1, len(slots) - 1)
-    for window in operator.window_plan.windows:
-        weights[window.anchor_index, channels.index(window.manifest_index)] = window.weights.sum()
-        stops[window.start_index : window.anchor_index] = np.maximum(
-            stops[window.start_index : window.anchor_index], window.anchor_index
-        )
-    observed = jnp.zeros_like(observations, dtype=bool).at[:, jnp.asarray(channels)].set(slots >= 0)
-    observed = observed & jnp.isfinite(observations)
-    readings = jnp.where(observed, observations, jnp.nan)
+    readings = jnp.where(observed & jnp.isfinite(observations), observations, jnp.nan)
 
     def noise(context: ParticleContext) -> tuple[GaussianNoiseFactors, ...]:
         model = cast(
             "HeterogeneousObservation", intervals.dynamical_model(context).observation_model
         )
         return prepare_grouped_noise(
-            compile_law_groups(model.laws, channels, interval=True),
+            compile_law_groups(model.laws, memory.channels, interval=True),
             model.measurement.manifest_cov,
             readings,
         )
 
-    labels = jax.tree.leaves(contexts)[0].shape[0]
     return WindowMemoryRuntime(
-        intervals,
-        channels,
-        jnp.asarray(scan.prev_coeffs[:, channels]),
-        jnp.asarray(scan.curr_coeffs[:, channels]),
-        jnp.asarray(reset),
-        jnp.asarray(slots),
-        jnp.asarray(weights),
-        jnp.asarray(stops),
-        max(1, int(np.max(stops - np.arange(len(stops))))),
-        (labels, len(channels), scan.max_active_windows, intervals.statistic_count),
-        jax.vmap(noise)(contexts),
+        intervals, jax.tree.leaves(contexts)[0].shape[0], jax.vmap(noise)(contexts)
     )
 
 
@@ -258,7 +232,7 @@ class SequentialObservationRuntime:
         )
 
     def advance(self, previous: jax.Array, state: jax.Array, index: jax.Array) -> jax.Array:
-        """Reset completed slots and integrate the next exact response segment."""
+        """Replay recurrences and carry window memory from the predecessor alone."""
         if self.target.state_space.requires_replay:
             indices = jnp.asarray(self.target.state_space.replayed_coordinates, dtype=jnp.int32)
             replayed = jax.vmap(self.target.replay_step, in_axes=(0, 0, None, None))(
@@ -270,34 +244,22 @@ class SequentialObservationRuntime:
         if self.windows is None:
             return current
         window = self.windows
-        statistics = previous[self.model_dimension :].reshape(window.shape)
-        statistics = jnp.where(window.reset[index - 1][None, ..., None], 0.0, statistics)
-        statistics = (
-            statistics
-            + window.previous[index][None, ..., None]
-            * window.moments(self.contexts, self.replayed_states(previous)[:-1], index - 1)
-            + window.current[index][None, ..., None]
-            * window.moments(self.contexts, self.replayed_states(current)[:-1], index)
+        statistics = window.advance(
+            self.contexts,
+            previous[self.model_dimension :].reshape(window.shape),
+            self.replayed_states(previous)[:-1],
+            index,
         )
         return jnp.concatenate((current, statistics.reshape(-1)))
 
     def replace_current(self, value: jax.Array, state: jax.Array, index: jax.Array) -> jax.Array:
-        """Vary only the current response, holding all past window contributions fixed."""
+        """Vary only the current state; window memory depends on earlier states alone."""
         indices = jnp.asarray(self.target.state_space.replayed_coordinates, dtype=jnp.int32)
         replayed = value[self.target.state_space.size : self.model_dimension].reshape(
             self.replay_shape
         )
         replayed = jnp.where(self.target.independent_mask[index, indices], state[indices], replayed)
-        current = jnp.concatenate((state, replayed.reshape(-1)))
-        if self.windows is None:
-            return current
-        window = self.windows
-        statistics = value[self.model_dimension :].reshape(window.shape)
-        difference = window.moments(
-            self.contexts, self.replayed_states(current)[:-1], index
-        ) - window.moments(self.contexts, self.replayed_states(value)[:-1], index)
-        statistics = statistics + window.current[index][None, ..., None] * difference
-        return jnp.concatenate((current, statistics.reshape(-1)))
+        return jnp.concatenate((state, replayed.reshape(-1), value[self.model_dimension :]))
 
     def log_probs(self, value: jax.Array, index: jax.Array) -> jax.Array:
         """Score exact point and completed-window factors under each parameter label."""

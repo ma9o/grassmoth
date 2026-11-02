@@ -10,7 +10,7 @@ import equinox as eqx
 import jax.numpy as jnp
 
 from grassmoth.artifacts.immutability import freeze_fields
-from grassmoth.models.ssm.compile.observation_windows import window_statistic_count
+from grassmoth.models.ssm.compile.observation_windows import compile_window_memory
 from grassmoth.models.ssm.execution.dynamical_model import build_dynamical_model
 from grassmoth.models.ssm.execution.observation_operator import compile_observation_operator
 from grassmoth.models.ssm.execution.state_transition import SupportedEulerMaruyama
@@ -145,8 +145,11 @@ def build_particle_problem(
         ParticleIntervalObservations(
             declared_model,
             operator,
-            window_statistic_count(
-                operator.window_plan, panel.observation_support.summary_operators
+            compile_window_memory(
+                operator.window_plan,
+                operator.scan,
+                operator.interval_summary_indices,
+                panel.observation_support.summary_operators,
             ),
             runtime.project_state,
         )

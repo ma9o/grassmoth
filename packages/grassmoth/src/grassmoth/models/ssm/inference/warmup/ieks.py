@@ -1,11 +1,11 @@
 """Data-conditioned path centers used only to initialize particle chains.
 
 Each Gauss--Newton iteration smooths an affine approximation of the dynamics
-and a positive-semidefinite quadratic approximation of the exact point reading
-densities. Neither approximation enters a sampling target or a diagnostic.
+and a positive-semidefinite quadratic approximation of the exact reading
+densities, interval readings included through the shared curvature's window
+memory. Neither approximation enters a sampling target or a diagnostic.
 Strong nonlinearity, separated modes and clipped curvature can leave a poor
-start. Interval readings are omitted from this seed; the shared curvature owner
-incorporates their cross-time information only when constructing a chart.
+start.
 """
 
 from __future__ import annotations
@@ -27,21 +27,14 @@ def ieks_path(
     """Run at most twenty damped smoothing iterations at fixed parameters.
 
     Exact replay enforces recurrences, static values and observed constraints
-    after every trial. Backtracking accepts only improvement of the exact
-    point-reading/path density. A failed numerical solve propagates a non-finite
-    result to the initializer's typed failure boundary; it never selects a
-    replacement flat path.
+    after every trial. Backtracking accepts only improvement of the exact path
+    density, including every interval reading. A failed numerical solve
+    propagates a non-finite result to the initializer's typed failure boundary;
+    it never selects a replacement flat path.
     """
-    indices = jnp.arange(initial_path.shape[0])
-    noise = target.prepare_noise_factors(context, target.observations)
-
-    def reading(state: jax.Array, index: jax.Array) -> jax.Array:
-        return target.observation_increment_with_noise(context, noise, state, index)
 
     def score(path: jax.Array) -> jax.Array:
-        return jnp.asarray(
-            target.prior_path_log_prob(context, path) + jnp.sum(jax.vmap(reading)(path, indices))
-        )
+        return jnp.asarray(target.factor_log_prob(context, path, target.observations))
 
     def iteration(path: jax.Array) -> jax.Array:
         curvature = linearize_path(target, context, path)

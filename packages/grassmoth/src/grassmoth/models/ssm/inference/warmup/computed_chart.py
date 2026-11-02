@@ -10,27 +10,23 @@ import jax.numpy as jnp
 from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 from grassmoth.models.ssm.inference.warmup.ieks import ieks_path
-from grassmoth.models.ssm.inference.warmup.path_curvature import (
-    interval_translation,
-    linearize_path,
-)
+from grassmoth.models.ssm.inference.warmup.path_curvature import linearize_path
 from grassmoth.models.ssm.shapes import Array, Float
 
 
 def computed_translation_slopes(
     target: ParticleTarget, position: Float[Array, " U"], path: Float[Array, "T D"]
 ) -> Float[Array, "T D U"]:
-    """Solve the mean cross curvature, including deterministic stages and intervals."""
+    """Solve the mean cross curvature, including deterministic stages and window memory."""
     if position.size == 0:
         return jnp.zeros((*path.shape, 0), dtype=path.dtype)
     context = target.context(position, target.times)
     curvature = linearize_path(target, context, path)
-    slopes = jax.jacfwd(
-        lambda value: curvature.mean(target, target.context(value, target.times), path)
-    )(position)
-    if target.intervals is not None:
-        slopes = interval_translation(target, position, path, curvature, slopes)
-    return jnp.asarray(slopes)
+    return jnp.asarray(
+        jax.jacfwd(lambda value: curvature.mean(target, target.context(value, target.times), path))(
+            position
+        )
+    )
 
 
 def computed_chart(

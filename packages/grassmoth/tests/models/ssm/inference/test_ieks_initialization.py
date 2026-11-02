@@ -59,7 +59,7 @@ def test_linear_gaussian_seed_matches_dense_smoother_including_unobserved_past(g
     assert actual[0, 0] > 0.1
 
 
-def test_correlated_gaussian_seed_conditions_exact_pins_and_omits_interval_readings():
+def test_correlated_gaussian_seed_conditions_exact_pins_and_interval_readings():
     target = _correlated_target(pinned=0.3)
     actual, _ = _seed(target)
     steps, dimension = actual.shape
@@ -82,12 +82,15 @@ def test_correlated_gaussian_seed_conditions_exact_pins_and_omits_interval_readi
             for index in range(steps)
         ]
     )
-    # Two point Gaussian readings and an exact stochastic pin; the interval is omitted.
-    observed = np.array([1, 2, 5])
-    values = np.array([0.1, 0.3, -0.2])
-    expected = prior_mean + covariance[:, observed] @ np.linalg.solve(
-        covariance[np.ix_(observed, observed)] + np.diag([0.2, 0.0, 0.2]),
-        values - prior_mean[observed],
+    # Two point Gaussian readings, an exact stochastic pin and the trapezoidal mean of
+    # both coordinates over [0, 3], which the window memory carries to its anchor.
+    design = np.zeros((4, steps * dimension))
+    design[[0, 1, 2], [1, 2, 5]] = 1.0
+    design[3] = np.repeat([0.5, 1.0, 1.0, 0.5], dimension) / 3.0
+    values = np.array([0.1, 0.3, -0.2, 0.2])
+    expected = prior_mean + covariance @ design.T @ np.linalg.solve(
+        design @ covariance @ design.T + np.diag([0.2, 0.0, 0.2, 0.2]),
+        values - design @ prior_mean,
     )
 
     np.testing.assert_allclose(actual, expected.reshape(steps, dimension), rtol=2e-5, atol=2e-5)

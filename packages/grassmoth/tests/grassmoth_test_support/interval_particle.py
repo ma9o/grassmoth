@@ -12,7 +12,7 @@ import numpy as np
 import numpyro.distributions as dist
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.models.ssm.compile.observation_windows import window_statistic_count
+from grassmoth.models.ssm.compile.observation_windows import compile_window_memory
 from grassmoth.models.ssm.compile.state_space import StateSpace
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
@@ -99,7 +99,9 @@ def interval_target(
         ParticleIntervalObservations(
             declared,
             operator,
-            window_statistic_count(operator.window_plan, summaries),
+            compile_window_memory(
+                operator.window_plan, operator.scan, operator.interval_summary_indices, summaries
+            ),
             lambda _context, state, _index: state,
         )
         if operator.requires_interval_summary_handling

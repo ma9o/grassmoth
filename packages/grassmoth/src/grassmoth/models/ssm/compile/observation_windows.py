@@ -1,4 +1,4 @@
-"""Sparse measurement quadrature, independent of scan slots."""
+"""Sparse measurement quadrature, its scan slots and their predecessor-only memory."""
 
 from __future__ import annotations
 
@@ -179,12 +179,73 @@ def compile_observation_scan(plan: CompiledWindowPlan) -> CompiledObservationSca
     return CompiledObservationScan(previous, current, weights, emissions)
 
 
-def window_statistic_count(
-    plan: CompiledWindowPlan, summary_operators: Sequence[str | None]
-) -> int:
-    """Response moments per window: two when any windowed channel takes a standard deviation."""
-    return (
+@dataclass(frozen=True)
+class CompiledWindowMemory:
+    """Predecessor-only accumulators of every open window on the interval channels.
+
+    Memory at t holds each open window's trapezoid contributions except the anchor's
+    own current term: ``m[t] = where(reset[t-1], 0, m[t-1] + current[t-1] r[t-1])
+    + previous[t] r[t-1]``. An emission at t reads ``m[t] + current[t] r[t]``. Memory
+    therefore depends only on earlier states, so every reading becomes a factor of
+    the current state and its memory. Arrays have axes time, channel and slot.
+    """
+
+    channels: tuple[int, ...]
+    previous: np.ndarray
+    current: np.ndarray
+    reset: np.ndarray
+    emission_slots: np.ndarray
+    emission_weights: np.ndarray
+    replay_stops: np.ndarray
+    statistic_count: int
+
+    def __post_init__(self) -> None:
+        """Detach the compiled schedule's buffers before publishing it."""
+        freeze_fields(self)
+
+    @property
+    def shape(self) -> tuple[int, int, int]:
+        """Channels, reusable slots and response moments carried per time point."""
+        return len(self.channels), int(self.previous.shape[-1]), self.statistic_count
+
+    @property
+    def max_replay(self) -> int:
+        """Longest stretch of later factors that one time point's memory can reach."""
+        return max(1, int(np.max(self.replay_stops - np.arange(len(self.replay_stops)))))
+
+
+def compile_window_memory(
+    plan: CompiledWindowPlan,
+    scan: CompiledObservationScan,
+    channels: tuple[int, ...],
+    summary_operators: Sequence[str | None],
+) -> CompiledWindowMemory:
+    """Own the reset, emission and replay schedule of the interval channels' scan slots."""
+    slots = scan.emission_slots[:, channels]
+    reset = (slots[:, :, None] >= 0) & (
+        np.arange(scan.max_active_windows)[None, None, :] == slots[:, :, None]
+    )
+    steps = len(slots)
+    weights = np.ones((steps, len(channels)))
+    stops = np.minimum(np.arange(steps) + 1, steps - 1)
+    for window in plan.windows:
+        weights[window.anchor_index, channels.index(window.manifest_index)] = window.weights.sum()
+        stops[window.start_index : window.anchor_index] = np.maximum(
+            stops[window.start_index : window.anchor_index], window.anchor_index
+        )
+    # A standard deviation needs the window's sum of squared responses as well.
+    statistic_count = (
         2
         if any(summary_operators[window.manifest_index] == "std" for window in plan.windows)
         else 1
+    )
+    return CompiledWindowMemory(
+        channels,
+        scan.prev_coeffs[:, channels],
+        scan.curr_coeffs[:, channels],
+        reset,
+        slots,
+        weights,
+        stops,
+        statistic_count,
     )
