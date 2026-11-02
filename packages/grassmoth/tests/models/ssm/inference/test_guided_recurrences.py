@@ -223,7 +223,12 @@ def test_recurrence_guide_matches_dense_gaussian_conditioning(steps, random_init
 
 @pytest.mark.parametrize(
     ("method", "kappa"),
-    [("twisted_particle_agrad", 1), ("twisted_particle_agrad", 0)],
+    [
+        ("twisted_particle_agrad", 1),
+        ("twisted_particle_agrad", 0),
+        ("particle_mgrad", 1),
+        ("particle_mgrad", 0),
+    ],
 )
 def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa):
     target = _target(1.0)

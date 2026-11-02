@@ -46,9 +46,8 @@ def validate_sampler_support(
         return ObservationPreflightFailure.rejected(
             "Exact inference currently requires Gaussian latent diffusion for every state."
         )
-    point_readings = not compiled.state_space.recurrence and not any(
-        item.support.support_kind == "interval" for item in compiled.observations
-    )
+    intervals = any(item.support.support_kind == "interval" for item in compiled.observations)
+    point_readings = not compiled.state_space.recurrence and not intervals
     if sampler.scale_chart and not point_readings:
         return ObservationPreflightFailure.rejected(
             "The scale chart requires point readings without deterministic recurrences."
@@ -70,16 +69,16 @@ def validate_sampler_support(
             return ObservationPreflightFailure.rejected(
                 "Prefix-mixture proposals require twisted Particle-aGRAD with kappa=1."
             )
-        if compiled.state_space.requires_replay or any(
-            item.support.support_kind == "interval" for item in compiled.observations
-        ):
+        if compiled.state_space.requires_replay or intervals:
             return ObservationPreflightFailure.rejected(
                 "Prefix-mixture proposals support point readings without replay."
             )
-    if path_update.method == "particle_mgrad" and not point_readings:
+    # Ancestral selection keeps Particle-mGRAD exact with recurrences. Window replay would
+    # need a marginal backward kernel without auxiliary factors, which is not established.
+    if path_update.method == "particle_mgrad" and intervals:
         return ObservationPreflightFailure.rejected(
-            "Particle-mGRAD supports point readings without deterministic recurrences; "
-            "twisted_particle_agrad also supports interval readings and recurrences."
+            "Particle-mGRAD supports point readings only; use twisted_particle_agrad for "
+            "interval readings."
         )
     return None
 

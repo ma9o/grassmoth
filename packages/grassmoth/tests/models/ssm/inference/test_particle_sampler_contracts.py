@@ -111,9 +111,11 @@ def test_guided_configuration_roundtrip_and_continuation_identity(method):
 
 @pytest.mark.parametrize(
     ("support", "recurrences", "accepted"),
-    [("point", (), True), ("interval", (), False), ("point", (AdditiveRecurrences((0,)),), False)],
+    [("point", (), True), ("interval", (), False), ("point", (AdditiveRecurrences((0,)),), True)],
 )
-def test_mgrad_admission_owns_point_only_support(monkeypatch, support, recurrences, accepted):
+def test_mgrad_admission_rejects_only_interval_readings(
+    monkeypatch, support, recurrences, accepted
+):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
