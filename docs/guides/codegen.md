@@ -44,9 +44,7 @@ bun run docs:check   # verify documentation drift, Markdown, and spelling
 
 ### Action-flow charts
 
-Each chart in [`docs/assets/action-flows`](../assets/action-flows) is a native Excalidraw scene, and the scene is the source. After editing a scene, export its SVG, then render and inspect the result. Use `edit_model` as the visual reference and keep its individual check nodes.
-
-Keep the shared styling: 16 px sans-serif body text, monospace titles and outcomes, solid 2 px outlines, rounded stacked cards, slate connectors and pale gray section panels. Requests are indigo, warnings amber, failures red and commits green. Skipped or unavailable results and subsequent actions use dashed gray cards.
+Follow the [action-chart authoring rules](../AGENTS.md#action-flow-charts) for source ownership, visual styling and export verification.
 
 ## Type Naming Conventions
 
@@ -133,7 +131,7 @@ Follow the [type naming conventions](#type-naming-conventions). `DynamicalModelS
 scientific definition retained inside the owning [action result](../../packages/grassmoth/src/grassmoth/actions/contracts/bodies.py); `ConstructSpec`, `IndicatorSpec`, and
 `ParameterSpec` retain their canonical ownership inside it, while [`Value`](../../packages/grassmoth/src/grassmoth/artifacts/base.py) supplies the shared immutable
 base. Server-composed views and study records share this export. Frontend code
-owns presentation and [display-only law composition](../../AGENTS.md#web-app).
+owns presentation and [display-only law composition](../../apps/grassmoth-client/AGENTS.md).
 
 Owned values expose tuples and read-only mappings. Generated outputs have
 readonly properties, arrays and tuples; an ID-keyed map preserves its named key
