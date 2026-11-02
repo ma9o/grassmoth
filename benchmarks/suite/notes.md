@@ -172,7 +172,7 @@ Fits use the exact Euler–Maruyama model on the 1-day clock.
 
 ## SV with a cubic drift: Particle-mGRAD with 80 chains — 2026-10-31
 
-**R̂ passes at the 4,000-draw ceiling on one H200, but bulk ESS for decay and vol-of-vol and tail ESS for vol-of-vol fall short of the 8,000 that 80 chains require.** It is the grassmoth arm of the [README comparison](../../README.md#stochastic-volatility). [Findings](../../scratchpad/sv-cubic-p128-20261031/findings.md).
+**R̂ passes at the 4,000-draw ceiling on one H200, but bulk ESS for decay and vol-of-vol and tail ESS for vol-of-vol fall short of the 8,000 that 80 chains require.** It is the grassmoth arm of the [README comparison](../../README.md#stochastic-volatility-with-cubic-drift). [Findings](../../scratchpad/sv-cubic-p128-20261031/findings.md).
 
 - **Model and data:** [the case above](#sv-with-a-cubic-drift-the-case).
 - **Source:** master `a7cb357b` plus the 80-chain experiment patch, in an isolated checkout: sweep memory planning for 80 chains, a binary-search resampling kernel, parallel CPU convergence diagnostics, GPU telemetry, a 192 GiB host-memory request and a serialization fix. [Patch](../../scratchpad/sv-cubic-20261030/mgrad-final-source.patch).
@@ -192,7 +192,7 @@ Fits use the exact Euler–Maruyama model on the 1-day clock.
 
 ## SV with a cubic drift: NUTS with 32 chains on an M1 Max — 2026-10-31
 
-**Passes all 12 checks at the first checkpoint, 1,000 draws per chain.** It is the NUTS arm of the [README comparison](../../README.md#stochastic-volatility), against the mGRAD fit above. [Findings](../../scratchpad/sv-nuts-local32-20261031/findings.md).
+**Passes all 12 checks at the first checkpoint, 1,000 draws per chain.** It is the NUTS arm of the [README comparison](../../README.md#stochastic-volatility-with-cubic-drift), against the mGRAD fit above. [Findings](../../scratchpad/sv-nuts-local32-20261031/findings.md).
 
 - **Model and data:** identical to the mGRAD fit's.
 - **Source:** the mGRAD fit's source plus a patch that gives each local CPU device a group of four vectorized chains, with no communication between devices inside a sweep block. From a shared adapted state, groups of one, two and four chains per device reproduce the single-device draws, random streams, leapfrog counts and divergences. [Patch](../../scratchpad/sv-nuts-local32-20261031/chain-mesh.patch).
@@ -217,7 +217,7 @@ Every retained transition took 31 leapfrog steps. Mean acceptance was 0.87, with
 
 ## SV with a cubic drift: auxiliary Kalman and centred NUTS on the H200 — 2026-10-31
 
-**More arms of the [README comparison](../../README.md#stochastic-volatility). None passes the check.** The model and data are the mGRAD fit's above. All four fits use seed 19, 2,000 warmup sweeps and float32 on one H200, with profiling, optional diagnostics and LOO off. The README's blocked column is the rerun on master.
+**More arms of the [README comparison](../../README.md#stochastic-volatility-with-cubic-drift). None passes the check.** The model and data are the mGRAD fit's above. All four fits use seed 19, 2,000 warmup sweeps and float32 on one H200, with profiling, optional diagnostics and LOO off. The README's blocked column is the rerun on master.
 
 | Fit | Study and call | Request | Source |
 | --- | --- | --- | --- |

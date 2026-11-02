@@ -20,7 +20,7 @@ Every study is a [continuous-time nonlinear state-space model](docs/assumptions.
 
 The only available samplers always target the exact posterior. Gelman's [folk theorem](https://statmodeling.stat.columbia.edu/2008/05/13/the_folk_theore/) holds that computational trouble often signals a problem with the model, and the agent can't switch to an approximation that hides it (unless translated into model specification). This results in a workflow where the LLM frequently cycles between specification and fitting. To keep fitting interactive we implemented [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) and [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301), which leverage model properties and GPU parallelism to obtain inference times on the order of minutes for the representative classes of problems below.
 
-### [Stochastic volatility](https://doi.org/10.1111/1467-937X.00050)
+### [Stochastic volatility](https://doi.org/10.1111/1467-937X.00050) with cubic drift
 
 Long path (3,000 steps of one state), nonlinear in both the observation (the state sets each return's variance) and the dynamics (a cubic drift pulls the log-variance back), with unknown parameters (persistence and noise scale). See the [case](benchmarks/cases/suite/SV-cubic).
 
