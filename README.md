@@ -71,7 +71,7 @@ See the [dev setup guide](docs/guides/dev_setup.md) for full details including e
 - **[Assumptions and limits](docs/assumptions.md):** the modeling commitments behind every result.
 - **Supported laws:** the [observation law](docs/reference/statistical-model-spec/likelihoods.md) and [parameter and prior](docs/reference/statistical-model-spec/parameters.md) references.
 - **API:** one POST per action returns running progress or the complete saved result; the remaining routes serve the slim timeline, workspaces and uploads. See the Swagger UI at `http://localhost:8100/api/docs` while the tool server runs, and the generated [study API reference](docs/reference/study-api.md).
-- **Guides:** [dev setup](docs/guides/dev_setup.md), [integration testing](docs/guides/agentic_integration_testing.md), [code generation](docs/guides/codegen.md), [public study library](docs/guides/public_study_library.md) and [benchmarks](docs/guides/running_evals.md).
+- **Guides:** [dev setup](docs/guides/dev_setup.md), [integration testing](docs/guides/agentic_integration_testing.md), [code generation](packages/api-types/AGENTS.md#code-generation), [public study library](docs/guides/public_study_library.md) and [benchmarks](docs/guides/running_evals.md).
 - **Local references:** the [reference papers](docs/papers/README.md) and a searchable [Bayesian Workflow wiki](docs/wiki/README.md), downloaded and built on demand.
 
 ## Credits

@@ -42,7 +42,7 @@ Optional keys:
 
 ### 4. Generate API Artifacts and Docs
 
-Generates committed API artifacts and documentation from Python sources. See the [code generation guide](codegen.md) for details.
+Generate committed API artifacts and documentation from Python sources following the [API generation workflow](../../packages/api-types/AGENTS.md#code-generation) and [documentation generation guidance](../AGENTS.md#generated-documentation).
 
 ### 5. Start development servers
 

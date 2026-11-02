@@ -8,4 +8,13 @@ Read the [notebook guidance](notebooks/AGENTS.md) for work in `notebooks/`.
 
 - Apply the root functional-core rules according to [module roles](scripts/checks/architecture_roles.py), including pure modules inside the service. Keep I/O and runtime acquisition in the designated edge and shell owners.
 
-- Export contracts from their Python owners and typed routes through [the API exporter](scripts/codegen/export_api.py). [Story scenarios](../../docs/guides/codegen.md#story-scenarios) use production response models and serialization; their synthetic values are interface examples, never scientific evidence.
+## Contract exports
+
+- Export contracts from their Python owners, [artifact registrations](scripts/artifact_contracts.py) and [typed routes](src/grassmoth_server/api/studies.py) through [export_api.py](scripts/codegen/export_api.py). Update the owning field or endpoint descriptions and follow the [code generation workflow](../../packages/api-types/AGENTS.md#code-generation); the exporter also owns the study API reference and study API agent skill.
+- [type_system_catalog.py](scripts/codegen/type_system_catalog.py) owns generic parameter names, declaration bodies and typed applications. Keep one declaration per Python owner. Preserve separate validation and serialization schemas.
+- Use the [result codec](src/grassmoth_server/study/persistence/codec.py) for shared numerical buffers. Read projections select owned values and declared compact report types; they do not filter or reparse scientific values to recreate a response.
+
+## Story scenarios
+
+- Declare synthetic examples in [story_data.py](scripts/codegen/story_data.py). [export_story_scenarios.py](scripts/codegen/export_story_scenarios.py) validates them with production response models and serializes them with the normal MessagePack codec, call identity and dependency owners.
+- Generate these interface examples through root `bun run codegen`, without loading a study or executing scientific actions. [Client stories](../grassmoth-client/AGENTS.md#story-scenarios) consume the generated responses; synthetic values are never scientific evidence.

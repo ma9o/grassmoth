@@ -37,7 +37,7 @@ Keep scope-specific guidance in its directory's `AGENTS.md` and link it from the
   - Parse, don't validate: each invariant has one owner, a smart constructor or an edge parser, and nothing downstream re-checks it. Pass the owner, not values derived from it. Projections are total; if one seems to need a check, fix the core type.
   - Return expected failures as typed outcomes instead of raising. Only bugs and infrastructure failures raise, and the shell handles them.
 
-- Keep dependencies explicit and preserve strong typing end to end. Follow the [type naming conventions](docs/guides/codegen.md#type-naming-conventions).
+- Keep dependencies explicit and preserve strong typing end to end. Follow the [type naming conventions](packages/grassmoth/AGENTS.md#type-naming-conventions). Web and API TypeScript consumers enable `noUncheckedIndexedAccess` and `exactOptionalPropertyTypes`: sparse lookups retain absence, and omitted request options stay absent.
 
 - These are agreed contracts:
   - the library surface: [grassmoth/public.py](packages/grassmoth/src/grassmoth/public.py) and the signatures of the functions it lists;
