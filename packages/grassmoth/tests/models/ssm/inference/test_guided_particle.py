@@ -1,6 +1,7 @@
 """Independent posterior references for both guided marginalized path updates."""
 
 from dataclasses import replace
+from typing import cast, override
 
 import dynestyx as dsx
 import equinox as eqx
@@ -9,6 +10,7 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 import pytest
+from dynestyx.models import DiscreteTimeStateEvolution
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal, norm
 
@@ -23,6 +25,10 @@ from grassmoth.artifacts.sampling import (
     GuidedPathSpec,
     SamplerSpec,
 )
+from grassmoth.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
+from grassmoth.models.ssm.execution.contracts import MeasurementParams
+from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
+from grassmoth.models.ssm.execution.supported_normal import SupportedNormal
 from grassmoth.models.ssm.inference.conditioning import compile_exact_state_constraints
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -425,9 +431,14 @@ def test_auxiliary_kalman_preserves_complete_parameter_mixture(
         np.testing.assert_allclose(cached, exact, rtol=2e-6, atol=2e-6)
 
 
+@pytest.mark.parametrize("block_length", [None, 1, 2])
 @pytest.mark.parametrize("case", ["windows", "recurrences"])
-def test_auxiliary_kalman_replays_memory_and_preserves_joint_posterior(case):
-    """Window memory and nonlinear recurrences are replayed, never proposed."""
+def test_auxiliary_kalman_replays_memory_and_preserves_joint_posterior(case, block_length):
+    """Window memory and nonlinear recurrences are replayed, never proposed.
+
+    Length-1 blocks update in turn; length-2 blocks share colours for the windows,
+    whose longest span is two steps, and update in turn for the recurrences.
+    """
     target, labels, starts, expected_mean, expected_second, expected_labels = (
         _window_posterior() if case == "windows" else _recurrence_posterior()
     )
@@ -448,7 +459,9 @@ def test_auxiliary_kalman_replays_memory_and_preserves_joint_posterior(case):
     guide = target.context(jnp.asarray([labels.mean()]), target.times)
 
     def advance(path, key):
-        return auxiliary_kalman_step(target, ctx, guide, key, path).latent_path
+        return auxiliary_kalman_step(
+            target, ctx, guide, key, path, block_length=block_length
+        ).latent_path
 
     @jax.jit
     def run(paths):
@@ -464,7 +477,7 @@ def test_auxiliary_kalman_replays_memory_and_preserves_joint_posterior(case):
     probabilities = jax.jit(jax.vmap(lambda path: jnp.exp(ctx.score_labels(path).log_probs)))(paths)
     np.testing.assert_allclose(np.asarray(probabilities).mean(axis=0), expected_labels, atol=0.025)
     assert np.mean(np.any(draws != np.asarray(starts[..., 0]), axis=-1)) > 0.5
-    if case == "recurrences":
+    if case == "recurrences" and block_length is None:
         # Both directions linearize at the guide's replay and score only free coordinates,
         # so the move cannot read whatever recurrence values a path happens to store.
         reference = starts[0]
@@ -478,6 +491,142 @@ def test_auxiliary_kalman_replays_memory_and_preserves_joint_posterior(case):
         exact, stale = (jax.jit(move)(path) for path in (reference, reference.at[:, 1:].add(0.7)))
         np.testing.assert_allclose(stale.proposed[:, 0], exact.proposed[:, 0], atol=1e-6)
         np.testing.assert_allclose(stale.log_acceptance, exact.log_acceptance, atol=1e-5)
+
+
+class _Stock(DiscreteTimeStateEvolution):
+    """x' = 0.7 x + noise and an exact stock E' = E + x."""
+
+    @override
+    def __call__(self, x, u, t_now, t_next):
+        del u, t_now, t_next
+        return SupportedNormal(
+            jnp.array([0.7 * x[0], x[1] + x[0]]), jnp.diag(jnp.array([0.3, 0.0])), (0,)
+        )
+
+
+def _stock_posterior(count):
+    """Dense Gaussian posterior when a precise reading of an exact stock couples the path."""
+    steps = 6
+    times = np.arange(float(steps))
+    readings = np.full((steps, 2), np.nan)
+    readings[1, 0], readings[3, 0], readings[5, 1] = 0.4, -0.2, 1.1
+    noise = np.array([0.2, 0.01])
+    base = interval_target(
+        times,
+        readings,
+        np.column_stack((times, times)),
+        ("last", "last"),
+        state_dim=2,
+        covariance=np.diag(noise),
+    )
+
+    def declared(bound):
+        observation = cast(
+            "HeterogeneousObservation", base.dynamical_model(bound).observation_model
+        )
+        return dsx.DynamicalModel(
+            initial_condition=SupportedNormal(jnp.zeros(2), jnp.diag(jnp.array([1.0, 0.0])), (0,)),
+            state_evolution=_Stock(),
+            observation_model=HeterogeneousObservation(
+                MeasurementParams(
+                    jnp.eye(2), observation.measurement.manifest_means, jnp.diag(jnp.asarray(noise))
+                ),
+                observation.laws,
+            ),
+            t0=0.0,
+        )
+
+    target = replace(
+        base,
+        dynamical_model=declared,
+        state_space=StateSpace(2, (), (0,), (0,), (), (ParallelRecurrences((1,)),)),
+    )
+    innovations = np.eye(steps)
+    for t in range(1, steps):
+        innovations[t, :t] = 0.7 * innovations[t - 1, :t]
+    prior = innovations @ np.diag([1.0, *([0.3] * (steps - 1))]) @ innovations.T
+    # x at t = 1 and 3, and E at t = 5, the sum of x over t < 5.
+    design = np.zeros((3, steps))
+    design[0, 1] = design[1, 3] = 1.0
+    design[2, :5] = 1.0
+    values = np.array([0.4, -0.2, 1.1])
+    predictive = design @ prior @ design.T + np.diag([0.2, 0.2, 0.01])
+    gain = np.linalg.solve(predictive, design @ prior).T
+    covariance = prior - gain @ design @ prior
+    labels = np.array([-0.3, 0.5])
+    means = np.stack([gain @ (values - label) for label in labels])
+    evidence = np.array(
+        [
+            norm.logpdf(label) + multivariate_normal.logpdf(values - label, cov=predictive)
+            for label in labels
+        ]
+    )
+    probabilities = np.exp(evidence - logsumexp(evidence))
+    expected_second = np.einsum(
+        "k,kij->ij", probabilities, covariance[None] + np.einsum("ki,kj->kij", means, means)
+    )
+    rng = np.random.default_rng(11)
+    x = (
+        means[rng.choice(2, count, p=probabilities)]
+        + rng.normal(size=(count, steps)) @ np.linalg.cholesky(covariance).T
+    )
+    stock = np.concatenate((np.zeros((count, 1)), np.cumsum(x, axis=1)[:, :-1]), axis=1)
+    starts = jnp.asarray(np.stack((x, stock), axis=-1), dtype=jnp.float32)
+    return target, labels, starts, probabilities @ means, expected_second, probabilities
+
+
+def test_blocked_kalman_updates_blocks_coupled_by_a_stock_in_turn():
+    """A stock reaches every later block, so blocks must update one at a time.
+
+    Updating same-coloured blocks together here leaves second-moment errors near
+    ten standard errors; the absolute errors stay below the usual 0.035 tolerance.
+    """
+    target, labels, starts, expected_mean, expected_second, expected_labels = _stock_posterior(
+        16384
+    )
+    static = build_smoother_setup(
+        target, num_parameter_particles=2, free_mask=target.independent_mask, diagnostic_metrics=()
+    )
+    ctx = build_smoother_context(
+        static,
+        jnp.asarray(labels[:, None]),
+        jnp.zeros(2),
+        reference=starts[0],
+        delta=jnp.full((starts.shape[1],), 0.3),
+        trajectory_dtype=starts.dtype,
+    )
+    guide = target.context(jnp.asarray([labels.mean()]), target.times)
+
+    @jax.jit
+    def run(paths):
+        def sweep(current, key):
+            moved = jax.vmap(
+                lambda path, draw: (
+                    auxiliary_kalman_step(
+                        target, ctx, guide, draw, path, block_length=1
+                    ).latent_path
+                )
+            )(current, jax.random.split(key, len(current)))
+            return moved, None
+
+        return jax.lax.scan(sweep, paths, jax.random.split(jax.random.key(7), 8))[0]
+
+    paths = run(starts)
+    draws = np.asarray(paths[..., 0], dtype=np.float64)
+    seconds = np.einsum("ni,nj->nij", draws, draws)
+    probabilities = np.asarray(
+        jax.jit(jax.vmap(lambda path: jnp.exp(ctx.score_labels(path).log_probs)))(paths),
+        dtype=np.float64,
+    )
+    count = len(draws)
+    for samples, expected in (
+        (draws, expected_mean),
+        (seconds, expected_second),
+        (probabilities, expected_labels),
+    ):
+        standard_errors = samples.std(axis=0) / np.sqrt(count)
+        assert np.max(np.abs(samples.mean(axis=0) - expected) / standard_errors) < 4.5
+    assert np.mean(np.any(draws != np.asarray(starts[..., 0]), axis=-1)) > 0.9
 
 
 @pytest.mark.parametrize("block_length", [None, 1, 2])

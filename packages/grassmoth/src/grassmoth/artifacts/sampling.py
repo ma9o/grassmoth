@@ -226,7 +226,7 @@ class AuxiliaryKalmanSpec(Value):
     block_length: int | None = Field(
         default=300,
         ge=1,
-        description="Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities.",
+        description="Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. With deterministic recurrences or window memory, each block pays its change in the whole label-conditional path density, and blocks update one at a time unless every window fits within a block.",
     )
     latent_step: LatentStepSpec = Field(
         default_factory=AdaptedLatentStepSpec,
@@ -235,10 +235,9 @@ class AuxiliaryKalmanSpec(Value):
             "acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. "
             "Poor local Gaussian fits, strong nonlinearity and separated parameter or "
             "path modes can lower acceptance. Exact nonlinear Metropolis corrections "
-            "preserve the target. The whole path also supports interval readings and "
-            "deterministic recurrences, which every label replays exactly; blocks support "
-            "point readings without recurrences. Parameter proposals and final "
-            "parameter-label selection remain MPGibbs."
+            "preserve the target. Interval readings and deterministic recurrences are "
+            "replayed exactly under every label, never proposed. Parameter proposals and "
+            "final parameter-label selection remain MPGibbs."
         ),
     )
 

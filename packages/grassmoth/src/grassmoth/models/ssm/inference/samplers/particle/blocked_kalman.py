@@ -1,16 +1,24 @@
-"""Label-conditional, two-colour auxiliary Kalman updates of time blocks.
+"""Label-conditional auxiliary Kalman updates of time blocks.
 
 Draw a label from its exact conditional before using Markov factorization. At
 fixed label and u, nonadjacent blocks are independent given their neighbours.
-The Gaussian is linearized at u, never at the changing path. Each block pays
-its true incoming, internal and outgoing transition and emission densities,
-plus the auxiliary and normalized proposal ratio. Sequential colours preserve
-the conditional law; integrating the sampled label preserves the mixture.
-Exact transition and observation factors are cached across colours and refreshed
-only for accepted blocks and their outgoing transitions. Auxiliary and normalized
-proposal densities remain explicit in each Metropolis ratio.
-Random half-block shifts prevent permanent boundaries. Nonlinear curvature,
-multimodality and long-range dependence can still reduce movement or mixing.
+The Gaussian is linearized at the label's exact replay of u, never at the
+changing path. Each block pays its true incoming, internal and outgoing
+transition and emission densities, plus the auxiliary and normalized proposal
+ratio. Sequential colours preserve the conditional law; integrating the sampled
+label preserves the mixture. Exact transition and observation factors are cached
+across colours and refreshed only for accepted blocks and their outgoing
+transitions. Auxiliary and normalized proposal densities remain explicit in each
+Metropolis ratio. Random half-block shifts prevent permanent boundaries.
+
+Deterministic recurrences and window memory carry a block's influence past its
+neighbours. Those models replay memory exactly and pay each block's change in the
+whole label-conditional path density. Blocks share a colour only while no window
+reaches across a whole block; recurrences and longer windows update one block
+at a time. The block Gaussian conditions on the entering memory but sees only
+the next transition beyond it, so later memory-borne readings cost acceptance.
+Nonlinear curvature, multimodality and long-range dependence can still reduce
+movement or mixing.
 """
 
 from types import MappingProxyType
@@ -18,6 +26,7 @@ from typing import NamedTuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 from grassmoth.models.ssm.inference.samplers.particle.contract import (
     ParticleSmootherResult,
@@ -197,12 +206,20 @@ def blocked_kalman_step(
         jnp.sqrt(variance) * jax.random.normal(auxiliary_key, reference.shape, reference.dtype),
         0.0,
     )
-    curvature = linearize_path(target, context, auxiliary)
-    raw = curvature.proposal_terms(target, context, auxiliary)
+    point = target.replay_path(context, auxiliary)
+    curvature = linearize_path(target, context, point)
+    raw = curvature.proposal_terms(target, context, point)
+    augmented_free = curvature.augment(free, fill=False)
+    augmented_variance = curvature.augment(variance, fill=1.0)
     terms = raw._replace(
         information=GaussianTwist(
-            raw.information.precision + jax.vmap(jnp.diag)(free / variance),
-            raw.information.shift + jnp.where(free, auxiliary / variance, 0.0),
+            raw.information.precision + jax.vmap(jnp.diag)(augmented_free / augmented_variance),
+            raw.information.shift
+            + jnp.where(
+                augmented_free,
+                curvature.augment(auxiliary, fill=0.0) / augmented_variance,
+                0.0,
+            ),
         )
     )
     length = min(block_length, ctx.num_steps)
@@ -218,9 +235,128 @@ def blocked_kalman_step(
     valid = (indices >= 0) & (indices < ctx.num_steps)
     gather = jnp.clip(indices, 0, ctx.num_steps - 1)
     nonempty = jnp.any(free[gather] & valid[:, :, None], axis=(1, 2))
+    starts = jnp.arange(blocks) * length - shift
+    memory = bool(target.state_space.recurrence) or target.intervals is not None
+
+    def augmented(path: jax.Array) -> jax.Array:
+        """The label's exact path followed by its window memory."""
+        exact = target.replay_path(context, path)
+        if target.intervals is None:
+            return exact
+        windows = target.intervals.memory_path(context, exact)
+        return jnp.concatenate((exact, windows.reshape(ctx.num_steps, -1)), axis=-1)
+
     geometry = prepare_block_geometry(
-        terms, free, reference, length=length, starts=jnp.arange(blocks) * length - shift
+        terms,
+        augmented_free,
+        augmented(reference) if memory else reference,
+        length=length,
+        starts=starts,
     )
+    if memory:
+        # Recurrences reach every later block; a window longer than a block reaches past
+        # its neighbour. Either couples same-coloured blocks, so update them in turn.
+        parallel = not target.state_space.recurrence and (
+            target.intervals is None or target.intervals.memory.max_replay <= length
+        )
+        groups = (
+            np.stack([np.arange(parity, blocks + 1, 2)[: (blocks + 1) // 2] for parity in (0, 1)])
+            if parallel
+            else np.arange(blocks)[:, None]
+        )
+
+        def density(path: jax.Array) -> jax.Array:
+            return jnp.asarray(target.factor_log_prob(context, path, ctx.runtime_observations))
+
+        def update(
+            carry: tuple[jax.Array, jax.Array], item: tuple[jax.Array, jax.Array]
+        ) -> tuple[tuple[jax.Array, jax.Array], tuple[jax.Array, jax.Array, jax.Array]]:
+            path, current = carry
+            members, random_key = item
+            sampling_key, acceptance_key = jax.random.split(random_key)
+            present = members < blocks
+            safe = jnp.minimum(members, blocks - 1)
+            neighbours = augmented(path)
+            laws = jax.vmap(
+                lambda block: jax.tree.map(lambda value: value[block], geometry).condition(
+                    neighbours
+                )
+            )(safe)
+            draws = jax.vmap(lambda law, draw_key: law.sample(draw_key))(
+                laws, jax.random.split(sampling_key, members.shape[0])
+            )
+            inside = (
+                (block_ids[None, :] == safe[:, None])[..., None]
+                & free[None]
+                & present[:, None, None]
+            )
+            candidates = jax.vmap(
+                lambda draw, mask: target.replay_path(
+                    context, jnp.where(mask, draw[within, : reference.shape[-1]], path)
+                )
+            )(draws, inside)
+            auxiliary_ratio = -0.5 * jnp.sum(
+                jnp.where(
+                    inside,
+                    ((candidates - auxiliary) ** 2 - (path - auxiliary) ** 2) / variance,
+                    0.0,
+                ),
+                axis=(-2, -1),
+            )
+            times = starts[safe][:, None] + jnp.arange(length)[None]
+            valid = (times >= 0) & (times < ctx.num_steps)
+            old_blocks = jnp.where(
+                valid[..., None], neighbours[jnp.clip(times, 0, ctx.num_steps - 1)], 0.0
+            )
+            log_q_old = jax.vmap(lambda law, value: law.log_density(value))(laws, old_blocks)
+            log_q_new = jax.vmap(lambda law, value: law.log_density(value))(laws, draws)
+            log_acceptance = jnp.minimum(
+                0.0,
+                jax.vmap(density)(candidates) - current + auxiliary_ratio + log_q_old - log_q_new,
+            )
+            accepted = (
+                present
+                & nonempty[safe]
+                & (
+                    jnp.log(
+                        jax.random.uniform(acceptance_key, members.shape, dtype=reference.dtype)
+                    )
+                    < log_acceptance
+                )
+            )
+            # Same-group blocks touch disjoint factors, so accepted blocks combine freely.
+            chosen = jnp.any(inside & accepted[:, None, None], axis=0)
+            proposed = jnp.sum(jnp.where(inside, candidates, 0.0), axis=0)
+            updated = target.replay_path(context, jnp.where(chosen, proposed, path))
+            block_acceptance = (
+                jnp.zeros(blocks, reference.dtype)
+                .at[members]
+                .set(jnp.where(present, log_acceptance, 0.0), mode="drop")
+            )
+            block_accepted = jnp.zeros(blocks, dtype=bool).at[members].set(accepted, mode="drop")
+            return (updated, density(updated)), (
+                jnp.where(jnp.any(inside, axis=0), proposed, path),
+                block_acceptance,
+                block_accepted,
+            )
+
+        (path, _), (proposals, log_acceptance, accepted) = jax.lax.scan(
+            update,
+            (reference, density(target.replay_path(context, reference))),
+            (jnp.asarray(groups), jax.random.split(colour_key, len(groups))),
+        )
+        return _blocked_result(
+            ctx,
+            reference,
+            path,
+            free,
+            block_ids,
+            nonempty,
+            auxiliary,
+            proposals,
+            log_acceptance,
+            accepted,
+        )
 
     noise = target.prepare_noise_factors(context, ctx.runtime_observations)
 
@@ -325,6 +461,33 @@ def blocked_kalman_step(
     (path, _, _), (proposals, log_acceptance, accepted) = jax.lax.scan(
         colour, (reference, *initial_densities), (jnp.arange(2), jax.random.split(colour_key, 2))
     )
+    return _blocked_result(
+        ctx,
+        reference,
+        path,
+        free,
+        block_ids,
+        nonempty,
+        auxiliary,
+        proposals,
+        log_acceptance,
+        accepted,
+    )
+
+
+def _blocked_result(
+    ctx: SmootherContext,
+    reference: jax.Array,
+    path: jax.Array,
+    free: jax.Array,
+    block_ids: jax.Array,
+    nonempty: jax.Array,
+    auxiliary: jax.Array,
+    proposals: jax.Array,
+    log_acceptance: jax.Array,
+    accepted: jax.Array,
+) -> TracedResult[ParticleSmootherResult, AuxiliaryKalmanTraceRecord]:
+    """Report the updated path with one pass of proposals and decisions per block group."""
     moved = jnp.any(accepted, axis=0)[block_ids]
     result = ParticleSmootherResult(
         path,

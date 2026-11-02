@@ -56,8 +56,8 @@ def test_auxiliary_kalman_request_roundtrip_and_identity(step):
     ("support", "recurrences", "metrics", "block_length", "accepted"),
     [
         ("point", (), (), 300, True),
-        ("interval", (), (), 300, False),
-        ("point", (AdditiveRecurrences((0,)),), (), 300, False),
+        ("interval", (), (), 300, True),
+        ("point", (AdditiveRecurrences((0,)),), (), 300, True),
         ("interval", (), (), None, True),
         ("point", (AdditiveRecurrences((0,)),), (), None, True),
         ("point", (), ("particle_weights",), None, False),
