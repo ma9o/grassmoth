@@ -104,7 +104,7 @@ class CurvatureMoments(NamedTuple):
 
 
 def initialize_curvature_moments(geometry: Float[Array, "*batch T D"]) -> CurvatureMoments:
-    """Start an empty window independently for each replica, time and free coordinate."""
+    """Start an empty window independently for each chain, time and free coordinate."""
     return CurvatureMoments(jnp.asarray(0), jnp.zeros_like(geometry))
 
 
@@ -182,7 +182,7 @@ def latent_adaptation(spec: PathUpdateSpec) -> LatentAdaptation:
     )
 
 
-class DsmcAdaptation(NamedTuple):
+class ScaleAdaptationState(NamedTuple):
     """Per-time scales and the recent accepted/proposed movement counts."""
 
     delta: Float[Array, "*batch T"]
@@ -193,28 +193,28 @@ class DsmcAdaptation(NamedTuple):
     proposed_total: Float[Array, "*batch T"]
 
 
-def initialize_adaptation(delta: Float[Array, "*batch T"]) -> DsmcAdaptation:
+def initialize_adaptation(delta: Float[Array, "*batch T"]) -> ScaleAdaptationState:
     """Initialize one scale vector or a batch of scale vectors."""
     shape = (*delta.shape[:-1], ADAPTATION_WINDOW, delta.shape[-1])
     window = jnp.zeros(shape, dtype=delta.dtype)
-    return DsmcAdaptation(
+    return ScaleAdaptationState(
         delta, window, window, jnp.asarray(0), jnp.zeros_like(delta), jnp.zeros_like(delta)
     )
 
 
 @jax.jit
 def adapt_scales(
-    state: DsmcAdaptation,
+    state: ScaleAdaptationState,
     settings: LatentAdaptation,
     accepted: Float[Array, "*batch T"],
     proposed: Bool[Array, "*batch T"] | Float[Array, "*batch T"],
     num_warmup: int | Int[Array, ""],
     maximum: Float[Array, "*batch T"],
-) -> DsmcAdaptation:
+) -> ScaleAdaptationState:
     """Adapt only proposed coordinates; freeze scales and windows after warmup."""
     target = settings.target[0]
 
-    def update() -> DsmcAdaptation:
+    def update() -> ScaleAdaptationState:
         slot = state.iteration % ADAPTATION_WINDOW
         accept_window = state.accepted.at[..., slot, :].set(accepted)
         proposal_window = state.proposed.at[..., slot, :].set(proposed)
@@ -237,11 +237,11 @@ def adapt_scales(
             min_scale=jnp.minimum(DELTA_MIN, maximum),
             max_scale=maximum,
         )
-        return DsmcAdaptation(
+        return ScaleAdaptationState(
             delta, accept_window, proposal_window, iteration, accepted_total, count
         )
 
-    adapted: DsmcAdaptation = jax.lax.cond(
+    adapted: ScaleAdaptationState = jax.lax.cond(
         settings.enabled[0] & (state.iteration < num_warmup), update, lambda: state
     )
     return adapted

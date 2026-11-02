@@ -9,11 +9,8 @@ from pydantic import ValidationError
 
 from grassmoth.artifacts.sampling import (
     AuxiliaryKalmanSpec,
-    DsmcSpec,
     FixedLatentStepSpec,
-    GaussianReferenceTemperingSpec,
     GuidedPathSpec,
-    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
@@ -46,15 +43,9 @@ pytestmark = pytest.mark.contract
 )
 def test_auxiliary_kalman_request_roundtrip_and_identity(step):
     sampler = SamplerSpec.model_validate(
-        {
-            "algorithm": {
-                "method": "mpgibbs",
-                "path_update": {"method": "auxiliary_kalman", "latent_step": step},
-            }
-        }
+        {"path_update": {"method": "auxiliary_kalman", "latent_step": step}}
     )
-    assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
-    assert isinstance(sampler.algorithm.path_update, AuxiliaryKalmanSpec)
+    assert isinstance(sampler.path_update, AuxiliaryKalmanSpec)
     assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
     assert sampler.kernel_identity != SamplerSpec().kernel_identity
     with pytest.raises(ValidationError, match="num_particles"):
@@ -80,42 +71,15 @@ def test_auxiliary_kalman_admission(monkeypatch, support, recurrences, metrics, 
         state_space=StateSpace(1, (), (0,), (0,), (), recurrences),
         observations=(Mock(support=Mock(support_kind=support)),),
     )
-    sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(
-            path_update=AuxiliaryKalmanSpec(), diagnostic_metrics=metrics
-        )
-    )
+    sampler = SamplerSpec(path_update=AuxiliaryKalmanSpec(), diagnostic_metrics=metrics)
     failure = validate_sampler_support(compiled, sampler)
     assert (failure is None) == accepted
 
 
-@pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad", "particle_mgrad"])
-def test_guided_preflight_rejects_tempering_before_compute(monkeypatch, method):
-    from grassmoth.models.ssm import compiled_access
-
-    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
-    compiled = Mock(
-        spec=CompiledDynamicalModel,
-        state_space=StateSpace(1, (), (0,), (0,), (), ()),
-        observations=(),
-    )
-    sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(
-            path_update=GuidedPathSpec(method=method), tempering=GaussianReferenceTemperingSpec()
-        )
-    )
-    failure = validate_sampler_support(compiled, sampler)
-    assert failure is not None
-    assert "tempering" in failure.message
-
-
-@pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad"])
 @pytest.mark.parametrize(
     "recurrences", [(), (AdditiveRecurrences((0,)),), (SequentialRecurrences((0,)),)]
 )
-def test_guided_preflight_accepts_interval_readings_and_recurrences(
-    monkeypatch, method, recurrences
-):
+def test_twisted_preflight_accepts_interval_readings_and_recurrences(monkeypatch, recurrences):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
@@ -125,28 +89,24 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(
         observations=(Mock(support=Mock(support_kind="interval")),),
     )
     sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(
-            path_update=GuidedPathSpec(method=method), compiler_reparameterization=True
-        )
+        path_update=GuidedPathSpec(method="twisted_particle_agrad"),
+        compiler_reparameterization=True,
     )
     assert validate_sampler_support(compiled, sampler) is None
 
 
-@pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad", "particle_mgrad"])
+@pytest.mark.parametrize("method", ["particle_mgrad", "twisted_particle_agrad"])
 def test_guided_configuration_roundtrip_and_continuation_identity(method):
-    sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method=method, kappa=1))
-    )
+    sampler = SamplerSpec(path_update=GuidedPathSpec(method=method, kappa=1))
     assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
-    assert sampler.kernel_identity != SamplerSpec().kernel_identity
+    # Particle-mGRAD with kappa=1 is the default path update.
+    assert (sampler.kernel_identity == SamplerSpec().kernel_identity) == (
+        method == "particle_mgrad"
+    )
     assert (
         sampler.kernel_identity
-        != SamplerSpec(
-            algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method=method, kappa=0))
-        ).kernel_identity
+        != SamplerSpec(path_update=GuidedPathSpec(method=method, kappa=0)).kernel_identity
     )
-    with pytest.raises(ValidationError, match="latent_block_coords"):
-        GuidedPathSpec.model_validate({"method": method, "latent_block_coords": 1})
 
 
 @pytest.mark.parametrize(
@@ -162,21 +122,18 @@ def test_mgrad_admission_owns_point_only_support(monkeypatch, support, recurrenc
         state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
         observations=(Mock(support=Mock(support_kind=support)),),
     )
-    sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method="particle_mgrad"))
-    )
+    sampler = SamplerSpec(path_update=GuidedPathSpec(method="particle_mgrad"))
     failure = validate_sampler_support(compiled, sampler)
     assert (failure is None) == accepted
     if failure is not None:
         assert "Particle-mGRAD" in failure.message
 
 
-@pytest.mark.parametrize("method", ["particle_rwm", "particle_amala", "particle_amala_plus"])
 @pytest.mark.parametrize(
     ("support", "recurrences", "accepted"),
     [("point", (), True), ("interval", (), False), ("point", (AdditiveRecurrences((0,)),), False)],
 )
-def test_dsmc_scale_chart_admission(monkeypatch, method, support, recurrences, accepted):
+def test_scale_chart_admission(monkeypatch, support, recurrences, accepted):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
@@ -185,11 +142,7 @@ def test_dsmc_scale_chart_admission(monkeypatch, method, support, recurrences, a
         state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
         observations=(Mock(support=Mock(support_kind=support)),),
     )
-    sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(
-            path_update=DsmcSpec(method=method), compiler_reparameterization=True, scale_chart=True
-        )
-    )
+    sampler = SamplerSpec(compiler_reparameterization=True, scale_chart=True)
     failure = validate_sampler_support(compiled, sampler)
     assert (failure is None) == accepted
     if failure is not None:
@@ -201,7 +154,6 @@ def test_dsmc_scale_chart_admission(monkeypatch, method, support, recurrences, a
     [
         ("twisted_particle_agrad", 1, "point", (), True),
         ("twisted_particle_agrad", 0, "point", (), False),
-        ("particle_agrad", 1, "point", (), False),
         ("particle_mgrad", 1, "point", (), False),
         ("twisted_particle_agrad", 1, "interval", (), False),
         ("twisted_particle_agrad", 1, "point", (AdditiveRecurrences((0,)),), False),
@@ -217,18 +169,11 @@ def test_prefix_mixture_admission(monkeypatch, method, kappa, support, recurrenc
         observations=(Mock(support=Mock(support_kind=support)),),
     )
     sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(
-            path_update=GuidedPathSpec(method=method, kappa=kappa, prefix_mixture=True)
-        )
+        path_update=GuidedPathSpec(method=method, kappa=kappa, prefix_mixture=True)
     )
     assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
-    assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
-    assert isinstance(sampler.algorithm.path_update, GuidedPathSpec)
-    ordinary = sampler.revised(
-        algorithm=sampler.algorithm.revised(
-            path_update=sampler.algorithm.path_update.revised(prefix_mixture=False)
-        )
-    )
+    assert isinstance(sampler.path_update, GuidedPathSpec)
+    ordinary = sampler.revised(path_update=sampler.path_update.revised(prefix_mixture=False))
     assert sampler.kernel_identity != ordinary.kernel_identity
     assert GuidedPathSpec().prefix_mixture is False
     failure = validate_sampler_support(compiled, sampler)
@@ -240,17 +185,13 @@ def test_prefix_mixture_admission(monkeypatch, method, kappa, support, recurrenc
 @pytest.mark.parametrize(
     "settings",
     [
-        {"drift": "global"},
-        {"amala_kappa": 0.75},
-        {"amala_grad_clip": 2},
-        {"latent_block_coords": 3},
         {"latent_step": {"kind": "fixed", "delta": 0}},
         {"latent_step": {"kind": "adapted", "target": 1}},
     ],
 )
-def test_dsmc_boundary_owns_discrete_choices_and_scale_policy(settings):
+def test_path_update_boundary_owns_scale_policy(settings):
     with pytest.raises(ValidationError):
-        DsmcSpec.model_validate(settings)
+        GuidedPathSpec.model_validate(settings)
 
 
 @pytest.mark.parametrize(
@@ -267,23 +208,12 @@ def test_dsmc_boundary_owns_discrete_choices_and_scale_policy(settings):
 )
 def test_sampler_boundary_rejects_unknown_modes(field):
     raw = (
-        {"path_update": {"method": "particle_rwm", field: "bogus"}}
+        {"path_update": {"method": "particle_mgrad", field: "bogus"}}
         if field == "drift"
         else {field: "bogus"}
     )
     with pytest.raises(ValidationError, match=field):
-        MarginalParticleGibbsSpec.model_validate(raw)
-
-
-@pytest.mark.parametrize(
-    "move", ["none", "centred_mh", "centred_and_scale_noncentred_mh", "centred_nuts"]
-)
-def test_untempered_boundary_rejects_removed_companion_field(move):
-    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-        MarginalParticleGibbsSpec.model_validate(
-            {"tempering": {"kind": "untempered", "companion": move}}
-        )
-    assert MarginalParticleGibbsSpec().tempering.model_dump() == {"kind": "untempered"}
+        SamplerSpec.model_validate(raw)
 
 
 @pytest.mark.parametrize(
@@ -332,7 +262,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         initial_chart=None,
         initial_param_step_size=jnp.asarray([0.01]),
         initial_parameter_chol=jnp.eye(1),
-        path_update=DsmcSpec(latent_step=FixedLatentStepSpec(delta=0.1)),
+        path_update=GuidedPathSpec(latent_step=FixedLatentStepSpec(delta=0.1)),
         min_scale=jnp.asarray([1e-6]),
         max_scale=jnp.asarray([1.0]),
     )
@@ -400,8 +330,6 @@ def test_initialization_failure_stops_production_before_sampling(monkeypatch):
 
 def test_computed_translation_is_the_only_translation_contract():
     ordinary = SamplerSpec()
-    computed = ordinary.revised(
-        algorithm=MarginalParticleGibbsSpec(compiler_reparameterization=True)
-    )
+    computed = ordinary.revised(compiler_reparameterization=True)
     assert ordinary.kernel_identity != computed.kernel_identity
     assert SamplerSpec.model_validate_json(computed.model_dump_json()) == computed

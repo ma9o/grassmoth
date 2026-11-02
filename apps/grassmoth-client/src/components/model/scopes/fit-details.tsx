@@ -13,26 +13,17 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
   const report = fit;
   const { convergence } = report;
   const mcmc = report.inference_diagnostics;
-  const sampler = report.inference_metadata.sampler_diagnostics;
-  const algorithm =
-    sampler && "latent_update_fraction" in sampler ? sampler.settings.algorithm : null;
+  const settings = report.inference_metadata.segments.at(-1)?.settings;
   return (
     <Section title="Chain convergence">
       <Hint>
-        {algorithm?.method === "mpgibbs"
+        {settings
           ? {
-              particle_rwm: "Particle-RWM",
-              particle_amala: "Particle-aMALA",
-              particle_amala_plus: "Particle-aMALA+",
-              particle_agrad: "Particle-aGRAD",
               particle_mgrad: "Particle-mGRAD",
               twisted_particle_agrad: "Twisted Particle-aGRAD",
               auxiliary_kalman: "Auxiliary Kalman",
-            }[algorithm.path_update.method]
-          : {
-              nuts_da: "Joint NUTS-DA",
-              mpgibbs: "Marginalized Particle Gibbs",
-            }[report.inference_metadata.engine.method]}{" "}
+            }[settings.path_update.method]
+          : "Unavailable"}{" "}
         · {mcmc?.num_chains ?? "Unavailable"} chains ×{" "}
         {mcmc?.num_samples_per_chain ?? "Unavailable"} draws ·{" "}
         {report.inference_metadata.duration_seconds.toLocaleString()} s
@@ -66,21 +57,12 @@ export function FitDetails({ context }: { context: ScopeContext }) {
   const report = fit;
   const plot = detail.data?.detail;
   const mcmc = report.inference_diagnostics;
-  const sampler = report.inference_metadata.sampler_diagnostics;
-  const gibbs = sampler && "latent_update_fraction" in sampler ? sampler : null;
-  const nuts = sampler && "max_tree_depth_fraction" in sampler ? sampler : null;
-  const tempering = sampler && "tempering" in sampler ? sampler.tempering : null;
+  const gibbs = report.inference_metadata.sampler_diagnostics;
   const weights = gibbs?.path_weights;
-  const stages =
-    weights?.kind === "dsmc"
-      ? [
-          ...weights.tree.map((node) => ({
-            label: `Level ${node.level}, steps ${node.start}–${node.stop - 1}`,
-            weights: node.weights,
-          })),
-          { label: "Terminal selection", weights: weights.terminal },
-        ]
-      : weights?.filters.map((stage, index) => ({ label: `Step ${index}`, weights: stage }));
+  const stages = weights?.filters.map((stage, index) => ({
+    label: `Step ${index}`,
+    weights: stage,
+  }));
   const lowestWeightStages = stages
     ?.toSorted(
       (left, right) =>
@@ -105,51 +87,6 @@ export function FitDetails({ context }: { context: ScopeContext }) {
                   ? "Unavailable"
                   : formatSignificant(stage.weights.metrics.ess_fraction.mean)
               }`,
-            ])}
-          />
-        </Section>
-      )}
-      {nuts && (
-        <Section title="Joint sampler adaptation">
-          <KeyValue
-            rows={[
-              ["Divergences", String(mcmc?.num_divergences ?? "Unavailable")],
-              ...(nuts.max_tree_depth_fraction === null
-                ? []
-                : [
-                    [
-                      "Maximum tree depth reached",
-                      formatSignificant(nuts.max_tree_depth_fraction),
-                    ] as [string, string],
-                  ]),
-              [
-                "Final step sizes",
-                nuts.final_step_size.map((value) => formatSignificant(value)).join(", "),
-              ],
-            ]}
-          />
-        </Section>
-      )}
-      {tempering && (
-        <Section title="Parallel tempering" wide>
-          <Hint>
-            Each temperature ladder contributes one cold posterior chain. Local movement telemetry
-            below is recorded before replica exchanges.
-          </Hint>
-          <KeyValue
-            rows={[
-              ["Temperatures per chain", String(tempering.inverse_temperatures.length)],
-              ["Ladder frozen at warmup step", String(tempering.ladder_frozen_at_warmup_step)],
-              [
-                "Inverse temperatures",
-                tempering.inverse_temperatures.map((beta) => formatSignificant(beta)).join(", "),
-              ],
-            ]}
-          />
-          <KeyValue
-            rows={tempering.swaps.map((counts, chain) => [
-              `Chain ${chain + 1} swaps by neighboring pair`,
-              counts.map(({ accepted, attempted }) => `${accepted}/${attempted}`).join(" · "),
             ])}
           />
         </Section>

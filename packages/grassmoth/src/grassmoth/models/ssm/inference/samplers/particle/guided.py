@@ -17,7 +17,7 @@ contain an auxiliary factor. For twisted kappa=1, the local proposal and future
 twist share a Gaussian approximation of the readings times the actual auxiliary
 law, in information form.
 The observation score and Hessian are batched once at u, with noise factors reused.
-Kappa=0 and ordinary aGRAD retain their unshifted-auxiliary guide.
+Kappa=0 and Particle-mGRAD retain their unshifted-auxiliary guide.
 Twisting linearizes only at u; exact nonlinear
 transition means are used in proposals and true densities in every weight.
 The optional prefix mixture uses each label's exact transition mean and covariance

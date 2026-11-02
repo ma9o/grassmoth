@@ -9,7 +9,7 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from grassmoth.artifacts.sampling import DsmcSpec, GuidedPathSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -31,7 +31,7 @@ def _scale_target(*, bounded_prior=False):
             bound[0],
             jnp.exp(2 * position[0]).reshape((1, 1)),
         )
-        return model, bound[1], bound[2]
+        return model, bound[1], bound[2], bound[3]
 
     def prior(position):
         if bounded_prior:
@@ -115,7 +115,7 @@ def test_bounded_label_correction_equals_the_two_gaussian_log_densities():
         num_parameter_particles=3,
         parameter_proposal="pseudo_langevin",
         parameter_preconditioner_chol=chol,
-        path_update=DsmcSpec(num_particles=4),
+        path_update=GuidedPathSpec(num_particles=4),
     )
     state = _state(target, kernel, jnp.array([0.5, -0.3]), jnp.zeros((1, 1)), step=0.3)
     traced = jax.jit(kernel.trace_step_fn)(state, jax.random.key(93))
@@ -140,7 +140,7 @@ def test_bounded_label_correction_equals_the_two_gaussian_log_densities():
 @pytest.mark.parametrize(
     "path_update",
     [
-        DsmcSpec(num_particles=8),
+        GuidedPathSpec(num_particles=8),
         GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1),
     ],
 )
@@ -176,10 +176,8 @@ def test_nonfinite_trajectory_densities_have_zero_final_selection_mass():
     target = interval_target(np.array([0.0]), np.array([[np.nan]]), np.array([[0.0]]), ("last",))
     static = build_smoother_setup(
         target,
-        DsmcSpec(num_particles=4),
         num_parameter_particles=4,
         free_mask=target.independent_mask,
-        paid_mix=None,
         diagnostic_metrics=(),
     )
     context = build_smoother_context(

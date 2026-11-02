@@ -19,12 +19,8 @@ from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.reports.inference import FitRuntime
 from grassmoth.artifacts.sampling import (
-    DsmcSpec,
     GaussianInitializationSpec,
     GuidedPathSpec,
-    MarginalParticleGibbsSpec,
-    NutsDASpec,
-    NutsTrajectorySpec,
     SamplerSpec,
 )
 from grassmoth.compute.budget import ComputeBudget, SharedMemoryBudget
@@ -105,16 +101,9 @@ def run(phase, output):
         source_digest="cache-regression", versions={}, compiler={}, devices=("cpu",)
     )
 
-    def execute(label, algorithm, *, prior=1.0, offset=0.0, seed=19, previous=None):
+    def execute(label, template, *, prior=1.0, offset=0.0, seed=19, previous=None):
         question, selection, data = fixture(prior, offset)
-        sampler = SamplerSpec(
-            hardware="local",
-            algorithm=algorithm,
-            num_chains=2,
-            num_warmup=2,
-            num_samples_per_chain=16,
-            seed=seed,
-        )
+        sampler = template.revised(seed=seed)
         events.clear()
         traces.clear()
         compiled.clear()
@@ -157,30 +146,27 @@ def run(phase, output):
         print(label, record["compilations"], f"{record['seconds']:.3f}s", flush=True)
         return result
 
-    algorithms = {
-        "rwm": MarginalParticleGibbsSpec(
-            path_update=DsmcSpec(num_particles=4),
+    samplers = {
+        name: SamplerSpec(
+            hardware="local",
+            num_chains=2,
+            num_warmup=2,
+            num_samples_per_chain=16,
+            path_update=GuidedPathSpec(method=method, num_particles=4),
             initialization=GaussianInitializationSpec(),
             diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights"),
-        ),
-        "agrad": MarginalParticleGibbsSpec(
-            path_update=GuidedPathSpec(method="particle_agrad", num_particles=4),
-            initialization=GaussianInitializationSpec(),
-            diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights"),
-        ),
-        "nuts": NutsDASpec(trajectory=NutsTrajectorySpec(max_tree_depth=2)),
+        )
+        for name, method in (("mgrad", "particle_mgrad"), ("twisted", "twisted_particle_agrad"))
     }
-    first = {name: execute(f"{name}/A", algorithm) for name, algorithm in algorithms.items()}
+    first = {name: execute(f"{name}/A", sampler) for name, sampler in samplers.items()}
     if phase == "reuse":
-        for name, algorithm in algorithms.items():
-            execute(f"{name}/same", algorithm)
-            if name in ("rwm", "nuts"):
-                execute(f"{name}/data", algorithm, offset=0.05)
-            if name == "rwm":
-                execute("rwm/seed", algorithm, seed=20)
-                execute("rwm/prior", algorithm, prior=1.2)
-            if name in ("rwm", "agrad"):
-                execute(f"{name}/continue", algorithm, previous=first[name])
+        for name, sampler in samplers.items():
+            execute(f"{name}/same", sampler)
+            if name == "mgrad":
+                execute("mgrad/data", sampler, offset=0.05)
+                execute("mgrad/seed", sampler, seed=20)
+                execute("mgrad/prior", sampler, prior=1.2)
+            execute(f"{name}/continue", sampler, previous=first[name])
 
 
 if __name__ == "__main__":

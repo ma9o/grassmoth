@@ -1,6 +1,6 @@
 """Center paths of scaled-deviation charts, learned from warmup windows.
 
-Each window's mean translated cold-chain path becomes the frozen center at the
+Each window's mean translated path over chains becomes the frozen center at the
 window's end. Scaling deviations from this center leaves the path's data-pinned
 shape in place, so a diffusion-scale label rescales mainly the diffusion-driven
 deviations. Any frozen center gives the exact target; a poor one costs mixing.

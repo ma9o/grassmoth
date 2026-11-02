@@ -65,7 +65,6 @@ const fit: InferenceReportCore = {
     segments: [],
     num_chains: 1,
     duration_seconds: 0,
-    engine: { method: "mpgibbs" },
     sampler_diagnostics: null,
   },
   inference_diagnostics: null,

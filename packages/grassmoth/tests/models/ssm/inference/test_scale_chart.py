@@ -12,10 +12,8 @@ import pytest
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
-    DsmcSpec,
     GaussianInitializationSpec,
     GuidedPathSpec,
-    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.continuation import frozen_particle_tuning
@@ -23,9 +21,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import run_marginal_particle_gibbs
-from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.targets.coordinates import ScaleChart, TranslationChart
-from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReference
 from grassmoth.models.ssm.inference.warmup.computed_chart import computed_translation_slopes
 from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
@@ -124,57 +120,11 @@ def test_scale_chart_pays_its_jacobian_and_expresses_moments_in_chart_units():
         np.testing.assert_allclose(
             chart_covariance * scale[:, None] * scale[None, :], covariance, rtol=1e-6
         )
-    previous = jnp.array([[0.1], [-0.2]])
-    current = jnp.array([[0.3], [0.0], [-0.4]])
-    elementwise = jax.vmap(
-        lambda ancestor: jax.vmap(
-            lambda descendant: scaled.transition_log_prob(context, ancestor, descendant, 1)
-        )(current)
-    )(previous)
-    np.testing.assert_allclose(
-        scaled.pairwise_transition_log_prob(context, previous, current, 1), elementwise, atol=3e-6
-    )
-    value, gradient = scaled._transition_value_and_grad(
-        context, previous[0], current[0], 1, current_gradient=True
-    )
-    np.testing.assert_allclose(value, elementwise[0, 0], atol=2e-6)
-    np.testing.assert_allclose(
-        gradient,
-        jax.grad(lambda state: scaled.transition_log_prob(context, previous[0], state, 1))(
-            current[0]
-        ),
-        atol=3e-6,
-    )
-    pilot = PaidMixture(path, jnp.full_like(path, 0.4), jnp.array([True]))
-    chart_pilot = pilot.in_coordinates(chart, position)
-    np.testing.assert_allclose(chart.decode(position, chart_pilot.mean), pilot.mean, atol=1e-6)
-    np.testing.assert_allclose(chart_pilot.variance * scale**2, pilot.variance, atol=1e-6)
-    physical_map = target.innovation_map(physical_context, target.independent_mask)
-    chart_map = scaled.innovation_map(context, target.independent_mask)
-    innovations = chart_map.encode(encoded)
-    np.testing.assert_allclose(innovations, physical_map.encode(path), atol=1e-6)
-    restored, chart_logdet = chart_map.decode(innovations)
-    physical, physical_logdet = physical_map.decode(innovations)
-    np.testing.assert_allclose(restored, encoded, atol=1e-6)
-    np.testing.assert_allclose(chart.decode(position, restored), physical, atol=1e-6)
-    np.testing.assert_allclose(chart_logdet + log_jacobian, physical_logdet, atol=1e-6)
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize(
-    ("method", "beta"),
-    [
-        ("particle_agrad", None),
-        ("twisted_particle_agrad", None),
-        ("particle_mgrad", None),
-        ("particle_rwm", None),
-        ("particle_amala", None),
-        ("particle_amala_plus", None),
-        ("particle_amala_plus", 0.0),
-        ("particle_amala_plus", 0.4),
-    ],
-)
-def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method, beta):
+@pytest.mark.parametrize("method", ["twisted_particle_agrad", "particle_mgrad"])
+def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method):
     target, mean, covariance = _gaussian_joint()
     chart = replace(
         _chart(),
@@ -183,30 +133,9 @@ def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method
             jnp.array([0.3]),
         ),
     )
-    if beta is not None:
-        reference = GaussianReference(
-            jnp.zeros(1),
-            jnp.eye(1),
-            jnp.zeros((3, 1)),
-            jnp.zeros((3, 1, 1)),
-            jnp.ones((3, 1, 1)),
-            target.independent_mask,
-        )
-        target = target.at_temperature(reference, jnp.asarray(beta))
-        precision = np.linalg.inv(covariance)
-        covariance = np.linalg.inv(beta * precision + (1 - beta) * np.eye(4))
-        mean = covariance @ (beta * precision @ mean)
-    path_update = (
-        DsmcSpec(method=method, num_particles=8, latent_block_coords=1)
-        if method in ("particle_rwm", "particle_amala", "particle_amala_plus")
-        else GuidedPathSpec(method=method, num_particles=8, kappa=1)
-    )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=path_update,
-        paid_mix=PaidMixture(jnp.full((3, 1), 0.2), jnp.full((3, 1), 0.7), jnp.array([True]))
-        if isinstance(path_update, DsmcSpec)
-        else None,
+        path_update=GuidedPathSpec(method=method, num_particles=8, kappa=1),
         num_parameter_particles=2,
         param_step_size=0.3,
         initial_chart=chart,
@@ -287,7 +216,7 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
     kernel = build_marginal_particle_gibbs_kernel(
         target, path_update=spec, num_parameter_particles=2, initial_chart=chart
     )
-    options = MarginalParticleGibbsSpec(path_update=spec, scale_chart=True)
+    options = SamplerSpec(path_update=spec, scale_chart=True)
 
     def run(warmup, draws, continuation=None):
         # A resumed run must take the saved chart, never a rebuilt template.
@@ -303,9 +232,7 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
         result = run_marginal_particle_gibbs(
             target,
             kernel=resumed_kernel,
-            sampler=SamplerSpec(
-                algorithm=options, num_warmup=warmup, num_samples_per_chain=draws, num_chains=1
-            ),
+            sampler=options.revised(num_warmup=warmup, num_samples_per_chain=draws, num_chains=1),
             key=jax.random.key(31),
             initialization=initialization,
             execution_context=EXECUTION_CONTEXT,
@@ -319,12 +246,12 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
     assert isinstance(full.final_chart, ScaleChart)
     assert not np.allclose(full.final_chart.center, chart.center)
     checkpoint = SamplerCheckpoint(
-        settings=SamplerSpec(algorithm=options),
+        settings=options,
         parameters=NumericalArray.from_numpy(np.asarray(prefix.last_parameters)),
         paths=NumericalArray.from_numpy(np.asarray(prefix.last_paths)),
         random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(prefix.random_key))),
         native_state=prefix.final_state,
-        tuning=frozen_particle_tuning(initialization, None),
+        tuning=frozen_particle_tuning(initialization),
     )
     restored = SamplerCheckpoint.model_validate(checkpoint.model_dump())
     continued = run(0, 2, restored)

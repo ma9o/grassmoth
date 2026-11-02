@@ -1,4 +1,4 @@
-"""Shared categorical weight measurements and tree or sequential projections."""
+"""Categorical weight measurements and their per-time projection."""
 
 from __future__ import annotations
 
@@ -9,8 +9,6 @@ import jax.numpy as jnp
 import numpy as np
 
 from grassmoth.artifacts.reports.posterior_diagnostics import (
-    DsmcNodeWeightDiagnostics,
-    DsmcWeightDiagnostics,
     ParticleWeightDiagnostics,
     ParticleWeightMetric,
     ParticleWeightSummary,
@@ -20,14 +18,11 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from grassmoth.artifacts.reports.posterior_diagnostics import (
-        DiagnosticPhase,
-        PathWeightDiagnostics,
-    )
+    from grassmoth.artifacts.reports.posterior_diagnostics import DiagnosticPhase
 
 
 def weight_statistics(logits: jax.Array) -> dict[ParticleWeightMetric, jax.Array]:
-    """Reduce the last candidate axis, preserving all leading node/batch axes.
+    """Reduce the last candidate axis, preserving all leading time/batch axes.
 
     Negative infinity is a zero-weight candidate. Finite log-weight moments are
     centered before reduction so additive offsets cannot inflate their variance.
@@ -72,7 +67,7 @@ def weight_statistics(logits: jax.Array) -> dict[ParticleWeightMetric, jax.Array
 def weight_history_fields(
     stages: tuple[Mapping[ParticleWeightMetric, jax.Array], ...],
 ) -> dict[str, jax.Array]:
-    """Flatten level-ordered nodes and terminal selection into shared history fields."""
+    """Flatten time-ordered filter stages into shared history fields."""
     return {
         metric.history_key: jnp.concatenate(tuple(stage[metric] for stage in stages))
         for metric in ParticleWeightMetric
@@ -101,9 +96,8 @@ def summarize_particle_weights(
     num_steps: int,
     num_particles: int,
     phase: DiagnosticPhase,
-    sequential: bool,
-) -> PathWeightDiagnostics:
-    """Project native chain/sweep/node histories once for both particle sampler families."""
+) -> SequentialWeightDiagnostics:
+    """Project native chain/sweep/time histories once."""
 
     def finite_scalar(value: np.floating) -> float | None:
         return float(value) if np.isfinite(value) else None
@@ -136,25 +130,6 @@ def summarize_particle_weights(
             metrics={metric: values[index] for metric, values in summaries.items()},
         )
 
-    if sequential:
-        return SequentialWeightDiagnostics(
-            phase=phase, filters=tuple(weights(index, num_particles) for index in range(num_steps))
-        )
-    nodes = tuple(
-        (level, start, min(start + (1 << level), num_steps))
-        for level in range((num_steps - 1).bit_length() + 1)
-        for start in range(0, num_steps, 1 << level)
-    )
-    return DsmcWeightDiagnostics(
-        phase=phase,
-        tree=tuple(
-            DsmcNodeWeightDiagnostics(
-                level=level,
-                start=start,
-                stop=stop,
-                weights=weights(index, num_particles if level == 0 else num_particles**2),
-            )
-            for index, (level, start, stop) in enumerate(nodes)
-        ),
-        terminal=weights(len(nodes), num_particles),
+    return SequentialWeightDiagnostics(
+        phase=phase, filters=tuple(weights(index, num_particles) for index in range(num_steps))
     )

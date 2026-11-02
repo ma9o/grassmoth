@@ -39,8 +39,6 @@ def test_initialization_pairs_parameter_and_path_chains():
             positions=jnp.zeros((2, 1)),
             paths=jnp.zeros((3, 4, 2)),
             parameter_chol=jnp.eye(1),
-            pilot_mean=jnp.zeros((4, 2)),
-            pilot_variance=jnp.ones((4, 2)),
             diagnostics=GaussianInitializationDiagnostics(joint_dimension=9, scale=1.0),
         )
 

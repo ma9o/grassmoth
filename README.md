@@ -33,8 +33,6 @@ Long path (3,000 steps of one state), nonlinear in both the observation (the sta
 | Worst R̂ | **1.016** | 1.037 |
 | Worst bulk ESS per second | 11.7 | **22.8** |
 
-NUTS takes about 20 minutes on an M1 Max CPU to reach ESS 9,395 and R̂ 1.003. mGRAD and blocked Kalman reach a good posterior 3x and 13x faster (R̂ < 1.05 and posterior means within ~2 MCSE of NUTS's).
-
 ### [Lorenz-96](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html)
 
 Wide path (40 states per step), nonlinear in the dynamics (chaotic coupling), with unknown states (half never observed). See the [case](benchmarks/cases/suite/L96).
@@ -78,7 +76,7 @@ See the [dev setup guide](docs/guides/dev_setup.md) for full details including e
 
 ## Credits
 
-- [NumPyro](https://github.com/pyro-ppl/numpyro): distributions, effect handlers and the NUTS kernel.
+- [NumPyro](https://github.com/pyro-ppl/numpyro): distributions, effect handlers and the warmup window schedule.
 - [dynestyx](https://github.com/BasisResearch/dynestyx): continuous-time dynamical models, Euler–Maruyama transitions and masked observation likelihoods.
 - [Diffrax](https://github.com/patrick-kidger/diffrax): SDE and ODE solvers for predictive and counterfactual simulation.
 - [BlackJAX](https://github.com/blackjax-devs/blackjax): step-size adaptation.

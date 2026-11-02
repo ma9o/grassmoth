@@ -34,7 +34,33 @@ def resolve_sampler_spec(
         time_limit_seconds=configured.time_limit_seconds
         if settings.time_limit_seconds is None
         else settings.time_limit_seconds,
-        algorithm=configured.algorithm if settings.algorithm is None else settings.algorithm,
+        n_parameter_particles=configured.n_parameter_particles
+        if settings.n_parameter_particles is None
+        else settings.n_parameter_particles,
+        path_update=configured.path_update
+        if settings.path_update is None
+        else settings.path_update,
+        compiler_reparameterization=configured.compiler_reparameterization
+        if settings.compiler_reparameterization is None
+        else settings.compiler_reparameterization,
+        scale_chart=configured.scale_chart
+        if settings.scale_chart is None
+        else settings.scale_chart,
+        parameter_proposal=configured.parameter_proposal
+        if settings.parameter_proposal is None
+        else settings.parameter_proposal,
+        diagnostic_metrics=configured.diagnostic_metrics
+        if settings.diagnostic_metrics is None
+        else settings.diagnostic_metrics,
+        param_target_accept=configured.param_target_accept
+        if settings.param_target_accept is None
+        else settings.param_target_accept,
+        adaptation_scheme=configured.adaptation_scheme
+        if settings.adaptation_scheme is None
+        else settings.adaptation_scheme,
+        initialization=configured.initialization
+        if settings.initialization is None
+        else settings.initialization,
     )
 
 

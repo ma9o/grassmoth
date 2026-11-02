@@ -12,8 +12,7 @@ import numpy as np
 import numpyro.distributions as dist
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.models.ssm.compile.interval_tree import compile_interval_tree
-from grassmoth.models.ssm.compile.observation_partition import CompiledObservationPartition
+from grassmoth.models.ssm.compile.observation_windows import window_statistic_count
 from grassmoth.models.ssm.compile.state_space import StateSpace
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
@@ -23,11 +22,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
 )
 from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
-from grassmoth.models.ssm.inference.targets.particle import (
-    ParticleContext,
-    ParticleTarget,
-    identity_state,
-)
+from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth_test_support.inference import make_observation_support_runtime
 from grassmoth_test_support.observation import observation_laws
 
@@ -104,8 +99,8 @@ def interval_target(
         ParticleIntervalObservations(
             declared,
             operator,
-            compile_interval_tree(operator.window_plan, summaries, observations),
-            identity_state,
+            window_statistic_count(operator.window_plan, summaries),
+            lambda _context, state, _index: state,
         )
         if operator.requires_interval_summary_handling
         else None
@@ -123,14 +118,6 @@ def interval_target(
             tuple(range(state_dim)),
             (),
             (),
-        ),
-        CompiledObservationPartition(tuple(range(channels)), ()),
-        jnp.broadcast_to(
-            jnp.any(
-                jnp.isfinite(observations) & jnp.asarray([kind == "point" for kind in kinds]),
-                axis=1,
-            )[:, None],
-            (len(times), state_dim),
         ),
         intervals=intervals,
     )

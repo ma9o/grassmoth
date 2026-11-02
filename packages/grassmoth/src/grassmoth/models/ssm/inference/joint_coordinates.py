@@ -1,4 +1,4 @@
-"""Invertible parameterizations of the same exact joint parameter and trajectory posterior."""
+"""Centred coordinates of the exact joint parameter and trajectory posterior."""
 
 from __future__ import annotations
 
@@ -9,15 +9,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from grassmoth.artifacts.joint_parameterization import (
-    CentredParameterizationRecord,
-    JointParameterizationRecord,
-    MixedParameterizationRecord,
-    NonCentredParameterizationRecord,
-)
-
 if TYPE_CHECKING:
-    from grassmoth.artifacts.sampling import JointParameterization
     from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.inference.targets.particle import (
         ParticleContext,
@@ -34,25 +26,13 @@ class CentredParameterization:
     path_chol: jax.Array
 
 
-@dataclass(frozen=True)
-class NonCentredParameterization:
-    """Every free stochastic path coordinate is an exact conditional innovation."""
-
-
-@dataclass(frozen=True, eq=False)
-class MixedParameterization:
-    """Available direct point readings select centred free coordinates, once per fit."""
-
-    centred_mask: jax.Array
-
-
 @jax.tree_util.register_dataclass
 @dataclass(frozen=True, eq=False)
 class JointChart:
     """Seed-dependent numerical inputs; the compiled coordinate policy stays fixed."""
 
     parameter_center: jax.Array
-    affine: CentredParameterization | None
+    affine: CentredParameterization
 
 
 @dataclass(frozen=True, eq=False)
@@ -63,40 +43,16 @@ class JointCoordinates:
     parameter_center: jax.Array
     free_mask: jax.Array
     free_indices: jax.Array
-    parameterization: CentredParameterization | NonCentredParameterization | MixedParameterization
+    parameterization: CentredParameterization
 
     @property
     def chart(self) -> JointChart:
         """Expose the numerical chart independently of masks and model structure."""
-        return JointChart(
-            self.parameter_center,
-            self.parameterization
-            if isinstance(self.parameterization, CentredParameterization)
-            else None,
-        )
+        return JointChart(self.parameter_center, self.parameterization)
 
     def bind(self, chart: JointChart) -> JointCoordinates:
         """Bind a fit's numerical inputs without changing its coordinate policy."""
-        return replace(
-            self,
-            parameter_center=chart.parameter_center,
-            parameterization=self.parameterization if chart.affine is None else chart.affine,
-        )
-
-    @property
-    def record(self) -> JointParameterizationRecord:
-        """Freeze native-coordinate provenance outside numerical tracing."""
-        match self.parameterization:
-            case CentredParameterization():
-                return CentredParameterizationRecord()
-            case NonCentredParameterization():
-                return NonCentredParameterizationRecord()
-            case MixedParameterization(centred_mask=mask):
-                return MixedParameterizationRecord(
-                    centred_mask=tuple(
-                        tuple(bool(value) for value in row) for row in np.asarray(mask)
-                    )
-                )
+        return replace(self, parameter_center=chart.parameter_center, parameterization=chart.affine)
 
     @property
     def parameter_dimension(self) -> int:
@@ -108,17 +64,6 @@ class JointCoordinates:
         """Parameters and free path coordinates, excluding exact recurrences."""
         return self.parameter_dimension + self.free_indices.size
 
-    @property
-    def innovation_mask(self) -> jax.Array:
-        """Stochastic coordinates transformed under this frozen policy."""
-        match self.parameterization:
-            case CentredParameterization():
-                return jnp.zeros_like(self.free_mask)
-            case NonCentredParameterization():
-                return self.free_mask
-            case MixedParameterization(centred_mask=mask):
-                return self.free_mask & ~mask
-
     def _unpack(self, position: jax.Array) -> tuple[jax.Array, jax.Array]:
         values = jnp.zeros(self.free_mask.size, dtype=position.dtype)
         values = values.at[self.free_indices].set(
@@ -128,101 +73,26 @@ class JointCoordinates:
             self.free_mask.shape
         )
 
-    def _path(self, context: ParticleContext, values: jax.Array) -> tuple[jax.Array, jax.Array]:
-        match self.parameterization:
-            case CentredParameterization(path_center=center, path_chol=chol):
-                path = center + jnp.einsum("tij,tj->ti", chol, values)
-                log_jacobian = jnp.sum(
-                    jnp.where(self.free_mask, jnp.log(jnp.diagonal(chol, axis1=-2, axis2=-1)), 0.0)
-                )
-                return self.target.replay_path(context, path), log_jacobian
-            case NonCentredParameterization() | MixedParameterization():
-                return self.target.innovation_map(context, self.innovation_mask).decode(values)
-
-    def encode(self, parameters: jax.Array, path: jax.Array) -> jax.Array:
-        """Encode the same scientific starts into this sampler's native coordinates."""
-        match self.parameterization:
-            case CentredParameterization(path_center=center, path_chol=chol):
-                values = jax.vmap(jnp.linalg.solve)(chol, path - center)
-            case NonCentredParameterization() | MixedParameterization():
-                context = self.target.context(parameters, self.target.times)
-                path = self.target.replay_path(context, path)
-                values = self.target.innovation_map(context, self.innovation_mask).encode(path)
-        result = jnp.concatenate(
-            (parameters - self.parameter_center, values.ravel()[self.free_indices])
-        )
-        return result if self.dimension else jnp.zeros(1, dtype=parameters.dtype)
+    def _path(self, context: ParticleContext, values: jax.Array) -> jax.Array:
+        center, chol = self.parameterization.path_center, self.parameterization.path_chol
+        return self.target.replay_path(context, center + jnp.einsum("tij,tj->ti", chol, values))
 
     def decode(self, position: jax.Array) -> tuple[jax.Array, jax.Array]:
         """Recover aligned scientific parameters and their exact-model trajectory."""
         parameters, values = self._unpack(position)
         context = self.target.context(parameters, self.target.times)
-        path, _ = self._path(context, values)
-        return parameters, path
-
-    def log_density(self, position: jax.Array) -> jax.Array:
-        """Score the authoritative scientific target plus the exact parameterization Jacobian.
-
-        The full density retains centred/pinned marginals and correlated static
-        initial factors. It also transforms a scientific Gaussian tempering
-        reference consistently, with the same Jacobian at every temperature.
-        """
-        parameters, values = self._unpack(position)
-        context = self.target.context(parameters, self.target.times)
-        match self.parameterization:
-            case CentredParameterization():
-                path, log_jacobian = self._path(context, values)
-                density = (
-                    jnp.asarray(
-                        self.target.log_prior(parameters)
-                        + self.target.factor_log_prob(context, path, self.target.observations)
-                    )
-                    + log_jacobian
-                )
-            case NonCentredParameterization() | MixedParameterization():
-                mapping = self.target.innovation_map(context, self.innovation_mask)
-                path, log_jacobian = mapping.decode(values)
-
-                def exact_path_density() -> jax.Array:
-                    return mapping.transformed_log_prob(values, path)
-
-                bridge = self.target.bridge
-                path_density = (
-                    exact_path_density()
-                    if bridge is None
-                    else bridge.combine(
-                        exact_path_density, bridge.reference.path_log_prob(path) + log_jacobian
-                    )
-                )
-                density = jnp.asarray(
-                    self.target.log_prior(parameters)
-                    + path_density
-                    + jnp.sum(
-                        self.target.observation_log_probs(context, path, self.target.observations)
-                    )
-                )
-        auxiliary = position[self.dimension :]
-        return density - 0.5 * jnp.sum(auxiliary**2) - 0.5 * auxiliary.size * jnp.log(2 * jnp.pi)
+        return parameters, self._path(context, values)
 
 
 def build_joint_coordinates(
-    target: ParticleTarget,
-    parameterization: JointParameterization = "centred",
-    *,
-    compiler: ProgramCompiler,
+    target: ParticleTarget, *, compiler: ProgramCompiler
 ) -> JointCoordinates:
-    """Freeze the policy; parameter-dependent innovation maps bind at each evaluation."""
+    """Freeze the affine path scale at the target's initial parameters."""
     position = target.initial_position
     free = target.independent_mask
     if target.exact_constraints is not None:
         free = free & target.exact_constraints.free_mask
     indices = jnp.asarray(np.flatnonzero(np.asarray(free)), dtype=jnp.int32)
-    if parameterization == "non_centred":
-        return JointCoordinates(target, position, free, indices, NonCentredParameterization())
-    if parameterization == "mixed":
-        return JointCoordinates(
-            target, position, free, indices, MixedParameterization(free & target.point_reading_mask)
-        )
 
     def affine_chart(parameters: jax.Array) -> CentredParameterization:
         context = target.context(parameters, target.times)

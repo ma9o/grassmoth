@@ -190,10 +190,8 @@ def test_conditional_path_scores_and_guides_preserve_label_permutation(summary):
     spec = GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1)
     setup = build_smoother_setup(
         target,
-        spec,
         num_parameter_particles=3,
         free_mask=target.independent_mask,
-        paid_mix=None,
         diagnostic_metrics=(),
     )._replace(
         trajectory_log_prob_fn=lambda context, path, _: precision.path_log_prob(

@@ -19,7 +19,7 @@ from grassmoth.artifacts.model.likelihood import (
 from grassmoth.artifacts.model.parameter_context import iter_coefficient_uses
 from grassmoth.artifacts.observations.spec import LabeledMeasurement, NumericMeasurement
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import DsmcSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.execution.observation_model import compile_observation_model
 from grassmoth.models.ssm.inference import problem as problem_module
@@ -30,7 +30,6 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
 )
-from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     _masked_mean,
     _masked_normal_log_prob,
@@ -430,7 +429,7 @@ def _conditioned_initial_state(problem):
     runtime = problem.runtime
     kernel = build_marginal_particle_gibbs_kernel(
         runtime,
-        path_update=DsmcSpec(num_particles=4),
+        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=problem.exact_constraints,
@@ -490,56 +489,32 @@ def test_conditioned_target_preserves_initial_and_transition_evidence(point_prob
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize("proposal", ["amala", "amala_plus"])
-def test_conditioned_smoother_traces_with_missing_and_observed_coordinates(point_problem, proposal):
+@pytest.mark.parametrize("kappa", [0, 1])
+def test_conditioned_smoother_traces_with_missing_and_observed_coordinates(point_problem, kappa):
     runtime = point_problem.runtime
     state = _conditioned_initial_state(point_problem)
-    path = state.latent_trajectory
     kernel = build_marginal_particle_gibbs_kernel(
         runtime,
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        paid_mix=PaidMixture(path, jnp.ones_like(path), jnp.asarray([True])),
-        path_update=DsmcSpec(
-            num_particles=4,
-            method=(
-                "particle_rwm"
-                if (proposal) == "none"
-                else "particle_amala"
-                if (proposal) == "amala"
-                else "particle_amala_plus"
-            ),
-            latent_block_coords=1,
-        ),
+        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4, kappa=kappa),
     )
     shape, _ = jax.eval_shape(kernel.step_fn, state, jax.random.key(1))
     assert shape.latent_trajectory.shape == (3, 2)
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize("proposal", ["amala", "amala_plus"])
-def test_particle_updates_keep_exact_readings_and_move_missing_states(point_problem, proposal):
+@pytest.mark.parametrize("kappa", [0, 1])
+def test_particle_updates_keep_exact_readings_and_move_missing_states(point_problem, kappa):
     runtime = point_problem.runtime
     state = _conditioned_initial_state(point_problem)
-    path = state.latent_trajectory
     kernel = build_marginal_particle_gibbs_kernel(
         runtime,
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        paid_mix=PaidMixture(path, jnp.ones_like(path), jnp.asarray([True])),
-        path_update=DsmcSpec(
-            num_particles=16,
-            method=(
-                "particle_rwm"
-                if (proposal) == "none"
-                else "particle_amala"
-                if (proposal) == "amala"
-                else "particle_amala_plus"
-            ),
-            latent_block_coords=1,
-        ),
+        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=16, kappa=kappa),
     )
     step = jax.jit(kernel.step_fn)
     missing_values = []

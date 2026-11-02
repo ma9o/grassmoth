@@ -19,7 +19,7 @@ class TrajectoryMCMCState(NamedTuple):
     """Joint position and context carried between offline kernel calls."""
 
     position: Float[Array, "*batch U"]
-    # Fixed-pilot parameter oracle at this position and this replica's target.
+    # Fixed-pilot parameter oracle at this position and this chain's target.
     parameter_gradient: Float[Array, "*batch U"]
     latent_context: ParticleContext  # noqa: F841, RUF100 - Retained state inspection in notebooks reads the bound context; Vulture checks src separately.
     latent_trajectory: Float[Array, "*batch T D"]
@@ -96,7 +96,6 @@ class TrajectoryMCMCResult:
     chain_extra_fields: Mapping[str, jax.Array | np.ndarray[tuple[int, ...], np.dtype[np.generic]]]
     num_chains: int
     num_samples: int
-    backend: str = "marginal_particle_gibbs"
 
     def get_samples(
         self, *, group_by_chain: bool = False

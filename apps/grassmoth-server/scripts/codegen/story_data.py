@@ -369,7 +369,6 @@ def fit() -> FitOutput:
                         "num_samples_total": 4,
                         "num_chains": 2,
                         "duration_seconds": 0,
-                        "engine": {"method": "mpgibbs"},
                         "sampler_diagnostics": None,
                     },
                     "inference_diagnostics": None,

@@ -8,12 +8,8 @@ import pytest
 
 from grassmoth.actions.fit.inputs import FitInputs
 from grassmoth.artifacts.sampling import (
-    DsmcSpec,
     GaussianInitializationSpec,
     GuidedPathSpec,
-    MarginalParticleGibbsSpec,
-    NutsDASpec,
-    NutsTrajectorySpec,
     SamplerSpec,
 )
 from grassmoth_server.actions.fit.action import run_fit
@@ -29,10 +25,8 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
         num_chains=2,
         num_warmup=2,
         num_samples_per_chain=2,
-        algorithm=MarginalParticleGibbsSpec(
-            initialization=GaussianInitializationSpec(),
-            path_update=GuidedPathSpec(method="particle_agrad", num_particles=4),
-        ),
+        initialization=GaussianInitializationSpec(),
+        path_update=GuidedPathSpec(num_particles=4),
     )
     inputs = FitInputs(
         selection=selection,
@@ -63,7 +57,7 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
     assert report.particle_dimensions is not None
     assert report.particle_dimensions.particles == 4
     assert report.particle_dimensions.labels == 2
-    assert report.chains == report.particle_dimensions.replicas == 2
+    assert report.chains == 2
     assert report.time_steps == 3
     assert json.loads((directory / "summary.json").read_text()) == report.model_dump(mode="json")
     assert not list(directory.rglob("*.trace.json.gz"))
@@ -112,16 +106,7 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
 
 
 @pytest.mark.parametrize("draws", [0, 1])
-@pytest.mark.parametrize(
-    "algorithm",
-    [
-        MarginalParticleGibbsSpec(
-            initialization=GaussianInitializationSpec(), path_update=DsmcSpec(num_particles=4)
-        ),
-        NutsDASpec(trajectory=NutsTrajectorySpec(max_tree_depth=2)),
-    ],
-)
-def test_profile_compile_only_and_first_sweep(algorithm, draws, tmp_path):
+def test_profile_compile_only_and_first_sweep(draws, tmp_path):
     question, selection, data = fixture()
     result = run_fit(
         FitInputs(
@@ -133,7 +118,8 @@ def test_profile_compile_only_and_first_sweep(algorithm, draws, tmp_path):
                 num_chains=1,
                 num_warmup=0,
                 num_samples_per_chain=draws,
-                algorithm=algorithm,
+                initialization=GaussianInitializationSpec(),
+                path_update=GuidedPathSpec(num_particles=4),
             ),
             compute_loo_diagnostics=False,
         ),
@@ -143,7 +129,5 @@ def test_profile_compile_only_and_first_sweep(algorithm, draws, tmp_path):
     assert report is not None
     assert report.phase == ("after_first_sweep" if draws else "compile_only")
     assert report.repetitions == (10 if draws else 0)
-    expected = {"full_sweep"}
-    if isinstance(algorithm, MarginalParticleGibbsSpec):
-        expected |= {"parameter_move", "path_smoother"}
+    expected = {"full_sweep", "parameter_move", "path_smoother"}
     assert {row.component for row in report.components} == (expected if draws else set())

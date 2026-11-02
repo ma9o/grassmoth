@@ -43,7 +43,7 @@ def test_retained_chart_coordinates_preserve_physical_identity_and_caches(
     kernel = kernel_module.build_marginal_particle_gibbs_kernel(
         target,
         num_parameter_particles=2,
-        path_update=GuidedPathSpec(method="particle_agrad", num_particles=2),
+        path_update=GuidedPathSpec(method="particle_mgrad", num_particles=2),
         initial_chart=chart,
     )
     state = _initialize_chain_state(
@@ -98,7 +98,7 @@ def test_charted_profile_components_return_production_physical_paths_and_caches(
     )
     keys = jax.random.split(jax.random.key(318), 2)
     production, _ = jax.jit(jax.vmap(kernel.step_fn))(states, keys)
-    profile = kernel.profile_parts(states, keys, 1, compile_program)
+    profile = kernel.profile_parts(states, keys, compile_program)
     parameter_outputs = jax.block_until_ready(profile.parameter_move())
     path_outputs = jax.block_until_ready(profile.path_smoother())
     assert parameter_outputs

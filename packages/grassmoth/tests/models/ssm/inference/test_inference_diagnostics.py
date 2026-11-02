@@ -82,20 +82,16 @@ def particle_posterior():
         "beta": jnp.asarray([2.5, -0.2]) + jnp.asarray(0.08 * rng.normal(size=(2, 64, 2))),
         "sigma": jnp.asarray(0.5 + 0.04 * rng.normal(size=(2, 64))),
     }
-    divergences = np.zeros((2, 64), dtype=bool)
-    divergences[0, 4] = True
+    parameter_moves = np.zeros((2, 64))
+    parameter_moves[0, 4] = 1.0
     mcmc = TrajectoryMCMCResult(
         chain_samples=samples,
         chain_extra_fields={
-            "diverging": jnp.asarray(divergences),
-            "num_steps": jnp.full((2, 64), 4),
-            "tree_depth": jnp.full((2, 64), 3),
-            "accept_prob": jnp.full((2, 64), 0.84),
-            "energy": jnp.asarray(4.0 + rng.normal(size=(2, 64))),
+            "parameter_accept_prob": jnp.asarray(parameter_moves),
+            "latent_accept_prob": jnp.full((2, 64), 0.84),
         },
         num_chains=2,
         num_samples=64,
-        backend="marginal_particle_gibbs",
     )
     return MCMCPosterior.from_run(
         draws=JointPosteriorDraws(parameters=mcmc.get_samples()),
@@ -113,12 +109,8 @@ def test_mcmc_report_preserves_coordinate_metrics_chains_and_sampler_statistics(
     traces, ranks = particle_posterior.get_chain_detail(refs)
     assert report.num_chains == 2
     assert report.num_samples_per_chain == 64
-    assert report.num_divergences == 1
-    assert report.divergence_rate == pytest.approx(1 / 128)
-    assert report.tree_depth_mean == report.tree_depth_max == 3
-    assert report.accept_prob_mean == pytest.approx(0.84)
-    assert len(report.energy.bfmi) == 2
-    assert all(np.isfinite(value) and value > 0 for value in report.energy.bfmi)
+    assert report.parameter_accept_prob_mean == pytest.approx(1 / 128)
+    assert report.latent_accept_prob_mean == pytest.approx(0.84)
     assert len(report.per_parameter) == len(traces) == len(ranks) == 4
     for metric, trace, hist, (name, indices) in zip(
         report.per_parameter, traces, ranks, coordinates, strict=True
@@ -163,7 +155,7 @@ def test_saved_host_telemetry_is_shared_and_gives_the_same_diagnostics(particle_
 
 
 @pytest.mark.inference(concern="sampling")
-def test_posterior_marginals_and_traces_preserve_joint_draws_and_divergences(particle_posterior):
+def test_posterior_marginals_and_traces_preserve_joint_draws_and_extra_fields(particle_posterior):
     coords = [("alpha", ()), ("beta", (0,)), ("beta", (1,)), ("sigma", ())]
     refs = references(coords)
     marginals = compute_posterior_marginals(particle_posterior.draws.parameters, refs, n_bins=8)
@@ -180,14 +172,14 @@ def test_posterior_marginals_and_traces_preserve_joint_draws_and_divergences(par
         assert marginal.interval_mass == 0.94
         assert len(marginal.density_curve.x) == len(marginal.density_curve.density) == 8
         assert min(marginal.density_curve.density) >= 0
-    expected_divergences = [False] * 128
-    expected_divergences[4] = True
+    expected_moves = [0.0] * 128
+    expected_moves[4] = 1.0
     traces, _ = particle_posterior.get_chain_detail(refs)
     columns = {trace.subject: np.asarray(trace.chains).reshape(-1) for trace in traces}
-    assert tuple(
-        bool(value)
-        for value in particle_posterior.diagnostics.mcmc.get_extra_fields()["diverging"].reshape(-1)
-    ) == tuple(expected_divergences)
+    extra = particle_posterior.diagnostics.mcmc.get_extra_fields()
+    assert tuple(float(value) for value in extra["parameter_accept_prob"].reshape(-1)) == tuple(
+        expected_moves
+    )
     for coordinate, (_, subject) in refs.items():
         values = particle_posterior.get_samples()[coordinate.site_name][
             (slice(None), *coordinate.indices)

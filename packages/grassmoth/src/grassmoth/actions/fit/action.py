@@ -25,7 +25,6 @@ from grassmoth.artifacts.reports.inference import (
     InferenceReportDetail,
 )
 from grassmoth.artifacts.reports.profiling import ProgramCompileReport
-from grassmoth.artifacts.sampling import MarginalParticleGibbsSpec
 from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
 from grassmoth.models.ssm.inference.samplers.profiling import compilation_seconds, log_profile
 from grassmoth.models.ssm.inference.samplers.progress import capture_phases, inference_phase
@@ -95,9 +94,6 @@ def _fit(
             settings=sampler,
             runtime=runtime,
             phases=tuple(phases),
-            parameterization=result.parameterization
-            if isinstance(result, UnretainedRun)
-            else result.diagnostics.parameterization,
         )
 
     encoded_arrays: dict[int, tuple[object, NumericalArray]] = {}
@@ -137,7 +133,6 @@ def _fit(
                 num_samples_total=0,
                 num_chains=sampler.num_chains,
                 duration_seconds=fitted.duration_seconds,
-                engine=result.evidence,
                 sampler_diagnostics=None,
                 segments=(segment(None),),
             ),
@@ -180,11 +175,7 @@ def _fit(
         if inputs.compute_loo_diagnostics
         else None,
         observed_rows=retain(np.any(np.isfinite(fitted.panel.observations), axis=1))
-        if inputs.compute_loo_diagnostics
-        or (
-            isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
-            and "regional_movement" in sampler.algorithm.diagnostic_metrics
-        )
+        if inputs.compute_loo_diagnostics or "regional_movement" in sampler.diagnostic_metrics
         else None,
         exact_observation_rows=retain(native.exact_observation_rows),
         phase_extra_fields={
@@ -197,16 +188,13 @@ def _fit(
         final_latent_delta=retain(result.final_latent_delta),
     )
     with inference_phase("fit", "segment_diagnostics", execution_context=execution_context):
-        diagnostics = segment_diagnostics(
-            conditioned, identity, evidence, sampler.num_chains, result.evidence
-        )
+        diagnostics = segment_diagnostics(conditioned, identity, evidence, sampler.num_chains)
     metadata = InferenceMetadata(
         distribution=identity,
         segments=(
             *(previous.inference.core.inference_metadata.segments if previous is not None else ()),
             segment(diagnostics),
         ),
-        engine=result.evidence,
         duration_seconds=fitted.duration_seconds,
         num_chains=native.mcmc.num_chains,
         num_samples_total=native.mcmc.num_chains * (old_count + native.mcmc.num_samples),
@@ -363,7 +351,6 @@ def inference_report(
                         chain_extra_fields=extra,
                         num_chains=chains,
                         num_samples=count // chains,
-                        backend=metadata.engine.method,
                     ),
                     observation_log_probs=np.asarray(evidence.observation_log_probs.values)
                     if evidence.observation_log_probs is not None
@@ -372,7 +359,6 @@ def inference_report(
                     if evidence.exact_observation_rows is not None
                     else None,
                 ),
-                evidence=metadata.engine,
             )
             diagnostics = (
                 metadata.segments[0].diagnostics
@@ -403,8 +389,7 @@ def inference_report(
         metrics = frozenset(
             metric
             for segment in metadata.segments[-1:]
-            if isinstance(segment.settings.algorithm, MarginalParticleGibbsSpec)
-            for metric in segment.settings.algorithm.diagnostic_metrics
+            for metric in segment.settings.diagnostic_metrics
         )
         labels = {
             identity: dynamical_model_spec.get_construct(identity).name

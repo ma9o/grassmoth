@@ -39,7 +39,6 @@ def _report(model):
     from grassmoth.artifacts.reports.posterior_diagnostics import (
         ChainDiagnostics,
         LatentDiagnostics,
-        MCMCEvidence,
         ParameterDiagnostics,
     )
     from grassmoth.models.ssm.compile.bindings import parameter_bindings
@@ -83,7 +82,6 @@ def _report(model):
                 num_samples_total=12,
                 num_chains=4,
                 duration_seconds=0,
-                engine=MCMCEvidence(),
                 sampler_diagnostics=None,
             ),
             inference_diagnostics=diagnostics,

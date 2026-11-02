@@ -143,8 +143,8 @@ The latent step adapts in warmup under a per-coordinate observation-curvature
 bound and freezes before the retained draws. The `fit` requests pin every setting.
 
 Tournament candidates include:
-- dSMC with Particle-RWM;
-- Particle-aGRAD;
+- Particle-mGRAD;
+- auxiliary Kalman;
 - κ = 0.
 
 ## Judging
@@ -162,8 +162,6 @@ Tournament candidates include:
 - Rejected, timed-out, errored, refused, invalid and unrun cases are reported as
   such, not as sampling results.
 - Truth recovery is reported, not gated: each case is one simulated history.
-- NUTS runs only as a declared diagnostic, at most once per case, when no arm of
-  that case converges at the schedule. It isn't a reference fit.
 
 ## Running
 

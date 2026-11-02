@@ -16,16 +16,9 @@ from grassmoth.artifacts.continuation import (
 )
 from grassmoth.artifacts.identity import ConstructRef
 from grassmoth.artifacts.reports.posterior_diagnostics import (
-    MCMCEvidence,
     ParticleSamplerDiagnostics,
 )
-from grassmoth.artifacts.sampling import (
-    AuxiliaryKalmanSpec,
-    DsmcSpec,
-    GaussianReferenceTemperingSpec,
-    MarginalParticleGibbsSpec,
-)
-from grassmoth.compute.programs import scalar_operand
+from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec
 from grassmoth.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
@@ -38,16 +31,11 @@ from grassmoth.models.ssm.inference.extraction import (
 from grassmoth.models.ssm.inference.problem import build_particle_problem
 from grassmoth.models.ssm.inference.reparameterization import AutoReparam
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
-    MarginalParticleGibbsKernel,
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     run_marginal_particle_gibbs,
 )
-from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
-    ReplicaExchangeKernel,
-)
-from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_particle_weights
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.targets.coordinates import (
@@ -62,7 +50,6 @@ from grassmoth.models.ssm.inference.types import (
     UnretainedRun,
 )
 from grassmoth.models.ssm.inference.warmup.computed_chart import computed_chart
-from grassmoth.models.ssm.inference.warmup.gaussian_reference import build_gaussian_reference
 from grassmoth.models.ssm.inference.warmup.initialization import (
     continued_particle_initialization,
     prepare_particle_initialization,
@@ -73,7 +60,6 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.reports.posterior_diagnostics import DiagnosticPhase
     from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.compute.context import ModelExecutionContext
-    from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
     from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
     from grassmoth.models.ssm.preparation.binding import BoundPanel
 
@@ -91,8 +77,6 @@ def fit_marginal_particle_gibbs(
     clock = execution_context.clock
     logger = execution_context.logger
     observations = panel.observations
-    options = sampler.algorithm
-    assert isinstance(options, MarginalParticleGibbsSpec)
     overall_t0 = clock()
     logger.info(
         "marginal_particle_gibbs entry: chains=%d warmup=%d samples=%d T=%d "
@@ -102,11 +86,11 @@ def fit_marginal_particle_gibbs(
         sampler.num_samples_per_chain,
         int(observations.shape[0]),
         int(observations.shape[1]) if observations.ndim >= 2 else 0,
-        options.path_update.method,
+        sampler.path_update.method,
         None
-        if isinstance(options.path_update, AuxiliaryKalmanSpec)
-        else options.path_update.num_particles,
-        options.n_parameter_particles,
+        if isinstance(sampler.path_update, AuxiliaryKalmanSpec)
+        else sampler.path_update.num_particles,
+        sampler.n_parameter_particles,
     )
 
     base_key = random.key(sampler.seed)
@@ -141,7 +125,7 @@ def fit_marginal_particle_gibbs(
         ):
             initialization = prepare_particle_initialization(
                 bundle.runtime,
-                spec=options.initialization,
+                spec=sampler.initialization,
                 key=initialization_key,
                 num_chains=sampler.num_chains,
                 execution_context=execution_context,
@@ -149,7 +133,7 @@ def fit_marginal_particle_gibbs(
     if isinstance(initialization, InitializationFailure):
         return initialization
     translation: TranslationChart | None = None
-    if options.compiler_reparameterization and continuation is not None and sampler.num_warmup == 0:
+    if sampler.compiler_reparameterization and continuation is not None and sampler.num_warmup == 0:
         # Shape template only: the runner restores the complete frozen native chart
         # before any sweep, without rebuilding or revalidating its construction.
         positions, paths = jnp.asarray(initialization.positions), jnp.asarray(initialization.paths)
@@ -157,7 +141,7 @@ def fit_marginal_particle_gibbs(
             jnp.zeros((*paths.shape[1:], positions.shape[-1]), paths.dtype),
             jnp.mean(positions, axis=0),
         )
-    elif options.compiler_reparameterization:
+    elif sampler.compiler_reparameterization:
         chart_started = clock()
 
         def construct_chart(positions: jax.Array, paths: jax.Array) -> TranslationChart:
@@ -184,7 +168,7 @@ def fit_marginal_particle_gibbs(
             np.asarray(translation.reference).tolist(),
         )
     chart: PathChart | None = translation
-    if options.scale_chart:
+    if sampler.scale_chart:
         reference = jnp.mean(initialization.positions, axis=0)
         paths = jnp.asarray(initialization.paths)
         if translation is None:
@@ -194,65 +178,24 @@ def fit_marginal_particle_gibbs(
         # Warmup windows replace this initial center with mean translated paths.
         center = jnp.mean(jax.vmap(translation.encode)(initialization.positions, paths), axis=0)
         chart = ScaleChart(translation, bundle.runtime.diffusion_scale_exponents(reference), center)
-    paid_mix = (
-        PaidMixture(
-            initialization.pilot_mean,
-            initialization.pilot_proposal_variance,
-            scalar_operand(value=options.path_update.pilot_mixture),
-        )
-        if isinstance(options.path_update, DsmcSpec)
-        else None
-    )
 
     phase_t0 = clock()
     logger.info("phase 3/4: building marginalized Particle Gibbs joint kernel...")
-
-    def make_kernel(runtime: ParticleTarget) -> MarginalParticleGibbsKernel:
-        return build_marginal_particle_gibbs_kernel(
-            runtime,
-            exact_constraints=bundle.exact_constraints,
-            num_parameter_particles=options.n_parameter_particles,
-            target_accept=options.param_target_accept,
-            parameter_preconditioner_chol=initialization.parameter_chol,
-            parameter_proposal=options.parameter_proposal,
-            paid_mix=paid_mix,
-            parameter_reference_path=jax.device_put(
-                continuation.tuning.parameter_reference_path.values
-            )
-            if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
-            else initialization.paths[0],
-            diagnostic_metrics=options.diagnostic_metrics,
-            path_update=options.path_update,
-            initial_chart=chart,
-            recompute_translation=options.compiler_reparameterization,
-        )
-
-    kernel = make_kernel(bundle.runtime)
-    tempering = None
-    reference = None
-    if isinstance(options.tempering, GaussianReferenceTemperingSpec):
-        ladder = options.tempering
-        if (
-            continuation is not None
-            and isinstance(continuation.tuning, ParticleTuning)
-            and continuation.tuning.gaussian_reference
-        ):
-            from grassmoth.models.ssm.inference.targets.gaussian_reference import (
-                GaussianReference,
-            )
-
-            reference = GaussianReference(
-                *(jnp.asarray(value.values) for value in continuation.tuning.gaussian_reference)
-            )
-        else:
-            reference = build_gaussian_reference(
-                bundle.runtime,
-                positions=initialization.positions,
-                paths=initialization.paths,
-                parameter_chol=initialization.parameter_chol,
-                scale=ladder.reference_scale,
-            )
-        tempering = ReplicaExchangeKernel(bundle.runtime, reference, make_kernel, ladder)
+    kernel = build_marginal_particle_gibbs_kernel(
+        bundle.runtime,
+        exact_constraints=bundle.exact_constraints,
+        num_parameter_particles=sampler.n_parameter_particles,
+        target_accept=sampler.param_target_accept,
+        parameter_preconditioner_chol=initialization.parameter_chol,
+        parameter_proposal=sampler.parameter_proposal,
+        parameter_reference_path=jax.device_put(continuation.tuning.parameter_reference_path.values)
+        if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
+        else initialization.paths[0],
+        diagnostic_metrics=sampler.diagnostic_metrics,
+        path_update=sampler.path_update,
+        initial_chart=chart,
+        recompute_translation=sampler.compiler_reparameterization,
+    )
     run_result = run_marginal_particle_gibbs(
         bundle.runtime,
         kernel=kernel,
@@ -260,8 +203,7 @@ def fit_marginal_particle_gibbs(
         key=sampling_key,
         initialization=initialization,
         execution_context=execution_context,
-        adaptation_scheme=options.adaptation_scheme,
-        tempering=tempering,
+        adaptation_scheme=sampler.adaptation_scheme,
         continuation=continuation,
     )
     if isinstance(run_result, InitializationFailure):
@@ -291,7 +233,7 @@ def fit_marginal_particle_gibbs(
     tuning = (
         continuation.tuning
         if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
-        else frozen_particle_tuning(initialization, reference)
+        else frozen_particle_tuning(initialization)
     ).revised(parameter_chol=NumericalArray.from_numpy(np.asarray(run_result.final_parameter_chol)))
     checkpoint = SamplerCheckpoint(
         settings=sampler,
@@ -337,7 +279,6 @@ def fit_marginal_particle_gibbs(
         chain_extra_fields=run_result.chain_extra_fields,
         num_chains=sampler.num_chains,
         num_samples=run_result.retained_draws,
-        backend="marginal_particle_gibbs",
     )
     chain_extra_fields = run_result.chain_extra_fields
     summary_extra_fields = (
@@ -351,16 +292,12 @@ def fit_marginal_particle_gibbs(
     kernel_diagnostics = ParticleSamplerDiagnostics(
         settings=sampler,
         parameter_kernel="m_pgibbs_random_walk"
-        if options.parameter_proposal == "random_walk"
+        if sampler.parameter_proposal == "random_walk"
         else "m_pgibbs_pseudo_langevin",
         mcmc_phase_seconds=float(mcmc_phase_seconds),
-        drift=kernel.path_update.drift
-        if isinstance(kernel.path_update, DsmcSpec)
-        else (
-            "none"
-            if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
-            else ("observation" if kernel.path_update.kappa else "none")
-        ),
+        drift="none"
+        if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
+        else ("observation" if kernel.path_update.kappa else "none"),
         diagnostic_metrics=kernel.diagnostic_metrics,
         param_target_accept=float(kernel.target_accept[0]),
         parameter_preconditioned=bool(kernel.preconditioned),
@@ -368,9 +305,6 @@ def fit_marginal_particle_gibbs(
         parameter_accept_rate=float(jnp.mean(summary_extra_fields["parameter_accept_prob"])),
         latent_update_fraction=float(jnp.mean(summary_extra_fields["latent_accept_prob"])),
         latent_frozen_fraction=float(jnp.mean(summary_extra_fields["latent_frozen_frac"])),
-        latent_block_coords=kernel.path_update.latent_block_coords
-        if isinstance(kernel.path_update, DsmcSpec)
-        else "all",
         initial_param_step_size=jax.device_get(run_result.initial_param_step_size).tolist(),
         final_param_step_size=jax.device_get(run_result.final_param_step_size).tolist(),
         chain_post_warmup_complete_log_posterior_mean=jax.device_get(
@@ -380,14 +314,12 @@ def fit_marginal_particle_gibbs(
         path_weights=summarize_particle_weights(
             summary_extra_fields,
             num_steps=len(bundle.runtime.times),
-            num_particles=options.path_update.num_particles,
+            num_particles=sampler.path_update.num_particles,
             phase=diagnostic_summary_phase,
-            sequential=not isinstance(options.path_update, DsmcSpec),
         )
         if "particle_weights" in kernel.diagnostic_metrics
-        and not isinstance(options.path_update, AuxiliaryKalmanSpec)
+        and not isinstance(sampler.path_update, AuxiliaryKalmanSpec)
         else None,
-        tempering=run_result.tempering,
         latent_move_rms_mean=float(jnp.mean(summary_extra_fields["latent_move_rms"]))
         if "latent_move_rms" in summary_extra_fields
         else None,
@@ -454,5 +386,4 @@ def fit_marginal_particle_gibbs(
         diagnostics=diagnostics,
         initial_latent_delta=run_result.initial_latent_delta,
         final_latent_delta=run_result.final_latent_delta,
-        evidence=MCMCEvidence(),
     )

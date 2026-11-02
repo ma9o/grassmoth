@@ -223,7 +223,7 @@ def test_recurrence_guide_matches_dense_gaussian_conditioning(steps, random_init
 
 @pytest.mark.parametrize(
     ("method", "kappa"),
-    [("twisted_particle_agrad", 1), ("particle_agrad", 0)],
+    [("twisted_particle_agrad", 1), ("twisted_particle_agrad", 0)],
 )
 def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa):
     target = _target(1.0)
@@ -252,10 +252,8 @@ def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa)
     spec = GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
     setup = build_smoother_setup(
         target,
-        spec,
         num_parameter_particles=2,
         free_mask=target.independent_mask,
-        paid_mix=None,
         diagnostic_metrics=("particle_identity",),
     )
     ctx = build_smoother_context(
@@ -408,10 +406,8 @@ def test_fixed_initial_state_without_memory_keeps_backward_selection():
     spec = GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1)
     setup = build_smoother_setup(
         target,
-        spec,
         num_parameter_particles=2,
         free_mask=target.independent_mask,
-        paid_mix=None,
         diagnostic_metrics=(),
     )
     ctx = build_smoother_context(

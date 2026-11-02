@@ -11,7 +11,6 @@ from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.identity import ConstructId, DistributionId, ParameterId
-from grassmoth.artifacts.joint_parameterization import JointParameterizationRecord
 from grassmoth.artifacts.reports.checks import SpecificationAssessment
 from grassmoth.artifacts.reports.data_quality import DataProfileReport
 from grassmoth.artifacts.reports.model_checks import QuestionCheckReport
@@ -21,8 +20,6 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     DensityCurve,
     LOODiagnostics,
     LOOPITPoint,
-    MCMCEvidence,
-    NutsDADiagnostics,
     ParetoKPoint,
     ParticleSamplerDiagnostics,
     PosteriorMarginal,
@@ -71,7 +68,6 @@ class FitSegment(Value):
     convergence: ConvergenceReport = Field(
         description="Production convergence assessment for this segment, before combining chains."
     )
-    parameterization: JointParameterizationRecord | None = None
 
 
 class InferenceMetadata(Value):
@@ -82,8 +78,7 @@ class InferenceMetadata(Value):
     segments: tuple[FitSegment, ...] = ()
     num_chains: int = Field(ge=1)
     duration_seconds: float = Field(ge=0)
-    engine: MCMCEvidence
-    sampler_diagnostics: ParticleSamplerDiagnostics | NutsDADiagnostics | None
+    sampler_diagnostics: ParticleSamplerDiagnostics | None
 
 
 class PosteriorDrawsInfo(Value):

@@ -204,7 +204,6 @@ CONCERNS = {
             "actions.contracts.settings",
             "actions.contracts.preparation",
             "artifacts.continuation",
-            "artifacts.joint_parameterization",
             "artifacts.reports.effects",
             "artifacts.reports.empirical",
             "artifacts.scenarios",
@@ -376,7 +375,6 @@ def _layer_for(name: str, module: str) -> str:
         (
             "artifacts.arrays",
             "artifacts.continuation",
-            "artifacts.joint_parameterization",
             "artifacts.reports.inference",
             "artifacts.reports.posterior_diagnostics",
             "artifacts.reports.scorecard",

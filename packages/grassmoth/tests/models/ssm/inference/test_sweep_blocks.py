@@ -8,7 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.artifacts.sampling import DsmcSpec, SamplerSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec, SamplerSpec
 from grassmoth.compute.budget import (
     AcceleratorMemoryBudget,
     ComputeBudget,
@@ -37,15 +37,12 @@ class _Carry(NamedTuple):
     state: jax.Array
 
 
-def _factory(_batch):
-    def step(carry, posterior):
-        key, state = carry
-        key, draw = jax.random.split(key)
-        state = state + jax.random.normal(draw, state.shape) * jnp.where(posterior, 1, 2)
-        record = {"telemetry": state.sum(axis=-1), "paths": state}
-        return _Carry(key, state), record
-
-    return step
+def _step(carry, posterior):
+    key, state = carry
+    key, draw = jax.random.split(key)
+    state = state + jax.random.normal(draw, state.shape) * jnp.where(posterior, 1, 2)
+    record = {"telemetry": state.sum(axis=-1), "paths": state}
+    return _Carry(key, state), record
 
 
 @pytest.mark.parametrize(("warmup", "samples"), [(0, 29), (28, 27), (7, 0)])
@@ -55,12 +52,11 @@ def test_block_boundaries_and_padding_preserve_key_stream_and_phase_outputs(
     caplog.set_level(logging.INFO, logger="grassmoth.models.ssm.inference.samplers.progress")
     initial = _Carry(jax.random.key(791), jnp.zeros((3, 4)))
     plan = sweeps.compile_sweeps(
-        SweepProgram(_factory, label="test", max_batch_size=8),
+        SweepProgram(_step),
         initial,
         execution_context=EXECUTION_CONTEXT,
         sampler=SamplerSpec(num_warmup=warmup, num_samples_per_chain=samples),
     )
-    assert plan.batch_size == 8
     run = run_sweeps(
         plan,
         initial,
@@ -98,7 +94,7 @@ def test_block_boundaries_and_padding_preserve_key_stream_and_phase_outputs(
     ):
         reference, records = jax.jit(
             lambda state, phase=phase, count=count: jax.lax.scan(
-                lambda carry, _: _factory(8)(carry, jnp.asarray(phase == "posterior")),
+                lambda carry, _: _step(carry, jnp.asarray(phase == "posterior")),
                 state,
                 None,
                 length=count,
@@ -126,21 +122,15 @@ def test_block_boundaries_and_padding_preserve_key_stream_and_phase_outputs(
 def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     monkeypatch, accelerator
 ):
-    compiled_batches = []
     compiled_phases = []
     executed = []
 
-    def factory(batch):
-        compiled_batches.append(batch)
-
-        def step(state, _posterior):
-            return state + 1, {"value": state}
-
-        return step
+    def step(state, _posterior):
+        return state + 1, {"value": state}
 
     def memory(executable):
         compiled_phases.append(executable)
-        return MemoryDemand(host_bytes=0, device_bytes=compiled_batches[-1] * 100_000)
+        return MemoryDemand(host_bytes=0, device_bytes=200_000)
 
     original_call = jax.stages.Compiled.__call__
 
@@ -158,14 +148,12 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     )
     initial = jnp.zeros((4, 3))
     plan = sweeps.compile_sweeps(
-        SweepProgram(factory, label="test", max_batch_size=8),
+        SweepProgram(step),
         initial,
         execution_context=replace(EXECUTION_CONTEXT, budget=budget),
         sampler=SamplerSpec(num_warmup=3, num_samples_per_chain=5),
     )
-    assert compiled_batches == [8, 4, 2]
-    assert len(compiled_phases) == 3
-    assert plan.batch_size == 2
+    assert len(compiled_phases) == 1
     assert isinstance(plan.warmup, sweep_plan.CompiledSweepPhase)
     assert isinstance(plan.posterior, sweep_plan.CompiledSweepPhase)
     assert plan.warmup.executable is plan.posterior.executable
@@ -176,7 +164,7 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
     assert len(executed) == 3  # First-step timing, remaining warmup, posterior.
     with pytest.raises(MemoryError, match="One sweep lane"):
         sweeps.compile_sweeps(
-            SweepProgram(factory, label="test", max_batch_size=2),
+            SweepProgram(step),
             initial,
             execution_context=replace(
                 EXECUTION_CONTEXT,
@@ -191,7 +179,7 @@ def test_history_budget_counts_posterior_paths_once_and_combined_diagnostics_twi
         sweeps, "compiled_memory", lambda _: MemoryDemand(host_bytes=0, device_bytes=64)
     )
     initial = _Carry(jax.random.key(791), jnp.zeros((2, 1024)))
-    program = SweepProgram(_factory, label="test", max_batch_size=1)
+    program = SweepProgram(_step)
     sampler = SamplerSpec(num_warmup=1, num_samples_per_chain=100)
 
     def context(device_bytes):
@@ -211,7 +199,7 @@ def test_history_budget_counts_posterior_paths_once_and_combined_diagnostics_twi
 
 
 def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
-    spec = latent_adaptation(DsmcSpec())
+    spec = latent_adaptation(GuidedPathSpec())
     state = initialize_adaptation(jnp.ones((2, 3)))
     rng = np.random.default_rng(91)
     proposed = rng.integers(0, 2, (ADAPTATION_WINDOW + 8, 2, 3)).astype(bool)
@@ -244,18 +232,13 @@ def test_optional_particle_histories_preserve_draws_and_random_stream():
         excluded_particle_diagnostics,
     )
 
-    def factory(batch):
-        base = _factory(batch)
-
-        def step(carry, posterior):
-            updated, record = base(carry, posterior)
-            return updated, {
-                **record,
-                "latent_move_rms_per_t": updated.state,
-                "selected_particle_per_t": updated.state,
-            }
-
-        return step
+    def step(carry, posterior):
+        updated, record = _step(carry, posterior)
+        return updated, {
+            **record,
+            "latent_move_rms_per_t": updated.state,
+            "selected_particle_per_t": updated.state,
+        }
 
     initial = _Carry(jax.random.key(791), jnp.zeros((3, 4)))
     runs = []
@@ -264,9 +247,7 @@ def test_optional_particle_histories_preserve_draws_and_random_stream():
             ("regional_movement", "particle_identity") if enabled else ()
         )
         plan = sweeps.compile_sweeps(
-            SweepProgram(
-                factory, label="optional-history", max_batch_size=8, excluded_history=excluded
-            ),
+            SweepProgram(step, excluded_history=excluded),
             initial,
             execution_context=EXECUTION_CONTEXT,
             sampler=SamplerSpec(num_warmup=2, num_samples_per_chain=3),

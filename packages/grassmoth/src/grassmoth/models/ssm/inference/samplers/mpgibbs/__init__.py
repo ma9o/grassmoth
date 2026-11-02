@@ -1,1 +1,1 @@
-"""Marginalized parameter ensembles with shared dSMC trajectory updates."""
+"""Marginalized parameter ensembles with exact conditional trajectory updates."""

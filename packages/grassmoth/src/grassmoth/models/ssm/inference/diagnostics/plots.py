@@ -12,7 +12,6 @@ from grassmoth.artifacts.model.parameter import ParameterCoordinate
 from grassmoth.artifacts.reports.histograms import empirical_points
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     DensityCurve,
-    EnergyDiagnostics,
     ParetoKPoint,
     PosteriorMarginal,
     RankHistogram,
@@ -127,23 +126,6 @@ def param_marginal(
         interval_mass=0.94,
         lower=float(low),
         upper=float(high),
-    )
-
-
-def build_energy_diagnostics(
-    energy: jnp.ndarray | NDArray, n_bins: int = 40
-) -> EnergyDiagnostics | None:
-    """Summarize per-chain energy and consecutive energy changes, including each chain's BFMI."""
-    from arviz_stats.base.array import array_stats
-
-    chains = np.atleast_2d(np.asarray(energy))
-    if chains.shape[1] < 2:
-        return None  # A single draw has no energy transitions or BFMI to report.
-    transitions = np.diff(chains, axis=1)
-    return EnergyDiagnostics(
-        energy_hist=_density_histogram(chains.reshape(-1), n_bins),
-        energy_transition_hist=_density_histogram(transitions.reshape(-1), n_bins),
-        bfmi=tuple(float(v) for v in array_stats.bfmi(chains, chain_axis=0, draw_axis=1)),
     )
 
 

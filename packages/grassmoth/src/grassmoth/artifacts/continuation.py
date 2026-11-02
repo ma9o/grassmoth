@@ -6,18 +6,10 @@ from pydantic import Field
 
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.base import Value
-from grassmoth.artifacts.joint_parameterization import JointParameterizationRecord
 from grassmoth.artifacts.reports.posterior_diagnostics import InitializationDiagnostics
 from grassmoth.artifacts.sampling import (
     SamplerSpec,
 )
-
-
-class JointTuning(Value):
-    """Joint coordinates are reconstructed from the original model and trace seed."""
-
-    kind: Literal["joint"] = "joint"
-    parameterization: JointParameterizationRecord
 
 
 class TransferredTuning(Value):
@@ -31,15 +23,12 @@ class ParticleTuning(Value):
 
     kind: Literal["particle"] = "particle"
     parameter_chol: NumericalArray
-    pilot_mean: NumericalArray
-    pilot_variance: NumericalArray
     parameter_reference_path: NumericalArray
-    gaussian_reference: tuple[NumericalArray, ...] = ()
     initialization: InitializationDiagnostics
 
 
 type FrozenSamplerTuning = Annotated[
-    JointTuning | ParticleTuning | TransferredTuning, Field(discriminator="kind")
+    ParticleTuning | TransferredTuning, Field(discriminator="kind")
 ]
 
 

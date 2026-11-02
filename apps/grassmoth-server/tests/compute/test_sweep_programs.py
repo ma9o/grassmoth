@@ -33,7 +33,7 @@ def test_runtime_inputs_rebind_nested_observations_priors_geometry_and_tuning():
         def step(state, _posterior):
             return transition(state)
 
-        return lambda _batch: step
+        return step
 
     initial = jnp.ones((2, 1))
     first = (jnp.zeros((2, 1)), jnp.asarray(0.0), jnp.asarray(1.0), jnp.eye(2), jnp.asarray(0.1))
@@ -46,7 +46,7 @@ def test_runtime_inputs_rebind_nested_observations_priors_geometry_and_tuning():
     )
     plans = tuple(
         sweeps.compile_sweeps(
-            SweepProgram(factory(values), label="test", max_batch_size=1),
+            SweepProgram(factory(values)),
             initial,
             execution_context=replace(EXECUTION_CONTEXT, prepare_program=prepare_program),
             sampler=SamplerSpec(num_warmup=1, num_samples_per_chain=1),
@@ -59,6 +59,6 @@ def test_runtime_inputs_rebind_nested_observations_priors_geometry_and_tuning():
     state, actual = first_phase.executable(
         second_phase.arguments, initial, jnp.asarray(1), jnp.asarray(True)
     )
-    expected_state, expected = factory(second)(1)(initial, jnp.asarray(True))
+    expected_state, expected = factory(second)(initial, jnp.asarray(True))
     np.testing.assert_array_equal(state, expected_state)
     np.testing.assert_array_equal(actual["density"][0], expected["density"])

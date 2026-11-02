@@ -15,8 +15,7 @@ from grassmoth.artifacts.model.construct import (
 from grassmoth.artifacts.model.expressions import LiteralExpression, coefficient, state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec, NormalLawSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec, PotentialMechanismSpec
-from grassmoth.artifacts.sampling import DsmcSpec, FixedLatentStepSpec, SamplerSpec
-from grassmoth.models.ssm.compile.observation_partition import compile_observation_partition
+from grassmoth.artifacts.sampling import FixedLatentStepSpec, GuidedPathSpec
 from grassmoth.models.ssm.compile.state_space import (
     AdditiveRecurrences,
     ParallelRecurrences,
@@ -26,7 +25,6 @@ from grassmoth.models.ssm.compile.state_space import (
 from grassmoth.models.ssm.dynamics.expression import ExpressionComponentSpec
 from grassmoth.models.ssm.dynamics.spec import DynamicsSpec
 from grassmoth.models.ssm.execution.supported_normal import SupportedNormal
-from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.inference.problem import build_particle_problem
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -34,8 +32,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
 )
-from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
-from grassmoth_test_support.compute import EXECUTION_CONTEXT, compile_program
+from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
 
@@ -196,7 +193,7 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        path_update=DsmcSpec(num_particles=4, method="particle_amala_plus", latent_block_coords=1),
+        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
     )
     after, info = jax.jit(kernel.step_fn)(
         _initial(target, coordinates, kernel=kernel), jax.random.key(4)
@@ -235,8 +232,10 @@ def test_parameter_free_model_moves_paths_and_replays_static_and_accumulated_sta
         target,
         num_parameter_particles=2,
         exact_constraints=problem.exact_constraints,
-        path_update=DsmcSpec(
-            num_particles=8, latent_step=FixedLatentStepSpec(delta=0.1), pilot_mixture=False
+        path_update=GuidedPathSpec(
+            method="twisted_particle_agrad",
+            num_particles=8,
+            latent_step=FixedLatentStepSpec(delta=0.1),
         ),
     )
     context = target.context(target.initial_position, target.times)
@@ -273,7 +272,7 @@ def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        path_update=DsmcSpec(num_particles=4, method="particle_amala_plus", latent_block_coords=1),
+        path_update=GuidedPathSpec(method="particle_mgrad", num_particles=4),
     )
     after, info = jax.jit(kernel.step_fn)(_initial(target, path, kernel=kernel), jax.random.key(6))
     np.testing.assert_array_equal(after.latent_trajectory[:, input_index], path[:, input_index])
@@ -330,7 +329,7 @@ def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="pseudo_langevin",
-        path_update=DsmcSpec(num_particles=4, method="particle_amala_plus", latent_block_coords=1),
+        path_update=GuidedPathSpec(method="particle_mgrad", num_particles=4),
     )
 
     def chain(key):
@@ -437,23 +436,10 @@ def test_parallel_recurrence_proof_rejects_nonlinearity_only_in_deterministic_su
             ),
         )
     )
-    prepared = compile_fit_fixture(
+    compiled = compile_fit_fixture(
         model.with_entities(edges=replace_constructs(model.edges, (total,)))
-    )
-    compiled = prepared.compiled_dynamical_model
+    ).compiled_dynamical_model
     assert isinstance(compiled.state_space.recurrence[0], SequentialRecurrences)
-    panel = bind_panel_fixture(
-        compiled, jnp.full((4, len(compiled.observations)), jnp.nan), jnp.arange(4.0)
-    )
-    failure = fit(
-        prepared.prior_runtime_bundle,
-        panel,
-        sampler=SamplerSpec(),
-        execution_context=EXECUTION_CONTEXT,
-    )
-    assert isinstance(failure, ObservationPreflightFailure)
-    assert "O(log T)" in failure.message
-    assert "total" in failure.message
 
     state_ids = (driver.id, total.id)
     coupled = DynamicsSpec(
@@ -573,8 +559,8 @@ def test_staged_replay_matches_sequential_path_density_and_gradients():
 
 
 @pytest.mark.inference(concern="recovery")
-@pytest.mark.parametrize("method", ["amala", "amala_plus"])
-def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(method):
+@pytest.mark.parametrize("kappa", [0, 1])
+def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(kappa):
     compiled, problem = _problem(_model())
     target = problem.runtime
     indices = {item.name: i for i, item in enumerate(compiled.states)}
@@ -584,16 +570,7 @@ def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(metho
         num_parameter_particles=2,
         param_step_size=0.1,
         parameter_proposal="random_walk",
-        path_update=DsmcSpec(
-            num_particles=9,
-            method=(
-                "particle_rwm"
-                if (method) == "none"
-                else "particle_amala"
-                if (method) == "amala"
-                else "particle_amala_plus"
-            ),
-        ),
+        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=9, kappa=kappa),
     )
 
     def draw_and_step(key):
@@ -654,7 +631,7 @@ def test_parallel_accumulator_preserves_an_exact_random_initial_value():
     target = problem.runtime
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=DsmcSpec(num_particles=4),
+        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=target.exact_constraints,
@@ -668,140 +645,6 @@ def test_parallel_accumulator_preserves_an_exact_random_initial_value():
         jnp.concatenate((jnp.array([0.7]), 0.7 + jnp.cumsum(path[:-1, indices["driver"]]))),
         atol=1e-6,
     )
-
-
-@pytest.mark.parametrize(
-    "accumulator_observation", ["gaussian", "gaussian_correlated", "delta", "delta_fixed_initial"]
-)
-def test_tree_factors_and_replay_correction_preserve_joint_density_and_gradients(
-    accumulator_observation,
-):
-    model = _model()
-    if accumulator_observation == "delta_fixed_initial":
-        driver = next(c for c in model.constructs if c.name == "driver")
-        driver = driver.revised(
-            coefficients=tuple(
-                coefficient(0.0, "initial_scale") if c.role == "initial_scale" else c
-                for c in driver.coefficients
-            )
-        )
-        model = model.with_entities(edges=replace_constructs(model.edges, (driver,)))
-    total = next(c for c in model.constructs if c.name == "total")
-    if accumulator_observation.startswith("delta"):
-        total = total.revised(
-            indicators=tuple(
-                indicator.revised(
-                    likelihood=LikelihoodSpec(
-                        law=DeltaLawSpec(v=state(total.id)),
-                        reasoning="Exact initial accumulator reading",
-                        standardized=False,
-                    )
-                )
-                for indicator in total.indicators
-            )
-        )
-    model = model.with_entities(edges=replace_constructs(model.edges, (total,)))
-    fit = compile_fit_fixture(model)
-    compiled = fit.compiled_dynamical_model
-    if accumulator_observation == "gaussian_correlated":
-        columns = {
-            compiled.states[observation.state_index].name: index
-            for index, observation in enumerate(compiled.observations)
-        }
-        row, column = sorted((columns["total"], columns["driver"]), reverse=True)
-        noise = compiled.observation_noise_block
-        compiled = replace(
-            compiled,
-            observation_noise_block=replace(
-                noise, template=noise.template.at[row, column].set(0.12)
-            ),
-        )
-    observations = jnp.full((4, len(compiled.observations)), 0.15)
-    if accumulator_observation.startswith("delta"):
-        column = next(
-            i
-            for i, observation in enumerate(compiled.observations)
-            if compiled.states[observation.state_index].name == "total"
-        )
-        observations = observations.at[:, column].set(jnp.nan).at[0, column].set(0.0)
-    panel = bind_panel_fixture(compiled, observations, jnp.arange(4.0))
-    problem = build_particle_problem(
-        fit.prior_runtime_bundle,
-        panel,
-        trace_key=jax.random.key(2),
-        reparam=None,
-        compiler=compile_program,
-    )
-    target = problem.runtime
-    local = target.tree_target()
-    expected_local = {
-        "gaussian": 3,
-        "gaussian_correlated": 2,
-        "delta": 3,
-        "delta_fixed_initial": 2,
-    }[accumulator_observation]
-    assert len(target.observation_partition.local) == expected_local
-    position = target.initial_position.at[-1].set(0.2)
-    path = jnp.arange(16.0).reshape(4, 4) / 25
-
-    def split_score(z, x):
-        context = target.context(z, target.times)
-        return local.factor_log_prob(context, x, local.observations) + target.replay_correction(
-            context, x, local.prior_path_log_prob(context, x)
-        )
-
-    actual = jax.jit(jax.value_and_grad(split_score, argnums=(0, 1)))(position, path)
-    expected = jax.value_and_grad(
-        lambda z, x: target.path_log_prob(target.context(z, target.times), x, target.observations),
-        argnums=(0, 1),
-    )(position, path)
-    for measured, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
-        assert np.isfinite(measured).all()
-        np.testing.assert_allclose(measured, reference, rtol=2e-5, atol=2e-5)
-
-
-@pytest.mark.parametrize(
-    ("links", "free_scales", "expected_replayed"),
-    [
-        ((), False, (0,)),
-        (((1, 0),), False, (0, 1)),
-        (((1, 0), (2, 1)), False, (0, 1, 2)),
-        (((1, 0), (2, 1)), True, (0, 1, 2)),
-    ],
-    ids=("independent", "correlated", "transitive", "free_scales"),
-)
-def test_observation_partition_keeps_free_loadings_and_joint_gaussian_blocks(
-    links, free_scales, expected_replayed
-):
-    compiled = compile_fit_fixture(_model()).compiled_dynamical_model
-    state_space = compiled.state_space
-    recurrence = state_space.recurrence[0].indices[0]
-    # A free loading with a zero template still depends on the recurrence.
-    template = jnp.zeros_like(compiled.loading_block.template)
-    support = np.zeros_like(compiled.loading_block.free_support)
-    support[0, recurrence] = True
-    loading = replace(
-        compiled.loading_block,
-        template=template,
-        free_support=support,
-        free_positions=((0, recurrence),),
-    )
-    noise_template = jnp.zeros((4, 4)) if free_scales else jnp.eye(4) * 0.3
-    for row, column in links:
-        noise_template = noise_template.at[row, column].set(0.1)
-    noise = replace(
-        compiled.observation_noise_block,
-        template=noise_template,
-        diag_support=np.full(4, free_scales),
-    )
-    partition = compile_observation_partition(
-        loading,
-        noise,
-        tuple(observation.law for observation in compiled.observations),
-        state_space,
-    )
-    assert partition.local == tuple(index for index in range(4) if index not in expected_replayed)
-    assert partition.replayed == expected_replayed
 
 
 def test_exact_static_readings_share_one_value_and_inconsistent_constraints_are_rejected():

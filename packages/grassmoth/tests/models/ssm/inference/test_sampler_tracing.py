@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from grassmoth.artifacts.reports.posterior_diagnostics import ParticleWeightMetric
-from grassmoth.artifacts.sampling import DsmcSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
@@ -27,7 +27,7 @@ def test_particle_trace_records_the_same_transition_and_selected_path(
     joint = jnp.linspace(-0.2, 0.3, steps + 1)
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=DsmcSpec(num_particles=8),
+        path_update=GuidedPathSpec(method="particle_mgrad", num_particles=8),
         num_parameter_particles=labels,
         param_step_size=0.3,
         parameter_proposal=proposal,
@@ -66,17 +66,14 @@ def test_particle_trace_records_the_same_transition_and_selected_path(
         updated.latent_trajectory,
         trace.smoother.particles[jnp.arange(steps), trace.smoother.selected_particles],
     )
-    for selection in (trace.smoother.root_selection, trace.label_selection):
+    for selection in (trace.smoother.terminal_selection, trace.label_selection):
         np.testing.assert_allclose(jnp.exp(selection.log_weights).sum(), 1, atol=2e-6)
         assert 0 <= int(selection.selected) < selection.log_weights.size
     assert trace.smoother.particles.shape == (steps, 8, 1)
-    # Native histories contain every real leaf/merge and the final corrected law.
-    stages = (
-        sum(len(range(0, steps, 1 << level)) for level in range((steps - 1).bit_length() + 1)) + 1
-    )
+    # Native histories hold one filter law per time; the last is the terminal selection law.
     for metric in ParticleWeightMetric:
-        assert info[metric.history_key].shape == (stages,)
-    probabilities = np.exp(np.asarray(trace.smoother.root_selection.log_weights))
+        assert info[metric.history_key].shape == (steps,)
+    probabilities = np.exp(np.asarray(trace.smoother.terminal_selection.log_weights))
     np.testing.assert_allclose(
         info[ParticleWeightMetric.ESS.history_key][-1],
         1 / np.square(probabilities).sum(),

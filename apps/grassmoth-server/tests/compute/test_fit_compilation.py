@@ -8,17 +8,15 @@ import pytest
 from jax._src import cache_key, compiler
 
 from grassmoth.artifacts.sampling import (
-    DsmcSpec,
     FixedLatentStepSpec,
     GaussianInitializationSpec,
+    GuidedPathSpec,
     SamplerSpec,
 )
-from grassmoth.compute.programs import scalar_operand
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import run_marginal_particle_gibbs
-from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
     prepare_particle_initialization,
@@ -96,14 +94,10 @@ def test_particle_fit_settings_reuse_jax_executable_and_preserve_transitions(tmp
             diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights")
             if diagnostic
             else (),
-            paid_mix=PaidMixture(
-                initialization.pilot_mean,
-                initialization.pilot_proposal_variance,
-                scalar_operand(value=fixed),
-            ),
-            path_update=DsmcSpec(num_particles=4, latent_step=FixedLatentStepSpec())
+            # With kappa=1 an adapted step gains a curvature bound, which changes the program.
+            path_update=GuidedPathSpec(num_particles=4, kappa=0, latent_step=FixedLatentStepSpec())
             if fixed
-            else DsmcSpec(num_particles=4),
+            else GuidedPathSpec(num_particles=4, kappa=0),
         )
         with local_compilation_cache(tmp_path, commit=lambda: None):
             result = run_marginal_particle_gibbs(

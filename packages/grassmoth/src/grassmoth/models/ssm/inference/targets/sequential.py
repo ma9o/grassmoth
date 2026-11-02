@@ -148,7 +148,7 @@ def _window_memory(
         jnp.asarray(weights),
         jnp.asarray(stops),
         max(1, int(np.max(stops - np.arange(len(stops))))),
-        (labels, len(channels), scan.max_active_windows, intervals.tree.statistic_count),
+        (labels, len(channels), scan.max_active_windows, intervals.statistic_count),
         jax.vmap(noise)(contexts),
     )
 
@@ -236,20 +236,11 @@ class SequentialObservationRuntime:
         )
 
     def transition_log_probs_with_means(
-        self,
-        previous: jax.Array,
-        current: jax.Array,
-        index: jax.Array,
-        means: jax.Array,
+        self, current: jax.Array, index: jax.Array, means: jax.Array
     ) -> jax.Array:
         """Score a selected successor without reevaluating the fixed predecessor means."""
-        return jax.vmap(self.target.transition_log_prob_with_mean, in_axes=(0, 0, 0, 0, None, 0))(
-            self.contexts,
-            self.noise,
-            self.replayed_states(previous)[:-1],
-            self.replayed_states(current)[:-1],
-            index,
-            means,
+        return jax.vmap(self.target.transition_log_prob_with_mean, in_axes=(0, 0, 0, None, 0))(
+            self.contexts, self.noise, self.replayed_states(current)[:-1], index, means
         )
 
     def initial(self, state: jax.Array) -> jax.Array:

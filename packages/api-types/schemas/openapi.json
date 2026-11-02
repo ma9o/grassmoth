@@ -2819,26 +2819,6 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "CentredParameterizationRecord": {
-        "additionalProperties": false,
-        "description": "The original frozen affine parameterization, reconstructed from the pinned target and seed.",
-        "properties": {
-          "kind": {
-            "const": "centred",
-            "default": "centred",
-            "title": "Kind",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind"
-        ],
-        "title": "CentredParameterizationRecord",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.joint_parameterization",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
       "ChainDiagnostics": {
         "additionalProperties": false,
         "description": "Compact retained-chain measurements; plot series compose the report detail.",
@@ -2873,66 +2853,6 @@
             "default": null,
             "title": "Per Latent"
           },
-          "num_divergences": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Num Divergences"
-          },
-          "divergence_rate": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Divergence Rate"
-          },
-          "tree_depth_mean": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Tree Depth Mean"
-          },
-          "tree_depth_max": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Tree Depth Max"
-          },
-          "accept_prob_mean": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "title": "Accept Prob Mean"
-          },
           "latent_accept_prob_mean": {
             "anyOf": [
               {
@@ -2956,17 +2876,6 @@
             ],
             "default": null,
             "title": "Parameter Accept Prob Mean"
-          },
-          "energy": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EnergyDiagnostics"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
           }
         },
         "required": [
@@ -2974,14 +2883,8 @@
           "num_samples_per_chain",
           "per_parameter",
           "per_latent",
-          "num_divergences",
-          "divergence_rate",
-          "tree_depth_mean",
-          "tree_depth_max",
-          "accept_prob_mean",
           "latent_accept_prob_mean",
-          "parameter_accept_prob_mean",
-          "energy"
+          "parameter_accept_prob_mean"
         ],
         "title": "ChainDiagnostics",
         "type": "object",
@@ -4782,172 +4685,6 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.model.mechanism",
         "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "DsmcNodeWeightDiagnostics": {
-        "additionalProperties": false,
-        "description": "One tree node before resampling; level zero is a leaf, stop is exclusive.\n\nEntirely padded nodes are omitted. A partial node's range contains only real\ntime indices, while its candidate count includes the algorithm's padding.",
-        "properties": {
-          "level": {
-            "minimum": 0,
-            "title": "Level",
-            "type": "integer"
-          },
-          "start": {
-            "minimum": 0,
-            "title": "Start",
-            "type": "integer"
-          },
-          "stop": {
-            "minimum": 1,
-            "title": "Stop",
-            "type": "integer"
-          },
-          "weights": {
-            "$ref": "#/components/schemas/ParticleWeightDiagnostics"
-          }
-        },
-        "required": [
-          "level",
-          "start",
-          "stop",
-          "weights"
-        ],
-        "title": "DsmcNodeWeightDiagnostics",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "DsmcSpec-Input": {
-        "additionalProperties": false,
-        "description": "Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.\n\nEach sweep refreshes an auxiliary point near the current path, draws candidates\naround it at every time step, and selects a new path through the conditional dSMC\ntree (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, Algorithm 4), whose depth grows with log T.\nThe auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).",
-        "properties": {
-          "method": {
-            "default": "particle_rwm",
-            "description": "Auxiliary law for conditional dSMC. particle_rwm (kappa 0) centres the auxiliary point on the current state. particle_amala (Algorithm 3) drifts it along the gradient of the local prior and observation terms; particle_amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & S\u00e4rkk\u00e4 (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4).",
-            "enum": [
-              "particle_rwm",
-              "particle_amala",
-              "particle_amala_plus"
-            ],
-            "title": "Method",
-            "type": "string"
-          },
-          "num_particles": {
-            "default": 64,
-            "description": "Particles per sweep, including the current path. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, section 4).",
-            "minimum": 2,
-            "title": "Num Particles",
-            "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Input",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed."
-          },
-          "latent_block_coords": {
-            "$ref": "#/components/schemas/LatentBlockSize",
-            "default": 1,
-            "description": "State coordinates proposed per sweep, drawn uniformly from the free ones; the others keep their current paths at every time step. 1 proposes one coordinate's whole path, all proposes the full state. Importance weights degenerate as the proposed dimension grows, which blocking counters (Corenflos & S\u00e4rkk\u00e4 2025, section 3.1): smaller blocks keep larger scales at the same movement rate, but each coordinate is proposed only every D/k sweeps, and coupled coordinates move slowly when proposed apart."
-          },
-          "pilot_mixture": {
-            "default": true,
-            "description": "Mix two fixed Gaussians into every candidate draw: 85% of candidates come from the local auxiliary proposal, 10% from a Gaussian at the initializer's mean path with a quarter of its variance, and 5% from one with four times its variance. Weights use the full mixture density, so the target is unchanged (a defensive mixture, Hesterberg 1995). It adds candidates away from the current path, as Corenflos, Chopin & S\u00e4rkk\u00e4 (2022, section 4) suggest for separable proposals. The auxiliary factor still scores each candidate against the refreshed point, so at a small scale distant pilot draws are rarely kept. The moments come from the num_chains starting paths.",
-            "title": "Pilot Mixture",
-            "type": "boolean"
-          }
-        },
-        "title": "DsmcSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "DsmcSpec-Output": {
-        "additionalProperties": false,
-        "description": "Conditional dSMC auxiliary law, particle proposal, and assigned scale policy.\n\nEach sweep refreshes an auxiliary point near the current path, draws candidates\naround it at every time step, and selects a new path through the conditional dSMC\ntree (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, Algorithm 4), whose depth grows with log T.\nThe auxiliary law is Particle-RWM or Particle-aMALA (Corenflos & Finke 2024).",
-        "properties": {
-          "method": {
-            "default": "particle_rwm",
-            "description": "Auxiliary law for conditional dSMC. particle_rwm (kappa 0) centres the auxiliary point on the current state. particle_amala (Algorithm 3) drifts it along the gradient of the local prior and observation terms; particle_amala_plus (Algorithm 5) adds the next transition. With gradients the scale need only shrink like D^(-1/3) as the state dimension D grows, against D^(-1) without (Corenflos & Finke 2024, figure 1). There aMALA+ had up to three times Particle-RWM's ESS and twice aMALA's, for twice aMALA's gradients (section 5.4). On a GPU, Corenflos & S\u00e4rkk\u00e4 (2025) found gradient and plain proposals equally efficient per second (section 4.1), with gradients more robust to sticky dynamics and very informative observations (section 4.4).",
-            "enum": [
-              "particle_rwm",
-              "particle_amala",
-              "particle_amala_plus"
-            ],
-            "title": "Method",
-            "type": "string"
-          },
-          "num_particles": {
-            "default": 64,
-            "description": "Particles per sweep, including the current path. More particles give each time step more candidates, but each dSMC merge scores N x N candidate pairs, so memory and work per merge grow as N^2 (Corenflos, Chopin & S\u00e4rkk\u00e4 2022, section 4).",
-            "minimum": 2,
-            "title": "Num Particles",
-            "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Output",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed."
-          },
-          "latent_block_coords": {
-            "$ref": "#/components/schemas/LatentBlockSize",
-            "default": 1,
-            "description": "State coordinates proposed per sweep, drawn uniformly from the free ones; the others keep their current paths at every time step. 1 proposes one coordinate's whole path, all proposes the full state. Importance weights degenerate as the proposed dimension grows, which blocking counters (Corenflos & S\u00e4rkk\u00e4 2025, section 3.1): smaller blocks keep larger scales at the same movement rate, but each coordinate is proposed only every D/k sweeps, and coupled coordinates move slowly when proposed apart."
-          },
-          "pilot_mixture": {
-            "default": true,
-            "description": "Mix two fixed Gaussians into every candidate draw: 85% of candidates come from the local auxiliary proposal, 10% from a Gaussian at the initializer's mean path with a quarter of its variance, and 5% from one with four times its variance. Weights use the full mixture density, so the target is unchanged (a defensive mixture, Hesterberg 1995). It adds candidates away from the current path, as Corenflos, Chopin & S\u00e4rkk\u00e4 (2022, section 4) suggest for separable proposals. The auxiliary factor still scores each candidate against the refreshed point, so at a small scale distant pilot draws are rarely kept. The moments come from the num_chains starting paths.",
-            "title": "Pilot Mixture",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "method",
-          "num_particles",
-          "latent_step",
-          "latent_block_coords",
-          "pilot_mixture"
-        ],
-        "title": "DsmcSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "DsmcWeightDiagnostics": {
-        "additionalProperties": false,
-        "description": "dSMC tree and terminal weight diagnostics.\n\nTree nodes are ordered by increasing level, then start time. Terminal weights\ninclude the exact full-path correction and precede the modified Gibbs move;\ntheir reference probability is not that move's rejection probability.",
-        "properties": {
-          "kind": {
-            "const": "dsmc",
-            "default": "dsmc",
-            "title": "Kind",
-            "type": "string"
-          },
-          "phase": {
-            "$ref": "#/components/schemas/DiagnosticPhase"
-          },
-          "tree": {
-            "items": {
-              "$ref": "#/components/schemas/DsmcNodeWeightDiagnostics"
-            },
-            "title": "Tree",
-            "type": "array"
-          },
-          "terminal": {
-            "$ref": "#/components/schemas/ParticleWeightDiagnostics"
-          }
-        },
-        "required": [
-          "kind",
-          "phase",
-          "tree",
-          "terminal"
-        ],
-        "title": "DsmcWeightDiagnostics",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "DynamicalModelSpec-Input": {
@@ -14758,35 +14495,6 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "EnergyDiagnostics": {
-        "additionalProperties": false,
-        "description": "Energy distributions and the producer's chain-specific BFMI values.",
-        "properties": {
-          "energy_hist": {
-            "$ref": "#/components/schemas/DensityCurve"
-          },
-          "energy_transition_hist": {
-            "$ref": "#/components/schemas/DensityCurve"
-          },
-          "bfmi": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Bfmi",
-            "type": "array"
-          }
-        },
-        "required": [
-          "energy_hist",
-          "energy_transition_hist",
-          "bfmi"
-        ],
-        "title": "EnergyDiagnostics",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
       "EntityRef": {
         "discriminator": {
           "mapping": {
@@ -16306,17 +16014,6 @@
           "convergence": {
             "$ref": "#/components/schemas/ConvergenceReport",
             "description": "Production convergence assessment for this segment, before combining chains."
-          },
-          "parameterization": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/JointParameterizationRecord"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
           }
         },
         "required": [
@@ -16326,8 +16023,7 @@
           "runtime",
           "phases",
           "diagnostics",
-          "convergence",
-          "parameterization"
+          "convergence"
         ],
         "title": "FitSegment",
         "type": "object",
@@ -16369,10 +16065,103 @@
             "default": null,
             "title": "Time Limit Seconds"
           },
-          "algorithm": {
+          "n_parameter_particles": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/InferenceAlgorithmSpec-Input"
+                "minimum": 2,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "N Parameter Particles"
+          },
+          "path_update": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathUpdateSpec-Input"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "compiler_reparameterization": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Compiler Reparameterization"
+          },
+          "scale_chart": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scale Chart"
+          },
+          "parameter_proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParameterProposal"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "diagnostic_metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParticleDiagnosticMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "param_target_accept": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Param Target Accept"
+          },
+          "adaptation_scheme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdaptationScheme"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "initialization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GaussianInitializationSpec-Input"
               },
               {
                 "type": "null"
@@ -16473,10 +16262,103 @@
             "default": null,
             "title": "Time Limit Seconds"
           },
-          "algorithm": {
+          "n_parameter_particles": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/InferenceAlgorithmSpec-Output"
+                "minimum": 2,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "N Parameter Particles"
+          },
+          "path_update": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathUpdateSpec-Output"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "compiler_reparameterization": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Compiler Reparameterization"
+          },
+          "scale_chart": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Scale Chart"
+          },
+          "parameter_proposal": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParameterProposal"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "diagnostic_metrics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParticleDiagnosticMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "param_target_accept": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Param Target Accept"
+          },
+          "adaptation_scheme": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AdaptationScheme"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "initialization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GaussianInitializationSpec-Output"
               },
               {
                 "type": "null"
@@ -16541,7 +16423,15 @@
           "profile",
           "hardware",
           "time_limit_seconds",
-          "algorithm",
+          "n_parameter_particles",
+          "path_update",
+          "compiler_reparameterization",
+          "scale_chart",
+          "parameter_proposal",
+          "diagnostic_metrics",
+          "param_target_accept",
+          "adaptation_scheme",
+          "initialization",
           "num_samples_per_chain",
           "num_warmup",
           "num_chains",
@@ -16670,7 +16560,7 @@
           },
           "delta": {
             "default": 0.01,
-            "description": "Variance of the candidates around each proposed state, at every time step: half comes from refreshing the auxiliary point and half from drawing around it (Corenflos & Finke 2024, Algorithm 3). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving.",
+            "description": "Twice the auxiliary variance at every time step: each sweep refreshes the auxiliary point around the current state with variance delta/2, and the same variance ties the candidates to it (Corenflos & Finke 2024, Algorithms 6 and 7). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving.",
             "exclusiveMinimum": 0,
             "title": "Delta",
             "type": "number"
@@ -16694,7 +16584,7 @@
           },
           "delta": {
             "default": 0.01,
-            "description": "Variance of the candidates around each proposed state, at every time step: half comes from refreshing the auxiliary point and half from drawing around it (Corenflos & Finke 2024, Algorithm 3). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving.",
+            "description": "Twice the auxiliary variance at every time step: each sweep refreshes the auxiliary point around the current state with variance delta/2, and the same variance ties the candidates to it (Corenflos & Finke 2024, Algorithms 6 and 7). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving.",
             "exclusiveMinimum": 0,
             "title": "Delta",
             "type": "number"
@@ -16705,58 +16595,6 @@
           "delta"
         ],
         "title": "FixedLatentStepSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "FixedTrajectorySpec-Input": {
-        "additionalProperties": false,
-        "description": "A fixed number of leapfrog steps, with the step size jittered by up to 20%.",
-        "properties": {
-          "kind": {
-            "const": "fixed",
-            "default": "fixed",
-            "title": "Kind",
-            "type": "string"
-          },
-          "steps": {
-            "default": 8,
-            "description": "Leapfrog steps per transition. Each transition scales the adapted step size by a uniform factor in [0.8, 1.2], so trajectories cannot stay periodic (Neal 2011, section 5.3.2). Every transition costs the same number of gradients, so chains advanced together never wait for the longest NUTS tree, which limits NUTS on accelerators (Hoffman, Radul & Sountsov 2021).",
-            "minimum": 1,
-            "title": "Steps",
-            "type": "integer"
-          }
-        },
-        "title": "FixedTrajectorySpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "FixedTrajectorySpec-Output": {
-        "additionalProperties": false,
-        "description": "A fixed number of leapfrog steps, with the step size jittered by up to 20%.",
-        "properties": {
-          "kind": {
-            "const": "fixed",
-            "default": "fixed",
-            "title": "Kind",
-            "type": "string"
-          },
-          "steps": {
-            "default": 8,
-            "description": "Leapfrog steps per transition. Each transition scales the adapted step size by a uniform factor in [0.8, 1.2], so trajectories cannot stay periodic (Neal 2011, section 5.3.2). Every transition costs the same number of gradients, so chains advanced together never wait for the longest NUTS tree, which limits NUTS on accelerators (Hoffman, Radul & Sountsov 2021).",
-            "minimum": 1,
-            "title": "Steps",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "kind",
-          "steps"
-        ],
-        "title": "FixedTrajectorySpec",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
@@ -16835,16 +16673,12 @@
       "FrozenSamplerTuning": {
         "discriminator": {
           "mapping": {
-            "joint": "#/components/schemas/JointTuning",
             "particle": "#/components/schemas/ParticleTuning",
             "transferred": "#/components/schemas/TransferredTuning"
           },
           "propertyName": "kind"
         },
         "oneOf": [
-          {
-            "$ref": "#/components/schemas/JointTuning"
-          },
           {
             "$ref": "#/components/schemas/ParticleTuning"
           },
@@ -17020,88 +16854,6 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "GaussianReferenceTemperingSpec-Input": {
-        "additionalProperties": false,
-        "description": "Replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class.",
-        "properties": {
-          "kind": {
-            "const": "gaussian_reference",
-            "default": "gaussian_reference",
-            "title": "Kind",
-            "type": "string"
-          },
-          "num_temperatures": {
-            "default": 48,
-            "description": "Replicas per chain, initially evenly spaced from beta one (the exact posterior) to beta zero (the Gaussian reference). Each replica runs a full sweep, so cost grows linearly. With alternating even/odd swaps the round-trip rate tends to 1 / (2 + 2\u039b) instead of collapsing as replicas are added, and about 2\u039b replicas are optimal, where \u039b is the posterior's communication barrier (Syed et al. 2022, sections 4.2 and 5.3).",
-            "minimum": 2,
-            "title": "Num Temperatures",
-            "type": "integer"
-          },
-          "reference_scale": {
-            "default": 1.0,
-            "description": "Multiplies the reference's standard deviations for parameters and path innovations. The reference is built at initialization from the starting draws and the transition Jacobians along their mean path. Above 1 it covers mass the starting draws missed, but overlaps the posterior less, which raises the barrier and so the replicas needed.",
-            "exclusiveMinimum": 0,
-            "title": "Reference Scale",
-            "type": "number"
-          },
-          "adaptation_interval": {
-            "default": 500,
-            "description": "Sweeps between ladder updates in the first half of warmup. Each update respaces the temperatures to equalize the swap rejection rates estimated since the last update (Syed et al. 2022, sections 5.1-5.2). An interval above half the warmup leaves the evenly spaced ladder unadapted.",
-            "minimum": 2,
-            "title": "Adaptation Interval",
-            "type": "integer"
-          }
-        },
-        "title": "GaussianReferenceTemperingSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "GaussianReferenceTemperingSpec-Output": {
-        "additionalProperties": false,
-        "description": "Replica exchange; each ladder retains only its exact beta-one chain.\n\nThe ladder spans beta one to zero. The reference is fixed at initialization,\nits endpoint is independently refreshed every sweep, and even/odd neighboring\nswaps alternate. Rejection-based ladder adaptation runs during the first half\nof warmup, leaving the rest to settle before retaining posterior draws.\n\nIt is for posteriors whose chains stay in separate modes: states that move freely\nunder the reference reach the exact chain through swaps (Syed et al. 2022). Its\nlimits are in docs/assumptions.md, under Model class.",
-        "properties": {
-          "kind": {
-            "const": "gaussian_reference",
-            "default": "gaussian_reference",
-            "title": "Kind",
-            "type": "string"
-          },
-          "num_temperatures": {
-            "default": 48,
-            "description": "Replicas per chain, initially evenly spaced from beta one (the exact posterior) to beta zero (the Gaussian reference). Each replica runs a full sweep, so cost grows linearly. With alternating even/odd swaps the round-trip rate tends to 1 / (2 + 2\u039b) instead of collapsing as replicas are added, and about 2\u039b replicas are optimal, where \u039b is the posterior's communication barrier (Syed et al. 2022, sections 4.2 and 5.3).",
-            "minimum": 2,
-            "title": "Num Temperatures",
-            "type": "integer"
-          },
-          "reference_scale": {
-            "default": 1.0,
-            "description": "Multiplies the reference's standard deviations for parameters and path innovations. The reference is built at initialization from the starting draws and the transition Jacobians along their mean path. Above 1 it covers mass the starting draws missed, but overlaps the posterior less, which raises the barrier and so the replicas needed.",
-            "exclusiveMinimum": 0,
-            "title": "Reference Scale",
-            "type": "number"
-          },
-          "adaptation_interval": {
-            "default": 500,
-            "description": "Sweeps between ladder updates in the first half of warmup. Each update respaces the temperatures to equalize the swap rejection rates estimated since the last update (Syed et al. 2022, sections 5.1-5.2). An interval above half the warmup leaves the evenly spaced ladder unadapted.",
-            "minimum": 2,
-            "title": "Adaptation Interval",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "kind",
-          "num_temperatures",
-          "reference_scale",
-          "adaptation_interval"
-        ],
-        "title": "GaussianReferenceTemperingSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "GitOid-Input": {
         "pattern": "^[0-9a-f]{40}$",
         "type": "string",
@@ -17122,12 +16874,11 @@
         "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nCorenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear\ntransitions and densities pay every weight, so each method's approximation costs\nmixing, never the target.",
         "properties": {
           "method": {
-            "default": "particle_agrad",
-            "description": "particle_agrad keeps the auxiliary variable in the weights (section 4.1); strong future information or multiple modes can reduce its mixing. twisted_particle_agrad adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings without deterministic recurrences, and separated path components and informative future readings can slow its mixing.",
+            "default": "particle_mgrad",
+            "description": "particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings without deterministic recurrences, and separated path components and informative future readings can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4). It also supports interval readings and deterministic recurrences; poor local fits and multiple modes cost efficiency.",
             "enum": [
-              "particle_agrad",
-              "twisted_particle_agrad",
-              "particle_mgrad"
+              "particle_mgrad",
+              "twisted_particle_agrad"
             ],
             "title": "Method",
             "type": "string"
@@ -17178,12 +16929,11 @@
         "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nCorenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear\ntransitions and densities pay every weight, so each method's approximation costs\nmixing, never the target.",
         "properties": {
           "method": {
-            "default": "particle_agrad",
-            "description": "particle_agrad keeps the auxiliary variable in the weights (section 4.1); strong future information or multiple modes can reduce its mixing. twisted_particle_agrad adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings without deterministic recurrences, and separated path components and informative future readings can slow its mixing.",
+            "default": "particle_mgrad",
+            "description": "particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings without deterministic recurrences, and separated path components and informative future readings can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4). It also supports interval readings and deterministic recurrences; poor local fits and multiple modes cost efficiency.",
             "enum": [
-              "particle_agrad",
-              "twisted_particle_agrad",
-              "particle_mgrad"
+              "particle_mgrad",
+              "twisted_particle_agrad"
             ],
             "title": "Method",
             "type": "string"
@@ -17728,46 +17478,6 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "InferenceAlgorithmSpec-Input": {
-        "discriminator": {
-          "mapping": {
-            "mpgibbs": "#/components/schemas/MarginalParticleGibbsSpec-Input",
-            "nuts_da": "#/components/schemas/NutsDASpec-Input"
-          },
-          "propertyName": "method"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/NutsDASpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/MarginalParticleGibbsSpec-Input"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "InferenceAlgorithmSpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "mpgibbs": "#/components/schemas/MarginalParticleGibbsSpec-Output",
-            "nuts_da": "#/components/schemas/NutsDASpec-Output"
-          },
-          "propertyName": "method"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/NutsDASpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/MarginalParticleGibbsSpec-Output"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "InferenceEvidence": {
         "additionalProperties": false,
         "description": "Native telemetry buffers; posterior atoms and coordinates belong to the model.",
@@ -17968,22 +17678,15 @@
             "title": "Duration Seconds",
             "type": "number"
           },
-          "engine": {
-            "$ref": "#/components/schemas/MCMCEvidence"
-          },
           "sampler_diagnostics": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/ParticleSamplerDiagnostics"
               },
               {
-                "$ref": "#/components/schemas/NutsDADiagnostics"
-              },
-              {
                 "type": "null"
               }
-            ],
-            "title": "Sampler Diagnostics"
+            ]
           }
         },
         "required": [
@@ -17992,7 +17695,6 @@
           "segments",
           "num_chains",
           "duration_seconds",
-          "engine",
           "sampler_diagnostics"
         ],
         "title": "InferenceMetadata",
@@ -18535,105 +18237,6 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "JointParameterization": {
-        "enum": [
-          "centred",
-          "non_centred",
-          "mixed"
-        ],
-        "type": "string",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "JointParameterizationRecord": {
-        "discriminator": {
-          "mapping": {
-            "centred": "#/components/schemas/CentredParameterizationRecord",
-            "mixed": "#/components/schemas/MixedParameterizationRecord",
-            "non_centred": "#/components/schemas/NonCentredParameterizationRecord"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/CentredParameterizationRecord"
-          },
-          {
-            "$ref": "#/components/schemas/NonCentredParameterizationRecord"
-          },
-          {
-            "$ref": "#/components/schemas/MixedParameterizationRecord"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.joint_parameterization",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "JointTrajectorySpec-Input": {
-        "discriminator": {
-          "mapping": {
-            "fixed": "#/components/schemas/FixedTrajectorySpec-Input",
-            "nuts": "#/components/schemas/NutsTrajectorySpec-Input"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/NutsTrajectorySpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/FixedTrajectorySpec-Input"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "JointTrajectorySpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "fixed": "#/components/schemas/FixedTrajectorySpec-Output",
-            "nuts": "#/components/schemas/NutsTrajectorySpec-Output"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/NutsTrajectorySpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/FixedTrajectorySpec-Output"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "JointTuning": {
-        "additionalProperties": false,
-        "description": "Joint coordinates are reconstructed from the original model and trace seed.",
-        "properties": {
-          "kind": {
-            "const": "joint",
-            "default": "joint",
-            "title": "Kind",
-            "type": "string"
-          },
-          "parameterization": {
-            "$ref": "#/components/schemas/JointParameterizationRecord"
-          }
-        },
-        "required": [
-          "kind",
-          "parameterization"
-        ],
-        "title": "JointTuning",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.continuation",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
       "JsonArray-Input": {
         "items": {
           "$ref": "#/components/schemas/JsonValue-Input"
@@ -18897,16 +18500,6 @@
         "title": "LabeledMeasurement",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.observations.spec",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "LatentBlockSize": {
-        "enum": [
-          1,
-          2,
-          "all"
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -19249,180 +18842,6 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "MCMCEvidence": {
-        "additionalProperties": false,
-        "description": "The algorithm that sampled the exact joint state and parameter target.",
-        "properties": {
-          "method": {
-            "default": "mpgibbs",
-            "enum": [
-              "nuts_da",
-              "mpgibbs"
-            ],
-            "title": "Method",
-            "type": "string"
-          }
-        },
-        "required": [
-          "method"
-        ],
-        "title": "MCMCEvidence",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "MarginalParticleGibbsSpec-Input": {
-        "additionalProperties": false,
-        "description": "Marginalized parameter ensemble and exact conditional trajectory updates.\n\nm-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around\na shared auxiliary point, runs conditional SMC against the posterior mixture over\nthem and selects a parameter together with the new path. Parameter moves are thus\nmarginalized over paths, as in PMMH, instead of conditioned on one. The proposal\ncovariance starts from the initializer and is re-estimated at the end of each\nwarmup window (section 3.4).",
-        "properties": {
-          "method": {
-            "const": "mpgibbs",
-            "default": "mpgibbs",
-            "title": "Method",
-            "type": "string"
-          },
-          "n_parameter_particles": {
-            "default": 2,
-            "description": "Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).",
-            "minimum": 2,
-            "title": "N Parameter Particles",
-            "type": "integer"
-          },
-          "tempering": {
-            "$ref": "#/components/schemas/TemperingSpec-Input",
-            "description": "untempered runs the exact posterior alone; gaussian_reference runs Gaussian-reference parallel tempering."
-          },
-          "path_update": {
-            "$ref": "#/components/schemas/PathUpdateSpec-Input",
-            "description": "Exact path update."
-          },
-          "compiler_reparameterization": {
-            "default": false,
-            "description": "Compute time-indexed path translations from Gauss-Newton mean cross curvature, including deterministic recurrences and interval readings. Build at mean initial parameters and their IEKS path; rebuild at cold-chain mean parameters and their IEKS path at warmup window ends. Freeze before retained draws and preserve the chart in native continuation state. Every density and reported path retains the exact physical model. Local slopes, strong nonlinearity and multiple modes can limit mixing.",
-            "title": "Compiler Reparameterization",
-            "type": "boolean"
-          },
-          "scale_chart": {
-            "default": false,
-            "description": "Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.",
-            "title": "Scale Chart",
-            "type": "boolean"
-          },
-          "parameter_proposal": {
-            "$ref": "#/components/schemas/ParameterProposal",
-            "default": "random_walk",
-            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel."
-          },
-          "diagnostic_metrics": {
-            "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
-            "default": [],
-            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
-          },
-          "param_target_accept": {
-            "default": 0.2,
-            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023).",
-            "title": "Param Target Accept",
-            "type": "number"
-          },
-          "adaptation_scheme": {
-            "$ref": "#/components/schemas/AdaptationScheme",
-            "default": "simple",
-            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2)."
-          },
-          "initialization": {
-            "$ref": "#/components/schemas/GaussianInitializationSpec-Input",
-            "description": "Independent Gaussian starts, which also set the initial proposal scale."
-          }
-        },
-        "title": "MarginalParticleGibbsSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "MarginalParticleGibbsSpec-Output": {
-        "additionalProperties": false,
-        "description": "Marginalized parameter ensemble and exact conditional trajectory updates.\n\nm-PGibbs (Corenflos 2025), the default sampler, proposes parameter particles around\na shared auxiliary point, runs conditional SMC against the posterior mixture over\nthem and selects a parameter together with the new path. Parameter moves are thus\nmarginalized over paths, as in PMMH, instead of conditioned on one. The proposal\ncovariance starts from the initializer and is re-estimated at the end of each\nwarmup window (section 3.4).",
-        "properties": {
-          "method": {
-            "const": "mpgibbs",
-            "default": "mpgibbs",
-            "title": "Method",
-            "type": "string"
-          },
-          "n_parameter_particles": {
-            "default": 2,
-            "description": "Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).",
-            "minimum": 2,
-            "title": "N Parameter Particles",
-            "type": "integer"
-          },
-          "tempering": {
-            "$ref": "#/components/schemas/TemperingSpec-Output",
-            "description": "untempered runs the exact posterior alone; gaussian_reference runs Gaussian-reference parallel tempering."
-          },
-          "path_update": {
-            "$ref": "#/components/schemas/PathUpdateSpec-Output",
-            "description": "Exact path update."
-          },
-          "compiler_reparameterization": {
-            "default": false,
-            "description": "Compute time-indexed path translations from Gauss-Newton mean cross curvature, including deterministic recurrences and interval readings. Build at mean initial parameters and their IEKS path; rebuild at cold-chain mean parameters and their IEKS path at warmup window ends. Freeze before retained draws and preserve the chart in native continuation state. Every density and reported path retains the exact physical model. Local slopes, strong nonlinearity and multiple modes can limit mixing.",
-            "title": "Compiler Reparameterization",
-            "type": "boolean"
-          },
-          "scale_chart": {
-            "default": false,
-            "description": "Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.",
-            "title": "Scale Chart",
-            "type": "boolean"
-          },
-          "parameter_proposal": {
-            "$ref": "#/components/schemas/ParameterProposal",
-            "default": "random_walk",
-            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel."
-          },
-          "diagnostic_metrics": {
-            "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
-            "default": [],
-            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (dSMC weight ESS, entropy and spread per tree node). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
-          },
-          "param_target_accept": {
-            "default": 0.2,
-            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023).",
-            "title": "Param Target Accept",
-            "type": "number"
-          },
-          "adaptation_scheme": {
-            "$ref": "#/components/schemas/AdaptationScheme",
-            "default": "simple",
-            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2)."
-          },
-          "initialization": {
-            "$ref": "#/components/schemas/GaussianInitializationSpec-Output",
-            "description": "Independent Gaussian starts, which also set the initial proposal scale."
-          }
-        },
-        "required": [
-          "method",
-          "n_parameter_particles",
-          "tempering",
-          "path_update",
-          "compiler_reparameterization",
-          "scale_chart",
-          "parameter_proposal",
-          "diagnostic_metrics",
-          "param_target_accept",
-          "adaptation_scheme",
-          "initialization"
-        ],
-        "title": "MarginalParticleGibbsSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "Measurement": {
         "discriminator": {
           "mapping": {
@@ -19521,51 +18940,6 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.predictive_provenance",
         "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "MixedParameterizationRecord": {
-        "additionalProperties": false,
-        "description": "Centred free coordinates, in the full checkpoint path's time/state axis order.",
-        "properties": {
-          "kind": {
-            "const": "mixed",
-            "default": "mixed",
-            "title": "Kind",
-            "type": "string"
-          },
-          "centred_mask": {
-            "items": {
-              "items": {
-                "type": "boolean"
-              },
-              "type": "array"
-            },
-            "title": "Centred Mask",
-            "type": "array"
-          },
-          "mask_identity": {
-            "description": "Content identity of the actual mask, including its time and state dimensions.",
-            "readOnly": true,
-            "title": "Mask Identity",
-            "type": "string"
-          },
-          "equals_non_centred": {
-            "description": "Whether the available-reading policy selects no centred free coordinate.",
-            "readOnly": true,
-            "title": "Equals Non Centred",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "kind",
-          "centred_mask",
-          "mask_identity",
-          "equals_non_centred"
-        ],
-        "title": "MixedParameterizationRecord",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.joint_parameterization",
-        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "ModelCheckReport": {
@@ -20312,26 +19686,6 @@
         "x-python-module": "grassmoth_server.actions.contracts.inputs",
         "x-layer": "transport",
         "x-concern": "api_tools"
-      },
-      "NonCentredParameterizationRecord": {
-        "additionalProperties": false,
-        "description": "Exact conditional innovations in every unpinned independent path coordinate.",
-        "properties": {
-          "kind": {
-            "const": "non_centred",
-            "default": "non_centred",
-            "title": "Kind",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind"
-        ],
-        "title": "NonCentredParameterizationRecord",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.joint_parameterization",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
       },
       "NonIdentifiableTreatmentStatus": {
         "additionalProperties": false,
@@ -21134,174 +20488,6 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.arrays",
         "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "NutsDADiagnostics": {
-        "additionalProperties": false,
-        "description": "Realized NUTS adaptation and retained-tree saturation by vectorized chain.",
-        "properties": {
-          "settings": {
-            "$ref": "#/components/schemas/SamplerSpec"
-          },
-          "mcmc_phase_seconds": {
-            "title": "Mcmc Phase Seconds",
-            "type": "number"
-          },
-          "final_step_size": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Final Step Size",
-            "type": "array"
-          },
-          "max_tree_depth_fraction": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Tree Depth Fraction"
-          }
-        },
-        "required": [
-          "settings",
-          "mcmc_phase_seconds",
-          "final_step_size",
-          "max_tree_depth_fraction"
-        ],
-        "title": "NutsDADiagnostics",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "NutsDASpec-Input": {
-        "additionalProperties": false,
-        "description": "Joint HMC with dual averaging and windowed diagonal mass adaptation.\n\nIt moves every parameter and free latent coordinate at once on the exact joint\ndensity, with no particle approximation. It also reconstructs deterministic\nrecurrences that the particle samplers reject, and is a diagnostic when particle\nchains fail to converge.",
-        "properties": {
-          "method": {
-            "const": "nuts_da",
-            "default": "nuts_da",
-            "title": "Method",
-            "type": "string"
-          },
-          "parameterization": {
-            "$ref": "#/components/schemas/JointParameterization",
-            "default": "centred",
-            "description": "Coordinates the sampler moves in; the posterior is the same in all three, only its geometry changes. centred samples each path directly, standardized by the prior's per-step covariances at the starting parameters. non_centred samples each free coordinate's Euler-Maruyama innovation and rebuilds the path from the current parameters. mixed keeps coordinates with a direct point reading centred and makes the rest non-centred. Centred mixes well where data pin the states, non-centred where data are weak against the dynamics (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). Frozen per fit; changing it on a continued fit requires warmup."
-          },
-          "target_accept_prob": {
-            "default": 0.8,
-            "description": "Mean acceptance statistic that dual averaging steers the step size towards during warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks the step, which removes divergences in strongly curved regions at the cost of longer trajectories. 0.8 is the NumPyro and Stan default.",
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Target Accept Prob",
-            "type": "number"
-          },
-          "trajectory": {
-            "$ref": "#/components/schemas/JointTrajectorySpec-Input",
-            "description": "NUTS chooses each trajectory's length; fixed runs a set number of steps."
-          }
-        },
-        "title": "NutsDASpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "NutsDASpec-Output": {
-        "additionalProperties": false,
-        "description": "Joint HMC with dual averaging and windowed diagonal mass adaptation.\n\nIt moves every parameter and free latent coordinate at once on the exact joint\ndensity, with no particle approximation. It also reconstructs deterministic\nrecurrences that the particle samplers reject, and is a diagnostic when particle\nchains fail to converge.",
-        "properties": {
-          "method": {
-            "const": "nuts_da",
-            "default": "nuts_da",
-            "title": "Method",
-            "type": "string"
-          },
-          "parameterization": {
-            "$ref": "#/components/schemas/JointParameterization",
-            "default": "centred",
-            "description": "Coordinates the sampler moves in; the posterior is the same in all three, only its geometry changes. centred samples each path directly, standardized by the prior's per-step covariances at the starting parameters. non_centred samples each free coordinate's Euler-Maruyama innovation and rebuilds the path from the current parameters. mixed keeps coordinates with a direct point reading centred and makes the rest non-centred. Centred mixes well where data pin the states, non-centred where data are weak against the dynamics (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). Frozen per fit; changing it on a continued fit requires warmup."
-          },
-          "target_accept_prob": {
-            "default": 0.8,
-            "description": "Mean acceptance statistic that dual averaging steers the step size towards during warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks the step, which removes divergences in strongly curved regions at the cost of longer trajectories. 0.8 is the NumPyro and Stan default.",
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Target Accept Prob",
-            "type": "number"
-          },
-          "trajectory": {
-            "$ref": "#/components/schemas/JointTrajectorySpec-Output",
-            "description": "NUTS chooses each trajectory's length; fixed runs a set number of steps."
-          }
-        },
-        "required": [
-          "method",
-          "parameterization",
-          "target_accept_prob",
-          "trajectory"
-        ],
-        "title": "NutsDASpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "NutsTrajectorySpec-Input": {
-        "additionalProperties": false,
-        "description": "A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).",
-        "properties": {
-          "kind": {
-            "const": "nuts",
-            "default": "nuts",
-            "title": "Kind",
-            "type": "string"
-          },
-          "max_tree_depth": {
-            "default": 10,
-            "description": "Maximum number of trajectory doublings per transition, so at most 2^max_tree_depth - 1 leapfrog steps. The report gives the fraction of transitions that reach it; frequent hits mean the step is small against the posterior's longest scale, and each extra level can double the cost. 10 is the NumPyro and Stan default.",
-            "minimum": 1,
-            "title": "Max Tree Depth",
-            "type": "integer"
-          }
-        },
-        "title": "NutsTrajectorySpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "NutsTrajectorySpec-Output": {
-        "additionalProperties": false,
-        "description": "A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).",
-        "properties": {
-          "kind": {
-            "const": "nuts",
-            "default": "nuts",
-            "title": "Kind",
-            "type": "string"
-          },
-          "max_tree_depth": {
-            "default": 10,
-            "description": "Maximum number of trajectory doublings per transition, so at most 2^max_tree_depth - 1 leapfrog steps. The report gives the fraction of transitions that reach it; frequent hits mean the step is small against the posterior's longest scale, and each extra level can double the cost. 10 is the NumPyro and Stan default.",
-            "minimum": 1,
-            "title": "Max Tree Depth",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "kind",
-          "max_tree_depth"
-        ],
-        "title": "NutsTrajectorySpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "ObservationData": {
@@ -22394,7 +21580,7 @@
       },
       "ParticleProfileDimensions": {
         "additionalProperties": false,
-        "description": "Particle-kernel work dimensions, including any temperature replicas.",
+        "description": "Particle-kernel work dimensions per chain.",
         "properties": {
           "particles": {
             "minimum": 1,
@@ -22405,17 +21591,11 @@
             "minimum": 2,
             "title": "Labels",
             "type": "integer"
-          },
-          "replicas": {
-            "minimum": 1,
-            "title": "Replicas",
-            "type": "integer"
           }
         },
         "required": [
           "particles",
-          "labels",
-          "replicas"
+          "labels"
         ],
         "title": "ParticleProfileDimensions",
         "type": "object",
@@ -22471,9 +21651,6 @@
           "latent_frozen_fraction": {
             "title": "Latent Frozen Fraction",
             "type": "number"
-          },
-          "latent_block_coords": {
-            "$ref": "#/components/schemas/LatentBlockSize"
           },
           "initial_param_step_size": {
             "items": {
@@ -22586,23 +21763,12 @@
           "path_weights": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/PathWeightDiagnostics"
+                "$ref": "#/components/schemas/SequentialWeightDiagnostics"
               },
               {
                 "type": "null"
               }
             ]
-          },
-          "tempering": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TemperingDiagnostics"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
           }
         },
         "required": [
@@ -22617,7 +21783,6 @@
           "parameter_accept_rate",
           "latent_update_fraction",
           "latent_frozen_fraction",
-          "latent_block_coords",
           "initial_param_step_size",
           "final_param_step_size",
           "latent_sign_flip_moves",
@@ -22629,8 +21794,7 @@
           "amala_grad_norm_mean",
           "amala_grad_norm_max",
           "initialization",
-          "path_weights",
-          "tempering"
+          "path_weights"
         ],
         "title": "ParticleSamplerDiagnostics",
         "type": "object",
@@ -22651,22 +21815,8 @@
           "parameter_chol": {
             "$ref": "#/components/schemas/NumericalArray"
           },
-          "pilot_mean": {
-            "$ref": "#/components/schemas/NumericalArray"
-          },
-          "pilot_variance": {
-            "$ref": "#/components/schemas/NumericalArray"
-          },
           "parameter_reference_path": {
             "$ref": "#/components/schemas/NumericalArray"
-          },
-          "gaussian_reference": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/NumericalArray"
-            },
-            "title": "Gaussian Reference",
-            "type": "array"
           },
           "initialization": {
             "$ref": "#/components/schemas/InitializationDiagnostics"
@@ -22675,10 +21825,7 @@
         "required": [
           "kind",
           "parameter_chol",
-          "pilot_mean",
-          "pilot_variance",
           "parameter_reference_path",
-          "gaussian_reference",
           "initialization"
         ],
         "title": "ParticleTuning",
@@ -22795,19 +21942,12 @@
         "discriminator": {
           "mapping": {
             "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanSpec-Input",
-            "particle_agrad": "#/components/schemas/GuidedPathSpec-Input",
-            "particle_amala": "#/components/schemas/DsmcSpec-Input",
-            "particle_amala_plus": "#/components/schemas/DsmcSpec-Input",
             "particle_mgrad": "#/components/schemas/GuidedPathSpec-Input",
-            "particle_rwm": "#/components/schemas/DsmcSpec-Input",
             "twisted_particle_agrad": "#/components/schemas/GuidedPathSpec-Input"
           },
           "propertyName": "method"
         },
         "oneOf": [
-          {
-            "$ref": "#/components/schemas/DsmcSpec-Input"
-          },
           {
             "$ref": "#/components/schemas/GuidedPathSpec-Input"
           },
@@ -22823,19 +21963,12 @@
         "discriminator": {
           "mapping": {
             "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanSpec-Output",
-            "particle_agrad": "#/components/schemas/GuidedPathSpec-Output",
-            "particle_amala": "#/components/schemas/DsmcSpec-Output",
-            "particle_amala_plus": "#/components/schemas/DsmcSpec-Output",
             "particle_mgrad": "#/components/schemas/GuidedPathSpec-Output",
-            "particle_rwm": "#/components/schemas/DsmcSpec-Output",
             "twisted_particle_agrad": "#/components/schemas/GuidedPathSpec-Output"
           },
           "propertyName": "method"
         },
         "oneOf": [
-          {
-            "$ref": "#/components/schemas/DsmcSpec-Output"
-          },
           {
             "$ref": "#/components/schemas/GuidedPathSpec-Output"
           },
@@ -22845,26 +21978,6 @@
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "PathWeightDiagnostics": {
-        "discriminator": {
-          "mapping": {
-            "dsmc": "#/components/schemas/DsmcWeightDiagnostics",
-            "sequential": "#/components/schemas/SequentialWeightDiagnostics"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/DsmcWeightDiagnostics"
-          },
-          {
-            "$ref": "#/components/schemas/SequentialWeightDiagnostics"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
         "x-concern": "scientific_model"
       },
       "PersistenceTransformSpec-Input": {
@@ -24391,29 +23504,6 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "ReplicaSwapCounts": {
-        "additionalProperties": false,
-        "description": "Accepted and attempted exchanges at one neighboring temperature pair.",
-        "properties": {
-          "accepted": {
-            "title": "Accepted",
-            "type": "integer"
-          },
-          "attempted": {
-            "title": "Attempted",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "accepted",
-          "attempted"
-        ],
-        "title": "ReplicaSwapCounts",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
       "RetractedArtifact": {
         "additionalProperties": false,
         "description": "A current artifact removed by an action, with the finding that caused it.",
@@ -24667,11 +23757,11 @@
       },
       "SamplerSpec": {
         "additionalProperties": false,
-        "description": "Fully resolved controls for exact joint state and parameter inference.",
+        "description": "Fully resolved controls for exact joint state and parameter inference.\n\nThe sampler is marginalized particle Gibbs. m-PGibbs (Corenflos 2025) proposes\nparameter particles around a shared auxiliary point, runs conditional SMC against the\nposterior mixture over them and selects a parameter together with the new path.\nParameter moves are thus marginalized over paths, as in PMMH, instead of conditioned on\none. The proposal covariance starts from the initializer and is re-estimated at the end\nof each warmup window (section 3.4).",
         "properties": {
           "num_warmup": {
             "default": 4000,
-            "description": "Warmup sweeps per chain. Every adaptive step, scale, covariance and ladder is learned here and frozen before draws are retained. Zero keeps the tuning as it is: a continued fit's frozen tuning, or the starting values of a new fit. With zero samples as well, both sweep programs compile and neither runs. Switching the algorithm or joint parameterization on a continued fit requires warmup.",
+            "description": "Warmup sweeps per chain. Every adaptive step, scale and covariance is learned here and frozen before draws are retained. Zero keeps the tuning as it is: a continued fit's frozen tuning, or the starting values of a new fit. With zero samples as well, both sweep programs compile and neither runs. Changing the sampler kernel on a continued fit requires warmup.",
             "minimum": 0,
             "title": "Num Warmup",
             "type": "integer"
@@ -24685,7 +23775,7 @@
           },
           "num_chains": {
             "default": 4,
-            "description": "Independent chains, which the convergence checks compare: rank-normalized R-hat, and bulk and tail ESS of at least 100 per chain. Vehtari et al. (2021) recommend at least four. Tempering runs one ladder per chain.",
+            "description": "Independent chains, which the convergence checks compare: rank-normalized R-hat, and bulk and tail ESS of at least 100 per chain. Vehtari et al. (2021) recommend at least four.",
             "minimum": 1,
             "title": "Num Chains",
             "type": "integer"
@@ -24709,9 +23799,53 @@
             "title": "Time Limit Seconds",
             "type": "integer"
           },
-          "algorithm": {
-            "$ref": "#/components/schemas/InferenceAlgorithmSpec-Output",
-            "description": "Exact joint sampler: mpgibbs (default) or nuts_da."
+          "n_parameter_particles": {
+            "default": 2,
+            "description": "Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).",
+            "minimum": 2,
+            "title": "N Parameter Particles",
+            "type": "integer"
+          },
+          "path_update": {
+            "$ref": "#/components/schemas/PathUpdateSpec-Output",
+            "description": "Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman."
+          },
+          "compiler_reparameterization": {
+            "default": false,
+            "description": "Compute time-indexed path translations from Gauss-Newton mean cross curvature, including deterministic recurrences and interval readings. Build at mean initial parameters and their IEKS path; rebuild at the chains' mean parameters and their IEKS path at warmup window ends. Freeze before retained draws and preserve the chart in native continuation state. Every density and reported path retains the exact physical model. Local slopes, strong nonlinearity and multiple modes can limit mixing.",
+            "title": "Compiler Reparameterization",
+            "type": "boolean"
+          },
+          "scale_chart": {
+            "default": false,
+            "description": "Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.",
+            "title": "Scale Chart",
+            "type": "boolean"
+          },
+          "parameter_proposal": {
+            "$ref": "#/components/schemas/ParameterProposal",
+            "default": "random_walk",
+            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel."
+          },
+          "diagnostic_metrics": {
+            "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
+            "default": [],
+            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
+          },
+          "param_target_accept": {
+            "default": 0.2,
+            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023).",
+            "title": "Param Target Accept",
+            "type": "number"
+          },
+          "adaptation_scheme": {
+            "$ref": "#/components/schemas/AdaptationScheme",
+            "default": "simple",
+            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2)."
+          },
+          "initialization": {
+            "$ref": "#/components/schemas/GaussianInitializationSpec-Output",
+            "description": "Independent Gaussian starts, which also set the initial proposal scale."
           }
         },
         "required": [
@@ -24721,7 +23855,15 @@
           "seed",
           "hardware",
           "time_limit_seconds",
-          "algorithm"
+          "n_parameter_particles",
+          "path_update",
+          "compiler_reparameterization",
+          "scale_chart",
+          "parameter_proposal",
+          "diagnostic_metrics",
+          "param_target_accept",
+          "adaptation_scheme",
+          "initialization"
         ],
         "title": "SamplerSpec",
         "type": "object",
@@ -24931,12 +24073,6 @@
         "additionalProperties": false,
         "description": "Conditional-filter weights in time order, including final path selection.",
         "properties": {
-          "kind": {
-            "const": "sequential",
-            "default": "sequential",
-            "title": "Kind",
-            "type": "string"
-          },
           "phase": {
             "$ref": "#/components/schemas/DiagnosticPhase"
           },
@@ -24949,7 +24085,6 @@
           }
         },
         "required": [
-          "kind",
           "phase",
           "filters"
         ],
@@ -26357,83 +25492,6 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "TemperingDiagnostics": {
-        "additionalProperties": false,
-        "description": "Frozen ladder and retained swap counts; columns are neighboring temperature edges.",
-        "properties": {
-          "inverse_temperatures": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Inverse Temperatures",
-            "type": "array"
-          },
-          "ladder_frozen_at_warmup_step": {
-            "title": "Ladder Frozen At Warmup Step",
-            "type": "integer"
-          },
-          "swaps": {
-            "items": {
-              "items": {
-                "$ref": "#/components/schemas/ReplicaSwapCounts"
-              },
-              "type": "array"
-            },
-            "title": "Swaps",
-            "type": "array"
-          }
-        },
-        "required": [
-          "inverse_temperatures",
-          "ladder_frozen_at_warmup_step",
-          "swaps"
-        ],
-        "title": "TemperingDiagnostics",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
-      "TemperingSpec-Input": {
-        "discriminator": {
-          "mapping": {
-            "gaussian_reference": "#/components/schemas/GaussianReferenceTemperingSpec-Input",
-            "untempered": "#/components/schemas/UntemperedSpec-Input"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/UntemperedSpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/GaussianReferenceTemperingSpec-Input"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "TemperingSpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "gaussian_reference": "#/components/schemas/GaussianReferenceTemperingSpec-Output",
-            "untempered": "#/components/schemas/UntemperedSpec-Output"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/UntemperedSpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/GaussianReferenceTemperingSpec-Output"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "TemporalStatus": {
         "description": "Temporal status states whether a construct varies within the individual over time.",
         "enum": [
@@ -26865,43 +25923,6 @@
         "title": "UnknownLawProvenance",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.predictive_provenance",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "UntemperedSpec-Input": {
-        "additionalProperties": false,
-        "description": "The exact posterior without temperature replicas.",
-        "properties": {
-          "kind": {
-            "const": "untempered",
-            "default": "untempered",
-            "title": "Kind",
-            "type": "string"
-          }
-        },
-        "title": "UntemperedSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "UntemperedSpec-Output": {
-        "additionalProperties": false,
-        "description": "The exact posterior without temperature replicas.",
-        "properties": {
-          "kind": {
-            "const": "untempered",
-            "default": "untempered",
-            "title": "Kind",
-            "type": "string"
-          }
-        },
-        "required": [
-          "kind"
-        ],
-        "title": "UntemperedSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -36555,16 +35576,12 @@
       "JsonResponse_FrozenSamplerTuning": {
         "discriminator": {
           "mapping": {
-            "joint": "#/components/schemas/JointTuning",
             "particle": "#/components/schemas/JsonResponse_ParticleTuning",
             "transferred": "#/components/schemas/TransferredTuning"
           },
           "propertyName": "kind"
         },
         "oneOf": [
-          {
-            "$ref": "#/components/schemas/JointTuning"
-          },
           {
             "$ref": "#/components/schemas/JsonResponse_ParticleTuning"
           },
@@ -37034,22 +36051,8 @@
           "parameter_chol": {
             "$ref": "#/components/schemas/JsonResponse_NumericalArray"
           },
-          "pilot_mean": {
-            "$ref": "#/components/schemas/JsonResponse_NumericalArray"
-          },
-          "pilot_variance": {
-            "$ref": "#/components/schemas/JsonResponse_NumericalArray"
-          },
           "parameter_reference_path": {
             "$ref": "#/components/schemas/JsonResponse_NumericalArray"
-          },
-          "gaussian_reference": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/JsonResponse_NumericalArray"
-            },
-            "title": "Gaussian Reference",
-            "type": "array"
           },
           "initialization": {
             "$ref": "#/components/schemas/InitializationDiagnostics"
@@ -37058,10 +36061,7 @@
         "required": [
           "kind",
           "parameter_chol",
-          "pilot_mean",
-          "pilot_variance",
           "parameter_reference_path",
-          "gaussian_reference",
           "initialization"
         ],
         "title": "ParticleTuning",

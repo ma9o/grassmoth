@@ -1,1 +1,1 @@
-"""Shared dSMC auxiliary laws, trajectory kernels, and warmup adaptation."""
+"""Particle-mGRAD, twisted Particle-aGRAD and auxiliary Kalman path updates and their warmup."""

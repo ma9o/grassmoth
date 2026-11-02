@@ -35,7 +35,7 @@ def covariance_windows(num_warmup: int) -> Int[Array, "W 2"]:
 def initialize_parameter_covariance(
     positions: Float[Array, "B U"], chol: Float[Array, "U U"]
 ) -> ParameterCovariance:
-    """Start one moment accumulator per cold chain, with a shared reference geometry."""
+    """Start one moment accumulator per chain, with a shared reference geometry."""
     chains, dimension = positions.shape
     return ParameterCovariance(
         reference_chol=chol,

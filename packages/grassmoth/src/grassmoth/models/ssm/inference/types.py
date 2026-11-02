@@ -11,7 +11,6 @@ if TYPE_CHECKING:
 
     from grassmoth.artifacts.continuation import SamplerCheckpoint
     from grassmoth.artifacts.identity import ConstructId
-    from grassmoth.artifacts.joint_parameterization import JointParameterizationRecord
     from grassmoth.artifacts.reports.profiling import FitProfileReport
     from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
 
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Self
 
@@ -32,8 +31,6 @@ from grassmoth.artifacts.reports.inference import PosteriorDrawsInfo
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     ChainDiagnostics,
     LOODiagnostics,
-    MCMCEvidence,
-    NutsDADiagnostics,
     ParameterDiagnostics,
     ParetoKPoint,
     ParticleSamplerDiagnostics,
@@ -43,9 +40,6 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 from grassmoth.models.ssm.inference.diagnostics.plots import (
     ParameterReferences,
     pareto_k_points,
-)
-from grassmoth.models.ssm.inference.diagnostics.plots import (
-    build_energy_diagnostics as _build_energy_diagnostics,
 )
 from grassmoth.models.ssm.inference.diagnostics.plots import (
     build_rank_histograms as _build_rank_histograms,
@@ -80,10 +74,8 @@ class UnretainedRun:
     """A completed compilation or warmup with no retained posterior and no checkpoint."""
 
     settings: SamplerSpec
-    evidence: MCMCEvidence
     compiled_step: Compiled
     phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]]
-    parameterization: JointParameterizationRecord | None = None
     profile: FitProfileReport | None = None
 
     @classmethod
@@ -92,7 +84,6 @@ class UnretainedRun:
         settings: SamplerSpec,
         compiled_step: Compiled,
         phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]],
-        parameterization: JointParameterizationRecord | None = None,
         profile: FitProfileReport | None = None,
     ) -> UnretainedRun:
         """Own a completed interval whose settings retain no posterior samples."""
@@ -100,10 +91,8 @@ class UnretainedRun:
             raise ValueError("Unretained runs require zero requested posterior samples")
         return cls(
             settings,
-            MCMCEvidence(method=settings.algorithm.method),
             compiled_step,
             phase_extra_fields,
-            parameterization,
             profile,
         )
 
@@ -119,13 +108,12 @@ class ProductionDiagnostics:
     mcmc: TrajectoryMCMCResult
     checkpoint: SamplerCheckpoint | None = None
     profile: FitProfileReport | None = None
-    parameterization: JointParameterizationRecord | None = None
     observation_log_probs: jnp.ndarray | NDArray
     latent_chains: LatentChainEvidence | None = None
     compiled_step: Compiled | None = None
     public_sites: tuple[str, ...] | None = None
     exact_observation_rows: jnp.ndarray | NDArray | None = None
-    sampler_diagnostics: ParticleSamplerDiagnostics | NutsDADiagnostics | None = None
+    sampler_diagnostics: ParticleSamplerDiagnostics | None = None
     phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]] | None = None
     warmup_complete_log_posterior_history: jnp.ndarray | None = None
     all_complete_log_posterior_history: jnp.ndarray | None = None
@@ -188,16 +176,12 @@ class JointPosteriorDraws:
         )
 
 
-_PARTICLE_ENGINE_EVIDENCE = MCMCEvidence()
-
-
 @dataclass(frozen=True)
 class MCMCPosterior:
     """Joint posterior draws produced by an exact state and parameter MCMC engine."""
 
     draws: JointPosteriorDraws
     diagnostics: ProductionDiagnostics
-    evidence: MCMCEvidence = field(default_factory=MCMCEvidence)
     initial_latent_delta: jnp.ndarray | None = None
     final_latent_delta: jnp.ndarray | None = None
 
@@ -207,15 +191,13 @@ class MCMCPosterior:
         *,
         draws: JointPosteriorDraws,
         diagnostics: ProductionDiagnostics,
-        evidence: MCMCEvidence = _PARTICLE_ENGINE_EVIDENCE,
         initial_latent_delta: jnp.ndarray | None = None,
         final_latent_delta: jnp.ndarray | None = None,
     ) -> Self:
-        """Own the resolved joint draws, exact diagnostics and engine evidence."""
+        """Own the resolved joint draws and exact diagnostics."""
         return cls(
             draws=draws,
             diagnostics=diagnostics,
-            evidence=evidence,
             initial_latent_delta=initial_latent_delta,
             final_latent_delta=final_latent_delta,
         )
@@ -270,9 +252,6 @@ class MCMCPosterior:
                             )
                         )
         extra = mcmc.get_extra_fields()
-        energy = extra.get("energy")
-        if energy is not None and mcmc.num_chains > 1 and energy.ndim == 1:
-            energy = energy.reshape(mcmc.num_chains, -1)
 
         def average(name: str) -> float | None:
             return float(np.mean(np.asarray(extra[name]))) if name in extra else None
@@ -284,18 +263,8 @@ class MCMCPosterior:
             per_latent=latent_chain_diagnostics(self.diagnostics.latent_chains)
             if self.diagnostics.latent_chains is not None
             else None,
-            num_divergences=int(np.sum(np.asarray(extra["diverging"])))
-            if "diverging" in extra
-            else None,
-            divergence_rate=average("diverging"),
-            tree_depth_mean=average("tree_depth"),
-            tree_depth_max=int(np.max(np.asarray(extra["tree_depth"])))
-            if "tree_depth" in extra
-            else None,
-            accept_prob_mean=average("accept_prob"),
             latent_accept_prob_mean=average("latent_accept_prob"),
             parameter_accept_prob_mean=average("parameter_accept_prob"),
-            energy=_build_energy_diagnostics(energy) if energy is not None else None,
         )
 
     def get_chain_detail(

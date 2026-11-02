@@ -14,15 +14,8 @@ from grassmoth.artifacts.model.likelihood import (
     StudentTLawSpec,
 )
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import (
-    AuxiliaryKalmanSpec,
-    DsmcSpec,
-    GaussianReferenceTemperingSpec,
-    NutsDASpec,
-    SamplerSpec,
-)
+from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, SamplerSpec
 from grassmoth.models.ssm import compiled_access as numeric
-from grassmoth.models.ssm.compile.state_space import SequentialRecurrences
 
 if TYPE_CHECKING:
     from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
@@ -53,67 +46,40 @@ def validate_sampler_support(
         return ObservationPreflightFailure.rejected(
             "Exact inference currently requires Gaussian latent diffusion for every state."
         )
-    if isinstance(sampler.algorithm, NutsDASpec):
-        return None
-    if sampler.algorithm.scale_chart and (
-        compiled.state_space.recurrence
-        or any(item.support.support_kind == "interval" for item in compiled.observations)
-    ):
+    point_readings = not compiled.state_space.recurrence and not any(
+        item.support.support_kind == "interval" for item in compiled.observations
+    )
+    if sampler.scale_chart and not point_readings:
         return ObservationPreflightFailure.rejected(
             "The scale chart requires point readings without deterministic recurrences."
         )
-    if isinstance(sampler.algorithm.path_update, AuxiliaryKalmanSpec):
-        if compiled.state_space.recurrence or any(
-            item.support.support_kind == "interval" for item in compiled.observations
-        ):
+    path_update = sampler.path_update
+    if isinstance(path_update, AuxiliaryKalmanSpec):
+        if not point_readings:
             return ObservationPreflightFailure.rejected(
                 "Auxiliary Kalman supports point readings without deterministic recurrences."
             )
-        if isinstance(sampler.algorithm.tempering, GaussianReferenceTemperingSpec):
-            return ObservationPreflightFailure.rejected(
-                "Auxiliary Kalman path updates do not support tempering."
-            )
-        if {"particle_identity", "particle_weights"} & set(sampler.algorithm.diagnostic_metrics):
+        if {"particle_identity", "particle_weights"} & set(sampler.diagnostic_metrics):
             return ObservationPreflightFailure.rejected(
                 "Auxiliary Kalman has no particle bank; particle identity and weight diagnostics "
                 "require a particle path update."
             )
         return None
-    if not isinstance(sampler.algorithm.path_update, DsmcSpec):
-        path_update = sampler.algorithm.path_update
-        if path_update.prefix_mixture:
-            if path_update.method != "twisted_particle_agrad" or path_update.kappa != 1:
-                return ObservationPreflightFailure.rejected(
-                    "Prefix-mixture proposals require twisted Particle-aGRAD with kappa=1."
-                )
-            if compiled.state_space.requires_replay or any(
-                item.support.support_kind == "interval" for item in compiled.observations
-            ):
-                return ObservationPreflightFailure.rejected(
-                    "Prefix-mixture proposals support point readings without replay."
-                )
-        if sampler.algorithm.path_update.method == "particle_mgrad" and (
-            compiled.state_space.recurrence
-            or any(item.support.support_kind == "interval" for item in compiled.observations)
+    if path_update.prefix_mixture:
+        if path_update.method != "twisted_particle_agrad" or path_update.kappa != 1:
+            return ObservationPreflightFailure.rejected(
+                "Prefix-mixture proposals require twisted Particle-aGRAD with kappa=1."
+            )
+        if compiled.state_space.requires_replay or any(
+            item.support.support_kind == "interval" for item in compiled.observations
         ):
             return ObservationPreflightFailure.rejected(
-                "Particle-mGRAD supports point readings without deterministic recurrences."
+                "Prefix-mixture proposals support point readings without replay."
             )
-        if isinstance(sampler.algorithm.tempering, GaussianReferenceTemperingSpec):
-            return ObservationPreflightFailure.rejected(
-                "Sequential guided path updates do not support tempering."
-            )
-        return None
-    unsupported = tuple(
-        ", ".join(compiled.states[index].name for index in stage.indices)
-        for stage in compiled.state_space.recurrence
-        if isinstance(stage, SequentialRecurrences)
-    )
-    if unsupported:
+    if path_update.method == "particle_mgrad" and not point_readings:
         return ObservationPreflightFailure.rejected(
-            "DSMC requires each deterministic dependency stage to be affine in its own "
-            "coordinates to preserve O(log T) parallel depth; unsupported components: "
-            + "; ".join(unsupported)
+            "Particle-mGRAD supports point readings without deterministic recurrences; "
+            "twisted_particle_agrad also supports interval readings and recurrences."
         )
     return None
 

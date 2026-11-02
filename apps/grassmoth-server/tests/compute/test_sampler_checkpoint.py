@@ -7,9 +7,7 @@ import pytest
 
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
-    DsmcSpec,
     GuidedPathSpec,
-    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.fit import fit
@@ -25,8 +23,7 @@ pytestmark = pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize(
     "path_update",
     [
-        DsmcSpec(num_particles=4),
-        GuidedPathSpec(method="particle_agrad", num_particles=4),
+        GuidedPathSpec(method="particle_mgrad", num_particles=4),
         GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
     ],
 )
@@ -34,7 +31,7 @@ pytestmark = pytest.mark.inference(concern="sampling")
 def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(path_update):
     prepared, panel = nonlinear_fit_fixture()
     settings = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(path_update=path_update),
+        path_update=path_update,
         num_warmup=40,
         num_samples_per_chain=4,
         num_chains=2,

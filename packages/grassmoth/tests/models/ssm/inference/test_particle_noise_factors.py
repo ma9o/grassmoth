@@ -31,7 +31,6 @@ from grassmoth.models.ssm.execution.observation_model import (
     prepare_grouped_density,
 )
 from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
-from grassmoth.models.ssm.inference.targets.gaussian_reference import GaussianReference
 from grassmoth_test_support.interval_particle import interval_target
 from grassmoth_test_support.observation import observation_laws
 
@@ -201,9 +200,7 @@ def test_prepared_noise_matches_native_values_and_gradients(with_interval):
             (observation, evolution),
         )
 
-    target = replace(
-        base, dynamical_model=declared, state_projection=lambda _bound, state: jnp.tanh(state)
-    )
+    target = replace(base, dynamical_model=declared)
     states = jnp.array([[0.2, -0.4], [-0.3, 0.7], [0.6, 0.1], [-0.2, -0.5]])
 
     def compare(theta):
@@ -249,9 +246,7 @@ def test_prepared_noise_matches_native_values_and_gradients(with_interval):
 
         def prepared_transition(previous, current, index):
             mean = target.prepare_transition_mean(bound, previous, index)
-            return target.transition_log_prob_with_mean(
-                bound, factors, previous, current, index, mean
-            )
+            return target.transition_log_prob_with_mean(bound, factors, current, index, mean)
 
         def prepared_observation(state, index):
             return target.observation_increment_with_noise(bound, factors, state, index)
@@ -296,17 +291,9 @@ def test_prepared_noise_matches_native_values_and_gradients(with_interval):
 
 
 @pytest.mark.parametrize("translated", [False, True])
-def test_prepared_transition_means_preserve_bridge_densities(translated):
+def test_prepared_transition_means_preserve_charted_densities(translated):
     times = np.array([0.0, 0.7, 1.8])
     base = interval_target(times, np.full((3, 1), 0.2), times[:, None], ("last",), state_dim=2)
-    reference = GaussianReference(
-        parameter_mean=jnp.zeros(1),
-        parameter_chol=jnp.eye(1),
-        path_mean=jnp.zeros((3, 2)),
-        autoregression=jnp.broadcast_to(0.4 * jnp.eye(2), (3, 2, 2)),
-        innovation_chol=jnp.broadcast_to(0.7 * jnp.eye(2), (3, 2, 2)),
-        free_mask=base.independent_mask,
-    )
     predecessors = jnp.array([[0.2, -0.4], [-0.3, 0.7]])
     successors = jnp.array([[0.6, 0.1], [-0.2, -0.5]])
     indices = jnp.arange(1, len(times))
@@ -320,20 +307,19 @@ def test_prepared_transition_means_preserve_bridge_densities(translated):
     chart_current = chart.frame(position).encode(successors, indices) if translated else successors
     physical_path = jnp.concatenate((predecessors[:1], successors))
     path = chart.encode(position, physical_path) if translated else physical_path
+    target = base.in_coordinates(chart) if translated else base
 
-    def compare(beta):
-        physical = base.at_temperature(reference, beta)
-        target = physical.in_coordinates(chart) if translated else physical
+    def compare():
         context = target.context(position, target.times)
         noise = target.prepare_noise_factors(context, target.observations)
         means = jax.vmap(
             lambda previous, index: target.prepare_transition_mean(context, previous, index)
         )(chart_previous, indices)
         prepared = jax.vmap(
-            lambda previous, current, index, mean: target.transition_log_prob_with_mean(
-                context, noise, previous, current, index, mean
+            lambda current, index, mean: target.transition_log_prob_with_mean(
+                context, noise, current, index, mean
             )
-        )(chart_previous, chart_current, indices, means)
+        )(chart_current, indices, means)
         declared = jax.vmap(
             lambda previous, current, index: target.transition_log_prob(
                 context, previous, current, index
@@ -342,7 +328,7 @@ def test_prepared_transition_means_preserve_bridge_densities(translated):
 
         def expected(parameter, coordinates):
             decoded = chart.decode(parameter, coordinates) if translated else coordinates
-            return physical.log_posterior(parameter, decoded, physical.observations, physical.times)
+            return base.log_posterior(parameter, decoded, base.observations, base.times)
 
         def actual(parameter, coordinates):
             return target.log_posterior(parameter, coordinates, target.observations, target.times)
@@ -354,7 +340,7 @@ def test_prepared_transition_means_preserve_bridge_densities(translated):
             jax.value_and_grad(expected, argnums=(0, 1))(position, path),
         )
 
-    prepared, declared, actual, expected = jax.jit(jax.vmap(compare))(jnp.array([0.0, 0.4, 1.0]))
+    prepared, declared, actual, expected = jax.jit(compare)()
     np.testing.assert_allclose(prepared, declared, rtol=1e-5, atol=1e-6)
     for result, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
         np.testing.assert_allclose(result, reference, rtol=1e-5, atol=1e-6)

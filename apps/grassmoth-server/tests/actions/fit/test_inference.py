@@ -14,7 +14,6 @@ import pytest
 from grassmoth.actions.fit import execution as stage5_inference
 from grassmoth.actions.fit.execution import FittedModelResult
 from grassmoth.actions.fit.inputs import FitInputs
-from grassmoth.artifacts.joint_parameterization import CentredParameterizationRecord
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
@@ -159,7 +158,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         lambda *_args: segment_diagnostics,
     )
     from grassmoth.artifacts.arrays import NumericalArray
-    from grassmoth.artifacts.continuation import JointTuning, SamplerCheckpoint
+    from grassmoth.artifacts.continuation import SamplerCheckpoint, TransferredTuning
     from grassmoth.artifacts.probability.serialization import empirical_atoms
     from grassmoth.artifacts.reports.data_quality import DataProfileReport
     from grassmoth.artifacts.reports.inference import (
@@ -209,7 +208,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             paths=NumericalArray.from_numpy(np.asarray(paths.reshape(2, count, 2, -1)[:, -1])),
             random_key=NumericalArray.from_numpy(np.array([0, offset], dtype=np.uint32)),
             native_state=(),
-            tuning=JointTuning(parameterization=CentredParameterizationRecord()),
+            tuning=TransferredTuning(),
         )
         telemetry = {
             "particle_weight_ess": jnp.arange(2 * count * 3, dtype=jnp.float32).reshape(2, count, 3)

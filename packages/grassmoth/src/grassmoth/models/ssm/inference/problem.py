@@ -8,12 +8,9 @@ from typing import TYPE_CHECKING, cast
 import dynestyx as dsx
 import equinox as eqx
 import jax.numpy as jnp
-import numpy as np
 
 from grassmoth.artifacts.immutability import freeze_fields
-from grassmoth.models.ssm.compile.interval_tree import compile_interval_tree
-from grassmoth.models.ssm.compile.observation_partition import compile_observation_partition
-from grassmoth.models.ssm.compile.point_readings import compile_point_reading_mask
+from grassmoth.models.ssm.compile.observation_windows import window_statistic_count
 from grassmoth.models.ssm.execution.dynamical_model import build_dynamical_model
 from grassmoth.models.ssm.execution.observation_operator import compile_observation_operator
 from grassmoth.models.ssm.execution.state_transition import SupportedEulerMaruyama
@@ -142,23 +139,14 @@ def build_particle_problem(
         observations,
         times,
         state_space,
-        compile_observation_partition(
-            compiled_dynamical_model.loading_block,
-            compiled_dynamical_model.observation_noise_block,
-            tuple(observation.law for observation in compiled_dynamical_model.observations),
-            state_space,
-        ),
-        compile_point_reading_mask(compiled_dynamical_model, observations),
         exact_constraints=exact_constraints,
     )
     intervals = (
         ParticleIntervalObservations(
             declared_model,
             operator,
-            compile_interval_tree(
-                operator.window_plan,
-                panel.observation_support.summary_operators,
-                np.asarray(observations),
+            window_statistic_count(
+                operator.window_plan, panel.observation_support.summary_operators
             ),
             runtime.project_state,
         )

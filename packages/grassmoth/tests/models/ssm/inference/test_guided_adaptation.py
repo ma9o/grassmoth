@@ -127,7 +127,7 @@ def test_non_gaussian_limits_follow_current_warmup_state(kind):
 @pytest.mark.parametrize(
     "spec",
     [
-        GuidedPathSpec(method="particle_agrad", kappa=1),
+        GuidedPathSpec(method="particle_mgrad", kappa=1),
         GuidedPathSpec(method="twisted_particle_agrad", kappa=1),
     ],
 )
@@ -158,7 +158,7 @@ def test_controller_obeys_changing_parameter_scale_and_freezes(spec):
 @pytest.mark.parametrize(
     "spec",
     [
-        GuidedPathSpec(method="particle_agrad", kappa=0),
+        GuidedPathSpec(method="particle_mgrad", kappa=0),
         GuidedPathSpec(method="twisted_particle_agrad", kappa=0),
     ],
 )
@@ -312,7 +312,6 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
     from grassmoth.artifacts.probability.families import DistributionFamily
     from grassmoth.artifacts.sampling import (
         GaussianInitializationSpec,
-        MarginalParticleGibbsSpec,
         SamplerSpec,
     )
     from grassmoth.models.ssm.inference.continuation import frozen_particle_tuning
@@ -367,12 +366,12 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
     full = run(120, 4)
     prefix = run(120, 2)
     checkpoint = SamplerCheckpoint(
-        settings=SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=spec)),
+        settings=SamplerSpec(path_update=spec),
         parameters=NumericalArray.from_numpy(np.asarray(prefix.last_parameters)),
         paths=NumericalArray.from_numpy(np.asarray(prefix.last_paths)),
         random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(prefix.random_key))),
         native_state=prefix.final_state,
-        tuning=frozen_particle_tuning(initialization, None),
+        tuning=frozen_particle_tuning(initialization),
     )
     continued = run(0, 2, checkpoint)
     np.testing.assert_array_equal(full.latent_paths[:, 2:], continued.latent_paths)

@@ -7,10 +7,7 @@ import pytest
 
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.artifacts.sampling import GaussianInitializationSpec
-from grassmoth.models.ssm.inference.joint_coordinates import (
-    CentredParameterization,
-    build_joint_coordinates,
-)
+from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.warmup import initialization
 from grassmoth.models.ssm.inference.warmup.ieks import ieks_path
 from grassmoth.models.ssm.inference.warmup.initialization import (
@@ -48,7 +45,6 @@ def gaussian_case():
 
 def _seed(target):
     coordinates = build_joint_coordinates(target, compiler=compile_program)
-    assert isinstance(coordinates.parameterization, CentredParameterization)
     initial_path = coordinates.parameterization.path_center
     context = target.context(target.initial_position, target.times)
     return jax.jit(lambda path: ieks_path(target, context, path))(initial_path), initial_path
@@ -144,8 +140,6 @@ def test_particle_initializer_consumes_seed_preserving_parameter_draws_and_path_
     np.testing.assert_allclose(
         result.parameter_chol, spec.scale * np.eye(target.initial_position.size)
     )
-    np.testing.assert_allclose(result.pilot_mean, np.mean(result.paths, axis=0), atol=1e-6)
-    np.testing.assert_allclose(result.pilot_variance, np.var(original_paths, axis=0), atol=1e-6)
 
 
 def test_nonfinite_seed_returns_typed_initialization_failure(gaussian_case, monkeypatch):

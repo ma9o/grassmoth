@@ -12,10 +12,8 @@ import pytest
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
-    DsmcSpec,
     GaussianInitializationSpec,
     GuidedPathSpec,
-    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.continuation import frozen_particle_tuning
@@ -26,7 +24,6 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
     run_marginal_particle_gibbs,
 )
-from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
 from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth.models.ssm.inference.warmup.computed_chart import (
@@ -150,34 +147,15 @@ def test_translation_preserves_nonlinear_factors_gradients_and_proposal_moments(
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize(
-    ("method", "paid_pilot"),
-    [
-        ("particle_rwm", False),
-        ("particle_amala", False),
-        ("particle_amala_plus", False),
-        ("particle_amala_plus", True),
-        ("particle_agrad", False),
-        ("twisted_particle_agrad", False),
-        ("particle_mgrad", False),
-    ],
-)
-def test_charted_joint_kernel_preserves_analytic_physical_posterior(method, paid_pilot):
+@pytest.mark.parametrize("method", ["twisted_particle_agrad", "particle_mgrad"])
+def test_charted_joint_kernel_preserves_analytic_physical_posterior(method):
     target, mean, covariance = _gaussian_joint()
     chart = TranslationChart(
         computed_translation_slopes(target, jnp.array([0.3]), jnp.zeros((3, 1))), jnp.array([0.3])
     )
-    path_update = (
-        DsmcSpec(method=method, num_particles=8)
-        if method in ("particle_rwm", "particle_amala", "particle_amala_plus")
-        else GuidedPathSpec(method=method, num_particles=8, kappa=1)
-    )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=path_update,
-        paid_mix=PaidMixture(jnp.full((3, 1), 0.2), jnp.full((3, 1), 0.7), jnp.array([True]))
-        if paid_pilot
-        else None,
+        path_update=GuidedPathSpec(method=method, num_particles=8, kappa=1),
         num_parameter_particles=2,
         param_step_size=0.3,
         initial_chart=chart,
@@ -222,16 +200,11 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
     compile_sweeps = runner.compile_projected_sweeps
 
     def capture_charts(program, initial, **kwargs):
-        def step_factory(batch):
-            step = program.step_factory(batch)
+        def sweep(current, posterior):
+            updated, record = program.step(current, posterior)
+            return updated, {**record, "chart_reference": updated.chains.chart.reference}
 
-            def sweep(current, posterior):
-                updated, record = step(current, posterior)
-                return updated, {**record, "chart_reference": updated.chains.chart.reference}
-
-            return sweep
-
-        return compile_sweeps(replace(program, step_factory=step_factory), initial, **kwargs)
+        return compile_sweeps(replace(program, step=sweep), initial, **kwargs)
 
     monkeypatch.setattr(runner, "compile_projected_sweeps", capture_charts)
     target, _, _ = _gaussian_joint()
@@ -252,10 +225,7 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
         initial_chart=chart,
         recompute_translation=True,
     )
-    options = MarginalParticleGibbsSpec(
-        path_update=spec,
-        compiler_reparameterization=True,
-    )
+    options = SamplerSpec(path_update=spec, compiler_reparameterization=True)
 
     def run(warmup, draws, continuation=None):
         resumed_kernel = (
@@ -268,9 +238,7 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
         result = run_marginal_particle_gibbs(
             target,
             kernel=resumed_kernel,
-            sampler=SamplerSpec(
-                algorithm=options, num_warmup=warmup, num_samples_per_chain=draws, num_chains=1
-            ),
+            sampler=options.revised(num_warmup=warmup, num_samples_per_chain=draws, num_chains=1),
             key=jax.random.key(31),
             initialization=initialization,
             execution_context=EXECUTION_CONTEXT,
@@ -291,12 +259,12 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
     assert not np.array_equal(prefix.final_chart.reference, chart.reference)
     np.testing.assert_array_equal(prefix.final_chart.slopes, chart.slopes)
     checkpoint = SamplerCheckpoint(
-        settings=SamplerSpec(algorithm=options),
+        settings=options,
         parameters=NumericalArray.from_numpy(np.asarray(prefix.last_parameters)),
         paths=NumericalArray.from_numpy(np.asarray(prefix.last_paths)),
         random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(prefix.random_key))),
         native_state=prefix.final_state,
-        tuning=frozen_particle_tuning(initialization, None),
+        tuning=frozen_particle_tuning(initialization),
     )
     restored = SamplerCheckpoint.model_validate(checkpoint.model_dump())
     continued = run(0, 2, restored)
@@ -313,9 +281,7 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
     failed = run_marginal_particle_gibbs(
         target,
         kernel=kernel,
-        sampler=SamplerSpec(
-            algorithm=options, num_warmup=120, num_samples_per_chain=2, num_chains=1
-        ),
+        sampler=options.revised(num_warmup=120, num_samples_per_chain=2, num_chains=1),
         key=jax.random.key(31),
         initialization=initialization,
         execution_context=EXECUTION_CONTEXT,

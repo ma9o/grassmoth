@@ -40,11 +40,10 @@ class FitComponentTiming(Value):
 
 
 class ParticleProfileDimensions(Value):
-    """Particle-kernel work dimensions, including any temperature replicas."""
+    """Particle-kernel work dimensions per chain."""
 
     particles: int = Field(ge=1)
     labels: int = Field(ge=2)
-    replicas: int = Field(ge=1)
 
 
 class ProgramCompileReport(Value):

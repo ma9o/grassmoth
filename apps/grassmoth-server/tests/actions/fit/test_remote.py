@@ -9,7 +9,11 @@ import pytest
 
 from grassmoth.actions.fit.inputs import FitInputs
 from grassmoth.artifacts.model.question import QuestionSpec
-from grassmoth.artifacts.sampling import InferenceHardware, NutsDASpec, SamplerSpec
+from grassmoth.artifacts.sampling import (
+    GuidedPathSpec,
+    InferenceHardware,
+    SamplerSpec,
+)
 from grassmoth_server.actions.contracts.identity import CallId
 from grassmoth_server.actions.fit.remote import (
     FIT_CACHE_VOLUME_ENV,
@@ -67,7 +71,11 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
         panel_parquet=b"pinned-history",
         variables=(),
         time_origin=datetime(2024, 1, 1, tzinfo=UTC),
-        sampler=SamplerSpec(algorithm=NutsDASpec(), num_chains=4, time_limit_seconds=time_limit),
+        sampler=SamplerSpec(
+            path_update=GuidedPathSpec(method="twisted_particle_agrad"),
+            num_chains=4,
+            time_limit_seconds=time_limit,
+        ),
         compute_loo_diagnostics=False,
         analysis_call=_ANALYSIS_CALL,
     )

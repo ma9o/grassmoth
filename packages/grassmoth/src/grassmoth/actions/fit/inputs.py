@@ -58,6 +58,6 @@ def resumed_checkpoint(inputs: FitInputs) -> SamplerCheckpoint | ContinuationRef
     if sampler.num_warmup == 0:
         return ContinuationRefusal(
             code="CONTINUATION_REQUIRES_WARMUP",
-            message="Switching algorithm or joint parameterization requires positive warmup",
+            message="Changing the sampler kernel requires positive warmup",
         )
     return checkpoint.revised(tuning=TransferredTuning())

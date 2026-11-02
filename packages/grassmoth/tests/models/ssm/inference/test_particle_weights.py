@@ -9,8 +9,8 @@ import pytest
 from scipy.special import logsumexp
 
 from grassmoth.artifacts.reports.posterior_diagnostics import (
-    DsmcWeightDiagnostics,
     ParticleWeightMetric,
+    SequentialWeightDiagnostics,
 )
 from grassmoth.models.ssm.inference.samplers.particle.weights import (
     summarize_particle_weights,
@@ -64,40 +64,22 @@ def test_invalid_weight_laws_are_reported_instead_of_replaced(invalid):
 
 
 @pytest.mark.contract
-def test_weight_payload_preserves_nodes_aggregates_and_nonfinite_evidence():
-    # Five leaves, three pairs, two four-step nodes, the root and terminal selection.
+def test_weight_payload_preserves_filter_times_aggregates_and_nonfinite_evidence():
     history = {
-        metric.history_key: jnp.arange(72, dtype=jnp.float32).reshape(2, 3, 12) / 100
+        metric.history_key: jnp.arange(30, dtype=jnp.float32).reshape(2, 3, 5) / 100
         for metric in ParticleWeightMetric
     }
     ess_key = ParticleWeightMetric.ESS.history_key
     history[ess_key] = history[ess_key].at[0, 0, 0].set(jnp.nan)
-    result = summarize_particle_weights(
-        history, num_steps=5, num_particles=8, phase="post_warmup", sequential=False
-    )
-    assert result.kind == "dsmc"
-    assert [(node.level, node.start, node.stop) for node in result.tree] == [
-        (0, 0, 1),
-        (0, 1, 2),
-        (0, 2, 3),
-        (0, 3, 4),
-        (0, 4, 5),
-        (1, 0, 2),
-        (1, 2, 4),
-        (1, 4, 5),
-        (2, 0, 4),
-        (2, 4, 5),
-        (3, 0, 5),
-    ]
-    assert [node.weights.candidates for node in result.tree] == [8] * 5 + [64] * 6
-    assert result.terminal.candidates == 8
-    missing = result.tree[0].weights.metrics[ParticleWeightMetric.ESS]
+    result = summarize_particle_weights(history, num_steps=5, num_particles=8, phase="post_warmup")
+    assert [stage.candidates for stage in result.filters] == [8] * 5
+    missing = result.filters[0].metrics[ParticleWeightMetric.ESS]
     assert missing.mean is missing.minimum is missing.maximum is None
     assert missing.nonfinite_fraction == pytest.approx(1 / 6)
-    terminal = result.terminal.metrics[ParticleWeightMetric.ESS]
-    assert terminal.mean == pytest.approx(0.41)
-    assert terminal.minimum == pytest.approx(0.11)
-    assert terminal.maximum == pytest.approx(0.71)
-    assert terminal.nonfinite_fraction == 0
+    last = result.filters[-1].metrics[ParticleWeightMetric.ESS]
+    assert last.mean == pytest.approx(0.165)
+    assert last.minimum == pytest.approx(0.04)
+    assert last.maximum == pytest.approx(0.29)
+    assert last.nonfinite_fraction == 0
     payload = json.dumps(result.model_dump(mode="json"), allow_nan=False)
-    assert DsmcWeightDiagnostics.model_validate_json(payload) == result
+    assert SequentialWeightDiagnostics.model_validate_json(payload) == result

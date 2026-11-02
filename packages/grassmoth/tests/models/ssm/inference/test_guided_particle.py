@@ -21,7 +21,6 @@ from grassmoth.artifacts.sampling import (
     FixedLatentStepSpec,
     GaussianInitializationSpec,
     GuidedPathSpec,
-    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.conditioning import compile_exact_state_constraints
@@ -83,7 +82,8 @@ def test_auxiliary_kalman_runner_retains_paths_and_freezes_step(fixed, block_len
             num_warmup=0 if fixed else 110,
             num_samples_per_chain=3,
             num_chains=1,
-            algorithm=MarginalParticleGibbsSpec(path_update=spec, diagnostic_metrics=()),
+            path_update=spec,
+            diagnostic_metrics=(),
         ),
         key=jax.random.key(9),
         initialization=initialization,
@@ -226,8 +226,7 @@ def _correlated_gaussian_case(sample_count=4096):
 @pytest.mark.parametrize(
     ("method", "cubic", "kappa", "pinned", "steps", "dimension", "prefix_mixture"),
     [
-        (method, *case, False)
-        for method in ("particle_agrad", "twisted_particle_agrad")
+        ("twisted_particle_agrad", *case, False)
         for case in (
             (0.7, 0, False, 3, 1),
             (0.7, 1, True, 3, 1),
@@ -263,10 +262,8 @@ def test_guided_updates_preserve_path_and_label_posterior(
         mask = mask.at[1, 0].set(False)
     static = build_smoother_setup(
         target,
-        spec,
         num_parameter_particles=2,
         free_mask=mask,
-        paid_mix=None,
         diagnostic_metrics=("particle_weights",),
     )
     ctx = build_smoother_context(
@@ -374,10 +371,8 @@ def test_auxiliary_kalman_preserves_complete_parameter_mixture(
     # This test exercises the shared context and independent smoother, not routing.
     static = build_smoother_setup(
         target,
-        AuxiliaryKalmanSpec(),
         num_parameter_particles=2,
         free_mask=mask,
-        paid_mix=None,
         diagnostic_metrics=(),
     )
     ctx = build_smoother_context(
@@ -432,10 +427,8 @@ def test_auxiliary_kalman_gaussian_limit_accepts_the_exact_conditional(block_len
     labels = jnp.full_like(labels, 0.05)
     static = build_smoother_setup(
         target,
-        AuxiliaryKalmanSpec(),
         num_parameter_particles=2,
         free_mask=target.independent_mask,
-        paid_mix=None,
         diagnostic_metrics=(),
     )
     ctx = build_smoother_context(
@@ -474,7 +467,7 @@ def test_auxiliary_kalman_gaussian_limit_accepts_the_exact_conditional(block_len
     np.testing.assert_allclose(move.log_acceptance, 0.0, atol=2e-5)
 
 
-@pytest.mark.parametrize("method", ["particle_agrad", "twisted_particle_agrad"])
+@pytest.mark.parametrize("method", ["particle_mgrad", "twisted_particle_agrad"])
 def test_guided_filter_keeps_zero_mass_candidates_out_of_selected_path(monkeypatch, method):
     def bounded_observation(self, context, state, index, observations):
         return dist.Uniform(state[0] - 0.35, state[0] + 0.35, validate_args=True).log_prob(
@@ -496,10 +489,8 @@ def test_guided_filter_keeps_zero_mass_candidates_out_of_selected_path(monkeypat
     reference = jnp.zeros((3, 1))
     setup = build_smoother_setup(
         target,
-        spec,
         num_parameter_particles=2,
         free_mask=target.independent_mask,
-        paid_mix=None,
         diagnostic_metrics=("particle_weights",),
     )
     ctx = build_smoother_context(

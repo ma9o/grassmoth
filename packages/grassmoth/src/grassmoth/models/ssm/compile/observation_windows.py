@@ -1,4 +1,4 @@
-"""Sparse measurement quadrature, independent of scan slots and particle trees."""
+"""Sparse measurement quadrature, independent of scan slots."""
 
 from __future__ import annotations
 
@@ -177,3 +177,14 @@ def compile_observation_scan(plan: CompiledWindowPlan) -> CompiledObservationSca
         weights[steps, channel, slot] = window.weights
         emissions[window.anchor_index, channel] = slot
     return CompiledObservationScan(previous, current, weights, emissions)
+
+
+def window_statistic_count(
+    plan: CompiledWindowPlan, summary_operators: Sequence[str | None]
+) -> int:
+    """Response moments per window: two when any windowed channel takes a standard deviation."""
+    return (
+        2
+        if any(summary_operators[window.manifest_index] == "std" for window in plan.windows)
+        else 1
+    )

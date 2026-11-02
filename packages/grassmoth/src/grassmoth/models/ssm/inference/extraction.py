@@ -23,7 +23,6 @@ def build_pmcmc_mcmc_result(
     chain_extra_fields: Mapping[str, jnp.ndarray],
     num_chains: int,
     num_samples: int,
-    backend: str,
 ) -> TrajectoryMCMCResult:
     """Project retained particle samples into the native posterior representation."""
     return TrajectoryMCMCResult(
@@ -31,7 +30,6 @@ def build_pmcmc_mcmc_result(
         chain_extra_fields=chain_extra_fields,
         num_chains=num_chains,
         num_samples=num_samples,
-        backend=backend,
     )
 
 

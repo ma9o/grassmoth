@@ -63,13 +63,7 @@ _REQUIRED_SHAPE_BOUNDARIES = (
     (
         "warmup.initialization",
         "ParticleInitialization",
-        (
-            "positions",
-            "paths",
-            "parameter_chol",
-            "pilot_mean",
-            "pilot_variance",
-        ),
+        ("positions", "paths", "parameter_chol"),
     ),
     (
         "warmup.initialization",

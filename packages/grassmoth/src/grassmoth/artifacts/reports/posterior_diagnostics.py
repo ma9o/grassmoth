@@ -22,7 +22,7 @@ from grassmoth.artifacts.reports.checks import (
 from grassmoth.artifacts.reports.display_frames import central_frame
 from grassmoth.artifacts.reports.effects import HistogramBin
 from grassmoth.artifacts.reports.empirical import EmpiricalPoint
-from grassmoth.artifacts.sampling import LatentBlockSize, ParticleDiagnosticMetric, SamplerSpec
+from grassmoth.artifacts.sampling import ParticleDiagnosticMetric, SamplerSpec
 
 
 class ParameterDiagnostics(Value):
@@ -65,14 +65,6 @@ class DensityCurve(Value):
         return self
 
 
-class EnergyDiagnostics(Value):
-    """Energy distributions and the producer's chain-specific BFMI values."""
-
-    energy_hist: DensityCurve
-    energy_transition_hist: DensityCurve
-    bfmi: tuple[float, ...]
-
-
 class LatentDiagnostics(Value):
     """Worst chain estimators across a construct's independent, unobserved time coordinates."""
 
@@ -92,14 +84,8 @@ class ChainDiagnostics(Value):
     num_samples_per_chain: int
     per_parameter: tuple[ParameterDiagnostics, ...]
     per_latent: tuple[LatentDiagnostics, ...] | None = None
-    num_divergences: int | None = None
-    divergence_rate: float | None = None
-    tree_depth_mean: float | None = None
-    tree_depth_max: int | None = None
-    accept_prob_mean: float | None = None
     latent_accept_prob_mean: float | None = None
     parameter_accept_prob_mean: float | None = None
-    energy: EnergyDiagnostics | None = None
 
 
 type ConvergenceAssessmentSubject = (
@@ -178,21 +164,6 @@ class LOODiagnostics(Value):
     n_warn_k: int | None = None
     pareto_warning_limit: float = 0.5
     pareto_failure_limit: float = 0.7
-
-
-class MCMCEvidence(Value):
-    """The algorithm that sampled the exact joint state and parameter target."""
-
-    method: Literal["nuts_da", "mpgibbs"] = "mpgibbs"
-
-
-class NutsDADiagnostics(Value):
-    """Realized NUTS adaptation and retained-tree saturation by vectorized chain."""
-
-    settings: SamplerSpec
-    mcmc_phase_seconds: float
-    final_step_size: tuple[float, ...]
-    max_tree_depth_fraction: float | None
 
 
 class PosteriorMarginal(Value):
@@ -329,10 +300,9 @@ class ParticleWeightMetric(StrEnum):
 
     @property
     def history_key(self) -> str:
-        """Native history field with axes chain, sweep, and weight stage.
+        """Native history field with axes chain, sweep, and filter time.
 
-        Stages are tree nodes followed by terminal selection for dSMC, or
-        filter times for sequential updates. The report owns their coordinates.
+        The report owns the time coordinates.
         """
         return f"particle_weight_{self.value}"
 
@@ -357,62 +327,14 @@ class ParticleWeightDiagnostics(Value):
     metrics: Mapping[ParticleWeightMetric, ParticleWeightSummary]
 
 
-class DsmcNodeWeightDiagnostics(Value):
-    """One tree node before resampling; level zero is a leaf, stop is exclusive.
-
-    Entirely padded nodes are omitted. A partial node's range contains only real
-    time indices, while its candidate count includes the algorithm's padding.
-    """
-
-    level: int = Field(ge=0)
-    start: int = Field(ge=0)
-    stop: int = Field(ge=1)
-    weights: ParticleWeightDiagnostics
-
-
 type DiagnosticPhase = Literal["warmup", "post_warmup"]
-
-
-class DsmcWeightDiagnostics(Value):
-    """dSMC tree and terminal weight diagnostics.
-
-    Tree nodes are ordered by increasing level, then start time. Terminal weights
-    include the exact full-path correction and precede the modified Gibbs move;
-    their reference probability is not that move's rejection probability.
-    """
-
-    kind: Literal["dsmc"] = "dsmc"
-    phase: DiagnosticPhase
-    tree: tuple[DsmcNodeWeightDiagnostics, ...]
-    terminal: ParticleWeightDiagnostics
 
 
 class SequentialWeightDiagnostics(Value):
     """Conditional-filter weights in time order, including final path selection."""
 
-    kind: Literal["sequential"] = "sequential"
     phase: DiagnosticPhase
     filters: tuple[ParticleWeightDiagnostics, ...]
-
-
-type PathWeightDiagnostics = Annotated[
-    DsmcWeightDiagnostics | SequentialWeightDiagnostics, Field(discriminator="kind")
-]
-
-
-class ReplicaSwapCounts(Value):
-    """Accepted and attempted exchanges at one neighboring temperature pair."""
-
-    accepted: int
-    attempted: int
-
-
-class TemperingDiagnostics(Value):
-    """Frozen ladder and retained swap counts; columns are neighboring temperature edges."""
-
-    inverse_temperatures: tuple[float, ...]
-    ladder_frozen_at_warmup_step: int
-    swaps: tuple[tuple[ReplicaSwapCounts, ...], ...]
 
 
 class ParticleSamplerDiagnostics(Value):
@@ -429,7 +351,6 @@ class ParticleSamplerDiagnostics(Value):
     parameter_accept_rate: float
     latent_update_fraction: float
     latent_frozen_fraction: float
-    latent_block_coords: LatentBlockSize
     initial_param_step_size: tuple[float, ...]
     final_param_step_size: tuple[float, ...]
     latent_sign_flip_moves: bool | None = None
@@ -441,5 +362,4 @@ class ParticleSamplerDiagnostics(Value):
     amala_grad_norm_mean: float | None = None
     amala_grad_norm_max: float | None = None
     initialization: InitializationDiagnostics
-    path_weights: PathWeightDiagnostics | None
-    tempering: TemperingDiagnostics | None = None
+    path_weights: SequentialWeightDiagnostics | None

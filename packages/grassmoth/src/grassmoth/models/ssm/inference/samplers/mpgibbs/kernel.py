@@ -38,7 +38,7 @@ rescales it whenever ``Sigma`` is re-estimated, keeping the average variance.
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import NamedTuple, Protocol, cast
+from typing import NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
@@ -47,14 +47,12 @@ from jax.scipy.linalg import solve_triangular
 
 from grassmoth.artifacts.sampling import (
     AuxiliaryKalmanSpec,
-    DsmcSpec,
-    MarginalParticleGibbsSpec,
     ParameterProposal,
     ParticleDiagnosticMetric,
     PathUpdateSpec,
+    SamplerSpec,
 )
 from grassmoth.compute.programs import ProgramCompiler, scalar_operand
-from grassmoth.models.ssm.compile.state_space import AdditiveRecurrences, ParallelRecurrences
 from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
 from grassmoth.models.ssm.inference.mcmc_state import (
     TrajectoryMCMCState,
@@ -73,16 +71,9 @@ from grassmoth.models.ssm.inference.samplers.particle.auxiliary_kalman import (
     auxiliary_kalman_step,
     trace_auxiliary_kalman_step,
 )
-from grassmoth.models.ssm.inference.samplers.particle.contract import (
-    PaidMixture,
-    ParticleSmootherResult,
-)
+from grassmoth.models.ssm.inference.samplers.particle.contract import ParticleSmootherResult
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
     build_particle_diagnostic_flags,
-)
-from grassmoth.models.ssm.inference.samplers.particle.dsmc import step as dsmc_step
-from grassmoth.models.ssm.inference.samplers.particle.dsmc import (
-    trace_step as dsmc_trace_step,
 )
 from grassmoth.models.ssm.inference.samplers.particle.guided import guided_step, trace_guided_step
 from grassmoth.models.ssm.inference.samplers.particle.math import (
@@ -102,12 +93,11 @@ from grassmoth.models.ssm.inference.tracing import (
     MarginalParticleTraceRecord,
     ParameterProposalTraceRecord,
     SequentialSmootherTraceRecord,
-    SmootherTraceRecord,
     TracedResult,
 )
 from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
 
-_DEFAULT_OPTIONS = MarginalParticleGibbsSpec()
+_DEFAULT_OPTIONS = SamplerSpec()
 # Warmup adapts the step from here; fits always run warmup, so these are not settings.
 INITIAL_PARAM_STEP_SIZE = 0.02
 PARAM_STEP_SIZE_MIN = 1e-6
@@ -128,16 +118,6 @@ def _bounded_parameter_drift(
     magnitude = jnp.max(jnp.abs(whitened), axis=-1, keepdims=True, initial=1.0)
     unit = whitened / magnitude
     return unit / jnp.maximum(1.0 / magnitude, jnp.linalg.norm(unit, axis=-1, keepdims=True))
-
-
-class MarginalParticleStep(Protocol):
-    """A joint transition with a static dSMC concurrency limit."""
-
-    def __call__(
-        self, state: TrajectoryMCMCState, key: jnp.ndarray, *, batch_size: int | None = None
-    ) -> MarginalParticleStepResult:
-        """Advance once with all nodes parallel unless a batch limit is supplied."""
-        ...
 
 
 class ParameterMoveInputs(NamedTuple):
@@ -186,9 +166,9 @@ class MarginalParticleGibbsKernel(NamedTuple):
     """Callable joint kernel and static metadata."""
 
     profile_parts: Callable[
-        [TrajectoryMCMCState, jax.Array, int, ProgramCompiler], ParticleProfilePrograms
+        [TrajectoryMCMCState, jax.Array, ProgramCompiler], ParticleProfilePrograms
     ]
-    step_fn: MarginalParticleStep
+    step_fn: Callable[[TrajectoryMCMCState, jnp.ndarray], MarginalParticleStepResult]
     parameter_gradient_fn: Callable[[Float[Array, " U"]], Float[Array, " U"]]
     trace_step_fn: Callable[  # noqa: F841, RUF100 - Notebook consumers are outside Vulture's source-only pass.
         [TrajectoryMCMCState, jnp.ndarray],
@@ -232,7 +212,6 @@ def build_marginal_particle_gibbs_kernel(
     parameter_preconditioner_chol: Float[Array, "U U"] | None = None,
     parameter_proposal: ParameterProposal = _DEFAULT_OPTIONS.parameter_proposal,
     path_update: PathUpdateSpec = _DEFAULT_OPTIONS.path_update,
-    paid_mix: PaidMixture | None = None,
     parameter_reference_path: Float[Array, "T D"] | None = None,
     exact_constraints: ExactStateConstraints | None = None,
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...] = _DEFAULT_OPTIONS.diagnostic_metrics,
@@ -249,11 +228,6 @@ def build_marginal_particle_gibbs_kernel(
 
     runtime_min_scale = scalar_operand(value=PARAM_STEP_SIZE_MIN)
     runtime_max_scale = scalar_operand(value=PARAM_STEP_SIZE_MAX)
-
-    assert all(
-        isinstance(stage, (AdditiveRecurrences, ParallelRecurrences))
-        for stage in target.state_space.recurrence
-    ), "The fitting preflight must establish an associative deterministic recurrence"
 
     runtime_observations = target.observations
     runtime_times = target.times
@@ -353,10 +327,8 @@ def build_marginal_particle_gibbs_kernel(
 
     static = build_smoother_setup(
         target,
-        path_update,
         num_parameter_particles=num_parameter_particles,
         free_mask=latent_free_mask,
-        paid_mix=paid_mix,
         diagnostic_metrics=diagnostic_metrics,
     )
 
@@ -392,10 +364,8 @@ def build_marginal_particle_gibbs_kernel(
                 if state.chart is None
                 else build_smoother_setup(
                     chart_target,
-                    path_update,
                     num_parameter_particles=num_parameter_particles,
                     free_mask=latent_free_mask,
-                    paid_mix=paid_mix,
                     diagnostic_metrics=diagnostic_metrics,
                 )
             )
@@ -424,10 +394,8 @@ def build_marginal_particle_gibbs_kernel(
         x_ref: jax.Array,
         *,
         record_trace: bool,
-        batch_size: int | None,
     ) -> (
         ParticleSmootherResult
-        | TracedResult[ParticleSmootherResult, SmootherTraceRecord]
         | TracedResult[ParticleSmootherResult, SequentialSmootherTraceRecord]
         | TracedResult[ParticleSmootherResult, AuxiliaryKalmanTraceRecord]
     ):
@@ -435,25 +403,9 @@ def build_marginal_particle_gibbs_kernel(
         chart_target = prepared.target
         ctx = boundary.context
         block_key = boundary.key
-        contexts = ctx.contexts
-
-        def root_correction(path: jax.Array, local_prior: jax.Array) -> jax.Array:
-            return jnp.asarray(
-                jax.vmap(
-                    lambda context, prior: chart_target.replay_correction(context, path, prior)
-                )(contexts, local_prior)
-            )
 
         with jax.named_scope("particle_smoother_full"):
-            if isinstance(path_update, DsmcSpec):
-                smoother = (dsmc_trace_step if record_trace else dsmc_step)(
-                    ctx,
-                    block_key,
-                    x_ref,
-                    root_correction if target.state_space.requires_replay else None,
-                    batch_size=batch_size,
-                )
-            elif isinstance(path_update, AuxiliaryKalmanSpec):
+            if isinstance(path_update, AuxiliaryKalmanSpec):
                 guide = chart_target.context(ctx.guide_position, runtime_times)
                 smoother = (trace_auxiliary_kalman_step if record_trace else auxiliary_kalman_step)(
                     chart_target,
@@ -540,7 +492,6 @@ def build_marginal_particle_gibbs_kernel(
         key: jnp.ndarray,
         *,
         record_trace: bool,
-        batch_size: int | None = None,
     ) -> (
         MarginalParticleStepResult
         | TracedResult[MarginalParticleStepResult, MarginalParticleTraceRecord]
@@ -559,9 +510,7 @@ def build_marginal_particle_gibbs_kernel(
         ctx = boundary.context
         x_ref = state.latent_trajectory
         traj_dtype = state.trajectory_log_prob.dtype
-        smoother = _smooth(
-            prepared, chart_reference, record_trace=record_trace, batch_size=batch_size
-        )
+        smoother = _smooth(prepared, chart_reference, record_trace=record_trace)
         smoother_result = smoother.result if isinstance(smoother, TracedResult) else smoother
         with jax.named_scope("postprocess"):
             latent_path = smoother_result.latent_path
@@ -690,10 +639,8 @@ def build_marginal_particle_gibbs_kernel(
             )
         return result
 
-    def _step_fn(
-        state: TrajectoryMCMCState, key: jnp.ndarray, *, batch_size: int | None = None
-    ) -> MarginalParticleStepResult:
-        result = _step(state, key, record_trace=False, batch_size=batch_size)
+    def _step_fn(state: TrajectoryMCMCState, key: jnp.ndarray) -> MarginalParticleStepResult:
+        result = _step(state, key, record_trace=False)
         assert not isinstance(result, TracedResult)
         return result
 
@@ -705,7 +652,7 @@ def build_marginal_particle_gibbs_kernel(
         return result
 
     def _profile_parts(
-        states: TrajectoryMCMCState, keys: jax.Array, batch_size: int, compiler: ProgramCompiler
+        states: TrajectoryMCMCState, keys: jax.Array, compiler: ProgramCompiler
     ) -> ParticleProfilePrograms:
         # Closure conversion exposes exactly the numerical operands consumed by
         # the native smoother, including arrays captured by its density helpers.
@@ -714,7 +661,7 @@ def build_marginal_particle_gibbs_kernel(
             prepared: ParameterMoveInputs, path: jax.Array
         ) -> SmootherProfileProgram[jax.Array]:
             def smooth(path: jax.Array) -> ParticleSmootherResult:
-                result = _smooth(prepared, path, record_trace=False, batch_size=batch_size)
+                result = _smooth(prepared, path, record_trace=False)
                 assert not isinstance(result, TracedResult)
                 return result
 
@@ -728,9 +675,7 @@ def build_marginal_particle_gibbs_kernel(
             # This pass only discovers the result tree. Running preparation
             # eagerly would compile and execute each array primitive on GPU.
             prepared = _prepare(state, key)
-            result = _smooth(
-                prepared, prepared.reference, record_trace=False, batch_size=batch_size
-            )
+            result = _smooth(prepared, prepared.reference, record_trace=False)
             assert not isinstance(result, TracedResult)
             return result
 

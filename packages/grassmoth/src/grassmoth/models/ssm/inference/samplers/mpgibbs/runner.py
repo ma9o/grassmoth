@@ -15,11 +15,7 @@ from jax.stages import Compiled
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.immutability import freeze_fields
-from grassmoth.artifacts.reports.posterior_diagnostics import (
-    ParticleWeightMetric,
-    ReplicaSwapCounts,
-    TemperingDiagnostics,
-)
+from grassmoth.artifacts.reports.posterior_diagnostics import ParticleWeightMetric
 from grassmoth.artifacts.reports.profiling import (
     FitComponentTiming,
     FitProfileReport,
@@ -29,7 +25,6 @@ from grassmoth.artifacts.reports.profiling import (
 from grassmoth.artifacts.sampling import (
     AdaptationScheme,
     AuxiliaryKalmanSpec,
-    DsmcSpec,
     FixedLatentStepSpec,
     GuidedPathSpec,
     SamplerSpec,
@@ -49,15 +44,10 @@ from grassmoth.models.ssm.inference.mcmc_state import (
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     MarginalParticleGibbsKernel,
 )
-from grassmoth.models.ssm.inference.samplers.mpgibbs.tempering import (
-    ExchangeRecord,
-    ReplicaExchangeKernel,
-    adapt_temperature_ladder,
-)
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     DELTA_MAX,
     CurvatureMoments,
-    DsmcAdaptation,
+    ScaleAdaptationState,
     adapt_curvature_geometry,
     adapt_scales,
     guided_curvature,
@@ -133,7 +123,6 @@ class ParticleChainResult:
     last_paths: jax.Array
     final_chart: PathChart | None
     retained_draws: int
-    tempering: TemperingDiagnostics | None = None
     profile: FitProfileReport | None = None
 
     @property
@@ -212,14 +201,8 @@ class _Population(NamedTuple):
     chains: TrajectoryMCMCState
     random_key: jax.Array
     iteration: jax.Array
-    betas: jax.Array
-    adaptation: DsmcAdaptation
+    adaptation: ScaleAdaptationState
     parameter_covariance: ParameterCovariance
-    swap_accepted: jax.Array
-    swap_attempted: jax.Array
-    warmup_attempts: jax.Array
-    warmup_rejections: jax.Array
-    ladder_frozen_at: jax.Array
     latent_geometry: jax.Array
     curvature_moments: CurvatureMoments
     center_moments: CenterMoments | None
@@ -239,7 +222,6 @@ def run_marginal_particle_gibbs(
     execution_context: ModelExecutionContext,
     # Both adaptation policies stop updating after warmup.
     adaptation_scheme: AdaptationScheme = "simple",
-    tempering: ReplicaExchangeKernel | None = None,
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleChainResult | InitializationFailure:
     """Run marginalized Particle Gibbs chains from paired starts."""
@@ -330,38 +312,17 @@ def run_marginal_particle_gibbs(
             f"{nonfinite_chains}. Every move would be rejected against a non-finite "
             "reference, so the sampler cannot recover from this initialization."
         )
-    levels = 1 if tempering is None else tempering.spec.num_temperatures
-    betas = jnp.linspace(1.0, 0.0, levels, dtype=states.position.dtype)
-    cold_indices = jnp.arange(num_chains) * levels
-    replicas = num_chains * levels
-    states = jax.tree.map(lambda value: jnp.repeat(value, levels, axis=0), states)
-    latent_geometry = jnp.repeat(latent_geometry, levels, axis=0)
-    if tempering is not None:
-        states = tempering.rebind(states, betas)
-    swap_accepted = jnp.zeros((num_chains, levels - 1), dtype=jnp.int32)
-    swap_attempted = jnp.zeros_like(swap_accepted)
-    warmup_attempts = jnp.zeros_like(swap_attempted)
-    warmup_rejections = jnp.zeros(swap_attempted.shape, dtype=betas.dtype)
     warmup_steps = scalar_operand(value=num_warmup, dtype=jnp.int32)
     scale_adaptation = latent_adaptation(kernel.path_update)
     runtime_adaptation_rate = scalar_operand(value=ADAPTATION_RATE)
-    ladder_interval = scalar_operand(
-        value=1 if tempering is None else tempering.spec.adaptation_interval, dtype=jnp.int32
-    )
     initial = _Population(
         states,
         key
         if continuation is None
         else jax.random.wrap_key_data(jax.device_put(continuation.random_key.values)),
         jnp.asarray(0),
-        betas,
         initialize_adaptation(states.latent_delta),
         initialize_parameter_covariance(chain_init_positions, initialization.parameter_chol),
-        swap_accepted,
-        swap_attempted,
-        warmup_attempts,
-        warmup_rejections,
-        jnp.asarray(0),
         latent_geometry,
         initialize_curvature_moments(latent_geometry),
         initialize_center_moments(chain_init_positions, chain_initial_latents)
@@ -377,305 +338,241 @@ def run_marginal_particle_gibbs(
                 chains=initial.chains._replace(latent_delta=delta),
                 adaptation=initial.adaptation._replace(delta=delta),
             )
-    initial_param_step_size = initial.chains.param_step_size[cold_indices]
-    initial_latent_delta = initial.chains.latent_delta[cold_indices]
+    initial_param_step_size = initial.chains.param_step_size
+    initial_latent_delta = initial.chains.latent_delta
 
-    def step_factory(
-        batch_size: int,
-    ) -> Callable[[_Population, jax.Array], tuple[_Population, dict[str, jax.Array]]]:
-        def sweep(
-            current: _Population, posterior: jax.Array
-        ) -> tuple[_Population, dict[str, jax.Array]]:
-            next_key, step_key = random.split(current.random_key)
-            keys = random.split(step_key, replicas)
-            # The frozen metric is shared by every label/candidate in the update.
-            # Keep its scalar controller in the state and saved response; expand
-            # only the kernel operand, then restore it before adaptation.
-            kernel_states = (
-                current.chains._replace(
-                    latent_delta=current.chains.latent_delta[..., None] * current.latent_geometry
-                )
-                if curvature_limited
-                else current.chains
+    def sweep(
+        current: _Population, posterior: jax.Array
+    ) -> tuple[_Population, dict[str, jax.Array]]:
+        next_key, step_key = random.split(current.random_key)
+        keys = random.split(step_key, num_chains)
+        # The frozen metric is shared by every label/candidate in the update.
+        # Keep its scalar controller in the state and saved response; expand
+        # only the kernel operand, then restore it before adaptation.
+        kernel_states = (
+            current.chains._replace(
+                latent_delta=current.chains.latent_delta[..., None] * current.latent_geometry
             )
-            if tempering is None:
-                updated, info = jax.vmap(
-                    lambda state, draw_key: kernel.step_fn(state, draw_key, batch_size=batch_size)
-                )(kernel_states, keys)
-                empty = jnp.zeros((num_chains, 0), dtype=jnp.int32)
-                exchange = ExchangeRecord(empty, empty, empty.astype(current.betas.dtype))
-            else:
-                updated, info, exchange = tempering.step(
-                    kernel_states, keys, current.betas, current.iteration, batch_size=batch_size
+            if curvature_limited
+            else current.chains
+        )
+        updated, info = jax.vmap(kernel.step_fn)(kernel_states, keys)
+        if curvature_limited:
+            updated = updated._replace(latent_delta=current.chains.latent_delta)
+        record: dict[str, jax.Array] = {
+            "log_posterior": updated.complete_log_posterior,
+            "parameter_accept_prob": info["parameter_accepted"],
+            "latent_accept_prob": _masked_mean(
+                info["latent_accepted"], info["latent_proposed"], axis=-1
+            ),
+            "selected_parameter_label": info["selected_label"],
+            "selected_particle": info["final_particle"],
+            **{
+                name: info[name]
+                for name in (
+                    "latent_move_rms",
+                    "latent_move_max_abs",
+                    "latent_move_rms_per_t",
+                    "latent_frozen_frac",
+                    "latent_frozen_frac_by_d",
+                    "final_label_log_probs",
+                    "amala_grad_norm_mean",
+                    "amala_grad_norm_max",
                 )
-            if curvature_limited:
-                updated = updated._replace(latent_delta=current.chains.latent_delta)
-            cold = jax.tree.map(lambda value: value[cold_indices], updated)
-            cold_info = jax.tree.map(lambda value: value[cold_indices], info)
-            record: dict[str, jax.Array] = {
-                "log_posterior": cold.complete_log_posterior,
-                "parameter_accept_prob": cold_info["parameter_accepted"],
-                "latent_accept_prob": _masked_mean(
-                    cold_info["latent_accepted"], cold_info["latent_proposed"], axis=-1
-                ),
-                "selected_parameter_label": cold_info["selected_label"],
-                "selected_particle": cold_info["final_particle"],
-                **{
-                    name: cold_info[name]
-                    for name in (
-                        "latent_move_rms",
-                        "latent_move_max_abs",
-                        "latent_move_rms_per_t",
-                        "latent_frozen_frac",
-                        "latent_frozen_frac_by_d",
-                        "final_label_log_probs",
-                        "amala_grad_norm_mean",
-                        "amala_grad_norm_max",
-                    )
-                },
-            }
-            record = {
-                **record,
-                **(
-                    {
-                        "path_block_acceptance": cold_info["path_block_acceptance"],
-                        "path_update_rms": cold_info["path_update_rms"],
-                    }
+            },
+        }
+        record = {
+            **record,
+            **(
+                {
+                    "path_block_acceptance": info["path_block_acceptance"],
+                    "path_update_rms": info["path_update_rms"],
+                }
+                if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
+                else {}
+            ),
+            **{
+                metric.history_key: info[metric.history_key]
+                for metric in (
+                    ()
                     if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
-                    else {}
-                ),
-                **{
-                    metric.history_key: cold_info[metric.history_key]
-                    for metric in (
-                        ()
-                        if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
-                        else ParticleWeightMetric
-                    )
-                },
-                **{
-                    name: cold_info[name]
-                    for name in (
-                        "selected_particle_per_t",
-                        "reference_path_hit_rate",
-                        "selected_particle_unique_count",
-                        "parameter_jump_rms",
-                    )
-                },
-            }
-
-            def adapt_steps(
-                step_size: jax.Array,
-                dual_averaging: DualAveragingAdaptationState,
-                accepted: jax.Array,
-            ) -> tuple[jax.Array, DualAveragingAdaptationState]:
-                """Advance one batch of step scalars under the configured warmup policy."""
-                if not use_dual_averaging:
-                    return _adapt_scale(
-                        step_size,
-                        accepted=accepted,
-                        target_accept=kernel.target_accept[0],
-                        adaptation_rate=runtime_adaptation_rate[0],
-                        min_scale=kernel.min_scale[0],
-                        max_scale=kernel.max_scale[0],
-                    ), dual_averaging
-                update = dual_averaging_adaptation(target=kernel.target_accept[0])[1]  # pyright: ignore[reportArgumentType] -- BlackJAX accepts scalar JAX arithmetic; its target annotation only permits float.
-                dual_averaging = jax.vmap(
-                    lambda state, rate: _clip_dual_averaging_state(
-                        update(state, rate),
-                        min_scale=kernel.min_scale[0],
-                        max_scale=kernel.max_scale[0],
-                    )
-                )(dual_averaging, accepted)
-                log_step = jnp.where(
-                    current.iteration + 1 == warmup_steps[0],
-                    dual_averaging.log_step_size_avg,
-                    dual_averaging.log_step_size,
+                    else ParticleWeightMetric
                 )
-                return _clip_scale(
-                    jnp.exp(log_step).astype(step_size.dtype),
+            },
+            **{
+                name: info[name]
+                for name in (
+                    "selected_particle_per_t",
+                    "reference_path_hit_rate",
+                    "selected_particle_unique_count",
+                    "parameter_jump_rms",
+                )
+            },
+        }
+
+        def adapt_steps(
+            step_size: jax.Array,
+            dual_averaging: DualAveragingAdaptationState,
+            accepted: jax.Array,
+        ) -> tuple[jax.Array, DualAveragingAdaptationState]:
+            """Advance one batch of step scalars under the configured warmup policy."""
+            if not use_dual_averaging:
+                return _adapt_scale(
+                    step_size,
+                    accepted=accepted,
+                    target_accept=kernel.target_accept[0],
+                    adaptation_rate=runtime_adaptation_rate[0],
                     min_scale=kernel.min_scale[0],
                     max_scale=kernel.max_scale[0],
                 ), dual_averaging
-
-            def retain(updated: TrajectoryMCMCState) -> _Population:
-                return current._replace(
-                    chains=updated,
-                    random_key=next_key,
-                    iteration=current.iteration + 1,
-                    swap_accepted=current.swap_accepted + exchange.accepted,
-                    swap_attempted=current.swap_attempted + exchange.attempted,
+            update = dual_averaging_adaptation(target=kernel.target_accept[0])[1]  # pyright: ignore[reportArgumentType] -- BlackJAX accepts scalar JAX arithmetic; its target annotation only permits float.
+            dual_averaging = jax.vmap(
+                lambda state, rate: _clip_dual_averaging_state(
+                    update(state, rate),
+                    min_scale=kernel.min_scale[0],
+                    max_scale=kernel.max_scale[0],
                 )
+            )(dual_averaging, accepted)
+            log_step = jnp.where(
+                current.iteration + 1 == warmup_steps[0],
+                dual_averaging.log_step_size_avg,
+                dual_averaging.log_step_size,
+            )
+            return _clip_scale(
+                jnp.exp(log_step).astype(step_size.dtype),
+                min_scale=kernel.min_scale[0],
+                max_scale=kernel.max_scale[0],
+            ), dual_averaging
 
-            def adapt(updated: TrajectoryMCMCState) -> _Population:
-                center_moments = current.center_moments
-                if kernel.recompute_translation or center_moments is not None:
-                    assert updated.chart is not None
-                    chart = jax.tree.map(lambda value: value[0], updated.chart)
-                    if kernel.recompute_translation:
+        def retain(updated: TrajectoryMCMCState) -> _Population:
+            return current._replace(
+                chains=updated, random_key=next_key, iteration=current.iteration + 1
+            )
 
-                        def rebuild() -> PathChart:
-                            translation = computed_chart(
-                                target, cold.position, cold.latent_trajectory
-                            )
-                            return (
-                                ScaleChart(translation, chart.exponents, chart.center)
-                                if isinstance(chart, ScaleChart)
-                                else translation
-                            )
+        def adapt(updated: TrajectoryMCMCState) -> _Population:
+            center_moments = current.center_moments
+            if kernel.recompute_translation or center_moments is not None:
+                assert updated.chart is not None
+                chart = jax.tree.map(lambda value: value[0], updated.chart)
+                if kernel.recompute_translation:
 
-                        chart = jax.lax.cond(
-                            jnp.any(current.iteration == windows[:, 1]), rebuild, lambda: chart
+                    def rebuild() -> PathChart:
+                        translation = computed_chart(
+                            target, updated.position, updated.latent_trajectory
                         )
-                    if center_moments is not None:
-                        assert isinstance(chart, ScaleChart)
-                        center_moments, chart = adapt_center(
-                            center_moments,
-                            chart,
-                            cold.position,
-                            cold.latent_trajectory,
-                            current.iteration,
-                            windows,
-                        )
-                    # The durable state is physical. Each next sweep encodes it
-                    # anew, so changing the chart preserves x and all physical caches.
-                    updated = updated._replace(
-                        chart=jax.tree.map(
-                            lambda value, old: jnp.broadcast_to(value, old.shape),
-                            chart,
-                            updated.chart,
-                        )
-                    )
-                geometry = current.latent_geometry
-                curvature_moments = current.curvature_moments
-                if curvature_limited:
-                    curvature = jax.vmap(
-                        lambda state: guided_curvature(
-                            target, state.latent_context, state.latent_trajectory, latent_free_mask
-                        )
-                    )(updated)
-                    curvature_moments, geometry = adapt_curvature_geometry(
-                        curvature_moments, curvature, geometry, current.iteration, windows
-                    )
-                maximum = jnp.full_like(
-                    updated.latent_delta, 1.0 if curvature_limited else DELTA_MAX
-                )
-                tuning = adapt_scales(
-                    current.adaptation,
-                    scale_adaptation,
-                    info["latent_controller_accepted"],
-                    info["latent_proposed"],
-                    warmup_steps[0],
-                    maximum,
-                )
-                updated = updated._replace(latent_delta=tuning.delta)
-                parameter_feedback = info["parameter_accepted"]
-                if use_dual_averaging:
-                    # Rao-Blackwellize the label draw, then pool chains at each
-                    # temperature. Replicas are ordered by chain, then level.
-                    # Identical starts and feedback keep their DA states shared,
-                    # including covariance restarts and the final averaged step.
-                    switch_probability = -jnp.expm1(info["final_label_log_probs"][:, 0])
-                    per_temperature = switch_probability.reshape(num_chains, levels).mean(axis=0)
-                    parameter_feedback = jnp.tile(per_temperature, num_chains)
-                param_step_size, param_da = adapt_steps(
-                    updated.param_step_size, updated.param_da, parameter_feedback
-                )
-                updated = updated._replace(param_step_size=param_step_size, param_da=param_da)
-                covariance, parameter_chol, changed = adapt_parameter_covariance(
-                    current.parameter_covariance,
-                    cold.position,
-                    updated.parameter_chol[0],
-                    current.iteration,
-                    windows,
-                )
-
-                def replace_geometry(chains: TrajectoryMCMCState) -> TrajectoryMCMCState:
-                    if dim == 0:
-                        return chains
-                    # Covariance estimates posterior geometry; acceptance feedback
-                    # tunes its scalar multiplier after the geometry changes.
-
-                    scale = _clip_scale(
-                        chains.param_step_size,
-                        min_scale=kernel.min_scale[0],
-                        max_scale=kernel.max_scale[0],
-                    )
-                    return chains._replace(
-                        parameter_chol=jnp.broadcast_to(
-                            parameter_chol, chains.parameter_chol.shape
-                        ),
-                        param_step_size=scale,
-                        param_da=restarted_dual_averaging(scale),
-                    )
-
-                updated = jax.lax.cond(
-                    changed,
-                    replace_geometry,
-                    lambda chains: chains,
-                    updated,
-                )
-                next_state: _Population = current._replace(
-                    chains=updated,
-                    random_key=next_key,
-                    iteration=current.iteration + 1,
-                    adaptation=tuning,
-                    latent_geometry=geometry,
-                    curvature_moments=curvature_moments,
-                    parameter_covariance=covariance,
-                    center_moments=center_moments,
-                )
-                if tempering is not None:
-                    exchange_kernel = tempering
-                    next_state = next_state._replace(
-                        warmup_attempts=current.warmup_attempts + exchange.attempted,
-                        warmup_rejections=current.warmup_rejections
-                        + exchange.rejection_probability,
-                    )
-
-                    def adapt_ladder(population: _Population) -> _Population:
-                        ladder = adapt_temperature_ladder(
-                            population.betas,
-                            population.warmup_rejections,
-                            population.warmup_attempts,
-                        )
-                        return population._replace(
-                            chains=exchange_kernel.rebind(population.chains, ladder),
-                            betas=ladder,
-                            warmup_attempts=jnp.zeros_like(population.warmup_attempts),
-                            warmup_rejections=jnp.zeros_like(population.warmup_rejections),
-                            ladder_frozen_at=population.iteration,
+                        return (
+                            ScaleChart(translation, chart.exponents, chart.center)
+                            if isinstance(chart, ScaleChart)
+                            else translation
                         )
 
-                    adapted: _Population = jax.lax.cond(
-                        (next_state.iteration % ladder_interval[0] == 0)
-                        & (next_state.iteration <= warmup_steps[0] // 2),
-                        adapt_ladder,
-                        lambda population: population,
-                        next_state,
+                    chart = jax.lax.cond(
+                        jnp.any(current.iteration == windows[:, 1]), rebuild, lambda: chart
                     )
-                    next_state = adapted
-                return next_state
+                if center_moments is not None:
+                    assert isinstance(chart, ScaleChart)
+                    center_moments, chart = adapt_center(
+                        center_moments,
+                        chart,
+                        updated.position,
+                        updated.latent_trajectory,
+                        current.iteration,
+                        windows,
+                    )
+                # The durable state is physical. Each next sweep encodes it
+                # anew, so changing the chart preserves x and all physical caches.
+                updated = updated._replace(
+                    chart=jax.tree.map(
+                        lambda value, old: jnp.broadcast_to(value, old.shape),
+                        chart,
+                        updated.chart,
+                    )
+                )
+            geometry = current.latent_geometry
+            curvature_moments = current.curvature_moments
+            if curvature_limited:
+                curvature = jax.vmap(
+                    lambda state: guided_curvature(
+                        target, state.latent_context, state.latent_trajectory, latent_free_mask
+                    )
+                )(updated)
+                curvature_moments, geometry = adapt_curvature_geometry(
+                    curvature_moments, curvature, geometry, current.iteration, windows
+                )
+            maximum = jnp.full_like(updated.latent_delta, 1.0 if curvature_limited else DELTA_MAX)
+            tuning = adapt_scales(
+                current.adaptation,
+                scale_adaptation,
+                info["latent_controller_accepted"],
+                info["latent_proposed"],
+                warmup_steps[0],
+                maximum,
+            )
+            updated = updated._replace(latent_delta=tuning.delta)
+            parameter_feedback = info["parameter_accepted"]
+            if use_dual_averaging:
+                # Rao-Blackwellize the label draw, then pool chains. Identical
+                # starts and feedback keep their DA states shared, including
+                # covariance restarts and the final averaged step.
+                switch_probability = -jnp.expm1(info["final_label_log_probs"][:, 0])
+                parameter_feedback = jnp.full_like(switch_probability, jnp.mean(switch_probability))
+            param_step_size, param_da = adapt_steps(
+                updated.param_step_size, updated.param_da, parameter_feedback
+            )
+            updated = updated._replace(param_step_size=param_step_size, param_da=param_da)
+            covariance, parameter_chol, changed = adapt_parameter_covariance(
+                current.parameter_covariance,
+                updated.position,
+                updated.parameter_chol[0],
+                current.iteration,
+                windows,
+            )
 
-            next_population: _Population = jax.lax.cond(posterior, retain, adapt, updated)
-            return next_population, {
-                **record,
-                "positions": cold.position,
-                "paths": cold.latent_trajectory,
-            }
+            def replace_geometry(chains: TrajectoryMCMCState) -> TrajectoryMCMCState:
+                if dim == 0:
+                    return chains
+                # Covariance estimates posterior geometry; acceptance feedback
+                # tunes its scalar multiplier after the geometry changes.
 
-        return sweep
+                scale = _clip_scale(
+                    chains.param_step_size,
+                    min_scale=kernel.min_scale[0],
+                    max_scale=kernel.max_scale[0],
+                )
+                return chains._replace(
+                    parameter_chol=jnp.broadcast_to(parameter_chol, chains.parameter_chol.shape),
+                    param_step_size=scale,
+                    param_da=restarted_dual_averaging(scale),
+                )
+
+            updated = jax.lax.cond(
+                changed,
+                replace_geometry,
+                lambda chains: chains,
+                updated,
+            )
+            return current._replace(
+                chains=updated,
+                random_key=next_key,
+                iteration=current.iteration + 1,
+                adaptation=tuning,
+                latent_geometry=geometry,
+                curvature_moments=curvature_moments,
+                parameter_covariance=covariance,
+                center_moments=center_moments,
+            )
+
+        next_population: _Population = jax.lax.cond(posterior, retain, adapt, updated)
+        return next_population, {
+            **record,
+            "positions": updated.position,
+            "paths": updated.latent_trajectory,
+        }
 
     with inference_phase("mpgibbs", "compiling_sweeps", execution_context=execution_context):
         plan = compile_projected_sweeps(
             SweepProgram(
-                step_factory,
-                label="mpgibbs",
-                max_batch_size=max(
-                    kernel.path_update.num_particles, (1 << (num_steps - 1).bit_length()) // 2
-                )
-                if isinstance(kernel.path_update, DsmcSpec)
-                else 1,
-                excluded_history=excluded_particle_diagnostics(kernel.diagnostic_metrics),
+                sweep, excluded_history=excluded_particle_diagnostics(kernel.diagnostic_metrics)
             ),
             initial,
             execution_context=execution_context,
@@ -686,16 +583,14 @@ def run_marginal_particle_gibbs(
         None
         if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
         else ParticleProfileDimensions(
-            particles=kernel.path_update.num_particles,
-            labels=kernel.num_parameter_particles,
-            replicas=replicas,
+            particles=kernel.path_update.num_particles, labels=kernel.num_parameter_particles
         )
     )
 
     def profile_state(current: _Population, phase: CompiledSweepPhase) -> FitProfileReport:
         full = measure_sweep(current, phase, clock)
         _, step_key = random.split(current.random_key)
-        keys = random.split(step_key, replicas)
+        keys = random.split(step_key, num_chains)
         kernel_states = (
             current.chains._replace(
                 latent_delta=current.chains.latent_delta[..., None] * current.latent_geometry
@@ -703,25 +598,9 @@ def run_marginal_particle_gibbs(
             if curvature_limited
             else current.chains
         )
-        if tempering is None:
-            parts = (kernel.profile_parts(kernel_states, keys, plan.batch_size, compiler),)
-        else:
-            # Production locally updates every non-reference replica. Splitting
-            # these temperature batches is itself part of the measured split cost.
-            levels = current.betas.size
-            parts = tuple(
-                tempering.kernel_for_target(
-                    target.at_temperature(tempering.reference, beta)
-                ).profile_parts(
-                    jax.tree.map(lambda value, index=index: value[index::levels], kernel_states),
-                    keys[index::levels],
-                    plan.batch_size,
-                    compiler,
-                )
-                for index, beta in enumerate(current.betas[:-1])
-            )
-        parameter, _ = measure(lambda: tuple(part.parameter_move() for part in parts), clock)
-        path, _ = measure(lambda: tuple(part.path_smoother() for part in parts), clock)
+        parts = kernel.profile_parts(kernel_states, keys, compiler)
+        parameter, _ = measure(parts.parameter_move, clock)
+        path, _ = measure(parts.path_smoother, clock)
         rows = (
             FitComponentTiming(component="full_sweep", timing=TimingSpread.from_seconds(full)),
             FitComponentTiming(
@@ -773,9 +652,9 @@ def run_marginal_particle_gibbs(
     complete_lp = run.history.posterior["log_posterior"]
     return ParticleChainResult(
         starting_values={
-            "positions": initial.chains.position[cold_indices],
-            "paths": initial.chains.latent_trajectory[cold_indices],
-            "log_joint": initial.chains.complete_log_posterior[cold_indices],
+            "positions": initial.chains.position,
+            "paths": initial.chains.latent_trajectory,
+            "log_joint": initial.chains.complete_log_posterior,
         },
         retained_draws=run.retained_draws,
         grouped_positions=run.history.posterior["positions"],
@@ -790,10 +669,10 @@ def run_marginal_particle_gibbs(
         ),
         latent_paths=run.history.posterior["paths"],
         initial_param_step_size=initial_param_step_size,
-        final_param_step_size=final.chains.param_step_size[cold_indices],
+        final_param_step_size=final.chains.param_step_size,
         final_parameter_chol=final.chains.parameter_chol[0],
         initial_latent_delta=initial_latent_delta,
-        final_latent_delta=final.chains.latent_delta[cold_indices],
+        final_latent_delta=final.chains.latent_delta,
         profile=run.profile
         if run.profile is not None
         else FitProfileReport(
@@ -810,26 +689,9 @@ def run_marginal_particle_gibbs(
         sampling_loop_seconds=run.sampling_loop_seconds,
         final_state=retain_state(final),
         random_key=final.random_key,
-        last_parameters=final.chains.position[cold_indices],
-        last_paths=final.chains.latent_trajectory[cold_indices],
+        last_parameters=final.chains.position,
+        last_paths=final.chains.latent_trajectory,
         final_chart=None
         if final.chains.chart is None
         else jax.tree.map(lambda value: value[0], final.chains.chart),
-        tempering=None
-        if tempering is None
-        else TemperingDiagnostics(
-            inverse_temperatures=tuple(float(beta) for beta in jax.device_get(final.betas)),
-            ladder_frozen_at_warmup_step=int(final.ladder_frozen_at),
-            swaps=tuple(
-                tuple(
-                    ReplicaSwapCounts(accepted=int(a), attempted=int(n))
-                    for a, n in zip(accepted, attempted, strict=True)
-                )
-                for accepted, attempted in zip(
-                    jax.device_get(final.swap_accepted),
-                    jax.device_get(final.swap_attempted),
-                    strict=True,
-                )
-            ),
-        ),
     )

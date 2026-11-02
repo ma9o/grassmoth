@@ -25,10 +25,7 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.identity import DistributionId
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.reports.inference import InferenceEvidence
-    from grassmoth.artifacts.reports.posterior_diagnostics import (
-        ChainDiagnostics,
-        MCMCEvidence,
-    )
+    from grassmoth.artifacts.reports.posterior_diagnostics import ChainDiagnostics
 
 
 def segment_diagnostics(
@@ -36,7 +33,6 @@ def segment_diagnostics(
     distribution: DistributionId,
     evidence: InferenceEvidence,
     chains: int,
-    engine: MCMCEvidence,
 ) -> ChainDiagnostics:
     """Diagnose the current execution before earlier draws and telemetry are appended."""
     layout = model.law_layouts[distribution]
@@ -66,7 +62,6 @@ def segment_diagnostics(
                 chain_extra_fields={name: value.values for name, value in extra.items()},
                 num_chains=chains,
                 num_samples=count,
-                backend=engine.method,
             ),
             observation_log_probs=jnp.empty((chains, count, 0)),
             latent_chains=LatentChainEvidence(
@@ -80,6 +75,5 @@ def segment_diagnostics(
             if evidence.latent_free_mask is not None
             else None,
         ),
-        evidence=engine,
     )
     return posterior.get_inference_diagnostics(references)

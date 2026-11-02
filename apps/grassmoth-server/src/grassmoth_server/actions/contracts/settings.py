@@ -5,8 +5,12 @@ from __future__ import annotations
 from pydantic import Field
 
 from grassmoth.public import (
-    InferenceAlgorithmSpec,
+    AdaptationScheme,
+    GaussianInitializationSpec,
     InferenceHardware,
+    ParameterProposal,
+    ParticleDiagnosticMetrics,
+    PathUpdateSpec,
     Value,
 )
 
@@ -25,7 +29,15 @@ class FitSettingsSpec(Value):
     )
     hardware: InferenceHardware | None = None
     time_limit_seconds: int | None = Field(default=None, ge=1)
-    algorithm: InferenceAlgorithmSpec | None = None
+    n_parameter_particles: int | None = Field(default=None, ge=2)
+    path_update: PathUpdateSpec | None = None
+    compiler_reparameterization: bool | None = None
+    scale_chart: bool | None = None
+    parameter_proposal: ParameterProposal | None = None
+    diagnostic_metrics: ParticleDiagnosticMetrics | None = None
+    param_target_accept: float | None = None
+    adaptation_scheme: AdaptationScheme | None = None
+    initialization: GaussianInitializationSpec | None = None
     num_samples_per_chain: int | None = Field(default=None, ge=0)
     num_warmup: int | None = Field(default=None, ge=0)
     num_chains: int | None = Field(default=None, ge=1)

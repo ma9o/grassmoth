@@ -279,23 +279,18 @@ def select_path(
         # links over time and both particle axes before the suffix recursion.
         # This trades O(T P^2 K) storage for parallel transition scoring.
         def pairwise(
-            previous: Float[Array, "P R"],
             current: Float[Array, "P R"],
             index: Int[Array, ""],
             transition_means: Float[Array, "P K D"],
         ) -> Float[Array, "P P K"]:
             return jax.vmap(
                 lambda following: jax.vmap(
-                    lambda value, mean: memory.transition_log_probs_with_means(
-                        value, following, index, mean
-                    )
-                )(previous, transition_means)
+                    lambda mean: memory.transition_log_probs_with_means(following, index, mean)
+                )(transition_means)
             )(current)
 
         links_bank = jax.lax.optimization_barrier(
-            jax.vmap(pairwise)(
-                memory_bank[:-1], memory_bank[1:], jnp.arange(1, steps), means
-            ).astype(scores.dtype)
+            jax.vmap(pairwise)(memory_bank[1:], jnp.arange(1, steps), means).astype(scores.dtype)
         )
 
         gumbels = jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=reference_dtype))(

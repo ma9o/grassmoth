@@ -1,4 +1,4 @@
-"""Interval densities, particle-tree factorization, and posterior recovery."""
+"""Interval densities, sequential window memory, and posterior recovery."""
 
 from __future__ import annotations
 
@@ -11,15 +11,12 @@ import jax.numpy as jnp
 import numpy as np
 import numpyro.distributions as dist
 import pytest
-from scipy.stats import norm
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import DsmcSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
-from grassmoth.models.ssm.inference.samplers.particle.contract import PaidMixture
-from grassmoth.models.ssm.inference.targets.intervals import gather_interval_statistics
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth_test_support.interval_particle import (
     gaussian_interval_case,
@@ -30,59 +27,7 @@ from grassmoth_test_support.interval_particle import (
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
-def _interval_tree_score(intervals, contexts, bank):
-    @jax.jit
-    def score(contexts, bank):
-        stats = intervals.leaf_statistics(contexts, bank)
-        total = jnp.zeros((bank.shape[1], jax.tree.leaves(contexts)[0].shape[0]))
-        pairs = []
-        for level in intervals.tree.levels[1:]:
-            if level.emission_slots.shape[1]:
-                # Pairwise selection must preserve every crossed path and parameter
-                # label, including zero-padded child slots and joint channel noise.
-                def compare_pairs(left, right, node, level=level):
-                    full_left = gather_interval_statistics(
-                        left, jnp.asarray(level.left_slots)[node]
-                    )
-                    full_right = gather_interval_statistics(
-                        right, jnp.asarray(level.right_slots)[node]
-                    )
-                    expected = jax.vmap(
-                        lambda row: intervals.emission_log_probs(
-                            contexts, row[None] + full_right, level, node
-                        )
-                    )(full_left)
-                    actual = intervals.pairwise_emission_log_probs(
-                        contexts, left, right, level, node
-                    )
-                    return actual, expected
-
-                pairs.append(
-                    jax.vmap(compare_pairs)(
-                        stats[::2], stats[1::2], jnp.arange(len(level.left_slots))
-                    )
-                )
-            stats = jax.vmap(
-                lambda left, right, node, level=level: (
-                    gather_interval_statistics(left, jnp.asarray(level.left_slots)[node])
-                    + gather_interval_statistics(right, jnp.asarray(level.right_slots)[node])
-                )
-            )(stats[::2], stats[1::2], jnp.arange(len(level.left_slots)))
-            if level.emission_slots.shape[1]:
-                total = total + jax.vmap(
-                    lambda s, node, level=level: intervals.emission_log_probs(
-                        contexts, s, level, node
-                    )
-                )(stats, jnp.arange(len(level.left_slots))).sum(axis=0)
-        return total, pairs
-
-    total, pairs = score(contexts, bank)
-    for actual, expected in pairs:
-        np.testing.assert_allclose(actual, expected, atol=2e-5)
-    return total
-
-
-def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree():
+def test_mixed_overlapping_intervals_match_independent_laws_and_gradients():
     times = np.array([0.0, 0.5, 1.5, 2.0, 3.0, 4.5, 5.0])
     summaries = ("last", "sum", "mean", "std")
     observations = np.full((7, 4), np.nan)
@@ -169,8 +114,8 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
     np.testing.assert_allclose(
         current_gradient, observation_jacobian[jnp.arange(7), jnp.arange(7)], atol=2e-5
     )
-    # Two parameter labels, two distinct paths, and seven real leaves exercise
-    # label-dependent responses, slot reuse, overlapping windows, and padding.
+    # Two parameter labels exercise label-dependent responses, slot reuse and
+    # overlapping windows in the sequential window memory.
     contexts = jax.jit(jax.vmap(lambda z: target.context(z, target.times)))(
         jnp.array([[0.15], [-0.4]])
     )
@@ -193,47 +138,11 @@ def test_mixed_overlapping_intervals_match_independent_laws_gradients_and_tree()
         )
     )(path, memory, jnp.arange(len(times)))
     np.testing.assert_allclose(current_scores, current_gradient, atol=2e-5)
-    bank = jnp.stack([path, path + 0.6], axis=1)
-    total = _interval_tree_score(intervals, contexts, bank)
-    reference = jax.jit(
-        jax.vmap(
-            lambda x: jax.vmap(
-                lambda bound: (
-                    target.observation_log_probs(bound, x, target.observations).sum()
-                    - target.observation_increment(bound, x[1], 1, target.observations)
-                )
-            )(contexts)
-        )
-    )(jnp.swapaxes(bank, 0, 1))
-    np.testing.assert_allclose(total, reference, atol=2e-5)
-    for channels in ((0, 1), (2, 3)):
-        selected = intervals.select_channels(channels)
-        assert selected is not None
-        selected_observations = jnp.where(
-            jnp.asarray(np.isin(np.arange(4), channels)), target.observations, jnp.nan
-        )
-        selected_reference = jax.jit(
-            jax.vmap(
-                lambda x, selected_observations=selected_observations: jax.vmap(
-                    lambda bound: (
-                        target.observation_log_probs(bound, x, selected_observations).sum()
-                        - target.observation_increment(bound, x[1], 1, selected_observations)
-                    )
-                )(contexts)
-            )
-        )(jnp.swapaxes(bank, 0, 1))
-        np.testing.assert_allclose(
-            _interval_tree_score(selected, contexts, bank), selected_reference, atol=2e-5
-        )
-    assert intervals.select_channels((0,)) is None
 
 
 @pytest.mark.inference(concern="recovery")
-@pytest.mark.parametrize(
-    ("method", "kappa"),
-    [("amala", 1.0), ("amala_plus", 1.0), ("amala_plus", 0.0)],
-)
-def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kappa):
+@pytest.mark.parametrize("kappa", [1, 0])
+def test_interval_particle_kernel_recovers_analytic_joint_posterior(kappa):
     target, mean, covariance = gaussian_interval_case()
     kernel = build_marginal_particle_gibbs_kernel(
         target,
@@ -241,19 +150,7 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        paid_mix=PaidMixture(
-            jnp.zeros((len(mean) - 1, 1)), jnp.ones((len(mean) - 1, 1)), jnp.asarray([True])
-        ),
-        path_update=DsmcSpec(
-            num_particles=12,
-            method=(
-                "particle_rwm"
-                if (method if kappa else "none") == "none"
-                else "particle_amala"
-                if (method if kappa else "none") == "amala"
-                else "particle_amala_plus"
-            ),
-        ),
+        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=12, kappa=kappa),
     )
     # Replicate chains to resolve the weakly identified offset/path direction
     # without loosening the analytic moment tolerances.
@@ -293,58 +190,6 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(method, kapp
     assert abs(contrast.var() - direction @ covariance @ direction) < 0.04
 
 
-@pytest.mark.parametrize(
-    ("method", "kappa"),
-    [("amala", 1.0), ("amala_plus", 1.0), ("amala_plus", 0.0)],
-)
-def test_reusable_tree_levels_preserve_joint_posterior_with_padding(method, kappa):
-    """An unbalanced 33-time tree exercises multiple shared upper levels and ancestry."""
-    target, mean, covariance = gaussian_interval_case(steps=33)
-    chol = np.linalg.cholesky(covariance)
-    size = 2048
-    before = mean + np.random.default_rng(410).normal(size=(size, mean.size)) @ chol.T
-    kernel = build_marginal_particle_gibbs_kernel(
-        target,
-        num_parameter_particles=2,
-        param_step_size=0.3,
-        parameter_proposal="random_walk",
-        parameter_reference_path=jnp.asarray(mean[1:, None]),
-        path_update=DsmcSpec(
-            num_particles=4,
-            method=(
-                "particle_rwm"
-                if (method if kappa else "none") == "none"
-                else "particle_amala"
-                if (method if kappa else "none") == "amala"
-                else "particle_amala_plus"
-            ),
-            pilot_mixture=False,
-        ),
-    )
-
-    def advance(point, key):
-        initial = initialize_interval_chain(target, point, kernel=kernel)
-        updated, _ = kernel.step_fn(initial, key)
-        return jnp.concatenate((updated.position, updated.latent_trajectory[:, 0]))
-
-    after = np.asarray(
-        jax.jit(jax.vmap(advance))(jnp.asarray(before), jax.random.split(jax.random.key(411), size))
-    )
-    initial = np.linalg.solve(chol, (before - mean).T).T
-    observed = np.linalg.solve(chol, (after - mean).T).T
-    left, right = np.triu_indices(mean.size)
-    differences = np.column_stack(
-        (
-            observed - initial,
-            observed[:, left] * observed[:, right] - initial[:, left] * initial[:, right],
-        )
-    )
-    critical = norm.isf(0.001 / (2 * differences.shape[1]))
-    uncertainty = differences.std(axis=0, ddof=1) / np.sqrt(size)
-    assert np.all(np.abs(differences.mean(axis=0)) <= critical * uncertainty)
-    assert np.all(np.mean((after - before) ** 2, axis=0) > 1e-4 * np.diag(covariance))
-
-
 def test_calendar_totals_and_grid_refinement_preserve_response_scale():
     errors = []
     for count in (3, 5, 9):
@@ -381,15 +226,18 @@ def test_joint_interval_noise_with_different_windows_keeps_cross_channel_covaria
     covariance = np.array([[0.4, 0.12], [0.12, 0.2]])
     target = interval_target(times, observations, starts, ("mean", "mean"), covariance=covariance)
     path = jnp.array([[0.0], [0.2], [0.6], [-0.2]])
+    context = target.context(jnp.zeros(1), target.times)
     contexts = jax.vmap(lambda z: target.context(z, target.times))(jnp.zeros((1, 1)))
-    intervals = target.intervals
-    assert intervals is not None
-    density = _interval_tree_score(intervals, contexts, path[:, None, :])
     means = jnp.array([jnp.trapezoid(path[:, 0]) / 3, jnp.trapezoid(path[1:, 0]) / 2])
     expected = dist.MultivariateNormal(means, covariance_matrix=jnp.asarray(covariance)).log_prob(
         observations[3]
     )
-    np.testing.assert_allclose(density[0, 0], expected, atol=2e-5)
+    exact = jax.jit(lambda x: target.observation_log_probs(context, x, target.observations))(path)
+    np.testing.assert_allclose(exact[3], expected, atol=2e-5)
+    sequential = sequential_observations(target, contexts, context)
+    memory = jax.jit(sequential.path)(path)
+    emitted = jax.jit(jax.vmap(sequential.log_probs))(memory, jnp.arange(len(times)))
+    np.testing.assert_allclose(emitted[3, 0], expected, atol=2e-5)
 
 
 @pytest.mark.inference(concern="recovery")

@@ -35,17 +35,13 @@ inference:
     num_samples_per_chain: 1000
     num_chains: 4
     seed: 0
-    # Select {method: nuts_da} for joint state/parameter NUTS with dual averaging.
-    algorithm:
-      method: mpgibbs
-      n_parameter_particles: 2
-      path_update:
-        num_particles: 64
-        method: particle_rwm
-        latent_block_coords: 1
-        latent_step:
-          kind: adapted
-          target: 0.5
-        pilot_mixture: true
-      parameter_proposal: random_walk
-      param_target_accept: 0.2
+    n_parameter_particles: 2
+    # path_update.method: particle_mgrad, twisted_particle_agrad or auxiliary_kalman.
+    path_update:
+      num_particles: 64
+      method: particle_mgrad
+      latent_step:
+        kind: adapted
+        target: 0.5
+    parameter_proposal: random_walk
+    param_target_accept: 0.2

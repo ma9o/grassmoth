@@ -169,10 +169,6 @@ def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engi
             dynamical_model_spec,
             report.core,
         )
-    from pydantic import ValidationError
-
-    with pytest.raises(ValidationError):
-        report.core.inference_metadata.revised(engine=None)
     prior = _treatment_outcome()
     with pytest.raises(CausalCertificationError, match="retained joint uncertainty"):
         certify_conditioned_model(prior, prior, _report(prior).core)

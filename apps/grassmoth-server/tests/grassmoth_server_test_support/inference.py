@@ -53,12 +53,10 @@ def inference_log(
 def inference_metadata(model):
     """Metadata for an explicit test-owned joint law with one retained chain."""
     from grassmoth.artifacts.reports.inference import InferenceMetadata
-    from grassmoth.artifacts.reports.posterior_diagnostics import MCMCEvidence
 
     identity = next(iter(model.law_layouts))
     return InferenceMetadata(
         distribution=identity,
-        engine=MCMCEvidence(),
         duration_seconds=0,
         num_samples_total=len(empirical_atoms(model.distributions[identity])),
         num_chains=1,

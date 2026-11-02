@@ -262,10 +262,22 @@ from grassmoth.artifacts.reports.predictive_provenance import (
     UnknownLawProvenance as UnknownLawProvenance,
 )
 from grassmoth.artifacts.sampling import (
-    InferenceAlgorithmSpec as InferenceAlgorithmSpec,
+    AdaptationScheme as AdaptationScheme,
+)
+from grassmoth.artifacts.sampling import (
+    GaussianInitializationSpec as GaussianInitializationSpec,
 )
 from grassmoth.artifacts.sampling import (
     InferenceHardware as InferenceHardware,
+)
+from grassmoth.artifacts.sampling import (
+    ParameterProposal as ParameterProposal,
+)
+from grassmoth.artifacts.sampling import (
+    ParticleDiagnosticMetrics as ParticleDiagnosticMetrics,
+)
+from grassmoth.artifacts.sampling import (
+    PathUpdateSpec as PathUpdateSpec,
 )
 from grassmoth.artifacts.sampling import (
     SamplerSpec as SamplerSpec,

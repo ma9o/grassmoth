@@ -39,12 +39,7 @@ def log_profile(report: FitProfileReport, logger: logging.Logger) -> None:
                 logger.info("Profile cache %s: %s", entry.name, entry.persistent_cache)
     if report.particle_dimensions is not None:
         dimensions = report.particle_dimensions
-        logger.info(
-            "Profile particles=%d labels=%d replicas=%d",
-            dimensions.particles,
-            dimensions.labels,
-            dimensions.replicas,
-        )
+        logger.info("Profile particles=%d labels=%d", dimensions.particles, dimensions.labels)
     for row in report.components:
         logger.info(
             "Profile %s: median=%.3f ms range=[%.3f, %.3f] ms",
