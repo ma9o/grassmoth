@@ -22,6 +22,7 @@ from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.records import Applied, Rejected
 from grassmoth_server_test_support.helpers import write_question
 from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.input_trajectories import deterministic_input_model
 
 pytestmark = pytest.mark.contract
 
@@ -108,6 +109,40 @@ def test_null_edge_prunes_ancestors_and_their_owned_parameters_and_laws():
     )
     assert (warning.severity, warning.code) == ("warning", "MODEL_COMPONENTS_PRUNED")
     assert warning.subject == "model"
+
+
+def test_named_input_laws_are_saved_under_their_coordinates():
+    original = deterministic_input_model()
+    source, outcome = original.constructs
+    stored = source.distribution
+    assert stored is not None
+    payload = original.model_dump(mode="json")
+    payload["constructs"][source.id]["distribution"] = "distribution:source_path"
+    payload["distributions"] = {
+        "distribution:source_path" if key == stored else key: law
+        for key, law in payload["distributions"].items()
+    }
+    layout = payload["law_layouts"][stored]
+    payload["law_layouts"] = {"distribution:source_path": layout}
+    created = apply_model_edit(
+        DynamicalModelSpec(), DynamicalModelSpec.model_validate(payload), outcome.id
+    ).dynamical_model_spec
+    assert created == original
+    law = payload["distributions"]["distribution:source_path"]
+    values = {"array": [1.0, 4.0, 2.0], "dtype": "float32"}
+    edit = DynamicalModelSpec.model_validate(
+        {
+            "constructs": {source.id: {"distribution": "distribution:revised_path"}},
+            "distributions": {
+                "distribution:revised_path": {**law, "params": {**law["params"], "v": values}}
+            },
+            "law_layouts": {"distribution:revised_path": layout},
+        }
+    )
+    revised = apply_model_edit(created, edit, outcome.id)
+    assert revised.dynamical_model_spec.get_construct(source.id).distribution == stored
+    assert revised.dynamical_model_spec.distributions[stored].v.tolist() == values["array"]
+    assert revised.pruning.distributions == ()
 
 
 def test_disconnected_creation_prunes_before_whole_model_validation():

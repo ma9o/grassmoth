@@ -2224,7 +2224,7 @@ export interface components {
                     readonly [key: string]: Domain.NumPyroValue;
                 };
             } | null>>>;
-            /** @description Scientific coordinates and production labels of each joint law, beside its native atoms. */
+            /** @description Scientific coordinates and production labels of each joint law, beside its native atoms. An edit may key a joint law by any name; edit_model saves it under the identity derived from these coordinates and updates its members' references. */
             readonly law_layouts?: Readonly<Partial<Record<components["schemas"]["DistributionId-Input"], {
                 readonly parameters?: readonly (readonly [
                     components["schemas"]["ParameterId-Input"],
@@ -3608,7 +3608,7 @@ export interface components {
             }>>>;
             /** @description All explicit probability laws. Members are the parameters and constructs referring to each ID. Event coordinates are parameters by ID and element ID, then constructs by ID and time point. A scalar law belongs to one parameter and applies independently to its elements. */
             readonly distributions: Readonly<Partial<Record<components["schemas"]["DistributionId-Output"], Domain.NumPyroDistribution>>>;
-            /** @description Scientific coordinates and production labels of each joint law, beside its native atoms. */
+            /** @description Scientific coordinates and production labels of each joint law, beside its native atoms. An edit may key a joint law by any name; edit_model saves it under the identity derived from these coordinates and updates its members' references. */
             readonly law_layouts: Readonly<Partial<Record<components["schemas"]["DistributionId-Output"], components["schemas"]["JointLawLayout-Output"]>>>;
             /** @default null */
             readonly measurement_clock: string | null;

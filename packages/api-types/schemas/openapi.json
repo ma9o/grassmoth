@@ -8769,7 +8769,7 @@
                 }
               ]
             },
-            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms.",
+            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms. An edit may key a joint law by any name; edit_model saves it under the identity derived from these coordinates and updates its members' references.",
             "propertyNames": {
               "$ref": "#/components/schemas/DistributionId-Input"
             },
@@ -13779,7 +13779,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JointLawLayout-Output"
             },
-            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms.",
+            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms. An edit may key a joint law by any name; edit_model saves it under the identity derived from these coordinates and updates its members' references.",
             "propertyNames": {
               "$ref": "#/components/schemas/DistributionId-Output"
             },
@@ -26045,7 +26045,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JointLawLayout-Input"
             },
-            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms.",
+            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms. An edit may key a joint law by any name; edit_model saves it under the identity derived from these coordinates and updates its members' references.",
             "propertyNames": {
               "$ref": "#/components/schemas/DistributionId-Input"
             },
@@ -26114,7 +26114,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JointLawLayout-Output"
             },
-            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms.",
+            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms. An edit may key a joint law by any name; edit_model saves it under the identity derived from these coordinates and updates its members' references.",
             "propertyNames": {
               "$ref": "#/components/schemas/DistributionId-Output"
             },
@@ -30450,7 +30450,7 @@
                 }
               ]
             },
-            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms.",
+            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms. An edit may key a joint law by any name; edit_model saves it under the identity derived from these coordinates and updates its members' references.",
             "propertyNames": {
               "$ref": "#/components/schemas/DistributionId-Input"
             },
@@ -35460,7 +35460,7 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/JointLawLayout-Output"
             },
-            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms.",
+            "description": "Scientific coordinates and production labels of each joint law, beside its native atoms. An edit may key a joint law by any name; edit_model saves it under the identity derived from these coordinates and updates its members' references.",
             "propertyNames": {
               "$ref": "#/components/schemas/DistributionId-Output"
             },

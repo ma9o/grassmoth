@@ -21,6 +21,8 @@ from grassmoth.artifacts.identity import (
 if TYPE_CHECKING:
     import jax
 
+    from grassmoth.json_types import JsonObject
+
 
 class JointLawLayout(Value):
     """An explicit law membership ordered independently of native tensor positions.
@@ -107,6 +109,11 @@ class JointLawLayout(Value):
                 else self.time_origin.isoformat(),
             ],
         )
+
+    @classmethod
+    def document_identity(cls, document: JsonObject) -> DistributionId:
+        """Parse an authored layout document and return the identity of its coordinates."""
+        return cls.model_validate(document).distribution_id
 
     def pack(
         self,

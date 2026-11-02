@@ -90,7 +90,11 @@ class _ModelEntities(Value):
     )
     law_layouts: Mapping[DistributionId, JointLawLayout] = Field(
         default_factory=dict,
-        description="Scientific coordinates and production labels of each joint law, beside its native atoms.",
+        description=(
+            "Scientific coordinates and production labels of each joint law, beside its native atoms. "
+            "An edit may key a joint law by any name; edit_model saves it under the identity "
+            "derived from these coordinates and updates its members' references."
+        ),
     )
 
     @model_validator(mode="before")
@@ -737,6 +741,16 @@ def _pruning_graph(document: DynamicalModelSpec) -> _PruningGraph:
     )
 
 
+def _with_law_key(
+    definition: JsonObject | None, keys: Mapping[DistributionId, DistributionId]
+) -> JsonObject | None:
+    """Point a construct or parameter definition at its law's stored key."""
+    law = None if definition is None else definition.get("distribution")
+    if definition is None or not isinstance(law, str) or law not in keys:
+        return definition
+    return {**definition, "distribution": keys[DistributionId(law)]}
+
+
 def apply_model_edit(
     parent: DynamicalModelSpec,
     supplied: DynamicalModelSpec,
@@ -744,7 +758,7 @@ def apply_model_edit(
     *,
     context: object = None,
 ) -> MaterializedModel:
-    """Merge a document, prune outside the outcome's ancestors, and parse the result."""
+    """Merge a document, prune outside the outcome's ancestors, key joint laws, and parse."""
     document = DynamicalModelSpec.model_validate(
         merge_fields(
             parent.model_dump(mode="python", context={"binary_arrays": True}),
@@ -792,20 +806,33 @@ def apply_model_edit(
         if identity in constructs or identity in parameters
     }
     removed_distributions = prior_memberships - kept_memberships
+    laws = {
+        identity: value
+        for identity, value in document.distribution_definitions.items()
+        if identity not in removed_distributions
+    }
+    layouts = {
+        identity: value
+        for identity, value in document.layout_definitions.items()
+        if identity not in removed_distributions
+    }
+    # Authors name joint laws freely; each is stored under the identity of its coordinates.
+    # A name whose identity another retained law already holds is left for validation to reject.
+    derived = {
+        identity: JointLawLayout.document_identity(value)
+        for identity, value in layouts.items()
+        if value is not None
+    }
+    keys = {
+        identity: key for identity, key in derived.items() if key != identity and key not in laws
+    }
+    stored = {keys.get(identity, identity) for identity in laws}
     complete = DynamicalModelSpec(
-        constructs=constructs,
+        constructs={identity: _with_law_key(value, keys) for identity, value in constructs.items()},
         edges=retained_edges,
-        parameters=parameters,
-        distributions={
-            identity: value
-            for identity, value in document.distribution_definitions.items()
-            if identity not in removed_distributions
-        },
-        law_layouts={
-            identity: value
-            for identity, value in document.layout_definitions.items()
-            if identity not in removed_distributions
-        },
+        parameters={identity: _with_law_key(value, keys) for identity, value in parameters.items()},
+        distributions={keys.get(identity, identity): value for identity, value in laws.items()},
+        law_layouts={keys.get(identity, identity): value for identity, value in layouts.items()},
         measurement_clock=document.measurement_clock,
     ).materialized(context=context)
     return MaterializedModel(
@@ -827,7 +854,7 @@ def apply_model_edit(
             distributions=tuple(
                 identity
                 for identity in document.distribution_definitions
-                if identity in removed_distributions
+                if identity in removed_distributions and identity not in stored
             ),
         ),
     )
