@@ -11,7 +11,7 @@ from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.observations.preparation import DataPreparationResult
 from grassmoth.artifacts.observations.reference import DataRef
-from grassmoth.artifacts.sampling import GuidedPathSpec, SamplerSpec
+from grassmoth.artifacts.sampling import SamplerSpec
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.actions.contracts.effects import ActionEffects
@@ -80,8 +80,7 @@ def test_noisy_interval_summary_passes_fit_admission_and_dispatches(monkeypatch)
     assert isinstance(prepared, PreparedFit)
     assert prepared.inputs is inputs
     assert prepared.panel.compiled_dynamical_model is inputs.compiled_dynamical_model
-    # Particle-mGRAD admits only point readings; twisted Particle-aGRAD admits intervals.
-    sampler = SamplerSpec(path_update=GuidedPathSpec(method="twisted_particle_agrad"))
+    sampler = SamplerSpec()
     execution_context = replace(
         EXECUTION_CONTEXT, compiler=compile_program, prepare_program=prepare_program
     )

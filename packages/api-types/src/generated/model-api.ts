@@ -4672,7 +4672,7 @@ export interface components {
          */
         readonly "GuidedPathSpec-Input": {
             /**
-             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings and deterministic recurrences, and separated path components and informative future readings can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4). It also supports interval readings; poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
+             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings, such as long interval windows, can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             readonly method: "particle_mgrad" | "twisted_particle_agrad";
@@ -4714,7 +4714,7 @@ export interface components {
          */
         readonly "GuidedPathSpec-Output": {
             /**
-             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it supports point readings and deterministic recurrences, and separated path components and informative future readings can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4). It also supports interval readings; poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
+             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings, such as long interval windows, can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             readonly method: "particle_mgrad" | "twisted_particle_agrad";

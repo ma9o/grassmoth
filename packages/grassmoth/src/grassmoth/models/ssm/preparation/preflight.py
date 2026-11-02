@@ -69,13 +69,6 @@ def validate_sampler_support(
             return ObservationPreflightFailure.rejected(
                 "Prefix-mixture proposals support point readings without replay."
             )
-    # Ancestral selection keeps Particle-mGRAD exact with recurrences. Window replay would
-    # need a marginal backward kernel without auxiliary factors, which is not established.
-    if path_update.method == "particle_mgrad" and intervals:
-        return ObservationPreflightFailure.rejected(
-            "Particle-mGRAD supports point readings only; use twisted_particle_agrad for "
-            "interval readings."
-        )
     return None
 
 

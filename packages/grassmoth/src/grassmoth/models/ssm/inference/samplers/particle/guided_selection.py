@@ -14,7 +14,7 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
 from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
 
-type PathSelector = Literal["backward", "window_replay", "ancestral"]
+type PathSelector = Literal["backward", "window_replay", "marginal_window_replay", "ancestral"]
 
 
 def _cached_backward(
@@ -121,12 +121,18 @@ def _window_backward(
     observe: Callable[[jax.Array, jax.Array], tuple[jax.Array, jax.Array]],
     transition: Callable[[jax.Array, jax.Array, jax.Array], jax.Array],
     unroll: int,
+    *,
+    auxiliary_factors: bool,
 ) -> Int[Array, " T"]:
-    """Pay all crossing windows and auxiliary factors before reusing an exact suffix.
+    """Pay all crossing windows, and aGRAD's auxiliary factors, before reusing a suffix.
 
     The compiler's window span bounds the replay. Beyond it, every label's future
     factors are independent of this prefix; their cached sums remain inside the
     label mixture. No approximation or finite-lag truncation enters these weights.
+    Particle-mGRAD integrates its auxiliary out of the weights, so its backward
+    kernel pays the true factors alone: CF24 Appendix D.2's swap identity carries
+    the candidate's window memory as it carries the label mixture. Adding the
+    auxiliary densities there would bias it.
     """
     window = memory.windows
     assert window is not None
@@ -149,11 +155,15 @@ def _window_backward(
                     previous, selected[time], time
                 )
                 observed, gradients = jax.vmap(observe, in_axes=(0, None))(current, time)
-                density = _masked_normal_log_prob(
-                    auxiliary[time],
-                    selected[time] + variance[time] * gradients,
-                    variance[time],
-                    mask[time],
+                density = (
+                    _masked_normal_log_prob(
+                        auxiliary[time],
+                        selected[time] + variance[time] * gradients,
+                        variance[time],
+                        mask[time],
+                    )
+                    if auxiliary_factors
+                    else jnp.zeros_like(auxiliary_sum)
                 )
                 factors = observed + jax.vmap(transition, in_axes=(0, 0, None))(
                     previous, current, time
@@ -256,6 +266,7 @@ def select_path(
                 observe,
                 transition,
                 unroll,
+                auxiliary_factors=selector == "window_replay",
             )
         path = bank[jnp.arange(steps), picks]
         if memory.log_precisions is None:

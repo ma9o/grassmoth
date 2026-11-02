@@ -85,7 +85,10 @@ def test_auxiliary_kalman_admission(
 @pytest.mark.parametrize(
     "recurrences", [(), (AdditiveRecurrences((0,)),), (SequentialRecurrences((0,)),)]
 )
-def test_twisted_preflight_accepts_interval_readings_and_recurrences(monkeypatch, recurrences):
+@pytest.mark.parametrize("method", ["particle_mgrad", "twisted_particle_agrad"])
+def test_guided_preflight_accepts_interval_readings_and_recurrences(
+    monkeypatch, method, recurrences
+):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
@@ -95,8 +98,7 @@ def test_twisted_preflight_accepts_interval_readings_and_recurrences(monkeypatch
         observations=(Mock(support=Mock(support_kind="interval")),),
     )
     sampler = SamplerSpec(
-        path_update=GuidedPathSpec(method="twisted_particle_agrad"),
-        compiler_reparameterization=True,
+        path_update=GuidedPathSpec(method=method), compiler_reparameterization=True
     )
     assert validate_sampler_support(compiled, sampler) is None
 
@@ -113,28 +115,6 @@ def test_guided_configuration_roundtrip_and_continuation_identity(method):
         sampler.kernel_identity
         != SamplerSpec(path_update=GuidedPathSpec(method=method, kappa=0)).kernel_identity
     )
-
-
-@pytest.mark.parametrize(
-    ("support", "recurrences", "accepted"),
-    [("point", (), True), ("interval", (), False), ("point", (AdditiveRecurrences((0,)),), True)],
-)
-def test_mgrad_admission_rejects_only_interval_readings(
-    monkeypatch, support, recurrences, accepted
-):
-    from grassmoth.models.ssm import compiled_access
-
-    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
-    compiled = Mock(
-        spec=CompiledDynamicalModel,
-        state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
-        observations=(Mock(support=Mock(support_kind=support)),),
-    )
-    sampler = SamplerSpec(path_update=GuidedPathSpec(method="particle_mgrad"))
-    failure = validate_sampler_support(compiled, sampler)
-    assert (failure is None) == accepted
-    if failure is not None:
-        assert "Particle-mGRAD" in failure.message
 
 
 @pytest.mark.parametrize(

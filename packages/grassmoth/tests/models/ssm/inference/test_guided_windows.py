@@ -143,7 +143,12 @@ def _window_posterior():
 
 @pytest.mark.parametrize(
     ("method", "kappa"),
-    [("twisted_particle_agrad", 1), ("twisted_particle_agrad", 0)],
+    [
+        ("twisted_particle_agrad", 1),
+        ("twisted_particle_agrad", 0),
+        ("particle_mgrad", 1),
+        ("particle_mgrad", 0),
+    ],
 )
 def test_guided_windows_preserve_joint_path_and_label_posterior(method, kappa):
     target, labels, starts, expected_mean, expected_second, probabilities = _window_posterior()
@@ -292,6 +297,7 @@ def test_window_backward_matches_full_nonlinear_augmented_density_ratios():
                 observe,
                 transition,
                 unroll=1,
+                auxiliary_factors=True,
             )
         )
     )(keys)

@@ -38,10 +38,12 @@ genealogical degeneracy; near-uniform weights do not guarantee movement.
 
 Particle-mGRAD retains the untwisted local proposal and integrates its auxiliary
 out of the bank weights. The observation-only auxiliary drift is common to all
-labels and depends only on the current point. Thus the non-Markovian mixture
-prefix/suffix accounting remains exact, and backward selection uses the true
-target without auxiliary factors (CF24 Appendix D.2). Point support is admitted
-before execution; intervals and recurrence are not part of this construction.
+labels and may depend on the candidate's window memory. Thus the non-Markovian
+mixture prefix/suffix accounting remains exact, and backward selection uses the
+true target without auxiliary factors (CF24 Appendix D.2). The same swap identity
+covers window memory, so its bounded window replay pays only true factors, and
+recurrences trace ancestors as for aGRAD. Without look-ahead, a long informative
+window pays its whole factor at its anchor, which can slow mixing.
 """
 
 from types import MappingProxyType
@@ -215,7 +217,11 @@ def _guided_components(target: ParticleTarget, spec: GuidedPathSpec) -> _GuidedC
         "memory" if target.intervals is not None or target.state_space.requires_replay else "point",
         "ancestral"
         if target.state_space.recurrence
-        else ("window_replay" if target.intervals is not None else "backward"),
+        else (
+            "backward"
+            if target.intervals is None
+            else ("marginal_window_replay" if spec.method == "particle_mgrad" else "window_replay")
+        ),
     )
 
 
