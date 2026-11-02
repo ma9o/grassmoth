@@ -61,27 +61,3 @@ export function availableGraphLayers(
   };
   return CAUSAL_GRAPH_LAYER_ORDER.filter((layer) => available[layer]);
 }
-
-import type { DagLayoutNode } from "@/lib/utils/dag-graph-layout";
-
-export interface GraphBand {
-  key: "static" | "history" | "present";
-  label: string;
-  nodes: DagLayoutNode[];
-}
-
-export function boundsForBand(
-  band: GraphBand,
-): { x: number; y: number; width: number; height: number } | null {
-  if (band.nodes.length === 0) return null;
-  const minimumX = Math.min(...band.nodes.map((node) => node.x));
-  const minimumY = Math.min(...band.nodes.map((node) => node.y));
-  const maximumX = Math.max(...band.nodes.map((node) => node.x + node.width));
-  const maximumY = Math.max(...band.nodes.map((node) => node.y + node.height));
-  return {
-    x: minimumX - 14,
-    y: minimumY - 28,
-    width: maximumX - minimumX + 28,
-    height: maximumY - minimumY + 42,
-  };
-}

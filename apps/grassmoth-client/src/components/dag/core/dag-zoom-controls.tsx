@@ -4,9 +4,11 @@ import { DAG_COLORS } from "@/lib/dag/palette";
 interface DagZoomControlsProps {
   zoom: number;
   onZoomChange: (zoom: number) => void;
+  /** Return to the zoom that fits the whole graph in its pane. */
+  onFit: () => void;
 }
 
-export function DagZoomControls({ zoom, onZoomChange }: DagZoomControlsProps) {
+export function DagZoomControls({ zoom, onZoomChange, onFit }: DagZoomControlsProps) {
   return (
     <>
       <div style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
@@ -31,10 +33,10 @@ export function DagZoomControls({ zoom, onZoomChange }: DagZoomControlsProps) {
         </button>
         <button
           type="button"
-          onClick={() => onZoomChange(1)}
+          onClick={onFit}
           style={ZOOM_BUTTON}
-          title="reset zoom"
-          aria-label="Reset zoom"
+          title="fit to pane"
+          aria-label="Fit to pane"
         >
           ⤢
         </button>

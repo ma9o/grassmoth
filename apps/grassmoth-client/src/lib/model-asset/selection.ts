@@ -2,6 +2,7 @@ import {
   type ConstructId,
   type EdgeId,
   type IndicatorId,
+  type MechanismId,
   type ComputedExtractionSpec,
 } from "@grassmoth/api-types";
 
@@ -13,6 +14,11 @@ export type EntitySelection =
 
 export function humanize(value: string): string {
   return value.replaceAll("_", " ");
+}
+
+/** A mechanism's id is its only name in the API. */
+export function mechanismName(id: MechanismId): string {
+  return humanize(id.slice("mechanism:".length));
 }
 
 export function formatFillNull(

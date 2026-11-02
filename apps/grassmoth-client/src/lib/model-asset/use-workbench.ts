@@ -49,7 +49,6 @@ export function useWorkbenchSnapshots(
 interface WorkbenchOptions {
   useSnapshot: SnapshotReader;
   workspaceId: string;
-  question: string | undefined;
   attempts: readonly TimelineRevision[];
   modelSnapshot: ModelSnapshot;
   focusSeq: number;
@@ -61,7 +60,6 @@ interface WorkbenchOptions {
 export function useWorkbench({
   useSnapshot,
   workspaceId,
-  question: initialQuestion,
   attempts,
   modelSnapshot,
   focusSeq,
@@ -143,7 +141,7 @@ export function useWorkbench({
     dismissComparison();
     viewAt(seq === latest ? null : seq);
   };
-  const question = modelSnapshot.question?.text ?? initialQuestion;
+  const question = modelSnapshot.question?.text;
   const simulationResult = modelSnapshot.simulation;
   const context: ScopeContext = {
     modelSnapshot,

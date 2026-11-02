@@ -19,15 +19,10 @@ export function LayeredComparisonOverlay({
     <g aria-label="Model differences">
       {overlay.addedEdges.map((edge) => (
         <g key={edge.id} data-comparison-edge={edge.id} data-change="added">
-          <DagEdge
-            points={edge.points}
-            color={COMPARISON_COLORS.added}
-            width={3 / zoom}
-            dashed={edge.crossSlice}
-          />
+          <DagEdge points={edge.points} color={COMPARISON_COLORS.added} width={3 / zoom} />
         </g>
       ))}
-      {overlay.addedNodes.map(({ node, construct, history }) => (
+      {overlay.addedNodes.map(({ node, construct }) => (
         <g
           key={node.id}
           data-comparison-node={node.id}
@@ -37,10 +32,9 @@ export function LayeredComparisonOverlay({
           <DagNodeShell
             width={node.width}
             height={node.height}
-            title={`${humanize(construct.name)}${history ? " · t−1" : ""}`}
+            title={humanize(construct.name)}
             subtitle="Added in the compared revision"
             accent={COMPARISON_COLORS.added}
-            dashed={history}
             highlighted
           />
         </g>

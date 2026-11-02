@@ -9,10 +9,7 @@ import type { SimulationPathsView } from "@/lib/model-asset/result-values";
 import { indexModel } from "@/lib/model-asset/entities";
 import type { DagGraphInput } from "@/lib/utils/dag-graph-layout";
 import { formatModelDate } from "@/lib/utils/format";
-import {
-  LayeredCausalGraph,
-  type LayeredCausalGraphVariant,
-} from "@/components/dag/layered/layered-causal-graph";
+import { LayeredCausalGraph } from "@/components/dag/layered/layered-causal-graph";
 
 // Only the asynchronous layout is stubbed; render the real graph and its overlays.
 vi.mock("@/lib/hooks/use-dag-layout", () => ({
@@ -99,7 +96,7 @@ const paths: SimulationPathsView = {
   effect: null,
 };
 
-function render(variant: LayeredCausalGraphVariant, simulation: SimulationReport | null) {
+function render(simulation: SimulationReport | null) {
   return renderToStaticMarkup(
     createElement(LayeredCausalGraph, {
       modelSnapshot,
@@ -108,24 +105,20 @@ function render(variant: LayeredCausalGraphVariant, simulation: SimulationReport
       simulationPaths: simulation ? paths : null,
       selection: null,
       onSelect: () => {},
-      variant,
     }),
   );
 }
 
 describe("dated intervention overlay", () => {
-  it.each([
-    "asset",
-    "workbench",
-  ] as const)("preserves the model's arrows and their styling in the %s view", (variant) => {
+  it("preserves the model's arrows and their styling", () => {
     const arrows = (markup: string) => markup.match(/<path\b[^>]*marker-end=[^>]*>/g) ?? [];
-    const baseline = arrows(render(variant, null));
-    expect(baseline).toHaveLength(4);
-    expect(arrows(render(variant, report))).toEqual(baseline);
+    const baseline = arrows(render(null));
+    expect(baseline).toHaveLength(2);
+    expect(arrows(render(report))).toEqual(baseline);
   });
 
   it("shows every dated assignment without implying a continuously fixed value", () => {
-    const markup = render("asset", report);
+    const markup = render(report);
     expect(markup.match(/>3 assignments</g)).toHaveLength(1);
     for (const event of report.evidence.assignments) {
       expect(markup).toContain(

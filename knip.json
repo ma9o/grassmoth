@@ -15,9 +15,6 @@
         "!src/**/*.stories.tsx",
         "!src/**/*.test.{ts,tsx}",
         "!src/**/__fixtures__/**",
-        "!src/components/design-prototypes/**",
-        "!src/**/story-decorators.tsx",
-        "!src/**/stage-story-*.{ts,tsx}",
         "!src/integration/**"
       ],
       "ignoreDependencies": [

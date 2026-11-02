@@ -36,5 +36,5 @@ export default function ModelPage({ params }: { params: Promise<{ workspaceId: s
     );
   }
 
-  return <CausalModelAsset workspaceId={workspaceId} question={undefined} journal={journal} />;
+  return <CausalModelAsset workspaceId={workspaceId} journal={journal} />;
 }

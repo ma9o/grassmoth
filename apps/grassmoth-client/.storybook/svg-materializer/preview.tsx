@@ -1,11 +1,31 @@
 /// <reference types="vite/client" />
 import type { Decorator, Preview } from "@storybook/nextjs-vite";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { STORY_RENDER_PHASE_CHANGED } from "storybook/internal/core-events";
+import { addons } from "storybook/preview-api";
 import {
   SVG_MATERIALIZER_ENDPOINT,
   SVG_MATERIALIZER_PARAMETER,
   type SvgMaterializerParameter,
 } from "./constants.ts";
+
+/** Each story's latest render: a capture waits until its play function has finished. */
+const renders = new Map<string, "pending" | "completed" | "failed">();
+let tracking = false;
+
+function trackRenders(): void {
+  if (tracking) return;
+  tracking = true;
+  addons.getChannel().on(STORY_RENDER_PHASE_CHANGED, (event: unknown) => {
+    if (typeof event !== "object" || event === null) return;
+    if (!("storyId" in event) || typeof event.storyId !== "string") return;
+    if (!("newPhase" in event) || typeof event.newPhase !== "string") return;
+    if (event.newPhase === "loading") renders.set(event.storyId, "pending");
+    if (event.newPhase === "completed") renders.set(event.storyId, "completed");
+    if (event.newPhase === "errored" || event.newPhase === "aborted")
+      renders.set(event.storyId, "failed");
+  });
+}
 
 const INLINE_STYLE_PROPERTIES = [
   "background-color",
@@ -141,15 +161,23 @@ function SvgMaterializer({
     const waitForSvg = () => {
       if (cancelled) return;
       attempts += 1;
+      const render = renders.get(storyId);
+      if (render === "failed") {
+        setState({ phase: "error", message: "The story failed before its SVG was final." });
+        return;
+      }
       const matches = document.querySelectorAll(parameter.selector);
-      if (matches.length === 1) {
+      if (render === "completed" && matches.length === 1) {
         void materialize();
         return;
       }
-      if (matches.length > 1 || attempts >= 40) {
+      if (matches.length > 1 || attempts >= 120) {
         setState({
           phase: "error",
-          message: `Expected one rendered SVG after layout; found ${matches.length}.`,
+          message:
+            render === "completed"
+              ? `Expected one rendered SVG after layout; found ${matches.length}.`
+              : "The story did not finish rendering.",
         });
         return;
       }
@@ -160,7 +188,7 @@ function SvgMaterializer({
       cancelled = true;
       window.clearTimeout(timeoutId);
     };
-  }, [materialize, parameter.auto, parameter.selector]);
+  }, [materialize, parameter.auto, parameter.selector, storyId]);
 
   const status =
     state.phase === "saved"
@@ -197,6 +225,7 @@ export const withSvgMaterializer: Decorator = (Story, context) => {
     selector: parameter.selector,
     ...(auto === undefined ? {} : { auto }),
   };
+  trackRenders();
   return (
     <SvgMaterializer storyId={context.id} parameter={options}>
       <Story />

@@ -88,7 +88,7 @@ export function DagEdge({
         stroke={color}
         strokeWidth={strokeWidth}
         strokeDasharray={dashed ? "6,4" : undefined}
-        strokeOpacity={opacity}
+        opacity={opacity}
         strokeLinecap="round"
         markerEnd={markerEnd ? `url(#${mid})` : undefined}
         style={{ transition: "stroke 200ms, stroke-width 150ms" }}

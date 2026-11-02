@@ -18,17 +18,26 @@ export interface Point {
 
 export type DagDirection = "RIGHT" | "DOWN" | "LEFT" | "UP";
 
+/** A fixed point on its node's west side where edges end, measured from the node's top. */
+export interface DagLayoutPortInput {
+  id: string;
+  y: number;
+}
+
 export interface DagLayoutNodeInput {
   id: string;
   width: number;
   height: number;
   /** Per-node ELK options (e.g. partitions for the interactive glyph columns). */
   layoutOptions?: Record<string, string>;
+  /** Fixed west-side ports; edges may target a port id instead of the node. */
+  ports?: readonly DagLayoutPortInput[];
 }
 
 export interface DagLayoutEdgeInput {
   id: string;
   source: string;
+  /** A node id, or a port id of the target node. */
   target: string;
 }
 
@@ -97,7 +106,21 @@ export function buildElkGraph(input: DagGraphInput): ElkNode {
       id: n.id,
       width: n.width,
       height: n.height,
-      ...(n.layoutOptions ? { layoutOptions: n.layoutOptions } : {}),
+      ...(n.ports
+        ? {
+            layoutOptions: { ...n.layoutOptions, "elk.portConstraints": "FIXED_POS" },
+            ports: n.ports.map((port) => ({
+              id: port.id,
+              x: 0,
+              y: port.y,
+              width: 0,
+              height: 0,
+              layoutOptions: { "elk.port.side": "WEST" },
+            })),
+          }
+        : n.layoutOptions
+          ? { layoutOptions: n.layoutOptions }
+          : {}),
     })),
     edges: input.edges.map((e) => ({
       id: e.id,

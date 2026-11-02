@@ -17,10 +17,6 @@ export const DAG_COLORS = {
   slate: "#5b6470",
   /** do() intervention accent (blue). */
   intervention: "#2f6bf0",
-  /** Contemporaneous structural edge (static DAG). */
-  contemporaneous: "#5b6470",
-  /** Lagged (t−1) structural edge (static DAG). */
-  crossSlice: "#9aa0a8",
   /** Counterfactual 95% CrI fill. */
   tealSoft: "rgba(15,155,142,.16)",
   /** Baseline 95% CrI fill. */

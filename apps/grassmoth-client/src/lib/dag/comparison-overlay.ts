@@ -1,21 +1,14 @@
-import { modelEdges, presentEntries } from "@/lib/model-accessors";
+import { modelConstructs, modelEdges, presentEntries } from "@/lib/model-accessors";
 import type {
   ConstructId,
   ConstructSpec,
   DynamicalModelSpec,
+  EdgeId,
   ModelDiffOutput,
 } from "@grassmoth/api-types";
-import type { DagLayoutNode, Point } from "@/lib/utils/dag-graph-layout";
-import { modelConstructs } from "@/lib/model-accessors";
+import type { DagLayoutEdge, DagLayoutNode, Point } from "@/lib/utils/dag-graph-layout";
 import { humanize } from "@/lib/model-asset/selection";
-import { ghostId, isGhost } from "@/lib/dag/unroll";
-import {
-  LAYERED_NODE_HEIGHT,
-  LAYERED_NODE_WIDTH,
-  LAYERED_HISTORY_HEIGHT,
-  LAYERED_HISTORY_WIDTH,
-  type LayeredGraphBundle,
-} from "@/lib/dag/build-layered-causal-graph";
+import type { LayeredGraphBundle } from "@/lib/dag/build-layered-causal-graph";
 
 /** Saved spec changes joined to their original model values for presentation. */
 export type ModelComparison = ModelDiffOutput & {
@@ -34,15 +27,40 @@ interface DifferenceMark {
   detail: string;
 }
 
+/** The point halfway along a routed polyline. */
+function halfway(points: readonly Point[]): Point | undefined {
+  const segments = points.flatMap((to, index) => {
+    const from = points[index - 1];
+    return from ? [{ from, to, length: Math.hypot(to.x - from.x, to.y - from.y) }] : [];
+  });
+  let remaining = segments.reduce((sum, segment) => sum + segment.length, 0) / 2;
+  for (const { from, to, length } of segments) {
+    if (remaining <= length) {
+      const t = length === 0 ? 0 : remaining / length;
+      return { x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t };
+    }
+    remaining -= length;
+  }
+  return points.at(-1);
+}
+
 /** Place additions around the selected layout. Existing coordinates are never recomputed. */
 export function placeComparisonOverlay(
   comparison: ModelComparison | null,
   topology: LayeredGraphBundle,
-  nodes: DagLayoutNode[],
-  width: number,
-  height: number,
+  layout: { nodes: DagLayoutNode[]; edges: DagLayoutEdge[]; width: number; height: number },
 ) {
-  const positions = new Map(nodes.map((node) => [node.id, node]));
+  const positions = new Map(layout.nodes.map((node) => [node.id, node]));
+  const drawn = new Map<EdgeId, { points: Point[]; cause: ConstructId; effect: ConstructId }>();
+  for (const arrow of layout.edges) {
+    const meta = topology.arrowMeta.get(arrow.id);
+    if (meta && !drawn.has(meta.edge.id))
+      drawn.set(meta.edge.id, {
+        points: arrow.points,
+        cause: meta.cause.id,
+        effect: meta.effect.id,
+      });
+  }
   const beforeConstructs = new Map(
     (comparison ? modelConstructs(comparison.beforeDynamicalModelSpec) : []).map((item) => [
       item.id,
@@ -61,56 +79,42 @@ export function placeComparisonOverlay(
   const afterEdges = new Map(
     modelEdges(comparison?.afterDynamicalModelSpec).map((item) => [item.id, item]),
   );
-  const dynamicIds = new Set(
-    [...constructs.values()]
-      .filter((item) => item.temporal_status === "time_varying")
-      .map((item) => item.id),
-  );
-  const previousDynamicIds = new Set(
-    [...beforeConstructs.values()]
-      .filter((item) => item.temporal_status === "time_varying")
-      .map((item) => item.id),
-  );
-  const edgeChanges = new Map<string, Change>();
+  const edgeChanges = new Map<EdgeId, Change>();
   const constructChanges = new Map<ConstructId, Change>();
-  const addedNodes: Array<{ node: DagLayoutNode; construct: ConstructSpec; history: boolean }> = [];
-  const addedEdges: Array<{ id: string; points: Point[]; crossSlice: boolean }> = [];
+  const addedNodes: Array<{ node: DagLayoutNode; construct: ConstructSpec }> = [];
+  const addedEdges: Array<{ id: EdgeId; points: Point[] }> = [];
   const marks: DifferenceMark[] = [];
-  let overlayWidth = width,
-    overlayHeight = height;
+  let overlayWidth = layout.width,
+    overlayHeight = layout.height,
+    nextY = 20;
 
-  const addNode = (construct: ConstructSpec, history = false) => {
-    const id = history ? ghostId(construct.id) : construct.id;
-    const existing = positions.get(id);
+  const addNode = (construct: ConstructSpec) => {
+    const existing = positions.get(construct.id);
     if (existing) return existing;
+    const size = topology.density.state;
     const node = {
-      id,
-      x: width + 60,
-      y: 20 + addedNodes.length * (LAYERED_NODE_HEIGHT + 40),
-      width: history ? LAYERED_HISTORY_WIDTH : LAYERED_NODE_WIDTH,
-      height: history ? LAYERED_HISTORY_HEIGHT : LAYERED_NODE_HEIGHT,
+      id: construct.id,
+      x: layout.width + 60,
+      y: nextY,
+      width: size.width,
+      height: size.height,
     };
-    positions.set(id, node);
-    addedNodes.push({ node, construct, history });
+    nextY += size.height + 40;
+    positions.set(construct.id, node);
+    addedNodes.push({ node, construct });
     overlayWidth = Math.max(overlayWidth, node.x + node.width);
     overlayHeight = Math.max(overlayHeight, node.y + node.height);
     return node;
   };
-  const addEdge = (
-    id: string,
-    source: DagLayoutNode,
-    target: DagLayoutNode,
-    crossSlice: boolean,
-  ) => {
+  const addEdge = (id: EdgeId, source: DagLayoutNode, target: DagLayoutNode) => {
     const start = { x: source.x + source.width, y: source.y + source.height / 2 };
     const end = { x: target.x, y: target.y + target.height / 2 };
     const middle = (start.x + end.x) / 2;
     addedEdges.push({
       id,
-      crossSlice,
       points: [start, { x: middle, y: start.y }, { x: middle, y: end.y }, end],
     });
-    return { id, x: middle, y: (start.y + end.y) / 2, width: 0, height: 0 };
+    return { x: middle, y: (start.y + end.y) / 2 };
   };
   for (const [id, patch] of presentEntries(comparison?.changes.constructs ?? {})) {
     const change = patch === null ? "removed" : beforeConstructs.has(id) ? "revised" : "added";
@@ -119,15 +123,6 @@ export function placeComparisonOverlay(
     if (!definition) throw new Error(`Compared construct ${id} is missing from its model`);
     const node = change === "added" ? addNode(definition) : positions.get(id);
     if (!node) continue;
-    if (change !== "removed") {
-      if (dynamicIds.has(id) && !previousDynamicIds.has(id)) {
-        const source = addNode(definition, true);
-        addEdge(`self:${id}`, source, node, true);
-      }
-    }
-    if (previousDynamicIds.has(id) && !dynamicIds.has(id)) {
-      edgeChanges.set(`self:${id}`, "removed");
-    }
     marks.push({
       id: id,
       x: node.x + node.width,
@@ -142,30 +137,24 @@ export function placeComparisonOverlay(
     edgeChanges.set(id, change);
     const definition = (change === "removed" ? beforeEdges : afterEdges).get(id);
     if (!definition) throw new Error(`Compared edge ${id} is missing from its model`);
-    const existing = topology.edgeMeta.get(id);
-    let anchor = existing ? positions.get(existing.slotId) : undefined;
-    if (change !== "removed") {
-      const cause = constructs.get(definition.cause.id);
+    const arrow = drawn.get(id);
+    let anchor = arrow ? halfway(arrow.points) : undefined;
+    const moved =
+      arrow !== undefined &&
+      (arrow.cause !== definition.cause.id || arrow.effect !== definition.effect.id);
+    if (change !== "removed" && (!arrow || moved)) {
+      const source = positions.get(definition.cause.id);
       const target = positions.get(definition.effect.id);
-      const source = cause
-        ? dynamicIds.has(cause.id)
-          ? addNode(cause, true)
-          : positions.get(cause.id)
-        : undefined;
-      if (
-        source &&
-        target &&
-        (!existing || existing.source !== source.id || existing.target !== target.id)
-      ) {
-        if (existing) edgeChanges.set(id, "removed");
-        anchor = addEdge(id, source, target, isGhost(source.id));
+      if (source && target) {
+        if (moved) edgeChanges.set(id, "removed");
+        anchor = addEdge(id, source, target);
       }
     }
     if (anchor)
       marks.push({
         id: id,
-        x: anchor.x + anchor.width / 2,
-        y: anchor.y + anchor.height / 2,
+        x: anchor.x,
+        y: anchor.y,
         change: change,
         title: `${humanize(change)} connection`,
         detail: definition.description,

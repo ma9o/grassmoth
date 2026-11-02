@@ -27,7 +27,6 @@ import { VersionScrubber } from "./version-scrubber";
 
 export interface CausalModelAssetViewProps {
   workspaceId: string;
-  question: string | undefined;
   useSnapshot: SnapshotReader;
   attempts: readonly TimelineRevision[];
   dependencies: StudyJournal["dependencies"];
@@ -63,7 +62,7 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
           <Link href="/" className="text-sm font-semibold">
             Grassmoth
           </Link>
-          <p className="text-sm">{props.question ?? props.workspaceId}</p>
+          <p className="text-sm">{props.workspaceId}</p>
         </header>
         <VersionScrubber
           ticks={props.attempts}
@@ -110,7 +109,6 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
 function ModelRevision({
   useSnapshot,
   workspaceId,
-  question: initialQuestion,
   attempts,
   dependencies,
   useActionTrace,
@@ -149,7 +147,6 @@ function ModelRevision({
   } = useWorkbench({
     useSnapshot,
     workspaceId,
-    question: initialQuestion,
     attempts,
     modelSnapshot,
     focusSeq,
@@ -307,7 +304,6 @@ function ModelRevision({
                   selection={selection}
                   onSelect={select}
                   comparison={modelComparison}
-                  variant="asset"
                 />
               ) : (
                 <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
@@ -355,11 +351,9 @@ function ModelRevision({
 /** The workbench reads semantic snapshots, committed history and recorded traces. */
 export function CausalModelAsset({
   workspaceId,
-  question,
   journal,
 }: {
   workspaceId: string;
-  question: string | undefined;
   journal: StudyJournal;
 }) {
   const useSnapshot = useMemo(
@@ -391,7 +385,6 @@ export function CausalModelAsset({
   return (
     <CausalModelAssetView
       workspaceId={workspaceId}
-      question={question}
       useSnapshot={useSnapshot}
       attempts={journal.attempts}
       dependencies={journal.dependencies}

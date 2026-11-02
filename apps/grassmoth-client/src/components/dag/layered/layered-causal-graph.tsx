@@ -1,7 +1,5 @@
 "use client";
 
-import { causalEffect } from "@/lib/simulation-report";
-
 import type { SimulationPathsView } from "@/lib/model-asset/result-values";
 import type { DataComparisonView } from "@/lib/model-asset/data-comparison";
 
@@ -12,29 +10,22 @@ import type {
   StateAssignment,
   ActionId,
 } from "@grassmoth/api-types";
-import { Pause, Play } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import { DrawsChart } from "@/components/charts/draws-chart";
 import { CHART_COLORS, cssColor } from "@/components/charts/chart-tokens";
 import { extentOf, linearScale, padDomain } from "@/components/charts/plot-geometry";
 import { ProfileMarks, profileDomain, profileSummary } from "@/components/charts/profile-strip";
 import { dataComparisonChart, pathLayers } from "@/components/charts/series-adapters";
-import { Button } from "@/components/ui/button";
-import {
-  LAYERED_EDGE_SLOT_HEIGHT,
-  LAYERED_EDGE_SLOT_WIDTH,
-  LAYERED_HISTORY_HEIGHT,
-  LAYERED_HISTORY_WIDTH,
-  LAYERED_NODE_HEIGHT,
-  LAYERED_NODE_WIDTH,
-  type LayeredGraphEdgeMeta,
-} from "@/lib/dag/build-layered-causal-graph";
+import type { GraphDensity, MechanismRow } from "@/lib/dag/build-layered-causal-graph";
 import type { ConstructStatus } from "@/lib/dag/construct-statuses";
-import { boundsForBand, type CausalGraphLayerId } from "@/lib/dag/layered-model";
 import { BLOCKING, COMPARISON_COLORS, DAG_COLORS, LATENT } from "@/lib/dag/palette";
-import { type LayeredGraphOptions, useLayeredGraph } from "@/lib/dag/use-layered-graph";
+import {
+  CANVAS_PADDING,
+  type LayeredGraphOptions,
+  useLayeredGraph,
+} from "@/lib/dag/use-layered-graph";
 import { entityFailures } from "@/lib/model-asset/inspector";
-import type { EntitySelection } from "@/lib/model-asset/selection";
+import { mechanismName, type EntitySelection } from "@/lib/model-asset/selection";
 import { FlowChart } from "@/components/charts/flow-chart";
 import { modelFlowPlots, type FlowPlot } from "@/lib/model-asset/flow-plots";
 import { formatModelDate, formatSignificant } from "@/lib/utils/format";
@@ -44,30 +35,12 @@ import { DagNodeShell } from "../core/dag-node";
 import { DagZoomControls } from "../core/dag-zoom-controls";
 import { LayeredComparisonOverlay } from "./layered-comparison-overlay";
 
-const CANVAS_PADDING = 36;
-
-const LAYER_LABELS: Record<CausalGraphLayerId, string> = {
-  structure: "Structure",
-  measurement: "Measurement",
-  design: "Design",
-  specification: "Specification",
-  fit: "Fit",
-  simulation: "Simulation",
-};
-
-export type LayeredCausalGraphVariant = "workbench" | "asset";
-
 export interface LayeredCausalGraphProps extends LayeredGraphOptions {
   simulationPaths?: SimulationPathsView | null;
   dataDiff?: DataComparisonView | null;
   onSelect: (selection: EntitySelection | null) => void;
   /** The action whose version is viewed; a data preparation shows each node's prepared data. */
   step?: ActionId | null;
-  /**
-   * `workbench` keeps the layer toggles, simulation timeline and legend around the canvas;
-   * `asset` renders the canvas alone, filling its container, with only the zoom control.
-   */
-  variant?: LayeredCausalGraphVariant;
 }
 
 function humanize(value: string): string {
@@ -99,18 +72,22 @@ function statusLabel(status: ConstructStatus | undefined): string | null {
 
 function LayerPill({
   x,
+  y,
   label,
   color,
   description,
+  minWidth,
 }: {
   x: number;
+  y: number;
   label: string;
   color: string;
   description?: string;
+  minWidth?: number;
 }) {
-  const width = Math.max(38, label.length * 5.3 + 14);
+  const width = pillWidth(label, minWidth);
   return (
-    <g transform={`translate(${x - width},8)`} role="img" aria-label={description ?? label}>
+    <g transform={`translate(${x - width},${y})`} role="img" aria-label={description ?? label}>
       <title>{description ?? label}</title>
       <rect width={width} height={17} rx={8.5} fill={color} fillOpacity={0.11} />
       <text x={width / 2} y={11.5} textAnchor="middle" fontSize={7.5} fontWeight={650} fill={color}>
@@ -120,19 +97,75 @@ function LayerPill({
   );
 }
 
+const pillWidth = (label: string, minWidth = 38) => Math.max(minWidth, label.length * 5.3 + 14);
+
+/** A chip has room for the count alone; the dated list stays in its description. */
+const CHIP_PILL_WIDTH = 20;
+
+/** The construct's own findings, as one mark. */
+function WarningMark({ x, y, failures }: { x: number; y: number; failures: readonly string[] }) {
+  if (failures.length === 0) return null;
+  return (
+    <g role="img" aria-label={failures.join("; ")} transform={`translate(${x},${y})`}>
+      <title>{failures.join("\n")}</title>
+      <path d="M0 11 L6 0 L12 11 Z" fill="var(--card)" stroke="var(--warning-foreground)" />
+      <text x={6} y={9} textAnchor="middle" fontSize={8} fill="var(--warning-foreground)">
+        !
+      </text>
+    </g>
+  );
+}
+
+/** Follows a time-varying construct's name: its state carries over from one moment to the next. */
+function CarryMark({ construct, size }: { construct: ConstructSpec; size: number }) {
+  return construct.temporal_status === "time_varying" ? (
+    <tspan dx={4} fontSize={size} fontWeight={400} fill={DAG_COLORS.muted}>
+      <title>time varying</title>↻
+    </tspan>
+  ) : null;
+}
+
 function assignmentLabel(event: StateAssignment, timeOrigin: string): string {
   return `${formatModelDate(event.time, timeOrigin)} (day ${event.time}): set to ${event.value}`;
 }
 
-/** The card's chart strip, below its title. */
-const STRIP = { x: 14, top: 36, width: LAYERED_NODE_WIDTH - 28, height: 64 } as const;
-/** One row per law or indicator: label, value, then its chart. */
-const STRIP_ROW = { height: 21, value: 108, plot: 114 } as const;
+/** One row per law or indicator in a card's chart strip. */
 const STRIP_ROWS = 3;
-const rowTop = (index: number) => STRIP.top + index * STRIP_ROW.height;
+
+/** Where a card's own column draws its title, chart strip and indicator rows, at one density. */
+function stateGeometry(density: GraphDensity) {
+  const rich = density.key === "rich";
+  const { width, title, strip, indicator, height } = density.state;
+  const x = rich ? 14 : 12;
+  const stripWidth = width - 2 * x;
+  return {
+    width,
+    height,
+    title: { band: title, y: rich ? 24 : 19, size: rich ? 13 : 11.5, length: rich ? 29 : 24 },
+    pillY: rich ? 8 : 5,
+    strip: { x, top: title, width: stripWidth, height: strip },
+    row: {
+      height: strip / STRIP_ROWS,
+      value: Math.round(stripWidth * 0.4865),
+      plot: Math.round(stripWidth * 0.5135),
+    },
+    indicator: {
+      top: title + strip + 4,
+      height: indicator,
+      chart: Math.round(width * 0.52),
+      length: rich ? 21 : 17,
+    },
+  };
+}
+type StateGeometry = ReturnType<typeof stateGeometry>;
+type Box = StateGeometry["strip"];
+
+const rowTop = (geometry: StateGeometry, index: number) =>
+  geometry.strip.top + index * geometry.row.height;
 
 /** One labelled row of a card's chart strip; its chart sits right of the value. */
 function StripRow({
+  geometry,
   index,
   title,
   label,
@@ -141,6 +174,7 @@ function StripRow({
   range,
   children,
 }: {
+  geometry: StateGeometry;
   index: number;
   title: string;
   label: string;
@@ -150,18 +184,20 @@ function StripRow({
   range?: readonly [number, number];
   children: ReactNode;
 }) {
-  const top = rowTop(index);
-  const bottom = top + STRIP_ROW.height - 0.5;
+  const { strip, row } = geometry;
+  const top = rowTop(geometry, index);
+  const baseline = top + Math.round(row.height * 0.52);
+  const bottom = top + row.height - 0.5;
   return (
     <g role="img" aria-label={title}>
       <title>{title}</title>
-      <rect x={STRIP.x} y={top} width={STRIP.width} height={STRIP_ROW.height} fill="transparent" />
-      <text x={STRIP.x} y={top + 11} fontSize={7.5} fontWeight={600} fill={DAG_COLORS.slate}>
+      <rect x={strip.x} y={top} width={strip.width} height={row.height} fill="transparent" />
+      <text x={strip.x} y={baseline} fontSize={7.5} fontWeight={600} fill={DAG_COLORS.slate}>
         {truncate(label, 17)}
       </text>
       <text
-        x={STRIP.x + STRIP_ROW.value}
-        y={top + 11}
+        x={strip.x + row.value}
+        y={baseline}
         textAnchor="end"
         fontSize={7.5}
         fontFamily="ui-monospace, monospace"
@@ -172,11 +208,11 @@ function StripRow({
       {children}
       {range ? (
         <>
-          <text x={STRIP.x + STRIP_ROW.plot} y={bottom} fontSize={5.5} fill={DAG_COLORS.muted}>
+          <text x={strip.x + row.plot} y={bottom} fontSize={5.5} fill={DAG_COLORS.muted}>
             {formatSignificant(range[0])}
           </text>
           <text
-            x={STRIP.x + STRIP.width}
+            x={strip.x + strip.width}
             y={bottom}
             textAnchor="end"
             fontSize={5.5}
@@ -191,11 +227,11 @@ function StripRow({
 }
 
 /** Rows past the strip stay in the inspector. */
-function StripOverflow({ hidden }: { hidden: number }) {
+function StripOverflow({ geometry, hidden }: { geometry: StateGeometry; hidden: number }) {
   return hidden > 0 ? (
     <text
-      x={LAYERED_NODE_WIDTH - 8}
-      y={LAYERED_NODE_HEIGHT - 4}
+      x={geometry.width - 8}
+      y={geometry.height - 4}
       textAnchor="end"
       fontSize={6.5}
       fill={DAG_COLORS.muted}
@@ -207,17 +243,19 @@ function StripOverflow({ hidden }: { hidden: number }) {
 
 /** Dated markers drawn by the card itself, so each keeps its own label at any zoom. */
 function CardMarkers({
+  box,
   times,
   markers,
 }: {
+  box: Box;
   times: readonly number[];
   markers: readonly { time: number; label: string }[];
 }) {
   const domain = extentOf(times);
   if (!domain || markers.length === 0) return null;
   const x = linearScale(domain[0] === domain[1] ? padDomain(domain) : domain, [
-    STRIP.x + 1,
-    STRIP.x + STRIP.width - 1,
+    box.x + 1,
+    box.x + box.width - 1,
   ]);
   return (
     <g pointerEvents="none">
@@ -227,8 +265,8 @@ function CardMarkers({
           <line
             x1={x(marker.time)}
             x2={x(marker.time)}
-            y1={STRIP.top}
-            y2={STRIP.top + STRIP.height}
+            y1={box.top}
+            y2={box.top + box.height}
             stroke={cssColor(CHART_COLORS.intervened)}
             strokeDasharray="3 3"
             strokeWidth={0.8}
@@ -241,8 +279,10 @@ function CardMarkers({
 
 /** A node's prepared indicators: observation counts and their profile strips. */
 function DataStrip({
+  geometry,
   rows,
 }: {
+  geometry: StateGeometry;
   rows: Array<{ indicator: IndicatorSpec; profile: IndicatorEmpiricalProfile }>;
 }) {
   const shown = rows.slice(0, STRIP_ROWS);
@@ -254,6 +294,7 @@ function DataStrip({
         return (
           <StripRow
             key={indicator.observation.id}
+            geometry={geometry}
             index={index}
             title={`${name} · ${profileSummary(profile)}`}
             label={name}
@@ -266,43 +307,54 @@ function DataStrip({
                 profile={profile}
                 values={[]}
                 x={linearScale(padDomain(domain, 0.02), [
-                  STRIP.x + STRIP_ROW.plot,
-                  STRIP.x + STRIP.width,
+                  geometry.strip.x + geometry.row.plot,
+                  geometry.strip.x + geometry.strip.width,
                 ])}
-                top={rowTop(index) + 2}
-                height={12}
+                top={rowTop(geometry, index) + 2}
+                height={Math.max(6, geometry.row.height - 9)}
               />
             )}
           </StripRow>
         );
       })}
-      <StripOverflow hidden={rows.length - shown.length} />
+      <StripOverflow geometry={geometry} hidden={rows.length - shown.length} />
     </g>
   );
 }
 
 function ConstructCard({
   construct,
+  width,
+  height,
+  rowsWidth,
+  geometry,
   isOutcome,
   failures,
   status,
-  children,
   assignments,
   timeOrigin,
   selected,
   dimmed,
   onSelect,
+  rows,
+  children,
 }: {
   construct: ConstructSpec;
+  width: number;
+  height: number;
+  /** Width of the mechanism rows' column, left of the construct's own column. */
+  rowsWidth: number;
+  geometry: StateGeometry;
   isOutcome: boolean;
   failures: string[];
   status: ConstructStatus | undefined;
-  children: ReactNode;
   assignments: readonly StateAssignment[];
   timeOrigin: string | null;
   selected: boolean;
   dimmed: boolean;
   onSelect: () => void;
+  rows: ReactNode;
+  children: ReactNode;
 }) {
   const label = statusLabel(status);
   const hasAssignments = assignments.length > 0;
@@ -318,6 +370,8 @@ function ConstructCard({
       : status === "latent"
         ? LATENT
         : DAG_COLORS.slate;
+  const title = `${isOutcome ? "★ " : ""}${truncate(humanize(construct.name), geometry.title.length)}`;
+  const { band, y, size } = geometry.title;
 
   return (
     <g
@@ -330,17 +384,23 @@ function ConstructCard({
       onKeyDown={(event) => activateOnKeyboard(event, onSelect)}
     >
       <DagNodeShell
-        width={LAYERED_NODE_WIDTH}
-        height={LAYERED_NODE_HEIGHT}
-        title={`${isOutcome ? "★ " : ""}${truncate(humanize(construct.name), 29)}`}
+        width={width}
+        height={height}
         {...(shellAccent === undefined ? {} : { accent: shellAccent })}
         dashed={status === "latent"}
         highlighted={selected}
         outcome={isOutcome}
-      >
+      />
+      {rows}
+      <g transform={`translate(${rowsWidth},0)`}>
+        <text x={geometry.strip.x} y={y} fontSize={size} fontWeight={650} fill="var(--foreground)">
+          {title}
+          <CarryMark construct={construct} size={size - 2} />
+        </text>
         {badge ? (
           <LayerPill
-            x={LAYERED_NODE_WIDTH - 8}
+            x={geometry.width - 8}
+            y={geometry.pillY}
             label={badge}
             color={badgeColor}
             {...(hasAssignments && timeOrigin !== null
@@ -353,159 +413,108 @@ function ConstructCard({
           />
         ) : null}
         {children}
-        {failures.length > 0 ? (
-          <g role="img" aria-label={failures.join("; ")}>
-            <title>{failures.join("\n")}</title>
-            <path
-              d="M235 37 L241 26 L247 37 Z"
-              fill="none"
-              stroke="var(--warning-foreground)"
-              strokeWidth={1.2}
-            />
-            <text x={241} y={35} textAnchor="middle" fontSize={8} fill="var(--warning-foreground)">
-              !
-            </text>
-          </g>
-        ) : null}
-      </DagNodeShell>
+        <WarningMark x={geometry.width - 15} y={band - 10} failures={failures} />
+      </g>
     </g>
   );
 }
 
-function HistoryCard({
-  construct,
-  status,
-  dimmed,
+/** One mechanism as a row of the card it drives: its name, then its output for the viewed state. */
+function MechanismRowView({
+  row,
+  density,
+  plot,
+  description,
+  failures,
+  zoom,
   selected,
+  dimmed,
   onSelect,
+  onHover,
 }: {
-  construct: ConstructSpec;
-  status: ConstructStatus | undefined;
-  dimmed: boolean;
+  row: MechanismRow;
+  density: GraphDensity;
+  plot: FlowPlot | undefined;
+  description: string;
+  failures: readonly string[];
+  zoom: number;
   selected: boolean;
+  dimmed: boolean;
   onSelect: () => void;
+  onHover: (hovered: boolean) => void;
 }) {
-  const accent = selected ? "var(--primary)" : statusAccent(status);
+  const rich = density.key === "rich";
+  const { width, height } = density.row;
+  const name = mechanismName(row.mechanism.id);
+  const chartTop = rich ? 17 : 12;
   return (
     <g
-      opacity={dimmed ? 0.13 : 0.45}
+      transform={`translate(0,${row.top})`}
+      opacity={dimmed ? 0.25 : 1}
       role="button"
-      aria-label={`${humanize(construct.name)} at the previous time`}
       tabIndex={0}
+      aria-label={`Mechanism ${name}`}
+      data-mechanism-id={row.mechanism.id}
       style={{ cursor: "pointer" }}
-      onClick={onSelect}
-      onKeyDown={(event) => activateOnKeyboard(event, onSelect)}
+      onClick={(event) => {
+        event.stopPropagation();
+        onSelect();
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        activateOnKeyboard(event, onSelect);
+      }}
+      onPointerEnter={() => onHover(true)}
+      onPointerLeave={() => onHover(false)}
     >
-      <DagNodeShell
-        width={LAYERED_HISTORY_WIDTH}
-        height={LAYERED_HISTORY_HEIGHT}
-        title={truncate(humanize(construct.name), 20)}
-        {...(accent === undefined ? {} : { accent })}
-        dashed
-        highlighted={selected}
-      />
-    </g>
-  );
-}
-
-function EdgeSlot({
-  meta,
-  plot,
-  color,
-  dimmed,
-  simulation,
-}: {
-  meta: LayeredGraphEdgeMeta;
-  plot: FlowPlot | undefined;
-  color: string;
-  dimmed: boolean;
-  simulation: boolean;
-}) {
-  if (!plot)
-    return (
-      <line
-        x1={0}
-        x2={LAYERED_EDGE_SLOT_WIDTH}
-        y1={LAYERED_EDGE_SLOT_HEIGHT / 2}
-        y2={LAYERED_EDGE_SLOT_HEIGHT / 2}
-        stroke={color}
-        strokeWidth={1.2}
-        opacity={dimmed ? 0.12 : 1}
-      />
-    );
-  return (
-    <g opacity={dimmed ? 0.12 : 1}>
-      <title>{`${plot.label}: ${plot.kind === "draws" ? plot.note : plot.reason}`}</title>
+      <title>{description}</title>
       <rect
-        width={LAYERED_EDGE_SLOT_WIDTH}
-        height={LAYERED_EDGE_SLOT_HEIGHT}
-        rx={8}
-        fill="var(--card)"
-        stroke={color}
-        strokeOpacity={0.55}
+        x={4}
+        y={1.5}
+        width={width - 8}
+        height={height - 3}
+        rx={6}
+        fill={DAG_COLORS.col}
+        stroke={selected ? "var(--primary)" : DAG_COLORS.line}
+        strokeWidth={selected ? 1.6 : 0.8}
       />
-      <foreignObject
-        x={6}
-        y={4}
-        width={LAYERED_EDGE_SLOT_WIDTH - 12}
-        height={LAYERED_EDGE_SLOT_HEIGHT - 18}
-        pointerEvents="none"
-      >
-        <FlowChart plot={plot} height={LAYERED_EDGE_SLOT_HEIGHT - 18} compact />
-      </foreignObject>
       <text
-        x={LAYERED_EDGE_SLOT_WIDTH / 2}
-        y={LAYERED_EDGE_SLOT_HEIGHT - 5}
-        textAnchor="middle"
-        fontSize={7}
+        x={10}
+        y={rich ? 12.5 : 9.5}
+        fontSize={rich ? 8 : 7}
+        fontWeight={600}
         fill={DAG_COLORS.slate}
       >
-        {simulation ? "Model drift" : meta.isSelf ? "Intrinsic drift" : "Drift contribution"}
+        {truncate(name, rich ? 31 : 26)}
       </text>
+      <foreignObject
+        x={8}
+        y={chartTop}
+        width={width - 24}
+        height={height - chartTop - 4}
+        pointerEvents="none"
+      >
+        {plot && <FlowChart plot={plot} height={height - chartTop - 4} compact resolution={zoom} />}
+      </foreignObject>
+      <path
+        d={`M${width - 9} ${height / 2 - 4} l4 4 l-4 4`}
+        fill="none"
+        stroke={DAG_COLORS.muted}
+        strokeWidth={1.2}
+      />
+      <WarningMark x={width - 22} y={3} failures={failures} />
     </g>
-  );
-}
-
-function LayerControls({
-  available,
-  visible,
-  onToggle,
-}: {
-  available: CausalGraphLayerId[];
-  visible: ReadonlySet<CausalGraphLayerId>;
-  onToggle: (layer: CausalGraphLayerId) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-1.5" aria-label="Causal graph layers">
-      {available.map((layer, index) => {
-        const active = visible.has(layer);
-        return (
-          <button
-            key={layer}
-            type="button"
-            disabled={layer === "structure"}
-            aria-pressed={active}
-            onClick={() => onToggle(layer)}
-            className={`rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors ${
-              active
-                ? "border-slate-500 bg-slate-800 text-white"
-                : "border-slate-200 bg-white text-slate-400"
-            } disabled:cursor-default disabled:opacity-100`}
-          >
-            {`${index + 1} · ${LAYER_LABELS[layer]}`}
-          </button>
-        );
-      })}
-    </div>
   );
 }
 
 /**
- * The state the selected action left, one part at a glance. Each construct and edge shows its
- * current laws or posteriors, its prepared data or its simulated draws, and a single mark when a
- * check on it failed. The details pane holds the depth. A data_diff leaf overlays every saved
- * replicate and the observations on indicator rows, or marks added, removed and revised
- * observations in comparison colours. Latent-only constructs and edges recede.
+ * The state the selected action left, one part at a glance. Each construct is a card whose
+ * mechanism rows feed its own column, and each edge ends on the rows that read its cause.
+ * Exogenous constructs are chips with their path. Cards show current laws or posteriors,
+ * prepared data or simulated draws, and a single mark when a check on them failed; the details
+ * pane holds the depth. A data_diff leaf overlays every saved replicate and the observations on
+ * indicator rows, or marks added, removed and revised observations in comparison colours.
+ * Latent-only constructs and edges recede.
  */
 export function LayeredCausalGraph({
   modelSnapshot,
@@ -517,114 +526,414 @@ export function LayeredCausalGraph({
   selection,
   onSelect,
   step = null,
-  variant = "workbench",
 }: LayeredCausalGraphProps) {
   const {
-    available,
     visible,
-    hoveredEdge,
-    setHoveredEdge,
+    setHovered,
     zoom,
     setZoom,
+    fitToPane,
     paneRef,
-    paneWidth,
+    pane,
+    outcome,
     topology,
     nodes,
-    routedSegments,
+    arrows,
     width,
     isLayouting,
     difference,
-    designVisible,
-    fitVisible,
-    simulationVisible,
     nodeStatuses,
     indicatorsByConstruct,
     simulationResult,
-    days,
-    clampedDayIndex,
-    setDayIndex,
-    playing,
-    setPlaying,
-    currentDay,
-    selectedNeighborhood,
-    graphBands,
-    toggleLayer,
+    focused,
     edgeVisual,
   } = useLayeredGraph({ modelSnapshot, entities, simulation, comparison, selection });
+  const { density } = topology;
+  const geometry = stateGeometry(density);
   const selectedNode = selection?.kind === "construct" ? selection.id : null;
   const flows =
     modelSnapshot.dynamical_model_spec && (visible.has("specification") || visible.has("fit"))
       ? modelFlowPlots(modelSnapshot.dynamical_model_spec)
       : null;
+  const name = (id: ConstructSpec["id"]) => humanize(entities.constructById.get(id)?.name ?? id);
+  const firstArrow = new Set<string>();
+
+  /** What a construct shows for the viewed state: its data, draws or laws. */
+  const compared = (construct: ConstructSpec) =>
+    dataDiff !== null &&
+    construct.indicators.some((indicator) =>
+      dataDiff.variables.some((variable) => variable.indicator_id === indicator.observation.id),
+    );
+  const preparedRows = (construct: ConstructSpec) =>
+    step === "prepare_data"
+      ? (indicatorsByConstruct.get(construct.id) ?? []).flatMap((indicator) => {
+          const profile = modelSnapshot.profile?.indicators[indicator.observation.id]?.profile;
+          return profile ? [{ indicator, profile }] : [];
+        })
+      : [];
+  const assignmentsOf = (construct: ConstructSpec) =>
+    simulationResult?.evidence.assignments.filter((event) => event.target === construct.id) ?? [];
+  const markersOf = (assignments: readonly StateAssignment[]) =>
+    simulationResult
+      ? assignments.map((event) => ({
+          time: event.time,
+          label: assignmentLabel(event, simulationResult.evidence.time_origin),
+        }))
+      : [];
+  const selectIndicator = (id: IndicatorSpec["observation"]["id"]) => () =>
+    onSelect({ kind: "indicator", id });
+
+  /** The construct's own column: its prepared data, simulated draws or laws, then its readings. */
+  const stateColumn = (construct: ConstructSpec, assignments: readonly StateAssignment[]) => {
+    const nodeIndicators = indicatorsByConstruct.get(construct.id) ?? [];
+    const series = simulationPaths?.states[construct.id];
+    const statePlot = flows?.constructs.get(construct.id);
+    const prepared = preparedRows(construct);
+    return (
+      <>
+        {dataDiff ? (
+          <>
+            {nodeIndicators.slice(0, STRIP_ROWS).map((indicator, index) => {
+              const variable = dataDiff.variables.find(
+                (item) => item.indicator_id === indicator.observation.id,
+              );
+              const evaluation = variable?.predictive?.evaluation ?? null;
+              const failures = (
+                evaluation && !("kind" in evaluation) ? evaluation.findings : []
+              ).filter((finding) => finding.kind !== "evaluated" || finding.outcome !== "passed");
+              const select = selectIndicator(indicator.observation.id);
+              return (
+                <g
+                  key={indicator.observation.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`${humanize(indicator.observation.name)} comparison`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    select();
+                  }}
+                  onKeyDown={(event) => {
+                    event.stopPropagation();
+                    activateOnKeyboard(event, select);
+                  }}
+                >
+                  <StripRow
+                    geometry={geometry}
+                    index={index}
+                    title={
+                      failures
+                        .map((finding) =>
+                          finding.kind === "evaluated" ? finding.evidence.note : finding.detail,
+                        )
+                        .join("; ") || humanize(indicator.observation.name)
+                    }
+                    label={humanize(indicator.observation.name)}
+                    value={failures.length ? "⚠" : ""}
+                    valueTone="var(--warning-foreground)"
+                  >
+                    {variable && (
+                      <foreignObject
+                        x={geometry.strip.x + geometry.row.plot}
+                        y={rowTop(geometry, index)}
+                        width={geometry.strip.width - geometry.row.plot}
+                        height={geometry.row.height - 2}
+                        pointerEvents="none"
+                      >
+                        <DrawsChart
+                          {...dataComparisonChart(variable)}
+                          height={geometry.row.height - 2}
+                          resolution={zoom}
+                          compact
+                        />
+                      </foreignObject>
+                    )}
+                  </StripRow>
+                </g>
+              );
+            })}
+            <StripOverflow geometry={geometry} hidden={nodeIndicators.length - STRIP_ROWS} />
+          </>
+        ) : series ? (
+          <>
+            <CardMarkers
+              box={geometry.strip}
+              times={simulationPaths.times}
+              markers={markersOf(assignments)}
+            />
+            <foreignObject
+              x={geometry.strip.x}
+              y={geometry.strip.top}
+              width={geometry.strip.width}
+              height={geometry.strip.height}
+              pointerEvents="none"
+            >
+              <DrawsChart
+                compact
+                height={geometry.strip.height}
+                resolution={zoom}
+                times={simulationPaths.times}
+                timeOrigin={simulationPaths.time_origin}
+                layers={pathLayers(series, "both", false)}
+                frame={series.frame}
+                levels={series.levels}
+                label={`${humanize(series.label)}: ${series.action.length} individual simulation draws`}
+              />
+            </foreignObject>
+          </>
+        ) : prepared.length > 0 ? (
+          <DataStrip geometry={geometry} rows={prepared} />
+        ) : (
+          <foreignObject
+            x={geometry.strip.x}
+            y={geometry.strip.top}
+            width={geometry.strip.width}
+            height={geometry.strip.height}
+            pointerEvents="none"
+          >
+            {statePlot && (
+              <FlowChart
+                plot={statePlot}
+                height={geometry.strip.height}
+                compact
+                resolution={zoom}
+              />
+            )}
+          </foreignObject>
+        )}
+        {!dataDiff &&
+          prepared.length === 0 &&
+          nodeIndicators.slice(0, 2).map((indicator, index) => {
+            const id = indicator.observation.id;
+            const readings = simulationPaths?.indicators[id];
+            const plot = flows?.indicators.get(id);
+            const select = selectIndicator(id);
+            const top = geometry.indicator.top + index * geometry.indicator.height;
+            return (
+              <g
+                key={id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${humanize(indicator.observation.name)} reading law`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  select();
+                }}
+                onKeyDown={(event) => {
+                  event.stopPropagation();
+                  activateOnKeyboard(event, select);
+                }}
+              >
+                <title>
+                  {readings
+                    ? `${humanize(readings.label)}: saved simulation readings`
+                    : plot
+                      ? `${plot.label}: ${plot.kind === "draws" ? plot.note : plot.reason}`
+                      : indicator.observation.name}
+                </title>
+                <text
+                  x={geometry.strip.x}
+                  y={top + Math.round(geometry.indicator.height * 0.52)}
+                  fontSize={7}
+                  fill={DAG_COLORS.slate}
+                >
+                  {truncate(humanize(indicator.observation.name), geometry.indicator.length)}
+                </text>
+                <foreignObject
+                  x={geometry.indicator.chart}
+                  y={top}
+                  width={geometry.width - geometry.strip.x - geometry.indicator.chart}
+                  height={geometry.indicator.height - 3}
+                  pointerEvents="none"
+                >
+                  {readings ? (
+                    <DrawsChart
+                      compact
+                      height={geometry.indicator.height - 3}
+                      resolution={zoom}
+                      times={simulationPaths.times}
+                      timeOrigin={simulationPaths.time_origin}
+                      layers={pathLayers(readings, "both", true)}
+                      levels={readings.levels}
+                      label={`${humanize(readings.label)}: saved readings`}
+                    />
+                  ) : plot ? (
+                    <FlowChart
+                      plot={plot}
+                      height={geometry.indicator.height - 3}
+                      compact
+                      resolution={zoom}
+                    />
+                  ) : null}
+                </foreignObject>
+              </g>
+            );
+          })}
+        {!dataDiff && prepared.length === 0 && (
+          <StripOverflow geometry={geometry} hidden={nodeIndicators.length - 2} />
+        )}
+      </>
+    );
+  };
+
+  /** An exogenous construct's one chart, chosen as its card's strip would be. */
+  const chipChart = (
+    construct: ConstructSpec,
+    assignments: readonly StateAssignment[],
+    box: Box,
+  ) => {
+    const nodeIndicators = indicatorsByConstruct.get(construct.id) ?? [];
+    const series = simulationPaths?.states[construct.id];
+    const statePlot = flows?.constructs.get(construct.id);
+    const prepared = preparedRows(construct);
+    const frame = (content: ReactNode) => (
+      <foreignObject
+        x={box.x}
+        y={box.top}
+        width={box.width}
+        height={box.height}
+        pointerEvents="none"
+      >
+        {content}
+      </foreignObject>
+    );
+    if (dataDiff) {
+      const shown = nodeIndicators.flatMap((indicator) => {
+        const variable = dataDiff.variables.find(
+          (item) => item.indicator_id === indicator.observation.id,
+        );
+        return variable ? [{ indicator, variable }] : [];
+      });
+      const first = shown[0];
+      if (!first) return null;
+      const select = selectIndicator(first.indicator.observation.id);
+      return (
+        <g
+          role="button"
+          tabIndex={0}
+          aria-label={`${humanize(first.indicator.observation.name)} comparison`}
+          onClick={(event) => {
+            event.stopPropagation();
+            select();
+          }}
+          onKeyDown={(event) => {
+            event.stopPropagation();
+            activateOnKeyboard(event, select);
+          }}
+        >
+          <title>
+            {shown.map(({ indicator }) => humanize(indicator.observation.name)).join(", ")}
+          </title>
+          {frame(
+            <DrawsChart
+              {...dataComparisonChart(first.variable)}
+              height={box.height}
+              resolution={zoom}
+              compact
+            />,
+          )}
+        </g>
+      );
+    }
+    if (series)
+      return (
+        <>
+          <CardMarkers box={box} times={simulationPaths.times} markers={markersOf(assignments)} />
+          {frame(
+            <DrawsChart
+              compact
+              height={box.height}
+              resolution={zoom}
+              times={simulationPaths.times}
+              timeOrigin={simulationPaths.time_origin}
+              layers={pathLayers(series, "both", false)}
+              frame={series.frame}
+              levels={series.levels}
+              label={`${humanize(series.label)}: ${series.action.length} individual simulation draws`}
+            />,
+          )}
+        </>
+      );
+    const first = prepared[0];
+    if (first) {
+      const domain = profileDomain(first.profile, []);
+      return (
+        <g role="img" aria-label={humanize(first.indicator.observation.name)}>
+          <title>
+            {prepared
+              .map(
+                ({ indicator, profile }) =>
+                  `${humanize(indicator.observation.name)} · ${profileSummary(profile)}`,
+              )
+              .join("\n")}
+          </title>
+          <rect x={box.x} y={box.top} width={box.width} height={box.height} fill="transparent" />
+          {domain && (
+            <ProfileMarks
+              profile={first.profile}
+              values={[]}
+              x={linearScale(padDomain(domain, 0.02), [box.x, box.x + box.width])}
+              top={box.top}
+              height={box.height}
+            />
+          )}
+        </g>
+      );
+    }
+    return statePlot
+      ? frame(<FlowChart plot={statePlot} height={box.height} compact resolution={zoom} />)
+      : null;
+  };
 
   const canvas = (
-    <DagCanvasFrame fill={variant === "asset"}>
+    <DagCanvasFrame>
       {isLayouting ? (
-        <div
-          className={`animate-pulse rounded-xl bg-slate-100 ${variant === "asset" ? "h-full" : "h-[560px]"}`}
-        />
+        <div className="h-full animate-pulse rounded-xl bg-slate-100" />
       ) : (
         <DagSvg
           contentWidth={difference.width + CANVAS_PADDING * 2}
           contentHeight={difference.height + CANVAS_PADDING * 2}
           zoom={zoom}
-          style={
-            variant === "asset"
-              ? {
-                  marginLeft: Math.max(
-                    0,
-                    (paneWidth - 14 - (width + CANVAS_PADDING * 2) * zoom) / 2,
-                  ),
-                  overflow: "visible",
-                }
-              : undefined
-          }
+          style={{
+            marginLeft: Math.max(0, (pane.width - 14 - (width + CANVAS_PADDING * 2) * zoom) / 2),
+            overflow: "visible",
+          }}
           role="img"
           aria-label="Layered causal graph"
         >
           <g transform={`translate(${CANVAS_PADDING},${CANVAS_PADDING})`}>
-            {graphBands.map((band) => {
-              const bounds = boundsForBand(band);
-              if (!bounds) return null;
-              return (
-                <g key={band.key}>
-                  <rect
-                    {...bounds}
-                    rx={14}
-                    fill={band.key === "present" ? "#f8fafc" : "#fbfcfd"}
-                    stroke="#e7ebef"
-                    strokeDasharray={band.key === "history" ? "5,4" : undefined}
-                  />
-                  <text
-                    x={bounds.x + 10}
-                    y={bounds.y + 16}
-                    fontSize={8}
-                    fontWeight={700}
-                    letterSpacing={0.7}
-                    fill={DAG_COLORS.muted}
-                  >
-                    {band.label.toUpperCase()}
-                  </text>
-                </g>
-              );
-            })}
-
-            {routedSegments.map((segment) => {
-              const segmentMeta = topology.segmentMeta.get(segment.id);
-              if (!segmentMeta) return null;
-              const meta = topology.edgeMeta.get(segmentMeta.edgeId);
+            {arrows.map((arrow) => {
+              const meta = topology.arrowMeta.get(arrow.id);
               if (!meta) return null;
               const visual = edgeVisual(meta);
+              const { edge } = meta;
+              const first = !firstArrow.has(edge.id);
+              firstArrow.add(edge.id);
+              const select = () =>
+                onSelect(
+                  selection?.kind === "edge" && selection.id === edge.id
+                    ? null
+                    : { kind: "edge", id: edge.id },
+                );
               return (
-                <g key={segment.id} data-edge-id={meta.id} data-change={visual.change}>
+                <g
+                  key={arrow.id}
+                  data-edge-id={edge.id}
+                  data-change={visual.change}
+                  role="button"
+                  tabIndex={first ? 0 : -1}
+                  aria-label={`${name(meta.cause.id)} → ${name(meta.effect.id)}`}
+                  onClick={select}
+                  onKeyDown={(event) => activateOnKeyboard(event, select)}
+                >
                   <DagEdge
-                    points={segment.points}
+                    points={arrow.points}
                     color={visual.color}
                     width={visual.width}
                     opacity={dataDiff ? 0.15 : visual.opacity}
-                    markerEnd={segmentMeta.markerEnd}
-                    highlighted={hoveredEdge === meta.id}
-                    onHoverChange={(hovered) => setHoveredEdge(hovered ? meta.id : null)}
+                    highlighted={visual.highlighted}
+                    onHoverChange={(hovered) =>
+                      setHovered(hovered ? { kind: "edge", id: edge.id } : null)
+                    }
                   />
                 </g>
               );
@@ -633,346 +942,179 @@ export function LayeredCausalGraph({
             {nodes.map((node) => {
               const meta = topology.nodeMeta.get(node.id);
               if (!meta) return null;
-              if (meta.kind === "edge_slot") {
-                const edge = meta.edge;
-                const visual = edgeVisual(edge);
-                const owner = entities.edges.find((item) => item.id === edge.id);
-                const target: EntitySelection = edge.isSelf
-                  ? { kind: "construct", id: edge.cause.id }
-                  : { kind: "edge", id: edge.id };
-                const select = () => onSelect(selection?.id === target.id ? null : target);
-                const failures = owner && !dataDiff ? entityFailures(modelSnapshot, owner) : [];
-                return (
-                  <g
-                    key={node.id}
-                    data-node-id={node.id}
-                    transform={`translate(${node.x},${node.y})`}
-                    role="button"
-                    aria-label={
-                      edge.isSelf
-                        ? `${humanize(edge.cause.name)} intrinsic dynamics`
-                        : `${humanize(edge.cause.name)} → ${humanize(edge.effect.name)}`
-                    }
-                    tabIndex={0}
-                    style={{ cursor: "pointer" }}
-                    onClick={select}
-                    onKeyDown={(event) => activateOnKeyboard(event, select)}
-                    onPointerEnter={() => setHoveredEdge(edge.id)}
-                    onPointerLeave={() => setHoveredEdge(null)}
-                  >
-                    <rect
-                      width={LAYERED_EDGE_SLOT_WIDTH}
-                      height={LAYERED_EDGE_SLOT_HEIGHT}
-                      fill="transparent"
-                    />
-                    <EdgeSlot
-                      meta={edge}
-                      plot={
-                        edge.isSelf
-                          ? flows?.intrinsic.get(edge.cause.id)
-                          : flows?.edges.get(edge.id)
-                      }
-                      color={visual.color}
-                      dimmed={dataDiff !== null || visual.dimmed}
-                      simulation={step === "simulate"}
-                    />
-                    {failures.length > 0 && (
-                      <g role="img" aria-label={failures.join("; ")}>
-                        <title>{failures.join("\n")}</title>
-                        <path
-                          d="M79 13 L85 2 L91 13 Z"
-                          fill="var(--card)"
-                          stroke="var(--warning-foreground)"
-                        />
-                        <text
-                          x={85}
-                          y={11}
-                          textAnchor="middle"
-                          fontSize={8}
-                          fill="var(--warning-foreground)"
-                        >
-                          !
-                        </text>
-                      </g>
-                    )}
-                  </g>
-                );
-              }
-
-              const construct = meta.construct;
+              const { construct } = meta;
               const constructChange = difference.constructChanges.get(construct.id);
               const dimmed =
-                (selectedNeighborhood != null && !selectedNeighborhood.has(construct.id)) ||
-                (dataDiff !== null &&
-                  (meta.kind === "history" ||
-                    !construct.indicators.some((indicator) =>
-                      dataDiff.variables.some(
-                        (variable) => variable.indicator_id === indicator.observation.id,
-                      ),
-                    )));
+                (focused !== null && !focused.constructs.has(construct.id)) ||
+                (dataDiff !== null && !compared(construct));
               const selected = selectedNode === construct.id;
               const select = () =>
-                onSelect(
-                  selectedNode === construct.id ? null : { kind: "construct", id: construct.id },
+                onSelect(selected ? null : { kind: "construct", id: construct.id });
+              const status = nodeStatuses.get(construct.id) ?? undefined;
+              const assignments = assignmentsOf(construct);
+              const failures = dataDiff ? [] : entityFailures(modelSnapshot, construct);
+              const outline = constructChange !== undefined && (
+                <rect
+                  x={-3}
+                  y={-3}
+                  width={node.width + 6}
+                  height={node.height + 6}
+                  rx={12}
+                  fill="none"
+                  stroke={COMPARISON_COLORS[constructChange]}
+                  strokeWidth={2 / zoom}
+                />
+              );
+
+              if (meta.kind === "exogenous") {
+                const rich = density.key === "rich";
+                const { width: chipWidth, height: chipHeight } = density.chip;
+                const size = rich ? 10.5 : 9.5;
+                const chart = rich ? 72 : 56;
+                const chartX = chipWidth - 9 - (failures.length > 0 ? 15 : 0) - chart;
+                const badge = assignments.length > 0 ? String(assignments.length) : null;
+                const labelEnd =
+                  (badge ? chartX - 6 - pillWidth(badge, CHIP_PILL_WIDTH) : chartX) - 6;
+                const carry = construct.temporal_status === "time_varying" ? 14 : 0;
+                const label = truncate(
+                  humanize(construct.name),
+                  Math.max(4, Math.floor((labelEnd - 10 - carry) / (size * 0.56))),
                 );
-              if (meta.kind === "history") {
+                const accent = selected
+                  ? "var(--primary)"
+                  : badge
+                    ? DAG_COLORS.intervention
+                    : (statusAccent(status) ?? "var(--border)");
                 return (
                   <g
                     key={node.id}
                     data-node-id={node.id}
+                    data-change={constructChange}
                     transform={`translate(${node.x},${node.y})`}
                   >
-                    <HistoryCard
-                      construct={construct}
-                      status={nodeStatuses.get(construct.id) ?? undefined}
-                      dimmed={dimmed}
-                      selected={selected}
-                      onSelect={select}
-                    />
+                    <g
+                      opacity={dimmed ? 0.18 : 1}
+                      role="button"
+                      aria-label={humanize(construct.name)}
+                      tabIndex={0}
+                      style={{ cursor: "pointer" }}
+                      onClick={select}
+                      onKeyDown={(event) => activateOnKeyboard(event, select)}
+                    >
+                      <rect
+                        width={chipWidth}
+                        height={chipHeight}
+                        rx={8}
+                        fill={DAG_COLORS.col}
+                        stroke={accent}
+                        strokeWidth={selected ? 2.4 : 1.2}
+                      />
+                      <text
+                        x={10}
+                        y={chipHeight / 2 + size * 0.36}
+                        fontSize={size}
+                        fontWeight={600}
+                        fill="var(--foreground)"
+                      >
+                        {label}
+                        <CarryMark construct={construct} size={size - 1} />
+                      </text>
+                      {badge && simulationResult && (
+                        <LayerPill
+                          x={chartX - 6}
+                          y={chipHeight / 2 - 8.5}
+                          label={badge}
+                          color={DAG_COLORS.intervention}
+                          minWidth={CHIP_PILL_WIDTH}
+                          description={`${badge} assignment${assignments.length === 1 ? "" : "s"}: ${assignments
+                            .map((event) =>
+                              assignmentLabel(event, simulationResult.evidence.time_origin),
+                            )
+                            .join("; ")}`}
+                        />
+                      )}
+                      {chipChart(construct, assignments, {
+                        x: chartX,
+                        top: 5,
+                        width: chart,
+                        height: chipHeight - 10,
+                      })}
+                      <WarningMark x={chipWidth - 21} y={chipHeight / 2 - 6} failures={failures} />
+                    </g>
+                    {outline}
                   </g>
                 );
               }
 
-              const nodeIndicators = indicatorsByConstruct.get(construct.id) ?? [];
-              const series = simulationPaths?.states[construct.id];
-              const statePlot = flows?.constructs.get(construct.id);
-              const prepared =
-                step === "prepare_data"
-                  ? nodeIndicators.flatMap((indicator) => {
-                      const profile =
-                        modelSnapshot.profile?.indicators[indicator.observation.id]?.profile;
-                      return profile ? [{ indicator, profile }] : [];
-                    })
-                  : [];
-              const assignments =
-                simulationResult?.evidence.assignments.filter(
-                  (event) => event.target === construct.id,
-                ) ?? [];
+              const rowsWidth = meta.rows.length > 0 ? density.row.width : 0;
+              const rows = meta.rows.map((row) => {
+                const owner = row.owner;
+                const edge = owner.kind === "edge" ? entities.edgeById.get(owner.id) : undefined;
+                const plot = flows?.mechanisms.get(row.mechanism.id);
+                const rowName = mechanismName(row.mechanism.id);
+                const reads = row.reads.map(name);
+                const description = [
+                  `${rowName} (${row.mechanism.kind}) · ${
+                    edge
+                      ? `on ${name(edge.cause.id)} → ${name(edge.effect.id)}`
+                      : `${name(construct.id)}'s own dynamics`
+                  }`,
+                  reads.length > 0 ? `Reads ${reads.join(", ")}` : "Reads no state",
+                  ...(plot
+                    ? [`${plot.label}: ${plot.kind === "draws" ? plot.note : plot.reason}`]
+                    : []),
+                ].join("\n");
+                return (
+                  <MechanismRowView
+                    key={row.mechanism.id}
+                    row={row}
+                    density={density}
+                    plot={plot}
+                    description={description}
+                    failures={edge && !dataDiff ? entityFailures(modelSnapshot, edge) : []}
+                    zoom={zoom}
+                    selected={selection?.kind === "edge" && selection.id === owner.id}
+                    dimmed={
+                      dataDiff !== null ||
+                      (focused !== null && !focused.mechanisms.has(row.mechanism.id))
+                    }
+                    onSelect={() =>
+                      onSelect(
+                        selection?.kind === owner.kind && selection.id === owner.id ? null : owner,
+                      )
+                    }
+                    onHover={(hovered) =>
+                      setHovered(hovered ? { kind: "mechanism", id: row.mechanism.id } : null)
+                    }
+                  />
+                );
+              });
               return (
                 <g
                   key={node.id}
                   data-node-id={node.id}
-                  data-change={difference.constructChanges.get(construct.id)}
+                  data-change={constructChange}
                   transform={`translate(${node.x},${node.y})`}
                 >
                   <ConstructCard
                     construct={construct}
-                    isOutcome={
-                      construct.id ===
-                      (causalEffect(simulation)?.outcome ?? modelSnapshot.question?.outcome)
-                    }
-                    failures={dataDiff ? [] : entityFailures(modelSnapshot, construct)}
-                    status={nodeStatuses.get(construct.id) ?? undefined}
+                    width={meta.width}
+                    height={meta.height}
+                    rowsWidth={rowsWidth}
+                    geometry={geometry}
+                    isOutcome={construct.id === outcome}
+                    failures={failures}
+                    status={status}
                     assignments={assignments}
                     timeOrigin={simulationResult?.evidence.time_origin ?? null}
                     selected={selected}
                     dimmed={dimmed}
                     onSelect={select}
+                    rows={rows}
                   >
-                    {dataDiff ? (
-                      <>
-                        {nodeIndicators.slice(0, STRIP_ROWS).map((indicator, index) => {
-                          const variable = dataDiff.variables.find(
-                            (item) => item.indicator_id === indicator.observation.id,
-                          );
-                          const evaluation = variable?.predictive?.evaluation ?? null;
-                          const failures = (
-                            evaluation && !("kind" in evaluation) ? evaluation.findings : []
-                          ).filter(
-                            (finding) =>
-                              finding.kind !== "evaluated" || finding.outcome !== "passed",
-                          );
-                          const selectIndicator = () =>
-                            onSelect({ kind: "indicator", id: indicator.observation.id });
-                          return (
-                            <g
-                              key={indicator.observation.id}
-                              role="button"
-                              tabIndex={0}
-                              aria-label={`${humanize(indicator.observation.name)} comparison`}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                selectIndicator();
-                              }}
-                              onKeyDown={(event) => {
-                                event.stopPropagation();
-                                activateOnKeyboard(event, selectIndicator);
-                              }}
-                            >
-                              <StripRow
-                                index={index}
-                                title={
-                                  failures
-                                    .map((finding) =>
-                                      finding.kind === "evaluated"
-                                        ? finding.evidence.note
-                                        : finding.detail,
-                                    )
-                                    .join("; ") || humanize(indicator.observation.name)
-                                }
-                                label={humanize(indicator.observation.name)}
-                                value={failures.length ? "⚠" : ""}
-                                valueTone="var(--warning-foreground)"
-                              >
-                                {variable && (
-                                  <foreignObject
-                                    x={STRIP.x + STRIP_ROW.plot}
-                                    y={rowTop(index)}
-                                    width={STRIP.width - STRIP_ROW.plot}
-                                    height={STRIP_ROW.height - 2}
-                                    pointerEvents="none"
-                                  >
-                                    <DrawsChart
-                                      {...dataComparisonChart(variable)}
-                                      height={STRIP_ROW.height - 2}
-                                      resolution={zoom}
-                                      compact
-                                    />
-                                  </foreignObject>
-                                )}
-                              </StripRow>
-                            </g>
-                          );
-                        })}
-                        <StripOverflow hidden={nodeIndicators.length - STRIP_ROWS} />
-                      </>
-                    ) : series ? (
-                      <>
-                        <CardMarkers
-                          times={simulationPaths.times}
-                          markers={[
-                            ...(simulationResult
-                              ? assignments.map((event) => ({
-                                  time: event.time,
-                                  label: assignmentLabel(
-                                    event,
-                                    simulationResult.evidence.time_origin,
-                                  ),
-                                }))
-                              : []),
-                            ...(variant === "workbench" && currentDay !== undefined
-                              ? [{ time: currentDay, label: `Viewed day ${currentDay}` }]
-                              : []),
-                          ]}
-                        />
-                        <foreignObject
-                          x={STRIP.x}
-                          y={STRIP.top}
-                          width={STRIP.width}
-                          height={STRIP.height}
-                          pointerEvents="none"
-                        >
-                          <DrawsChart
-                            compact
-                            height={STRIP.height}
-                            resolution={zoom}
-                            times={simulationPaths.times}
-                            timeOrigin={simulationPaths.time_origin}
-                            layers={pathLayers(series, "both", false)}
-                            frame={series.frame}
-                            levels={series.levels}
-                            label={`${humanize(series.label)}: ${series.action.length} individual simulation draws`}
-                          />
-                        </foreignObject>
-                      </>
-                    ) : prepared.length > 0 ? (
-                      <DataStrip rows={prepared} />
-                    ) : (
-                      <foreignObject
-                        x={STRIP.x}
-                        y={STRIP.top}
-                        width={STRIP.width}
-                        height={STRIP.height}
-                        pointerEvents="none"
-                      >
-                        {statePlot && (
-                          <FlowChart
-                            plot={statePlot}
-                            height={STRIP.height}
-                            compact
-                            resolution={zoom}
-                          />
-                        )}
-                      </foreignObject>
-                    )}
-                    {!dataDiff &&
-                      prepared.length === 0 &&
-                      nodeIndicators.slice(0, 2).map((indicator, index) => {
-                        const id = indicator.observation.id;
-                        const readings = simulationPaths?.indicators[id];
-                        const plot = flows?.indicators.get(id);
-                        const selectIndicator = () => onSelect({ kind: "indicator", id });
-                        return (
-                          <g
-                            key={id}
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`${humanize(indicator.observation.name)} reading law`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              selectIndicator();
-                            }}
-                            onKeyDown={(event) => {
-                              event.stopPropagation();
-                              activateOnKeyboard(event, selectIndicator);
-                            }}
-                          >
-                            <title>
-                              {readings
-                                ? `${humanize(readings.label)}: saved simulation readings`
-                                : plot
-                                  ? `${plot.label}: ${plot.kind === "draws" ? plot.note : plot.reason}`
-                                  : indicator.observation.name}
-                            </title>
-                            <text
-                              x={STRIP.x}
-                              y={115 + index * 21}
-                              fontSize={7}
-                              fill={DAG_COLORS.slate}
-                            >
-                              {truncate(humanize(indicator.observation.name), 21)}
-                            </text>
-                            <foreignObject
-                              x={130}
-                              y={104 + index * 21}
-                              width={106}
-                              height={18}
-                              pointerEvents="none"
-                            >
-                              {readings ? (
-                                <DrawsChart
-                                  compact
-                                  height={18}
-                                  resolution={zoom}
-                                  times={simulationPaths.times}
-                                  timeOrigin={simulationPaths.time_origin}
-                                  layers={pathLayers(readings, "both", true)}
-                                  levels={readings.levels}
-                                  label={`${humanize(readings.label)}: saved readings`}
-                                />
-                              ) : plot ? (
-                                <FlowChart plot={plot} height={18} compact resolution={zoom} />
-                              ) : null}
-                            </foreignObject>
-                          </g>
-                        );
-                      })}
-                    {!dataDiff && prepared.length === 0 && (
-                      <StripOverflow hidden={nodeIndicators.length - 2} />
-                    )}
+                    {stateColumn(construct, assignments)}
                   </ConstructCard>
-                  {constructChange !== undefined && (
-                    <rect
-                      x={-3}
-                      y={-3}
-                      width={LAYERED_NODE_WIDTH + 6}
-                      height={LAYERED_NODE_HEIGHT + 6}
-                      rx={12}
-                      fill="none"
-                      stroke={COMPARISON_COLORS[constructChange]}
-                      strokeWidth={2 / zoom}
-                    />
-                  )}
+                  {outline}
                 </g>
               );
             })}
@@ -983,69 +1125,11 @@ export function LayeredCausalGraph({
     </DagCanvasFrame>
   );
 
-  if (variant === "asset") {
-    return (
-      <div ref={paneRef} className="relative flex h-full min-h-0 flex-col">
-        {canvas}
-        <div className="absolute right-3 bottom-2 flex items-center gap-1.5 rounded-lg bg-white/85 px-1.5 py-0.5">
-          <DagZoomControls zoom={zoom} onZoomChange={setZoom} />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-0 space-y-3 bg-slate-50/60 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white px-3 py-2.5">
-        <div>
-          <div className="text-xs font-semibold text-slate-800">Causal model</div>
-          <div className="text-[10px] text-muted-foreground">
-            One structural topology; each materialized artifact adds one visual layer.
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <LayerControls available={available} visible={visible} onToggle={toggleLayer} />
-          <DagZoomControls zoom={zoom} onZoomChange={setZoom} />
-        </div>
-      </div>
-
+    <div ref={paneRef} className="relative flex h-full min-h-0 flex-col">
       {canvas}
-
-      {simulationVisible && days.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-white px-3 py-2">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 w-7 p-0"
-            onClick={() => setPlaying((current) => !current)}
-            aria-label={playing ? "Pause simulation timeline" : "Play simulation timeline"}
-          >
-            {playing ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-          </Button>
-          <input
-            type="range"
-            min={0}
-            max={days.length - 1}
-            value={clampedDayIndex}
-            onChange={(event) => setDayIndex(Number(event.target.value))}
-            className="min-w-52 flex-1 accent-blue-600"
-            aria-label="Simulation day"
-          />
-          <span className="min-w-16 text-right font-mono text-[10px] text-slate-600">
-            day {currentDay}
-          </span>
-          <span className="text-[10px] text-muted-foreground">
-            gray reference · blue intervention
-          </span>
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap gap-x-4 gap-y-1 px-1 text-[9px] text-muted-foreground">
-        <span>Dynamic causes connect successive state slices.</span>
-        {simulationVisible ? <span>Dashed blue markers show dated assignments.</span> : null}
-        {designVisible ? <span>Dashed edge slots are projected by design.</span> : null}
-        {fitVisible ? <span>State and mechanism plots preserve joint draws.</span> : null}
+      <div className="absolute right-3 bottom-2 flex items-center gap-1.5 rounded-lg bg-white/85 px-1.5 py-0.5">
+        <DagZoomControls zoom={zoom} onZoomChange={setZoom} onFit={fitToPane} />
       </div>
     </div>
   );

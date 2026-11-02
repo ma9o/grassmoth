@@ -1,14 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
-import { expect, userEvent, within } from "storybook/test";
-import {
-  scenarioQuestion,
-  scenarioTimeline,
-  scenarioWorkspace,
-} from "@/components/__fixtures__/generated/study";
-import { scenarioRevision, type ScenarioName } from "@/components/__fixtures__/study-scenario";
+import { expect, userEvent, waitFor, within } from "storybook/test";
+import { scenarioTimeline, scenarioWorkspace } from "@/components/__fixtures__/generated/study";
 import { ScenarioProviders, startScenarioWorker } from "@/components/__fixtures__/study-story";
 import { useStudyJournal } from "@/lib/hooks/use-study-journal";
-import { timelineTickLabel } from "@/lib/model-asset/timeline-presentation";
 import { CausalModelAsset } from "./causal-model-asset";
 
 function WorkbenchStory() {
@@ -24,11 +18,7 @@ function WorkbenchStory() {
         Synthetic interface examples
       </div>
       <div className="md:h-[calc(100dvh-24px)] [&>div]:md:h-full [&>div]:md:min-h-0">
-        <CausalModelAsset
-          workspaceId={scenarioWorkspace}
-          question={scenarioQuestion}
-          journal={journal.data}
-        />
+        <CausalModelAsset workspaceId={scenarioWorkspace} journal={journal.data} />
       </div>
     </>
   );
@@ -58,76 +48,87 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-// Keep one comprehensive workbench story and exercise the production reader throughout.
+/** Select a recorded node by its timeline label, as a viewer does. */
+async function selectTick(canvasElement: HTMLElement, label: string) {
+  const canvas = within(canvasElement);
+  await userEvent.click(await canvas.findByRole("button", { name: new RegExp(label) }));
+  const record = within(await canvas.findByRole("complementary", { name: "Action record" }));
+  await expect(await record.findByText(label)).toBeVisible();
+  return record;
+}
+
+/** The workbench as it opens: at the latest node, with a fit still running. */
 export const Complete: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    const select = async (name: ScenarioName) => {
-      const label = timelineTickLabel(scenarioRevision(name));
-      await userEvent.click(await canvas.findByRole("button", { name: new RegExp(label) }));
-      const record = within(await canvas.findByRole("complementary", { name: "Action record" }));
-      await expect(await record.findByText(label)).toBeVisible();
-      return record;
-    };
-    await canvas.findByRole("button", {
-      name: new RegExp(timelineTickLabel(scenarioRevision("dataCompared"))),
-    });
+    await expect(await canvas.findByRole("log", { name: "fit · running" })).toBeVisible();
     await expect(canvasElement.querySelectorAll("path[data-argument]")).toHaveLength(
       scenarioTimeline.dependencies.length,
     );
-    await select("editFailed");
-    const failure = await canvas.findByRole("region", { name: "Edit model failed" });
-    await expect(failure).toBeVisible();
-    await expect(within(failure).getByText(/SyntheticProposalError:/)).toBeVisible();
-    await select("fitRejected");
-    await expect(await canvas.findByRole("region", { name: "Fit failed" })).toBeVisible();
-    for (const name of [
-      "question",
-      "structure",
-      "measurement",
-      "authored",
-      "prepared",
-      "fitted",
-      "simulated",
-      "edited",
-      "effectUnavailable",
-      "modelCompared",
-      "dataCompared",
-    ] as const) {
-      const record = await select(name);
-      await expect(await canvas.findByRole("region", { name: "Model details" })).toBeVisible();
-      if (name === "authored") {
-        await userEvent.click(record.getByText("Agent conversation"));
-        await expect(
-          await record.findByText("Synthetic authoring conversation for the story trace panel."),
-        ).toBeVisible();
-      }
-      if (name === "prepared") {
-        await expect(await canvas.findByRole("region", { name: "Prepared data" })).toBeVisible();
-        await expect(await canvas.findByText("input/synthetic.csv")).toBeVisible();
-      }
-      if (name === "simulated") {
-        await expect(await canvas.findByRole("log", { name: "Simulator log" })).toBeVisible();
-        await expect(
-          (await canvas.findAllByRole("img", { name: /recorded paired effects/ }))[0],
-        ).toBeInTheDocument();
-      }
-      if (name === "effectUnavailable") {
-        await expect(
-          await canvas.findByText("Synthetic example of an unavailable causal effect."),
-        ).toBeVisible();
-      }
-      if (name === "modelCompared") {
-        await expect(await record.findByRole("region", { name: "Model comparison" })).toBeVisible();
-      }
-      if (name === "dataCompared") {
-        await expect(await record.findByRole("region", { name: "Data comparison" })).toBeVisible();
-        await expect(
-          await canvas.findByText("Synthetic calibration warning for interface coverage."),
-        ).toBeVisible();
-      }
-    }
-    await userEvent.click(await canvas.findByRole("button", { name: "Return to latest" }));
-    await expect(await canvas.findByRole("log", { name: "fit · running" })).toBeVisible();
   },
+};
+
+const GRAPH = 'svg[aria-label="Layered causal graph"]';
+
+/**
+ * The workbench at the recorded node whose timeline label is the story's name, so a story
+ * cannot show a different node than it names. The graph pane is the workbench's own, at the
+ * size the workbench gives it; the SVG materializer saves the graph once the node has drawn.
+ * Each story states its svg-materialize tag literally, so the story index can read it.
+ */
+const atNode = (
+  drawn: (canvasElement: HTMLElement) => Promise<unknown> = async () => {},
+): Story => ({
+  parameters: { svgMaterializer: { selector: GRAPH, auto: true } },
+  play: async ({ canvasElement, name }) => {
+    await selectTick(canvasElement, name);
+    await waitFor(() =>
+      expect(canvasElement.querySelector("main")).toHaveAttribute("aria-busy", "false"),
+    );
+    await within(canvasElement).findByRole("img", { name: "Layered causal graph" });
+    await drawn(canvasElement);
+  },
+});
+
+export const EditModel2: Story = {
+  ...atNode(),
+  name: "edit_model · 0000002",
+  tags: ["svg-materialize"],
+};
+export const EditModel3: Story = {
+  ...atNode(),
+  name: "edit_model · 0000003",
+  tags: ["svg-materialize"],
+};
+export const EditModel4: Story = {
+  ...atNode(),
+  name: "edit_model · 0000004",
+  tags: ["svg-materialize"],
+};
+export const PrepareData: Story = {
+  ...atNode(),
+  name: "prepare_data · 0000005",
+  tags: ["svg-materialize"],
+};
+export const Fit: Story = { ...atNode(), name: "fit · 0000008", tags: ["svg-materialize"] };
+export const Simulate: Story = {
+  ...atNode((canvasElement) =>
+    within(canvasElement).findAllByRole("img", { name: /individual simulation draws/ }),
+  ),
+  name: "simulate · 0000009",
+  tags: ["svg-materialize"],
+};
+export const ModelDiff: Story = {
+  ...atNode((canvasElement) =>
+    waitFor(() => expect(canvasElement.querySelector("[data-comparison-mark]")).not.toBeNull()),
+  ),
+  name: "model_diff · 000000c",
+  tags: ["svg-materialize"],
+};
+export const DataDiff: Story = {
+  ...atNode((canvasElement) =>
+    within(canvasElement).findAllByRole("button", { name: /comparison$/ }),
+  ),
+  name: "data_diff · 000000d",
+  tags: ["svg-materialize"],
 };

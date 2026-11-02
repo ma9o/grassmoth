@@ -5,6 +5,7 @@ import type {
   EdgeId,
   Expression,
   IndicatorId,
+  MechanismId,
 } from "@grassmoth/api-types";
 import { modelConstructs, modelEdges } from "@/lib/model-accessors";
 import {
@@ -18,7 +19,7 @@ import {
 import { displayProbability } from "./law-draws";
 import { measurementDraw } from "./measurement-draws";
 import { modelDraws } from "./model-draws";
-import { humanize } from "./selection";
+import { humanize, mechanismName } from "./selection";
 import { formatModelDate } from "@/lib/utils/format";
 
 export type FlowPlot =
@@ -38,6 +39,8 @@ export interface ModelFlowPlots {
   readonly constructs: ReadonlyMap<ConstructId, FlowPlot>;
   readonly intrinsic: ReadonlyMap<ConstructId, FlowPlot>;
   readonly edges: ReadonlyMap<EdgeId, FlowPlot>;
+  /** Each mechanism alone: one term of its effect's drift. */
+  readonly mechanisms: ReadonlyMap<MechanismId, FlowPlot>;
   readonly indicators: ReadonlyMap<IndicatorId, FlowPlot>;
 }
 
@@ -104,8 +107,8 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
   const mechanismPlot = (
     mechanisms: readonly DynamicsMechanismSpec[],
     target: ConstructId,
+    label = `Drift into ${name(target)}`,
   ): FlowPlot => {
-    const label = `Drift into ${name(target)}`;
     if (mechanisms.length === 0)
       return { kind: "unavailable", label, reason: "No mechanism assigned." };
     return plot(
@@ -144,6 +147,17 @@ export function modelFlowPlots(model: DynamicalModelSpec): ModelFlowPlots {
     ),
     edges: new Map(
       modelEdges(model).map((edge) => [edge.id, mechanismPlot(edge.mechanisms, edge.effect.id)]),
+    ),
+    mechanisms: new Map(
+      [
+        ...constructs.map((construct) => ({ target: construct.id, owned: construct.dynamics })),
+        ...modelEdges(model).map((edge) => ({ target: edge.effect.id, owned: edge.mechanisms })),
+      ].flatMap(({ target, owned }) =>
+        owned.map((mechanism) => [
+          mechanism.id,
+          mechanismPlot([mechanism], target, `${mechanismName(mechanism.id)} into ${name(target)}`),
+        ]),
+      ),
     ),
     indicators: new Map(
       constructs.flatMap((construct) =>

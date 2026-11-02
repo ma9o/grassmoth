@@ -3,9 +3,9 @@
 import type {
   ConstructId,
   EdgeId,
-  PosteriorMarginal,
   IndicatorSpec,
   ModelSnapshot,
+  PosteriorMarginal,
   SimulationReport,
 } from "@grassmoth/api-types";
 
@@ -13,19 +13,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ModelEntities } from "@/lib/model-asset/entities";
 import { useDagLayout } from "@/lib/hooks/use-dag-layout";
 import { ownLawUses } from "@/lib/model-asset/laws";
-import type { DagLayoutNode } from "@/lib/utils/dag-graph-layout";
-import { buildLayeredCausalGraph, type LayeredGraphEdgeMeta } from "./build-layered-causal-graph";
-import { placeComparisonOverlay, type ModelComparison } from "./comparison-overlay";
+import type { EntitySelection } from "@/lib/model-asset/selection";
+import { causalEffect } from "@/lib/simulation-report";
 import {
-  availableGraphLayers,
-  type CausalGraphLayerId,
-  type GraphBand,
-  graphEntities,
-  graphStatus,
-} from "./layered-model";
+  buildLayeredCausalGraph,
+  GRAPH_DENSITIES,
+  type LayeredGraphArrowMeta,
+} from "./build-layered-causal-graph";
+import { placeComparisonOverlay, type ModelComparison } from "./comparison-overlay";
+import { availableGraphLayers, graphEntities, graphStatus } from "./layered-model";
 import { BLOCKING, COMPARISON_COLORS, DAG_COLORS, LATENT } from "./palette";
-import { selectedNeighbors } from "./selection";
-import { useGraphControls, usePlayback } from "./use-graph-controls";
+import { focusedParts, type GraphFocus } from "./selection";
 
 export interface LayeredGraphOptions {
   modelSnapshot: ModelSnapshot;
@@ -33,8 +31,17 @@ export interface LayeredGraphOptions {
   /** A simulation of the viewed model revision; its node histories replace the law charts. */
   simulation?: SimulationReport | null;
   comparison?: ModelComparison | null;
-  selection: import("@/lib/model-asset/selection").EntitySelection | null;
+  selection: EntitySelection | null;
 }
+
+/** Space around the laid-out graph inside the canvas, in layout units. */
+export const CANVAS_PADDING = 36;
+/** The canvas frame's border and padding, in pixels. */
+const FRAME_INSET = 14;
+/** Cards stay rich while the whole rich layout fits its pane at this zoom or larger. */
+const RICH_FIT = 0.6;
+const MIN_ZOOM = 0.08;
+const MAX_ZOOM = 1.8;
 
 /** Derive graph display state from recorded model findings and user interaction. */
 export function useLayeredGraph({
@@ -44,43 +51,84 @@ export function useLayeredGraph({
   comparison = null,
   selection,
 }: LayeredGraphOptions) {
-  const selectedNode = selection?.kind === "construct" ? selection.id : null;
-  const available = useMemo(
-    () => availableGraphLayers(modelSnapshot, simulation),
+  const visible = useMemo(
+    () => new Set(availableGraphLayers(modelSnapshot, simulation)),
     [modelSnapshot, simulation],
   );
-  const [hiddenLayers, setHiddenLayers] = useState<Set<CausalGraphLayerId>>(() => new Set());
-  const { zoom, setZoom, hoveredEdge, setHoveredEdge } = useGraphControls(1, 0.08, 1.8);
+  const [manualZoom, setManualZoom] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<GraphFocus | null>(null);
   const paneRef = useRef<HTMLDivElement>(null);
-  const [paneWidth, setPaneWidth] = useState(0);
-  const visible = useMemo(
-    () => new Set(available.filter((layer) => !hiddenLayers.has(layer))),
-    [available, hiddenLayers],
-  );
+  const [pane, setPane] = useState({ width: 0, height: 0 });
 
   const entities = useMemo(() => graphEntities(indexed), [indexed]);
-  const topology = useMemo(
-    () =>
-      buildLayeredCausalGraph(entities.constructs, entities.edges, entities.dynamicConstructIds),
-    [entities],
+  const outcome = causalEffect(simulation)?.outcome ?? modelSnapshot.question?.outcome ?? null;
+  const topologies = useMemo(
+    () => ({
+      rich: buildLayeredCausalGraph(
+        entities.constructs,
+        entities.edges,
+        outcome,
+        GRAPH_DENSITIES.rich,
+      ),
+      compact: buildLayeredCausalGraph(
+        entities.constructs,
+        entities.edges,
+        outcome,
+        GRAPH_DENSITIES.compact,
+      ),
+    }),
+    [entities, outcome],
   );
-  const { nodes, edges: routedSegments, width, height, isLayouting } = useDagLayout(topology.graph);
-  const difference = useMemo(
-    () => placeComparisonOverlay(isLayouting ? null : comparison, topology, nodes, width, height),
-    [comparison, topology, nodes, width, height, isLayouting],
-  );
+  const rich = useDagLayout(topologies.rich.graph);
+  const compact = useDagLayout(topologies.compact.graph);
   useEffect(() => {
-    const pane = paneRef.current;
-    if (!pane || isLayouting) return;
-    const measure = () => setPaneWidth(pane.getBoundingClientRect().width);
+    const element = paneRef.current;
+    if (!element) return;
+    const measure = () => {
+      const box = element.getBoundingClientRect();
+      setPane({ width: box.width, height: box.height });
+    };
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(pane);
+    observer.observe(element);
     return () => observer.disconnect();
-  }, [isLayouting]);
+  }, []);
+  const richFits =
+    pane.width === 0 ||
+    rich.isLayouting ||
+    Math.min(
+      (pane.width - FRAME_INSET) / (rich.width + 2 * CANVAS_PADDING),
+      (pane.height - FRAME_INSET) / (rich.height + 2 * CANVAS_PADDING),
+    ) >= RICH_FIT;
+  const topology = richFits ? topologies.rich : topologies.compact;
+  const { nodes, edges: arrows, width, height, isLayouting } = richFits ? rich : compact;
+  const difference = useMemo(
+    () =>
+      placeComparisonOverlay(isLayouting ? null : comparison, topology, {
+        nodes,
+        edges: arrows,
+        width,
+        height,
+      }),
+    [comparison, topology, nodes, arrows, width, height, isLayouting],
+  );
+  // The graph opens fitted to its pane, never above full size, until the viewer zooms.
+  const fitZoom =
+    pane.width === 0 || isLayouting
+      ? 1
+      : Math.max(
+          MIN_ZOOM,
+          Math.min(
+            1,
+            (pane.width - FRAME_INSET) / (difference.width + 2 * CANVAS_PADDING),
+            (pane.height - FRAME_INSET) / (difference.height + 2 * CANVAS_PADDING),
+          ),
+        );
+  const zoom = manualZoom ?? fitZoom;
+  const setZoom = (value: number) => setManualZoom(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, value)));
+  const fitToPane = () => setManualZoom(null);
 
   const designVisible = visible.has("design");
-  const specificationVisible = visible.has("specification");
   const fitVisible = visible.has("fit");
   const simulationVisible = visible.has("simulation");
   const nodeStatuses = new Map(
@@ -94,156 +142,79 @@ export function useLayeredGraph({
       ? entities.constructs.map((construct) => [construct.id, construct.indicators])
       : [],
   );
-  const likelihoodByVariable = new Map(
-    specificationVisible
-      ? entities.indicators.flatMap((indicator) =>
-          indicator.likelihood ? [[indicator.observation.id, indicator.likelihood] as const] : [],
-        )
+  const edgePosteriors = new Map<EdgeId, PosteriorMarginal>(
+    fitVisible
+      ? entities.edges.flatMap((edge) => {
+          const parameters = new Set(
+            ownLawUses(edge)
+              .filter((use) => use.role === "weight")
+              .map((use) => use.parameterId),
+          );
+          const rows =
+            modelSnapshot.fit?.posterior_marginals.filter((row) =>
+              parameters.has(row.subject.parameter_id),
+            ) ?? [];
+          const posterior = rows.length === 1 ? rows[0] : undefined;
+          return posterior ? [[edge.id, posterior] as const] : [];
+        })
       : [],
   );
-  const marginal = (uses: ReturnType<typeof ownLawUses>, role: "weight" | "decay") => {
-    const parameters = new Set(
-      uses.filter((use) => use.role === role).map((use) => use.parameterId),
-    );
-    const rows =
-      modelSnapshot.fit?.posterior_marginals.filter((row) =>
-        parameters.has(row.subject.parameter_id),
-      ) ?? [];
-    return rows.length === 1 ? rows[0] : undefined;
-  };
-  const edgePosteriors: Partial<Record<EdgeId, PosteriorMarginal | undefined>> = fitVisible
-    ? Object.fromEntries(
-        entities.edges.map((edge) => [edge.id, marginal(ownLawUses(edge), "weight")]),
-      )
-    : {};
-  const persistencePosteriors: Partial<Record<ConstructId, PosteriorMarginal | undefined>> =
-    fitVisible
-      ? Object.fromEntries(
-          entities.constructs.map((construct) => [
-            construct.id,
-            marginal(ownLawUses(construct), "decay"),
-          ]),
-        )
-      : {};
 
   const simulationResult = simulationVisible ? simulation : null;
-  const days = useMemo(() => simulationResult?.evidence.times ?? [], [simulationResult]);
-  const {
-    index: clampedDayIndex,
-    setIndex: setDayIndex,
-    playing,
-    setPlaying,
-  } = usePlayback(days.length, 180);
-  const currentDay = days[clampedDayIndex];
-  const selectedNeighborhood = useMemo(
-    () =>
-      selectedNeighbors(
-        selectedNode,
-        entities.edges.map((edge) => [edge.cause.id, edge.effect.id] as const),
-      ),
-    [entities.edges, selectedNode],
-  );
+  const focus = hovered ?? selection;
+  const focused = useMemo(() => (focus ? focusedParts(focus, topology) : null), [focus, topology]);
 
-  const graphBands = useMemo<GraphBand[]>(() => {
-    const dynamicIds = new Set(entities.dynamicConstructIds);
-    const staticNodes: DagLayoutNode[] = [];
-    const historyNodes: DagLayoutNode[] = [];
-    const presentNodes: DagLayoutNode[] = [];
-    for (const node of nodes) {
-      const meta = topology.nodeMeta.get(node.id);
-      if (meta?.kind === "history") historyNodes.push(node);
-      if (meta?.kind === "construct") {
-        if (!dynamicIds.has(meta.construct.id)) staticNodes.push(node);
-        else presentNodes.push(node);
-      }
-    }
-    return [
-      { key: "static", label: "stable context", nodes: staticNodes },
-      { key: "history", label: "t−1", nodes: historyNodes },
-      { key: "present", label: "t", nodes: presentNodes },
-    ];
-  }, [nodes, topology.nodeMeta, entities.dynamicConstructIds]);
-
-  const toggleLayer = (layer: CausalGraphLayerId) => {
-    if (layer === "structure") return;
-    setHiddenLayers((current) => {
-      const next = new Set(current);
-      if (next.has(layer)) next.delete(layer);
-      else next.add(layer);
-      return next;
-    });
-  };
-
-  const edgeVisual = (meta: LayeredGraphEdgeMeta) => {
-    const posterior = meta.isSelf
-      ? persistencePosteriors[meta.cause.id]
-      : Object.entries(edgePosteriors).find(([id]) => id === meta.id)?.[1];
+  const edgeVisual = ({ edge, cause, effect }: LayeredGraphArrowMeta) => {
     const blocking =
-      nodeStatuses.get(meta.cause.id) === "blocking" ||
-      nodeStatuses.get(meta.effect.id) === "blocking";
+      nodeStatuses.get(cause.id) === "blocking" || nodeStatuses.get(effect.id) === "blocking";
     const latent =
-      nodeStatuses.get(meta.cause.id) === "latent" || nodeStatuses.get(meta.effect.id) === "latent";
-    const color = blocking
-      ? BLOCKING
-      : latent
-        ? LATENT
-        : meta.crossSlice
-          ? DAG_COLORS.crossSlice
-          : DAG_COLORS.contemporaneous;
+      nodeStatuses.get(cause.id) === "latent" || nodeStatuses.get(effect.id) === "latent";
+    const color = blocking ? BLOCKING : latent ? LATENT : DAG_COLORS.slate;
     // A coefficient's mean is not the strength or sign of a nonlinear state-dependent effect.
     const width = 1.7;
-    const selectedEdge =
-      selectedNode == null || meta.cause.id === selectedNode || meta.effect.id === selectedNode;
-    const dimmed = !selectedEdge || (hoveredEdge != null && hoveredEdge !== meta.id);
-    const opacity = dimmed ? 0.1 : latent ? 0.38 : posterior ? 0.92 : 0.78;
-    const change = difference.edgeChanges.get(meta.id);
+    const lit = focused?.edges.has(edge.id) ?? false;
+    const change = difference.edgeChanges.get(edge.id);
     return {
-      posterior,
       color:
-        selection?.kind === "edge" && selection.id === meta.id
+        selection?.kind === "edge" && selection.id === edge.id
           ? "var(--primary)"
           : change
             ? COMPARISON_COLORS[change]
             : color,
       width: change ? Math.max(width, 3 / zoom) : width,
-      opacity: change ? 1 : opacity,
-      dimmed: change ? false : dimmed,
+      opacity: change
+        ? 1
+        : focused && !lit
+          ? 0.1
+          : latent
+            ? 0.38
+            : edgePosteriors.has(edge.id)
+              ? 0.92
+              : 0.78,
+      highlighted: lit,
       change,
     };
   };
 
   return {
-    available,
     visible,
-    hoveredEdge,
-    setHoveredEdge,
+    setHovered,
     zoom,
     setZoom,
+    fitToPane,
     paneRef,
-    paneWidth,
+    pane,
+    outcome,
     topology,
     nodes,
-    routedSegments,
+    arrows,
     width,
     isLayouting,
     difference,
-    designVisible,
-    specificationVisible,
-    fitVisible,
-    simulationVisible,
     nodeStatuses,
     indicatorsByConstruct,
-    likelihoodByVariable,
     simulationResult,
-    days,
-    clampedDayIndex,
-    setDayIndex,
-    playing,
-    setPlaying,
-    currentDay,
-    selectedNeighborhood,
-    graphBands,
-    toggleLayer,
+    focused,
     edgeVisual,
   };
 }
