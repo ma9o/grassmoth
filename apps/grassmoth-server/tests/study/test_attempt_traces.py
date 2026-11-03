@@ -242,3 +242,87 @@ def test_subroutine_retains_conversation_before_a_tool_failure(data_root, monkey
     assert trace.messages[-1].tool_calls is not None
     assert trace.messages[-1].tool_calls[0]["arguments"] == '{"file":"data.csv"}'
     assert not list(data_root.rglob("*.partial"))
+
+
+def test_failed_extraction_chunks_become_durable_messages_once(data_root):
+    del data_root
+    from grassmoth_server.actions.contracts.inputs import PrepareDataInput
+    from grassmoth_server.actions.contracts.preparation import FileSourceRef
+    from grassmoth_server.actions.contracts.progress import ExtractionWorkerEvent
+    from grassmoth_server.actions.contracts.requests import PrepareDataRequest
+    from grassmoth_server.study.persistence.store import ArtifactStore
+    from grassmoth_server.study.records import PrepareAttempt
+    from grassmoth_server_test_support.storage import seed_record
+    from grassmoth_test_support.helpers import make_model
+
+    store = ArtifactStore("ws-extraction-errors")
+    model = make_model(["outcome"])
+    parent = seed_record(
+        store,
+        "model",
+        derived_from={},
+        produced_by="edit_model",
+        json_files={"model.json": model.model_dump(mode="json")},
+    )
+    request = PrepareDataRequest[GitOid, FileSourceRef](
+        input=PrepareDataInput(
+            dynamical_model_spec_ref=parent.revision,
+            source=FileSourceRef(files=("source.csv",)),
+            extraction={
+                model.indicators[0].observation.id: {
+                    "kind": "semantic",
+                    "how_to_measure": "Read it",
+                }
+            },
+        )
+    )
+    attempt_id = UUID(int=9)
+    identity = call_identity(request)
+    errors = {7: "Provider request exhausted retries", 8: "No usable extraction"}
+    for worker_id in (7, 8, 7):
+        emit_event(
+            store.workspace_id,
+            identity,
+            ExtractionWorkerEvent(
+                attempt_id=attempt_id,
+                worker_id=worker_id,
+                state="failed",
+                n_windows=1,
+                n_extractions=0,
+                error=errors[worker_id],
+            ),
+        )
+    emit_event(
+        store.workspace_id,
+        identity,
+        ExtractionWorkerEvent(
+            attempt_id=attempt_id,
+            worker_id=9,
+            state="completed",
+            n_windows=1,
+            n_extractions=2,
+        ),
+    )
+    publication_input = AttemptPublication(
+        workspace_id=store.workspace_id,
+        record=AttemptRecord(
+            seq=2,
+            attempt_id=attempt_id,
+            ts="2026-11-03T00:00:00Z",
+            attempt=PrepareAttempt(
+                action="prepare_data",
+                request=request,
+                outcome=Raised(error_type="ValueError", error_message="Panel assembly failed"),
+            ),
+        ),
+    )
+    publication = asyncio.run(journal_activity(publication_input))
+    messages = publication.record.messages
+    assert [(message.subject, message.severity, message.detail) for message in messages] == [
+        (f"extraction_worker:{worker_id}", "error", detail) for worker_id, detail in errors.items()
+    ]
+    assert all(message.code == "EXTRACTION_CHUNK_FAILED" for message in messages)
+    storage.rm_tree(data_module.call_dir(store.workspace_id, identity))
+    assert asyncio.run(journal_activity(publication_input)) == publication
+    saved = read_call_log(StudyRepository(store.workspace_id), publication.commit_id)
+    assert tuple(message for message in saved.messages if message.kind == "log") == messages

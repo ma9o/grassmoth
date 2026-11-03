@@ -17,6 +17,7 @@ from grassmoth_server.actions.input_resolution import input_state
 from grassmoth_server.actions.messages import (
     comparison_messages,
     edit_messages,
+    extraction_failure_messages,
     fit_check_messages,
     inference_messages,
     preparation_messages,
@@ -194,19 +195,18 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
             )
             messages = messages[:-1] + announcements + messages[-1:]
     logs = collect_run_traces(activity_input.workspace_id, identity)
-    record = record.with_logs(
-        messages=messages,
-        trace_ids=tuple(path.removeprefix("traces/").removesuffix(".json") for path in logs),
-    )
+    trace_ids = tuple(path.removeprefix("traces/").removesuffix(".json") for path in logs)
     from pydantic import TypeAdapter
 
     from grassmoth_server.actions.contracts.progress import ProgressEvent
     from grassmoth_server.actions.progress import read_events
 
     if record.attempt_id is not None:
-        logs["progress.json"] = TypeAdapter(tuple[ProgressEvent, ...]).dump_json(
-            tuple(read_events(activity_input.workspace_id, identity))
-        )
+        events = tuple(read_events(activity_input.workspace_id, identity))
+        logs["progress.json"] = TypeAdapter(tuple[ProgressEvent, ...]).dump_json(events)
+        failures = extraction_failure_messages(events, datetime.now(UTC))
+        messages = (*messages[:-1], *failures, *messages[-1:])
+    record = record.with_logs(messages=messages, trace_ids=trace_ids)
     return journal.append(record, logs=logs)
 
 

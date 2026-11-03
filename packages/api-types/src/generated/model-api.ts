@@ -1064,22 +1064,12 @@ export interface components {
             /** Findings */
             readonly findings: readonly Domain.Assessment<Domain.ConvergenceAssessmentSubject, Domain.NumericCriterionEvidence>[];
             /**
-             * Warnings
-             * @default []
-             */
-            readonly warnings: readonly string[];
-            /**
              * Checked
              * @description Number of distinct parameter and construct references with convergence findings.
              */
             readonly checked: number;
-            /** @description Convergence verdict with failed checks taking precedence over unevaluated checks. */
+            /** @description Convergence verdict from required criteria; mixing advisories do not change it. */
             readonly status: components["schemas"]["CheckStatus"];
-            /**
-             * Messages
-             * @description Explanations for convergence checks that failed or could not be evaluated.
-             */
-            readonly messages: readonly string[];
         };
         /**
          * ConvergenceSubject
@@ -4013,7 +4003,7 @@ export interface components {
         readonly ExtractionWorkerResult: components["schemas"]["CompletedExtractionWorker"] | components["schemas"]["FailedExtractionChunk"];
         /**
          * FailedExtractionChunk
-         * @description A failed extraction chunk with its error, retained counts, and execution details.
+         * @description A failed extraction chunk's counts; its execution error belongs to action messages.
          */
         readonly FailedExtractionChunk: {
             /** Worker Id */
@@ -4027,8 +4017,6 @@ export interface components {
              * @enum {string}
              */
             readonly status: "failed";
-            /** Error */
-            readonly error: string;
             /**
              * N Llm Calls
              * @default 0
@@ -5533,12 +5521,6 @@ export interface components {
              * @description Unobserved constructs blocking identification
              */
             readonly confounders: readonly components["schemas"]["ConstructId-Output"][];
-            /**
-             * Notes
-             * @description Optional explanation if confounders cannot be enumerated
-             * @default null
-             */
-            readonly notes: string | null;
         };
         /**
          * NormalLawSpec[Expression]

@@ -122,7 +122,7 @@ def test_identification_preserves_negative_findings():
     report = identify_model(StructuralSelection(unmeasured, perf))
     assert not report.estimable_treatments
     assert report.non_identifiable[stress].confounders == (perf,)
-    assert report.non_identifiable[stress].notes == "outcome is unobserved"
+    assert "notes" not in report.non_identifiable[stress].model_dump(mode="json")
 
 
 @pytest.mark.parametrize("nonempty", [False, True])
@@ -176,7 +176,6 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
                     status="failed",
                     n_extractions=0,
                     n_windows=1,
-                    error="No usable extraction",
                 )
             ],
         )
@@ -203,7 +202,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
         1,
     )
     assert worker.status == "failed"
-    assert worker.error == "No usable extraction"
+    assert "error" not in worker.model_dump(mode="json")
     from grassmoth_server.study.persistence.history import StudyRepository
 
     journal = StudyRepository(workspace)

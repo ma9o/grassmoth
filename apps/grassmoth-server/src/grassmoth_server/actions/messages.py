@@ -13,6 +13,7 @@ from grassmoth.public import (
     PairedArmSimulation,
     QueryTargetSubject,
 )
+from grassmoth_server.actions.contracts.progress import ExtractionWorkerEvent
 from grassmoth_server.study.records import ActionMessage
 
 if TYPE_CHECKING:
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
         ModelEditResult,
         SimulationReport,
     )
+    from grassmoth_server.actions.contracts.progress import ProgressEvent
 
 
 type FindingEvidence = str | NumericCriterionEvidence | tuple[NumericCriterionEvidence, ...]
@@ -86,9 +88,11 @@ def edit_messages(
                 severity="warning",
                 code="identification",
                 subject=ConstructRef(id=target),
-                detail="This target's causal effect is not identifiable.",
+                detail="This target's causal effect is not identifiable: the outcome is unobserved."
+                if identification.outcome in finding.confounders
+                else "This target's causal effect is not identifiable.",
             )
-            for target in identification.non_identifiable
+            for target, finding in identification.non_identifiable.items()
             if target not in queried
         ),
         *(
@@ -144,6 +148,29 @@ def preparation_messages(
             if extraction.extraction_reused
             else ()
         ),
+    )
+
+
+def extraction_failure_messages(
+    events: Iterable[ProgressEvent], timestamp: datetime
+) -> tuple[ActionMessage, ...]:
+    """Retain each failed chunk's execution error once, including retried event delivery."""
+    failures = {
+        event.worker_id: event.error
+        for event in events
+        if isinstance(event, ExtractionWorkerEvent)
+        and event.state == "failed"
+        and event.error is not None
+    }
+    return tuple(
+        ActionMessage(
+            timestamp=timestamp,
+            severity="error",
+            code="EXTRACTION_CHUNK_FAILED",
+            subject=f"extraction_worker:{worker_id}",
+            detail=error,
+        )
+        for worker_id, error in sorted(failures.items())
     )
 
 

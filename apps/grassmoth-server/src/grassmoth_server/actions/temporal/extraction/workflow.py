@@ -200,6 +200,7 @@ class MeasurementsWorkflow:
                     )
                     await emit_snapshot()
 
+                    error: str | None = None
                     try:
                         result: ExtractionChunkResult = await workflow.execute_child_workflow(
                             "ExtractionChunkWorkflow",
@@ -232,12 +233,12 @@ class MeasurementsWorkflow:
                         )
                     except ChildWorkflowError as exc:
                         failure = temporal_failure(exc)
+                        error = failure.error_message
                         result = FailedExtractionChunk(
                             worker_id=chunk.worker_id,
                             status="failed",
                             n_extractions=0,
                             n_windows=chunk.n_windows,
-                            error=failure.error_message,
                         )
 
                     running_workers -= 1
@@ -253,7 +254,7 @@ class MeasurementsWorkflow:
                             n_windows=result.n_windows,
                             n_extractions=result.n_extractions,
                             n_llm_calls=result.n_llm_calls or None,
-                            error=result.error if result.status == "failed" else None,
+                            error=error,
                         )
                     )
                     await emit_snapshot()

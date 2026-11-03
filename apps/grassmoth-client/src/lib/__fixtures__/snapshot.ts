@@ -72,7 +72,7 @@ const fit: InferenceReportCore = {
     sampler_diagnostics: null,
   },
   inference_diagnostics: null,
-  convergence: { findings: [], checked: 0, status: "not_evaluated", messages: [], warnings: [] },
+  convergence: { findings: [], checked: 0, status: "not_evaluated" },
   loo_diagnostics: null,
   frequency_refresh: [],
   regional_movement: [],

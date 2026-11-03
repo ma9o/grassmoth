@@ -184,9 +184,10 @@ def _identification_finding(
         code="identification",
         subject=subject,
         outcome="failed",
-        evidence=f"{effect} is not identified"
-        + (f"; it is confounded by {confounders}" if confounders else "")
-        + (f". {status.notes}" if status.notes else "."),
+        evidence=f"{effect} is not identified: the outcome is unobserved."
+        if identification.outcome in status.confounders
+        else f"{effect} is not identified"
+        + (f"; it is confounded by {confounders}." if confounders else "."),
     )
 
 

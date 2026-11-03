@@ -70,7 +70,7 @@ def check_identifiability(
         The outcome and one finding per treatment, keyed by construct ID: identified
         treatments first, with their estimand (or IV placeholder), the unobserved
         constructs it integrates out and any instruments; then unidentified treatments,
-        with their blocking confounders and optional notes.
+        with their blocking confounders. Question findings explain identification failures.
 
     Raises:
         ValueError: No outcome construct is selected for the identification query.
@@ -97,7 +97,7 @@ def check_identifiability(
             outcome=outcome_id,
             treatments={
                 identities[treatment]: NonIdentifiableTreatmentStatus(
-                    confounders=(identities[outcome],), notes="outcome is unobserved"
+                    confounders=(identities[outcome],)
                 )
                 for treatment in all_treatments
             },

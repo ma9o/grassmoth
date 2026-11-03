@@ -32,14 +32,16 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
         <StatusIcon status={convergence.status} />
         <span>Chain convergence: {humanize(convergence.status)}.</span>
       </div>
-      {convergence.warnings.map((message) => (
-        <p key={message} className="text-amber-700">
-          Warning: {message}
-        </p>
-      ))}
-      {convergence.messages.map((message) => (
-        <p key={message}>{message}</p>
-      ))}
+      {convergence.findings
+        .filter((finding) => finding.kind === "not_evaluated" || finding.outcome === "failed")
+        .map((finding, index) => (
+          <p key={index} className="text-amber-700">
+            {finding.code === "fit_mixing" && "Mixing advisory: "}
+            {finding.kind === "not_evaluated"
+              ? finding.detail
+              : `${finding.evidence.note} · ${humanize(finding.evidence.criterion)}: ${formatSignificant(finding.evidence.value)}`}
+          </p>
+        ))}
     </Section>
   );
 }

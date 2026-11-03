@@ -223,3 +223,37 @@ def test_an_off_path_model_edit_retains_the_connected_branch(tmp_path, monkeypat
         == (dynamical_model_spec.constructs[2])
     )
     assert len(result.effects.produced) == 1
+
+
+def test_unobserved_outcome_explanation_is_an_identification_finding():
+    from grassmoth.artifacts.model.dynamical_model_spec import ModelEditResult
+    from grassmoth.artifacts.reports.checks import QueryTargetSubject
+    from grassmoth.artifacts.reports.model_checks import ModelCheckReport, QuestionCheckReport
+    from grassmoth_server.actions.messages import _findings as announce_findings
+    from grassmoth_server.actions.messages import edit_messages
+
+    model = _model()
+    dose, mood = model.constructs
+    model = model.with_entities(
+        edges=replace_constructs(model.edges, (mood.revised(indicators=()),))
+    )
+    question = _question(model)
+    findings = question_findings(question, StructuralSelection(model, mood.id), history=None)
+    (finding,) = (item for item in findings if item.code == "identification")
+    assert finding.kind == "evaluated"
+    assert finding.outcome == "failed"
+    assert isinstance(finding.subject, QueryTargetSubject)
+    assert finding.subject.target.id == dose.id
+    assert "the outcome is unobserved" in finding.evidence
+    (message,) = announce_findings((finding,), _ORIGIN)
+    assert message.severity == "warning"
+    assert message.detail == finding.evidence
+    selection = StructuralSelection(model, mood.id)
+    (unqueried,) = edit_messages(
+        ModelCheckReport(specification=(), question=QuestionCheckReport(findings=())),
+        selection.identification,
+        ModelEditResult(),
+        _ORIGIN,
+    )
+    assert unqueried.code == "identification"
+    assert "the outcome is unobserved" in unqueried.detail

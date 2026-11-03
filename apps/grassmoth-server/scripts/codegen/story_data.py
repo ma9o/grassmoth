@@ -381,11 +381,17 @@ def fit() -> FitOutput:
                     },
                     "inference_diagnostics": None,
                     "convergence": {
-                        "findings": [],
+                        "findings": [
+                            {
+                                "kind": "not_evaluated",
+                                "code": "parameter_chains",
+                                "subject": "recorded_parameter_chains",
+                                "reason": "NO_RETAINED_CHAINS",
+                                "detail": "Synthetic display example; no sampler was run.",
+                            }
+                        ],
                         "checked": 0,
                         "status": "not_evaluated",
-                        "messages": ["Synthetic display example; no sampler was run."],
-                        "warnings": [],
                     },
                     "posterior_marginals": [
                         {

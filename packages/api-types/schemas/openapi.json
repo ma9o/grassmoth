@@ -3671,14 +3671,6 @@
             "title": "Findings",
             "type": "array"
           },
-          "warnings": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
-          },
           "checked": {
             "description": "Number of distinct parameter and construct references with convergence findings.",
             "readOnly": true,
@@ -3687,25 +3679,14 @@
           },
           "status": {
             "$ref": "#/components/schemas/CheckStatus",
-            "description": "Convergence verdict with failed checks taking precedence over unevaluated checks.",
+            "description": "Convergence verdict from required criteria; mixing advisories do not change it.",
             "readOnly": true
-          },
-          "messages": {
-            "description": "Explanations for convergence checks that failed or could not be evaluated.",
-            "items": {
-              "type": "string"
-            },
-            "readOnly": true,
-            "title": "Messages",
-            "type": "array"
           }
         },
         "required": [
           "findings",
-          "warnings",
           "checked",
-          "status",
-          "messages"
+          "status"
         ],
         "title": "ConvergenceReport",
         "type": "object",
@@ -15110,7 +15091,7 @@
       },
       "FailedExtractionChunk": {
         "additionalProperties": false,
-        "description": "A failed extraction chunk with its error, retained counts, and execution details.",
+        "description": "A failed extraction chunk's counts; its execution error belongs to action messages.",
         "properties": {
           "worker_id": {
             "title": "Worker Id",
@@ -15128,10 +15109,6 @@
             "const": "failed",
             "default": "failed",
             "title": "Status",
-            "type": "string"
-          },
-          "error": {
-            "title": "Error",
             "type": "string"
           },
           "n_llm_calls": {
@@ -15164,7 +15141,6 @@
           "n_extractions",
           "n_windows",
           "status",
-          "error",
           "n_llm_calls",
           "reused"
         ],
@@ -19518,25 +19494,11 @@
             },
             "title": "Confounders",
             "type": "array"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Optional explanation if confounders cannot be enumerated",
-            "title": "Notes"
           }
         },
         "required": [
           "status",
-          "confounders",
-          "notes"
+          "confounders"
         ],
         "title": "NonIdentifiableTreatmentStatus",
         "type": "object",

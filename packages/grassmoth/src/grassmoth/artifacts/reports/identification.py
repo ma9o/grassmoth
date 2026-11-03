@@ -37,10 +37,6 @@ class NonIdentifiableTreatmentStatus(Value):
         default_factory=tuple,
         description="Unobserved constructs blocking identification",
     )
-    notes: str | None = Field(
-        default=None,
-        description="Optional explanation if confounders cannot be enumerated",
-    )
 
 
 class IdentificationReport(Value):

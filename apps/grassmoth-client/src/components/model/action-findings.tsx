@@ -55,7 +55,6 @@ export function ActionFindings({ context, call }: { context: ScopeContext; call:
                 .map((entity) => humanize(entity.name))
                 .join(", ")}.`
             : "",
-          finding.notes,
         ]
           .filter(Boolean)
           .join(" "),

@@ -435,9 +435,10 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         law=AuthoredLawProvenance(),
         findings=(),
     )
+    inference_report = _report(dynamical_model_spec)
     fitted = (
         GitRef(workspace_id="TEST", revision=git_oid(2), path="model.json"),
-        _report(dynamical_model_spec).core,
+        inference_report.core,
     )
     assert evidence.arms.kind == "paired"
     arms = evidence.arms
@@ -492,12 +493,15 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         equal_nan=True,
     )
     from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
-    from grassmoth_server.actions.messages import simulation_messages
+    from grassmoth_server.actions.messages import inference_messages, simulation_messages
 
     model_ref, fit_report = fitted
     diagnostics = fit_report.inference_diagnostics
     assert diagnostics is not None
     for chains in (
+        diagnostics.revised(
+            per_parameter=tuple(row.revised(r_hat=1.02) for row in diagnostics.per_parameter)
+        ),
         diagnostics.revised(
             per_parameter=tuple(
                 row.revised(r_hat=1.05, ess_bulk=264.0, ess_tail=90.0)
@@ -530,9 +534,22 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         warned_report = report.revised(evidence=warned_evidence, findings=findings)
         messages = simulation_messages(warned_report, datetime(2024, 1, 1, tzinfo=UTC))
         assert messages
-        assert {message.code for message in messages} == {finding.code for finding in findings}
-        assert any(message.code == "fit_reliability" for message in messages)
+        assert {message.code for message in messages} == {
+            finding.code
+            for finding in findings
+            if finding.kind == "not_evaluated" or finding.outcome == "failed"
+        }
+        assert any(message.code in {"fit_reliability", "fit_mixing"} for message in messages)
         assert all(message.severity == "warning" for message in messages)
+        if convergence.status == "passed":
+            fit_messages = inference_messages(
+                inference_report.revised(core=fit_report.revised(convergence=convergence)),
+                datetime(2024, 1, 1, tzinfo=UTC),
+            )
+            assert fit_messages
+            assert all(message.code == "fit_mixing" for message in fit_messages)
+            assert all(message.severity == "warning" for message in fit_messages)
+            assert all("1.02" in message.detail for message in fit_messages)
 
     from grassmoth.artifacts.arrays import NumericalArray
     from grassmoth.artifacts.identity import IndicatorRef

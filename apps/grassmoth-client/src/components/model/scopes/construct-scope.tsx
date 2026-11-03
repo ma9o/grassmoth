@@ -102,6 +102,12 @@ export function IdentificationFinding({
   const finding = context.modelSnapshot.identification?.treatments[construct.id];
   const identified = finding?.status === "identified" ? finding : null;
   const notIdentified = finding?.status === "not_identified" ? finding : null;
+  const explanations = context.modelSnapshot.question_checks?.findings.filter(
+    (item) =>
+      item.code === "identification" &&
+      "target" in item.subject &&
+      item.subject.target.id === construct.id,
+  );
   const namesFor = (ids: readonly ConstructId[]) =>
     context.entities.constructs
       .filter((entity) => ids.includes(entity.id))
@@ -129,9 +135,14 @@ export function IdentificationFinding({
             <StatusIcon status="failed" label="Not identified" />
             <span>
               {namesFor(notIdentified.confounders)} confound this treatment under the current
-              design.{notIdentified.notes ? ` ${notIdentified.notes}` : ""}
+              design.
             </span>
           </div>
+          {explanations?.map((item, index) => (
+            <p key={index} className="mt-2">
+              {item.kind === "evaluated" ? item.evidence : item.detail}
+            </p>
+          ))}
         </Callout>
       )}
     </>

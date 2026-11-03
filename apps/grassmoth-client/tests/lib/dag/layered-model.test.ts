@@ -73,7 +73,7 @@ describe("semantic graph layers", () => {
       identification: {
         outcome: outcome.id,
         treatments: {
-          [treatment.id]: { status: "not_identified", confounders: [baseline.id], notes: null },
+          [treatment.id]: { status: "not_identified", confounders: [baseline.id] },
         },
       },
     };

@@ -28,7 +28,9 @@ export function recordedEntityFailures(
       typeof finding.subject !== "string" &&
       "parameter" in finding.subject &&
       parameters.includes(finding.subject.parameter.parameter_id)
-        ? [`Parameter convergence: ${finding.subject.label}`]
+        ? [
+            `${finding.code === "fit_mixing" ? "Mixing advisory" : "Parameter convergence"}: ${finding.subject.label}`,
+          ]
         : [],
     );
   const indicators = Object.fromEntries(
@@ -76,7 +78,9 @@ export function recordedEntityFailures(
                 "state" in finding.subject &&
                 finding.subject.state.id === construct.id &&
                 (finding.kind === "not_evaluated" || finding.outcome === "failed")
-                  ? [`Latent convergence: ${finding.subject.label}`]
+                  ? [
+                      `${finding.code === "fit_mixing" ? "Mixing advisory" : "Latent convergence"}: ${finding.subject.label}`,
+                    ]
                   : [],
               ),
               ...construct.indicators.flatMap(

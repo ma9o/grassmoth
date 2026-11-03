@@ -405,3 +405,72 @@ def test_latent_diagnostics_bound_selection_and_detect_late_frozen_coordinate(
             ),
             rtol=5e-5,
         )
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize(
+    ("r_hat", "status", "advisory"),
+    [
+        (1.009, "passed", False),
+        (1.01, "passed", True),
+        (1.049, "passed", True),
+        (1.05, "failed", False),
+        (None, "not_evaluated", False),
+    ],
+)
+def test_convergence_findings_keep_mixing_advisories_separate_from_verdict(r_hat, status, advisory):
+    from grassmoth.artifacts.identity import ConstructRef
+    from grassmoth.artifacts.reports.checks import ConvergenceSubject, LatentConvergenceSubject
+    from grassmoth.artifacts.reports.posterior_diagnostics import (
+        ChainDiagnostics,
+        LatentDiagnostics,
+        ParameterDiagnostics,
+    )
+    from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
+
+    parameter = references([("scale", ())])[ParameterCoordinate(site_name="scale", indices=())][1]
+    latent = ConstructRef(id="construct:state")
+    report = chain_convergence(
+        ChainDiagnostics(
+            num_chains=4,
+            num_samples_per_chain=1000,
+            per_parameter=(
+                ParameterDiagnostics(
+                    parameter="scale",
+                    subject=parameter,
+                    r_hat=r_hat,
+                    ess_bulk=800.0,
+                    ess_tail=600.0,
+                    mcse_mean=None,
+                ),
+            ),
+            per_latent=(
+                LatentDiagnostics(
+                    subject=latent,
+                    label="state",
+                    coordinates=3,
+                    r_hat=r_hat,
+                    ess_bulk=800.0,
+                    ess_tail=600.0,
+                    mcse_mean=None,
+                ),
+            ),
+        )
+    )
+    assert report.status == status
+    assert report.checked == 2
+    mixing = tuple(item for item in report.findings if item.code == "fit_mixing")
+    assert len(mixing) == (2 if advisory else 0)
+    for item in mixing:
+        assert item.kind == "evaluated"
+        assert item.outcome == "failed"
+        assert item.evidence.criterion == "r_hat"
+        assert item.evidence.value == r_hat
+        assert item.evidence.upper == 1.01
+        assert not item.evidence.accepted
+    if mixing:
+        assert isinstance(mixing[0].subject, ConvergenceSubject)
+        assert isinstance(mixing[1].subject, LatentConvergenceSubject)
+        assert mixing[0].subject.parameter == parameter
+        assert mixing[1].subject.state == latent
+    assert set(report.model_dump()) == {"findings", "checked", "status"}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { modelFixture, outcome, treatment } from "@/lib/__fixtures__/model";
-import { authoredSnapshot } from "@/lib/__fixtures__/snapshot";
+import { decay, modelFixture, outcome, treatment } from "@/lib/__fixtures__/model";
+import { authoredSnapshot, fittedSnapshot } from "@/lib/__fixtures__/snapshot";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { entityFailures } from "@/lib/model-asset/inspector";
 import { modelConstructs, modelEdges } from "@/lib/model-accessors";
@@ -61,7 +61,7 @@ describe("scoped model inspection", () => {
       identification: {
         outcome: outcome.id,
         treatments: {
-          [treatment.id]: { status: "not_identified" as const, confounders: [], notes: null },
+          [treatment.id]: { status: "not_identified" as const, confounders: [] },
         },
       },
     };
@@ -71,5 +71,55 @@ describe("scoped model inspection", () => {
       "Identification against ★: treatment",
     ]);
     expect(entityFailures(authoredSnapshot, outcome)).toEqual([]);
+  });
+  it("keeps parameter and latent mixing advisories distinct from convergence failures", () => {
+    const fit = fixtureValue(fittedSnapshot.fit);
+    const evidence = {
+      criterion: "r_hat",
+      value: 1.02,
+      lower: null,
+      upper: 1.01,
+      lower_inclusive: true,
+      upper_inclusive: false,
+      note: "Inspect mixing.",
+      display_value: "",
+      band_label: "< 1.01",
+    };
+    const modelSnapshot = {
+      ...fittedSnapshot,
+      fit: {
+        ...fit,
+        convergence: {
+          checked: 2,
+          status: "passed" as const,
+          findings: [
+            {
+              kind: "evaluated" as const,
+              code: "fit_mixing",
+              outcome: "failed" as const,
+              subject: {
+                parameter: {
+                  parameter_id: decay.id,
+                  element_id: `element:${decay.id.slice("parameter:".length)}` as const,
+                },
+                label: "decay",
+              },
+              evidence,
+            },
+            {
+              kind: "evaluated" as const,
+              code: "fit_mixing",
+              outcome: "failed" as const,
+              subject: { state: { kind: "construct" as const, id: outcome.id }, label: "outcome" },
+              evidence,
+            },
+          ],
+        },
+      },
+    };
+    const issues = entityFailures(modelSnapshot, outcome);
+    expect(issues).toContain("Mixing advisory: decay");
+    expect(issues).toContain("Mixing advisory: outcome");
+    expect(issues.some((issue) => issue.includes("convergence:"))).toBe(false);
   });
 });

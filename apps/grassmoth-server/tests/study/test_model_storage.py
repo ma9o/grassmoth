@@ -603,7 +603,6 @@ def test_identification_round_trip_preserves_tagged_evidence():
     payload["treatments"]["construct:y"] = {
         "status": "not_identified",
         "confounders": ["construct:x"],
-        "notes": "Blocking confounding",
     }
     report = IdentificationReport.model_validate(payload)
     restored = IdentificationReport.model_validate_json(report.model_dump_json())
@@ -613,7 +612,7 @@ def test_identification_round_trip_preserves_tagged_evidence():
     assert identified.status == "identified"
     assert identified.estimand == "P(Y | do(X))"
     assert restored.non_identifiable[ConstructId("construct:y")].confounders == ("construct:x",)
-    assert restored.non_identifiable[ConstructId("construct:y")].notes == "Blocking confounding"
+    assert "notes" not in restored.non_identifiable[ConstructId("construct:y")].model_dump()
 
     payload["treatments"]["construct:y"]["estimand"] = "Contradictory positive evidence"
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):

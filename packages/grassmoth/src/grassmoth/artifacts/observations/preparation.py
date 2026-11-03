@@ -230,13 +230,12 @@ class CompletedExtractionWorker(Value):
 
 
 class FailedExtractionChunk(Value):
-    """A failed extraction chunk with its error, retained counts, and execution details."""
+    """A failed extraction chunk's counts; its execution error belongs to action messages."""
 
     worker_id: int
     n_extractions: int
     n_windows: int
     status: Literal["failed"] = "failed"
-    error: str
     n_llm_calls: int | None = 0
     reused: bool | None = False
 

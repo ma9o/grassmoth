@@ -99,7 +99,6 @@ class ConvergenceReport(Value):
     """Recorded-chain criteria cover parameters and independent latent coordinates."""
 
     findings: tuple[Assessment[ConvergenceAssessmentSubject, NumericCriterionEvidence], ...]
-    warnings: tuple[str, ...] = ()
 
     @computed_field
     @property
@@ -118,24 +117,13 @@ class ConvergenceReport(Value):
     @computed_field
     @property
     def status(self) -> CheckStatus:
-        """Convergence verdict with failed checks taking precedence over unevaluated checks."""
-        if any(isinstance(item, Evaluated) and item.outcome == "failed" for item in self.findings):
+        """Convergence verdict from required criteria; mixing advisories do not change it."""
+        criteria = tuple(item for item in self.findings if item.code != "fit_mixing")
+        if any(isinstance(item, Evaluated) and item.outcome == "failed" for item in criteria):
             return "failed"
-        if not self.findings or any(isinstance(item, NotEvaluated) for item in self.findings):
+        if not criteria or any(isinstance(item, NotEvaluated) for item in criteria):
             return "not_evaluated"
         return "passed"
-
-    @computed_field
-    @property
-    def messages(self) -> tuple[str, ...]:
-        """Explanations for convergence checks that failed or could not be evaluated."""
-        return tuple(
-            item.detail
-            if isinstance(item, NotEvaluated)
-            else f"{item.evidence.criterion} fails for {item.evidence.note}: {item.evidence.value:g}"
-            for item in self.findings
-            if isinstance(item, NotEvaluated) or item.outcome != "passed"
-        )
 
 
 class ParetoKPoint(Value):

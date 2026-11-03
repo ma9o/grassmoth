@@ -100,10 +100,21 @@ function ParameterLawSections({
                 {findings.map((item) => (
                   <div key={item.code} className="flex items-center gap-2">
                     <StatusIcon
-                      status={item.kind === "evaluated" ? item.outcome : "not_evaluated"}
+                      status={
+                        item.code === "fit_mixing"
+                          ? "warning"
+                          : item.kind === "evaluated"
+                            ? item.outcome
+                            : "not_evaluated"
+                      }
                     />
                     <Hint>
-                      {item.kind === "evaluated" ? humanize(item.evidence.criterion) : item.detail}
+                      {item.code === "fit_mixing" && "Mixing advisory: "}
+                      {item.kind === "evaluated"
+                        ? item.code === "fit_mixing"
+                          ? item.evidence.note
+                          : humanize(item.evidence.criterion)
+                        : item.detail}
                     </Hint>
                   </div>
                 ))}

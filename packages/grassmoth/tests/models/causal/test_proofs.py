@@ -101,7 +101,7 @@ def test_identification_proof_rejects_unidentified_treatment(
     model = _design_payload()
     report = IdentificationReport(
         outcome=model.constructs[1].id,
-        treatments={model.constructs[0].id: NonIdentifiableTreatmentStatus(notes="Unidentified")}
+        treatments={model.constructs[0].id: NonIdentifiableTreatmentStatus()}
         if explicit_finding
         else {},
     )

@@ -16,7 +16,6 @@ from grassmoth.artifacts.reports.checks import (
 )
 from grassmoth.artifacts.scenarios import CausalEffectResult
 from grassmoth.artifacts.simulation import PairedArmSimulation
-from grassmoth.models.ssm.inference.diagnostics.convergence import R_HAT_LIMIT, R_HAT_WARNING
 
 if TYPE_CHECKING:
     from grassmoth.actions.contracts.io import PredictiveLaw
@@ -39,13 +38,17 @@ def _fit_findings(law: PredictiveLaw) -> tuple[PredictiveAssessment, ...]:
     convergence = law.report.convergence
     status = convergence.status
     missing = tuple(item for item in convergence.findings if isinstance(item, NotEvaluated))
-    measured = tuple(item for item in convergence.findings if isinstance(item, Evaluated))
+    measured = tuple(
+        item
+        for item in convergence.findings
+        if isinstance(item, Evaluated) and item.code != "fit_mixing"
+    )
     reliability: PredictiveAssessment = (
         NotEvaluated(
             code="fit_reliability",
             subject=subject,
             reason="NO_RETAINED_CHAINS",
-            detail="; ".join(convergence.messages)
+            detail="; ".join(item.detail for item in missing)
             or "No retained convergence criteria are available.",
         )
         if status == "not_evaluated"
@@ -69,14 +72,9 @@ def _fit_findings(law: PredictiveLaw) -> tuple[PredictiveAssessment, ...]:
         )
     )
     mixing = tuple(
-        item.evidence.revised(
-            upper=R_HAT_WARNING,
-            note=f"{item.evidence.note}: r_hat is {item.evidence.value:g}; "
-            "inspect mixing before relying on this fit.",
-            band_label=f"< {R_HAT_WARNING:g}",
-        )
-        for item in measured
-        if item.evidence.criterion == "r_hat" and R_HAT_WARNING <= item.evidence.value < R_HAT_LIMIT
+        item.evidence
+        for item in convergence.findings
+        if isinstance(item, Evaluated) and item.code == "fit_mixing"
     )
     unavailable: tuple[PredictiveAssessment, ...] = (
         (

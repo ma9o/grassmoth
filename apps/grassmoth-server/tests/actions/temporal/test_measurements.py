@@ -628,3 +628,93 @@ def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_p
         trace = LLMTrace.model_validate(storage.read_json(trace_path))
         assert trace.model == "openrouter/mock-extraction"
         assert trace.usage.input_tokens == 3
+
+
+@pytest.mark.contract
+def test_failed_chunk_error_reaches_progress_without_an_output_error_field(monkeypatch):
+    from types import SimpleNamespace
+
+    from temporalio.exceptions import ApplicationError, ChildWorkflowError
+
+    from grassmoth_server.actions.contracts.effects import ActionEffects
+    from grassmoth_server.actions.temporal.extraction import workflow as extraction_workflow
+    from grassmoth_server.actions.temporal.extraction.messages import (
+        MeasurementsPlan,
+        MeasurementsWorkflowInput,
+    )
+    from grassmoth_server.study.records import Applied
+    from grassmoth_test_support.git import git_oid
+
+    plan = MeasurementsPlan(
+        workspace_id="test",
+        run_id="run",
+        plan_ref="plan",
+        pins={},
+        chunks=[MeasurementChunkRef(worker_id=7, n_windows=1, spec_ref="chunk")],
+        max_concurrent_workers=1,
+        max_rpm=1,
+        max_tool_turns=1,
+        llm=EmbeddedLLMSpec(model="mock"),
+    )
+    events = []
+    finalized = []
+    applied = Applied(result=git_oid(2), effects=ActionEffects())
+
+    async def execute_activity(name, payload, **_kwargs):
+        if name == "plan_measurements_activity":
+            return plan
+        assert name == "finalize_measurements_activity"
+        finalized.extend(payload.chunk_results)
+        return applied
+
+    async def execute_child(*_args, **_kwargs):
+        error = ChildWorkflowError(
+            "child failed",
+            namespace="test",
+            workflow_id="chunk",
+            run_id="run",
+            workflow_type="ExtractionChunkWorkflow",
+            initiated_event_id=1,
+            started_event_id=2,
+            retry_state=None,
+        )
+        error.__cause__ = ApplicationError("No usable extraction", type="ValueError")
+        raise error
+
+    async def emit(_workspace_id, _call_id, event):
+        events.append(event)
+
+    monkeypatch.setattr(extraction_workflow.workflow, "execute_activity", execute_activity)
+    monkeypatch.setattr(extraction_workflow.workflow, "execute_child_workflow", execute_child)
+    monkeypatch.setattr(
+        extraction_workflow.workflow, "info", lambda: SimpleNamespace(task_queue="test")
+    )
+    monkeypatch.setattr(extraction_workflow, "emit_progress", emit)
+    result = run_async(
+        extraction_workflow.MeasurementsWorkflow().run(
+            MeasurementsWorkflowInput(
+                workspace_id="test",
+                call_id="test-call",
+                seq=1,
+                attempt_id=uuid.uuid4(),
+                raw_data_revision=git_oid(1),
+                preparation={
+                    "dynamical_model_spec_ref": git_oid(1),
+                    "source": {"files": ["source.csv"]},
+                    "extraction": {
+                        "indicator:test": {"kind": "semantic", "how_to_measure": "Read it"}
+                    },
+                },
+            )
+        )
+    )
+    assert result == applied
+    (failed,) = (
+        event
+        for event in events
+        if event.event == "grassmoth.extraction.worker" and event.state == "failed"
+    )
+    assert failed.worker_id == 7
+    assert failed.error == "No usable extraction"
+    assert finalized[0].status == "failed"
+    assert "error" not in finalized[0].model_dump()

@@ -96,11 +96,21 @@ def chain_convergence(chains: ChainDiagnostics | None) -> ConvergenceReport:
                         evidence=evidence,
                     )
                 )
-    return ConvergenceReport(
-        findings=tuple(findings),
-        warnings=tuple(
-            f"{subject.label}: r_hat is {r_hat:g}; inspect mixing before relying on this fit."
-            for subject, r_hat, _, _ in coordinates
-            if r_hat is not None and R_HAT_WARNING <= r_hat < R_HAT_LIMIT
-        ),
-    )
+        if r_hat is not None and R_HAT_WARNING <= r_hat < R_HAT_LIMIT:
+            findings.append(
+                Evaluated(
+                    code="fit_mixing",
+                    subject=subject,
+                    outcome="failed",
+                    evidence=NumericCriterionEvidence(
+                        criterion=ConvergenceCriterion.R_HAT.value,
+                        value=r_hat,
+                        upper=R_HAT_WARNING,
+                        upper_inclusive=False,
+                        note=f"{subject.label}: r_hat is {r_hat:g}; "
+                        "inspect mixing before relying on this fit.",
+                        band_label=f"< {R_HAT_WARNING:g}",
+                    ),
+                )
+            )
+    return ConvergenceReport(findings=tuple(findings))
