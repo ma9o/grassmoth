@@ -81,6 +81,7 @@ def test_library_parameter_output_preserves_public_vector_sites_and_chain_order(
         observations=jnp.zeros((4, 1)),
         times=jnp.arange(4.0),
         state_space=StateSpace(1, (), (0,), (0,), (), ()),
+        output_coordinates=(),
     )
     problem = ParticleProblem(runtime=runtime, site_info={}, public_sites=frozenset({"beta"}))
     samples = extract_grouped_public_samples(

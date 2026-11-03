@@ -13,10 +13,11 @@ import numpyro.distributions as dist
 import pytest
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
+from grassmoth.models.ssm.inference.targets.path_factors import prepare_path_factors
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth_test_support.interval_particle import (
     gaussian_interval_case,
@@ -101,8 +102,33 @@ def test_mixed_overlapping_intervals_match_independent_laws_and_gradients():
     for actual_grad, expected_grad in zip(actual_gradient, expected_gradient, strict=True):
         np.testing.assert_allclose(actual_grad, expected_grad, atol=2e-5)
 
+    factors = prepare_path_factors(target, context, target.observations)
+    cache = jax.jit(factors.initialize)(path)
+    for start in (-1, 2, 6):
+        changed = (jnp.arange(len(times)) >= start) & (jnp.arange(len(times)) < start + 2)
+        candidate = cache.path + jnp.where(changed[:, None], 0.13, 0.0)
+        updated = jax.jit(lambda old, new, first: factors.update(old, new, first, 2))(
+            cache, candidate, jnp.asarray(start)
+        )
+        complete = jax.jit(factors.initialize)(candidate)
+        for value, expected_value in zip(updated, complete, strict=True):
+            np.testing.assert_allclose(value, expected_value, atol=1e-5)
+        expected_difference = target.factor_log_prob(
+            context, candidate, target.observations
+        ) - target.factor_log_prob(context, cache.path, target.observations)
+        np.testing.assert_allclose(updated.difference(cache), expected_difference, atol=2e-5)
+        cache = updated
+
     intervals = target.intervals
     assert intervals is not None
+    reference_memory = [jnp.zeros(intervals.memory.shape)]
+    for index in range(1, len(times)):
+        reference_memory.append(
+            intervals.advance(context, reference_memory[-1], path[index - 1], index)
+        )
+    np.testing.assert_allclose(
+        jax.jit(intervals.memory_path)(context, path), jnp.stack(reference_memory), atol=2e-6
+    )
     current_gradient = jax.jit(
         jax.grad(
             lambda x: intervals.trajectory_log_probs(
@@ -138,6 +164,40 @@ def test_mixed_overlapping_intervals_match_independent_laws_and_gradients():
         )
     )(path, memory, jnp.arange(len(times)))
     np.testing.assert_allclose(current_scores, current_gradient, atol=2e-5)
+
+
+@pytest.mark.parametrize("block_length", [2, 4])
+def test_blocked_kalman_preserves_analytic_interval_posterior(block_length):
+    target, mean, covariance = gaussian_interval_case()
+    kernel = build_marginal_particle_gibbs_kernel(
+        target,
+        num_parameter_particles=2,
+        param_step_size=0.3,
+        parameter_proposal="random_walk",
+        parameter_reference_path=jnp.asarray(mean[1:, None]),
+        path_update=AuxiliaryKalmanSpec(block_length=block_length),
+    )
+    chains = 4096
+    joint = jnp.asarray(
+        np.random.default_rng(29).multivariate_normal(mean, covariance, size=chains)
+    )
+    initial = jax.jit(
+        jax.vmap(lambda point: initialize_interval_chain(target, point, kernel=kernel))
+    )(joint)
+
+    @jax.jit
+    def sample(states):
+        def sweep(current, key):
+            updated, _ = jax.vmap(kernel.step_fn)(current, jax.random.split(key, chains))
+            return updated, None
+
+        return jax.lax.scan(sweep, states, jax.random.split(jax.random.key(35), 3))[0]
+
+    final = sample(initial)
+    draws = np.asarray(jnp.concatenate((final.position, final.latent_trajectory[..., 0]), axis=1))
+    np.testing.assert_allclose(draws.mean(0), mean, atol=0.045)
+    np.testing.assert_allclose(np.cov(draws.T), covariance, atol=0.055)
+    assert np.mean(draws[:, 1:] != np.asarray(joint[:, 1:])) > 0.25
 
 
 @pytest.mark.inference(concern="recovery")

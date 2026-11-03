@@ -68,8 +68,18 @@ class ParticleTarget:
     observations: jax.Array
     times: jax.Array
     state_space: StateSpace
+    output_coordinates: tuple[int, ...]
     intervals: ParticleIntervalObservations | None = None
     exact_constraints: ExactStateConstraints | None = None
+
+    @property
+    def coupled_recurrences(self) -> bool:
+        """Whether a replayed coordinate can affect later exact or proposal factors."""
+        return any(
+            index not in self.output_coordinates
+            for stage in self.state_space.recurrence
+            for index in stage.indices
+        )
 
     def in_coordinates(self, chart: PathChart) -> ParticleTarget:
         """Compose an exact chart beneath every particle density and proposal.

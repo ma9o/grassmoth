@@ -39,10 +39,19 @@ class GaussianPathProposal(NamedTuple):
 
     def sample(self, key: jax.Array) -> jax.Array:
         """Compose affine draws simultaneously across the time grid."""
+        return self.sample_with_log_density(key)[0]
+
+    def sample_with_log_density(self, key: jax.Array) -> tuple[jax.Array, jax.Array]:
+        """Return a draw and its normalized density from the generating innovations."""
         noise = jax.random.normal(key, self.offsets.shape, dtype=self.offsets.dtype)
         increments = self.offsets + jnp.einsum("tij,tj->ti", self.cholesky, noise) * self.free
         _, path = jax.lax.associative_scan(compose_affine_maps, (self.matrices, increments))
-        return jnp.asarray(path)
+        log_density = (
+            -0.5 * jnp.sum(jnp.where(self.free, noise**2, 0.0))
+            - jnp.sum(jnp.log(jnp.diagonal(self.cholesky, axis1=-2, axis2=-1)))
+            - 0.5 * jnp.sum(self.free) * jnp.log(2.0 * jnp.pi)
+        )
+        return jnp.asarray(path), log_density
 
     def log_density(self, path: jax.Array) -> jax.Array:
         """Use the exact factors used to draw, including their determinants.

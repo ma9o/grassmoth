@@ -83,7 +83,12 @@ class ParticleIntervalObservations:
 
         Returns full-manifest means and the mask of interval channels emitting here.
         """
-        response = self.response(context, state, index)
+        return self.means_from_response(memory, self.response(context, state, index), index)
+
+    def means_from_response(
+        self, memory: jax.Array, response: jax.Array, index: jax.Array | int
+    ) -> tuple[jax.Array, jax.Array]:
+        """Complete recorded windows using an already evaluated exact response."""
         channels = jnp.asarray(self.memory.channels, dtype=jnp.int32)
         slots = jnp.asarray(self.memory.emission_slots)[index]
         slot = jnp.maximum(slots, 0)
@@ -112,15 +117,30 @@ class ParticleIntervalObservations:
     def memory_path(self, context: ParticleContext, path: jax.Array) -> jax.Array:
         """Window memory along a path, with axes time, channel, slot and moment."""
         initial = jnp.zeros(self.memory.shape, dtype=path.dtype)
+        responses = jax.vmap(lambda state, index: self.response(context, state, index))(
+            path, jnp.arange(path.shape[0])
+        )
+        return self.memory_segment(responses, initial, jnp.arange(path.shape[0]))
 
-        def step(
-            previous: jax.Array, inputs: tuple[jax.Array, jax.Array]
-        ) -> tuple[jax.Array, jax.Array]:
-            state, index = inputs
-            current = self.advance(context, previous, state, index)
-            return current, current
+    def memory_segment(
+        self, responses: jax.Array, initial: jax.Array, indices: jax.Array
+    ) -> jax.Array:
+        """Replay a contiguous segment from its unchanged entering memory in parallel."""
+        if responses.shape[0] == 1:
+            return initial[None]
+        moments = jax.vmap(self._moments)(responses[:-1])[:, :, None, :]
+        keep = (~jnp.asarray(self.memory.reset)[indices[:-1]])[..., None]
+        weights = jnp.where(keep[..., 0], jnp.asarray(self.memory.current)[indices[:-1]], 0.0)
+        weights = weights + jnp.asarray(self.memory.previous)[indices[1:]]
+        increments = weights[..., None].astype(responses.dtype) * moments
 
-        _, tail = jax.lax.scan(step, initial, (path[:-1], jnp.arange(1, path.shape[0])))
+        def compose(left, right):
+            left_keep, left_value = left
+            right_keep, right_value = right
+            return right_keep & left_keep, right_keep * left_value + right_value
+
+        retained, sums = jax.lax.associative_scan(compose, (keep, increments))
+        tail = retained * initial + sums
         return jnp.concatenate((initial[None], tail))
 
     def trajectory_log_probs(

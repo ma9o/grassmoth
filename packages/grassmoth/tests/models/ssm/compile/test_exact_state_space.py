@@ -153,9 +153,24 @@ def _initial(target, path, *, kernel, position=None):
     )
 
 
+def test_output_accumulator_only_couples_blocks_when_it_reaches_later_factors():
+    model = _model()
+    model = model.with_entities(
+        edges=tuple(edge for edge in model.edges if edge.cause.name != "total")
+    )
+    compiled, problem = _problem(model)
+    index = next(i for i, item in enumerate(compiled.states) if item.name == "total")
+    channel = next(i for i, item in enumerate(compiled.observations) if item.state_index == index)
+    assert problem.runtime.output_coordinates == (index,)
+    readings = jnp.full((4, len(compiled.observations)), jnp.nan).at[0, channel].set(0.0)
+    assert _problem(model, readings)[1].runtime.output_coordinates == (index,)
+    assert _problem(model, readings.at[2, channel].set(0.5))[1].runtime.output_coordinates == ()
+
+
 def test_static_and_accumulator_target_preserves_support_density_feedback_and_gradients():
     compiled, problem = _problem(_model())
     target = problem.runtime
+    assert target.output_coordinates == ()
     indices = {s.name: i for i, s in enumerate(compiled.states)}
     b, x, a, y = (indices[n] for n in ("baseline", "driver", "total", "outcome"))
     assert set(compiled.state_space.initial) == {b, x, y}

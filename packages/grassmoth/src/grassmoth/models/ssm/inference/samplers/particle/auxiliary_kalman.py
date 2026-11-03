@@ -86,9 +86,8 @@ def auxiliary_kalman_move(
     free = ctx.latent_free_mask
     with jax.named_scope("kalman_forward_proposal"):
         forward = _proposal(target, guide, reference, auxiliary, variance, free)
-        draw = forward.sample(sampling_key)
+        draw, forward_density = forward.sample_with_log_density(sampling_key)
         proposed = draw[:, : reference.shape[-1]]
-        forward_density = forward.log_density(draw)
     with jax.named_scope("kalman_reverse_proposal"):
         reverse = _proposal(target, guide, proposed, auxiliary, variance, free)
         # Memory rows are replayed by the reverse proposal itself; their entries are unread.

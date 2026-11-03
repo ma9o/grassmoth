@@ -8,9 +8,11 @@ from typing import TYPE_CHECKING, cast
 import dynestyx as dsx
 import equinox as eqx
 import jax.numpy as jnp
+import numpy as np
 
 from grassmoth.artifacts.immutability import freeze_fields
 from grassmoth.models.ssm.compile.observation_windows import compile_window_memory
+from grassmoth.models.ssm.compile.path_dependencies import compile_output_coordinates
 from grassmoth.models.ssm.execution.dynamical_model import build_dynamical_model
 from grassmoth.models.ssm.execution.observation_operator import compile_observation_operator
 from grassmoth.models.ssm.execution.state_transition import SupportedEulerMaruyama
@@ -139,6 +141,7 @@ def build_particle_problem(
         observations,
         times,
         state_space,
+        compile_output_coordinates(compiled_dynamical_model, np.asarray(observations)),
         exact_constraints=exact_constraints,
     )
     intervals = (

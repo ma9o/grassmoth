@@ -121,6 +121,7 @@ def interval_target(
             (),
             (),
         ),
+        output_coordinates=(),
         intervals=intervals,
     )
 

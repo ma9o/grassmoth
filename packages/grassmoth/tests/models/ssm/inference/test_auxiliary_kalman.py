@@ -158,7 +158,7 @@ def test_deterministic_row_is_replayed_by_the_proposal_and_never_read():
         ),
         jnp.asarray(free),
     )
-    path = proposal.sample(jax.random.key(5))
+    path, sampled_density = proposal.sample_with_log_density(jax.random.key(5))
     # Dense law of the free coordinates: memory is affine in them, and the Gaussian
     # tilt applies to the augmented state at every time.
     memory_map = np.zeros((steps, steps))
@@ -188,6 +188,7 @@ def test_deterministic_row_is_replayed_by_the_proposal_and_never_read():
     covariance = np.linalg.inv(tilted)
     expected = multivariate_normal.logpdf(np.asarray(path[:, 0]), covariance @ linear, covariance)
     np.testing.assert_allclose(proposal.log_density(path), expected, atol=2e-5)
+    np.testing.assert_allclose(sampled_density, expected, atol=2e-5)
     np.testing.assert_allclose(
         proposal.log_density(path.at[:, 1].set(-7.0)), proposal.log_density(path), atol=1e-6
     )

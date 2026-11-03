@@ -30,6 +30,7 @@ from grassmoth.models.ssm.inference.samplers.particle.guided import (
 from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import _memory_guide
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
 from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
+from grassmoth.models.ssm.inference.targets.path_factors import prepare_path_factors
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth_test_support.interval_particle import interval_target
 
@@ -316,9 +317,25 @@ def test_replayed_prefix_factors_match_whole_path_and_independent_recurrences(tr
     labels = jnp.array([[-0.45], [0.55]])
     contexts = jax.vmap(lambda label: target.context(label, target.times))(labels)
     guide = target.context(jnp.array([0.05]), target.times)
+    factors = prepare_path_factors(target, guide, target.observations)
     memory = sequential_observations(target, contexts, guide)
     coordinates = jnp.array(
         [[0.2, 92.0, 93.0], [-0.3, 92.0, 93.0], [0.4, 92.0, 93.0], [-0.1, 92.0, 93.0]]
+    )
+    exact = target.replay_path(guide, coordinates)
+    cached = jax.jit(factors.initialize)(exact)
+    candidate = target.replay_path(guide, exact.at[1, 0].add(0.2))
+    updated = jax.jit(lambda old, new: factors.update(old, new, jnp.asarray(1), 1))(
+        cached, candidate
+    )
+    complete = jax.jit(factors.initialize)(candidate)
+    for actual_factor, expected_factor in zip(updated, complete, strict=True):
+        np.testing.assert_allclose(actual_factor, expected_factor, atol=2e-5)
+    np.testing.assert_allclose(
+        updated.difference(cached),
+        target.factor_log_prob(guide, candidate, target.observations)
+        - target.factor_log_prob(guide, exact, target.observations),
+        atol=3e-5,
     )
     carried = jax.jit(memory.path)(coordinates)
     replayed = jax.vmap(memory.replayed_states)(carried)
