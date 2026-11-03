@@ -25,9 +25,15 @@ from grassmoth.artifacts.simulation import (
 )
 from grassmoth_server.actions.contracts.call_state import PendingCall
 from grassmoth_server.actions.contracts.effects import ActionEffects
-from grassmoth_server.actions.contracts.inputs import FitInput, NewFitTarget, SimulateInput
+from grassmoth_server.actions.contracts.inputs import (
+    EditModelInput,
+    FitInput,
+    NewFitTarget,
+    SimulateInput,
+)
 from grassmoth_server.actions.contracts.requests import (
     DataDiffRequest,
+    EditModelRequest,
     FitRequest,
     ModelDiffRequest,
     ScientificActionRequest,
@@ -53,7 +59,14 @@ from grassmoth_server.study.state import RetractedArtifact
 from grassmoth_server_test_support.action import (
     applied_record,
     empty_simulation_summary,
+    fixture_request,
     question_root,
+)
+from grassmoth_server_test_support.storage import (
+    result_blob,
+    routing_record,
+    seed_record,
+    stage_result,
 )
 from grassmoth_test_support.git import git_oid
 
@@ -67,20 +80,41 @@ def _publish(repository, *artifacts, retracted=()):
             result=GitOid(str(repository.repo.create_blob(msgpack.packb({})))),
             effects=ActionEffects(produced=artifacts, retracted=retracted),
         )
+        request = fixture_request(
+            ArtifactStore(repository.workspace_id),
+            repository.state(),
+            "prepare_data" if artifacts else "edit_model",
+            repository.latest_seq() + 1,
+        )
+        if not artifacts:
+            request = request.revised(input=request.input.revised(parent_ref=repository.head()))
+        stage_result(ArtifactStore(repository.workspace_id), outcome.result, request)
         return repository.append(
             AttemptRecord(
                 seq=repository.latest_seq() + 1,
                 ts="2026-01-01T00:00:00Z",
-                attempt=PrepareAttempt(action="prepare_data", request=None, outcome=outcome)
+                attempt=PrepareAttempt(action="prepare_data", request=request, outcome=outcome)
                 if artifacts
-                else EditAttempt(action="edit_model", request=None, outcome=outcome),
+                else EditAttempt(action="edit_model", request=request, outcome=outcome),
             )
         )
+    from grassmoth_server.study.persistence.store import read_model
+
+    request = EditModelRequest[GitOid](
+        input=EditModelInput[GitOid](
+            parent_ref=repository.head(),
+            dynamical_model_spec=read_model(
+                ArtifactStore(repository.workspace_id),
+                next(a.revision for a in artifacts if a.artifact_id == "model"),
+            ),
+        )
+    )
     return repository.append(
         applied_record(
             repository.workspace_id,
             Applied(result=None, effects=ActionEffects(produced=artifacts, retracted=retracted)),
             seq=repository.latest_seq() + 1,
+            request=request,
         )
     )
 
@@ -95,7 +129,8 @@ def study(tmp_path, monkeypatch):
     question_root("LATEST")
     repository, store = StudyRepository("LATEST"), ArtifactStore("LATEST")
     models = tuple(
-        store.write_artifact(
+        seed_record(
+            store,
             "model",
             produced_by="edit_model",
             derived_from={"question": repository.question().revision},
@@ -107,18 +142,14 @@ def study(tmp_path, monkeypatch):
     )
     for model in models:
         _publish(repository, model)
-    raw = store.write_artifact(
+    raw = seed_record(
+        store,
         "raw_data",
         produced_by="prepare_data",
         derived_from={},
         json_files={"data.json": {"version": 1}},
     )
-    panel = store.write_artifact(
-        "panel",
-        produced_by="prepare_data",
-        derived_from={"raw_data": raw.revision},
-        json_files={"data.json": {}},
-    )
+    panel = routing_record(store, "panel", derived_from={"raw_data": raw.revision})
     _publish(repository, raw, panel)
     evidence = SimulationEvidence(
         time_origin=datetime(2026, 1, 1, tzinfo=UTC),
@@ -151,13 +182,14 @@ def study(tmp_path, monkeypatch):
                     result=evidence.revised(seed=seed),
                     effects=ActionEffects(
                         reports={
-                            "simulation": store.write_result(
+                            "simulation": result_blob(
+                                store,
                                 SimulationReport(
                                     evidence=evidence.revised(seed=seed),
                                     summary=empty_simulation_summary(),
                                     law=AuthoredLawProvenance(),
                                     fit_reliability="not_fitted",
-                                )
+                                ),
                             )
                         }
                     ),
@@ -166,6 +198,7 @@ def study(tmp_path, monkeypatch):
                     input=SimulateInput(
                         dynamical_model_spec_ref=models[-1].revision,
                         simulation=SimulationSpec(start=date(2026, 1, 1), horizon="1d"),
+                        seed=seed,
                     )
                 ),
                 seq=repository.latest_seq() + 1,
@@ -177,13 +210,16 @@ def study(tmp_path, monkeypatch):
             ts="2026-01-01T00:00:00Z",
             attempt=SimulateAttempt(
                 action="simulate",
-                request=None,
+                request=fixture_request(
+                    store, repository.state(), "simulate", repository.latest_seq() + 1
+                ),
                 outcome=Raised(error_type="RuntimeError", error_message="failed"),
             ),
         )
     )
     # A staged artifact has a ref in the store but was never successfully published.
-    store.write_artifact(
+    seed_record(
+        store,
         "model",
         produced_by="edit_model",
         derived_from={},
@@ -372,15 +408,15 @@ def test_prepare_data_captures_named_folder_recursively_and_pins_bytes(study, cl
     assert poll.status_code == 200
     assert msgpack.unpackb(poll.content)["call_id"] == original_id
     for name, body in expected.items():
-        staged = workspace / "scratch" / "source-files" / captured.hashes[name] / name
+        staged = workspace / "tmp" / str(call_identity(dispatched[0])) / "sources" / name
         assert staged.read_bytes() == body
 
 
 @pytest.mark.parametrize(
     "source",
-    ["", ".", "..", "../input", "/input", "input/nested", "input\\nested", {"files": ["data.csv"]}],
+    ["", ".", "..", "../input", "/input", "input\\nested", {"files": ["data.csv"]}],
 )
-def test_prepare_data_requires_one_folder_name(client, source):
+def test_prepare_data_requires_a_safe_relative_folder(client, source):
     http, dispatched = client
     assert _prepare_folder(http, source).status_code == 422
     assert not dispatched
@@ -506,7 +542,8 @@ def test_latest_does_not_resurrect_retracted_or_stale_panel(study, client, inval
             retracted=(RetractedArtifact(artifact_id="panel", reason_ref="empty extraction"),),
         )
     else:
-        raw = store.write_artifact(
+        raw = seed_record(
+            store,
             "raw_data",
             produced_by="prepare_data",
             derived_from={},

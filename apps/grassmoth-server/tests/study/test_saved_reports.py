@@ -72,6 +72,7 @@ from grassmoth_server_test_support.action import (
     question_root,
 )
 from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata, seed_model
+from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.model import x_y_model
 
 pytestmark = pytest.mark.contract
@@ -82,7 +83,8 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     workspace = "SAVED"
     question_root(workspace)
     store, repository = ArtifactStore(workspace), StudyRepository(workspace)
-    panel = store.write_artifact(
+    panel = seed_record(
+        store,
         "panel",
         produced_by="prepare_data",
         derived_from={},
@@ -103,13 +105,13 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         if model_checks is not None:
             if isinstance(model_checks, tuple):
                 reports.update(
-                    checks=store.write_result(model_checks[0]),
-                    identification=store.write_result(model_checks[1]),
+                    checks=result_blob(store, model_checks[0]),
+                    identification=result_blob(store, model_checks[1]),
                 )
             else:
-                reports["checks"] = store.write_result(model_checks)
+                reports["checks"] = result_blob(store, model_checks)
         if data_profile is not None:
-            reports["data-profile"] = store.write_result(data_profile)
+            reports["data-profile"] = result_blob(store, data_profile)
         record = applied_record(
             workspace,
             applied.revised(effects=applied.effects.revised(reports=reports)),
@@ -165,7 +167,8 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         data_profile=profile,
     )
     dynamical_model_spec = x_y_model()
-    authored = store.write_artifact(
+    authored = seed_record(
+        store,
         "model",
         produced_by="edit_model",
         derived_from={"question": repository.question().revision},
@@ -212,7 +215,8 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         ),
         model_checks=(edit_checks, identification),
     )
-    fitted = store.write_artifact(
+    fitted = seed_record(
+        store,
         "model",
         produced_by="fit",
         derived_from={"model": authored.revision, "panel": panel.revision},
@@ -254,8 +258,8 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
             effects=ActionEffects(
                 produced=(fitted,),
                 reports={
-                    "inference": store.write_result(inference),
-                    "checks": store.write_result(validation),
+                    "inference": result_blob(store, inference),
+                    "checks": result_blob(store, validation),
                 },
             ),
         ),
@@ -315,7 +319,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     simulation_publication, simulated = publish(
         Applied(
             result=evidence,
-            effects=ActionEffects(reports={"simulation": store.write_result(simulation)}),
+            effects=ActionEffects(reports={"simulation": result_blob(store, simulation)}),
         ),
         request=SimulateRequest[GitOid](
             input=SimulateInput[GitOid](
@@ -324,11 +328,11 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
             )
         ),
     )
-    cache = Path(data.cache_dir(workspace))
+    cache = Path(data.tmp_dir(workspace))
     cache.mkdir(parents=True, exist_ok=True)
     shutil.rmtree(cache)
     monkeypatch.setattr(
-        "grassmoth_server.actions.output_builder.complete_attempt", unexpected_evaluation
+        "grassmoth_server.study.persistence.store.ArtifactStore.write_result", unexpected_evaluation
     )
 
     for owner in (

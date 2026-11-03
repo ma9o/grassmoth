@@ -10,22 +10,22 @@ from grassmoth_server.storage import paths as data_module
 
 def open_repository(workspace_id: str, path: Path | None = None) -> pygit2.Repository:
     """Open or initialize local study history, rejecting incompatible repository formats."""
-    if path is None and "://" in data_module.study_dir(workspace_id):
+    if path is None and "://" in data_module.history_dir(workspace_id):
         raise ValueError("Study history requires local storage")
-    destination = path or Path(data_module.study_dir(workspace_id)) / "history.git"
+    destination = path or Path(data_module.history_dir(workspace_id))
     if destination.exists():
         repository = pygit2.Repository(str(destination))
         if (
             "grassmoth.format" not in repository.config
-            or repository.config.get_int("grassmoth.format") != 31
+            or repository.config.get_int("grassmoth.format") != 32
         ):
             raise ValueError(
-                "This study uses an incompatible storage format. Create a new study for format 31."
+                "This study uses an incompatible storage format. Create a new study for format 32."
             )
         return repository
     destination.parent.mkdir(parents=True, exist_ok=True)
     repository = pygit2.init_repository(str(destination), bare=True, initial_head="main")
-    repository.config["grassmoth.format"] = 31
+    repository.config["grassmoth.format"] = 32
     repository.config["user.name"] = "grassmoth"
     repository.config["user.email"] = "study@local"
     return repository
@@ -45,22 +45,6 @@ def write_blob(repository: pygit2.Repository, payload: bytes) -> pygit2.Oid:
         check=True,
     )
     return pygit2.Oid(hex=written.stdout.decode().strip())
-
-
-def write_tree(repository: pygit2.Repository, files: dict[str, bytes]) -> pygit2.Oid:
-    """Write path-keyed bytes as nested Git trees and return the root tree identity."""
-    builder = repository.TreeBuilder()
-    directories: dict[str, dict[str, bytes]] = {}
-    for name, content in files.items():
-        directory, separator, rest = name.partition("/")
-        if separator:
-            directories.setdefault(directory, {})[rest] = content
-        else:
-            builder.insert(name, write_blob(repository, content), pygit2.GIT_FILEMODE_BLOB)
-    for name, children in directories.items():
-        builder.insert(name, write_tree(repository, children), pygit2.GIT_FILEMODE_TREE)
-    oid: pygit2.Oid = builder.write()
-    return oid
 
 
 def read_blob(repository: pygit2.Repository, identity: pygit2.Oid) -> bytes:
@@ -93,3 +77,30 @@ def read_file(repository: pygit2.Repository, revision: str, path: str) -> bytes:
         raise StudyLookupError(f"No stored file {path!r} at {revision}")
     blob = tree[path].peel(pygit2.Blob)
     return blob.data
+
+
+def write_file_blob(repository: pygit2.Repository, path: Path) -> pygit2.Oid:
+    """Stream an encoded file through Git without constructing another body in memory."""
+    written = subprocess.run(
+        ["git", "--git-dir", repository.path, "hash-object", "-w", "--", str(path)],
+        capture_output=True,
+        check=True,
+    )
+    return pygit2.Oid(hex=written.stdout.decode().strip())
+
+
+def write_directory(repository: pygit2.Repository, path: Path) -> pygit2.Oid:
+    """Capture a directory as real Git edges, streaming each file to the object store."""
+    builder = repository.TreeBuilder()
+    if path.exists():
+        for child in sorted(path.iterdir()):
+            if child.is_dir():
+                builder.insert(
+                    child.name, write_directory(repository, child), pygit2.GIT_FILEMODE_TREE
+                )
+            elif child.is_file():
+                builder.insert(
+                    child.name, write_file_blob(repository, child), pygit2.GIT_FILEMODE_BLOB
+                )
+    oid: pygit2.Oid = builder.write()
+    return oid

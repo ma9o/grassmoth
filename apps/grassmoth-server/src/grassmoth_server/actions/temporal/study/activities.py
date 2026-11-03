@@ -9,7 +9,7 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from grassmoth.public import AggregatedCompileError, IncompleteModelError
-from grassmoth_server.actions.contracts.requests import PrepareDataRequest
+from grassmoth_server.actions.contracts.requests import PrepareDataRequest, call_identity
 from grassmoth_server.actions.edit_model import edit_model
 from grassmoth_server.actions.edit_question import edit_question
 from grassmoth_server.actions.errors import ActionExecutionError
@@ -30,7 +30,6 @@ from grassmoth_server.actions.temporal.study.messages import (
     ActionInput,
     AttemptPublication,
     ChecksResult,
-    CompleteResultInput,
     EditModelActivityInput,
     EditQuestionActivityInput,
     EvaluateChecksInput,
@@ -86,9 +85,7 @@ async def run_action_activity(activity_input: ActionInput) -> ActionAttempt:
         raise ApplicationError(
             str(exc), exc.diagnostics, type=type(exc).__name__, non_retryable=True
         ) from exc
-    return action_attempt(
-        activity_input.request, Applied(result=result.result, effects=result.effects)
-    )
+    return action_attempt(activity_input.request, result)
 
 
 @activity.defn
@@ -112,14 +109,13 @@ async def edit_question_activity(
 @activity.defn
 async def evaluate_model_checks_activity(activity_input: EvaluateChecksInput) -> ChecksResult:
     """Read the action's complete checks and produce its completion messages."""
-    from grassmoth.public import EditModelOutput
+    from grassmoth.public import EditModelOutput, FitOutput
     from grassmoth_server.actions.contracts.requests import FitRequest
-    from grassmoth_server.compute.remote_receipts import published_fit_report
 
     store = ArtifactStore(activity_input.workspace_id)
     if isinstance(activity_input.request, FitRequest):
         fit = await asyncio.to_thread(
-            lambda: published_fit_report(store, activity_input.applied.result)
+            lambda: store.read_result(activity_input.applied.result, FitOutput)
         )
         return ChecksResult(reports={}, messages=fit_check_messages(fit.checks, datetime.now(UTC)))
     if isinstance(activity_input.request, PrepareDataRequest):
@@ -164,16 +160,6 @@ async def read_inputs_activity(activity_input: ReadInputsInput) -> ActionBase:
 
 
 @activity.defn
-async def complete_result_activity(activity_input: CompleteResultInput) -> ActionAttempt:
-    """Save the complete typed result and return its small publication reference."""
-    from grassmoth_server.actions.output_builder import complete_attempt
-
-    return await asyncio.to_thread(
-        complete_attempt, activity_input.workspace_id, activity_input.attempt
-    )
-
-
-@activity.defn
 async def journal_activity(activity_input: AttemptPublication) -> StudyRevision:
     """Publish the owned record and traces; replay retries use its persisted identity."""
     return await asyncio.to_thread(_journal_attempt, activity_input)
@@ -182,26 +168,24 @@ async def journal_activity(activity_input: AttemptPublication) -> StudyRevision:
 def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
     """Read large saved reports and publish their journal entry outside the event loop."""
     journal = StudyRepository(activity_input.workspace_id)
-    existing = journal.read_attempt(activity_input.record.seq)
+    request = activity_input.record.attempt.request
+    assert request is not None
+    identity = call_identity(request)
+    existing = journal.call(identity)
     if existing is not None:
         return existing
     record = activity_input.record
     messages = record.messages
     if isinstance(record.attempt.outcome, Applied):
         from grassmoth.public import DataDiffOutput, FitOutput, SimulateOutput
-        from grassmoth_server.compute.remote_receipts import RemoteFitReceipt, published_fit_report
         from grassmoth_server.study.queries.results import read_result
 
         store = ArtifactStore(activity_input.workspace_id)
-        result = (
-            published_fit_report(store, record.attempt.outcome.result)
-            if record.attempt.action == "fit"
-            else read_result(store, record.attempt.action, record.attempt.outcome.result)
-        )
+        result = read_result(store, record.attempt.action, record.attempt.outcome.result)
         if messages:
             announcements = (
                 inference_messages(result.inference, messages[-1].timestamp)
-                if isinstance(result, (FitOutput, RemoteFitReceipt))
+                if isinstance(result, FitOutput)
                 else simulation_messages(result.report, messages[-1].timestamp)
                 if isinstance(result, SimulateOutput)
                 else comparison_messages(result.report, messages[-1].timestamp)
@@ -209,7 +193,7 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
                 else ()
             )
             messages = messages[:-1] + announcements + messages[-1:]
-    logs = collect_run_traces(activity_input.workspace_id, record.seq)
+    logs = collect_run_traces(activity_input.workspace_id, identity)
     record = record.with_logs(
         messages=messages,
         trace_ids=tuple(path.removeprefix("traces/").removesuffix(".json") for path in logs),
@@ -221,7 +205,7 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
 
     if record.attempt_id is not None:
         logs["progress.json"] = TypeAdapter(tuple[ProgressEvent, ...]).dump_json(
-            tuple(read_events(activity_input.workspace_id, record.attempt_id))
+            tuple(read_events(activity_input.workspace_id, identity))
         )
     return journal.append(record, logs=logs)
 
@@ -233,7 +217,6 @@ async def collect_completed_runs_activity(workspace_id: str) -> None:
 
 
 ALL_ACTIVITIES = [
-    complete_result_activity,
     run_action_activity,
     edit_question_activity,
     edit_model_activity,

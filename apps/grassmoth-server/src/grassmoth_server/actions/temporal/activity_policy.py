@@ -20,11 +20,11 @@ EVENT_TIMEOUT = timedelta(seconds=30)
 EVENT_RETRY = RetryPolicy(initial_interval=timedelta(seconds=1), maximum_attempts=5)
 
 
-async def emit_progress(workspace_id: str, event: ProgressEvent) -> None:
+async def emit_progress(workspace_id: str, call_id: str, event: ProgressEvent) -> None:
     """Publish one live progress event using the common activity policy."""
     await workflow.execute_activity(
         "emit_progress_event_activity",
-        ProgressEventInput(workspace_id=workspace_id, event=event),
+        ProgressEventInput(workspace_id=workspace_id, call_id=call_id, event=event),
         start_to_close_timeout=EVENT_TIMEOUT,
         retry_policy=EVENT_RETRY,
     )

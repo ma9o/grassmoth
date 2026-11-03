@@ -46,7 +46,6 @@ with workflow.unsafe.imports_passed_through():
         read_source_data_activity,
     )
     from grassmoth_server.actions.temporal.study.activities import (
-        complete_result_activity,
         evaluate_model_checks_activity,
         run_action_activity,
     )
@@ -55,7 +54,6 @@ with workflow.unsafe.imports_passed_through():
         ActionRequest,
         AttemptPublication,
         ChecksResult,
-        CompleteResultInput,
         EditModelActivityInput,
         EditQuestionActivityInput,
         EvaluateChecksInput,
@@ -294,12 +292,7 @@ class StudyWorkflow:
                         )
                     )
                 )
-            completed = await workflow.execute_activity(
-                complete_result_activity,
-                CompleteResultInput(workspace_id=self._workspace_id, attempt=attempt),
-                start_to_close_timeout=_CHECK_TIMEOUT,
-                retry_policy=_ACTIVITY_RETRY,
-            )
+            completed = attempt
         except (ActivityError, ChildWorkflowError) as exc:
             completed = action_attempt(action, temporal_failure(exc))
         await self._journal(request, running, completed)
@@ -311,7 +304,11 @@ class StudyWorkflow:
         memo = {"workspace_id": self._workspace_id, "seq": seq, "action": "prepare_data"}
         raw_data = await workflow.execute_activity(
             read_source_data_activity,
-            ReadSourceDataInput(workspace_id=self._workspace_id, source=preparation.source),
+            ReadSourceDataInput(
+                workspace_id=self._workspace_id,
+                call_id=call_identity(request.request),
+                source=preparation.source,
+            ),
             start_to_close_timeout=_WRITE_TIMEOUT,
             retry_policy=_ACTIVITY_RETRY,
             summary="Read source tables",
@@ -324,6 +321,7 @@ class StudyWorkflow:
                 workspace_id=self._workspace_id,
                 seq=seq,
                 attempt_id=request.attempt_id,
+                call_id=call_identity(request.request),
                 raw_data_revision=raw_data.revision,
                 preparation=preparation,
             ),

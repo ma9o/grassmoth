@@ -36,7 +36,7 @@ def write_subroutine_trace(path: str, trace: LLMTrace) -> None:
 
 def subroutine_root(workspace_id: str, run_id: str, subroutine_id: str) -> str:
     """Locate a subroutine's scratch storage within its workspace and run."""
-    return storage.join(data_module.scratch_run_dir(workspace_id, run_id), "llm", subroutine_id)
+    return storage.join(data_module.call_dir(workspace_id, run_id), "llm", subroutine_id)
 
 
 def subroutine_conversation_path(

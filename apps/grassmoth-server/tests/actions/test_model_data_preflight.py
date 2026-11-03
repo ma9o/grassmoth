@@ -26,6 +26,7 @@ from grassmoth_server_test_support.action import edit_and_check, prepared_profil
 from grassmoth_server_test_support.helpers import write_question
 from grassmoth_server_test_support.model import stress_sleep_causal_model
 from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
+from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import compile_fit_fixture
 from grassmoth_test_support.model import construct_named
@@ -111,7 +112,8 @@ def test_edit_with_missing_panel_variable_has_no_data_findings(tmp_path, monkeyp
         preparation=full.preparation.revised(variables=full.preparation.variables[:1]),
     )
     panel = panel_frame(n_days=4).filter(pl.col("indicator_id") == metadata.variables[0].id)
-    record = store.write_artifact(
+    record = seed_record(
+        store,
         "panel",
         produced_by="prepare_data",
         derived_from={},

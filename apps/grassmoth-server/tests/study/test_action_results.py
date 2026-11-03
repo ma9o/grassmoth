@@ -20,6 +20,7 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_question
 from grassmoth_server.study.queries.action_outputs import completed_call_msgpack
 from grassmoth_server.study.records import Applied, AttemptRecord, EditQuestionAttempt
+from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id
 
 pytestmark = pytest.mark.contract
@@ -32,7 +33,6 @@ def _array_value(values):
 
 def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeypatch, tmp_path):
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
-    from grassmoth_server.actions import output_builder
     from grassmoth_server.api import studies as study_api
 
     workspace = "RESULTS"
@@ -43,14 +43,8 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
     )
     request = EditQuestionRequest(input=EditQuestionInput(question=question))
     result = EditQuestionOutput(question=question)
-    ref = store.write_result(result)
-    staged = store.write_artifact(
-        "question",
-        derived_from={},
-        produced_by="edit_question",
-        json_files={"question.json": question.model_dump(mode="json")},
-    )
-    artifact = store.result_artifact(staged, ref)
+    ref = store.write_result(result, call_id=call_identity(request))
+    artifact = store.result_record("question", ref, derived_from={}, produced_by="edit_question")
     revision = repository.append(
         AttemptRecord(
             seq=1,
@@ -71,7 +65,7 @@ def test_poll_and_repeated_post_return_the_saved_result_without_building(monkeyp
     def cannot_build(*args, **kwargs):
         raise AssertionError("A saved call must never construct another result")
 
-    monkeypatch.setattr(output_builder, "complete_attempt", cannot_build)
+    monkeypatch.setattr(ArtifactStore, "write_result", cannot_build)
     monkeypatch.setenv("READ_ONLY_FACADE", "0")
     app = FastAPI()
 
@@ -145,7 +139,6 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
     from grassmoth_server.actions.contracts.inputs import PrepareDataInput
     from grassmoth_server.actions.contracts.preparation import FileSourceRef
     from grassmoth_server.actions.contracts.requests import PrepareDataRequest
-    from grassmoth_server.actions.output_builder import complete_attempt
     from grassmoth_server.study.queries.data import read_data_history
     from grassmoth_server.study.records import action_attempt
     from grassmoth_server.study.state import ArtifactResult
@@ -166,7 +159,8 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
         pl.col("anchor_time", "support_start", "support_end").str.to_datetime(),
         pl.when(pl.col("value") == 1.0).then(None).otherwise(pl.col("value")).alias("value"),
     )
-    panel = store.write_artifact(
+    panel = seed_record(
+        store,
         "panel",
         produced_by="prepare_data",
         derived_from={},
@@ -196,24 +190,19 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
         metadata,
         DataPreparationResult(),
     )
-    attempt = complete_attempt(
-        workspace,
-        action_attempt(
-            request,
-            Applied(
-                result=store.write_result(prepared),
-                effects=ActionEffects(
-                    produced=(panel,), reports={"data-profile": store.write_result(profile)}
-                ),
-            ),
-        ),
+    saved = store.write_result(prepared, call_id=call_identity(request))
+    published_panel = store.result_record(
+        "panel", saved, derived_from={}, produced_by="prepare_data"
+    )
+    attempt = action_attempt(
+        request, Applied(result=saved, effects=ActionEffects(produced=(published_panel,)))
     )
     revision = repository.append(AttemptRecord(seq=2, ts="2026-01-01T00:00:00Z", attempt=attempt))
     assert isinstance(attempt.outcome, Applied)
     published = attempt.outcome.effects.produced[0]
     assert isinstance(published.source, ArtifactResult)
     assert published.source.result == attempt.outcome.result
-    assert published.revision != panel.revision
+    assert published.revision == published_panel.revision
     actual = read_data_history(
         store, DataRef[GitOid, int](revision=revision.commit_id, replicate_index=0)
     ).observations.recorded.frame
@@ -230,7 +219,6 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
     from grassmoth_server.actions.contracts.inputs import EditModelInput
     from grassmoth_server.actions.contracts.requests import EditModelRequest
     from grassmoth_server.actions.model_diff import model_diff
-    from grassmoth_server.actions.output_builder import complete_attempt
     from grassmoth_server.study.records import action_attempt
     from grassmoth_server_test_support.action import edit_and_check, question_root
     from grassmoth_test_support.helpers import make_model
@@ -250,7 +238,7 @@ def test_model_comparisons_resolve_published_artifact_trees_as_specs(monkeypatch
     )
     staged = edit_and_check(workspace, request, repository.state())
     assert isinstance(staged, Applied)
-    attempt = complete_attempt(workspace, action_attempt(request, staged))
+    attempt = action_attempt(request, staged)
     repository.append(AttemptRecord(seq=2, ts="2026-01-01T00:00:00Z", attempt=attempt))
     assert isinstance(attempt.outcome, Applied)
     tree = attempt.outcome.effects.produced[0].revision
@@ -288,7 +276,7 @@ def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, repository = ArtifactStore("BUFFERS"), StudyRepository("BUFFERS")
-    identity = store.write_array(values)
+    identity = _array_value(values).identity
     result = EditModelOutput(
         dynamical_model_spec=DynamicalModelSpec.model_validate(
             {
@@ -297,11 +285,8 @@ def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
                         "distribution": "Delta",
                         "params": {
                             "v": {
-                                "array_ref": identity,
-                                "shape": list(values.shape),
-                                "dtype": str(values.dtype.newbyteorder("<")),
-                                "index": [],
-                            }
+                                "npy": _array_value(values).npy,
+                            },
                         },
                     }
                 }
@@ -311,12 +296,12 @@ def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
         identification={"outcome": None, "treatments": {}},
         pruning={},
     )
-    ref = store.write_result(result)
     request = EditModelRequest[GitOid](
         input=EditModelInput[GitOid](
             parent_ref=git_oid(1), dynamical_model_spec=DynamicalModelSpec()
         )
     )
+    ref = store.write_result(result, call_id=call_identity(request))
     publication = AttemptRecord(
         seq=1,
         ts="2026-01-01T00:00:00Z",
@@ -326,18 +311,11 @@ def test_published_arrays_remain_readable_after_execution_buffers_are_removed(
             outcome=Applied(result=ref, effects=ActionEffects()),
         ),
     )
-    from grassmoth_server.storage import arrays
+    assert f"refs/arrays/{identity}" not in store.repo.references
+    repository.append(publication)
+    from grassmoth_server.study.sweep import collect_completed_runs
 
-    read_staging = arrays.read_array_bytes
-
-    def publish_during_staging_read(directory, selected):
-        repository.append(publication)
-        return read_staging(directory, selected)
-
-    with monkeypatch.context() as concurrent:
-        concurrent.setattr(arrays, "read_array_bytes", publish_during_staging_read)
-        np.testing.assert_array_equal(store.read_array(identity), values)
-    assert not (tmp_path / "BUFFERS/store/arrays" / f"{identity}.npy").exists()
+    collect_completed_runs("BUFFERS")
     np.testing.assert_array_equal(ArtifactStore("BUFFERS").read_array(identity), values)
     payload = unpack_result(repository.read_file(repository.head(), "result.msgpack"))
     assert payload == {

@@ -41,6 +41,7 @@ from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
 from grassmoth_server_test_support.git import artifact_revisions
+from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.git import git_oid
 
 
@@ -273,7 +274,8 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
 
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, history = ArtifactStore("DIFF"), StudyRepository("DIFF")
-    model = store.write_artifact(
+    model = seed_record(
+        store,
         "model",
         produced_by="edit_model",
         derived_from={},
@@ -314,7 +316,7 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
             store.workspace_id,
             Applied(
                 result=report.evidence,
-                effects=ActionEffects(reports={"simulation": store.write_result(report)}),
+                effects=ActionEffects(reports={"simulation": result_blob(store, report)}),
             ),
             request=SimulateRequest(
                 input=SimulateInput(
@@ -341,7 +343,8 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
             "observation_window": ["1d"] * 3,
         }
     )
-    panel = store.write_artifact(
+    panel = seed_record(
+        store,
         "panel",
         produced_by="prepare_data",
         derived_from={},
@@ -423,7 +426,7 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
                         result=saved,
                         effects=ActionEffects(
                             reports={
-                                "simulation": store.write_result(report.revised(evidence=saved))
+                                "simulation": result_blob(store, report.revised(evidence=saved))
                             }
                         ),
                     ),

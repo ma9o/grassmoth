@@ -46,7 +46,6 @@ from grassmoth_server.actions.contracts.requests import (
 )
 from grassmoth_server.actions.temporal.study import workflow as study_workflow
 from grassmoth_server.actions.temporal.study.activities import (
-    complete_result_activity,
     edit_question_activity,
     journal_activity,
     read_inputs_activity,
@@ -170,8 +169,6 @@ def test_call_contract_reuses_successful_running_and_failed_calls(tmp_path, monk
                 entered.set()
                 await release.wait()
                 return await edit_question_activity(payload)
-            if name == "complete_result_activity":
-                return await complete_result_activity(payload)
             if name == "journal_activity":
                 return await journal_activity(payload)
             if name == "collect_completed_runs_activity":

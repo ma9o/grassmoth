@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -23,17 +21,19 @@ from grassmoth_server.actions.contracts.requests import (
     call_identity,
 )
 from grassmoth_server.study.errors import StudyLookupError
+from grassmoth_server.study.persistence.call import SavedApplied, SavedCall, SavedResult
 from grassmoth_server.study.persistence.git_objects import (
     open_repository,
-    read_blob,
     read_file,
-    write_tree,
+    write_blob,
+    write_directory,
 )
 from grassmoth_server.study.records import (
     ActionMessage,
     Applied,
     Rejected,
     StudyRevision,
+    action_attempt,
     argument_parents,
     recorded_question,
 )
@@ -113,20 +113,49 @@ class StudyRepository:
         """Require an existing study commit whose retained attempt, if any, was applied successfully."""
         revision = at
         commit = self._commit(revision)
-        if "logs" in commit.tree and not isinstance(
+        if "call.json" in commit.tree and not isinstance(
             self.record(revision).record.attempt.outcome, Applied
         ):
             raise StudyLookupError(f"Commit {revision} is an unsuccessful attempt")
         return revision
 
+    def saved_record(self, revision: str) -> SavedCall:
+        """Read storage-only metadata without loading any scientific body."""
+        return SavedCall.model_validate_json(self.read_file(revision, "call.json"))
+
     def record(self, revision: str) -> StudyRevision:
-        """Parse a retained attempt and pair it with its publication commit and parents."""
-        commit = self._commit(revision)
+        """Reconstruct public effects from real record trees in their retained order."""
+        from grassmoth_server.actions.contracts.effects import ActionEffects
+        from grassmoth_server.study.persistence.store import ArtifactStore
         from grassmoth_server.study.records import AttemptRecord
 
+        commit = self._commit(revision)
+        saved = self.saved_record(revision)
+        outcome = saved.outcome
+        store = ArtifactStore(self.workspace_id, repository_path=self.path)
+        public_outcome = (
+            Applied(
+                result=outcome.result.revision,
+                effects=ActionEffects(
+                    produced=tuple(
+                        store.read_meta(kind, str(commit.tree[f"records/{kind}"].id))
+                        for kind in outcome.produced
+                    ),
+                    retracted=outcome.retracted,
+                    reports=outcome.reports,
+                ),
+            )
+            if isinstance(outcome, SavedApplied)
+            else outcome
+        )
         return StudyRevision(
-            record=AttemptRecord.model_validate_json(
-                read_file(self.repo, revision, "logs/attempt.json")
+            record=AttemptRecord(
+                seq=saved.seq,
+                attempt_id=saved.attempt_id,
+                ts=saved.ts,
+                messages=saved.messages,
+                trace_ids=saved.trace_ids,
+                attempt=action_attempt(saved.request, public_outcome),
             ),
             commit_id=GitOid(str(commit.id)),
             parent_ids=tuple(GitOid(str(parent)) for parent in commit.parent_ids),
@@ -136,38 +165,25 @@ class StudyRepository:
         """Read indexed attempts in submission order, optionally through one attempt's sequence."""
         if revision is None:
             return self.attempts()
-        if "logs" not in self._commit(revision).tree:
+        if "call.json" not in self._commit(revision).tree:
             return []
         seq = self.record(revision).record.seq
         return [item for item in self.attempts() if item.record.seq <= seq]
 
     def attempts(self) -> list[StudyRevision]:
-        """Read all indexed attempts in numerical study-sequence order."""
-        refs = (ref for ref in self.repo.references if ref.startswith("refs/attempts/"))
-        return [
-            self.record(str(self.repo.references[ref].target))
-            for ref in sorted(refs, key=lambda ref: int(ref.rsplit("/", 1)[1]))
-        ]
-
-    def read_attempt(self, seq: int) -> StudyRevision | None:
-        """Workflow retry lookup; attempt numbers are not scientific revision identities."""
-        ref = f"refs/attempts/{seq}"
-        return (
-            self.record(str(self.repo.references[ref].target))
-            if ref in self.repo.references
-            else None
+        """Read every retained call in numerical submission order."""
+        return sorted(
+            (
+                self.record(str(self.repo.references[ref].target))
+                for ref in self.repo.references
+                if ref.startswith("refs/calls/")
+            ),
+            key=lambda revision: revision.record.seq,
         )
 
     def latest_seq(self) -> int:
-        """Return the highest indexed attempt sequence, or zero before any attempts are recorded."""
-        return max(
-            (
-                int(ref.rsplit("/", 1)[1])
-                for ref in self.repo.references
-                if ref.startswith("refs/attempts/")
-            ),
-            default=0,
-        )
+        """Return the greatest saved sequence, including rejected and raised calls."""
+        return max((revision.record.seq for revision in self.attempts()), default=0)
 
     def saved_call(
         self, request: ScientificActionRequest | DataDiffRequest[GitOid] | ModelDiffRequest[GitOid]
@@ -197,38 +213,21 @@ class StudyRepository:
         *,
         logs: dict[str, bytes] | None = None,
     ) -> StudyRevision:
-        """Publish an independent attempt, deduplicating calls and admitting one question."""
+        """Atomically publish a call and its law owners, admitting one immutable question."""
+        from grassmoth_server.storage import paths
+        from grassmoth_server.study.persistence.log_codec import assemble_call_log
+
+        request = record.attempt.request
+        if request is None:
+            raise ValueError("Saved calls require their request")
+        identity = call_identity(request)
+        call_ref = f"refs/calls/{identity.removeprefix('call:')}"
+        directory = Path(paths.call_dir(self.workspace_id, identity))
         outcome = record.attempt.outcome
-        attempt_ref = f"refs/attempts/{record.seq}"
-        log = record.model_dump(mode="json", round_trip=True)
-        array_ids: tuple[str, ...] = ()
         with self.repo.transaction() as transaction:
-            transaction.lock_ref(attempt_ref)
-            call_ref = None
-            if record.attempt.request is not None:
-                identity = call_identity(record.attempt.request)
-                call_ref = f"refs/calls/{identity.removeprefix('call:')}"
-                transaction.lock_ref(call_ref)
-                saved = self.call(identity)
-                if saved is not None and saved.record.seq != record.seq:
-                    return saved
-            action_ref = (
-                f"refs/actions/{record.attempt_id}" if record.attempt_id is not None else None
-            )
-            if action_ref is not None:
-                transaction.lock_ref(action_ref)
-                if (
-                    action_ref in self.repo.references
-                    and self.record(str(self.repo.references[action_ref].target)).record.seq
-                    != record.seq
-                ):
-                    raise FileExistsError(
-                        f"Action {record.attempt_id} already has a different attempt"
-                    )
-            existing = self.read_attempt(record.seq)
+            transaction.lock_ref(call_ref)
+            existing = self.call(identity)
             if existing is not None:
-                if existing.record.model_dump(mode="json", round_trip=True) != log:
-                    raise FileExistsError(f"Attempt {record.seq} already has different content")
                 return existing
             question_ref = None
             if record.attempt.action == "edit_question" and isinstance(outcome, Applied):
@@ -252,74 +251,84 @@ class StudyRepository:
                             ),
                         ),
                     )
-                    log = record.model_dump(mode="json", round_trip=True)
                 else:
                     question_ref = "refs/question"
             tree = self.repo.TreeBuilder()
-            log_files = {
-                "attempt.json": json.dumps(log, sort_keys=True).encode(),
-                **(logs or {}),
-            }
-            from grassmoth_server.study.persistence.log_codec import assemble_call_log
-
-            log_files["messages.json"] = (
-                assemble_call_log(
-                    record.messages,
-                    logs or {},
-                    at=datetime.fromisoformat(record.ts),
-                    failure=None if isinstance(outcome, Applied) else outcome,
-                )
-                .model_dump_json(round_trip=True)
-                .encode()
-            )
-            log_tree = self.repo.TreeBuilder(write_tree(self.repo, log_files))
             if isinstance(outcome, Applied):
-                from grassmoth_server.study.persistence.arrays import owned_arrays
-                from grassmoth_server.study.persistence.codec import unpack_result
-
+                saved_result = SavedResult.model_validate_json(
+                    (directory / "result.json").read_bytes()
+                )
+                if saved_result.revision != outcome.result:
+                    raise ValueError("The call's encoded result does not match its publication")
+                saved_outcome = SavedApplied(
+                    result=saved_result,
+                    produced=tuple(info.artifact_id for info in outcome.effects.produced),
+                    retracted=outcome.effects.retracted,
+                    reports=outcome.effects.reports,
+                )
                 tree.insert(
                     "result.msgpack", pygit2.Oid(hex=outcome.result), pygit2.GIT_FILEMODE_BLOB
                 )
-                result = unpack_result(read_blob(self.repo, pygit2.Oid(hex=outcome.result)))
-                from grassmoth_server.compute.remote_receipts import RemoteFitReceipt
-
-                array_ids = (
-                    RemoteFitReceipt.model_validate(result).array_ids
-                    if result.get("kind") == "remote_fit"
-                    else tuple(owned_arrays(result))
-                )
-                for identity in array_ids:
-                    array_ref = f"refs/arrays/{identity}"
+                records = self.repo.TreeBuilder()
+                for info in outcome.effects.produced:
+                    records.insert(
+                        info.artifact_id, pygit2.Oid(hex=info.revision), pygit2.GIT_FILEMODE_TREE
+                    )
+                tree.insert("records", records.write(), pygit2.GIT_FILEMODE_TREE)
+                if outcome.effects.reports:
+                    reports = self.repo.TreeBuilder()
+                    for name, result in outcome.effects.reports.items():
+                        reports.insert(name, pygit2.Oid(hex=result), pygit2.GIT_FILEMODE_BLOB)
+                    tree.insert("reports", reports.write(), pygit2.GIT_FILEMODE_TREE)
+                for array_id in sorted(saved_result.law_arrays):
+                    array_ref = f"refs/arrays/{array_id}"
+                    transaction.lock_ref(array_ref)
                     if array_ref not in self.repo.references:
-                        # Every owner embeds the same content-addressed array.
-                        with suppress(pygit2.AlreadyExistsError):
-                            self.repo.references.create(array_ref, pygit2.Oid(hex=outcome.result))
-            tree.insert("logs", log_tree.write(), pygit2.GIT_FILEMODE_TREE)
+                        transaction.set_target(array_ref, pygit2.Oid(hex=outcome.result))
+            else:
+                saved_outcome = outcome
+            saved = SavedCall(
+                seq=record.seq,
+                attempt_id=record.attempt_id,
+                ts=record.ts,
+                request=request,
+                messages=record.messages,
+                trace_ids=record.trace_ids,
+                outcome=saved_outcome,
+            )
+            tree.insert(
+                "call.json",
+                write_blob(self.repo, saved.model_dump_json(round_trip=True).encode()),
+                pygit2.GIT_FILEMODE_BLOB,
+            )
+            log = assemble_call_log(
+                record.messages,
+                logs or {},
+                at=datetime.fromisoformat(record.ts),
+                failure=None if isinstance(outcome, Applied) else outcome,
+            )
+            tree.insert(
+                "log.json",
+                write_blob(self.repo, log.model_dump_json(round_trip=True).encode()),
+                pygit2.GIT_FILEMODE_BLOB,
+            )
+            for name in ("sources", "profiles"):
+                if (directory / name).exists():
+                    tree.insert(
+                        name, write_directory(self.repo, directory / name), pygit2.GIT_FILEMODE_TREE
+                    )
             timestamp = int(datetime.fromisoformat(record.ts).timestamp())
             signature = pygit2.Signature("grassmoth", "study@local", timestamp, 0)
-            action = record.attempt.action
             parents = argument_parents(record.attempt, self.attempts())
             oid = self.repo.create_commit(
                 None,
                 signature,
                 signature,
-                f"{action} ({outcome.status})",
+                f"{request.action} ({outcome.status})",
                 tree.write(),
                 [pygit2.Oid(hex=parent) for parent in parents],
             )
-            transaction.set_target(attempt_ref, oid)
-            if call_ref is not None:
-                transaction.set_target(call_ref, oid)
-            if action_ref is not None:
-                transaction.set_target(action_ref, oid)
+            transaction.set_target(call_ref, oid)
             if question_ref is not None:
                 transaction.set_target(question_ref, oid)
-        if isinstance(outcome, Applied):
-            from grassmoth_server.storage import paths as data_module
-
-            # Publication now owns these buffers; execution copies are expendable.
-            arrays = Path(data_module.store_dir(self.workspace_id)) / "arrays"
-            for identity in array_ids:
-                path = arrays / f"{identity}.npy"
-                path.unlink(missing_ok=True)
         return StudyRevision(commit_id=GitOid(str(oid)), parent_ids=parents, record=record)

@@ -12,6 +12,7 @@ from grassmoth.artifacts.observations.preparation import (
 )
 from grassmoth.artifacts.simulation import SimulationObservationLayout
 from grassmoth_server.actions.contracts.preparation import FileSourceRef
+from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.inference import compile_model_fixture
 
 
@@ -79,7 +80,8 @@ def preparation_input(store, preparation):
             ),
         ),
     )
-    info = store.write_artifact(
+    info = seed_record(
+        store,
         "model",
         derived_from={},
         produced_by="edit_model",

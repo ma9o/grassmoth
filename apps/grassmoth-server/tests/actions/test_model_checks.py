@@ -17,6 +17,7 @@ from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState, apply_effects
 from grassmoth_server_test_support.action import question_root
 from grassmoth_server_test_support.model import stress_sleep_causal_model
+from grassmoth_server_test_support.storage import result_blob
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.model import construct_named
 
@@ -111,7 +112,7 @@ def test_fit_checks_reuse_the_retained_input_report_without_rebuilding(tmp_path,
 
     model = stress_sleep_causal_model()
     output = FitOutput(dynamical_model_spec=model, checks=report, inference=_report(model))
-    reference = ArtifactStore("checks").write_result(output)
+    reference = result_blob(ArtifactStore("checks"), output)
 
     def unexpected(*_args, **_kwargs):
         pytest.fail("A completed fit must reuse its selected-input findings")

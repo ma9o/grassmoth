@@ -143,7 +143,7 @@ class MeasurementsWorkflow:
         attempt_id = workflow_input.attempt_id
 
         async def emit(event: ProgressEvent) -> None:
-            await emit_progress(workflow_input.workspace_id, event)
+            await emit_progress(workflow_input.workspace_id, workflow_input.call_id, event)
 
         await emit(StepEvent(attempt_id=attempt_id, status="running"))
         try:

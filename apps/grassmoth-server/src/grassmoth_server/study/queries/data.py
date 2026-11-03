@@ -187,9 +187,7 @@ def _read_history(
         return DataHistory(
             source,
             ObservationDataset.from_frame(
-                store.read_parquet_file(
-                    "panel", panel_revision(store, source.revision), "panel.parquet"
-                ),
+                store.read_panel(panel_revision(store, source.revision)),
                 data.variables,
                 time_origin=data.time_origin,
             ),

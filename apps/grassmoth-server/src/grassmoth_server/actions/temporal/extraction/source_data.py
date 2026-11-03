@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 import pyarrow as pa
 import pyarrow.csv as csv
@@ -12,7 +12,6 @@ from temporalio import activity
 from grassmoth_server.actions.temporal.extraction.messages import ReadSourceDataInput
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data
-from grassmoth_server.study.artifact_files import parquet_filename
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Rejected
 from grassmoth_server.study.state import ArtifactRecord
@@ -33,9 +32,8 @@ async def read_source_data_activity(
                 detail=f"{filename}: prepare_data requires ready-to-use CSV or Parquet tables.",
             )
         path = storage.join(
-            data.scratch_dir(activity_input.workspace_id),
-            "source-files",
-            activity_input.source.hashes[filename],
+            data.call_dir(activity_input.workspace_id, activity_input.call_id),
+            "sources",
             filename,
         )
         try:
@@ -73,9 +71,7 @@ async def read_source_data_activity(
         return Rejected(
             code="SOURCE_INVALID", subject="inputs", detail="Source tables contain no records."
         )
-    return ArtifactStore(activity_input.workspace_id).write_artifact(
-        "raw_data",
-        derived_from={},
-        produced_by="prepare_data",
-        parquet_files={parquet_filename("raw_data", "raw"): table},
-    )
+    directory = Path(data.call_dir(activity_input.workspace_id, activity_input.call_id))
+    directory.mkdir(parents=True, exist_ok=True)
+    pq.write_table(table, directory / "raw.parquet", compression="zstd")
+    return ArtifactStore(activity_input.workspace_id).raw_record(activity_input.call_id)

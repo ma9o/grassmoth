@@ -120,9 +120,9 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
     payload = conditioned.model_dump(mode="json")
     assert not {"posterior", "prior", "provenance", "diagnostics", "result"} & payload.keys()
     assert "array_ref" in conditioned.model_dump_json()
-    from grassmoth_server.study.persistence.writes import write_model_revision
+    from grassmoth_server_test_support.storage import seed_model_record
 
-    info = write_model_revision(store, conditioned, derived_from={}, produced_by="fit")
+    info = seed_model_record(store, conditioned, derived_from={}, produced_by="fit")
     loaded = read_model(store, info.revision)
     assert loaded == conditioned
     assert (

@@ -92,7 +92,7 @@ export interface paths {
         readonly put?: never;
         /**
          * Fit
-         * @description Fit target.new model and data, or continue target.fit_ref at its last retained state. Counts request additional draws; zero warmup freezes tuning and algorithm changes require warmup. Zero warmup and zero samples compile both sweep programs without execution. Zero-draw fits return checks and inference without a conditioned model. repeat distinguishes timing attempts. GET polls call_id.
+         * @description Fit target.new model and data, or continue a Modal-produced target.fit_ref from its full retained Volume result. Continuing a local-produced fit is rejected. Counts request additional draws; zero warmup freezes tuning and algorithm changes require warmup. Zero warmup and zero samples compile both sweep programs without execution. Zero-draw fits return checks and inference without a conditioned model. repeat distinguishes timing attempts. GET polls call_id.
          */
         readonly post: operations["fit"];
         readonly delete?: never;
@@ -214,7 +214,7 @@ export interface paths {
         readonly put?: never;
         /**
          * Upload File
-         * @description Stage one named raw input file in the workspace's input folder. prepare_data reads that folder when input.source is "input" and captures each file's SHA-256.
+         * @description Stage one named raw input file under tmp/input/ and return <workspace>/tmp/input/<file>. prepare_data reads that folder when input.source is "tmp/input" and captures each file's SHA-256.
          */
         readonly post: operations["upload_file_api_upload_post"];
         readonly delete?: never;
@@ -7254,7 +7254,7 @@ export interface components {
             readonly kind: "single";
             readonly action: components["schemas"]["SimulationArm"];
         };
-        /** @description Folder of ready-to-use CSV or Parquet tables under data/{workspace_id}/, such as input. Every table must have a date or datetime timestamp column. */
+        /** @description Folder of ready-to-use CSV or Parquet tables under data/{workspace_id}/, such as tmp/input. Every table must have a date or datetime timestamp column. */
         readonly SourceFolder: string;
         readonly SpecificationAssessment: Domain.Evaluated<string, string> | Domain.NotEvaluated<string>;
         /**

@@ -27,6 +27,7 @@ from grassmoth_server.study.state import StudyState, apply_effects
 from grassmoth_server_test_support.action import applied_record, edit_and_check, question_root
 from grassmoth_server_test_support.data import metadata_for_model
 from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
+from grassmoth_server_test_support.storage import seed_record, seed_source_table
 from grassmoth_test_support.helpers import make_model
 
 pytestmark = pytest.mark.contract
@@ -82,13 +83,13 @@ def _exact_measurement(model):
 
 
 def _write(store, artifact_id, payload, pins=None):
-    from grassmoth_server.study.artifact_files import artifact_file_spec
 
-    return store.write_artifact(
+    return seed_record(
+        store,
         artifact_id,
         derived_from=pins or {},
         produced_by=None,
-        json_files={next(iter(artifact_file_spec(artifact_id).json_files.values())): payload},
+        json_files={{"model": "model.json", "question": "question.json"}[artifact_id]: payload},
     )
 
 
@@ -133,12 +134,7 @@ def test_extraction_requires_some_observations(workspace, tmp_path, nonempty):
 
     store = ArtifactStore(workspace)
     dynamical_model_spec = _model()
-    raw = store.write_artifact(
-        "raw_data",
-        derived_from={},
-        produced_by="prepare_data",
-        parquet_files={"raw.parquet": pl.DataFrame({"timestamp": [datetime(2026, 1, 1)]})},
-    )
+    raw = seed_source_table(store, pl.DataFrame({"timestamp": [datetime(2026, 1, 1)]}), "run-1")
     state = StudyState().with_artifacts(
         [raw, _write(store, "model", dynamical_model_spec.model_dump(mode="json"))]
     )
@@ -276,7 +272,7 @@ def test_exact_measurement_preserves_execution_layout(workspace):
     )
     store = ArtifactStore(workspace)
     info = next(info for info in effects.effects.produced if info.artifact_id == "model")
-    payload = store.read_json_file("model", info.revision, "model.json")
+    payload = store.read_document("model", info.revision)
     plan = DynamicalModelSpec.model_validate(payload).materialized()
     assert [
         plan.get_construct(identity).name
@@ -318,7 +314,8 @@ def test_model_edit_is_independent_of_stale_extraction(workspace):
             }
         )
     )
-    panel = store.write_artifact(
+    panel = seed_record(
+        store,
         "panel",
         derived_from={},
         produced_by="prepare_data",
@@ -409,7 +406,7 @@ def test_failed_tree_write_publishes_no_artifact(workspace, monkeypatch):
     def fail_tree(*_args, **_kwargs):
         raise OSError("cannot write metadata")
 
-    monkeypatch.setattr(store_module, "write_tree", fail_tree)
+    monkeypatch.setattr(store_module, "write_blob", fail_tree)
     with pytest.raises(OSError, match="metadata"):
         _write(ArtifactStore(workspace), "model", _model().model_dump(mode="json"))
     assert artifact_revisions(ArtifactStore(workspace), "model") == []

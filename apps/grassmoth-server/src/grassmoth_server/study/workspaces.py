@@ -41,4 +41,4 @@ def stage_input(workspace_id: str, filename: str, payload: bytes) -> str | Study
     storage.makedirs(directory)
     with storage.open_file(storage.join(directory, filename), "wb") as handle:
         handle.write(payload)
-    return f"{parsed}/input/{filename}"
+    return f"{parsed}/tmp/input/{filename}"

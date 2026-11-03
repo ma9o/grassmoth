@@ -23,10 +23,10 @@ from grassmoth_server.actions.contracts.requests import (
     call_identity,
 )
 from grassmoth_server.actions.fit.selection import fit_source, prior_fit
-from grassmoth_server.compute.remote_receipts import RemoteFitReceipt, load_remote_fit
-from grassmoth_server.storage.paths import cache_dir
+from grassmoth_server.compute.fit_results import download_fit_result, load_full_fit
+from grassmoth_server.storage.paths import call_dir
 from grassmoth_server.study.persistence.store import ArtifactStore
-from grassmoth_server.study.records import Applied
+from grassmoth_server.study.records import Applied, Rejected
 
 if TYPE_CHECKING:
     from grassmoth.public import GitOid
@@ -40,7 +40,7 @@ async def _run_fit(
     pins: dict[ArtifactId, GitOid],
     request: FitInput[GitOid],
     call_id: CallId,
-) -> Applied[GitOid]:
+) -> Applied[GitOid] | Rejected:
     """Keep continuation loading, compute and publication off the activity event loop."""
     return await asyncio.to_thread(_fit_selected, store, pins, request, call_id)
 
@@ -50,7 +50,7 @@ def _fit_selected(
     pins: dict[ArtifactId, GitOid],
     request: FitInput[GitOid],
     call_id: CallId,
-) -> Applied[GitOid]:
+) -> Applied[GitOid] | Rejected:
     from grassmoth_server.actions.fit.action import run_fit
     from grassmoth_server.actions.fit.execution import resolve_sampler_spec
     from grassmoth_server.config import get_config
@@ -63,19 +63,18 @@ def _fit_selected(
         if isinstance(request.target, ContinueFitTarget)
         else None
     )
-    prior_settings = (
-        previous.continuation
-        if isinstance(previous, RemoteFitReceipt)
-        else None
-        if previous is None or previous.inference.evidence.checkpoint is None
-        else previous.inference.evidence.checkpoint.settings
+    if isinstance(previous, Rejected):
+        return previous
+    sampler = resolve_sampler_spec(
+        request.settings, None if previous is None else previous.settings
     )
-    sampler = resolve_sampler_spec(request.settings, prior_settings)
-    previous_cache = previous.cache if isinstance(previous, RemoteFitReceipt) else None
-    if isinstance(previous, RemoteFitReceipt) and sampler.hardware == InferenceHardware.LOCAL:
-        previous = load_remote_fit(
-            Path(cache_dir(store.workspace_id)) / "remote-results", previous.cache
-        )
+    previous_cache = None if previous is None else previous.full_fit
+    directory = Path(call_dir(store.workspace_id, call_id))
+    previous_result = (
+        load_full_fit(directory, previous.full_fit)
+        if previous is not None and sampler.hardware == InferenceHardware.LOCAL
+        else None
+    )
 
     from grassmoth_server.study.persistence.store import model_values, read_model, read_question
 
@@ -87,50 +86,39 @@ def _fit_selected(
         data_for_model=history.observations,
         sampler=sampler,
         compute_loo_diagnostics=get_config().inference.compute_loo_diagnostics,
-        previous=previous if isinstance(previous, FitOutput) else None,
+        previous=previous_result,
     )
 
-    from grassmoth_server.compute.analysis_cache import AnalysisCall, fit_profile_directory
+    from grassmoth_server.compute.analysis_cache import AnalysisCall
 
     analysis_call = AnalysisCall(workspace_id=store.workspace_id, call_id=call_id)
     if sampler.hardware != InferenceHardware.LOCAL:
         from grassmoth_server.actions.fit.remote import fit_on_modal
 
-        result = fit_on_modal(
+        completion = fit_on_modal(
             inputs,
             analysis_call=analysis_call,
             profile=request.settings.profile,
             previous_cache=previous_cache,
         )
+        path = download_fit_result(directory, completion.transfer)
+        saved = store.import_result(
+            call_id=call_id,
+            path=path,
+            law_arrays=completion.law_arrays,
+            full_fit=completion.full_fit,
+        )
+        result = store.read_result(saved, FitOutput)
     else:
         result = run_fit(
-            inputs,
-            profile_dir=fit_profile_directory(Path(cache_dir(store.workspace_id)), analysis_call)
-            if request.settings.profile
-            else None,
+            inputs, profile_dir=directory / "profiles" if request.settings.profile else None
         )
-
-    from grassmoth_server.study.persistence.writes import write_model_revision
-
-    saved = store.write_result(result)
-    # A zero-draw continuation reuses the previous model without producing a revision.
-    if isinstance(result, RemoteFitReceipt):
-        produced = (
-            (
-                store.result_artifact(
-                    store.write_artifact("model", derived_from=pins, produced_by="fit"), saved
-                ),
-            )
-            if result.has_model and sampler.num_samples_per_chain > 0
-            else ()
-        )
-    else:
-        conditioned = result.dynamical_model_spec
-        produced = (
-            ()
-            if conditioned is None or sampler.num_samples_per_chain == 0
-            else (write_model_revision(store, conditioned, derived_from=pins, produced_by="fit"),)
-        )
+        saved = store.write_result(result, call_id=call_id)
+    produced = (
+        (store.result_record("model", saved, derived_from=pins, produced_by="fit"),)
+        if result.dynamical_model_spec is not None and sampler.num_samples_per_chain > 0
+        else ()
+    )
     return Applied(result=saved, effects=ActionEffects(produced=produced))
 
 
@@ -138,6 +126,7 @@ async def _run_simulate(
     store: ArtifactStore,
     pins: dict[ArtifactId, GitOid],
     request: SimulateInput[GitOid],
+    call_id: CallId,
 ) -> Applied[GitOid]:
     from grassmoth.public import ObservationPreflightFailure
     from grassmoth_server.actions.errors import ActionExecutionError
@@ -146,7 +135,7 @@ async def _run_simulate(
     result = await asyncio.to_thread(run_simulation, store, request, pins["question"])
     if isinstance(result, ObservationPreflightFailure):
         raise ActionExecutionError(result.message)
-    return Applied(result=store.write_result(result), effects=ActionEffects())
+    return Applied(result=store.write_result(result, call_id=call_id), effects=ActionEffects())
 
 
 async def run_action_locally(
@@ -156,7 +145,7 @@ async def run_action_locally(
     | DataDiffRequest[GitOid]
     | ModelDiffRequest[GitOid],
     pins: dict[ArtifactId, GitOid],
-) -> Applied[GitOid]:
+) -> Applied[GitOid] | Rejected:
     """Run an action directly against its recorded inputs."""
     store = ArtifactStore(workspace_id)
     if isinstance(request, ModelDiffRequest):
@@ -165,13 +154,16 @@ async def run_action_locally(
         report = await asyncio.to_thread(
             model_diff, workspace_id, request.input.before_ref, request.input.after_ref
         )
-        return Applied(result=store.write_result(report), effects=ActionEffects())
+        return Applied(
+            result=store.write_result(report, call_id=call_identity(request)),
+            effects=ActionEffects(),
+        )
     if isinstance(request, DataDiffRequest):
         from grassmoth_server.actions.data_diff import read_data_diff
 
         comparison = await asyncio.to_thread(read_data_diff, workspace_id, request)
         return Applied(
-            result=store.write_result(comparison),
+            result=store.write_result(comparison, call_id=call_identity(request)),
             effects=ActionEffects(),
         )
     if isinstance(request, FitRequest):
@@ -181,7 +173,7 @@ async def run_action_locally(
             request.input,
             call_identity(request),
         )
-    return await _run_simulate(store, pins, request.input)
+    return await _run_simulate(store, pins, request.input, call_identity(request))
 
 
 def _pinned(store: ArtifactStore, selected: dict[ArtifactId, GitOid]) -> dict[ArtifactId, GitOid]:
@@ -229,7 +221,7 @@ async def run_action(
     | DataDiffRequest[GitOid]
     | ModelDiffRequest[GitOid],
     state: StudyState,
-) -> Applied[GitOid]:
+) -> Applied[GitOid] | Rejected:
     """Pin and compile inputs off the activity event loop, then execute the action."""
     pins = await asyncio.to_thread(_pin_action_inputs, workspace_id, request, state)
     return await run_action_locally(workspace_id, request, pins)

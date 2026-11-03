@@ -140,7 +140,7 @@ def test_emit_progress_uses_shared_activity_policy(monkeypatch) -> None:
         error=StepError(type="ValueError", message="bad input"),
     )
 
-    asyncio.run(emit_progress("workspace-1", step))
+    asyncio.run(emit_progress("workspace-1", "call-test", step))
 
     (activity_name, payload), kwargs = calls[0]
     assert activity_name == "emit_progress_event_activity"
@@ -214,7 +214,6 @@ def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monk
         FitAttempt,
         Raised,
         StudyRevision,
-        action_attempt,
     )
     from grassmoth_server.study.state import ArtifactRecord, StudyState
     from grassmoth_test_support.git import git_oid
@@ -249,8 +248,6 @@ def test_continuation_calls_overlap_deduplicate_and_keep_their_own_progress(monk
                     request=payload.request,
                     outcome=Raised(error_type=f"Arm{index}", error_message=f"arm {index}"),
                 )
-            if name == "complete_result_activity":
-                return action_attempt(payload.attempt.request, payload.attempt.outcome)
             if name == "journal_activity":
                 publications.append(payload.record)
                 return StudyRevision(

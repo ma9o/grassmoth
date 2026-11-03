@@ -171,11 +171,10 @@ def _stage_sources(
 ) -> None:
     if not isinstance(request, PrepareDataRequest):
         return
-    for filename, identity in request.input.source.hashes.items():
+    for filename in request.input.source.files:
         path = (
-            pathlib.Path(data_module.scratch_dir(workspace_id))
-            / "source-files"
-            / identity
+            pathlib.Path(data_module.call_dir(workspace_id, call_identity(request)))
+            / "sources"
             / filename
         )
         if path.exists():
@@ -204,9 +203,7 @@ async def submit_action(
     if isinstance(parsed, StudyError):
         return parsed
     workspace_id = parsed
-    if not actions_enabled() and not storage.exists(
-        storage.join(data_module.study_dir(workspace_id), "history.git")
-    ):
+    if not actions_enabled() and not storage.exists(data_module.history_dir(workspace_id)):
         return _read_only()
     repository = StudyRepository(workspace_id)
     try:
@@ -301,7 +298,7 @@ async def poll_action(
     if isinstance(parsed, StudyError):
         return parsed
     workspace_id = parsed
-    if storage.exists(storage.join(data_module.study_dir(workspace_id), "history.git")):
+    if storage.exists(data_module.history_dir(workspace_id)):
         saved = await asyncio.to_thread(StudyRepository(workspace_id).call, call_id)
         if saved is not None:
             if saved.record.attempt.action != action:

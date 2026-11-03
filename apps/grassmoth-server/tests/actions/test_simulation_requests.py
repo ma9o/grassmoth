@@ -15,6 +15,7 @@ from grassmoth_server.actions.contracts.inputs import SimulateInput
 from grassmoth_server.actions.contracts.requests import SimulateRequest
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 from grassmoth_server_test_support.action import empty_simulation_summary
+from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.inference import compile_model_fixture, particle_posterior
 from grassmoth_test_support.model import x_y_model
 
@@ -206,13 +207,14 @@ def test_runner_uses_model_time_binding_without_reading_panels(
             time_origin=fit_origin,
         )
     # An imported conditioned model must be executable without its original fit history.
-    from grassmoth_server.study.persistence.writes import write_model_revision
+    from grassmoth_server_test_support.storage import seed_model_record
 
-    record = write_model_revision(
+    record = seed_model_record(
         store, dynamical_model_spec, derived_from={}, produced_by="edit_model"
     )
 
-    panel = store.write_artifact(
+    panel = seed_record(
+        store,
         "panel",
         derived_from={},
         produced_by="prepare_data",

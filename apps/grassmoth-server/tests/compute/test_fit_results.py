@@ -12,12 +12,7 @@ from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import FitInput, NewFitTarget
 from grassmoth_server.actions.contracts.requests import FitRequest, call_identity
 from grassmoth_server.compute.analysis_cache import AnalysisCall, cache_fit_result
-from grassmoth_server.compute.remote_receipts import (
-    RemoteFitReceipt,
-    complete_remote_body,
-    published_fit_report,
-    receipt_for,
-)
+from grassmoth_server.compute.fit_results import RemoteFitResult, download_fit_result, load_full_fit
 from grassmoth_server.storage import paths
 from grassmoth_server.study.persistence.arrays import owned_arrays
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
@@ -25,7 +20,6 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model
 from grassmoth_server.study.queries.action_outputs import completed_call_msgpack
 from grassmoth_server.study.records import Applied
-from grassmoth_server_test_support.action import applied_record
 from grassmoth_test_support.git import git_oid
 
 pytestmark = pytest.mark.contract
@@ -64,78 +58,67 @@ def retained_case(tmp_path, monkeypatch):
             )
         )
     )
-    call = AnalysisCall(workspace_id="RECEIPT", call_id=call_identity(request))
+    call = AnalysisCall(workspace_id="FIT", call_id=call_identity(request))
     body = pack_result(result)
     entry = cache_fit_result(tmp_path / "volume" / "retained", call, unpack_result(body))
-    receipt = receipt_for(result, entry, tuple(owned_arrays(unpack_result(body))), transfer=entry)
-    return result, body, receipt, request
-
-
-def test_publication_needs_no_download_and_full_reads_preserve_body(retained_case, monkeypatch):
-    result, body, receipt, request = retained_case
-    from grassmoth_server.actions.temporal.study.activities import (
-        _journal_attempt,
-        evaluate_model_checks_activity,
+    completion = RemoteFitResult(
+        full_fit=entry,
+        transfer=entry,
+        law_arrays=tuple(owned_arrays(unpack_result(body)["dynamical_model_spec"])),
     )
-    from grassmoth_server.actions.temporal.study.messages import (
-        AttemptPublication,
-        EvaluateChecksInput,
-    )
-    from grassmoth_server.study.state import StudyState
-    from grassmoth_server_test_support.helpers import run_async
+    return result, body, completion, request
 
+
+def test_published_body_is_local_and_full_pointer_is_storage_only(
+    retained_case, monkeypatch, tmp_path
+):
+    from grassmoth_server.study.records import AttemptRecord, action_attempt
+
+    result, body, completion, request = retained_case
     volume = Mock(
-        read_file_into_fileobj=Mock(side_effect=AssertionError("Publication downloaded evidence"))
+        read_file_into_fileobj=Mock(side_effect=AssertionError("Saved GET contacted Modal"))
     )
     monkeypatch.setattr(modal.Volume, "from_name", lambda _name: volume)
-    store = ArtifactStore(receipt.cache.call.workspace_id)
-    reference = store.write_result(receipt)
-    artifact = store.result_artifact(
-        store.write_artifact("model", derived_from={}, produced_by="fit"), reference
+    store = ArtifactStore(completion.full_fit.call.workspace_id)
+    path = tmp_path / "transfer.msgpack"
+    path.write_bytes(body)
+    reference = store.import_result(
+        call_id=call_identity(request),
+        path=path,
+        law_arrays=completion.law_arrays,
+        full_fit=completion.full_fit,
     )
+    artifact = store.result_record("model", reference, derived_from={}, produced_by="fit")
     applied = Applied(result=reference, effects=ActionEffects(produced=(artifact,)))
-    run_async(
-        evaluate_model_checks_activity(
-            EvaluateChecksInput(
-                workspace_id=store.workspace_id,
-                state=StudyState(),
-                applied=applied,
-                request=request,
-            )
-        )
+    repository = StudyRepository(store.workspace_id)
+    revision = repository.append(
+        AttemptRecord(seq=1, ts="2026-01-01T00:00:00Z", attempt=action_attempt(request, applied))
     )
-    record = applied_record(store.workspace_id, applied, seq=1, request=request)
-    revision = _journal_attempt(AttemptPublication(workspace_id=store.workspace_id, record=record))
-    assert published_fit_report(store, reference) == receipt
-    assert len(pack_result(receipt)) < 100_000 < len(body)
-    assert not receipt.inference.evidence.phase_extra_fields
-    assert receipt.checks == result.checks
-    assert receipt.inference.core.convergence == result.inference.core.convergence
-    assert (
-        len(StudyRepository(store.workspace_id).read_file(revision.commit_id, "result.msgpack"))
-        < 100_000
-    )
-    volume.read_file_into_fileobj.assert_not_called()
+    from grassmoth_server.study.persistence.call import SavedApplied
 
-    monkeypatch.setattr(
-        volume, "read_file_into_fileobj", Mock(side_effect=lambda _path, stream: stream.write(body))
-    )
+    saved = repository.saved_record(revision.commit_id).outcome
+    assert isinstance(saved, SavedApplied)
+    assert saved.result.full_fit == completion.full_fit
+    assert repository.read_file(revision.commit_id, "result.msgpack") == body
     assert store.read_result_bytes(reference) == body
     assert store.read_result(reference, FitOutput) == result
     assert read_model(store, artifact.revision) == result.dynamical_model_spec
-    identity = receipt.array_ids[0]
-    assert store.read_array_bytes(identity) == owned_arrays(unpack_result(body))[identity].npy
     assert unpack_result(completed_call_msgpack(store.workspace_id, revision))[
         "body"
     ] == unpack_result(body)
-    volume.read_file_into_fileobj.assert_called_once()
+    assert {
+        ref.removeprefix("refs/arrays/")
+        for ref in store.repo.references
+        if ref.startswith("refs/arrays/")
+    } == set(completion.law_arrays)
+    volume.read_file_into_fileobj.assert_not_called()
 
 
 @pytest.mark.parametrize("failure", ["checksum", "truncated", "interrupted"])
 def test_corrupt_or_partial_download_is_never_installed(
     retained_case, monkeypatch, tmp_path, failure
 ):
-    _result, body, receipt, _request = retained_case
+    _result, body, completion, _request = retained_case
 
     def download(_path, stream):
         if failure == "checksum":
@@ -150,12 +133,12 @@ def test_corrupt_or_partial_download_is_never_installed(
     )
     root = tmp_path / "download"
     with pytest.raises((ValueError, RuntimeError), match=r"identity|Interrupted"):
-        complete_remote_body(pack_result(receipt), root)
+        download_fit_result(root, completion.transfer)
     assert not tuple((root / "results").iterdir())
 
 
 @pytest.mark.parametrize("thinned", [False, True])
-def test_gpu_commits_complete_body_before_returning_only_receipt(
+def test_gpu_commits_full_and_transfer_bodies_before_returning_pointers(
     retained_case, monkeypatch, tmp_path, thinned
 ):
     import jax
@@ -163,7 +146,7 @@ def test_gpu_commits_complete_body_before_returning_only_receipt(
     from grassmoth_server.actions.fit import remote
     from grassmoth_server.compute import compilation_cache
 
-    result, body, receipt, _request = retained_case
+    result, body, completion, _request = retained_case
     if thinned:
         from datetime import UTC, datetime
 
@@ -229,48 +212,49 @@ def test_gpu_commits_complete_body_before_returning_only_receipt(
     )
     volume = Mock()
     monkeypatch.setattr(modal.Volume, "from_name", lambda _name: volume)
-    chunks = remote._fit_gpu(Mock(analysis_call=receipt.cache.call), Mock())
+    chunks = remote._fit_gpu(Mock(analysis_call=completion.full_fit.call), Mock())
     decoded = remote.decode_fit_result(b"".join(chunks))
-    returned = RemoteFitReceipt.model_validate(unpack_result(decoded.output))
+    returned = RemoteFitResult.model_validate(unpack_result(decoded.output))
     if not thinned:
-        assert returned == receipt
+        assert returned == completion
     assert (
-        tmp_path / "worker" / "retained" / "results" / (returned.cache.sha256 + ".msgpack")
+        tmp_path / "worker" / "retained" / "results" / (returned.full_fit.sha256 + ".msgpack")
     ).read_bytes() == body
-    from grassmoth_server.compute.analysis_cache import cached_fit_result
+    from grassmoth_server.compute.analysis_cache import retained_fit_result
 
-    assert cached_fit_result(tmp_path / "worker", returned.cache.call).read_bytes() == body
+    assert (
+        retained_fit_result(tmp_path / "worker" / "retained", returned.full_fit).read_bytes()
+        == body
+    )
     volume.commit.assert_called_once()
     if thinned:
-        from grassmoth_server.compute.remote_receipts import load_remote_fit
-
         monkeypatch.setattr(
             volume,
             "read_file_into_fileobj",
             lambda path, stream: stream.write((tmp_path / "worker" / path).read_bytes()),
         )
-        transfer_body = complete_remote_body(pack_result(returned), tmp_path / "local")
+        transfer_body = download_fit_result(tmp_path / "local", returned.transfer).read_bytes()
         downloaded = FitOutput.model_validate(unpack_result(transfer_body))
         assert downloaded.inference.core.inference_metadata.draws_kept_per_chain == 3
         assert downloaded.inference.core.inference_metadata.thinning_factor == 5
         assert downloaded.inference.core.inference_metadata.draws_sampled_per_chain == 13
-        assert returned.cache != returned.transfer
-        restored = load_remote_fit(tmp_path / "local", returned.cache)
+        assert returned.full_fit != returned.transfer
+        restored = load_full_fit(tmp_path / "local", returned.full_fit)
         assert restored.inference.core.inference_metadata.draws_kept_per_chain == 13
         assert restored.inference.core.inference_metadata.thinning_factor == 1
         assert pack_result(restored) == body
 
 
-def test_dispatch_rejects_receipt_for_another_call(retained_case, monkeypatch):
+def test_dispatch_rejects_pointers_for_another_call(retained_case, monkeypatch):
     from grassmoth.public import FitInputs, SamplerSpec
     from grassmoth_server.actions.contracts.identity import CallId
     from grassmoth_server.actions.fit import remote
     from grassmoth_server_test_support.fit_cache import fixture
 
-    _result, _body, receipt, _request = retained_case
+    _result, _body, completion, _request = retained_case
     question, selection, data = fixture()
     monkeypatch.setattr(
-        remote, "_dispatch_fit", Mock(return_value=remote.FitComputeResult(pack_result(receipt)))
+        remote, "_dispatch_fit", Mock(return_value=remote.FitComputeResult(pack_result(completion)))
     )
     with pytest.raises(ValueError, match="different call"):
         remote.fit_on_modal(
@@ -281,5 +265,5 @@ def test_dispatch_rejects_receipt_for_another_call(retained_case, monkeypatch):
                 sampler=SamplerSpec(hardware="L40S"),
                 compute_loo_diagnostics=False,
             ),
-            analysis_call=receipt.cache.call.revised(call_id=CallId("call:" + "f" * 64)),
+            analysis_call=completion.full_fit.call.revised(call_id=CallId("call:" + "f" * 64)),
         )

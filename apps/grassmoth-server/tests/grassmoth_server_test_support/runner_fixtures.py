@@ -11,6 +11,7 @@ from grassmoth.artifacts.observations.preparation import (
 from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
 from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.model import stress_sleep_model
+from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id
 
 
@@ -43,7 +44,8 @@ def state_from(*infos):
 
 
 def seed_model(store):
-    return store.write_artifact(
+    return seed_record(
+        store,
         "model",
         derived_from={},
         produced_by="edit_model",
@@ -52,7 +54,8 @@ def seed_model(store):
 
 
 def seed_panel(store, *, model_revision):
-    return store.write_artifact(
+    return seed_record(
+        store,
         "panel",
         derived_from={},
         json_files={"metadata.json": panel_metadata().model_dump(mode="json")},

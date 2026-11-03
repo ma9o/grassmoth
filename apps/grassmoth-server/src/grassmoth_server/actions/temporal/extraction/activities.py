@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
+import pyarrow.parquet as pq
 from pydantic import TypeAdapter
 from temporalio import activity
 
@@ -39,7 +40,6 @@ from grassmoth_server.actions.temporal.llm.messages import (
 from grassmoth_server.llm.specs import EmbeddedLLMSpec
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths as data_module
-from grassmoth_server.study.artifact_files import json_filename, parquet_filename
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Applied
 
@@ -48,7 +48,7 @@ if TYPE_CHECKING:
 
 
 def _run_root(workspace_id: str, run_id: str) -> str:
-    return storage.join(data_module.scratch_run_dir(workspace_id, run_id), "extraction")
+    return storage.join(data_module.call_dir(workspace_id, run_id), "extraction")
 
 
 def _write_json(path: str, value: object) -> None:
@@ -64,7 +64,7 @@ async def emit_progress_event_activity(activity_input: ProgressEventInput) -> No
     """Persist a workflow progress event in the designated workspace."""
     from grassmoth_server.actions.progress import emit_event
 
-    emit_event(activity_input.workspace_id, activity_input.event)
+    emit_event(activity_input.workspace_id, activity_input.call_id, activity_input.event)
 
 
 @activity.defn
@@ -82,13 +82,11 @@ async def plan_measurements_activity(activity_input: MeasurementsWorkflowInput) 
         "raw_data": activity_input.raw_data_revision,
         "model": activity_input.preparation.dynamical_model_spec_ref,
     }
-    run_id = f"seq-{activity_input.seq:06d}"
+    run_id = activity_input.call_id
     root = _run_root(activity_input.workspace_id, run_id)
 
-    raw_table = store.read_parquet_table(
-        "raw_data",
-        pins["raw_data"],
-        parquet_filename("raw_data", "raw"),
+    raw_table = pq.read_table(
+        storage.join(data_module.call_dir(activity_input.workspace_id, run_id), "raw.parquet")
     )
     raw_df = pl.DataFrame(raw_table)
     from grassmoth_server.actions.prepare_data.resolve import resolve_preparation
@@ -335,10 +333,11 @@ async def finalize_measurements_activity(
         output = prepare_data(
             preparation.definition,
             SourceTable(
-                rows=store.read_parquet_table(
-                    "raw_data",
-                    activity_input.pins["raw_data"],
-                    parquet_filename("raw_data", "raw"),
+                rows=pq.read_table(
+                    storage.join(
+                        data_module.call_dir(activity_input.workspace_id, activity_input.run_id),
+                        "raw.parquet",
+                    )
                 ),
                 start=preparation.source.start,
                 end=preparation.source.end,
@@ -351,22 +350,16 @@ async def finalize_measurements_activity(
                 ),
             ),
         )
+        result = store.write_result(output, call_id=activity_input.run_id)
         return Applied(
-            result=store.write_result(output),
+            result=result,
             effects=ActionEffects(
                 produced=(
-                    store.write_artifact(
+                    store.result_record(
                         "panel",
+                        result,
                         derived_from=activity_input.pins,
                         produced_by="prepare_data",
-                        parquet_files={
-                            parquet_filename("panel", "panel"): output.observation_frame()
-                        },
-                        json_files={
-                            json_filename("panel", "metadata"): output.metadata.model_dump(
-                                mode="json"
-                            )
-                        },
                     ),
                 )
             ),

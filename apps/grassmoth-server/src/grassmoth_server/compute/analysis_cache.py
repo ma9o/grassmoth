@@ -36,7 +36,7 @@ class AnalysisCall(Value):
 
 
 class AnalysisCacheEntry(Value):
-    """A call alias to verified MessagePack bytes produced by its remote fit."""
+    """An immutable pointer to verified MessagePack bytes produced by its remote fit."""
 
     call: AnalysisCall
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
@@ -48,20 +48,8 @@ def fit_profile_directory(root: Path, call: AnalysisCall) -> Path:
     return root / "profiles" / call.identity
 
 
-def _atomic_write(path: Path, data: bytes) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with NamedTemporaryFile(dir=path.parent, prefix=".pending-", delete=False) as stream:
-        temporary = Path(stream.name)
-        try:
-            stream.write(data)
-            stream.flush()
-            temporary.replace(path)
-        finally:
-            temporary.unlink(missing_ok=True)
-
-
 def cache_fit_result(
-    root: Path, call: AnalysisCall, output: Mapping[str, object], *, publish_alias: bool = True
+    root: Path, call: AnalysisCall, output: Mapping[str, object]
 ) -> AnalysisCacheEntry:
     """Stream an atomic cache body without an additional full encoded copy."""
     from grassmoth_server.study.persistence.codec import write_payload
@@ -80,26 +68,11 @@ def cache_fit_result(
             temporary.replace(target)
         finally:
             temporary.unlink(missing_ok=True)
-    if publish_alias:
-        _atomic_write(root / "calls" / (call.identity + ".json"), entry.model_dump_json().encode())
     return entry
 
 
-def cached_fit_result(root: Path, call: AnalysisCall) -> Path:
-    """Resolve a call alias and verify the complete cached file with bounded reads."""
-    # Published bodies occupy a separate namespace, outside temporary-cache cleanup.
-    retained = root / "retained"
-    selected = retained if (retained / "calls" / (call.identity + ".json")).exists() else root
-    entry = AnalysisCacheEntry.model_validate_json(
-        (selected / "calls" / (call.identity + ".json")).read_bytes()
-    )
-    if entry.call != call:
-        raise ValueError("Analysis cache call identity does not match")
-    return retained_fit_result(selected, entry)
-
-
 def retained_fit_result(root: Path, entry: AnalysisCacheEntry) -> Path:
-    """Verify content against the immutable receipt, independent of mutable call aliases."""
+    """Verify content against the immutable full-result pointer."""
     path = root / "results" / (entry.sha256 + ".msgpack")
     return verified_fit_content(path, entry)
 
@@ -114,7 +87,7 @@ def verified_fit_content(path: Path, entry: AnalysisCacheEntry) -> Path:
 
 
 def expire_analysis_cache(root: Path, *, now_seconds: float) -> tuple[int, int]:
-    """Expire temporary cache data; receipt-backed scientific results are retained."""
+    """Expire temporary cache data; pointer-backed scientific results are retained."""
     cutoff = now_seconds - ANALYSIS_RETENTION_SECONDS
     files = size = 0
     for profile in (root / "profiles").glob("*"):

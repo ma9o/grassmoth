@@ -3,7 +3,7 @@
 from grassmoth.public import DynamicalModelSpec, GitOid, ModelEditFailure
 from grassmoth.public import edit_model as edit_model_values
 from grassmoth_server.actions.contracts.effects import ActionEffects
-from grassmoth_server.actions.contracts.requests import EditModelRequest
+from grassmoth_server.actions.contracts.requests import EditModelRequest, call_identity
 from grassmoth_server.actions.input_resolution import model_edit_state
 from grassmoth_server.study.persistence.store import (
     ArtifactStore,
@@ -11,7 +11,6 @@ from grassmoth_server.study.persistence.store import (
     read_model,
     read_question,
 )
-from grassmoth_server.study.persistence.writes import write_model_revision
 from grassmoth_server.study.records import Applied, Rejected
 
 
@@ -30,10 +29,11 @@ def edit_model(workspace_id: str, request: EditModelRequest[GitOid]) -> Applied[
     )
     if isinstance(result, ModelEditFailure):
         return Rejected(code="MODEL_SPEC_INVALID", subject="model", detail=result.detail)
-    info = write_model_revision(
-        store,
-        result.dynamical_model_spec,
+    saved = store.write_result(result, call_id=call_identity(request))
+    info = store.result_record(
+        "model",
+        saved,
         derived_from={kind: record.revision for kind, record in state.current.items()},
         produced_by="edit_model",
     )
-    return Applied(result=store.write_result(result), effects=ActionEffects(produced=(info,)))
+    return Applied(result=saved, effects=ActionEffects(produced=(info,)))

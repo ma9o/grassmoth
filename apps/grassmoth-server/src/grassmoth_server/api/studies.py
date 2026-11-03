@@ -104,7 +104,7 @@ async def fit(
     body: Annotated[FitRequest[RevisionSelector], Body(discriminator="action")],
     temporal_client: Annotated[TemporalClientProvider, Depends(temporal_client)],
 ) -> Response:
-    """Fit target.new model and data, or continue target.fit_ref at its last retained state. Counts request additional draws; zero warmup freezes tuning and algorithm changes require warmup. Zero warmup and zero samples compile both sweep programs without execution. Zero-draw fits return checks and inference without a conditioned model. repeat distinguishes timing attempts. GET polls call_id."""
+    """Fit target.new model and data, or continue a Modal-produced target.fit_ref from its full retained Volume result. Continuing a local-produced fit is rejected. Counts request additional draws; zero warmup freezes tuning and algorithm changes require warmup. Zero warmup and zero samples compile both sweep programs without execution. Zero-draw fits return checks and inference without a conditioned model. repeat distinguishes timing attempts. GET polls call_id."""
     return _http_response(await calls.submit_action(workspace_id, body, temporal_client), request)
 
 

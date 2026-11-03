@@ -15,9 +15,9 @@ def trace_log_path(subroutine_id: str) -> str:
     return f"traces/{subroutine_id}.json"
 
 
-def collect_run_traces(workspace_id: str, seq: int) -> dict[str, bytes]:
+def collect_run_traces(workspace_id: str, call_id: str) -> dict[str, bytes]:
     """Collect the accumulated trace snapshots before scratch is swept."""
-    llm_root = storage.join(data_module.scratch_run_dir(workspace_id, f"seq-{seq:06d}"), "llm")
+    llm_root = storage.join(data_module.call_dir(workspace_id, call_id), "llm")
     logs: dict[str, bytes] = {}
     for subroutine_root in sorted(storage.listdir(llm_root)):
         subroutine_id = subroutine_root.rstrip("/").rsplit("/", 1)[-1]

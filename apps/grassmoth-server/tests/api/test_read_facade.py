@@ -14,6 +14,7 @@ from grassmoth_server.api.read_only import create_read_facade_app
 from grassmoth_server.storage import paths as data_module
 from grassmoth_server.study.records import Applied
 from grassmoth_server_test_support.action import applied_record, question_root
+from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.git import git_oid
 
 pytestmark = pytest.mark.contract
@@ -68,7 +69,8 @@ def test_saved_call_serves_pinned_artifacts_without_starting_new_actions(monkeyp
                 parent_ref=repository.question().revision, dynamical_model_spec=dynamical_model_spec
             )
         )
-        artifact = store.write_artifact(
+        artifact = seed_record(
+            store,
             "model",
             derived_from={},
             produced_by="edit_model",
@@ -118,13 +120,14 @@ def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
             dynamical_model_spec=DynamicalModelSpec(),
         )
     )
-    model = ArtifactStore("WS-TRACE").write_artifact(
+    model = seed_record(
+        ArtifactStore("WS-TRACE"),
         "model",
         derived_from={},
         produced_by="edit_model",
         json_files={"model.json": request.input.dynamical_model_spec.model_dump(mode="json")},
     )
-    source = str(tmp_path / "data/WS-TRACE/scratch/runs/seq-000002/llm/raw-data/trace.json")
+    source = str(tmp_path / "data/WS-TRACE/tmp/call-test/llm/raw-data/trace.json")
     storage.write_text(
         source,
         LLMTrace(
@@ -132,7 +135,7 @@ def test_saved_call_returns_promoted_traces(monkeypatch, tmp_path):
             model="test-model",
         ).model_dump_json(),
     )
-    logs = collect_run_traces("WS-TRACE", 2)
+    logs = collect_run_traces("WS-TRACE", "call-test")
     StudyRepository("WS-TRACE").append(
         applied_record(
             "WS-TRACE",
@@ -190,10 +193,10 @@ def test_upload_endpoint_stages_input_file(monkeypatch, tmp_path):
     )
 
     assert response.status_code == 200
-    assert response.json() == "WS-UPLOAD/input/data.csv"
-    assert storage.read_text(str(tmp_path / "data" / "WS-UPLOAD" / "input" / "data.csv")) == (
-        "x,y\n1,2\n"
-    )
+    assert response.json() == "WS-UPLOAD/tmp/input/data.csv"
+    assert storage.read_text(
+        str(tmp_path / "data" / "WS-UPLOAD" / "tmp" / "input" / "data.csv")
+    ) == ("x,y\n1,2\n")
 
 
 def test_full_facade_advertises_actions(monkeypatch, tmp_path):

@@ -24,6 +24,7 @@ from grassmoth_server_test_support.action import applied_record, edit_and_check,
 from grassmoth_server_test_support.data import metadata_for_model
 from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
 from grassmoth_server_test_support.helpers import run_async, write_question
+from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id, make_model
 from grassmoth_test_support.model import x_y_model
 
@@ -116,13 +117,15 @@ def test_incomplete_model_is_rejected_off_loop_before_inference(workspace, monke
     local = Mock()
     monkeypatch.setattr(inference_fit, "fit", local)
     store = ArtifactStore(workspace)
-    model = store.write_artifact(
+    model = seed_record(
+        store,
         "model",
         derived_from={},
         produced_by="edit_model",
         json_files={"model.json": make_model(["X", "Y"], [("X", "Y")]).model_dump(mode="json")},
     )
-    panel = store.write_artifact(
+    panel = seed_record(
+        store,
         "panel",
         derived_from={},
         produced_by="prepare_data",
@@ -181,7 +184,8 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     for revision, (model, producer) in enumerate(
         ((prior, "edit_model"), (fitted, "fit"), (edited, None)), 1
     ):
-        store.write_artifact(
+        seed_record(
+            store,
             "model",
             derived_from={"model": artifact_revision(workspace, "model", revision - 1)}
             if revision > 1
@@ -189,7 +193,8 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
             produced_by=producer,
             json_files={"model.json": model.model_dump(mode="json")},
         )
-    store.write_artifact(
+    seed_record(
+        store,
         "panel",
         derived_from={},
         produced_by="prepare_data",
@@ -264,7 +269,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
         import modal
 
         from grassmoth_server.compute.analysis_cache import cache_fit_result
-        from grassmoth_server.compute.remote_receipts import receipt_for
+        from grassmoth_server.compute.fit_results import RemoteFitResult
         from grassmoth_server.study.persistence.arrays import owned_arrays
         from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 
@@ -278,7 +283,11 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
             "from_name",
             lambda _name: Mock(read_file_into_fileobj=lambda _path, stream: stream.write(body)),
         )
-        return receipt_for(result, entry, tuple(owned_arrays(unpack_result(body))), transfer=entry)
+        return RemoteFitResult(
+            full_fit=entry,
+            transfer=entry,
+            law_arrays=tuple(owned_arrays(unpack_result(body)["dynamical_model_spec"])),
+        )
 
     modal_fit = Mock(side_effect=remote_fit)
     monkeypatch.setattr(flow, "run_fit", local_fit)

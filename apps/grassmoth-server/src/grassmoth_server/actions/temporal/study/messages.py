@@ -22,7 +22,6 @@ from grassmoth_server.actions.contracts.requests import (
     SimulateRequest,
 )
 from grassmoth_server.study.records import (
-    ActionAttempt,
     ActionMessage,
     Applied,
     AttemptRecord,
@@ -108,13 +107,6 @@ class ChecksResult(Value):
 
     reports: Mapping[ActionReportName, GitOid]
     messages: tuple[ActionMessage, ...]
-
-
-class CompleteResultInput(Value):
-    """The completed execution whose full scientific result must be saved before publication."""
-
-    workspace_id: str
-    attempt: ActionAttempt
 
 
 class AttemptPublication(Value):

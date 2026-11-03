@@ -32,6 +32,7 @@ from grassmoth_server.study.records import Applied
 from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
 from grassmoth_server_test_support.data import metadata_for_model
 from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.compute import COMPUTE_BUDGET
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import compile_model_fixture
@@ -72,7 +73,8 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
         edges=replace_constructs(dynamical_model_spec.edges, constructs)
     )
     store, history = ArtifactStore("SUMMARY"), StudyRepository("SUMMARY")
-    definition = store.write_artifact(
+    definition = seed_record(
+        store,
         "model",
         derived_from={},
         produced_by="edit_model",
@@ -167,7 +169,7 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
             store.workspace_id,
             Applied(
                 result=report.evidence,
-                effects=ActionEffects(reports={"simulation": store.write_result(report)}),
+                effects=ActionEffects(reports={"simulation": result_blob(store, report)}),
             ),
             request=SimulateRequest(
                 input=SimulateInput(

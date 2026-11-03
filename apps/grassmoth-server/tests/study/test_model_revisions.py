@@ -13,6 +13,7 @@ from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.state import ArtifactRecord, StudyState, is_stale
 from grassmoth_server_test_support.action import edit_and_check, question_root
 from grassmoth_server_test_support.git import artifact_revision, artifact_revisions
+from grassmoth_server_test_support.storage import routing_record
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.helpers import fixture_entity_id, make_model
 from grassmoth_test_support.model import x_y_model
@@ -168,9 +169,7 @@ def test_model_diff_addresses_question_and_model_without_checkpoint_traversal(wo
         ),
     )
     assert failed.parent_ids == (edited.commit_id,)
-    panel = ArtifactStore(workspace).write_artifact(
-        "panel", produced_by="prepare_data", derived_from={}, json_files={"metadata.json": {}}
-    )
+    panel = routing_record(ArtifactStore(workspace), "panel", derived_from={})
     for invalid in (failed.commit_id, panel.revision):
         with pytest.raises(StudyLookupError):
             model_diff(workspace, model, invalid)

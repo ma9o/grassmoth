@@ -235,7 +235,7 @@ JSON
 
 ### POST `/api/studies/{workspace_id}/fit`
 
-Fit target.new model and data, or continue target.fit_ref at its last retained state. Counts request additional draws; zero warmup freezes tuning and algorithm changes require warmup. Zero warmup and zero samples compile both sweep programs without execution. Zero-draw fits return checks and inference without a conditioned model. repeat distinguishes timing attempts. GET polls call_id.
+Fit target.new model and data, or continue a Modal-produced target.fit_ref from its full retained Volume result. Continuing a local-produced fit is rejected. Counts request additional draws; zero warmup freezes tuning and algorithm changes require warmup. Zero warmup and zero samples compile both sweep programs without execution. Zero-draw fits return checks and inference without a conditioned model. repeat distinguishes timing attempts. GET polls call_id.
 
 **Parameters**
 
@@ -492,7 +492,7 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/ACTI
 
 ### POST `/api/upload`
 
-Stage one named raw input file in the workspace's input folder. prepare_data reads that folder when input.source is "input" and captures each file's SHA-256.
+Stage one named raw input file under tmp/input/ and return <workspace>/tmp/input/<file>. prepare_data reads that folder when input.source is "tmp/input" and captures each file's SHA-256.
 
 ```bash
 curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/upload" \

@@ -55,7 +55,7 @@ pytestmark = [pytest.mark.workflow, pytest.mark.timeout(60, method="thread")]
 _QUESTION = "does exercise improve sleep?"
 _PREPARATION: dict[str, Any] = {
     "dynamical_model_spec_ref": "latest",
-    "source": "input",
+    "source": "tmp/input",
     "extraction": {
         "indicator:sleep": {
             "kind": "computed",

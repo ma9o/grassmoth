@@ -77,7 +77,9 @@ def test_progress_event_variants_round_trip_through_temporal(payload, required_f
 
     adapter = TypeAdapter(ProgressEventInput)
     event = {"attempt_id": str(uuid.uuid4()), **payload}
-    message = adapter.validate_python({"workspace_id": "test", "event": event})
+    message = adapter.validate_python(
+        {"workspace_id": "test", "call_id": "call-test", "event": event}
+    )
 
     async def round_trip():
         encoded = await pydantic_data_converter.encode([message])
@@ -615,7 +617,7 @@ def test_extraction_chunk_workflow_runs_shared_llm_subroutine(monkeypatch, tmp_p
     from grassmoth_server.llm.traces import LLMTrace
 
     trace_path = storage.join(
-        data_module.scratch_run_dir(workspace_id, "seq-000001"),
+        data_module.call_dir(workspace_id, "seq-000001"),
         "llm",
         "measurement-chunk-000000-attempt-001",
         "trace.json",

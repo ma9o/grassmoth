@@ -5,6 +5,7 @@ import pytest
 from grassmoth_server.storage import paths as data
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.queries.lineage import law_provenance
+from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.input_trajectories import deterministic_input_model
 
 pytestmark = pytest.mark.contract
@@ -14,7 +15,8 @@ def test_stored_deterministic_inputs_have_authored_provenance(tmp_path, monkeypa
     dynamical_model_spec = deterministic_input_model()
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("INPUTLAW")
-    record = store.write_artifact(
+    record = seed_record(
+        store,
         "model",
         derived_from={},
         produced_by="edit_model",

@@ -215,7 +215,6 @@ CONCERNS = {
     "execution_history": (
         "Execution & history",
         (
-            "study.artifact_files",
             "study.state",
             "actions.contracts.effects",
             "study.persistence.store",

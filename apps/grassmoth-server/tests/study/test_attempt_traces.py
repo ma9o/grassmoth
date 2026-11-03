@@ -50,9 +50,9 @@ def _trace(model: str = "openrouter/test-model") -> LLMTrace:
     )
 
 
-def _scratch_trace(workspace_id: str, seq: int, subroutine_id: str) -> str:
+def _scratch_trace(workspace_id: str, call_id: str, subroutine_id: str) -> str:
     path = storage.join(
-        data_module.scratch_run_dir(workspace_id, f"seq-{seq:06d}"),
+        data_module.call_dir(workspace_id, call_id),
         "llm",
         subroutine_id,
         "trace.json",
@@ -63,9 +63,9 @@ def _scratch_trace(workspace_id: str, seq: int, subroutine_id: str) -> str:
 
 def test_collects_finalized_traces_and_validates_commit_paths(data_root):
     del data_root
-    _scratch_trace("ws-trace", 1, "zeta")
-    _scratch_trace("ws-trace", 1, "alpha")
-    logs = collect_run_traces("ws-trace", 1)
+    _scratch_trace("ws-trace", "call-test", "zeta")
+    _scratch_trace("ws-trace", "call-test", "alpha")
+    logs = collect_run_traces("ws-trace", "call-test")
     assert list(logs) == ["traces/alpha.json", "traces/zeta.json"]
     with pytest.raises(ValueError, match="Invalid attempt trace subroutine id"):
         trace_log_path("../scratch")
@@ -90,12 +90,12 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
             )
         )
     )
-    _scratch_trace("ws-trace", 1, "latent-structure")
     request = EditModelRequest[GitOid](
         input=EditModelInput[GitOid](
             parent_ref=question.revision, dynamical_model_spec=DynamicalModelSpec()
         )
     )
+    _scratch_trace("ws-trace", call_identity(request), "latent-structure")
     attempt_id = UUID(int=1)
     messages = (
         ActionMessage(
@@ -106,7 +106,9 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
             detail="Started.",
         ),
     )
-    emit_event("ws-trace", StepEvent(attempt_id=attempt_id, status="running"))
+    emit_event(
+        "ws-trace", call_identity(request), StepEvent(attempt_id=attempt_id, status="running")
+    )
     live = collect_call_log(
         "ws-trace",
         RunningCall(attempt_id=attempt_id, seq=1, request=request, messages=messages),
@@ -131,11 +133,10 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     publication = asyncio.run(journal_activity(publication_input))
     assert base.state.current["question"] == question
     assert StudyRepository("ws-trace").state() == previous_state
-    storage.rm_tree(data_module.scratch_run_dir("ws-trace", "seq-000001"))
-    storage.rm_tree(data_module.scratch_events_dir("ws-trace"))
+    storage.rm_tree(data_module.call_dir("ws-trace", call_identity(request)))
     asyncio.run(journal_activity(publication_input))
 
-    record = StudyRepository("ws-trace").read_attempt(1)
+    record = StudyRepository("ws-trace").call(call_identity(request))
     assert record is not None
     assert record.record.attempt.outcome.status == "raised"
     assert record.record.trace_ids == ("latent-structure",)
@@ -172,7 +173,7 @@ def test_subroutine_retains_conversation_before_a_tool_failure(data_root, monkey
 
     subroutine = LLMSubroutineRef(
         workspace_id="ws-trace",
-        run_id="seq-000001",
+        run_id="call-test",
         subroutine_id="extraction",
         context_ref="unused-context.json",
     )
@@ -235,7 +236,7 @@ def test_subroutine_retains_conversation_before_a_tool_failure(data_root, monkey
             )
         )
     trace = LLMTrace.model_validate_json(
-        collect_run_traces("ws-trace", 1)["traces/extraction.json"]
+        collect_run_traces("ws-trace", "call-test")["traces/extraction.json"]
     )
     assert [message.role for message in trace.messages] == ["user", "assistant"]
     assert trace.messages[-1].tool_calls is not None

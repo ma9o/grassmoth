@@ -135,18 +135,24 @@ lint, type, documentation, and duplicate checks when they apply to the change.
 
 ### Local study history
 
-New studies initialize their local bare repository on first use. On a fresh checkout, restore the tracked `HEALTHDEMO` history bundle before using its backend:
+New studies initialize `history.git/` at the workspace root on first use. The
+[storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/git_objects.py)
+requires format 32. Start a new study for older formats; there is no automatic
+migration or bundle restore step.
+
+A tracked study includes its packed `history.git/`. With its workers stopped and
+no calls pending, prepare the repository before committing it:
 
 ```bash
-git clone --mirror data/HEALTHDEMO/study/history.bundle data/HEALTHDEMO/study/history.git
-git --git-dir=data/HEALTHDEMO/study/history.git config grassmoth.format 30
+STUDY_HISTORY="data/WORKSPACE_ID/history.git"
+git --git-dir="$STUDY_HISTORY" repack -ad
+git --git-dir="$STUDY_HISTORY" pack-refs --all
+rm -rf "$STUDY_HISTORY/hooks" "$STUDY_HISTORY/info" "$STUDY_HISTORY/description"
 ```
 
-#### Storage format
-
-The [storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/git_objects.py)
-requires format 31. Start a new study or restore a format-31 bundle. The application
-reads only this format and does not perform automatic migrations.
+Never prune Git objects while a call is pending: unpublished result objects are
+not yet reachable from a saved call ref. Copying the packed repository, including
+its format configuration, is sufficient to read every saved result and timeline.
 
 ### Local stack
 
@@ -201,34 +207,40 @@ persists its event history to `.local/agentic-integration-stack/temporal.db`
 process — to serve the UI, pick up a change, or recover from a crash —
 **resumes** in-flight study workflows exactly where they left off
 rather than orphaning them. To start genuinely fresh, delete that
-`temporal.db` before boot and wipe that workspace's `store/`, `study/`,
-`scratch/`, and `cache/` directories. The Web UI is served at
+`temporal.db` before boot and remove that test workspace's `history.git/` and
+`tmp/` directories while the stack is stopped. The Web UI is served at
 `http://localhost:8233`.
 
 ## Workspace Layout
 
 ```text
 data/
-├── <WORKSPACE_ID>/        # User-facing workspace
-│   ├── input/             # Ready-to-use CSV or Parquet tables for prepare_data
-│   ├── store/             # Uploaded tables and transient execution buffers
-│   ├── study/             # Complete results, logs and traces in each Git commit
-│   ├── cache/             # Temporary compilation and file materialization
-│   └── scratch/           # Live progress events and run-scoped execution state
-└── HEALTHDEMO/                  # Public demo study
+└── <WORKSPACE_ID>/
+    ├── history.git/       # Saved calls, exact served results, records, logs and sources
+    └── tmp/               # Ignored by Git
+        ├── input/         # Uploaded CSV or Parquet tables awaiting capture
+        └── <call id>/     # Captured sources, parsed tables, extraction, events and profiles
 ```
 
-Back up the whole workspace directory: Git retains complete action results and their numerical buffers; `store/` retains uploaded input tables. See the [storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/store.py). Temporary cache entries are safe to delete at any time. `uv run grassmoth-sweep WORKSPACE_ID` expires telemetry and caches, and offline maintenance can add `--collect-runs` to remove finished run scratch.
+Saved calls own everything needed for reads inside `history.git/`; Modal fits
+also retain an immutable full-result pointer there for continuation and analysis.
+The [fit chart](../assets/action-flows/fit.svg) owns those branches.
+
+`uv run grassmoth-sweep WORKSPACE_ID` removes temporary directories only for
+saved calls, including failures. Startup performs the same idempotent cleanup.
+If publication fails, the temporary work remains. With the workspace stopped,
+`uv run grassmoth-sweep WORKSPACE_ID --offline` clears all of `tmp/`, including
+uploads and captures abandoned before acceptance. Nothing is removed by age.
+
+A saved `prepare_data` GET needs no uploads. To repeat its POST, first put its
+source files back in the named folder: POST resolves source hashes before reuse.
+Hand-authored relative source folders remain valid alongside `tmp/input/`.
 
 ### Publishing a workspace
 
-Use the current copier only for a stopped synthetic workspace and a destination with no previous copy. The hosted viewer serves the copied payloads:
-
-```bash
-uv run --project apps/grassmoth-server grassmoth-publish SYNTHETIC_WORKSPACE --exclude input
-```
-
-`--exclude input` withholds uploaded source files only. `--exclude raw_data` matches `store/raw_data/`; it does not remove current raw-table blobs under `store/blobs/` or their Git history. Existing remote files, including mutable Git refs, are skipped, so repeated uploads do not synchronize study history.
+Hosted R2 serving and synchronization of format-32 histories are not implemented.
+The existing skip-existing copier does not publish this layout. Keep validation
+studies local until that separate workflow is implemented.
 
 ## Step-by-Step Flow
 
@@ -238,14 +250,20 @@ uv run --project apps/grassmoth-server grassmoth-publish SYNTHETIC_WORKSPACE --e
 WORKSPACE_ID="T3ST42"
 QUESTION="How does screen time affect sleep?"
 
+cat > /tmp/grassmoth-observations.csv <<'CSV'
+timestamp,screen_hours,sleep_hours
+2026-01-01,3,7
+2026-01-02,2,8
+CSV
+
 curl -s -X POST http://localhost:8100/api/upload \
   -F "workspaceId=$WORKSPACE_ID" \
-  -F "file=@data/HEALTHDEMO/input/observations.csv"
+  -F "file=@/tmp/grassmoth-observations.csv"
 
 curl -s -X POST http://localhost:8100/api/studies/$WORKSPACE_ID/edit_question \
   -H 'Content-Type: application/json' \
   -H 'Accept: application/json' \
-  -d "{\"action\":\"edit_question\",\"input\":{\"question\":{\"text\":\"$QUESTION\"}}}"
+  -d "{\"action\":\"edit_question\",\"input\":{\"question\":{\"text\":\"$QUESTION\",\"outcome\":\"construct:sleep\"}}}"
 ```
 
 `GET /api/workspaces` includes the `X-Actions-Enabled` capability header. Poll the returned `call_id` using the [study API reference](../reference/study-api.md). A read-only facade serves saved calls, including failures and comparisons; unsaved POST calls return 403. The [action charts](../README.md#documentation) show what each action does.

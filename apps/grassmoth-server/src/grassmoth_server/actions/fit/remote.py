@@ -27,7 +27,7 @@ from grassmoth_server.compute.analysis_cache import (
     fit_profile_directory,
     retained_fit_result,
 )
-from grassmoth_server.compute.remote_receipts import RemoteFitReceipt, receipt_for
+from grassmoth_server.compute.fit_results import RemoteFitResult
 from grassmoth_server.compute.resources import HOST_MEMORY_ALLOCATION_ENV
 from grassmoth_server.study.persistence.codec import pack_result, unpack_result
 
@@ -69,7 +69,7 @@ class FitComputeInput:
 
 @dataclass(frozen=True)
 class FitComputeResult:
-    """Verified compact receipt to persist through the caller's store."""
+    """Verified full-result and transfer pointers returned to the caller."""
 
     output: bytes
 
@@ -190,7 +190,7 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
             "Fit streamed cache write complete: elapsed_seconds=%.6f", time.perf_counter() - started
         )
         del values
-        # The analysis alias and continuation receipt keep the complete result.
+        # The full-result pointer serves analysis and continuation.
         # Publish a separate immutable body for UI reads and downloads.
         transfer_values = result_payload(result, thin_fit_draws=True)
         transferred = FitOutput.model_validate(transfer_values)
@@ -201,15 +201,16 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
                 ANALYSIS_CACHE_ROOT / "retained",
                 payload.analysis_call,
                 transfer_values,
-                publish_alias=False,
             )
         )
         started = time.perf_counter()
-        receipt = receipt_for(
-            transferred, entry, tuple(owned_arrays(transfer_values)), transfer=transfer
+        completion = RemoteFitResult(
+            full_fit=entry,
+            transfer=transfer,
+            law_arrays=tuple(owned_arrays(transfer_values.get("dynamical_model_spec"))),
         )
         logger.info(
-            "Fit result_receipt complete: elapsed_seconds=%.6f", time.perf_counter() - started
+            "Fit result_pointers complete: elapsed_seconds=%.6f", time.perf_counter() - started
         )
         started = time.perf_counter()
         modal.Volume.from_name(ANALYSIS_CACHE_VOLUME).commit()
@@ -217,7 +218,7 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
             "Fit volume_commit complete: elapsed_seconds=%.6f", time.perf_counter() - started
         )
         started = time.perf_counter()
-        frame = encode_fit_result(FitComputeResult(pack_result(receipt)))
+        frame = encode_fit_result(FitComputeResult(pack_result(completion)))
         logger.info(
             "Fit result_frame_encode complete: elapsed_seconds=%.6f", time.perf_counter() - started
         )
@@ -285,7 +286,7 @@ def fit_on_modal(
     analysis_call: AnalysisCall,
     profile: bool = False,
     previous_cache: AnalysisCacheEntry | None = None,
-) -> RemoteFitReceipt:
+) -> RemoteFitResult:
     """Compute once on Modal; return reports only after retaining the complete result."""
     panel = io.BytesIO()
     inputs.data_for_model.recorded.frame.write_parquet(panel)
@@ -308,7 +309,7 @@ def fit_on_modal(
         ),
         hardware=inputs.sampler.hardware,
     )
-    receipt = RemoteFitReceipt.model_validate(unpack_result(result.output))
-    if receipt.cache.call != analysis_call:
-        raise ValueError("Remote fit receipt belongs to a different call")
-    return receipt
+    completion = RemoteFitResult.model_validate(unpack_result(result.output))
+    if completion.full_fit.call != analysis_call or completion.transfer.call != analysis_call:
+        raise ValueError("Remote fit completion belongs to a different call")
+    return completion

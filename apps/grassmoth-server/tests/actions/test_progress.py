@@ -25,25 +25,29 @@ def test_progress_events_roundtrip_per_attempt(monkeypatch, tmp_path):
 
     emit_event(
         workspace_id,
+        "call-attempt",
         StepEvent(
             attempt_id=attempt,
             status="failed",
             error=StepError(type="ValidationError", message="unreadable file"),
         ),
     )
-    emit_event(workspace_id, StepEvent(attempt_id=other, status="running"))
+    emit_event(workspace_id, "call-other", StepEvent(attempt_id=other, status="running"))
     emit_event(
         workspace_id,
+        "call-attempt",
         ExtractionPlanEvent(attempt_id=attempt, total_workers=2, max_concurrent_workers=1),
     )
     emit_event(
         workspace_id,
+        "call-attempt",
         ExtractionWorkerEvent(
             attempt_id=attempt, worker_id=0, state="completed", n_windows=3, n_extractions=4
         ),
     )
     emit_event(
         workspace_id,
+        "call-attempt",
         ExtractionSnapshotEvent(
             attempt_id=attempt,
             total_workers=2,
@@ -54,7 +58,7 @@ def test_progress_events_roundtrip_per_attempt(monkeypatch, tmp_path):
         ),
     )
 
-    events = read_events(workspace_id, attempt)
+    events = read_events(workspace_id, "call-attempt")
     assert [type(event) for event in events] == [
         StepEvent,
         ExtractionPlanEvent,
@@ -65,7 +69,7 @@ def test_progress_events_roundtrip_per_attempt(monkeypatch, tmp_path):
     step = events[0]
     assert isinstance(step, StepEvent)
     assert step.error == StepError(type="ValidationError", message="unreadable file")
-    assert read_events(workspace_id, attempt, after=events[1].cursor) == events[2:]
-    (other_step,) = read_events(workspace_id, other)
+    assert read_events(workspace_id, "call-attempt", after=events[1].cursor) == events[2:]
+    (other_step,) = read_events(workspace_id, "call-other")
     assert isinstance(other_step, StepEvent)
     assert other_step.status == "running"

@@ -2,6 +2,7 @@
 
 from grassmoth_server.actions.contracts.inputs import EditQuestionInput
 from grassmoth_server.actions.edit_model import edit_model
+from grassmoth_server_test_support.storage import result_blob
 from grassmoth_test_support.helpers import fixture_entity_id
 
 
@@ -93,7 +94,7 @@ def applied_record(
 
                 revision = state.current["panel"].revision
                 data = read_data_metadata(store, revision)
-                frame = store.read_parquet_file("panel", revision, "panel.parquet")
+                frame = store.read_panel(revision)
                 output = prepared_output(
                     ObservationDataset.from_frame(
                         frame, data.variables, time_origin=data.time_origin
@@ -162,7 +163,12 @@ def applied_record(
                 else:
                     output = EditQuestionOutput(question=question)
                     action = "edit_question"
-        identity = store.write_result(output)
+        identity = result_blob(store, output)
+    if request is None:
+        request = fixture_request(store, state, action, seq)
+    from grassmoth_server_test_support.storage import stage_result
+
+    stage_result(store, identity, request)
     saved = TypeAdapter(ActionAttempt).validate_python(
         {
             "action": action,
@@ -171,6 +177,62 @@ def applied_record(
         }
     )
     return AttemptRecord(seq=seq, ts=ts, attempt=saved, **metadata)
+
+
+def fixture_request(store, state, action, seq):
+    """Give isolated journal fixtures concrete requests, as real callers must."""
+    from datetime import date
+
+    from pydantic import TypeAdapter
+
+    from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from grassmoth.artifacts.model.question import QuestionSpec
+    from grassmoth.artifacts.simulation import SimulationSpec
+    from grassmoth_server.actions.contracts.requests import ScientificActionRequest
+    from grassmoth_server.study.persistence.store import read_model, read_question
+    from grassmoth_test_support.git import git_oid
+
+    model = state.current.get("model")
+    question = state.current.get("question")
+    panel = state.current.get("panel")
+    model_ref = model.revision if model else git_oid(seq)
+    inputs = {
+        "edit_question": {
+            "question": read_question(store, question.revision)
+            if question
+            else QuestionSpec(text=f"Question {seq}?", outcome="construct:outcome")
+        },
+        "edit_model": {
+            "parent_ref": question.revision if question else git_oid(seq),
+            "dynamical_model_spec": read_model(store, model_ref) if model else DynamicalModelSpec(),
+        },
+        "prepare_data": {
+            "dynamical_model_spec_ref": model_ref,
+            "source": {"files": [f"tmp/input/source-{seq}.csv"]},
+            "extraction": {
+                "indicator:outcome": {"kind": "semantic", "how_to_measure": "Read outcome"}
+            },
+        },
+        "fit": {
+            "target": {
+                "kind": "new",
+                "dynamical_model_spec_ref": model_ref,
+                "data_ref": {
+                    "revision": panel.revision if panel else git_oid(seq),
+                    "replicate_index": 0,
+                },
+            },
+            "repeat": seq,
+        },
+        "simulate": {
+            "dynamical_model_spec_ref": model_ref,
+            "simulation": SimulationSpec(start=date(2024, 1, 1), horizon="1d"),
+            "seed": seq,
+        },
+    }
+    return TypeAdapter(ScientificActionRequest).validate_python(
+        {"action": action, "input": inputs[action]}
+    )
 
 
 def empty_simulation_summary():

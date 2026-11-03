@@ -29,6 +29,7 @@ from grassmoth_server_test_support.git import artifact_revision, commit_id
 from grassmoth_server_test_support.helpers import write_question
 from grassmoth_server_test_support.model import stress_sleep_causal_model, stress_sleep_model
 from grassmoth_server_test_support.runner_fixtures import panel_metadata
+from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.inference import (
@@ -109,7 +110,8 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, journal = ArtifactStore("TEST"), StudyRepository("TEST")
     dynamical_model_spec = scientific_model_payload()
-    definition = store.write_artifact(
+    definition = seed_record(
+        store,
         "model",
         produced_by=None,
         derived_from={},
@@ -133,7 +135,8 @@ def test_durable_replication_preserves_current_laws_without_comparison(
         "question": question.revision,
     }
     produced.append(
-        store.write_artifact(
+        seed_record(
+            store,
             "panel",
             produced_by="prepare_data",
             derived_from={},
@@ -155,9 +158,9 @@ def test_durable_replication_preserves_current_laws_without_comparison(
             times=jnp.arange(-1.0, 4.0),
             time_origin=panel_metadata().time_origin,
         )
-        from grassmoth_server.study.persistence.writes import write_model_revision
+        from grassmoth_server_test_support.storage import seed_model_record
 
-        fitted = write_model_revision(
+        fitted = seed_model_record(
             store,
             dynamical_model_spec,
             produced_by="fit",
@@ -175,7 +178,8 @@ def test_durable_replication_preserves_current_laws_without_comparison(
             effects=ActionEffects(
                 produced=tuple(produced),
                 reports={
-                    "inference": store.write_result(
+                    "inference": result_blob(
+                        store,
                         inference_report(
                             FitResult(
                                 dynamical_model_spec=read_model(store, fitted.revision),
@@ -188,7 +192,7 @@ def test_durable_replication_preserves_current_laws_without_comparison(
                             ),
                             windows=(),
                             execution_context=EXECUTION_CONTEXT,
-                        )
+                        ),
                     )
                 },
             ),
@@ -260,7 +264,8 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     result_ref = simulation.record.attempt.outcome.result
     current = store.read_result(result_ref, SimulateOutput).report
     assert current == report
-    edited = store.write_artifact(
+    edited = seed_record(
+        store,
         "model",
         produced_by=None,
         derived_from={},
@@ -516,7 +521,8 @@ def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
             *revised_model.edges[1:],
         )
     )
-    revised = store.write_artifact(
+    revised = seed_record(
+        store,
         "model",
         produced_by=None,
         derived_from={},

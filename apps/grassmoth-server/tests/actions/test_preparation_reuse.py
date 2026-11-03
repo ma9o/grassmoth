@@ -38,6 +38,7 @@ from grassmoth_server.storage import paths as data
 from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server_test_support.data import preparation_input
 from grassmoth_server_test_support.helpers import run_async
+from grassmoth_server_test_support.storage import seed_source_table
 
 pytestmark = pytest.mark.contract
 
@@ -87,15 +88,11 @@ def test_extraction_cache_is_shared_and_only_changed_effective_requests_miss(tmp
 
     def plan(workspace, variables, end, context="Daily scores"):
         store = ArtifactStore(workspace)
-        artifact = store.write_artifact(
-            "raw_data",
-            derived_from={},
-            produced_by="prepare_data",
-            parquet_files={"raw.parquet": raw},
-        )
+        artifact = seed_source_table(store, raw, "seq-000001")
         return run_async(
             plan_measurements_activity(
                 MeasurementsWorkflowInput(
+                    call_id="seq-000001",
                     workspace_id=workspace,
                     seq=1,
                     attempt_id=uuid4(),
@@ -255,9 +252,7 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
         }
     )
     store = ArtifactStore("empty")
-    artifact = store.write_artifact(
-        "raw_data", derived_from={}, produced_by="prepare_data", parquet_files={"raw.parquet": raw}
-    )
+    artifact = seed_source_table(store, raw, "seq-000001")
     variable = _variable("x").revised(
         observation=_variable("x").observation.revised(aggregation=aggregation)
     )
@@ -268,6 +263,7 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
     plan = run_async(
         plan_measurements_activity(
             MeasurementsWorkflowInput(
+                call_id="seq-000001",
                 workspace_id="empty",
                 seq=1,
                 attempt_id=uuid4(),
@@ -322,7 +318,7 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
         )
     )
     revision = effects.effects.produced[0].revision
-    panel = store.read_parquet_file("panel", revision, "panel.parquet")
+    panel = store.read_panel(revision)
     assert panel["value"].to_list() == [None, 2.0, None]
     assert panel["anchor_time"].to_list() == [datetime(2026, 1, day + offset) for day in (3, 5, 7)]
     assert panel["support_start"].to_list() == [datetime(2026, 1, day) for day in (3, 5, 7)]

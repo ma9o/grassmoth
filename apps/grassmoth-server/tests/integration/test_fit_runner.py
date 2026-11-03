@@ -168,10 +168,10 @@ def test_library_fit_failure_stops_before_publication(
         )
     )
     write_result = Mock()
-    write_artifact = Mock()
+    result_record = Mock()
     monkeypatch.setattr(flow, "fit", compute)
     monkeypatch.setattr(type(artifact_store), "write_result", write_result)
-    monkeypatch.setattr(type(artifact_store), "write_artifact", write_artifact)
+    monkeypatch.setattr(type(artifact_store), "result_record", result_record)
     request = FitRequest[GitOid](
         input=FitInput[GitOid](
             target=NewFitTarget(
@@ -191,4 +191,4 @@ def test_library_fit_failure_stops_before_publication(
     assert caught.value.diagnostics == {"duration_seconds": 0.01}
     compute.assert_called_once()
     write_result.assert_not_called()
-    write_artifact.assert_not_called()
+    result_record.assert_not_called()

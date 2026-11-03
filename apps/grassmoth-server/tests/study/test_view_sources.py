@@ -9,6 +9,7 @@ from grassmoth_server.study.records import Applied, inference_record
 from grassmoth_server_test_support.action import applied_record
 from grassmoth_server_test_support.git import artifact_revision
 from grassmoth_server_test_support.helpers import write_question
+from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.model import x_y_model
 
@@ -19,7 +20,8 @@ def test_authored_model_has_no_inference_report(monkeypatch, tmp_path):
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     store, journal = ArtifactStore("ABSENT"), StudyRepository("ABSENT")
-    info = store.write_artifact(
+    info = seed_record(
+        store,
         "model",
         derived_from={},
         produced_by="edit_model",
@@ -56,7 +58,8 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
     dynamical_model_spec = dynamical_model_spec.with_entities(
         law_layouts={identity: layout.revised(labels=labels)}
     )
-    prior = store.write_artifact(
+    prior = seed_record(
+        store,
         "model",
         derived_from={},
         produced_by="edit_model",
@@ -69,7 +72,8 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
     from grassmoth_server_test_support.runner_fixtures import seed_panel
 
     panel = seed_panel(store, model_revision=prior.revision)
-    info = store.write_artifact(
+    info = seed_record(
+        store,
         "model",
         derived_from={"model": prior.revision, "panel": panel.revision},
         produced_by="fit",
@@ -84,7 +88,8 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
                 effects=ActionEffects(
                     produced=(write_question(store), panel, info),
                     reports={
-                        "inference": store.write_result(
+                        "inference": result_blob(
+                            store,
                             inference_report(
                                 FitResult(
                                     dynamical_model_spec=read_model(store, info.revision),
@@ -97,7 +102,7 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
                                 ),
                                 windows=(),
                                 execution_context=EXECUTION_CONTEXT,
-                            )
+                            ),
                         )
                     },
                 ),
@@ -145,7 +150,8 @@ def test_model_view_reads_canonical_science_without_a_compiled_plan(monkeypatch,
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store = ArtifactStore("DEFINITION")
     dynamical_model_spec = x_y_model()
-    info = store.write_artifact(
+    info = seed_record(
+        store,
         "model",
         derived_from={},
         produced_by=None,
@@ -170,7 +176,8 @@ def test_model_view_reads_canonical_science_without_a_compiled_plan(monkeypatch,
         for parameter in dynamical_model_spec.parameters
     )
     changed = dynamical_model_spec.revised(measurement_clock="2d")
-    revision = store.write_artifact(
+    revision = seed_record(
+        store,
         "model",
         derived_from={"model": artifact_revision("DEFINITION", "model", 1)},
         produced_by=None,

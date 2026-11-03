@@ -41,6 +41,7 @@ from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
 from grassmoth_server_test_support.data import metadata_for_model, simulation_layout
 from grassmoth_server_test_support.helpers import run_async
+from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.git import git_oid
 from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import compile_model_fixture
@@ -105,7 +106,8 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     monkeypatch.setattr(data_module, "_DATA_URI", str(tmp_path))
     store, history = ArtifactStore("TEST"), StudyRepository("TEST")
     dynamical_model_spec = _recorded_replicate_becomes_a_compatible_panel_complete_test_model()
-    model_info = store.write_artifact(
+    model_info = seed_record(
+        store,
         "model",
         derived_from={},
         produced_by="edit_model",
@@ -164,7 +166,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
         store.workspace_id,
         Applied(
             result=report.evidence,
-            effects=ActionEffects(reports={"simulation": store.write_result(report)}),
+            effects=ActionEffects(reports={"simulation": result_blob(store, report)}),
         ),
         seq=2,
         ts="2026-09-25T12:01:00Z",
@@ -186,7 +188,7 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
             store.workspace_id,
             Applied(
                 result=later.evidence,
-                effects=ActionEffects(reports={"simulation": store.write_result(later)}),
+                effects=ActionEffects(reports={"simulation": result_blob(store, later)}),
             ),
             seq=3,
         )

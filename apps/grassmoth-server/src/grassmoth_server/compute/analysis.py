@@ -15,8 +15,8 @@ from grassmoth_server.actions.contracts.identity import CallId
 from grassmoth_server.compute.analysis_cache import (
     ANALYSIS_CACHE_ROOT,
     ANALYSIS_CACHE_VOLUME,
-    AnalysisCall,
-    cached_fit_result,
+    AnalysisCacheEntry,
+    retained_fit_result,
 )
 
 if TYPE_CHECKING:
@@ -31,10 +31,10 @@ class AnalysisOutput(Value):
 
 
 def _analyze_cpu(
-    call: AnalysisCall, script: bytes, arguments: tuple[str, ...]
+    entry: AnalysisCacheEntry, script: bytes, arguments: tuple[str, ...]
 ) -> Iterator[AnalysisOutput]:
     """Pass a verified MessagePack body as argv[1]; results never enter an image."""
-    result = cached_fit_result(ANALYSIS_CACHE_ROOT, call)
+    result = retained_fit_result(ANALYSIS_CACHE_ROOT / "retained", entry)
     with TemporaryDirectory() as directory:
         path = Path(directory) / "analysis.py"
         path.write_bytes(script)
@@ -50,7 +50,7 @@ def _analyze_cpu(
 
 
 def analyze_on_modal(
-    call: AnalysisCall, script: bytes, arguments: tuple[str, ...]
+    entry: AnalysisCacheEntry, script: bytes, arguments: tuple[str, ...]
 ) -> AnalysisOutput:
     """Send only script bytes and lookup metadata to a bounded CPU-only runner."""
     import modal
@@ -73,14 +73,14 @@ def analyze_on_modal(
         },
     )(_analyze_cpu)
     with app.run():
-        (output,) = analyze.remote_gen(call, script, arguments)
+        (output,) = analyze.remote_gen(entry, script, arguments)
         return AnalysisOutput.model_validate(output)
 
 
 def main() -> None:
     """Resolve a published fit using journal metadata, then analyze its cached output."""
+    from grassmoth_server.study.persistence.call import SavedApplied
     from grassmoth_server.study.persistence.history import StudyRepository
-    from grassmoth_server.study.records import Applied
 
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -92,14 +92,20 @@ def main() -> None:
     script = args.script[1:] if args.script[:1] == ["--"] else args.script
     if not script:
         parser.error("supply -- script.py [arguments]")
-    call = AnalysisCall(workspace_id=args.workspace, call_id=args.call)
-    revision = StudyRepository(call.workspace_id).call(call.call_id)
+    repository = StudyRepository(args.workspace)
+    revision = repository.call(args.call)
+    if revision is None:
+        parser.error("--call must select a published successful Modal fit in --workspace")
+    saved = repository.saved_record(revision.commit_id)
+    outcome = saved.outcome
     if (
-        revision is None
-        or revision.record.attempt.action != "fit"
-        or not isinstance(revision.record.attempt.outcome, Applied)
+        saved.request.action != "fit"
+        or not isinstance(outcome, SavedApplied)
+        or outcome.result.full_fit is None
     ):
-        parser.error("--call must select a published successful fit in --workspace")
-    output = analyze_on_modal(call, Path(script[0]).read_bytes(), tuple(script[1:]))
+        parser.error("--call must select a published successful Modal fit in --workspace")
+    output = analyze_on_modal(
+        outcome.result.full_fit, Path(script[0]).read_bytes(), tuple(script[1:])
+    )
     print(output.log, end="")
     raise SystemExit(output.exit_code)

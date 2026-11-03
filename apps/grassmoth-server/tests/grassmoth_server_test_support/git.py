@@ -1,4 +1,6 @@
-"""Explicitly ordered server test setup artifacts."""
+"""Locate explicitly seeded record trees without adding durable application indexes."""
+
+import pygit2
 
 from grassmoth.artifacts.identity import GitOid
 from grassmoth_server.actions.contracts.identity import ArtifactId
@@ -7,17 +9,14 @@ from grassmoth_server.study.persistence.store import ArtifactStore
 
 
 def artifact_revisions(store: ArtifactStore, artifact: ArtifactId) -> list[GitOid]:
-    """Order explicitly created setup trees; application reads never use a catalog."""
-    prefix = f"refs/artifacts/{artifact}/"
-    records = [
-        store.read_meta(artifact, name.removeprefix(prefix))
-        for name in store.repo.references
-        if name.startswith(prefix)
-    ]
-    return [
-        record.revision
-        for record in sorted(records, key=lambda info: (info.created_at, info.revision))
-    ]
+    records = []
+    for oid in store.repo.odb:
+        obj = store.repo[oid]
+        if isinstance(obj, pygit2.Tree) and "meta.json" in obj:
+            record = store.read_record(str(oid))
+            if record.artifact_id == artifact:
+                records.append(record)
+    return [record.revision for record in sorted(records, key=lambda r: (r.created_at, r.revision))]
 
 
 def artifact_revision(workspace: str, artifact: ArtifactId, ordinal: int) -> GitOid:
@@ -25,7 +24,4 @@ def artifact_revision(workspace: str, artifact: ArtifactId, ordinal: int) -> Git
 
 
 def commit_id(workspace: str, seq: int) -> GitOid:
-    repository = StudyRepository(workspace)
-    record = repository.read_attempt(seq)
-    assert record is not None
-    return record.commit_id
+    return next(r.commit_id for r in StudyRepository(workspace).attempts() if r.record.seq == seq)

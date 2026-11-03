@@ -338,7 +338,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     from grassmoth_server.actions.contracts.identity import CallId
     from grassmoth_server.actions.fit import remote
     from grassmoth_server.compute.analysis_cache import AnalysisCall, cache_fit_result
-    from grassmoth_server.compute.remote_receipts import receipt_for
+    from grassmoth_server.compute.fit_results import RemoteFitResult
     from grassmoth_server.study.persistence.arrays import owned_arrays
 
     monkeypatch.setattr(remote, "ANALYSIS_CACHE_ROOT", tmp_path)
@@ -352,7 +352,11 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         entry = cache_fit_result(tmp_path / "retained", payload.analysis_call, unpack_result(body))
         return remote.FitComputeResult(
             pack_result(
-                receipt_for(fitted, entry, tuple(owned_arrays(unpack_result(body))), transfer=entry)
+                RemoteFitResult(
+                    full_fit=entry,
+                    transfer=entry,
+                    law_arrays=tuple(owned_arrays(unpack_result(body)["dynamical_model_spec"])),
+                )
             )
         )
 
@@ -377,10 +381,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             analysis_call=analysis_call,
             previous_cache=parent,
         )
-        assert receipt.continuation is not None
         return FitOutput.model_validate(
             unpack_result(
-                remote.retained_fit_result(tmp_path / "retained", receipt.cache).read_bytes()
+                remote.retained_fit_result(tmp_path / "retained", receipt.full_fit).read_bytes()
             )
         )
 

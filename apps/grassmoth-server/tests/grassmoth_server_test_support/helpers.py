@@ -2,6 +2,7 @@
 
 import asyncio
 
+from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.helpers import fixture_entity_id
 
 
@@ -22,7 +23,8 @@ def write_question(store, question=None):
             outcome=fixture_entity_id("construct", "unmeasured_outcome"),
         )
     )
-    return store.write_artifact(
+    return seed_record(
+        store,
         "question",
         derived_from={},
         produced_by="edit_question",

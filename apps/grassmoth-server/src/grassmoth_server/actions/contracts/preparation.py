@@ -12,16 +12,14 @@ from grassmoth.public import DataPreparationSpec, Value
 
 
 def _validate_source_folder(value: str) -> str:
-    if not value or value in {".", ".."} or any(char in value for char in ("/", "\\", "\0")):
-        raise ValueError("Use one folder name under the workspace data directory")
-    return value
+    return _validate_source_path(value)
 
 
 type SourceFolder = Annotated[
     str,
     Field(
         min_length=1,
-        description="Folder of ready-to-use CSV or Parquet tables under data/{workspace_id}/, such as input. Every table must have a date or datetime timestamp column.",
+        description="Folder of ready-to-use CSV or Parquet tables under data/{workspace_id}/, such as tmp/input. Every table must have a date or datetime timestamp column.",
     ),
     AfterValidator(_validate_source_folder),
 ]

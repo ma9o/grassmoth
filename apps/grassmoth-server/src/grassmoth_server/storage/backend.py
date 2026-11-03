@@ -21,11 +21,9 @@ from __future__ import annotations
 
 import os
 from contextlib import contextmanager
-from dataclasses import dataclass
-from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Literal, TypedDict, overload
+from typing import IO, TYPE_CHECKING, Literal, overload
 
 from pydantic import TypeAdapter
 
@@ -154,14 +152,6 @@ def rm_tree(path: str) -> None:
     shutil.rmtree(path, ignore_errors=True)
 
 
-def rm_file(path: str) -> None:
-    """Remove one file or object when it exists."""
-    if is_remote():
-        get_fs().rm(path)
-        return
-    Path(path).unlink(missing_ok=True)
-
-
 def listdir(path: str) -> list[str]:
     """List entries in *path*. Returns full paths/URIs."""
     if is_remote():
@@ -185,28 +175,6 @@ def walk_files(path: str) -> list[str]:
     if not root.is_dir():
         return []
     return [str(entry) for entry in root.rglob("*") if entry.is_file()]
-
-
-@dataclass(frozen=True)
-class FileInfo:
-    """Backend-independent size and modification time for a stored file."""
-
-    size: int
-    modified_seconds: float
-
-
-class _RemoteFileInfo(TypedDict):
-    size: int
-    LastModified: datetime
-
-
-def file_info(path: str) -> FileInfo:
-    """Normalize filesystem metadata at the storage boundary."""
-    if is_remote():
-        info = TypeAdapter(_RemoteFileInfo).validate_python(get_fs().info(path), strict=True)
-        return FileInfo(size=info["size"], modified_seconds=info["LastModified"].timestamp())
-    stat = Path(path).stat()
-    return FileInfo(size=stat.st_size, modified_seconds=stat.st_mtime)
 
 
 @overload

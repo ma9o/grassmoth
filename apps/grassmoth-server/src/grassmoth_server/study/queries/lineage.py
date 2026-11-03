@@ -14,7 +14,6 @@ from grassmoth.public import (
     PreparedDataMetadata,
     UnknownLawProvenance,
 )
-from grassmoth_server.study.artifact_files import json_filename
 from grassmoth_server.study.persistence.store import read_model
 from grassmoth_server.study.records import StudyRevision, inference_record
 
@@ -29,7 +28,7 @@ if TYPE_CHECKING:
 def read_data_metadata(store: ArtifactStore, revision: GitOid) -> PreparedDataMetadata:
     """Parse the preparation metadata owned by an exact panel artifact revision."""
     return TypeAdapter[PreparedDataMetadata](PreparedDataMetadata).validate_python(
-        store.read_json_file("panel", revision, json_filename("panel", "metadata"))
+        store.read_document("panel", revision)
     )
 
 

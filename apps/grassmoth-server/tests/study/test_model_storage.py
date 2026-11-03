@@ -26,8 +26,10 @@ from grassmoth.artifacts.reports.identification import IdentificationReport
 from grassmoth.artifacts.reports.model_checks import QuestionCheckReport
 from grassmoth.models.ssm.compile.bindings import joint_law_layout, parameter_bindings
 from grassmoth.models.structure import StructuralSelection, selected_state_ids
+from grassmoth.public import GitOid
 from grassmoth_server.actions.contracts.effects import ActionEffects
-from grassmoth_server.study.artifact_files import json_filename
+from grassmoth_server.actions.contracts.inputs import EditModelInput
+from grassmoth_server.actions.contracts.requests import EditModelRequest
 from grassmoth_server.study.errors import StudyLookupError
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore, read_model, read_question
@@ -36,6 +38,7 @@ from grassmoth_server_test_support.action import applied_record, question_root
 from grassmoth_server_test_support.git import artifact_revision, commit_id
 from grassmoth_server_test_support.helpers import write_question
 from grassmoth_server_test_support.model import load_study_model_fixture
+from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.fixtures import model_fixture_json
 from grassmoth_test_support.helpers import graph_constructs
 from grassmoth_test_support.inference import compile_model_fixture
@@ -173,11 +176,12 @@ def test_predictive_findings_use_entity_ids_and_keep_served_reasons(monkeypatch)
 def _commit(workspace, artifact_id, payload, *, pins=None, retracted=(), reports=None):
     journal = StudyRepository(workspace)
     store = ArtifactStore(workspace)
-    info = store.write_artifact(
+    info = seed_record(
+        store,
         artifact_id,
         derived_from=pins or {},
         produced_by=None,
-        json_files={json_filename(artifact_id, artifact_id): payload},
+        json_files={{"model": "model.json", "question": "question.json"}[artifact_id]: payload},
     )
     # Every lineage carries its question; the first commit adds it alongside.
     rooted = journal.state().has("question")
@@ -221,7 +225,6 @@ def _identity_owners(model):
 
 def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monkeypatch):
     from grassmoth.actions.contracts.io import EditModelOutput
-    from grassmoth_server.study.records import AttemptRecord, EditAttempt
 
     dynamical_model_spec = (
         _fitted_snapshot_keeps_joint_arrays_lazy_and_workspace_bound_complete_test_model()
@@ -254,31 +257,38 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
         law_layouts={layout.distribution_id: layout},
     )
     question_root(workspace)
-    staged = store.write_artifact(
+    staged = seed_record(
+        store,
         "model",
         derived_from={},
         produced_by="edit_model",
-        json_files={"model.json": conditioned.model_dump(mode="json")},
+        json_files={
+            "model.json": conditioned.model_dump(mode="python", context={"binary_arrays": True})
+        },
     )
-    result = store.write_result(
+    result = result_blob(
+        store,
         EditModelOutput(
             dynamical_model_spec=conditioned,
             checks={"specification": (), "question": {"findings": ()}},
             identification={"outcome": None, "treatments": {}},
             pruning={},
-        )
-    )
-    attempt = EditAttempt(
-        action="edit_model",
-        request=None,
-        outcome=Applied(
-            result=result,
-            effects=ActionEffects(produced=(store.result_artifact(staged, result),)),
         ),
     )
-    StudyRepository(workspace).append(
-        AttemptRecord(seq=2, ts="2026-09-12T12:00:00Z", attempt=attempt)
+    outcome = Applied(
+        result=result,
+        effects=ActionEffects(
+            produced=(
+                store.result_record(
+                    "model",
+                    result,
+                    derived_from=staged.derived_from,
+                    produced_by=staged.produced_by,
+                ),
+            )
+        ),
     )
+    StudyRepository(workspace).append(applied_record(workspace, outcome, seq=2))
     read_array = ArtifactStore.read_array
     reads = []
 
@@ -401,7 +411,8 @@ def test_uncommitted_versions_and_failed_attempts_never_change_published_model(w
     _measured(workspace)
     before_commit = StudyRepository(workspace).head()
     before = _published_model(workspace, before_commit)
-    ArtifactStore(workspace).write_artifact(
+    seed_record(
+        ArtifactStore(workspace),
         "model",
         derived_from={},
         produced_by=None,
@@ -414,7 +425,12 @@ def test_uncommitted_versions_and_failed_attempts_never_change_published_model(w
             trace_ids=[],
             attempt=EditAttempt(
                 action="edit_model",
-                request=None,
+                request=EditModelRequest[GitOid](
+                    input=EditModelInput[GitOid](
+                        parent_ref=before_commit,
+                        dynamical_model_spec=DynamicalModelSpec(measurement_clock="2d"),
+                    )
+                ),
                 outcome=Raised(error_type="SavedError", error_message="failed"),
             ),
         )
@@ -527,11 +543,11 @@ def test_identification_keeps_entity_ids_after_rename(workspace):
 
     store, repository = ArtifactStore(workspace), StudyRepository(workspace)
     reports = {
-        "checks": store.write_result(
-            ModelCheckReport(specification=(), question=QuestionCheckReport(findings=()))
+        "checks": result_blob(
+            store, ModelCheckReport(specification=(), question=QuestionCheckReport(findings=()))
         ),
-        "identification": store.write_result(
-            IdentificationReport.model_validate(_identification())
+        "identification": result_blob(
+            store, IdentificationReport.model_validate(_identification())
         ),
     }
     original = _commit(workspace, "model", _model().model_dump(mode="json"), reports=reports)

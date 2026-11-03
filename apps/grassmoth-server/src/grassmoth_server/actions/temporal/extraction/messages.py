@@ -23,6 +23,7 @@ class MeasurementsWorkflowInput(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     workspace_id: str
+    call_id: str
     seq: int
     attempt_id: UUID
     raw_data_revision: GitOid
@@ -35,6 +36,7 @@ class ProgressEventInput(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     workspace_id: str
+    call_id: str
     event: ProgressEvent
 
 
@@ -44,6 +46,7 @@ class ReadSourceDataInput(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     workspace_id: str
+    call_id: str
     source: FileSourceRef
 
 

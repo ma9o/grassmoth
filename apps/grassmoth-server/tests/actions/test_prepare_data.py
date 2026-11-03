@@ -39,6 +39,7 @@ from grassmoth_server.study.queries.lineage import read_data_metadata
 from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.action import prepared_profile
 from grassmoth_server_test_support.helpers import run_async
+from grassmoth_server_test_support.storage import seed_source_table
 
 pytestmark = pytest.mark.contract
 
@@ -89,24 +90,22 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
     )
     request = PrepareDataRequest[GitOid, FileSourceRef](input=prepared_input)
     assert isinstance(request.input, PrepareDataInput)
-    raw = store.write_artifact(
-        "raw_data",
-        derived_from={},
-        produced_by="prepare_data",
-        parquet_files={
-            "raw.parquet": pl.DataFrame(
-                {
-                    "timestamp": [datetime(2026, 1, 1), datetime(2026, 1, 3)],
-                    "steps": [4, 8],
-                    "diary": ["calm", "overwhelmed"],
-                }
-            )
-        },
+    raw = seed_source_table(
+        store,
+        pl.DataFrame(
+            {
+                "timestamp": [datetime(2026, 1, 1), datetime(2026, 1, 3)],
+                "steps": [4, 8],
+                "diary": ["calm", "overwhelmed"],
+            }
+        ),
+        "seq-000001",
     )
     state = StudyState().with_artifacts([raw])
     plan = run_async(
         plan_measurements_activity(
             MeasurementsWorkflowInput(
+                call_id="seq-000001",
                 workspace_id="data-only",
                 seq=1,
                 attempt_id=uuid4(),
@@ -167,7 +166,7 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
         "raw_data": raw.revision,
         "model": prepared_input.dynamical_model_spec_ref,
     }
-    observations = store.read_parquet_file("panel", panel.revision, "panel.parquet")
+    observations = store.read_panel(panel.revision)
     assert observations.select("indicator_id", "value").rows() == [
         ("indicator:steps", 4),
         ("indicator:steps", 0),

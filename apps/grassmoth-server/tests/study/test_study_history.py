@@ -29,7 +29,10 @@ from grassmoth_server.actions.contracts.inputs import (
     SimulateInput,
 )
 from grassmoth_server.actions.contracts.preparation import FileSourceRef
-from grassmoth_server.actions.contracts.requests import EditModelRequest, PrepareDataRequest
+from grassmoth_server.actions.contracts.requests import (
+    EditModelRequest,
+    PrepareDataRequest,
+)
 from grassmoth_server.storage import paths as data_module
 from grassmoth_server.study.errors import StudyLookupError
 from grassmoth_server.study.persistence.history import StudyRepository
@@ -41,7 +44,12 @@ from grassmoth_server.study.records import (
     Raised,
     Rejected,
 )
-from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
+from grassmoth_server_test_support.action import (
+    applied_record,
+    empty_simulation_summary,
+    fixture_request,
+)
+from grassmoth_server_test_support.storage import seed_record, stage_result
 
 pytestmark = pytest.mark.contract
 
@@ -58,7 +66,13 @@ def _record(seq, *, outcome=None, attempt_id=None, **effects):
             seq=seq,
             attempt_id=attempt_id,
             ts="2026-09-23T12:00:00+00:00",
-            attempt=PrepareAttempt(request=None, outcome=outcome, action="prepare_data"),
+            attempt=PrepareAttempt(
+                request=fixture_request(
+                    ArtifactStore("STUDY"), StudyRepository("STUDY").state(), "prepare_data", seq
+                ),
+                outcome=outcome,
+                action="prepare_data",
+            ),
         )
     return applied_record(
         "STUDY",
@@ -70,7 +84,8 @@ def _record(seq, *, outcome=None, attempt_id=None, **effects):
 
 
 def _model(store, clock, parent=0):
-    return store.write_artifact(
+    return seed_record(
+        store,
         "model",
         produced_by=None,
         derived_from={"model": parent} if parent else {},
@@ -85,10 +100,11 @@ def test_failed_attempt_and_invalid_publication_do_not_advance_scientific_state(
     head = repository.append(accepted).commit_id
     assert repository.append(accepted).commit_id == head
     persisted = StudyRepository("STUDY")
-    assert str(persisted.repo.references[f"refs/actions/{attempt_id}"].target) == head
-    with pytest.raises(FileExistsError):
-        repository.append(_record(2, attempt_id=attempt_id))
-    assert repository.read_attempt(2) is None
+    saved = persisted.saved_call(accepted.attempt.request)
+    assert saved is not None
+    assert saved.commit_id == head
+    assert repository.append(accepted.revised(seq=2)).commit_id == head
+    assert len(repository.attempts()) == 1
     failed = repository.append(
         _record(2, outcome=Raised(error_type="SavedError", error_message="failure")),
     ).commit_id
@@ -121,6 +137,8 @@ def test_out_of_order_publication_selects_submission_order_and_retains_input_par
             )
         )
     first, second = records
+    for record in records:
+        stage_result(store, record.attempt.outcome.result, record.attempt.request)
     published_second = repository.append(second)
     published_first = repository.append(first)
     assert repository.head() == published_second.commit_id
@@ -271,12 +289,6 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
             return await read_inputs_activity(payload)
         if name == "run_action_activity":
             return await run_action_activity(payload)
-        if name == "complete_result_activity":
-            from grassmoth_server.actions.temporal.study.activities import (
-                complete_result_activity,
-            )
-
-            return await complete_result_activity(payload)
         if name == "journal_activity":
             try:
                 # A journal activity retry reads the saved report rather than comparing again.
@@ -308,7 +320,7 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
     worker = study_workflow.StudyWorkflow(StudyInit(workspace_id="STUDY", initial_seq=2))
     action = ActionRequest(request=request)
     run_async(study_workflow.StudyWorkflow.execute_action(worker, action))
-    leaf = repository.read_attempt(3)
+    leaf = repository.saved_call(request)
     assert leaf is not None
     assert leaf.parent_ids == (root, head)
     assert "artifacts" not in repository.repo[leaf.commit_id].tree
@@ -346,7 +358,7 @@ def test_comparison_is_a_saved_leaf_of_the_journal(study, monkeypatch, fails, co
         )
 
         # Replaying the call after cache loss and a code change reads its Git blob.
-        cache = Path(data_module.cache_dir("STUDY"))
+        cache = Path(data_module.tmp_dir("STUDY"))
         cache.mkdir(parents=True, exist_ok=True)
         shutil.rmtree(cache)
 

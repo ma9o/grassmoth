@@ -4,12 +4,12 @@ import hashlib
 from datetime import datetime
 
 import polars as pl
+import pyarrow.parquet as pq
 import pytest
 
 from grassmoth_server.actions.temporal.extraction.messages import ReadSourceDataInput
 from grassmoth_server.actions.temporal.extraction.source_data import read_source_data_activity
 from grassmoth_server.storage import paths as data
-from grassmoth_server.study.persistence.store import ArtifactStore
 from grassmoth_server.study.records import Rejected
 from grassmoth_server_test_support.helpers import run_async
 
@@ -22,13 +22,15 @@ def _read_sources(tmp_path, monkeypatch, sources):
     for filename, content in sources.items():
         digest = hashlib.sha256(content).hexdigest()
         hashes[filename] = digest
-        path = tmp_path / "ws" / "scratch" / "source-files" / digest / filename
+        path = tmp_path / "ws" / "tmp" / "source-call" / "sources" / filename
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(content)
     return run_async(
         read_source_data_activity(
             ReadSourceDataInput(
-                workspace_id="ws", source={"files": tuple(sources), "hashes": hashes}
+                workspace_id="ws",
+                call_id="source-call",
+                source={"files": tuple(sources), "hashes": hashes},
             )
         )
     )
@@ -44,7 +46,7 @@ def test_csv_sources_preserve_rows_columns_and_missing_values(tmp_path, monkeypa
         },
     )
     assert not isinstance(result, Rejected)
-    table = ArtifactStore("ws").read_parquet_table("raw_data", result.revision, "raw.parquet")
+    table = pq.read_table(tmp_path / "ws" / "tmp" / "source-call" / "raw.parquet")
     assert table.to_pydict() == {
         "timestamp": [datetime(2026, 1, 2, 8), datetime(2026, 1, 1, 8)],
         "score": [2, None],
@@ -68,7 +70,7 @@ def test_parquet_preserves_authored_column_metadata(tmp_path, monkeypatch):
     pq.write_table(table, content)
     result = _read_sources(tmp_path, monkeypatch, {"input/scores.parquet": content.getvalue()})
     assert not isinstance(result, Rejected)
-    saved = ArtifactStore("ws").read_parquet_table("raw_data", result.revision, "raw.parquet")
+    saved = pq.read_table(tmp_path / "ws" / "tmp" / "source-call" / "raw.parquet")
     assert saved.equals(table, check_metadata=True)
 
 

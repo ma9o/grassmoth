@@ -2,32 +2,45 @@
 
 from pathlib import Path
 
-from grassmoth.public import FitOutput, GitOid
+from grassmoth.public import FitOutput, GitOid, SamplerSpec, Value
 from grassmoth_server.actions.contracts.inputs import FitTarget, NewFitTarget
-from grassmoth_server.compute.remote_receipts import RemoteFitReceipt, published_fit_report
+from grassmoth_server.compute.analysis_cache import AnalysisCacheEntry
 from grassmoth_server.study.errors import StudyLookupError
+from grassmoth_server.study.persistence.call import SavedApplied
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
-from grassmoth_server.study.records import Applied
+from grassmoth_server.study.records import Rejected
 
 
-def prior_fit(store: ArtifactStore, revision: GitOid) -> FitOutput | RemoteFitReceipt:
-    """Read an applied fit by its immutable journal revision."""
+class FitContinuation(Value):
+    """A full retained fit and the sampler settings needed to continue it."""
+
+    full_fit: AnalysisCacheEntry
+    settings: SamplerSpec
+
+
+def prior_fit(store: ArtifactStore, revision: GitOid) -> FitContinuation | Rejected:
+    """Select only fits with retained full evidence for continuation."""
     repository = StudyRepository(store.workspace_id, repository_path=Path(store.repo.path))
-    attempt = repository.record(revision).record.attempt
-    if attempt.action != "fit" or not isinstance(attempt.outcome, Applied):
+    call = repository.saved_record(revision)
+    outcome = call.outcome
+    if call.request.action != "fit" or not isinstance(outcome, SavedApplied):
         raise StudyLookupError("Continuing requires a successful fit revision")
-    result = published_fit_report(store, attempt.outcome.result)
-    settings = (
-        result.continuation
-        if isinstance(result, RemoteFitReceipt)
-        else None
-        if result.inference.evidence.checkpoint is None
-        else result.inference.evidence.checkpoint.settings
-    )
-    if settings is None:
-        raise StudyLookupError("The selected fit has no last retained draw to continue")
-    return result
+    if outcome.result.full_fit is None:
+        return Rejected(
+            code="LOCAL_FIT_CONTINUATION_UNAVAILABLE",
+            subject="inputs",
+            detail="Local fits retain only their served result and cannot be continued. Start a new fit.",
+        )
+    result = store.read_result(outcome.result.revision, FitOutput)
+    checkpoint = result.inference.evidence.checkpoint
+    if checkpoint is None:
+        return Rejected(
+            code="FIT_CONTINUATION_UNAVAILABLE",
+            subject="inputs",
+            detail="The selected fit has no last retained draw to continue",
+        )
+    return FitContinuation(full_fit=outcome.result.full_fit, settings=checkpoint.settings)
 
 
 def fit_source(store: ArtifactStore, target: FitTarget[GitOid]) -> NewFitTarget[GitOid]:
