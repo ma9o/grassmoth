@@ -50,7 +50,7 @@ class EditModelInput[RevisionT](Value):
         description=(
             "Scientific definitions merged by identity into a model parent, or into an empty "
             "model for a question parent. Omitted fields are retained; null entity entries "
-            "delete their identities. The action retains the merged spec and its findings."
+            "delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings."
         )
     )
 

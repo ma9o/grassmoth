@@ -98,7 +98,7 @@ def edit_messages(
                     severity="warning",
                     code="MODEL_COMPONENTS_PRUNED",
                     subject="model",
-                    detail="Components outside the question's outcome ancestry were removed.",
+                    detail="Components outside the question's outcome component were removed.",
                 ),
             )
             if any((pruning.constructs, pruning.edges, pruning.parameters, pruning.distributions))

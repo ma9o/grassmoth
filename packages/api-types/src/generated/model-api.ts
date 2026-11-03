@@ -52,7 +52,7 @@ export interface paths {
         readonly put?: never;
         /**
          * Edit Model
-         * @description Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Prune constructs outside the outcome ancestry with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
+         * @description Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
          */
         readonly post: operations["edit_model"];
         readonly delete?: never;
@@ -3638,7 +3638,7 @@ export interface components {
         readonly EditModelInput_GitOid_: {
             /** @description Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. */
             readonly parent_ref: components["schemas"]["GitOid-Input"];
-            /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. The action retains the merged spec and its findings. */
+            /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
             readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Input"];
         };
         /**
@@ -3648,7 +3648,7 @@ export interface components {
         readonly EditModelInput_RevisionSelector_: {
             /** @description Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. */
             readonly parent_ref: components["schemas"]["RevisionSelector"];
-            /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. The action retains the merged spec and its findings. */
+            /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
             readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Input"];
         };
         /**

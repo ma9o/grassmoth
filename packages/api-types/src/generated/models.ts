@@ -394,7 +394,7 @@ export type EditModelInput<RevisionT> = {
      * @description Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head.
      */
     readonly parent_ref: RevisionT;
-    /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. The action retains the merged spec and its findings. */
+    /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
     readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Input"];
 };
 export type EditModelRequest<RevisionT> = {

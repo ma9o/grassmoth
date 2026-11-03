@@ -94,7 +94,7 @@ JSON
 
 ### POST `/api/studies/{workspace_id}/edit_model`
 
-Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Prune constructs outside the outcome ancestry with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
+Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
 
 **Parameters**
 
@@ -107,7 +107,7 @@ Create or revise a model from a question or model parent.
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
 | `parent_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. |
-| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. The action retains the merged spec and its findings. |
+| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. |
 
 **Success body: [`EditModelOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 

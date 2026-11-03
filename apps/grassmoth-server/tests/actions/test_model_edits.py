@@ -298,3 +298,43 @@ def test_partial_law_parameters_merge_and_a_changed_family_replaces_them():
     )
     changed = apply_model_edit(edited, replacement, outcome.id).dynamical_model_spec
     assert isinstance(changed.distribution_for(parameter), dist.Uniform)
+
+
+def test_edit_keeps_the_whole_outcome_component_and_its_owned_laws():
+    original = make_model(
+        ["X", "Y", "Side", "Tail", "Parent", "A", "B"],
+        [("X", "Y"), ("X", "Side"), ("Y", "Tail"), ("Parent", "Side"), ("A", "B"), ("Y", "A")],
+    )
+    nodes = {node.name: node for node in original.constructs}
+    payload = original.model_dump(mode="json")
+    payload["edges"].pop(original.edges[-1].id)
+    parameters = {name: scientific_id("parameter", name + " initial") for name in ("Side", "B")}
+    for name, parameter in parameters.items():
+        payload["constructs"][nodes[name].id]["coefficients"] = [
+            {"kind": "coefficient", "role": "initial_mean", "value": parameter}
+        ]
+        payload["parameters"][parameter] = {
+            "name": name + " initial",
+            "distribution": "distribution:" + name,
+            "reasoning": {"text": "Synthetic initial level for component retention."},
+        }
+        payload["distributions"]["distribution:" + name] = {
+            "distribution": "Normal",
+            "params": {"loc": 0, "scale": 1},
+        }
+    supplied = DynamicalModelSpec.model_validate(payload)
+    result = apply_model_edit(DynamicalModelSpec(), supplied, nodes["Y"].id)
+    retained = result.dynamical_model_spec
+    assert {node.name for node in retained.constructs} == {"X", "Y", "Side", "Tail", "Parent"}
+    assert {(edge.cause.name, edge.effect.name) for edge in retained.edges} == {
+        ("X", "Y"),
+        ("X", "Side"),
+        ("Y", "Tail"),
+        ("Parent", "Side"),
+    }
+    assert retained.get_construct(nodes["Side"].id).indicators == nodes["Side"].indicators
+    assert {parameter.id for parameter in retained.parameters} == {parameters["Side"]}
+    assert set(retained.distributions) == {"distribution:Side"}
+    assert set(result.pruning.constructs) == {nodes["A"].id, nodes["B"].id}
+    assert result.pruning.parameters == (parameters["B"],)
+    assert result.pruning.distributions == ("distribution:B",)
