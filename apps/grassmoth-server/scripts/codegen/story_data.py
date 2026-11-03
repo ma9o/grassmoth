@@ -278,11 +278,11 @@ def model(stage: Literal["structure", "measurement", "authored", "edited"]) -> E
 def history(values: tuple[int, ...]) -> dict[str, object]:
     """Aligned four-point example, with explicit daily support intervals."""
     return {
-        "times": TIMES,
+        "times": array(TIMES),
         "values": values,
         "support_start": (-1, 0, 1, 2),
         "support_end": TIMES,
-        "empirical": [],
+        "empirical": {"values": array([]), "probabilities": array([])},
     }
 
 
@@ -387,12 +387,10 @@ def fit() -> FitOutput:
                                 "element_id": key.replace("parameter:", "element:"),
                             },
                             "density_curve": density,
-                            "empirical": [
-                                {"value": value, "probability": probability}
-                                for value, probability in zip(
-                                    values, (0.25, 0.5, 0.75, 1), strict=True
-                                )
-                            ],
+                            "empirical": {
+                                "values": array(values),
+                                "probabilities": array((0.25, 0.5, 0.75, 1)),
+                            },
                             "mean": 0.5,
                             "lower": values[0],
                             "upper": values[-1],
@@ -550,7 +548,8 @@ def comparison() -> DataDiffOutput:
                                         "standardized": False,
                                         "observed": [1, 3, 2, 5],
                                         "median": [1.5, 4, 5, 6],
-                                        "spaghetti_draws": [[1, 3, 4, 5], [2, 5, 6, 7]],
+                                        "spaghetti_draws": array([[1, 3, 4, 5], [2, 5, 6, 7]]),
+                                        "frame": (1, 7),
                                     }
                                 ],
                                 "test_stats": [

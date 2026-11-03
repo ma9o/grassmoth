@@ -9,7 +9,7 @@ import numpy as np
 
 from grassmoth.artifacts.identity import ParameterRef
 from grassmoth.artifacts.model.parameter import ParameterCoordinate
-from grassmoth.artifacts.reports.histograms import empirical_points
+from grassmoth.artifacts.reports.histograms import empirical_distribution
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     DensityCurve,
     ParetoKPoint,
@@ -119,7 +119,7 @@ def param_marginal(
         parameter=parameter,
         subject=subject,
         density_curve=histogram,
-        empirical=empirical_points(draws),
+        empirical=empirical_distribution(draws),
         mean=float(np.mean(draws)),
         sd=float(np.std(draws)),
         interval_kind="hdi",

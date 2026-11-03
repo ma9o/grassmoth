@@ -1,4 +1,4 @@
-import type { PathSeriesView } from "@/lib/model-asset/result-values";
+import { numericalRows, type PathSeriesView } from "@/lib/model-asset/result-values";
 import type { DataVariableView } from "@/lib/model-asset/data-comparison";
 import type { PPCOverlay } from "@grassmoth/api-types";
 import { CHART_COLORS, chainColor } from "./chart-tokens";
@@ -70,7 +70,7 @@ export function overlayChart(overlay: PPCOverlay, label: string): Omit<DrawsChar
         key: "replicates",
         label: "Replicate",
         color: CHART_COLORS.replicate,
-        rows: overlay.spaghetti_draws.map((values, index) => ({
+        rows: numericalRows(overlay.spaghetti_draws).map((values, index) => ({
           key: `replicate-${index}`,
           label: `replicate ${index + 1}`,
           values,

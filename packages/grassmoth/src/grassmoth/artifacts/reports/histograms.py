@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.reports.effects import HistogramBin
-from grassmoth.artifacts.reports.empirical import EmpiricalPoint
+from grassmoth.artifacts.reports.empirical import EmpiricalDistribution
 
 if TYPE_CHECKING:
     from numpy.typing import ArrayLike
@@ -30,14 +31,11 @@ def histogram_draws(draws: ArrayLike, *, max_bins: int = 25) -> list[HistogramBi
     ]
 
 
-def empirical_points(values: np.ndarray) -> tuple[EmpiricalPoint, ...]:
+def empirical_distribution(values: np.ndarray) -> EmpiricalDistribution:
     """Compute the empirical CDF at distinct finite values, retaining duplicate frequencies."""
     unique, counts = np.unique(values[np.isfinite(values)], return_counts=True)
-    cumulative = np.cumsum(counts) / counts.sum() if counts.size else []
-    return tuple(
-        EmpiricalPoint(
-            value=value,
-            probability=float(probability),
-        )
-        for value, probability in zip(unique, cumulative, strict=True)
+    cumulative = np.cumsum(counts) / counts.sum() if counts.size else np.empty(0)
+    return EmpiricalDistribution(
+        values=NumericalArray.from_numpy(unique),
+        probabilities=NumericalArray.from_numpy(cumulative),
     )

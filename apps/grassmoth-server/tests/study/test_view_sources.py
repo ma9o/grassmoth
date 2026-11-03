@@ -134,7 +134,7 @@ def test_joint_reports_and_raw_draws_use_production_labels_without_compiling(mon
     assert {row.subject.element_id for row in marginals} == set(
         dynamical_model_spec.law_layouts[identity].labels
     )
-    assert all(row.empirical[-1].probability == 1 for row in marginals)
+    assert all(row.empirical.probabilities.values[-1] == 1 for row in marginals)
 
 
 @pytest.mark.inference(concern="sampling")

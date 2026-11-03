@@ -113,7 +113,7 @@ class PrepareDataOutput(Value):
     data: ObservationData = Field(
         description=(
             "Full observation histories keyed by indicator ID, including measurement support "
-            "intervals and missing values."
+            "intervals and missing values; times and empirical CDF coordinates are binary arrays."
         )
     )
     metadata: PreparedDataMetadata = Field(
@@ -133,7 +133,6 @@ class PrepareDataOutput(Value):
         """Reconstruct the canonical table retained by this preparation."""
         import polars as pl
 
-        from grassmoth.artifacts.arrays import resolve_vector
         from grassmoth.artifacts.observations.dataset import ObservationDataset
         from grassmoth.artifacts.observations.time import ModelTime, ObservationInstant
 
@@ -149,9 +148,6 @@ class PrepareDataOutput(Value):
                     else None
                 )
 
-            starts = resolve_vector(history.support_start)
-            ends = resolve_vector(history.support_end)
-            values = resolve_vector(history.values)
             rows.extend(
                 {
                     "indicator_id": variable.id,
@@ -164,7 +160,7 @@ class PrepareDataOutput(Value):
                     "anchor_policy": variable.anchor_policy.value,
                     "observation_window": str(variable.observation_window),
                 }
-                for day, start, end, value in zip(history.times, starts, ends, values, strict=True)
+                for day, value, start, end in history.readings()
             )
         schema = ObservationDataset.row_schema() | {
             "value": pl.Float64,
@@ -242,7 +238,10 @@ class SimulateOutput(Value):
 
     data: tuple[ObservationData, ...] = Field(
         min_length=1,
-        description="One observation history per retained replicate, in replicate order.",
+        description=(
+            "One observation history per retained replicate, in replicate order. "
+            "Histories share one binary time buffer and each retains its binary empirical CDF."
+        ),
     )
     report: SimulationReport = Field(description="Generation evidence and evaluated findings.")
 
@@ -256,7 +255,8 @@ class DataDiffOutput(Value):
     report: DataComparisonReport = Field(
         description=(
             "Exact history selections, point changes, per-history statistics, compatibility "
-            "findings and predictive checks."
+            "findings and predictive checks. Predictive overlays retain at most 20 binary "
+            "spaghetti series; their median and frame use all replicates."
         )
     )
 

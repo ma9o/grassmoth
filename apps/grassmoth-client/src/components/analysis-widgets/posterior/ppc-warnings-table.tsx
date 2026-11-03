@@ -61,14 +61,14 @@ function buildRows(
   }));
 }
 
-// ── Overlay: observations over every retained replicate ─
+// ── Overlay: observations over saved predictive replicates ─
 
 function OverlayCell({ overlay, variable }: { overlay?: PPCOverlay; variable: string }) {
   if (!overlay) return <span className="text-xs text-muted-foreground">—</span>;
   return (
     <div className="w-60">
       <DrawsChart
-        {...overlayChart(overlay, `${variable}: observations over every retained replicate`)}
+        {...overlayChart(overlay, `${variable}: observations over saved predictive replicates`)}
         height={72}
         compact
       />

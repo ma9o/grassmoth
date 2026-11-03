@@ -1,10 +1,11 @@
 import type { PathSeriesView } from "@/lib/model-asset/result-values";
 import type {
-  EmpiricalPoint,
+  EmpiricalDistribution,
   IndicatorEmpiricalProfile,
   IndicatorId,
   ModelSnapshot,
 } from "@grassmoth/api-types";
+import { readNumericalArray } from "@grassmoth/api-types";
 import { ChartFigure } from "@/components/charts/chart-figure";
 import { CHART_COLORS, chainColor, cssColor } from "@/components/charts/chart-tokens";
 import { DistributionChart } from "@/components/charts/distribution-chart";
@@ -209,7 +210,7 @@ export function ObservationPlots({
           />
         )}
       </ChartFigure>
-      {data.empirical.length > 0 && (
+      {readNumericalArray(data.empirical.values).values.length > 0 && (
         <EmpiricalPlot points={data.empirical} label={data.label} xLabel="Observed value" />
       )}
     </>
@@ -242,10 +243,12 @@ export function EmpiricalPlot({
   label,
   xLabel,
 }: {
-  points: readonly EmpiricalPoint[];
+  points: EmpiricalDistribution;
   label: string;
   xLabel: string;
 }) {
+  const values = readNumericalArray(points.values).values;
+  const probabilities = readNumericalArray(points.probabilities).values;
   return (
     <ChartFigure title="Empirical distribution" legend={xLabel} height={120}>
       {(view) => (
@@ -257,7 +260,10 @@ export function EmpiricalPlot({
               key: "empirical",
               label: "Empirical cumulative probability",
               color: CHART_COLORS.observed,
-              points,
+              points: Array.from(values, (value, index) => ({
+                value: Number(value),
+                probability: Number(probabilities[index]),
+              })),
             },
           ]}
         />

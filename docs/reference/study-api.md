@@ -61,7 +61,7 @@ The computed comparison report; original histories remain in their producing res
 
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
-| `report` | [`DataComparisonReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/data_comparison.py) | required | Exact history selections, point changes, per-history statistics, compatibility findings and predictive checks. |
+| `report` | [`DataComparisonReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/data_comparison.py) | required | Exact history selections, point changes, per-history statistics, compatibility findings and predictive checks. Predictive overlays retain at most 20 binary spaghetti series; their median and frame use all replicates. |
 
 ```bash
 curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/data_diff" -H 'Accept: application/json' -o /tmp/action.json \
@@ -375,7 +375,7 @@ Prepared observations, their resolved metadata, and data-quality findings.
 
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
-| `data` | [`ObservationData`](../../packages/grassmoth/src/grassmoth/artifacts/observations/history.py) | required | Full observation histories keyed by indicator ID, including measurement support intervals and missing values. |
+| `data` | [`ObservationData`](../../packages/grassmoth/src/grassmoth/artifacts/observations/history.py) | required | Full observation histories keyed by indicator ID, including measurement support intervals and missing values; times and empirical CDF coordinates are binary arrays. |
 | `metadata` | [`PreparedDataMetadata`](../../packages/grassmoth/src/grassmoth/artifacts/observations/preparation.py) | required | Preparation recipe, resolved observation schema, and the calendar origin used to interpret model time. |
 | `profile` | [`DataProfileReport`](../../packages/grassmoth/src/grassmoth/artifacts/reports/data_quality.py) | required | Empirical statistics and data-quality findings for the prepared panel. |
 | `extraction` | [`DataPreparationResult`](../../packages/grassmoth/src/grassmoth/artifacts/observations/preparation.py) | required | Retained extraction workers, failed chunks and reuse counts. |
@@ -433,7 +433,7 @@ Generated histories and their complete scientific report, including owned numeri
 
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
-| `data` | array<[`ObservationData`](../../packages/grassmoth/src/grassmoth/artifacts/observations/history.py)> (min items 1) | required | One observation history per retained replicate, in replicate order. |
+| `data` | array<[`ObservationData`](../../packages/grassmoth/src/grassmoth/artifacts/observations/history.py)> (min items 1) | required | One observation history per retained replicate, in replicate order. Histories share one binary time buffer and each retains its binary empirical CDF. |
 | `report` | [`SimulationReport`](../../packages/grassmoth/src/grassmoth/artifacts/simulation.py) | required | Generation evidence and evaluated findings. |
 
 ```bash

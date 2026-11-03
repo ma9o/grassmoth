@@ -7,10 +7,10 @@ from typing import TYPE_CHECKING
 import numpy as np
 import polars as pl
 
-from grassmoth.artifacts.arrays import ArrayVector
+from grassmoth.artifacts.arrays import ArrayVector, NumericalArray
 from grassmoth.artifacts.observations.history import ObservationHistory
 from grassmoth.artifacts.observations.time import ObservationInstant
-from grassmoth.artifacts.reports.histograms import empirical_points
+from grassmoth.artifacts.reports.histograms import empirical_distribution
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -36,13 +36,18 @@ def observation_history(time_origin: datetime, panel: pl.DataFrame) -> Observati
 
     values = panel["value"].cast(pl.Float64).to_numpy()
     return ObservationHistory(
-        times=tuple(
-            ObservationInstant(value).relative_to(origin).days for value in panel["anchor_time"]
+        times=NumericalArray.from_numpy(
+            np.asarray(
+                [
+                    ObservationInstant(value).relative_to(origin).days
+                    for value in panel["anchor_time"]
+                ]
+            )
         ),
         values=finite_values(values),
         support_start=days("support_start"),
         support_end=days("support_end"),
-        empirical=empirical_points(values),
+        empirical=empirical_distribution(values),
     )
 
 
@@ -52,10 +57,11 @@ def simulation_observation_histories(
     mask: np.ndarray,
 ) -> tuple[ObservationData, ...]:
     """Project every saved replicate into the same history type as prepared user data."""
+    times = NumericalArray.from_numpy(np.asarray(evidence.times))
     return tuple(
         {
             variable.id: ObservationHistory(
-                times=evidence.times,
+                times=times,
                 values=ArrayVector(
                     array=evidence.arms.action.observations,
                     indices=(replicate, None, column),
@@ -72,7 +78,7 @@ def simulation_observation_histories(
                     array=evidence.observation_layout.support_end_times,
                     indices=(None, column),
                 ),
-                empirical=empirical_points(values),
+                empirical=empirical_distribution(values),
             )
             for column, variable in enumerate(evidence.observation_layout.variables)
             for values in (

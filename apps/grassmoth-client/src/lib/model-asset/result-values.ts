@@ -7,7 +7,7 @@ import type {
   InferenceReport,
   InferenceReportDetail,
   ObservationHistory,
-  EmpiricalPoint,
+  EmpiricalDistribution,
   ParameterRef,
   NumPyroValue,
   NumPyroDistribution,
@@ -17,7 +17,11 @@ import type {
   SimulationSummary,
 } from "@grassmoth/api-types";
 
-export type HistoryView = Omit<ObservationHistory, "values" | "support_start" | "support_end"> & {
+export type HistoryView = Omit<
+  ObservationHistory,
+  "times" | "values" | "support_start" | "support_end"
+> & {
+  readonly times: readonly number[];
   readonly values: readonly (number | null)[];
   readonly support_start: readonly (number | null)[];
   readonly support_end: readonly (number | null)[];
@@ -49,7 +53,7 @@ export interface DrawColumnView {
   readonly label: string;
   readonly subject: ParameterRef;
   readonly values: readonly number[];
-  readonly empirical: readonly EmpiricalPoint[];
+  readonly empirical: EmpiricalDistribution;
 }
 
 /** Decode a recorded vector selection; all statistical summaries already belong to the result. */
@@ -80,10 +84,18 @@ export function scalarValues(value: ScalarValues): readonly (number | null)[] {
 export function historyView(history: ObservationHistory): HistoryView {
   return {
     ...history,
+    times: Array.from(readNumericalArray(history.times).values, Number),
     values: scalarValues(history.values),
     support_start: scalarValues(history.support_start),
     support_end: scalarValues(history.support_end),
   };
+}
+
+/** Read aligned binary rows, preserving absent values for plotted gaps. */
+export function numericalRows(array: NumericalArray): readonly (readonly (number | null)[])[] {
+  return Array.from({ length: required(readNumericalArray(array).shape[0]) }, (_, row) =>
+    scalarValues({ array, indices: [row, null], start: 0, stop: null, mask: null }),
+  );
 }
 
 const simulationPaths = new WeakMap<
@@ -246,13 +258,7 @@ export function inferenceView(result: FitOutput): InferenceView {
   const detail = report.detail;
   const evidence = report.evidence;
   const rows = (array: NumericalArray | null): readonly (readonly number[])[] | null =>
-    array === null
-      ? null
-      : Array.from({ length: required(readNumericalArray(array).shape[0]) }, (_, row) =>
-          scalarValues({ array, indices: [row, null], start: 0, stop: null, mask: null }).map(
-            required,
-          ),
-        );
+    array === null ? null : numericalRows(array).map((row) => row.map(required));
   const divergent = evidence.chain_extra_fields.diverging;
   const vector = (value: ScalarValues) => scalarValues(value).map(required);
   return {

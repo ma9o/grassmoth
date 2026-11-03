@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
+from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.identity import IndicatorId, IndicatorRef
 from grassmoth.artifacts.observations.spec import LabeledMeasurement
 from grassmoth.artifacts.observations.time import ObservationInstant
@@ -35,6 +36,7 @@ from grassmoth.artifacts.reports.data_comparison import (
     Revised,
     ScalarStatisticComparison,
 )
+from grassmoth.artifacts.reports.display_frames import central_frame
 from grassmoth.artifacts.reports.histograms import histogram_draws
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     PosteriorPredictiveChecks,
@@ -356,23 +358,18 @@ def _compute_overlays(
             both arrays; this function does not transform their values.
 
     Returns:
-        One overlay per indicator, retaining every supplied predictive trajectory
-        and representing missing plot values as ``None``.
+        One overlay per indicator, retaining the first 20 predictive trajectories
+        as binary arrays. Medians and frames use all supplied trajectories.
     """
     overlays = []
     n_manifest = observations.shape[1]
-    n_draws = y_sim.shape[0]
+    draws = np.asarray(y_sim)
 
     q50 = jnp.percentile(y_sim, 50.0, axis=0)  # (T, m)
 
     for j, name in zip(range(n_manifest), indicator_ids, strict=True):
         obs_j = observations[:, j]
         observed = [None if jnp.isnan(v) else float(v) for v in obs_j]
-
-        # Spaghetti: individual draw trajectories for this variable
-        spaghetti = [
-            [_predictive_value(v) for v in y_sim[int(idx), :, j]] for idx in range(n_draws)
-        ]
 
         overlays.append(
             PPCOverlay(
@@ -382,7 +379,10 @@ def _compute_overlays(
                 standardized=standardized[j],
                 observed=tuple(observed),
                 median=tuple(_predictive_value(v) for v in q50[:, j]),
-                spaghetti_draws=tuple(tuple(draw) for draw in spaghetti),
+                spaghetti_draws=NumericalArray.from_numpy(draws[:20, :, j]),
+                frame=central_frame(
+                    np.where(np.isfinite(draws[:, :, j]), draws[:, :, j], np.nan), observed
+                ),
             )
         )
 

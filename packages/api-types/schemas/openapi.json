@@ -3884,7 +3884,7 @@
         "properties": {
           "report": {
             "$ref": "#/components/schemas/DataComparisonReport",
-            "description": "Exact history selections, point changes, per-history statistics, compatibility findings and predictive checks."
+            "description": "Exact history selections, point changes, per-history statistics, compatibility findings and predictive checks. Predictive overlays retain at most 20 binary spaghetti series; their median and frame use all replicates."
           }
         },
         "required": [
@@ -14470,26 +14470,24 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "EmpiricalPoint": {
+      "EmpiricalDistribution": {
         "additionalProperties": false,
-        "description": "A step of an empirical cumulative distribution.",
+        "description": "Aligned binary coordinates of an empirical cumulative distribution.",
         "properties": {
-          "value": {
-            "description": "Distinct finite observed or sampled value.",
-            "title": "Value",
-            "type": "number"
+          "values": {
+            "$ref": "#/components/schemas/NumericalArray",
+            "description": "Distinct finite observed or sampled values in ascending order."
           },
-          "probability": {
-            "description": "Fraction of finite values less than or equal to `value`.",
-            "title": "Probability",
-            "type": "number"
+          "probabilities": {
+            "$ref": "#/components/schemas/NumericalArray",
+            "description": "Cumulative fractions of finite values less than or equal to each aligned value."
           }
         },
         "required": [
-          "value",
-          "probability"
+          "values",
+          "probabilities"
         ],
-        "title": "EmpiricalPoint",
+        "title": "EmpiricalDistribution",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.empirical",
         "x-layer": "findings",
@@ -20482,11 +20480,8 @@
         "description": "All prepared observations, their true anchors and their measurement support.",
         "properties": {
           "times": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Times",
-            "type": "array"
+            "$ref": "#/components/schemas/NumericalArray",
+            "description": "Finite model-day anchors as a one-dimensional binary array."
           },
           "values": {
             "$ref": "#/components/schemas/ScalarValues"
@@ -20498,11 +20493,7 @@
             "$ref": "#/components/schemas/ScalarValues"
           },
           "empirical": {
-            "items": {
-              "$ref": "#/components/schemas/EmpiricalPoint"
-            },
-            "title": "Empirical",
-            "type": "array"
+            "$ref": "#/components/schemas/EmpiricalDistribution"
           }
         },
         "required": [
@@ -20979,21 +20970,8 @@
             "type": "array"
           },
           "spaghetti_draws": {
-            "items": {
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "number"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              },
-              "type": "array"
-            },
-            "title": "Spaghetti Draws",
-            "type": "array"
+            "$ref": "#/components/schemas/NumericalArray",
+            "description": "At most 20 replicated series as a binary (draw, time) array; non-finite entries are missing."
           },
           "frame": {
             "anyOf": [
@@ -21014,8 +20992,7 @@
                 "type": "null"
               }
             ],
-            "description": "Plot range spanning the widest per-time central 95% of draws and every observed value.",
-            "readOnly": true,
+            "description": "Widest per-time central 95% of all predictive draws, widened to cover every observed value.",
             "title": "Frame"
           }
         },
@@ -22128,11 +22105,7 @@
             "$ref": "#/components/schemas/DensityCurve"
           },
           "empirical": {
-            "items": {
-              "$ref": "#/components/schemas/EmpiricalPoint"
-            },
-            "title": "Empirical",
-            "type": "array"
+            "$ref": "#/components/schemas/EmpiricalDistribution"
           },
           "mean": {
             "title": "Mean",
@@ -22562,7 +22535,7 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/ObservationData",
-            "description": "Full observation histories keyed by indicator ID, including measurement support intervals and missing values."
+            "description": "Full observation histories keyed by indicator ID, including measurement support intervals and missing values; times and empirical CDF coordinates are binary arrays."
           },
           "metadata": {
             "$ref": "#/components/schemas/PreparedDataMetadata",
@@ -24192,7 +24165,7 @@
         "description": "Generated histories and their complete scientific report, including owned numerical evidence.",
         "properties": {
           "data": {
-            "description": "One observation history per retained replicate, in replicate order.",
+            "description": "One observation history per retained replicate, in replicate order. Histories share one binary time buffer and each retains its binary empirical CDF.",
             "items": {
               "$ref": "#/components/schemas/ObservationData"
             },
@@ -26154,7 +26127,7 @@
       "JsonResponse_ActionSuccess": {
         "discriminator": {
           "mapping": {
-            "data_diff": "#/components/schemas/SuccessfulPoll_Literal__data_diff___DataDiffOutput_",
+            "data_diff": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__data_diff___DataDiffOutput_",
             "edit_model": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__edit_model___EditModelOutput_",
             "edit_question": "#/components/schemas/SuccessfulPoll_Literal__edit_question___EditQuestionOutput_",
             "fit": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__fit___FitOutput_",
@@ -26181,7 +26154,7 @@
             "$ref": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__simulate___SimulateOutput_"
           },
           {
-            "$ref": "#/components/schemas/SuccessfulPoll_Literal__data_diff___DataDiffOutput_"
+            "$ref": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__data_diff___DataDiffOutput_"
           },
           {
             "$ref": "#/components/schemas/JsonResponse_SuccessfulPoll_Literal__model_diff___ModelDiffOutput_"
@@ -26335,6 +26308,61 @@
         "x-python-module": "grassmoth.artifacts.scenarios",
         "x-layer": "findings",
         "x-concern": "scientific_model"
+      },
+      "JsonResponse_DataComparisonReport": {
+        "additionalProperties": false,
+        "description": "Statistical comparison of two nonempty selections of immutable saved histories.\n\nCompare data preparation revisions, observations with prior or posterior\nsimulations, or simulations across model specifications, priors, fits and\nintervention scenarios.\n\nLeft/right name comparison sides, not temporal revisions or an editing language.\nResolved references retain every selected replicate in request order; a history\ncannot occur twice within one side. Variables are ordered by indicator identity.\nExogenous indicators supplied by a simulation's model are excluded.\n\nOne-versus-one comparisons expose point changes. One-versus-many comparisons\nevaluate predictive checks against the singleton reference. Many-versus-many\ncomparisons retain per-history statistics without pairing draws or evaluating\nreference-based checks. IndicatorComparison owns the exact change semantics.\nSource definitions and complete observations belong to prepare_data/simulate\nresults; this report owns only selection identity and newly computed evidence.",
+        "properties": {
+          "left": {
+            "items": {
+              "$ref": "#/components/schemas/DataRef_GitOid_int_"
+            },
+            "title": "Left",
+            "type": "array"
+          },
+          "right": {
+            "items": {
+              "$ref": "#/components/schemas/DataRef_GitOid_int_"
+            },
+            "title": "Right",
+            "type": "array"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/JsonResponse_IndicatorComparison"
+            },
+            "title": "Variables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "left",
+          "right",
+          "variables"
+        ],
+        "title": "DataComparisonReport",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.data_comparison",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "JsonResponse_DataDiffOutput": {
+        "additionalProperties": false,
+        "description": "The computed comparison report; original histories remain in their producing results.",
+        "properties": {
+          "report": {
+            "$ref": "#/components/schemas/JsonResponse_DataComparisonReport",
+            "description": "Exact history selections, point changes, per-history statistics, compatibility findings and predictive checks. Predictive overlays retain at most 20 binary spaghetti series; their median and frame use all replicates."
+          }
+        },
+        "required": [
+          "report"
+        ],
+        "title": "DataDiffOutput",
+        "type": "object",
+        "x-python-module": "grassmoth.actions.contracts.io",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
       },
       "JsonResponse_DynamicalModelSpec-Input": {
         "additionalProperties": false,
@@ -35493,6 +35521,29 @@
         "x-layer": "transport",
         "x-concern": "api_tools"
       },
+      "JsonResponse_EmpiricalDistribution": {
+        "additionalProperties": false,
+        "description": "Aligned binary coordinates of an empirical cumulative distribution.",
+        "properties": {
+          "values": {
+            "$ref": "#/components/schemas/JsonResponse_NumericalArray",
+            "description": "Distinct finite observed or sampled values in ascending order."
+          },
+          "probabilities": {
+            "$ref": "#/components/schemas/JsonResponse_NumericalArray",
+            "description": "Cumulative fractions of finite values less than or equal to each aligned value."
+          }
+        },
+        "required": [
+          "values",
+          "probabilities"
+        ],
+        "title": "EmpiricalDistribution",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.empirical",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "JsonResponse_FitOutput": {
         "additionalProperties": false,
         "description": "A conditioned model, its completed checks, and self-contained inference evidence.",
@@ -35558,6 +35609,59 @@
           }
         ],
         "x-python-module": "grassmoth.artifacts.continuation",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "JsonResponse_IndicatorComparison": {
+        "additionalProperties": false,
+        "description": "Computed evidence for one persistent indicator identity, without copying its histories.\n\nPoint changes are directional, from left to right, and only computed for one\nhistory on each side. Match by calendar instant:\na new anchor is Added, a lost anchor Removed, and an exact value or support change\nat a retained anchor Revised. Omit unchanged points and order changes by anchor.\nRenames and measurement-definition changes are not point revisions; definition\nmismatches are findings. No tolerance, interpolation, or imputation is\nused. Reversing sides exchanges additions/removals and before/after payloads.\n\nAn empty changes tuple can mean identical points or an inapplicable point diff\n(replicated selections); it never asserts that whole\ndatasets are equal. Missing variables and differing schedules remain explicit\nfindings. Predictive evaluation owns its own applicability, so extra replicate\nanchors can produce a schedule finding without preventing checks at observed anchors.",
+        "properties": {
+          "indicator_id": {
+            "$ref": "#/components/schemas/IndicatorId-Output"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/Change_DataPoint_"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "statistics": {
+            "items": {
+              "$ref": "#/components/schemas/DataStatisticComparison"
+            },
+            "title": "Statistics",
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/DataFinding"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "predictive": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonResponse_PredictiveComparison"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Reference history against the other side's replicates, when exactly one side is a single history of a compatible numeric indicator; otherwise null. An alignment failure is reported as a finding."
+          }
+        },
+        "required": [
+          "indicator_id",
+          "changes",
+          "statistics",
+          "findings",
+          "predictive"
+        ],
+        "title": "IndicatorComparison",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.data_comparison",
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
@@ -35709,7 +35813,7 @@
             "$ref": "#/components/schemas/JsonResponse_InferenceEvidence"
           },
           "core": {
-            "$ref": "#/components/schemas/InferenceReportCore"
+            "$ref": "#/components/schemas/JsonResponse_InferenceReportCore"
           },
           "detail": {
             "$ref": "#/components/schemas/JsonResponse_InferenceReportDetail"
@@ -35721,6 +35825,88 @@
           "detail"
         ],
         "title": "InferenceReport",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.inference",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "JsonResponse_InferenceReportCore": {
+        "additionalProperties": false,
+        "description": "Compact scientific report shared by snapshots and the full report.",
+        "properties": {
+          "inference_metadata": {
+            "$ref": "#/components/schemas/InferenceMetadata"
+          },
+          "inference_diagnostics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChainDiagnostics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "convergence": {
+            "$ref": "#/components/schemas/ConvergenceReport"
+          },
+          "loo_diagnostics": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LOODiagnostics"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "posterior_marginals": {
+            "items": {
+              "$ref": "#/components/schemas/JsonResponse_PosteriorMarginal"
+            },
+            "title": "Posterior Marginals",
+            "type": "array"
+          },
+          "prior_densities": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DensityCurve"
+            },
+            "description": "Input laws evaluated on the quantity scale of the posterior summaries.",
+            "propertyNames": {
+              "$ref": "#/components/schemas/ParameterId-Output"
+            },
+            "title": "Prior Densities",
+            "type": "object"
+          },
+          "frequency_refresh": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FrequencyRefresh"
+            },
+            "title": "Frequency Refresh",
+            "type": "array"
+          },
+          "regional_movement": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RegionalMovement"
+            },
+            "title": "Regional Movement",
+            "type": "array"
+          }
+        },
+        "required": [
+          "inference_metadata",
+          "inference_diagnostics",
+          "convergence",
+          "loo_diagnostics",
+          "posterior_marginals",
+          "prior_densities",
+          "frequency_refresh",
+          "regional_movement"
+        ],
+        "title": "InferenceReportCore",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.inference",
         "x-layer": "findings",
@@ -35930,11 +36116,8 @@
         "description": "All prepared observations, their true anchors and their measurement support.",
         "properties": {
           "times": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Times",
-            "type": "array"
+            "$ref": "#/components/schemas/JsonResponse_NumericalArray",
+            "description": "Finite model-day anchors as a one-dimensional binary array."
           },
           "values": {
             "$ref": "#/components/schemas/JsonResponse_ScalarValues"
@@ -35946,11 +36129,7 @@
             "$ref": "#/components/schemas/JsonResponse_ScalarValues"
           },
           "empirical": {
-            "items": {
-              "$ref": "#/components/schemas/EmpiricalPoint"
-            },
-            "title": "Empirical",
-            "type": "array"
+            "$ref": "#/components/schemas/JsonResponse_EmpiricalDistribution"
           }
         },
         "required": [
@@ -35965,6 +36144,100 @@
         "x-python-module": "grassmoth.artifacts.observations.history",
         "x-layer": "authored",
         "x-concern": "read_models"
+      },
+      "JsonResponse_PPCOverlay": {
+        "additionalProperties": false,
+        "description": "A predictive overlay sets one indicator's observed values against simulated ones.\n\nIt carries the predictive median and a few individual replicated series, the\nspaghetti plot of a visual predictive check.",
+        "properties": {
+          "times": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Times",
+            "type": "array"
+          },
+          "time_origin": {
+            "format": "date-time",
+            "title": "Time Origin",
+            "type": "string"
+          },
+          "standardized": {
+            "title": "Standardized",
+            "type": "boolean"
+          },
+          "indicator_id": {
+            "$ref": "#/components/schemas/IndicatorId-Output"
+          },
+          "observed": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Observed",
+            "type": "array"
+          },
+          "median": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Median",
+            "type": "array"
+          },
+          "spaghetti_draws": {
+            "$ref": "#/components/schemas/JsonResponse_NumericalArray",
+            "description": "At most 20 replicated series as a binary (draw, time) array; non-finite entries are missing."
+          },
+          "frame": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Widest per-time central 95% of all predictive draws, widened to cover every observed value.",
+            "title": "Frame"
+          }
+        },
+        "required": [
+          "times",
+          "time_origin",
+          "standardized",
+          "indicator_id",
+          "observed",
+          "median",
+          "spaghetti_draws",
+          "frame"
+        ],
+        "title": "PPCOverlay",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
       },
       "JsonResponse_PairedArmSimulation": {
         "additionalProperties": false,
@@ -36038,13 +36311,152 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
+      "JsonResponse_PosteriorMarginal": {
+        "additionalProperties": false,
+        "description": "One parameter's posterior interval, scale and density plot.",
+        "properties": {
+          "parameter": {
+            "title": "Parameter",
+            "type": "string"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/ParameterRef"
+          },
+          "density_curve": {
+            "$ref": "#/components/schemas/DensityCurve"
+          },
+          "empirical": {
+            "$ref": "#/components/schemas/JsonResponse_EmpiricalDistribution"
+          },
+          "mean": {
+            "title": "Mean",
+            "type": "number"
+          },
+          "lower": {
+            "title": "Lower",
+            "type": "number"
+          },
+          "upper": {
+            "title": "Upper",
+            "type": "number"
+          },
+          "interval_kind": {
+            "enum": [
+              "hdi",
+              "equal_tail"
+            ],
+            "title": "Interval Kind",
+            "type": "string"
+          },
+          "interval_mass": {
+            "exclusiveMaximum": 1,
+            "exclusiveMinimum": 0,
+            "title": "Interval Mass",
+            "type": "number"
+          },
+          "sd": {
+            "minimum": 0,
+            "title": "Sd",
+            "type": "number"
+          }
+        },
+        "required": [
+          "parameter",
+          "subject",
+          "density_curve",
+          "empirical",
+          "mean",
+          "lower",
+          "upper",
+          "interval_kind",
+          "interval_mass",
+          "sd"
+        ],
+        "title": "PosteriorMarginal",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "JsonResponse_PosteriorPredictiveChecks": {
+        "additionalProperties": false,
+        "description": "Posterior predictive checks report exact-model checks and their supporting plot data.",
+        "properties": {
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/Assessment_IndicatorCheckSubject_NumericCriterionEvidence_"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "n_subsample": {
+            "default": 0,
+            "title": "N Subsample",
+            "type": "integer"
+          },
+          "overlays": {
+            "items": {
+              "$ref": "#/components/schemas/JsonResponse_PPCOverlay"
+            },
+            "title": "Overlays",
+            "type": "array"
+          },
+          "test_stats": {
+            "items": {
+              "$ref": "#/components/schemas/PPCTestStat"
+            },
+            "title": "Test Stats",
+            "type": "array"
+          }
+        },
+        "required": [
+          "findings",
+          "n_subsample",
+          "overlays",
+          "test_stats"
+        ],
+        "title": "PosteriorPredictiveChecks",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.posterior_diagnostics",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "JsonResponse_PredictiveComparison": {
+        "additionalProperties": false,
+        "description": "One reference history compared with the other side's replicated histories.\n\nThe singleton side owns the reference role even when evaluation is unavailable.\nSwapping sides changes reference_side and preserves the evaluation. Matching\nmeasurement definitions, calendar binding, and support at every observed anchor\nare required. Missing reference values are masked; missing replicate values at\nobserved anchors prevent evaluation. Replicates may have additional anchors.\nThe source simulation's law provenance determines prior/posterior interpretation;\nthe side names and number of selected histories do not establish that provenance.",
+        "properties": {
+          "reference_side": {
+            "$ref": "#/components/schemas/ComparisonSide"
+          },
+          "evaluation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JsonResponse_PosteriorPredictiveChecks"
+              },
+              {
+                "$ref": "#/components/schemas/NotEvaluated_IndicatorRef_"
+              }
+            ],
+            "title": "Evaluation"
+          }
+        },
+        "required": [
+          "reference_side",
+          "evaluation"
+        ],
+        "title": "PredictiveComparison",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.reports.data_comparison",
+        "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
       "JsonResponse_PrepareDataOutput": {
         "additionalProperties": false,
         "description": "Prepared observations, their resolved metadata, and data-quality findings.",
         "properties": {
           "data": {
             "$ref": "#/components/schemas/JsonResponse_ObservationData",
-            "description": "Full observation histories keyed by indicator ID, including measurement support intervals and missing values."
+            "description": "Full observation histories keyed by indicator ID, including measurement support intervals and missing values; times and empirical CDF coordinates are binary arrays."
           },
           "metadata": {
             "$ref": "#/components/schemas/PreparedDataMetadata",
@@ -36141,7 +36553,7 @@
         "description": "Generated histories and their complete scientific report, including owned numerical evidence.",
         "properties": {
           "data": {
-            "description": "One observation history per retained replicate, in replicate order.",
+            "description": "One observation history per retained replicate, in replicate order. Histories share one binary time buffer and each retains its binary empirical CDF.",
             "items": {
               "$ref": "#/components/schemas/JsonResponse_ObservationData"
             },
@@ -36372,6 +36784,54 @@
         "x-python-module": "grassmoth.artifacts.simulation",
         "x-layer": "findings",
         "x-concern": "scientific_model"
+      },
+      "JsonResponse_SuccessfulPoll_Literal__data_diff___DataDiffOutput_": {
+        "additionalProperties": false,
+        "description": "A published scientific result and the complete execution log of its call.",
+        "properties": {
+          "call_id": {
+            "$ref": "#/components/schemas/CallId-Output"
+          },
+          "action": {
+            "const": "data_diff",
+            "title": "Action",
+            "type": "string"
+          },
+          "status": {
+            "const": "success",
+            "default": "success",
+            "title": "Status",
+            "type": "string"
+          },
+          "commit_id": {
+            "$ref": "#/components/schemas/GitOid-Output"
+          },
+          "body": {
+            "$ref": "#/components/schemas/JsonResponse_DataDiffOutput"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionMessage"
+            },
+            "title": "Messages",
+            "type": "array"
+          }
+        },
+        "required": [
+          "call_id",
+          "action",
+          "status",
+          "commit_id",
+          "body",
+          "messages"
+        ],
+        "title": "SuccessfulPoll[Literal['data_diff'], DataDiffOutput]",
+        "type": "object",
+        "x-typescript-mode": "serialization",
+        "x-typescript-type": "SuccessfulPoll<\"data_diff\", DataDiffOutput>",
+        "x-python-module": "grassmoth_server.actions.contracts.polling",
+        "x-layer": "transport",
+        "x-concern": "api_tools"
       },
       "JsonResponse_SuccessfulPoll_Literal__edit_model___EditModelOutput_": {
         "additionalProperties": false,

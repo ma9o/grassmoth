@@ -12,7 +12,10 @@ from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.identity import ConstructId, IndicatorId
 from grassmoth.artifacts.observations.spec import NumericMeasurement, ResolvedObservationSpec
 from grassmoth.artifacts.reports.checks import NotEvaluated
-from grassmoth.study.projections.visuals import observation_history
+from grassmoth.study.projections.visuals import (
+    observation_history,
+    simulation_observation_histories,
+)
 from grassmoth_test_support.helpers import fixture_entity_id
 
 
@@ -30,10 +33,12 @@ def test_observations_keep_irregular_anchors_support_missingness_and_empirical_m
         }
     )
     view = observation_history(origin.replace(tzinfo=UTC), table)
-    assert view.times == (0, 0.25, 8, 10, 11)
+    np.testing.assert_array_equal(view.times.values, (0, 0.25, 8, 10, 11))
     assert view.values == (-4, -4, None, 5, 5)
     assert view.support_start == (-1, 0, 7, 9, 10)
-    assert [(p.value, p.probability) for p in view.empirical] == [(-4, 0.5), (5, 1)]
+    np.testing.assert_array_equal(view.empirical.values.values, (-4, 5))
+    np.testing.assert_array_equal(view.empirical.probabilities.values, (0.5, 1))
+    assert view.readings()[1] == (0.25, -4, 0, 0.25)
 
 
 @pytest.mark.contract
@@ -96,6 +101,11 @@ def test_full_draw_summaries_preserve_modes_and_masked_category_counts():
             start="2026-01-01", horizon="9d", interventions=({"target": state_id, "value": 1},)
         ).assignments(datetime(2026, 1, 1, tzinfo=UTC)),
     )
+    histories = simulation_observation_histories(evidence, observed, mask)
+    assert all(history[indicator].times is histories[0][indicator].times for history in histories)
+    np.testing.assert_array_equal(histories[0][indicator].times.values, evidence.times)
+    np.testing.assert_array_equal(histories[0][indicator].empirical.values.values, (0, 1))
+    np.testing.assert_array_equal(histories[0][indicator].empirical.probabilities.values, (0.5, 1))
     summary = simulation_summary(evidence)
     assert summary.state_frames[state_id] == pytest.approx((-5.875, 8.375))
     probabilities = summary.action_category_probabilities[indicator]

@@ -1,6 +1,6 @@
 "use client";
 
-import type { DensityCurve, EmpiricalPoint } from "@grassmoth/api-types";
+import type { DensityCurve } from "@grassmoth/api-types";
 import { area, curveLinear, curveStep, curveStepAfter, line } from "d3-shape";
 import { useEffect, useMemo, useRef } from "react";
 import { formatSignificant } from "@/lib/utils/format";
@@ -62,7 +62,7 @@ export interface CumulativeLayer {
   readonly key: string;
   readonly label: string;
   readonly color: ChartColor;
-  readonly points: readonly EmpiricalPoint[];
+  readonly points: readonly { readonly value: number; readonly probability: number }[];
 }
 
 type Point = readonly [number, number];

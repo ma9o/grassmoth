@@ -1162,7 +1162,7 @@ export interface components {
          * @description The computed comparison report; original histories remain in their producing results.
          */
         readonly DataDiffOutput: {
-            /** @description Exact history selections, point changes, per-history statistics, compatibility findings and predictive checks. */
+            /** @description Exact history selections, point changes, per-history statistics, compatibility findings and predictive checks. Predictive overlays retain at most 20 binary spaghetti series; their median and frame use all replicates. */
             readonly report: components["schemas"]["DataComparisonReport"];
         };
         /**
@@ -3815,20 +3815,14 @@ export interface components {
             readonly prob_positive: number;
         };
         /**
-         * EmpiricalPoint
-         * @description A step of an empirical cumulative distribution.
+         * EmpiricalDistribution
+         * @description Aligned binary coordinates of an empirical cumulative distribution.
          */
-        readonly EmpiricalPoint: {
-            /**
-             * Value
-             * @description Distinct finite observed or sampled value.
-             */
-            readonly value: number;
-            /**
-             * Probability
-             * @description Fraction of finite values less than or equal to `value`.
-             */
-            readonly probability: number;
+        readonly EmpiricalDistribution: {
+            /** @description Distinct finite observed or sampled values in ascending order. */
+            readonly values: components["schemas"]["NumericalArray"];
+            /** @description Cumulative fractions of finite values less than or equal to each aligned value. */
+            readonly probabilities: components["schemas"]["NumericalArray"];
         };
         /** @description An entity reference identifies a construct, edge, indicator, or mechanism by its persistent identity. */
         readonly EntityRef: components["schemas"]["ConstructRef-Output"] | components["schemas"]["EdgeRef"] | components["schemas"]["IndicatorRef"] | components["schemas"]["MechanismRef"];
@@ -5841,13 +5835,12 @@ export interface components {
          * @description All prepared observations, their true anchors and their measurement support.
          */
         readonly ObservationHistory: {
-            /** Times */
-            readonly times: readonly number[];
+            /** @description Finite model-day anchors as a one-dimensional binary array. */
+            readonly times: components["schemas"]["NumericalArray"];
             readonly values: components["schemas"]["ScalarValues"];
             readonly support_start: components["schemas"]["ScalarValues"];
             readonly support_end: components["schemas"]["ScalarValues"];
-            /** Empirical */
-            readonly empirical: readonly components["schemas"]["EmpiricalPoint"][];
+            readonly empirical: components["schemas"]["EmpiricalDistribution"];
         };
         readonly "ObservationLawSpec-Output": Domain.DeltaLawSpec<Domain.Expression> | Domain.NormalLawSpec<Domain.Expression> | Domain.StudentTLawSpec<Domain.Expression> | Domain.PoissonLawSpec<Domain.Expression> | Domain.GammaLawSpec<Domain.Expression> | Domain.BernoulliLogitsLawSpec<Domain.Expression> | Domain.BernoulliProbsLawSpec<Domain.Expression> | Domain.NegativeBinomial2LawSpec<Domain.Expression> | Domain.BetaLawSpec<Domain.Expression> | Domain.OrderedLogisticLawSpec<Domain.Expression> | Domain.CategoricalLawSpec<Domain.Expression>;
         /** ObservationSpec[Annotated[Union[ObservationWindow, NoneType], FieldInfo(annotation=NoneType, required=False, default=None)]] */
@@ -5928,11 +5921,11 @@ export interface components {
             readonly observed: readonly (number | null)[];
             /** Median */
             readonly median: readonly (number | null)[];
-            /** Spaghetti Draws */
-            readonly spaghetti_draws: readonly (readonly (number | null)[])[];
+            /** @description At most 20 replicated series as a binary (draw, time) array; non-finite entries are missing. */
+            readonly spaghetti_draws: components["schemas"]["NumericalArray"];
             /**
              * Frame
-             * @description Plot range spanning the widest per-time central 95% of draws and every observed value.
+             * @description Widest per-time central 95% of all predictive draws, widened to cover every observed value.
              */
             readonly frame: readonly [
                 number,
@@ -6238,8 +6231,7 @@ export interface components {
             readonly parameter: string;
             readonly subject: components["schemas"]["ParameterRef"];
             readonly density_curve: components["schemas"]["DensityCurve"];
-            /** Empirical */
-            readonly empirical: readonly components["schemas"]["EmpiricalPoint"][];
+            readonly empirical: components["schemas"]["EmpiricalDistribution"];
             /** Mean */
             readonly mean: number;
             /** Lower */
@@ -6367,7 +6359,7 @@ export interface components {
          * @description Prepared observations, their resolved metadata, and data-quality findings.
          */
         readonly PrepareDataOutput: {
-            /** @description Full observation histories keyed by indicator ID, including measurement support intervals and missing values. */
+            /** @description Full observation histories keyed by indicator ID, including measurement support intervals and missing values; times and empirical CDF coordinates are binary arrays. */
             readonly data: components["schemas"]["ObservationData"];
             /** @description Preparation recipe, resolved observation schema, and the calendar origin used to interpret model time. */
             readonly metadata: components["schemas"]["PreparedDataMetadata"];
@@ -7034,7 +7026,7 @@ export interface components {
         readonly SimulateOutput: {
             /**
              * Data
-             * @description One observation history per retained replicate, in replicate order.
+             * @description One observation history per retained replicate, in replicate order. Histories share one binary time buffer and each retains its binary empirical CDF.
              */
             readonly data: readonly [
                 components["schemas"]["ObservationData"],

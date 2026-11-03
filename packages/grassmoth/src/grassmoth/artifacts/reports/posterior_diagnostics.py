@@ -6,7 +6,7 @@ from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, ConfigDict, Field, FiniteFloat, computed_field, model_validator
 
-from grassmoth.artifacts.arrays import ScalarValues
+from grassmoth.artifacts.arrays import NumericalArray, ScalarValues
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.identity import ConstructRef, IndicatorId, ParameterRef
 from grassmoth.artifacts.reports.checks import (
@@ -21,7 +21,7 @@ from grassmoth.artifacts.reports.checks import (
 )
 from grassmoth.artifacts.reports.display_frames import central_frame
 from grassmoth.artifacts.reports.effects import HistogramBin
-from grassmoth.artifacts.reports.empirical import EmpiricalPoint
+from grassmoth.artifacts.reports.empirical import EmpiricalDistribution
 from grassmoth.artifacts.sampling import ParticleDiagnosticMetric, SamplerSpec
 
 
@@ -173,7 +173,7 @@ class PosteriorMarginal(Value):
     parameter: str
     subject: ParameterRef
     density_curve: DensityCurve
-    empirical: tuple[EmpiricalPoint, ...]
+    empirical: EmpiricalDistribution
     mean: float
     lower: float
     upper: float
@@ -202,13 +202,12 @@ class PPCOverlay(Value):
     indicator_id: IndicatorId
     observed: tuple[float | None, ...]
     median: tuple[float | None, ...]
-    spaghetti_draws: tuple[tuple[float | None, ...], ...] = Field(default_factory=tuple)
-
-    @computed_field
-    @property
-    def frame(self) -> tuple[float, float] | None:
-        """Plot range spanning the widest per-time central 95% of draws and every observed value."""
-        return central_frame(self.spaghetti_draws, self.observed)
+    spaghetti_draws: NumericalArray = Field(
+        description="At most 20 replicated series as a binary (draw, time) array; non-finite entries are missing."
+    )
+    frame: tuple[float, float] | None = Field(
+        description="Widest per-time central 95% of all predictive draws, widened to cover every observed value."
+    )
 
     @model_validator(mode="after")
     def aligned_schedule(self) -> "PPCOverlay":
@@ -216,7 +215,9 @@ class PPCOverlay(Value):
         if (
             len(self.times) != len(self.observed)
             or len(self.times) != len(self.median)
-            or any(len(draw) != len(self.times) for draw in self.spaghetti_draws)
+            or len(self.spaghetti_draws.layout[0]) != 2
+            or self.spaghetti_draws.layout[0][1] != len(self.times)
+            or self.spaghetti_draws.layout[0][0] > 20
         ):
             raise ValueError("Predictive overlay columns must align with their evaluated schedule")
         if any(right <= left for left, right in zip(self.times, self.times[1:], strict=False)):

@@ -20,15 +20,8 @@ it("selects original joint posterior atoms and native chain evidence without red
     ...marginal,
     empirical:
       column === 0
-        ? [
-            { value: -5, probability: 0.5 },
-            { value: 5, probability: 1 },
-          ]
-        : [
-            { value: -1, probability: 0.25 },
-            { value: 0, probability: 0.5 },
-            { value: 1, probability: 1 },
-          ],
+        ? { values: array([2], [-5, 5]), probabilities: array([2], [0.5, 1]) }
+        : { values: array([3], [-1, 0, 1]), probabilities: array([3], [0.25, 0.5, 1]) },
   }));
   const saved: FitOutput = {
     ...base,

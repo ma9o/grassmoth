@@ -400,7 +400,25 @@ def test_overlays_preserve_quantiles_observations_and_all_trajectories():
         np.testing.assert_allclose(
             np.asarray(overlay.median, dtype=float), expected_medians[column], rtol=1e-6, atol=1e-6
         )
-        np.testing.assert_array_equal(overlay.spaghetti_draws, draws[:, :, column])
+        np.testing.assert_array_equal(overlay.spaghetti_draws.values, draws[:, :, column])
+
+
+@pytest.mark.inference(concern="predictive")
+def test_overlay_caps_binary_draws_but_frames_and_summarizes_all_runs():
+    draws = np.stack([np.arange(100, dtype=np.float32), np.full(100, np.nan)], axis=1)[:, :, None]
+    draws[-1, 0, 0] = np.inf
+    (overlay,) = _compute_overlays(
+        jnp.asarray(draws),
+        jnp.array([[-10.0], [jnp.nan]]),
+        [IndicatorId("indicator:x")],
+        times=(0.0, 1.0),
+        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+        standardized=(False,),
+    )
+    np.testing.assert_array_equal(overlay.spaghetti_draws.values, draws[:20, :, 0])
+    assert overlay.spaghetti_draws.values.dtype == np.float32
+    assert overlay.median == (49.5, None)
+    assert overlay.frame == pytest.approx((-10, 95.55))
 
 
 @pytest.mark.inference(concern="predictive")
@@ -418,7 +436,7 @@ def test_single_draw_has_exact_median_and_one_trajectory():
     assert len(result) == 2
     for column, overlay in enumerate(result):
         np.testing.assert_array_equal(overlay.median, draws[0, :, column])
-        np.testing.assert_array_equal(overlay.spaghetti_draws, draws[:, :, column])
+        np.testing.assert_array_equal(overlay.spaghetti_draws.values, draws[:, :, column])
 
 
 @pytest.mark.inference(concern="predictive")

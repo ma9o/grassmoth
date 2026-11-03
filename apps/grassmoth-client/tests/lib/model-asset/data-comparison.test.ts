@@ -38,11 +38,14 @@ const metadata: PreparedDataMetadata = {
   variables: [observation],
 };
 const history: ObservationHistory = {
-  times: [5, 6, 7],
+  times: { npy: new Uint8Array(dump([5, 6, 7], [3], { dtype: "f8" })) },
   values: [1, 4, null],
   support_start: [4, 5, 6],
   support_end: [5, 6, 7],
-  empirical: [],
+  empirical: {
+    values: { npy: new Uint8Array(dump([], [0], { dtype: "f8" })) },
+    probabilities: { npy: new Uint8Array(dump([], [0], { dtype: "f8" })) },
+  },
 };
 const envelope = {
   status: "success" as const,
@@ -52,7 +55,7 @@ const envelope = {
 const replicate = (index: number): ObservationData => ({
   [observation.id]: {
     ...history,
-    times: [3, 4, 5],
+    times: { npy: new Uint8Array(dump([3, 4, 5], [3], { dtype: "f8" })) },
     support_start: [2, 3, 4],
     support_end: [3, 4, 5],
     values: {
@@ -152,7 +155,7 @@ it("joins selected source histories in report order and retains computed evidenc
     support_start: [2, 3, 4],
     support_end: [3, 4, 5],
     values: [2, null, null],
-    empirical: [],
+    empirical: history.empirical,
   });
   const chart = dataComparisonChart(variable);
   expect(chart.layers.find((layer) => layer.key === "right")?.points).toBe(true);

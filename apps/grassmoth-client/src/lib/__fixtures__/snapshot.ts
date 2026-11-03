@@ -1,5 +1,6 @@
 /** Explicit served projections for unit tests; no saved study or numerical execution. */
 import type { InferenceReportCore, ModelSnapshot } from "@grassmoth/api-types";
+import { dump } from "npyjs";
 import { decay, diffusion, modelFixture, outcome } from "./model";
 
 export const dynamicalModelSpecRef = {
@@ -79,11 +80,10 @@ const fit: InferenceReportCore = {
       element_id: `element:${parameter.id.slice("parameter:".length)}` as const,
     },
     density_curve: density,
-    empirical: [
-      { value: 0.1, probability: 1 / 3 },
-      { value: 0.5, probability: 2 / 3 },
-      { value: 0.9, probability: 1 },
-    ],
+    empirical: {
+      values: { npy: new Uint8Array(dump([0.1, 0.5, 0.9], [3], { dtype: "f8" })) },
+      probabilities: { npy: new Uint8Array(dump([1 / 3, 2 / 3, 1], [3], { dtype: "f8" })) },
+    },
     mean: 0.5,
     lower: 0.1,
     upper: 0.9,
