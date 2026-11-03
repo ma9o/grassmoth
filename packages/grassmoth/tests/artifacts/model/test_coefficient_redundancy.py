@@ -9,6 +9,7 @@ from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.expressions import CallExpression, coefficient, state
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth_test_support.helpers import fixture_entity_id, make_model
 
 pytestmark = pytest.mark.contract
@@ -44,7 +45,7 @@ def _model(*mechanisms, reused=False):
     return DynamicalModelSpec.from_entities(
         edges=(edge.revised(effect=y.revised(dynamics=own), mechanisms=terms),),
         parameters=tuple(
-            ParameterSpec(id=identity, name=name, description=name)
+            ParameterSpec(id=identity, name=name, reasoning=ReasoningSpec(text=name))
             for identity, name in zip((_A, _B, _C), "abc", strict=True)
             if identity in used
         ),

@@ -32,7 +32,5 @@
       "construct_ids": []
     }
   },
-  "standardized": false,
-  "reasoning": "Native density parity",
-  "sources": []
+  "standardized": false
 }

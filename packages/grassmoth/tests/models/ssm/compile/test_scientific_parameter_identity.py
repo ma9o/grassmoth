@@ -19,6 +19,7 @@ from grassmoth.artifacts.model.likelihood import (
 )
 from grassmoth.artifacts.model.parameter import SiteKind
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.compile.bindings import parameter_bindings
 from grassmoth.models.structure import StructuralSelection, selected_state_ids
@@ -47,6 +48,7 @@ def _shared_likelihood_parameter_owns_only_active_channels_complete_model() -> D
     a_obs = indicator_named(dynamical_model_spec, "A_obs")
     a_obs_likelihood = likelihood_named(dynamical_model_spec, "A_obs")
     a_obs_revised = a_obs.revised(
+        reasoning={"text": "Test tails"},
         likelihood=a_obs_likelihood.revised(
             law=StudentTLawSpec[Expression](
                 df=coefficient(_OBS_DF_PARAMETER_ID, "degrees_of_freedom"),
@@ -56,8 +58,7 @@ def _shared_likelihood_parameter_owns_only_active_channels_complete_model() -> D
                 ),
                 scale=coefficient(0.0, "observation_scale"),
             ),
-            reasoning="Test tails",
-        )
+        ),
     )
     a_revised = a.revised(indicators=(a_obs_revised,))
     return dynamical_model_spec.with_entities(
@@ -67,8 +68,10 @@ def _shared_likelihood_parameter_owns_only_active_channels_complete_model() -> D
             ParameterSpec(
                 id=_OBS_DF_PARAMETER_ID,
                 name="obs_df",
-                description="degrees of freedom for obs_df",
                 distribution=_OBS_DF_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="degrees of freedom for obs_df. Synthetic prior for degrees of freedom for obs_df; its values define this test scenario."
+                ),
             ),
         ),
         distributions={
@@ -85,6 +88,7 @@ def _shared_likelihood_parameter_owns_only_active_channels_complete_model_2() ->
     b_obs_likelihood = likelihood_named(dynamical_model_spec, "B_obs")
     obs_df = parameter_named(dynamical_model_spec, "obs_df")
     b_obs_revised = b_obs.revised(
+        reasoning={"text": "Test tails"},
         likelihood=b_obs_likelihood.revised(
             law=StudentTLawSpec[Expression](
                 df=coefficient(obs_df.id, "degrees_of_freedom"),
@@ -94,8 +98,7 @@ def _shared_likelihood_parameter_owns_only_active_channels_complete_model_2() ->
                 ),
                 scale=coefficient(0.0, "observation_scale"),
             ),
-            reasoning="Test tails",
-        )
+        ),
     )
     b_revised = b.revised(indicators=(b_obs_revised,))
     return dynamical_model_spec.with_entities(
@@ -146,8 +149,10 @@ def _student_innovation_model() -> DynamicalModelSpec:
             ParameterSpec(
                 id=_PROC_DF_PARAMETER_ID,
                 name="proc_df",
-                description="degrees of freedom for proc_df",
                 distribution=_PROC_DF_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="degrees of freedom for proc_df. Synthetic prior for degrees of freedom for proc_df; its values define this test scenario."
+                ),
             ),
         ),
         distributions={
@@ -187,22 +192,24 @@ def _rename_preserves_parameter_and_element_identity__compile_2() -> DynamicalMo
         parameters=replace_parameters(
             dynamical_model_spec.parameters,
             rho_a.revised(
-                name="rho_renamed construct 0", description="stiffness of rho_renamed construct 0"
+                name="rho_renamed construct 0",
+                reasoning={"text": "stiffness of rho_renamed construct 0"},
             ),
             rho_b.revised(
-                name="rho_renamed construct 1", description="stiffness of rho_renamed construct 1"
+                name="rho_renamed construct 1",
+                reasoning={"text": "stiffness of rho_renamed construct 1"},
             ),
             beta_a_b.revised(
                 name="beta_renamed construct 0_renamed construct 1",
-                description="weight of beta_renamed construct 0_renamed construct 1",
+                reasoning={"text": "weight of beta_renamed construct 0_renamed construct 1"},
             ),
             sigma_a.revised(
                 name="sigma_renamed construct 0",
-                description="innovation.scale for sigma_renamed construct 0",
+                reasoning={"text": "innovation.scale for sigma_renamed construct 0"},
             ),
             sigma_b.revised(
                 name="sigma_renamed construct 1",
-                description="innovation.scale for sigma_renamed construct 1",
+                reasoning={"text": "innovation.scale for sigma_renamed construct 1"},
             ),
         ),
     )
@@ -263,14 +270,18 @@ def _initial_state_defaults_are_authored_before_compilation_complete_model_initi
             ParameterSpec(
                 id=_T0_SD_A_PARAMETER_ID,
                 name="t0_sd_A",
-                description="initial state.scale for t0_sd_A",
                 distribution=_T0_SD_A_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="initial state.scale for t0_sd_A. Synthetic prior for initial state.scale for t0_sd_A; its values define this test scenario."
+                ),
             ),
             ParameterSpec(
                 id=_T0_SD_B_PARAMETER_ID,
                 name="t0_sd_B",
-                description="initial state.scale for t0_sd_B",
                 distribution=_T0_SD_B_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="initial state.scale for t0_sd_B. Synthetic prior for initial state.scale for t0_sd_B; its values define this test scenario."
+                ),
             ),
         ),
         distributions={
@@ -328,14 +339,18 @@ def _initial_state_defaults_are_authored_before_compilation_complete_model_initi
             ParameterSpec(
                 id=_T0_MEAN_A_PARAMETER_ID,
                 name="t0_mean_A",
-                description="initial state.mean for t0_mean_A",
                 distribution=_T0_MEAN_A_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="initial state.mean for t0_mean_A. Synthetic prior for initial state.mean for t0_mean_A; its values define this test scenario."
+                ),
             ),
             ParameterSpec(
                 id=_T0_MEAN_B_PARAMETER_ID,
                 name="t0_mean_B",
-                description="initial state.mean for t0_mean_B",
                 distribution=_T0_MEAN_B_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="initial state.mean for t0_mean_B. Synthetic prior for initial state.mean for t0_mean_B; its values define this test scenario."
+                ),
             ),
         ),
         distributions={
@@ -511,7 +526,6 @@ def test_shared_likelihood_parameter_owns_only_active_channels():
                 "scientific_parameter_identity/shared_likelihood_parameter_owns_only_active_channels_observation_law.json"
             )
         ),
-        reasoning="Test tails",
         standardized=True,
     )
     first = first.revised(indicators=(first.indicators[0].revised(likelihood=student),))
@@ -528,15 +542,15 @@ def test_shared_likelihood_parameter_owns_only_active_channels():
     second = second.revised(
         indicators=(
             second.indicators[0].revised(
+                reasoning={"text": "Test tails"},
                 likelihood=LikelihoodSpec(
                     law=TypeAdapter(ObservationLawSpec).validate_json(
                         model_fixture_json(
                             "scientific_parameter_identity/shared_likelihood_parameter_owns_only_active_channels_observation_law_2.json"
                         )
                     ),
-                    reasoning="Test tails",
                     standardized=True,
-                )
+                ),
             ),
         )
     )

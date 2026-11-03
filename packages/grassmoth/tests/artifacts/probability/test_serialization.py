@@ -21,6 +21,7 @@ from grassmoth_test_support.model import (
     parameter_laws,
     parameter_named,
     replace_parameters,
+    without_prior,
     x_model,
 )
 
@@ -159,7 +160,7 @@ def test_completed_model_requires_a_prior_on_each_parameter():
     science = x_model()
     draft = science.with_entities(
         distributions={},
-        parameters=tuple(parameter.revised(distribution=None) for parameter in science.parameters),
+        parameters=tuple(without_prior(parameter) for parameter in science.parameters),
     )
     with pytest.raises(IncompleteModelError, match="prior"):
         require_priors(StructuralSelection(draft, None))

@@ -50,7 +50,5 @@
       "construct_ids": []
     }
   },
-  "standardized": true,
-  "reasoning": "Test Gaussian emission",
-  "sources": []
+  "standardized": true
 }

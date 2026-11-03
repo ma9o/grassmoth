@@ -18,6 +18,7 @@ from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import ObservationLawSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
 from grassmoth.artifacts.model.question import QuestionSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.probability.serialization import (
     empirical_atoms,
     empirical_distribution,
@@ -67,11 +68,14 @@ def _model():
             "constructs": {
                 f"construct:{key}": {
                     "name": key.upper(),
-                    "description": key,
+                    "reasoning": {"text": key},
                     "role": "endogenous",
                     "temporal_status": "time_varying",
                     "indicators": {
                         f"indicator:{key}": {
+                            "reasoning": {
+                                "text": "Synthetic measurement of the construct for this test scenario."
+                            },
                             "observation": {
                                 "name": f"{key.upper()}_obs",
                                 "measurement": {"dtype": "continuous"},
@@ -88,7 +92,7 @@ def _model():
                 "edge:xy": {
                     "cause": "construct:x",
                     "effect": "construct:y",
-                    "description": "effect",
+                    "reasoning": {"text": "effect"},
                 }
             },
         }
@@ -104,11 +108,11 @@ def _drop_x(model):
                 effect=ConstructSpec(
                     id="construct:z",
                     name="Z",
-                    description="Downstream response",
+                    reasoning=ReasoningSpec(text="Downstream response"),
                     role="endogenous",
                     temporal_status="time_varying",
                 ),
-                description="Y affects Z",
+                reasoning=ReasoningSpec(text="Y affects Z"),
             ),
         )
     )
@@ -240,7 +244,14 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
     )
     conditioned = dynamical_model_spec.with_entities(
         parameters=tuple(
-            p.revised(distribution=layout.distribution_id, transform={"kind": "identity"})
+            p.revised(
+                distribution=layout.distribution_id,
+                transform={"kind": "identity"},
+                reasoning=p.reasoning.revised(
+                    text=p.reasoning.text + " [1]",
+                    reference_urls=("https://example.org/prior",),
+                ),
+            )
             for p in dynamical_model_spec.parameters
         ),
         edges=replace_constructs(
@@ -289,6 +300,8 @@ def test_saved_model_keeps_joint_arrays_lazy_and_self_contained(workspace, monke
     monkeypatch.setattr(ArtifactStore, "read_array", tracked_read)
     restored_model = _published_model(workspace)
     assert restored_model.model_dump(mode="json") == conditioned.model_dump(mode="json")
+    assert restored_model.parameters[0].reasoning.reference_urls == ("https://example.org/prior",)
+    assert type(restored_model.parameters[0].model_dump()["reasoning"]["reference_urls"][0]) is str
     assert reads == []
     # The retained model owns its buffers and needs no workspace lookup to read draws.
     restored = restored_model.distributions[layout.distribution_id]
@@ -361,8 +374,6 @@ def test_planning_preserves_ids_across_name_and_role_edits(workspace):
                 "v": {"kind": "state", "construct_id": "construct:x"},
             },
             "standardized": False,
-            "reasoning": "The renamed input is given exactly.",
-            "sources": [],
         }
     revised = DynamicalModelSpec.model_validate(payload).materialized()
     assert set(selected_state_ids(StructuralSelection(original, None))) == set(
@@ -444,7 +455,6 @@ def test_owned_likelihood_survives_reused_names(workspace, monkeypatch):
         "law": TypeAdapter(ObservationLawSpec)
         .validate_json(model_fixture_json("common/y_gaussian_observation_law.json"))
         .model_dump(mode="json"),
-        "reasoning": "Test",
     }
     _commit(workspace, "model", payload)
     before_commit = StudyRepository(workspace).head()

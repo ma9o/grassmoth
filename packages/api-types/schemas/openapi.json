@@ -2649,25 +2649,16 @@
             ],
             "description": "Effect construct; shared endpoints have one identity."
           },
-          "description": {
-            "description": "Theoretical justification for this causal link",
-            "title": "Description",
-            "type": "string"
-          },
-          "sources": {
-            "description": "Literature sources supporting this causal link",
-            "items": {
-              "$ref": "#/components/schemas/LiteratureSource-Input"
-            },
-            "title": "Sources",
-            "type": "array"
+          "reasoning": {
+            "$ref": "#/components/schemas/ReasoningSpec-Input",
+            "description": "Why this causal link holds and why its mechanism has the specified form. Cite references with [n] in the text."
           }
         },
         "required": [
           "id",
           "cause",
           "effect",
-          "description"
+          "reasoning"
         ],
         "title": "CausalEdgeSpec",
         "type": "object",
@@ -2713,18 +2704,9 @@
             ],
             "description": "Effect construct; shared endpoints have one identity."
           },
-          "description": {
-            "description": "Theoretical justification for this causal link",
-            "title": "Description",
-            "type": "string"
-          },
-          "sources": {
-            "description": "Literature sources supporting this causal link",
-            "items": {
-              "$ref": "#/components/schemas/LiteratureSource-Output"
-            },
-            "title": "Sources",
-            "type": "array"
+          "reasoning": {
+            "$ref": "#/components/schemas/ReasoningSpec-Output",
+            "description": "Why this causal link holds and why its mechanism has the specified form. Cite references with [n] in the text."
           }
         },
         "required": [
@@ -2732,8 +2714,7 @@
           "mechanisms",
           "cause",
           "effect",
-          "description",
-          "sources"
+          "reasoning"
         ],
         "title": "CausalEdgeSpec",
         "type": "object",
@@ -3401,10 +3382,9 @@
             "title": "Name",
             "type": "string"
           },
-          "description": {
-            "description": "What this theoretical construct represents",
-            "title": "Description",
-            "type": "string"
+          "reasoning": {
+            "$ref": "#/components/schemas/ReasoningSpec-Input",
+            "description": "What this construct is and why the model needs it. Cite references with [n] in the text."
           },
           "indicators": {
             "default": [],
@@ -3463,7 +3443,7 @@
         "required": [
           "id",
           "name",
-          "description",
+          "reasoning",
           "role",
           "temporal_status"
         ],
@@ -3486,10 +3466,9 @@
             "title": "Name",
             "type": "string"
           },
-          "description": {
-            "description": "What this theoretical construct represents",
-            "title": "Description",
-            "type": "string"
+          "reasoning": {
+            "$ref": "#/components/schemas/ReasoningSpec-Output",
+            "description": "What this construct is and why the model needs it. Cite references with [n] in the text."
           },
           "indicators": {
             "default": [],
@@ -3548,7 +3527,7 @@
         "required": [
           "id",
           "name",
-          "description",
+          "reasoning",
           "indicators",
           "dynamics",
           "coefficients",
@@ -4702,9 +4681,26 @@
                       "description": "Construct name (e.g., 'stress', 'sleep_quality')",
                       "type": "string"
                     },
-                    "description": {
-                      "description": "What this theoretical construct represents",
-                      "type": "string"
+                    "reasoning": {
+                      "additionalProperties": false,
+                      "description": "A scientific explanation with a consistent list of numbered references.",
+                      "properties": {
+                        "text": {
+                          "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "reference_urls": {
+                          "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                          "items": {
+                            "format": "uri",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
                     },
                     "indicators": {
                       "additionalProperties": {
@@ -4789,11 +4785,32 @@
                                 "x-typescript-mode": "validation",
                                 "x-typescript-type": "ObservationSpec<ObservationWindow | null>"
                               },
+                              "reasoning": {
+                                "additionalProperties": false,
+                                "description": "A scientific explanation with a consistent list of numbered references.",
+                                "properties": {
+                                  "text": {
+                                    "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "reference_urls": {
+                                    "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                                    "items": {
+                                      "format": "uri",
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "type": "object"
+                              },
                               "likelihood": {
                                 "anyOf": [
                                   {
                                     "additionalProperties": false,
-                                    "description": "An indicator's conditional probability law and its scientific justification.",
+                                    "description": "An indicator's conditional probability law and observation standardization.",
                                     "properties": {
                                       "law": {
                                         "anyOf": [
@@ -7735,39 +7752,6 @@
                                       "standardized": {
                                         "description": "Whether observations are mean-centered and scaled before fitting.",
                                         "type": "boolean"
-                                      },
-                                      "reasoning": {
-                                        "description": "Why this conditional law was chosen for the indicator",
-                                        "type": "string"
-                                      },
-                                      "sources": {
-                                        "items": {
-                                          "additionalProperties": false,
-                                          "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                                          "properties": {
-                                            "title": {
-                                              "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                                              "type": "string"
-                                            },
-                                            "url": {
-                                              "anyOf": [
-                                                {
-                                                  "type": "string"
-                                                },
-                                                {
-                                                  "type": "null"
-                                                }
-                                              ],
-                                              "description": "URL of the source if available"
-                                            },
-                                            "snippet": {
-                                              "description": "Relevant excerpt or paraphrase from the source",
-                                              "type": "string"
-                                            }
-                                          },
-                                          "type": "object"
-                                        },
-                                        "type": "array"
                                       }
                                     },
                                     "type": "object"
@@ -8461,39 +8445,26 @@
                       "$ref": "#/components/schemas/ConstructId-Input",
                       "description": "Persistent identity. Preserve when revising or renaming."
                     },
-                    "description": {
-                      "description": "Theoretical justification for this causal link",
-                      "type": "string"
-                    },
-                    "sources": {
-                      "description": "Literature sources supporting this causal link",
-                      "items": {
-                        "additionalProperties": false,
-                        "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                        "properties": {
-                          "title": {
-                            "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                            "type": "string"
-                          },
-                          "url": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "description": "URL of the source if available"
-                          },
-                          "snippet": {
-                            "description": "Relevant excerpt or paraphrase from the source",
-                            "type": "string"
-                          }
+                    "reasoning": {
+                      "additionalProperties": false,
+                      "description": "A scientific explanation with a consistent list of numbered references.",
+                      "properties": {
+                        "text": {
+                          "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                          "minLength": 1,
+                          "type": "string"
                         },
-                        "type": "object"
+                        "reference_urls": {
+                          "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                          "items": {
+                            "format": "uri",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
                       },
-                      "type": "array"
+                      "type": "object"
                     }
                   },
                   "type": "object"
@@ -8514,15 +8485,32 @@
               "anyOf": [
                 {
                   "additionalProperties": false,
-                  "description": "A named uncertain quantity; fixed coefficients are literals in component slots.",
+                  "description": "A named uncertain quantity and the scientific reasoning for its place in the model.",
                   "properties": {
                     "name": {
                       "description": "Authored parameter label; relationships use its persistent ID",
                       "type": "string"
                     },
-                    "description": {
-                      "description": "Human-readable description of what this parameter represents",
-                      "type": "string"
+                    "reasoning": {
+                      "additionalProperties": false,
+                      "description": "A scientific explanation with a consistent list of numbered references.",
+                      "properties": {
+                        "text": {
+                          "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "reference_urls": {
+                          "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                          "items": {
+                            "format": "uri",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
                     },
                     "transform": {
                       "anyOf": [
@@ -8608,47 +8596,6 @@
                         }
                       ],
                       "description": "Membership in a native law in DynamicalModelSpec.distributions; may be joint. None means the law has not been assigned yet."
-                    },
-                    "reasoning": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "Why the authored prior law fits this quantity, and where its values come from."
-                    },
-                    "sources": {
-                      "description": "Evidence behind the authored prior law.",
-                      "items": {
-                        "additionalProperties": false,
-                        "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                        "properties": {
-                          "title": {
-                            "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                            "type": "string"
-                          },
-                          "url": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "description": "URL of the source if available"
-                          },
-                          "snippet": {
-                            "description": "Relevant excerpt or paraphrase from the source",
-                            "type": "string"
-                          }
-                        },
-                        "type": "object"
-                      },
-                      "type": "array"
                     }
                   },
                   "type": "object"
@@ -8805,9 +8752,31 @@
                   "description": "Construct name (e.g., 'stress', 'sleep_quality')",
                   "type": "string"
                 },
-                "description": {
-                  "description": "What this theoretical construct represents",
-                  "type": "string"
+                "reasoning": {
+                  "additionalProperties": false,
+                  "description": "A scientific explanation with a consistent list of numbered references.",
+                  "properties": {
+                    "text": {
+                      "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "reference_urls": {
+                      "default": [],
+                      "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                      "items": {
+                        "format": "uri",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "reference_urls"
+                  ],
+                  "type": "object"
                 },
                 "indicators": {
                   "additionalProperties": {
@@ -8914,11 +8883,37 @@
                         "x-typescript-mode": "serialization",
                         "x-typescript-type": "ObservationSpec<ObservationWindow | null>"
                       },
+                      "reasoning": {
+                        "additionalProperties": false,
+                        "description": "A scientific explanation with a consistent list of numbered references.",
+                        "properties": {
+                          "text": {
+                            "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "reference_urls": {
+                            "default": [],
+                            "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                            "items": {
+                              "format": "uri",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "reference_urls"
+                        ],
+                        "type": "object"
+                      },
                       "likelihood": {
                         "anyOf": [
                           {
                             "additionalProperties": false,
-                            "description": "An indicator's conditional probability law and its scientific justification.",
+                            "description": "An indicator's conditional probability law and observation standardization.",
                             "properties": {
                               "law": {
                                 "discriminator": {
@@ -12641,53 +12636,11 @@
                                 "default": false,
                                 "description": "Whether observations are mean-centered and scaled before fitting.",
                                 "type": "boolean"
-                              },
-                              "reasoning": {
-                                "description": "Why this conditional law was chosen for the indicator",
-                                "type": "string"
-                              },
-                              "sources": {
-                                "default": [],
-                                "items": {
-                                  "additionalProperties": false,
-                                  "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                                  "properties": {
-                                    "title": {
-                                      "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                                      "type": "string"
-                                    },
-                                    "url": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
-                                      ],
-                                      "default": null,
-                                      "description": "URL of the source if available"
-                                    },
-                                    "snippet": {
-                                      "description": "Relevant excerpt or paraphrase from the source",
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "title",
-                                    "url",
-                                    "snippet"
-                                  ],
-                                  "type": "object"
-                                },
-                                "type": "array"
                               }
                             },
                             "required": [
                               "law",
-                              "standardized",
-                              "reasoning",
-                              "sources"
+                              "standardized"
                             ],
                             "type": "object"
                           },
@@ -12708,6 +12661,7 @@
                     },
                     "required": [
                       "observation",
+                      "reasoning",
                       "likelihood",
                       "construct_polarity"
                     ],
@@ -13273,7 +13227,7 @@
               },
               "required": [
                 "name",
-                "description",
+                "reasoning",
                 "indicators",
                 "dynamics",
                 "coefficients",
@@ -13519,53 +13473,38 @@
                   "$ref": "#/components/schemas/ConstructId-Output",
                   "description": "Persistent identity. Preserve when revising or renaming."
                 },
-                "description": {
-                  "description": "Theoretical justification for this causal link",
-                  "type": "string"
-                },
-                "sources": {
-                  "description": "Literature sources supporting this causal link",
-                  "items": {
-                    "additionalProperties": false,
-                    "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                    "properties": {
-                      "title": {
-                        "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                        "type": "string"
-                      },
-                      "url": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "description": "URL of the source if available"
-                      },
-                      "snippet": {
-                        "description": "Relevant excerpt or paraphrase from the source",
-                        "type": "string"
-                      }
+                "reasoning": {
+                  "additionalProperties": false,
+                  "description": "A scientific explanation with a consistent list of numbered references.",
+                  "properties": {
+                    "text": {
+                      "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                      "minLength": 1,
+                      "type": "string"
                     },
-                    "required": [
-                      "title",
-                      "url",
-                      "snippet"
-                    ],
-                    "type": "object"
+                    "reference_urls": {
+                      "default": [],
+                      "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                      "items": {
+                        "format": "uri",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "text",
+                    "reference_urls"
+                  ],
+                  "type": "object"
                 }
               },
               "required": [
                 "mechanisms",
                 "cause",
                 "effect",
-                "description",
-                "sources"
+                "reasoning"
               ],
               "type": "object"
             },
@@ -13578,15 +13517,37 @@
           "parameters": {
             "additionalProperties": {
               "additionalProperties": false,
-              "description": "A named uncertain quantity; fixed coefficients are literals in component slots.",
+              "description": "A named uncertain quantity and the scientific reasoning for its place in the model.",
               "properties": {
                 "name": {
                   "description": "Authored parameter label; relationships use its persistent ID",
                   "type": "string"
                 },
-                "description": {
-                  "description": "Human-readable description of what this parameter represents",
-                  "type": "string"
+                "reasoning": {
+                  "additionalProperties": false,
+                  "description": "A scientific explanation with a consistent list of numbered references.",
+                  "properties": {
+                    "text": {
+                      "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "reference_urls": {
+                      "default": [],
+                      "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                      "items": {
+                        "format": "uri",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "reference_urls"
+                  ],
+                  "type": "object"
                 },
                 "transform": {
                   "discriminator": {
@@ -13699,64 +13660,13 @@
                   ],
                   "default": null,
                   "description": "Membership in a native law in DynamicalModelSpec.distributions; may be joint. None means the law has not been assigned yet."
-                },
-                "reasoning": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ],
-                  "default": null,
-                  "description": "Why the authored prior law fits this quantity, and where its values come from."
-                },
-                "sources": {
-                  "default": [],
-                  "description": "Evidence behind the authored prior law.",
-                  "items": {
-                    "additionalProperties": false,
-                    "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                    "properties": {
-                      "title": {
-                        "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                        "type": "string"
-                      },
-                      "url": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "description": "URL of the source if available"
-                      },
-                      "snippet": {
-                        "description": "Relevant excerpt or paraphrase from the source",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "title",
-                      "url",
-                      "snippet"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
                 }
               },
               "required": [
                 "name",
-                "description",
-                "transform",
-                "distribution",
                 "reasoning",
-                "sources"
+                "transform",
+                "distribution"
               ],
               "type": "object"
             },
@@ -17416,6 +17326,10 @@
           "observation": {
             "$ref": "#/components/schemas/ObservationSpec_Annotated_Union_ObservationWindow__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___-Input"
           },
+          "reasoning": {
+            "$ref": "#/components/schemas/ReasoningSpec-Input",
+            "description": "What this indicator measures and how it is read (for example exact, noisy or rounded), including why its observation law is appropriate. Cite references with [n] in the text."
+          },
           "likelihood": {
             "anyOf": [
               {
@@ -17434,6 +17348,7 @@
         },
         "required": [
           "observation",
+          "reasoning",
           "construct_polarity"
         ],
         "title": "IndicatorSpec",
@@ -17448,6 +17363,10 @@
         "properties": {
           "observation": {
             "$ref": "#/components/schemas/ObservationSpec_Annotated_Union_ObservationWindow__NoneType___FieldInfo_annotation_NoneType__required_False__default_None___-Output"
+          },
+          "reasoning": {
+            "$ref": "#/components/schemas/ReasoningSpec-Output",
+            "description": "What this indicator measures and how it is read (for example exact, noisy or rounded), including why its observation law is appropriate. Cite references with [n] in the text."
           },
           "likelihood": {
             "anyOf": [
@@ -17467,6 +17386,7 @@
         },
         "required": [
           "observation",
+          "reasoning",
           "likelihood",
           "construct_polarity"
         ],
@@ -18662,7 +18582,7 @@
       },
       "LikelihoodSpec-Input": {
         "additionalProperties": false,
-        "description": "An indicator's conditional probability law and its scientific justification.",
+        "description": "An indicator's conditional probability law and observation standardization.",
         "properties": {
           "law": {
             "$ref": "#/components/schemas/ObservationLawSpec-Input"
@@ -18672,24 +18592,10 @@
             "description": "Whether observations are mean-centered and scaled before fitting.",
             "title": "Standardized",
             "type": "boolean"
-          },
-          "reasoning": {
-            "description": "Why this conditional law was chosen for the indicator",
-            "title": "Reasoning",
-            "type": "string"
-          },
-          "sources": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/LiteratureSource-Input"
-            },
-            "title": "Sources",
-            "type": "array"
           }
         },
         "required": [
-          "law",
-          "reasoning"
+          "law"
         ],
         "title": "LikelihoodSpec",
         "type": "object",
@@ -18699,7 +18605,7 @@
       },
       "LikelihoodSpec-Output": {
         "additionalProperties": false,
-        "description": "An indicator's conditional probability law and its scientific justification.",
+        "description": "An indicator's conditional probability law and observation standardization.",
         "properties": {
           "law": {
             "$ref": "#/components/schemas/ObservationLawSpec-Output"
@@ -18709,26 +18615,11 @@
             "description": "Whether observations are mean-centered and scaled before fitting.",
             "title": "Standardized",
             "type": "boolean"
-          },
-          "reasoning": {
-            "description": "Why this conditional law was chosen for the indicator",
-            "title": "Reasoning",
-            "type": "string"
-          },
-          "sources": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/LiteratureSource-Output"
-            },
-            "title": "Sources",
-            "type": "array"
           }
         },
         "required": [
           "law",
-          "standardized",
-          "reasoning",
-          "sources"
+          "standardized"
         ],
         "title": "LikelihoodSpec",
         "type": "object",
@@ -18782,83 +18673,6 @@
         "title": "LiteralExpression",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.model.expressions",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "LiteratureSource-Input": {
-        "additionalProperties": false,
-        "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-        "properties": {
-          "title": {
-            "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-            "title": "Title",
-            "type": "string"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "URL of the source if available",
-            "title": "Url"
-          },
-          "snippet": {
-            "description": "Relevant excerpt or paraphrase from the source",
-            "title": "Snippet",
-            "type": "string"
-          }
-        },
-        "required": [
-          "title",
-          "snippet"
-        ],
-        "title": "LiteratureSource",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.model.evidence",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "LiteratureSource-Output": {
-        "additionalProperties": false,
-        "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-        "properties": {
-          "title": {
-            "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-            "title": "Title",
-            "type": "string"
-          },
-          "url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "URL of the source if available",
-            "title": "Url"
-          },
-          "snippet": {
-            "description": "Relevant excerpt or paraphrase from the source",
-            "title": "Snippet",
-            "type": "string"
-          }
-        },
-        "required": [
-          "title",
-          "url",
-          "snippet"
-        ],
-        "title": "LiteratureSource",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.model.evidence",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -21326,7 +21140,7 @@
       },
       "ParameterSpec-Input": {
         "additionalProperties": false,
-        "description": "A named uncertain quantity; fixed coefficients are literals in component slots.",
+        "description": "A named uncertain quantity and the scientific reasoning for its place in the model.",
         "properties": {
           "id": {
             "$ref": "#/components/schemas/ParameterId-Input"
@@ -21336,10 +21150,9 @@
             "title": "Name",
             "type": "string"
           },
-          "description": {
-            "description": "Human-readable description of what this parameter represents",
-            "title": "Description",
-            "type": "string"
+          "reasoning": {
+            "$ref": "#/components/schemas/ReasoningSpec-Input",
+            "description": "What this quantity means and, for an informative prior, where its values come from. Cite references with [n] in the text."
           },
           "transform": {
             "$ref": "#/components/schemas/ParameterTransformSpec-Input"
@@ -21355,34 +21168,12 @@
             ],
             "default": null,
             "description": "Membership in a native law in DynamicalModelSpec.distributions; may be joint. None means the law has not been assigned yet."
-          },
-          "reasoning": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Why the authored prior law fits this quantity, and where its values come from.",
-            "title": "Reasoning"
-          },
-          "sources": {
-            "default": [],
-            "description": "Evidence behind the authored prior law.",
-            "items": {
-              "$ref": "#/components/schemas/LiteratureSource-Input"
-            },
-            "title": "Sources",
-            "type": "array"
           }
         },
         "required": [
           "id",
           "name",
-          "description"
+          "reasoning"
         ],
         "title": "ParameterSpec",
         "type": "object",
@@ -21392,7 +21183,7 @@
       },
       "ParameterSpec-Output": {
         "additionalProperties": false,
-        "description": "A named uncertain quantity; fixed coefficients are literals in component slots.",
+        "description": "A named uncertain quantity and the scientific reasoning for its place in the model.",
         "properties": {
           "id": {
             "$ref": "#/components/schemas/ParameterId-Output"
@@ -21402,10 +21193,9 @@
             "title": "Name",
             "type": "string"
           },
-          "description": {
-            "description": "Human-readable description of what this parameter represents",
-            "title": "Description",
-            "type": "string"
+          "reasoning": {
+            "$ref": "#/components/schemas/ReasoningSpec-Output",
+            "description": "What this quantity means and, for an informative prior, where its values come from. Cite references with [n] in the text."
           },
           "transform": {
             "$ref": "#/components/schemas/ParameterTransformSpec-Output"
@@ -21421,38 +21211,14 @@
             ],
             "default": null,
             "description": "Membership in a native law in DynamicalModelSpec.distributions; may be joint. None means the law has not been assigned yet."
-          },
-          "reasoning": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null,
-            "description": "Why the authored prior law fits this quantity, and where its values come from.",
-            "title": "Reasoning"
-          },
-          "sources": {
-            "default": [],
-            "description": "Evidence behind the authored prior law.",
-            "items": {
-              "$ref": "#/components/schemas/LiteratureSource-Output"
-            },
-            "title": "Sources",
-            "type": "array"
           }
         },
         "required": [
           "id",
           "name",
-          "description",
-          "transform",
-          "distribution",
           "reasoning",
-          "sources"
+          "transform",
+          "distribution"
         ],
         "title": "ParameterSpec",
         "type": "object",
@@ -23229,6 +22995,69 @@
         "type": "object",
         "x-python-module": "grassmoth.artifacts.reports.scorecard",
         "x-layer": "findings",
+        "x-concern": "scientific_model"
+      },
+      "ReasoningSpec-Input": {
+        "additionalProperties": false,
+        "description": "A scientific explanation with a consistent list of numbered references.",
+        "properties": {
+          "text": {
+            "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "reference_urls": {
+            "default": [],
+            "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+            "items": {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Reference Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "ReasoningSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.model.reasoning",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ReasoningSpec-Output": {
+        "additionalProperties": false,
+        "description": "A scientific explanation with a consistent list of numbered references.",
+        "properties": {
+          "text": {
+            "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "reference_urls": {
+            "default": [],
+            "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+            "items": {
+              "format": "uri",
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Reference Urls",
+            "type": "array"
+          }
+        },
+        "required": [
+          "text",
+          "reference_urls"
+        ],
+        "title": "ReasoningSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.model.reasoning",
+        "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "RecordDependency": {
@@ -26433,9 +26262,26 @@
                       "description": "Construct name (e.g., 'stress', 'sleep_quality')",
                       "type": "string"
                     },
-                    "description": {
-                      "description": "What this theoretical construct represents",
-                      "type": "string"
+                    "reasoning": {
+                      "additionalProperties": false,
+                      "description": "A scientific explanation with a consistent list of numbered references.",
+                      "properties": {
+                        "text": {
+                          "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "reference_urls": {
+                          "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                          "items": {
+                            "format": "uri",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
                     },
                     "indicators": {
                       "additionalProperties": {
@@ -26520,11 +26366,32 @@
                                 "x-typescript-mode": "validation",
                                 "x-typescript-type": "ObservationSpec<ObservationWindow | null>"
                               },
+                              "reasoning": {
+                                "additionalProperties": false,
+                                "description": "A scientific explanation with a consistent list of numbered references.",
+                                "properties": {
+                                  "text": {
+                                    "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                                    "minLength": 1,
+                                    "type": "string"
+                                  },
+                                  "reference_urls": {
+                                    "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                                    "items": {
+                                      "format": "uri",
+                                      "minLength": 1,
+                                      "type": "string"
+                                    },
+                                    "type": "array"
+                                  }
+                                },
+                                "type": "object"
+                              },
                               "likelihood": {
                                 "anyOf": [
                                   {
                                     "additionalProperties": false,
-                                    "description": "An indicator's conditional probability law and its scientific justification.",
+                                    "description": "An indicator's conditional probability law and observation standardization.",
                                     "properties": {
                                       "law": {
                                         "anyOf": [
@@ -29466,39 +29333,6 @@
                                       "standardized": {
                                         "description": "Whether observations are mean-centered and scaled before fitting.",
                                         "type": "boolean"
-                                      },
-                                      "reasoning": {
-                                        "description": "Why this conditional law was chosen for the indicator",
-                                        "type": "string"
-                                      },
-                                      "sources": {
-                                        "items": {
-                                          "additionalProperties": false,
-                                          "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                                          "properties": {
-                                            "title": {
-                                              "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                                              "type": "string"
-                                            },
-                                            "url": {
-                                              "anyOf": [
-                                                {
-                                                  "type": "string"
-                                                },
-                                                {
-                                                  "type": "null"
-                                                }
-                                              ],
-                                              "description": "URL of the source if available"
-                                            },
-                                            "snippet": {
-                                              "description": "Relevant excerpt or paraphrase from the source",
-                                              "type": "string"
-                                            }
-                                          },
-                                          "type": "object"
-                                        },
-                                        "type": "array"
                                       }
                                     },
                                     "type": "object"
@@ -30192,39 +30026,26 @@
                       "$ref": "#/components/schemas/ConstructId-Input",
                       "description": "Persistent identity. Preserve when revising or renaming."
                     },
-                    "description": {
-                      "description": "Theoretical justification for this causal link",
-                      "type": "string"
-                    },
-                    "sources": {
-                      "description": "Literature sources supporting this causal link",
-                      "items": {
-                        "additionalProperties": false,
-                        "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                        "properties": {
-                          "title": {
-                            "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                            "type": "string"
-                          },
-                          "url": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "description": "URL of the source if available"
-                          },
-                          "snippet": {
-                            "description": "Relevant excerpt or paraphrase from the source",
-                            "type": "string"
-                          }
+                    "reasoning": {
+                      "additionalProperties": false,
+                      "description": "A scientific explanation with a consistent list of numbered references.",
+                      "properties": {
+                        "text": {
+                          "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                          "minLength": 1,
+                          "type": "string"
                         },
-                        "type": "object"
+                        "reference_urls": {
+                          "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                          "items": {
+                            "format": "uri",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
                       },
-                      "type": "array"
+                      "type": "object"
                     }
                   },
                   "type": "object"
@@ -30245,15 +30066,32 @@
               "anyOf": [
                 {
                   "additionalProperties": false,
-                  "description": "A named uncertain quantity; fixed coefficients are literals in component slots.",
+                  "description": "A named uncertain quantity and the scientific reasoning for its place in the model.",
                   "properties": {
                     "name": {
                       "description": "Authored parameter label; relationships use its persistent ID",
                       "type": "string"
                     },
-                    "description": {
-                      "description": "Human-readable description of what this parameter represents",
-                      "type": "string"
+                    "reasoning": {
+                      "additionalProperties": false,
+                      "description": "A scientific explanation with a consistent list of numbered references.",
+                      "properties": {
+                        "text": {
+                          "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                          "minLength": 1,
+                          "type": "string"
+                        },
+                        "reference_urls": {
+                          "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                          "items": {
+                            "format": "uri",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
                     },
                     "transform": {
                       "anyOf": [
@@ -30339,47 +30177,6 @@
                         }
                       ],
                       "description": "Membership in a native law in DynamicalModelSpec.distributions; may be joint. None means the law has not been assigned yet."
-                    },
-                    "reasoning": {
-                      "anyOf": [
-                        {
-                          "type": "string"
-                        },
-                        {
-                          "type": "null"
-                        }
-                      ],
-                      "description": "Why the authored prior law fits this quantity, and where its values come from."
-                    },
-                    "sources": {
-                      "description": "Evidence behind the authored prior law.",
-                      "items": {
-                        "additionalProperties": false,
-                        "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                        "properties": {
-                          "title": {
-                            "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                            "type": "string"
-                          },
-                          "url": {
-                            "anyOf": [
-                              {
-                                "type": "string"
-                              },
-                              {
-                                "type": "null"
-                              }
-                            ],
-                            "description": "URL of the source if available"
-                          },
-                          "snippet": {
-                            "description": "Relevant excerpt or paraphrase from the source",
-                            "type": "string"
-                          }
-                        },
-                        "type": "object"
-                      },
-                      "type": "array"
                     }
                   },
                   "type": "object"
@@ -30536,9 +30333,31 @@
                   "description": "Construct name (e.g., 'stress', 'sleep_quality')",
                   "type": "string"
                 },
-                "description": {
-                  "description": "What this theoretical construct represents",
-                  "type": "string"
+                "reasoning": {
+                  "additionalProperties": false,
+                  "description": "A scientific explanation with a consistent list of numbered references.",
+                  "properties": {
+                    "text": {
+                      "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "reference_urls": {
+                      "default": [],
+                      "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                      "items": {
+                        "format": "uri",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "reference_urls"
+                  ],
+                  "type": "object"
                 },
                 "indicators": {
                   "additionalProperties": {
@@ -30645,11 +30464,37 @@
                         "x-typescript-mode": "serialization",
                         "x-typescript-type": "ObservationSpec<ObservationWindow | null>"
                       },
+                      "reasoning": {
+                        "additionalProperties": false,
+                        "description": "A scientific explanation with a consistent list of numbered references.",
+                        "properties": {
+                          "text": {
+                            "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                            "minLength": 1,
+                            "type": "string"
+                          },
+                          "reference_urls": {
+                            "default": [],
+                            "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                            "items": {
+                              "format": "uri",
+                              "minLength": 1,
+                              "type": "string"
+                            },
+                            "type": "array"
+                          }
+                        },
+                        "required": [
+                          "text",
+                          "reference_urls"
+                        ],
+                        "type": "object"
+                      },
                       "likelihood": {
                         "anyOf": [
                           {
                             "additionalProperties": false,
-                            "description": "An indicator's conditional probability law and its scientific justification.",
+                            "description": "An indicator's conditional probability law and observation standardization.",
                             "properties": {
                               "law": {
                                 "discriminator": {
@@ -34372,53 +34217,11 @@
                                 "default": false,
                                 "description": "Whether observations are mean-centered and scaled before fitting.",
                                 "type": "boolean"
-                              },
-                              "reasoning": {
-                                "description": "Why this conditional law was chosen for the indicator",
-                                "type": "string"
-                              },
-                              "sources": {
-                                "default": [],
-                                "items": {
-                                  "additionalProperties": false,
-                                  "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                                  "properties": {
-                                    "title": {
-                                      "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                                      "type": "string"
-                                    },
-                                    "url": {
-                                      "anyOf": [
-                                        {
-                                          "type": "string"
-                                        },
-                                        {
-                                          "type": "null"
-                                        }
-                                      ],
-                                      "default": null,
-                                      "description": "URL of the source if available"
-                                    },
-                                    "snippet": {
-                                      "description": "Relevant excerpt or paraphrase from the source",
-                                      "type": "string"
-                                    }
-                                  },
-                                  "required": [
-                                    "title",
-                                    "url",
-                                    "snippet"
-                                  ],
-                                  "type": "object"
-                                },
-                                "type": "array"
                               }
                             },
                             "required": [
                               "law",
-                              "standardized",
-                              "reasoning",
-                              "sources"
+                              "standardized"
                             ],
                             "type": "object"
                           },
@@ -34439,6 +34242,7 @@
                     },
                     "required": [
                       "observation",
+                      "reasoning",
                       "likelihood",
                       "construct_polarity"
                     ],
@@ -35004,7 +34808,7 @@
               },
               "required": [
                 "name",
-                "description",
+                "reasoning",
                 "indicators",
                 "dynamics",
                 "coefficients",
@@ -35250,53 +35054,38 @@
                   "$ref": "#/components/schemas/ConstructId-Output",
                   "description": "Persistent identity. Preserve when revising or renaming."
                 },
-                "description": {
-                  "description": "Theoretical justification for this causal link",
-                  "type": "string"
-                },
-                "sources": {
-                  "description": "Literature sources supporting this causal link",
-                  "items": {
-                    "additionalProperties": false,
-                    "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                    "properties": {
-                      "title": {
-                        "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                        "type": "string"
-                      },
-                      "url": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "description": "URL of the source if available"
-                      },
-                      "snippet": {
-                        "description": "Relevant excerpt or paraphrase from the source",
-                        "type": "string"
-                      }
+                "reasoning": {
+                  "additionalProperties": false,
+                  "description": "A scientific explanation with a consistent list of numbered references.",
+                  "properties": {
+                    "text": {
+                      "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                      "minLength": 1,
+                      "type": "string"
                     },
-                    "required": [
-                      "title",
-                      "url",
-                      "snippet"
-                    ],
-                    "type": "object"
+                    "reference_urls": {
+                      "default": [],
+                      "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                      "items": {
+                        "format": "uri",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
                   },
-                  "type": "array"
+                  "required": [
+                    "text",
+                    "reference_urls"
+                  ],
+                  "type": "object"
                 }
               },
               "required": [
                 "mechanisms",
                 "cause",
                 "effect",
-                "description",
-                "sources"
+                "reasoning"
               ],
               "type": "object"
             },
@@ -35309,15 +35098,37 @@
           "parameters": {
             "additionalProperties": {
               "additionalProperties": false,
-              "description": "A named uncertain quantity; fixed coefficients are literals in component slots.",
+              "description": "A named uncertain quantity and the scientific reasoning for its place in the model.",
               "properties": {
                 "name": {
                   "description": "Authored parameter label; relationships use its persistent ID",
                   "type": "string"
                 },
-                "description": {
-                  "description": "Human-readable description of what this parameter represents",
-                  "type": "string"
+                "reasoning": {
+                  "additionalProperties": false,
+                  "description": "A scientific explanation with a consistent list of numbered references.",
+                  "properties": {
+                    "text": {
+                      "description": "Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.",
+                      "minLength": 1,
+                      "type": "string"
+                    },
+                    "reference_urls": {
+                      "default": [],
+                      "description": "URLs cited by [n] in text, ordered by their 1-based citation number.",
+                      "items": {
+                        "format": "uri",
+                        "minLength": 1,
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "text",
+                    "reference_urls"
+                  ],
+                  "type": "object"
                 },
                 "transform": {
                   "discriminator": {
@@ -35430,64 +35241,13 @@
                   ],
                   "default": null,
                   "description": "Membership in a native law in DynamicalModelSpec.distributions; may be joint. None means the law has not been assigned yet."
-                },
-                "reasoning": {
-                  "anyOf": [
-                    {
-                      "type": "string"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ],
-                  "default": null,
-                  "description": "Why the authored prior law fits this quantity, and where its values come from."
-                },
-                "sources": {
-                  "default": [],
-                  "description": "Evidence behind the authored prior law.",
-                  "items": {
-                    "additionalProperties": false,
-                    "description": "A literature source records cited evidence supporting a scientific modeling decision.",
-                    "properties": {
-                      "title": {
-                        "description": "Title of the source (paper, meta-analysis, textbook, etc.)",
-                        "type": "string"
-                      },
-                      "url": {
-                        "anyOf": [
-                          {
-                            "type": "string"
-                          },
-                          {
-                            "type": "null"
-                          }
-                        ],
-                        "default": null,
-                        "description": "URL of the source if available"
-                      },
-                      "snippet": {
-                        "description": "Relevant excerpt or paraphrase from the source",
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "title",
-                      "url",
-                      "snippet"
-                    ],
-                    "type": "object"
-                  },
-                  "type": "array"
                 }
               },
               "required": [
                 "name",
-                "description",
-                "transform",
-                "distribution",
                 "reasoning",
-                "sources"
+                "transform",
+                "distribution"
               ],
               "type": "object"
             },

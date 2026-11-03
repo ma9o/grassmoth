@@ -133,7 +133,10 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
       "constructs": {
         "construct:00000000000000000001": {
           "name": "baseline",
-          "description": "Synthetic baseline for interface examples.",
+          "reasoning": {
+            "text": "Synthetic baseline for interface examples.",
+            "reference_urls": []
+          },
           "indicators": {},
           "dynamics": {},
           "coefficients": [],
@@ -144,7 +147,10 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
         },
         "construct:00000000000000000002": {
           "name": "treatment",
-          "description": "Synthetic treatment for interface examples.",
+          "reasoning": {
+            "text": "Synthetic treatment for interface examples.",
+            "reference_urls": []
+          },
           "indicators": {},
           "dynamics": {},
           "coefficients": [],
@@ -155,7 +161,10 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
         },
         "construct:00000000000000000003": {
           "name": "outcome",
-          "description": "Synthetic outcome for interface examples.",
+          "reasoning": {
+            "text": "Synthetic outcome for interface examples.",
+            "reference_urls": []
+          },
           "indicators": {},
           "dynamics": {},
           "coefficients": [],
@@ -168,15 +177,19 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
       "edges": {
         "edge:00000000000000000001": {
           "mechanisms": {},
-          "description": "Baseline affects treatment.",
-          "sources": [],
+          "reasoning": {
+            "text": "Baseline affects treatment.",
+            "reference_urls": []
+          },
           "cause": "construct:00000000000000000001",
           "effect": "construct:00000000000000000002"
         },
         "edge:00000000000000000002": {
           "mechanisms": {},
-          "description": "Treatment affects the outcome.",
-          "sources": [],
+          "reasoning": {
+            "text": "Treatment affects the outcome.",
+            "reference_urls": []
+          },
           "cause": "construct:00000000000000000002",
           "effect": "construct:00000000000000000003"
         }

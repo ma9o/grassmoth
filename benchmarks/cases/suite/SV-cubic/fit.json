@@ -2,7 +2,6 @@
   "constructs": {
     "construct:h": {
       "name": "log_variance",
-      "description": "Daily log-variance of percent returns around its long-run level",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -158,11 +157,16 @@
                 }
               }
             },
-            "standardized": false,
-            "reasoning": "A Normal(0, exp(p/2)) return has square Gamma(1/2, rate 1/(2 exp(p))); |r| depends on no parameter, so the posterior is unchanged."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "A Normal(0, exp(p/2)) return has square Gamma(1/2, rate 1/(2 exp(p))); |r| depends on no parameter, so the posterior is unchanged."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Daily log-variance of percent returns around its long-run level"
       }
     }
   },
@@ -170,18 +174,24 @@
   "parameters": {
     "parameter:880c309512b418fec2f84448c184ed176e09ee71a5f08228997383837b1deeb8": {
       "name": "level",
-      "description": "Long-run log-variance of daily percent returns",
-      "distribution": "distribution:prior-sv-level"
+      "distribution": "distribution:prior-sv-level",
+      "reasoning": {
+        "text": "Long-run log-variance of daily percent returns"
+      }
     },
     "parameter:13f16533dcd0153daa8294893366e785f98ce83bd4cc5b17cf046406a3711b96": {
       "name": "decay",
-      "description": "Daily mean-reversion rate of the log-variance; persistence is 1 - decay",
-      "distribution": "distribution:prior-sv-decay"
+      "distribution": "distribution:prior-sv-decay",
+      "reasoning": {
+        "text": "Daily mean-reversion rate of the log-variance; persistence is 1 - decay"
+      }
     },
     "parameter:f1ffd89daa71e4eb82bffebfcbb3d0d14f07a311cb81517a1936558916dd12a0": {
       "name": "vol_of_vol",
-      "description": "Diffusion scale of the log-variance per square-root day",
-      "distribution": "distribution:prior-sv-vol_of_vol"
+      "distribution": "distribution:prior-sv-vol_of_vol",
+      "reasoning": {
+        "text": "Diffusion scale of the log-variance per square-root day"
+      }
     }
   },
   "distributions": {

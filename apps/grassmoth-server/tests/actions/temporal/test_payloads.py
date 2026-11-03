@@ -23,8 +23,10 @@ def test_prior_request_round_trips_through_a_cold_workflow_sandbox():
     model["parameters"] = {
         parameter_id: {
             "name": "baseline",
-            "description": "Initial symptom burden",
             "distribution": "distribution:baseline",
+            "reasoning": {
+                "text": "Initial symptom burden. A symmetric Beta law bounds synthetic symptom burden between zero and one."
+            },
         }
     }
     model["distributions"] = {

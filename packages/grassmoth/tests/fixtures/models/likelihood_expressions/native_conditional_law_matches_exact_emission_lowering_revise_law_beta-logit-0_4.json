@@ -90,7 +90,5 @@
       }
     }
   },
-  "standardized": false,
-  "reasoning": "Native density parity",
-  "sources": []
+  "standardized": false
 }

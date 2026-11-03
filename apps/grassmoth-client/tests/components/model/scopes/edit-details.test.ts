@@ -140,8 +140,14 @@ describe("edit change summaries after history compaction", () => {
               name: fixtureValue(context.entities.constructById.get(edge.cause.id)).name,
             },
           },
-          edges: { [edge.id]: { description: "Changed causal assumption" } },
-          parameters: { [parameter.id]: { reasoning: "Changed prior justification" } },
+          edges: {
+            [edge.id]: { reasoning: { text: "Changed causal assumption", reference_urls: [] } },
+          },
+          parameters: {
+            [parameter.id]: {
+              reasoning: { text: "Changed prior justification", reference_urls: [] },
+            },
+          },
           measurement_clock: null,
         },
       },

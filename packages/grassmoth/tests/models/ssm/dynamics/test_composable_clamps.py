@@ -118,10 +118,10 @@ def test_model_input_paths_hold_and_interventions_override_later_points(monkeypa
     dynamical_model_spec = _exact_model_model()
     dose = dynamical_model_spec.constructs[0]
     indicator = dose.indicators[0].revised(
+        reasoning={"text": "Given dose total"},
         observation=dose.indicators[0].observation.revised(aggregation="sum"),
         likelihood=LikelihoodSpec(
             law=DeltaLawSpec(v=state(dose.id)),
-            reasoning="Given dose total",
         ),
     )
     layout = JointLawLayout(parameters=(), constructs=(dose.id,), time_points=(-2, 2, 4), labels={})

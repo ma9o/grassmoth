@@ -11,6 +11,7 @@ import type { ScopeContext } from "@/lib/model-asset/scope";
 import { humanize } from "@/lib/model-asset/selection";
 import { Hint, KeyValue, Section, StatusIcon } from "../scope-primitives";
 import { EmpiricalPlot, SimulationHistory } from "./recorded-history";
+import { Reasoning } from "./reasoning";
 
 function interval(days: number | "model_clock"): string {
   return days === "model_clock" ? "model clock tick" : `${days} d`;
@@ -60,7 +61,7 @@ function ParameterLawSections({
       const diagnostics = rows.filter((row) => row.subject.parameter_id === parameter.id);
       return (
         <Section key={parameter.id} title={label.charAt(0).toUpperCase() + label.slice(1)}>
-          <Hint>{humanize(parameter.description)}</Hint>
+          <Reasoning value={parameter.reasoning} muted />
           {curve ? (
             <LawChart curve={curve} caption={humanize(parameter.name)} />
           ) : (

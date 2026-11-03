@@ -32,6 +32,7 @@ from grassmoth.artifacts.model.parameter_spec import (
     InitialCorrelationTransformSpec,
     ParameterSpec,
 )
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.observations.semantics import SummaryOperator
 from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
@@ -217,6 +218,7 @@ def _manifest_standardization_of_constant_column_centers_without_scaling__make_s
     latent_0_revised = latent_0.revised(
         indicators=(
             IndicatorSpec(
+                reasoning=ReasoningSpec(text="Test likelihood"),
                 observation=AuthoredObservationSpec(
                     id=_X_INDICATOR_ID,
                     name="x",
@@ -235,7 +237,6 @@ def _manifest_standardization_of_constant_column_centers_without_scaling__make_s
                         ),
                     ),
                     standardized=True,
-                    reasoning="Test likelihood",
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
@@ -251,8 +252,10 @@ def _manifest_standardization_of_constant_column_centers_without_scaling__make_s
             ParameterSpec(
                 id=_LATENT_0_X_MANIFEST_VAR_DIAG_PARAMETER_ID,
                 name=_LATENT_0_X_MANIFEST_VAR_DIAG_PARAMETER_ID,
-                description="Fixture quantity",
                 distribution=_LATENT_0_X_MANIFEST_VAR_DIAG_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="Fixture quantity. Synthetic prior for Fixture quantity; its values define this test scenario."
+                ),
             ),
         ),
         distributions={
@@ -280,6 +283,7 @@ def _stress_interval_model(window="31d") -> DynamicalModelSpec:
     latent_0_revised = latent_0.revised(
         indicators=(
             IndicatorSpec(
+                reasoning=ReasoningSpec(text="Test likelihood"),
                 observation=AuthoredObservationSpec(
                     id=_STRESS_SCORE_INDICATOR_ID,
                     name="stress_score",
@@ -298,7 +302,6 @@ def _stress_interval_model(window="31d") -> DynamicalModelSpec:
                             "observation_scale",
                         ),
                     ),
-                    reasoning="Test likelihood",
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
@@ -314,8 +317,10 @@ def _stress_interval_model(window="31d") -> DynamicalModelSpec:
             ParameterSpec(
                 id=_LATENT_0_STRESS_SCORE_MANIFEST_VAR_DIAG_PARAMETER_ID,
                 name=_LATENT_0_STRESS_SCORE_MANIFEST_VAR_DIAG_PARAMETER_ID,
-                description="Fixture quantity",
                 distribution=_LATENT_0_STRESS_SCORE_MANIFEST_VAR_DIAG_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="Fixture quantity. Synthetic prior for Fixture quantity; its values define this test scenario."
+                ),
             ),
         ),
         distributions={

@@ -10,6 +10,7 @@ from grassmoth.artifacts.model.construct import ConstructSpec, Role, TemporalSta
 from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.indicator import IndicatorPolarity, IndicatorSpec
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.semantics import SummaryOperator
 from grassmoth.artifacts.observations.spec import (
     AuthoredObservationSpec,
@@ -41,11 +42,12 @@ def construct_factory():
         return ConstructSpec(
             id=identity,
             name=name,
-            description=f"{name} description",
+            reasoning=ReasoningSpec(text=f"{name} description"),
             role=role,
             temporal_status=temporal_status,
             indicators=(
                 IndicatorSpec(
+                    reasoning=ReasoningSpec(text="Given reading"),
                     observation=AuthoredObservationSpec(
                         observation_window=None,
                         id=fixture_entity_id("indicator", name),
@@ -56,7 +58,6 @@ def construct_factory():
                     construct_polarity="positive",
                     likelihood=LikelihoodSpec(
                         law=DeltaLawSpec(v=state(identity)),
-                        reasoning="Given reading",
                     ),
                 ),
             )
@@ -83,6 +84,9 @@ def indicator_factory():
         construct_polarity: IndicatorPolarity = IndicatorPolarity.POSITIVE,
     ) -> IndicatorSpec:
         return IndicatorSpec(
+            reasoning=ReasoningSpec(
+                text="Synthetic measurement of the construct for this test scenario."
+            ),
             observation=AuthoredObservationSpec(
                 observation_window=None,
                 id=fixture_entity_id("indicator", name),

@@ -2,7 +2,6 @@
   "constructs": {
     "construct:766f6091724c163a3404": {
       "name": "u_shared",
-      "description": "Shared static confounder",
       "indicators": {},
       "dynamics": {},
       "coefficients": [
@@ -22,11 +21,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_invariant"
+      "temporal_status": "time_invariant",
+      "reasoning": {
+        "text": "Shared static confounder"
+      }
     },
     "construct:6b04dc42c531e7091eb8": {
       "name": "stress",
-      "description": "Stress",
       "indicators": {
         "indicator:3696aef3ff6f446744e5": {
           "likelihood": {
@@ -63,9 +64,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -75,6 +74,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -190,11 +192,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Stress"
+      }
     },
     "construct:cdc0b2958a9512b2abad": {
       "name": "sleep",
-      "description": "Sleep",
       "indicators": {
         "indicator:7f807162156d3eb1b611": {
           "likelihood": {
@@ -231,9 +235,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -243,6 +245,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -358,66 +363,81 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Sleep"
+      }
     }
   },
   "edges": {
     "edge:0e72c3c33116c415bd39": {
       "mechanisms": {},
-      "description": "Shared baseline causes stress",
-      "sources": [],
       "cause": "construct:766f6091724c163a3404",
-      "effect": "construct:6b04dc42c531e7091eb8"
+      "effect": "construct:6b04dc42c531e7091eb8",
+      "reasoning": {
+        "text": "Shared baseline causes stress"
+      }
     },
     "edge:a1528b0e1cd05dd511ef": {
       "mechanisms": {},
-      "description": "Shared baseline causes sleep",
-      "sources": [],
       "cause": "construct:766f6091724c163a3404",
-      "effect": "construct:cdc0b2958a9512b2abad"
+      "effect": "construct:cdc0b2958a9512b2abad",
+      "reasoning": {
+        "text": "Shared baseline causes sleep"
+      }
     }
   },
   "parameters": {
     "parameter:cf1ee9c9b96a4a8d7ce3608b03090754c0d1b87a9fe9c2469341052b058ea022": {
       "name": "rho_stress",
-      "description": "stiffness of rho_stress",
       "distribution": "distribution:f9fcb060182679d7dcb683cf3ee83642b0ab3b13b778a99aea64f35b5caa651c",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_stress. Synthetic Beta prior for rho_stress; its values define this test scenario."
       }
     },
     "parameter:4ac3bc41fd4b20007a0464ca5565fa3039fa65aa7f979869b38184c760453c87": {
       "name": "rho_sleep",
-      "description": "stiffness of rho_sleep",
       "distribution": "distribution:3f4c7297700f670ab15c42ddca5cd1903bc430db6ba2c7c220ac5260e51dac64",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_sleep. Synthetic Beta prior for rho_sleep; its values define this test scenario."
       }
     },
     "parameter:a2113913d29155f9c976efb0a5150ae1b3994e86c0809bc948bb615ed5ddc793": {
       "name": "sigma_stress",
-      "description": "innovation.scale for sigma_stress",
       "distribution": "distribution:0e23e00ec4f5fc46b707b8697ae926d166d0623b4c712d974d86070dac45b617",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_stress. Synthetic HalfNormal prior for sigma_stress; its values define this test scenario."
       }
     },
     "parameter:8bce948d54f6a98b8a7c8e55c08787dce1ef73cc78daf24034b72c41ac44f64c": {
       "name": "sigma_sleep",
-      "description": "innovation.scale for sigma_sleep",
       "distribution": "distribution:d6c458a6b58bc50dfc0cce390e8477a668a66e5bba7042d86d8201c8e75519a7",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_sleep. Synthetic HalfNormal prior for sigma_sleep; its values define this test scenario."
       }
     },
     "parameter:bcea33f691b78f68f2dc48b00a1ee23f22ad1e719c1eafc353ce7419a0e618c3": {
       "name": "tau_u_shared",
-      "description": "initial state.scale for tau_u_shared",
       "distribution": "distribution:d92fccda7e9e1f070fffa894bb43432aac86200ba98bd8aa416234ad4ba0ce89",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "initial state.scale for tau_u_shared. Synthetic HalfNormal prior for tau_u_shared; its values define this test scenario."
       }
     }
   },

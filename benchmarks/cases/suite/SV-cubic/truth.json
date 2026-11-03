@@ -2,7 +2,6 @@
   "constructs": {
     "construct:h": {
       "name": "log_variance",
-      "description": "Daily log-variance of percent returns around its long-run level",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -158,11 +157,16 @@
                 }
               }
             },
-            "standardized": false,
-            "reasoning": "A Normal(0, exp(p/2)) return has square Gamma(1/2, rate 1/(2 exp(p))); |r| depends on no parameter, so the posterior is unchanged."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "A Normal(0, exp(p/2)) return has square Gamma(1/2, rate 1/(2 exp(p))); |r| depends on no parameter, so the posterior is unchanged."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Daily log-variance of percent returns around its long-run level"
       }
     }
   },

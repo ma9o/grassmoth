@@ -35,7 +35,7 @@ def _quantity_curves_put_authored_laws_on_the_posterior_scale_complete_test_mode
         for edge in dynamical_model_spec.edges
         if edge.cause.id == x.id and edge.effect.id == y.id
     )
-    return dynamical_model_spec.with_entities(edges=(x_to_y.revised(description="X"),))
+    return dynamical_model_spec.with_entities(edges=(x_to_y.revised(reasoning={"text": "X"}),))
 
 
 if TYPE_CHECKING:

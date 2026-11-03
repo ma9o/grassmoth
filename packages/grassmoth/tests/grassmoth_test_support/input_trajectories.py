@@ -27,9 +27,8 @@ def deterministic_input_model(*, measured=False, time_origin="relative"):
         distribution=layout.distribution_id,
         indicators=(
             source.indicators[0].revised(
-                likelihood=LikelihoodSpec(
-                    law=DeltaLawSpec(v=state(source.id)), reasoning="Exact known input"
-                ),
+                reasoning={"text": "Exact known input"},
+                likelihood=LikelihoodSpec(law=DeltaLawSpec(v=state(source.id))),
             ),
         )
         if measured

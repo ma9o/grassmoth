@@ -2,7 +2,6 @@
   "constructs": {
     "construct:y": {
       "name": "y",
-      "description": "Nonlinear stochastic state y",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -122,16 +121,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state y"
       }
     },
     "construct:u": {
       "name": "u",
-      "description": "Assigned input",
       "role": "exogenous",
       "temporal_status": "time_varying",
       "indicators": {
@@ -152,17 +155,21 @@
                 "construct_id": "construct:u"
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
       },
-      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1"
+      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1",
+      "reasoning": {
+        "text": "Assigned input"
+      }
     },
     "construct:x": {
       "name": "x",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -282,10 +289,12 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         },
         "indicator:x-second": {
           "observation": {
@@ -310,11 +319,16 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     }
   },
@@ -322,7 +336,6 @@
     "edge:u-y": {
       "cause": "construct:u",
       "effect": "construct:y",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:u-y": {
           "kind": "drift",
@@ -341,12 +354,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     },
     "edge:u-x": {
       "cause": "construct:u",
       "effect": "construct:x",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:u-x": {
           "kind": "drift",
@@ -365,12 +380,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     },
     "edge:x-y": {
       "cause": "construct:x",
       "effect": "construct:y",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:x-y": {
           "kind": "drift",
@@ -389,6 +406,9 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     }
   },

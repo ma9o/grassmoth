@@ -2,7 +2,6 @@
   "constructs": {
     "construct:c2061f241aafa2387cc9": {
       "name": "A",
-      "description": "A",
       "indicators": {
         "indicator:1f1d7290b5a33ca3b39c": {
           "likelihood": {
@@ -51,9 +50,7 @@
                 ]
               }
             },
-            "standardized": false,
-            "reasoning": "Ordered test measurement",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -68,6 +65,9 @@
               ]
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Ordered test measurement"
           }
         }
       },
@@ -183,11 +183,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "A"
+      }
     },
     "construct:efca9bd7f243a46c0d06": {
       "name": "B",
-      "description": "B",
       "indicators": {
         "indicator:1260ee92b41d90b180ec": {
           "likelihood": {
@@ -234,9 +236,7 @@
                 ]
               }
             },
-            "standardized": false,
-            "reasoning": "Ordered test measurement",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -250,6 +250,9 @@
               ]
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Ordered test measurement"
           }
         }
       },
@@ -365,7 +368,10 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "B"
+      }
     }
   },
   "edges": {
@@ -389,78 +395,95 @@
           }
         }
       },
-      "description": "A causes B",
-      "sources": [],
       "cause": "construct:c2061f241aafa2387cc9",
-      "effect": "construct:efca9bd7f243a46c0d06"
+      "effect": "construct:efca9bd7f243a46c0d06",
+      "reasoning": {
+        "text": "A causes B"
+      }
     }
   },
   "parameters": {
     "parameter:a13b76d97c503c035e38d91ccc01486e13fbcfc380e47cb2c80e64ed7848c885": {
       "name": "rho_A",
-      "description": "stiffness of rho_A",
       "distribution": "distribution:917fec2627406d199b3b8ff09b845996bcbbed5c6f384d4137c53bd7a73c8b4a",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_A. Synthetic Beta prior for rho_A; its values define this test scenario."
       }
     },
     "parameter:27d8c5458fcd6c8573ccaf1af9eb7b799c04e5f3c5e3a48f11ef55d82486a31d": {
       "name": "rho_B",
-      "description": "stiffness of rho_B",
       "distribution": "distribution:f57db412c0f1b13630efd9dcd7ae60089f9539364b029e25040009f02a3163e7",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_B. Synthetic Beta prior for rho_B; its values define this test scenario."
       }
     },
     "parameter:79483cc47622edfa2a1e13e799a422d756d6be929da89f6f78aa798b4f773196": {
       "name": "beta_A_B",
-      "description": "weight of beta_A_B",
       "distribution": "distribution:054824992c13ba69ff5084fdabd003da86c1efaa9dcb1e8349588fec65a72ef6",
       "transform": {
         "kind": "dt_effect_to_ct_rate",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "weight of beta_A_B. Synthetic Normal prior for beta_A_B; its values define this test scenario."
       }
     },
     "parameter:85bca3dac5c83f1907e6f00ed9f4b9f1c0d4032b7a083337e89e15caf43f6845": {
       "name": "sigma_A",
-      "description": "innovation.scale for sigma_A",
       "distribution": "distribution:6aac88cbee07a7083e98fa22db06d175e8f0101abf9da0eff7a0499e7a638af0",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_A. Synthetic HalfNormal prior for sigma_A; its values define this test scenario."
       }
     },
     "parameter:867b1c416cd96f970435bed414fcb4349c8707960d05394ee762ccaf43e3e8b6": {
       "name": "obs_ordered_base_A_obs",
-      "description": "likelihood.cutpoint base for obs_ordered_base_A_obs",
       "distribution": "distribution:b8c1163609641b65d3c9e1baf8f943d9f064b390cd74e406085c95c88ed5cd93",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.cutpoint base for obs_ordered_base_A_obs. Synthetic Normal prior for obs_ordered_base_A_obs; its values define this test scenario."
       }
     },
     "parameter:0a035253a275cd500d621a1dbf12c67d213eb73b1364d42bc3d2a3a6c4a2c157": {
       "name": "obs_ordered_gaps_A_obs",
-      "description": "likelihood.cutpoint gaps for obs_ordered_gaps_A_obs",
       "distribution": "distribution:32ad3f1106157f2f6670d971780d5cfb1286531a600ccdfc4b7693dbad0f71ea",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.cutpoint gaps for obs_ordered_gaps_A_obs. Synthetic HalfNormal prior for obs_ordered_gaps_A_obs; its values define this test scenario."
       }
     },
     "parameter:e0e90b3df4282bc948a04a3a0f387f939d1669a4aeacaa011c354a83e4ef4f67": {
       "name": "sigma_B",
-      "description": "innovation.scale for sigma_B",
       "distribution": "distribution:9786432a8d55f072e18e612e2b2d89944710a1232809355f63c1b9468edc57a6",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_B. Synthetic HalfNormal prior for sigma_B; its values define this test scenario."
       }
     },
     "parameter:4e22cb24b9b7dc7fdb1402e9298b2bfc70918c64975747c83935cedd524dfb9b": {
       "name": "obs_ordered_base_B_obs",
-      "description": "likelihood.cutpoint base for obs_ordered_base_B_obs",
       "distribution": "distribution:169e66ad3f32deabc85bc51910b8103ac30f2ca5dd5798a60613e5a6c1ae9234",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.cutpoint base for obs_ordered_base_B_obs. Synthetic Normal prior for obs_ordered_base_B_obs; its values define this test scenario."
       }
     }
   },

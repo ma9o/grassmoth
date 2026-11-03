@@ -2,7 +2,6 @@
   "constructs": {
     "construct:16176a18c25802dee8a1": {
       "name": "dose",
-      "description": "dose",
       "indicators": {
         "indicator:06ac50310de3251cd28e": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "test",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "test"
           }
         }
       },
@@ -166,53 +166,65 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "dose"
+      }
     },
     "construct:86d4bfae39331f91a35d": {
       "name": "unmeasured_outcome",
-      "description": "A downstream response outside the numerical fixture's measured states.",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "A downstream response outside the numerical fixture's measured states."
+      }
     }
   },
   "edges": {
     "edge:a623a9dcdef69c37af74": {
       "mechanisms": {},
-      "description": "dose causes unmeasured_outcome",
-      "sources": [],
       "cause": "construct:16176a18c25802dee8a1",
-      "effect": "construct:86d4bfae39331f91a35d"
+      "effect": "construct:86d4bfae39331f91a35d",
+      "reasoning": {
+        "text": "dose causes unmeasured_outcome"
+      }
     }
   },
   "parameters": {
     "parameter:09255b7b29502b5a3e120edd335dbfba0d3a200f5c310be7d8bc0f72b371c831": {
       "name": "rho_dose",
-      "description": "stiffness of rho_dose",
       "distribution": "distribution:1d40ac56616de064109bc60c0b6019f62ade747267ae09f2851e084a09a446d5",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_dose. Synthetic Beta prior for rho_dose; its values define this test scenario."
       }
     },
     "parameter:92d922b92ba976a8998dd6ec735898f19c4c8c00647b7117eaff5860df72b893": {
       "name": "manifest_mean_fill_quantity",
-      "description": "Observation intercept for fill_quantity",
       "distribution": "distribution:6d1a304470c5be8599d9d6007928c349817e076476431583608b1676426f3528",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Observation intercept for fill_quantity. Synthetic Normal prior for manifest_mean_fill_quantity; its values define this test scenario."
       }
     },
     "parameter:e8b6fcb47767c2a0d18576028f66b8aeb704c869fe806432c39096ac478cf1a4": {
       "name": "sigma_dose",
-      "description": "innovation.scale for sigma_dose",
       "distribution": "distribution:f296bfd29aebc923af872a04ffa7ecb011d77c9462b519dc6d7711f70c86093d",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_dose. Synthetic HalfNormal prior for sigma_dose; its values define this test scenario."
       }
     }
   },

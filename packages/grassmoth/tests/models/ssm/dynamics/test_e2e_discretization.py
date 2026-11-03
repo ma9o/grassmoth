@@ -281,11 +281,14 @@ def two_construct_structure() -> DynamicalModelSpec:
             "constructs": {
                 "construct:6b04dc42c531e7091eb8": {
                     "name": "stress",
-                    "description": "Daily stress level",
+                    "reasoning": {"text": "Daily stress level"},
                     "role": "endogenous",
                     "temporal_status": "time_varying",
                     "indicators": {
                         "indicator:4ff8be7491bd87d28af4": {
+                            "reasoning": {
+                                "text": "Synthetic measurement of the construct for this test scenario."
+                            },
                             "observation": {
                                 "name": "stress_self_report",
                                 "measurement": {"dtype": "continuous"},
@@ -294,6 +297,9 @@ def two_construct_structure() -> DynamicalModelSpec:
                             "construct_polarity": "positive",
                         },
                         "indicator:522342c2385e38d5e750": {
+                            "reasoning": {
+                                "text": "Synthetic measurement of the construct for this test scenario."
+                            },
                             "observation": {
                                 "name": "stress_cortisol",
                                 "measurement": {"dtype": "continuous"},
@@ -305,11 +311,14 @@ def two_construct_structure() -> DynamicalModelSpec:
                 },
                 "construct:bbc87212909e45b9e6c3": {
                     "name": "mood",
-                    "description": "Daily mood state",
+                    "reasoning": {"text": "Daily mood state"},
                     "role": "endogenous",
                     "temporal_status": "time_varying",
                     "indicators": {
                         "indicator:e05e217de7f4442abdc5": {
+                            "reasoning": {
+                                "text": "Synthetic measurement of the construct for this test scenario."
+                            },
                             "observation": {
                                 "name": "mood_rating",
                                 "measurement": {"dtype": "continuous"},
@@ -324,7 +333,7 @@ def two_construct_structure() -> DynamicalModelSpec:
                 "edge:923689028b6b177617c2": {
                     "cause": "construct:6b04dc42c531e7091eb8",
                     "effect": "construct:bbc87212909e45b9e6c3",
-                    "description": "Stress impairs mood",
+                    "reasoning": {"text": "Stress impairs mood"},
                 }
             },
             "measurement_clock": "1d",

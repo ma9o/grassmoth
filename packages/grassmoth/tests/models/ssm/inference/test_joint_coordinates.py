@@ -72,6 +72,7 @@ def _direct_constraints(value, *, steps=4, state_names=("x", "y")):
             ),
             indicators=tuple(
                 i.revised(
+                    reasoning={"text": "Analytic control instrument"},
                     observation=i.observation.revised(aggregation="last"),
                     likelihood=LikelihoodSpec(
                         law=DeltaLawSpec(v=state(c.id))
@@ -80,7 +81,6 @@ def _direct_constraints(value, *, steps=4, state_names=("x", "y")):
                             loc=state(c.id), scale=coefficient(0.2, role="observation_scale")
                         ),
                         standardized=c.name != "x",
-                        reasoning="Analytic control instrument",
                     ),
                 )
                 for i in c.indicators

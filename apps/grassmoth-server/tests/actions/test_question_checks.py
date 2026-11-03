@@ -26,9 +26,8 @@ def _model():
     dynamical_model_spec = make_model(["Dose", "Mood"], [("Dose", "Mood")])
     dose = dynamical_model_spec.constructs[0]
     reading = dose.indicators[0].revised(
-        likelihood=LikelihoodSpec(
-            law=DeltaLawSpec(v=state(dose.id)), reasoning="The dose is read exactly."
-        )
+        reasoning={"text": "The dose is read exactly."},
+        likelihood=LikelihoodSpec(law=DeltaLawSpec(v=state(dose.id))),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(

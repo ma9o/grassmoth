@@ -6,6 +6,7 @@ import { humanize } from "@/lib/model-asset/selection";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { Callout, KeyValue, OwnerLink, Prose, Section, StatusIcon } from "../scope-primitives";
 import { LawSections, SimulatedHistory } from "./law-sections";
+import { Reasoning } from "./reasoning";
 import { FlowSection } from "./flow-sections";
 import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
 import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
@@ -24,7 +25,7 @@ export function ConstructScope({ context, id }: { context: ScopeContext; id: Con
   return (
     <>
       <Section title="Structure">
-        <Prose>{construct.description}</Prose>
+        <Reasoning value={construct.reasoning} />
         <details className="text-xs">
           <summary className="cursor-pointer text-muted-foreground">Properties</summary>
           <div className="mt-2">

@@ -52,6 +52,7 @@ function authoredModel(): DynamicalModelSpec {
         ],
         indicators: {
           [indicator]: {
+            reasoning: { text: "Test measurement", reference_urls: [] },
             observation: {
               name: "reading",
               measurement: { dtype: "continuous" },
@@ -65,8 +66,6 @@ function authoredModel(): DynamicalModelSpec {
                 v: binary("add", binary("multiply", literal(2), state), parameter),
               },
               standardized: false,
-              reasoning: "Test measurement",
-              sources: [],
             },
           },
         },
@@ -76,11 +75,12 @@ function authoredModel(): DynamicalModelSpec {
     parameters: {
       [theta]: {
         name: "theta",
-        description: "Shared parameter",
         distribution: law,
         transform: { kind: "identity" },
-        sources: [],
-        reasoning: null,
+        reasoning: {
+          text: "A Normal law centered at two gives the synthetic flow visible parameter uncertainty.",
+          reference_urls: [],
+        },
       },
     },
     distributions: { [law]: { distribution: "Normal", params: { loc: 2, scale: 0.4 } } },

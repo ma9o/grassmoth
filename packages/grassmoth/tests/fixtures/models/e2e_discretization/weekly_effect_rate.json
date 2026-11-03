@@ -2,7 +2,6 @@
   "constructs": {
     "construct:6b04dc42c531e7091eb8": {
       "name": "stress",
-      "description": "Daily stress level",
       "indicators": {
         "indicator:4ff8be7491bd87d28af4": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         },
         "indicator:522342c2385e38d5e750": {
@@ -88,9 +88,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -100,6 +98,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -215,11 +216,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Daily stress level"
+      }
     },
     "construct:bbc87212909e45b9e6c3": {
       "name": "mood",
-      "description": "Daily mood state",
       "indicators": {
         "indicator:e05e217de7f4442abdc5": {
           "likelihood": {
@@ -256,9 +259,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -268,6 +269,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -383,7 +387,10 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Daily mood state"
+      }
     }
   },
   "edges": {
@@ -407,78 +414,95 @@
           }
         }
       },
-      "description": "Stress impairs mood",
-      "sources": [],
       "cause": "construct:6b04dc42c531e7091eb8",
-      "effect": "construct:bbc87212909e45b9e6c3"
+      "effect": "construct:bbc87212909e45b9e6c3",
+      "reasoning": {
+        "text": "Stress impairs mood"
+      }
     }
   },
   "parameters": {
     "parameter:cf1ee9c9b96a4a8d7ce3608b03090754c0d1b87a9fe9c2469341052b058ea022": {
       "name": "rho_stress",
-      "description": "stiffness of rho_stress",
       "distribution": "distribution:f9fcb060182679d7dcb683cf3ee83642b0ab3b13b778a99aea64f35b5caa651c",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_stress. Synthetic Beta prior for rho_stress; its values define this test scenario."
       }
     },
     "parameter:3dd6b7c9eb6876093f9fe0c1c1ce2864fd4a8c53e6dac3d6a1e5538016e1fdff": {
       "name": "rho_mood",
-      "description": "stiffness of rho_mood",
       "distribution": "distribution:2eff23efd9f2c90b12d3fab727df449314c576dbed7ec15919f20bf81841a9b9",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_mood. Synthetic Beta prior for rho_mood; its values define this test scenario."
       }
     },
     "parameter:1cca47926769853c7797c3d6551b784d9bf83559281df15e9ff3842253505ce9": {
       "name": "beta_stress_mood",
-      "description": "weight of beta_stress_mood",
       "distribution": "distribution:149b4a284af34bc424b81748016b4e69b56c4aaf6ac62dfa6fc80c6ba35806c7",
       "transform": {
         "kind": "dt_effect_to_ct_rate",
         "interval_days": 7.0
+      },
+      "reasoning": {
+        "text": "weight of beta_stress_mood. Synthetic Normal prior for beta_stress_mood; its values define this test scenario."
       }
     },
     "parameter:a2113913d29155f9c976efb0a5150ae1b3994e86c0809bc948bb615ed5ddc793": {
       "name": "sigma_stress",
-      "description": "innovation.scale for sigma_stress",
       "distribution": "distribution:0e23e00ec4f5fc46b707b8697ae926d166d0623b4c712d974d86070dac45b617",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_stress. Synthetic HalfNormal prior for sigma_stress; its values define this test scenario."
       }
     },
     "parameter:6c31f1ba63c074c52a103b37a003dbe266a63181c6778575348c32ac5a4ec04d": {
       "name": "obs_sd_stress_self_report",
-      "description": "likelihood.scale for obs_sd_stress_self_report",
       "distribution": "distribution:025b6454436de1a00678076c7706e0859bbe561d5276a1e5fd8cb41c8c7bf182",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.scale for obs_sd_stress_self_report. Synthetic HalfNormal prior for obs_sd_stress_self_report; its values define this test scenario."
       }
     },
     "parameter:a4d7ab3978084d363f0ed6d0074ea10da98d1635f2542ca31a9e1ffba783d934": {
       "name": "lambda_stress_cortisol_stress",
-      "description": "likelihood.loading.construct:6b04dc42c531e7091eb8 for lambda_stress_cortisol_stress",
       "distribution": "distribution:63e8c9bc8fdcb76949e41622e9eb67703fe1fb4b273542bdc88265d785241da3",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.loading.construct:6b04dc42c531e7091eb8 for lambda_stress_cortisol_stress. Synthetic Normal prior for lambda_stress_cortisol_stress; its values define this test scenario."
       }
     },
     "parameter:b2e3b61b006fbde7922217f0d12c8ef46459553e57e6c4b28477d69c6b5a3be7": {
       "name": "obs_sd_stress_cortisol",
-      "description": "likelihood.scale for obs_sd_stress_cortisol",
       "distribution": "distribution:3175bb5d2819eded6faaafc0b01f63a138f47713719ca29a34dc8bd3416a4949",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.scale for obs_sd_stress_cortisol. Synthetic HalfNormal prior for obs_sd_stress_cortisol; its values define this test scenario."
       }
     },
     "parameter:ea7fd5ac08160569f35431da4d1741f5ac0606585c802a602de991f3e3a51263": {
       "name": "sigma_mood",
-      "description": "innovation.scale for sigma_mood",
       "distribution": "distribution:b4dc0c968ac82b7a968d154b7fd9c17cfc407e1d6f7b44a4a1d3eddd2d99bce7",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_mood. Synthetic HalfNormal prior for sigma_mood; its values define this test scenario."
       }
     }
   },

@@ -2,7 +2,6 @@
   "constructs": {
     "construct:c2061f241aafa2387cc9": {
       "name": "A",
-      "description": "A",
       "indicators": {
         "indicator:1f1d7290b5a33ca3b39c": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -166,11 +166,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "A"
+      }
     },
     "construct:efca9bd7f243a46c0d06": {
       "name": "B",
-      "description": "B",
       "indicators": {
         "indicator:1260ee92b41d90b180ec": {
           "likelihood": {
@@ -207,9 +209,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -219,6 +219,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -334,22 +337,26 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "B"
+      }
     },
     "construct:e5bc584a6ba37c08fe03": {
       "name": "Sink",
-      "description": "Sink",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Sink"
+      }
     },
     "construct:d90c52e59b79004188dc": {
       "name": "Y",
-      "description": "Y",
       "indicators": {
         "indicator:ac9f22e5539367d664a0": {
           "likelihood": {
@@ -386,9 +393,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -398,6 +403,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -513,11 +521,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Y"
+      }
     },
     "construct:311c9047b5ede16a8f26": {
       "name": "X",
-      "description": "X",
       "indicators": {
         "indicator:a3ee56b69d8d2ab75830": {
           "likelihood": {
@@ -554,9 +564,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -566,6 +574,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -681,7 +692,10 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "X"
+      }
     }
   },
   "edges": {
@@ -705,24 +719,27 @@
           }
         }
       },
-      "description": "A causes B",
-      "sources": [],
       "cause": "construct:c2061f241aafa2387cc9",
-      "effect": "construct:efca9bd7f243a46c0d06"
+      "effect": "construct:efca9bd7f243a46c0d06",
+      "reasoning": {
+        "text": "A causes B"
+      }
     },
     "edge:d24e65f797ae6c4914ba": {
       "mechanisms": {},
-      "description": "B causes Sink",
-      "sources": [],
       "cause": "construct:efca9bd7f243a46c0d06",
-      "effect": "construct:e5bc584a6ba37c08fe03"
+      "effect": "construct:e5bc584a6ba37c08fe03",
+      "reasoning": {
+        "text": "B causes Sink"
+      }
     },
     "edge:9477f4bdac94e015329f": {
       "mechanisms": {},
-      "description": "Y causes Sink",
-      "sources": [],
       "cause": "construct:d90c52e59b79004188dc",
-      "effect": "construct:e5bc584a6ba37c08fe03"
+      "effect": "construct:e5bc584a6ba37c08fe03",
+      "reasoning": {
+        "text": "Y causes Sink"
+      }
     },
     "edge:fe51566d79c4fb71ee4d": {
       "mechanisms": {
@@ -744,97 +761,118 @@
           }
         }
       },
-      "description": "X causes Y",
-      "sources": [],
       "cause": "construct:311c9047b5ede16a8f26",
-      "effect": "construct:d90c52e59b79004188dc"
+      "effect": "construct:d90c52e59b79004188dc",
+      "reasoning": {
+        "text": "X causes Y"
+      }
     }
   },
   "parameters": {
     "parameter:a13b76d97c503c035e38d91ccc01486e13fbcfc380e47cb2c80e64ed7848c885": {
       "name": "rho_A",
-      "description": "stiffness of rho_A",
       "distribution": "distribution:917fec2627406d199b3b8ff09b845996bcbbed5c6f384d4137c53bd7a73c8b4a",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_A. Synthetic Beta prior for rho_A; its values define this test scenario."
       }
     },
     "parameter:27d8c5458fcd6c8573ccaf1af9eb7b799c04e5f3c5e3a48f11ef55d82486a31d": {
       "name": "rho_B",
-      "description": "stiffness of rho_B",
       "distribution": "distribution:f57db412c0f1b13630efd9dcd7ae60089f9539364b029e25040009f02a3163e7",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_B. Synthetic Beta prior for rho_B; its values define this test scenario."
       }
     },
     "parameter:6d4506cd6203ad744865ecc5484e379e4aa091c99315d8e4711529e94eb81c7a": {
       "name": "rho_Y",
-      "description": "stiffness of rho_Y",
       "distribution": "distribution:6c6e4b3d1c7806403f9f8a1d5b30faa0c3ad670b44500125517d1deef0e5ad7b",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_Y. Synthetic Beta prior for rho_Y; its values define this test scenario."
       }
     },
     "parameter:f08d4a4d8120abb4df938bd884301a10972cc5ec4fe7caf2ee6f951f63b04e2e": {
       "name": "rho_X",
-      "description": "stiffness of rho_X",
       "distribution": "distribution:19c2f43487dd2be4177df68e40f2ce84a191d02af580e6e2895d41afae7017e6",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_X. Synthetic Beta prior for rho_X; its values define this test scenario."
       }
     },
     "parameter:79483cc47622edfa2a1e13e799a422d756d6be929da89f6f78aa798b4f773196": {
       "name": "beta_A_B",
-      "description": "weight of beta_A_B",
       "distribution": "distribution:054824992c13ba69ff5084fdabd003da86c1efaa9dcb1e8349588fec65a72ef6",
       "transform": {
         "kind": "dt_effect_to_ct_rate",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "weight of beta_A_B. Synthetic Normal prior for beta_A_B; its values define this test scenario."
       }
     },
     "parameter:274b8c50cf0cd28d406d1f1fab279b2339a41e804b53448382e8f7741baf5266": {
       "name": "beta_X_Y",
-      "description": "weight of beta_X_Y",
       "distribution": "distribution:0d7ae2a5e0e87987a1d40441a6d1754d027bf993e609f678ccb00124ad1abbd5",
       "transform": {
         "kind": "dt_effect_to_ct_rate",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "weight of beta_X_Y. Synthetic Normal prior for beta_X_Y; its values define this test scenario."
       }
     },
     "parameter:85bca3dac5c83f1907e6f00ed9f4b9f1c0d4032b7a083337e89e15caf43f6845": {
       "name": "sigma_A",
-      "description": "innovation.scale for sigma_A",
       "distribution": "distribution:6aac88cbee07a7083e98fa22db06d175e8f0101abf9da0eff7a0499e7a638af0",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_A. Synthetic HalfNormal prior for sigma_A; its values define this test scenario."
       }
     },
     "parameter:e0e90b3df4282bc948a04a3a0f387f939d1669a4aeacaa011c354a83e4ef4f67": {
       "name": "sigma_B",
-      "description": "innovation.scale for sigma_B",
       "distribution": "distribution:9786432a8d55f072e18e612e2b2d89944710a1232809355f63c1b9468edc57a6",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_B. Synthetic HalfNormal prior for sigma_B; its values define this test scenario."
       }
     },
     "parameter:5d4ebb898b1d5ff69f921d2aa2c9a3d894693566ef2eeba7205f000df6ef07d8": {
       "name": "sigma_Y",
-      "description": "innovation.scale for sigma_Y",
       "distribution": "distribution:93777c8caea45abd264bac0da9ff92271e9884d9370829e035286fcb70de31bc",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_Y. Synthetic HalfNormal prior for sigma_Y; its values define this test scenario."
       }
     },
     "parameter:46a3c6de382a8360c4dad5c16186903011acf92719599690ea1f25719c4c64c9": {
       "name": "sigma_X",
-      "description": "innovation.scale for sigma_X",
       "distribution": "distribution:20d91718f0ffa05371965d7e575cc8ae6b53c2bf297ac4112d6b096cf9b7f8e6",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_X. Synthetic HalfNormal prior for sigma_X; its values define this test scenario."
       }
     }
   },

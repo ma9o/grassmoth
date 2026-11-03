@@ -2,18 +2,19 @@
   "constructs": {
     "construct:x": {
       "name": "X",
-      "description": "X",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "X"
+      }
     },
     "construct:y": {
       "name": "Y",
-      "description": "Y",
       "indicators": {
         "indicator:y": {
           "likelihood": {
@@ -50,9 +51,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Continuous measurement",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -62,6 +61,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Continuous measurement"
           }
         }
       },
@@ -70,7 +72,10 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Y"
+      }
     }
   },
   "edges": {
@@ -183,27 +188,32 @@
           }
         }
       },
-      "description": "X influences Y",
-      "sources": [],
       "cause": "construct:x",
-      "effect": "construct:y"
+      "effect": "construct:y",
+      "reasoning": {
+        "text": "X influences Y"
+      }
     }
   },
   "parameters": {
     "parameter:8deaae71d09e76318d9abe372f4706a9da2c6ad05802da5a3dd67b4780736859": {
       "name": "effect",
-      "description": "Linear effect",
       "distribution": "distribution:a62411c9bd664f66f88469c684c614c1475bc91a5165160276c0ff8857a157e0",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Linear effect. Synthetic Normal prior for effect; its values define this test scenario."
       }
     },
     "parameter:1920c59600acfacd9875858e82f1f5deafda7fcffa7981fc66fc3d4c367ad95b": {
       "name": "emax",
-      "description": "Maximum Hill effect",
       "distribution": null,
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Maximum Hill effect"
       }
     }
   },

@@ -20,6 +20,7 @@ from grassmoth.artifacts.model.expressions import (
 from grassmoth.artifacts.model.likelihood import NegativeBinomial2LawSpec, NormalLawSpec
 from grassmoth.artifacts.model.parameter import SiteKind
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.spec import NumericMeasurement
 from grassmoth.artifacts.sampling import SamplerSpec
 from grassmoth.models.ssm.inference.fit import fit
@@ -107,8 +108,10 @@ def _raw_channels_model() -> DynamicalModelSpec:
             ParameterSpec(
                 id=_LATENT_0_RAW_CHANNEL_MANIFEST_MEANS_PARAMETER_ID,
                 name=_LATENT_0_RAW_CHANNEL_MANIFEST_MEANS_PARAMETER_ID,
-                description="Fixture quantity",
                 distribution=_LATENT_0_RAW_CHANNEL_MANIFEST_MEANS_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="Fixture quantity. Synthetic prior for Fixture quantity; its values define this test scenario."
+                ),
             ),
             latent_0_raw_channel_manifest_var_diag,
             latent_0_small_channel_manifest_means,
@@ -205,8 +208,10 @@ def _non_identity_links_are_not_judged__model() -> DynamicalModelSpec:
             ParameterSpec(
                 id=_OBS_R_PARAMETER_ID,
                 name="obs_r",
-                description="dispersion for obs_r",
                 distribution=_OBS_R_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="dispersion for obs_r. Synthetic prior for dispersion for obs_r; its values define this test scenario."
+                ),
             ),
         ),
         distributions={

@@ -2,7 +2,6 @@
   "constructs": {
     "construct:43bb4e4071332cd230df": {
       "name": "sleep_state",
-      "description": "Test state",
       "indicators": {
         "indicator:a6c99a629d09c47f8b69": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Test likelihood",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test likelihood"
           }
         },
         "indicator:c0bf518a25306a72d19b": {
@@ -88,9 +88,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Test likelihood",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -100,6 +98,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test likelihood"
           }
         }
       },
@@ -199,76 +200,94 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Test state"
+      }
     },
     "construct:numerical_test_outcome": {
       "name": "numerical_test_outcome",
-      "description": "Unmeasured downstream response joining the numerical test states.",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Unmeasured downstream response joining the numerical test states."
+      }
     }
   },
   "edges": {
     "edge:58a855f2bfcf31d64ae0": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:43bb4e4071332cd230df",
-      "effect": "construct:numerical_test_outcome"
+      "effect": "construct:numerical_test_outcome",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     }
   },
   "parameters": {
     "parameter:d7369a212aaee5c28638c3bf8cd2b7fbd9758128625a05c7ea0dd563ed984e20": {
       "name": "parameter:d7369a212aaee5c28638c3bf8cd2b7fbd9758128625a05c7ea0dd563ed984e20",
-      "description": "Fixture quantity",
       "distribution": "distribution:d849f24e27c12f29f05361e193000623a42321ddebdb4927e66cb75117f5699d",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:d7369a212aaee5c28638c3bf8cd2b7fbd9758128625a05c7ea0dd563ed984e20; its values define this test scenario."
       }
     },
     "parameter:aa2f2a3ca3e3089ae9df6f9694563061ea3ccadeb4c8eb00a8aa4a7ddfa9617e": {
       "name": "parameter:aa2f2a3ca3e3089ae9df6f9694563061ea3ccadeb4c8eb00a8aa4a7ddfa9617e",
-      "description": "Fixture quantity",
       "distribution": "distribution:d9299f9ac65b124ffb8679bd30f9f7b37965596e2031a49ecde31ae1dbf00884",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:aa2f2a3ca3e3089ae9df6f9694563061ea3ccadeb4c8eb00a8aa4a7ddfa9617e; its values define this test scenario."
       }
     },
     "parameter:ce3639f9b2b381e33669a0fd90dd9e898683743b08fdfc0ffd9c7db068bd6c70": {
       "name": "parameter:ce3639f9b2b381e33669a0fd90dd9e898683743b08fdfc0ffd9c7db068bd6c70",
-      "description": "Fixture quantity",
       "distribution": "distribution:3d664873010e7ee67a187fad852a6afb125160d1043685dee2dbad104146ba3c",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:ce3639f9b2b381e33669a0fd90dd9e898683743b08fdfc0ffd9c7db068bd6c70; its values define this test scenario."
       }
     },
     "parameter:f5c019abe1c36f246ed85d3cb698d14114e83f7c19b8620d439c1dfe81b75a68": {
       "name": "parameter:f5c019abe1c36f246ed85d3cb698d14114e83f7c19b8620d439c1dfe81b75a68",
-      "description": "Fixture quantity",
       "distribution": "distribution:e62bf7620681245093258509b235afe01cd9c938af9f29cf01c33797fe89790d",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:f5c019abe1c36f246ed85d3cb698d14114e83f7c19b8620d439c1dfe81b75a68; its values define this test scenario."
       }
     },
     "parameter:ddf3d58c03426aa5e3be0ddee42ffd3fc80e1a4bd3945448a885e489696727b8": {
       "name": "parameter:ddf3d58c03426aa5e3be0ddee42ffd3fc80e1a4bd3945448a885e489696727b8",
-      "description": "Fixture quantity",
       "distribution": "distribution:ec3b4d3bff36dffcef9674569ad5b0e0ea3bec7dc4d8558313a89668da22af76",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:ddf3d58c03426aa5e3be0ddee42ffd3fc80e1a4bd3945448a885e489696727b8; its values define this test scenario."
       }
     },
     "parameter:1e235f6c89da7062b1c43e6266f9b04128d763c7c2310e6e2f4e96f229f95cff": {
       "name": "parameter:1e235f6c89da7062b1c43e6266f9b04128d763c7c2310e6e2f4e96f229f95cff",
-      "description": "Fixture quantity",
       "distribution": "distribution:8f2cdf68f7185c2c1127e954f9fd1d53346c48f292ae96487bf4e0656d5ed967",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:1e235f6c89da7062b1c43e6266f9b04128d763c7c2310e6e2f4e96f229f95cff; its values define this test scenario."
       }
     }
   },

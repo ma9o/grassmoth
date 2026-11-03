@@ -16,13 +16,14 @@ def graph_input(dynamical_model_spec: DynamicalModelSpec) -> JsonObject:
     result: dict[str, JsonValue] = {
         "constructs": [
             item.model_dump(
-                mode="json", include={"id", "name", "description", "role", "temporal_status"}
+                mode="json",
+                include={"id", "name", "reasoning", "role", "temporal_status"},
             )
             for item in dynamical_model_spec.constructs
         ],
         "edges": [
             {
-                **item.model_dump(mode="json", include={"id", "description", "sources"}),
+                **item.model_dump(mode="json", include={"id", "reasoning"}),
                 "cause_id": item.cause.id,
                 "effect_id": item.effect.id,
             }
@@ -35,7 +36,10 @@ def graph_input(dynamical_model_spec: DynamicalModelSpec) -> JsonObject:
 def indicator_rows(dynamical_model_spec: DynamicalModelSpec) -> list[JsonObject]:
     """Measurement inputs with ownership derived from canonical containment."""
     return [
-        {**indicator.model_dump(mode="json", exclude={"likelihood"}), "construct_id": construct.id}
+        {
+            **indicator.model_dump(mode="json", exclude={"likelihood", "reasoning"}),
+            "construct_id": construct.id,
+        }
         for construct, indicator in dynamical_model_spec.iter_indicators()
     ]
 
@@ -67,9 +71,7 @@ def compilation_input(dynamical_model_spec: DynamicalModelSpec) -> JsonObject:
         if dynamical_model_spec.measurement_clock is not None
         else None,
         "parameters": [
-            parameter.model_dump(
-                mode="json", exclude={"distribution", "transform", "reasoning", "sources"}
-            )
+            parameter.model_dump(mode="json", exclude={"distribution", "transform", "reasoning"})
             for parameter in dynamical_model_spec.parameters
         ],
         "constructs": [

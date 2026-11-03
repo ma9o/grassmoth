@@ -145,7 +145,7 @@ git --git-dir=data/HEALTHDEMO/study/history.git config grassmoth.format 30
 #### Storage format
 
 The [storage owner](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/git_objects.py)
-requires format 31. Start a new study or restore a format-31 bundle. The application
+requires format 32. Start a new study or restore a format-32 bundle. The application
 reads only this format and does not perform automatic migrations.
 
 ### Local stack

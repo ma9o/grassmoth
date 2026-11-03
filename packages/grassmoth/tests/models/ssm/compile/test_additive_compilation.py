@@ -52,11 +52,11 @@ def test_exact_observations_preserve_state_and_parameter_identity():
     observed = source.revised(
         indicators=(
             source.indicators[0].revised(
+                reasoning={"text": "The source is observed exactly."},
                 likelihood=LikelihoodSpec(
                     law=DeltaLawSpec(v=expr_state(source.id)),
                     standardized=False,
-                    reasoning="The source is observed exactly.",
-                )
+                ),
             ),
         )
     )

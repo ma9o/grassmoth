@@ -2,7 +2,6 @@
   "constructs": {
     "construct:y": {
       "name": "y",
-      "description": "Nonlinear stochastic state y",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -128,16 +127,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Preregistered TAIL StudentT reading; central curvature matches C0 at df=5; one shared learned df, fixed scale."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Preregistered TAIL StudentT reading; central curvature matches C0 at df=5; one shared learned df, fixed scale."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state y"
       }
     },
     "construct:u": {
       "name": "u",
-      "description": "Assigned input",
       "role": "exogenous",
       "temporal_status": "time_varying",
       "indicators": {
@@ -158,17 +161,21 @@
                 "construct_id": "construct:u"
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
       },
-      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1"
+      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1",
+      "reasoning": {
+        "text": "Assigned input"
+      }
     },
     "construct:x": {
       "name": "x",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -294,11 +301,16 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Preregistered TAIL StudentT reading; central curvature matches C0 at df=5; one shared learned df, fixed scale."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Preregistered TAIL StudentT reading; central curvature matches C0 at df=5; one shared learned df, fixed scale."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     }
   },
@@ -306,7 +318,6 @@
     "edge:u-y": {
       "cause": "construct:u",
       "effect": "construct:y",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:u-y": {
           "kind": "drift",
@@ -325,12 +336,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     },
     "edge:u-x": {
       "cause": "construct:u",
       "effect": "construct:x",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:u-x": {
           "kind": "drift",
@@ -349,12 +362,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     },
     "edge:x-y": {
       "cause": "construct:x",
       "effect": "construct:y",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:x-y": {
           "kind": "drift",
@@ -373,19 +388,26 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     }
   },
   "parameters": {
     "parameter:2366c82cffc90e7355265181c33534a4faaa36e0e668c4fe9560b8f949819491": {
       "name": "input_effect",
-      "description": "Input effect",
-      "distribution": "distribution:tiny-beta"
+      "distribution": "distribution:tiny-beta",
+      "reasoning": {
+        "text": "Input effect"
+      }
     },
     "parameter:832daa5b640b20d33cbefbc6fcba3aaf01846c0a8f71c4e828c24ab25abff052": {
       "name": "measurement_tail_df",
-      "description": "Shared StudentT degrees of freedom for x and y readings",
-      "distribution": "distribution:measurement_tail_df"
+      "distribution": "distribution:measurement_tail_df",
+      "reasoning": {
+        "text": "Shared StudentT degrees of freedom for x and y readings"
+      }
     }
   },
   "distributions": {

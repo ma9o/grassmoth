@@ -118,7 +118,6 @@ def test_authored_affine_delta_keeps_its_calibration_coefficients(exact_model):
     )
     likelihood = LikelihoodSpec(
         law=DeltaLawSpec(v=predictor),
-        reasoning="Exact measurement with an unknown calibration offset.",
     )
     indicator = owner.indicators[0].revised(likelihood=likelihood)
     dynamical_model_spec = (
@@ -195,7 +194,6 @@ def test_exact_measurement_is_available_but_never_selected_by_default(
         law=TypeAdapter(ObservationLawSpec).validate_json(
             model_fixture_json(observation_law_payload)
         ),
-        reasoning="Explicit exact measurement",
     )
     dynamical_model_spec.with_entities(
         edges=replace_constructs(
@@ -281,6 +279,7 @@ def test_unsupported_delta_constraints_fail_before_parameter_initialization(
         indicator = indicator.revised(observation=indicator.observation.revised(aggregation="mean"))
     else:
         indicator = indicator.revised(
+            reasoning={"text": "An affine equality needs a different constraint parameterization."},
             likelihood=LikelihoodSpec(
                 law=DeltaLawSpec(
                     v=TypeAdapter(ObservationLawSpec)
@@ -289,8 +288,7 @@ def test_unsupported_delta_constraints_fail_before_parameter_initialization(
                     )
                     .loc
                 ),
-                reasoning="An affine equality needs a different constraint parameterization.",
-            )
+            ),
         )
     exact_model = exact_model.with_entities(
         edges=replace_constructs(

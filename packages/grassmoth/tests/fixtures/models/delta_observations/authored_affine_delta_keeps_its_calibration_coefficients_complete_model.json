@@ -2,7 +2,6 @@
   "constructs": {
     "construct:beeea6c08f33d811dbd9": {
       "name": "setting",
-      "description": "setting",
       "indicators": {
         "indicator:d1248de14e9137cf987d": {
           "likelihood": {
@@ -33,9 +32,7 @@
                 }
               }
             },
-            "standardized": false,
-            "reasoning": "Exact measurement with an unknown calibration offset.",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -45,6 +42,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Exact measurement with an unknown calibration offset."
           }
         }
       },
@@ -160,11 +160,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "setting"
+      }
     },
     "construct:d109b56ae5a2d4eadc3e": {
       "name": "response",
-      "description": "response",
       "indicators": {
         "indicator:f504374f8edbe89da3c6": {
           "likelihood": {
@@ -201,9 +203,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -213,6 +213,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -328,7 +331,10 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "response"
+      }
     }
   },
   "edges": {
@@ -352,62 +358,75 @@
           }
         }
       },
-      "description": "setting causes response",
-      "sources": [],
       "cause": "construct:beeea6c08f33d811dbd9",
-      "effect": "construct:d109b56ae5a2d4eadc3e"
+      "effect": "construct:d109b56ae5a2d4eadc3e",
+      "reasoning": {
+        "text": "setting causes response"
+      }
     }
   },
   "parameters": {
     "parameter:9a192e5990cb9c31db3a8a235e1eaa00c8b049ddb19fe255bc4c645cd6523975": {
       "name": "rho_setting",
-      "description": "stiffness of rho_setting",
       "distribution": "distribution:d7c8233f2bfb010be5b532c306b75f97ab289b998fd9bc2ba7bef4ea548f0e15",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_setting. Synthetic Beta prior for rho_setting; its values define this test scenario."
       }
     },
     "parameter:b4ee55360d3ce369d52a5ed3cce5ea510f70a75bcad53d2614c5e8b17fca4a45": {
       "name": "rho_response",
-      "description": "stiffness of rho_response",
       "distribution": "distribution:132213901da5cb0d5021a2b2c47f8ea57c3a3f55f919dfc902d3c25a64581747",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_response. Synthetic Beta prior for rho_response; its values define this test scenario."
       }
     },
     "parameter:e44bcf21fb8d91279d2db72abbb81e1766940d6e5c10558c0dc8d273cd4d5715": {
       "name": "beta_setting_response",
-      "description": "weight of beta_setting_response",
       "distribution": "distribution:64f60bc7fce02e5ec929610a4d3f35508786034f409d4c9c3320c726ba16f0cd",
       "transform": {
         "kind": "dt_effect_to_ct_rate",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "weight of beta_setting_response. Synthetic Normal prior for beta_setting_response; its values define this test scenario."
       }
     },
     "parameter:37102bdfa362994b85c9ddaa867c5329828ff4f92365e82b2c7d84db690ca871": {
       "name": "sigma_setting",
-      "description": "innovation.scale for sigma_setting",
       "distribution": "distribution:62a263759580a8075a5444c559809c2fe8a4d15e4033c4047d3c1c0da463ad14",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_setting. Synthetic HalfNormal prior for sigma_setting; its values define this test scenario."
       }
     },
     "parameter:dc3d340d02603d98fcbb3181a2d20f780359fcb9f17be514832652fae607fe52": {
       "name": "sigma_response",
-      "description": "innovation.scale for sigma_response",
       "distribution": "distribution:ace810ad6a58a2e62eb1e3abacf0a0b3e8debea9ba75199a9c4eb79ba4a6d737",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_response. Synthetic HalfNormal prior for sigma_response; its values define this test scenario."
       }
     },
     "parameter:aea2f862f4198d3c0de22833f27b83d678cb1acb5e1552ea73768e30711ec4f4": {
       "name": "manifest_mean_setting_obs",
-      "description": "likelihood.intercept for manifest_mean_setting_obs",
       "distribution": "distribution:25b9002dc5c824be9f345fe625aa8a123e78429a037fdb775fff40fba38edd84",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.intercept for manifest_mean_setting_obs. Synthetic Normal prior for manifest_mean_setting_obs; its values define this test scenario."
       }
     }
   },

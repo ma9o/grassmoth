@@ -61,7 +61,7 @@ def test_partial_document_round_trip_and_nested_merge_preserve_omission():
     ).dynamical_model_spec
     assert edited.measurement_clock == original.measurement_clock
     assert edited.edges[0].id == original.edges[0].id
-    assert edited.get_construct(source.id).description == source.description
+    assert edited.get_construct(source.id).reasoning == source.reasoning
     assert edited.get_construct(source.id).name == "Renamed"
     assert edited.indicator(indicator).observation.name == "new reading"
     assert edited.mechanism(mechanism.id).expression == (coefficient(4, "weight") + 2) * state(
@@ -81,8 +81,10 @@ def test_null_edge_prunes_ancestors_and_their_owned_parameters_and_laws():
     document["parameters"] = {
         identity: {
             "name": "initial A",
-            "description": "Baseline A",
             "distribution": "distribution:initial",
+            "reasoning": {
+                "text": "Baseline A. A standard Normal law supplies a synthetic baseline for the pruning test."
+            },
         }
     }
     document["distributions"] = {
@@ -260,8 +262,10 @@ def test_partial_law_parameters_merge_and_a_changed_family_replaces_them():
                 "parameters": {
                     parameter: {
                         "name": "baseline",
-                        "description": "Initial X",
                         "distribution": "distribution:baseline",
+                        "reasoning": {
+                            "text": "Initial X. A centered Normal baseline supplies the parameters whose partial edits this test exercises."
+                        },
                     }
                 },
                 "distributions": {

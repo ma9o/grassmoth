@@ -23,6 +23,7 @@ from grassmoth.artifacts.model.likelihood import StudentTLawSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
 from grassmoth.artifacts.model.parameter import SiteKind
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.predictive.statistics import observation_signal_and_variance
 from grassmoth.models.ssm.predictive.types import PredictiveDraws, PredictiveTrajectory
@@ -152,8 +153,10 @@ def _student_t_model() -> DynamicalModelSpec:
             ParameterSpec(
                 id=_INDICATOR_A6C99A629D09C47F8B69_DEGREES_OF_FREEDOM_PARAMETER_ID,
                 name="indicator:a6c99a629d09c47f8b69/degrees_of_freedom",
-                description="Explicit coefficient for the diagnostic fixture.",
                 distribution=_INDICATOR_A6C99A629D09C47F8B69_DEGREES_OF_FREEDOM_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="Explicit coefficient for the diagnostic fixture. Synthetic prior for Explicit coefficient for the diagnostic fixture; its values define this test scenario."
+                ),
             ),
         ),
         distributions={

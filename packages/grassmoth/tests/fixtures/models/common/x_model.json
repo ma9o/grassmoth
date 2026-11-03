@@ -2,7 +2,6 @@
   "constructs": {
     "construct:311c9047b5ede16a8f26": {
       "name": "X",
-      "description": "X",
       "indicators": {
         "indicator:a3ee56b69d8d2ab75830": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -166,45 +166,55 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "X"
+      }
     },
     "construct:86d4bfae39331f91a35d": {
       "name": "unmeasured_outcome",
-      "description": "A downstream response outside the numerical fixture's measured states.",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "A downstream response outside the numerical fixture's measured states."
+      }
     }
   },
   "edges": {
     "edge:0f8cdb60921e1d52911d": {
       "mechanisms": {},
-      "description": "X causes unmeasured_outcome",
-      "sources": [],
       "cause": "construct:311c9047b5ede16a8f26",
-      "effect": "construct:86d4bfae39331f91a35d"
+      "effect": "construct:86d4bfae39331f91a35d",
+      "reasoning": {
+        "text": "X causes unmeasured_outcome"
+      }
     }
   },
   "parameters": {
     "parameter:f08d4a4d8120abb4df938bd884301a10972cc5ec4fe7caf2ee6f951f63b04e2e": {
       "name": "rho_X",
-      "description": "stiffness of rho_X",
       "distribution": "distribution:19c2f43487dd2be4177df68e40f2ce84a191d02af580e6e2895d41afae7017e6",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_X. Synthetic Beta prior for rho_X; its values define this test scenario."
       }
     },
     "parameter:46a3c6de382a8360c4dad5c16186903011acf92719599690ea1f25719c4c64c9": {
       "name": "sigma_X",
-      "description": "innovation.scale for sigma_X",
       "distribution": "distribution:20d91718f0ffa05371965d7e575cc8ae6b53c2bf297ac4112d6b096cf9b7f8e6",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_X. Synthetic HalfNormal prior for sigma_X; its values define this test scenario."
       }
     }
   },

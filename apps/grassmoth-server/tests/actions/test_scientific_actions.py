@@ -267,7 +267,9 @@ def test_durable_replication_preserves_current_laws_without_comparison(
         json_files={
             "model.json": dynamical_model_spec.with_entities(
                 edges=(
-                    dynamical_model_spec.edges[0].revised(description="Revised justification"),
+                    dynamical_model_spec.edges[0].revised(
+                        reasoning={"text": "Revised justification"}
+                    ),
                     *dynamical_model_spec.edges[1:],
                 )
             ).model_dump(mode="json")
@@ -538,7 +540,7 @@ def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
     revised_model = stress_sleep_model()
     revised_model = revised_model.with_entities(
         edges=(
-            revised_model.edges[0].revised(description="Another scientific goal"),
+            revised_model.edges[0].revised(reasoning={"text": "Another scientific goal"}),
             *revised_model.edges[1:],
         )
     )

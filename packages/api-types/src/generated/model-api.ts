@@ -771,16 +771,8 @@ export interface components {
             readonly cause: components["schemas"]["ConstructSpec-Output"] | components["schemas"]["ConstructRef-Output"];
             /** @description Effect construct; shared endpoints have one identity. */
             readonly effect: components["schemas"]["ConstructSpec-Output"] | components["schemas"]["ConstructRef-Output"];
-            /**
-             * Description
-             * @description Theoretical justification for this causal link
-             */
-            readonly description: string;
-            /**
-             * Sources
-             * @description Literature sources supporting this causal link
-             */
-            readonly sources: readonly components["schemas"]["LiteratureSource-Output"][];
+            /** @description Why this causal link holds and why its mechanism has the specified form. Cite references with [n] in the text. */
+            readonly reasoning: components["schemas"]["ReasoningSpec-Output"];
         };
         /**
          * CausalEffectResult
@@ -994,11 +986,8 @@ export interface components {
              * @description Construct name (e.g., 'stress', 'sleep_quality')
              */
             readonly name: string;
-            /**
-             * Description
-             * @description What this theoretical construct represents
-             */
-            readonly description: string;
+            /** @description What this construct is and why the model needs it. Cite references with [n] in the text. */
+            readonly reasoning: components["schemas"]["ReasoningSpec-Output"];
             /**
              * Indicators
              * @default []
@@ -1398,8 +1387,13 @@ export interface components {
             readonly constructs?: Readonly<Partial<Record<components["schemas"]["ConstructId-Input"], {
                 /** @description Construct name (e.g., 'stress', 'sleep_quality') */
                 readonly name?: string;
-                /** @description What this theoretical construct represents */
-                readonly description?: string;
+                /** @description A scientific explanation with a consistent list of numbered references. */
+                readonly reasoning?: {
+                    /** @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs. */
+                    readonly text?: string;
+                    /** @description URLs cited by [n] in text, ordered by their 1-based citation number. */
+                    readonly reference_urls?: readonly string[];
+                };
                 readonly indicators?: Readonly<Partial<Record<components["schemas"]["IndicatorId-Input"], {
                     readonly observation?: {
                         /** @description Indicator name (e.g., 'hrv', 'self_reported_stress') */
@@ -1424,6 +1418,13 @@ export interface components {
                         readonly aggregation?: "first" | "last" | "sum" | "count" | "mean" | "std";
                         /** @description Optional support window: positive fixed units s, m, h, d or w (for example '2w'), or whole calendar months/years parsed by pytimeparse2 (for example '3mo', '2 years', '1y6mo'). Calendar windows align to whole-month boundaries anchored to January 1970 and retain their actual lengths, including leap days. Resolved by the preparation window or the generative model clock. */
                         readonly observation_window?: string | null;
+                    };
+                    /** @description A scientific explanation with a consistent list of numbered references. */
+                    readonly reasoning?: {
+                        /** @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs. */
+                        readonly text?: string;
+                        /** @description URLs cited by [n] in text, ordered by their 1-based citation number. */
+                        readonly reference_urls?: readonly string[];
                     };
                     readonly likelihood?: {
                         readonly law?: {
@@ -2020,16 +2021,6 @@ export interface components {
                         };
                         /** @description Whether observations are mean-centered and scaled before fitting. */
                         readonly standardized?: boolean;
-                        /** @description Why this conditional law was chosen for the indicator */
-                        readonly reasoning?: string;
-                        readonly sources?: readonly {
-                            /** @description Title of the source (paper, meta-analysis, textbook, etc.) */
-                            readonly title?: string;
-                            /** @description URL of the source if available */
-                            readonly url?: string | null;
-                            /** @description Relevant excerpt or paraphrase from the source */
-                            readonly snippet?: string;
-                        }[];
                     } | null;
                     /**
                      * @description Whether the measurement increases or decreases with its owning construct.
@@ -2171,23 +2162,24 @@ export interface components {
                 readonly cause?: components["schemas"]["ConstructId-Input"];
                 /** @description Persistent identity. Preserve when revising or renaming. */
                 readonly effect?: components["schemas"]["ConstructId-Input"];
-                /** @description Theoretical justification for this causal link */
-                readonly description?: string;
-                /** @description Literature sources supporting this causal link */
-                readonly sources?: readonly {
-                    /** @description Title of the source (paper, meta-analysis, textbook, etc.) */
-                    readonly title?: string;
-                    /** @description URL of the source if available */
-                    readonly url?: string | null;
-                    /** @description Relevant excerpt or paraphrase from the source */
-                    readonly snippet?: string;
-                }[];
+                /** @description A scientific explanation with a consistent list of numbered references. */
+                readonly reasoning?: {
+                    /** @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs. */
+                    readonly text?: string;
+                    /** @description URLs cited by [n] in text, ordered by their 1-based citation number. */
+                    readonly reference_urls?: readonly string[];
+                };
             } | null>>>;
             readonly parameters?: Readonly<Partial<Record<components["schemas"]["ParameterId-Input"], {
                 /** @description Authored parameter label; relationships use its persistent ID */
                 readonly name?: string;
-                /** @description Human-readable description of what this parameter represents */
-                readonly description?: string;
+                /** @description A scientific explanation with a consistent list of numbered references. */
+                readonly reasoning?: {
+                    /** @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs. */
+                    readonly text?: string;
+                    /** @description URLs cited by [n] in text, ordered by their 1-based citation number. */
+                    readonly reference_urls?: readonly string[];
+                };
                 readonly transform?: {
                     /** @constant */
                     readonly kind?: "identity";
@@ -2205,17 +2197,6 @@ export interface components {
                 };
                 /** @description Membership in a native law in DynamicalModelSpec.distributions; may be joint. None means the law has not been assigned yet. */
                 readonly distribution?: `distribution:${string}` | null;
-                /** @description Why the authored prior law fits this quantity, and where its values come from. */
-                readonly reasoning?: string | null;
-                /** @description Evidence behind the authored prior law. */
-                readonly sources?: readonly {
-                    /** @description Title of the source (paper, meta-analysis, textbook, etc.) */
-                    readonly title?: string;
-                    /** @description URL of the source if available */
-                    readonly url?: string | null;
-                    /** @description Relevant excerpt or paraphrase from the source */
-                    readonly snippet?: string;
-                }[];
             } | null>>>;
             /** @description All explicit probability laws. Members are the parameters and constructs referring to each ID. Event coordinates are parameters by ID and element ID, then constructs by ID and time point. A scalar law belongs to one parameter and applies independently to its elements. */
             readonly distributions?: Readonly<Partial<Record<components["schemas"]["DistributionId-Input"], {
@@ -2250,8 +2231,16 @@ export interface components {
             readonly constructs: Readonly<Partial<Record<components["schemas"]["ConstructId-Output"], {
                 /** @description Construct name (e.g., 'stress', 'sleep_quality') */
                 readonly name: string;
-                /** @description What this theoretical construct represents */
-                readonly description: string;
+                /** @description A scientific explanation with a consistent list of numbered references. */
+                readonly reasoning: {
+                    /** @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs. */
+                    readonly text: string;
+                    /**
+                     * @description URLs cited by [n] in text, ordered by their 1-based citation number.
+                     * @default []
+                     */
+                    readonly reference_urls: readonly string[];
+                };
                 readonly indicators: Readonly<Partial<Record<components["schemas"]["IndicatorId-Output"], {
                     readonly observation: {
                         /** @description Indicator name (e.g., 'hrv', 'self_reported_stress') */
@@ -2279,6 +2268,16 @@ export interface components {
                          * @default null
                          */
                         readonly observation_window: string | null;
+                    };
+                    /** @description A scientific explanation with a consistent list of numbered references. */
+                    readonly reasoning: {
+                        /** @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs. */
+                        readonly text: string;
+                        /**
+                         * @description URLs cited by [n] in text, ordered by their 1-based citation number.
+                         * @default []
+                         */
+                        readonly reference_urls: readonly string[];
                     };
                     /** @default null */
                     readonly likelihood: {
@@ -3290,20 +3289,6 @@ export interface components {
                          * @default false
                          */
                         readonly standardized: boolean;
-                        /** @description Why this conditional law was chosen for the indicator */
-                        readonly reasoning: string;
-                        /** @default [] */
-                        readonly sources: readonly {
-                            /** @description Title of the source (paper, meta-analysis, textbook, etc.) */
-                            readonly title: string;
-                            /**
-                             * @description URL of the source if available
-                             * @default null
-                             */
-                            readonly url: string | null;
-                            /** @description Relevant excerpt or paraphrase from the source */
-                            readonly snippet: string;
-                        }[];
                     } | null;
                     /**
                      * @description Whether the measurement increases or decreases with its owning construct.
@@ -3533,26 +3518,30 @@ export interface components {
                 readonly cause: components["schemas"]["ConstructId-Output"];
                 /** @description Persistent identity. Preserve when revising or renaming. */
                 readonly effect: components["schemas"]["ConstructId-Output"];
-                /** @description Theoretical justification for this causal link */
-                readonly description: string;
-                /** @description Literature sources supporting this causal link */
-                readonly sources: readonly {
-                    /** @description Title of the source (paper, meta-analysis, textbook, etc.) */
-                    readonly title: string;
+                /** @description A scientific explanation with a consistent list of numbered references. */
+                readonly reasoning: {
+                    /** @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs. */
+                    readonly text: string;
                     /**
-                     * @description URL of the source if available
-                     * @default null
+                     * @description URLs cited by [n] in text, ordered by their 1-based citation number.
+                     * @default []
                      */
-                    readonly url: string | null;
-                    /** @description Relevant excerpt or paraphrase from the source */
-                    readonly snippet: string;
-                }[];
+                    readonly reference_urls: readonly string[];
+                };
             }>>>;
             readonly parameters: Readonly<Partial<Record<components["schemas"]["ParameterId-Output"], {
                 /** @description Authored parameter label; relationships use its persistent ID */
                 readonly name: string;
-                /** @description Human-readable description of what this parameter represents */
-                readonly description: string;
+                /** @description A scientific explanation with a consistent list of numbered references. */
+                readonly reasoning: {
+                    /** @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs. */
+                    readonly text: string;
+                    /**
+                     * @description URLs cited by [n] in text, ordered by their 1-based citation number.
+                     * @default []
+                     */
+                    readonly reference_urls: readonly string[];
+                };
                 readonly transform: {
                     /**
                      * @default identity
@@ -3585,26 +3574,6 @@ export interface components {
                  * @default null
                  */
                 readonly distribution: `distribution:${string}` | null;
-                /**
-                 * @description Why the authored prior law fits this quantity, and where its values come from.
-                 * @default null
-                 */
-                readonly reasoning: string | null;
-                /**
-                 * @description Evidence behind the authored prior law.
-                 * @default []
-                 */
-                readonly sources: readonly {
-                    /** @description Title of the source (paper, meta-analysis, textbook, etc.) */
-                    readonly title: string;
-                    /**
-                     * @description URL of the source if available
-                     * @default null
-                     */
-                    readonly url: string | null;
-                    /** @description Relevant excerpt or paraphrase from the source */
-                    readonly snippet: string;
-                }[];
             }>>>;
             /** @description All explicit probability laws. Members are the parameters and constructs referring to each ID. Event coordinates are parameters by ID and element ID, then constructs by ID and time point. A scalar law belongs to one parameter and applies independently to its elements. */
             readonly distributions: Readonly<Partial<Record<components["schemas"]["DistributionId-Output"], Domain.NumPyroDistribution>>>;
@@ -4905,6 +4874,8 @@ export interface components {
          */
         readonly "IndicatorSpec-Output": {
             readonly observation: Domain.ObservationSpec<Domain.ObservationWindow | null>;
+            /** @description What this indicator measures and how it is read (for example exact, noisy or rounded), including why its observation law is appropriate. Cite references with [n] in the text. */
+            readonly reasoning: components["schemas"]["ReasoningSpec-Output"];
             /** @default null */
             readonly likelihood: components["schemas"]["LikelihoodSpec-Output"] | null;
             /** @description Whether higher values move with (positive) or against (negative) the construct. */
@@ -5264,7 +5235,7 @@ export interface components {
         readonly "LatentStepSpec-Output": components["schemas"]["AdaptedLatentStepSpec-Output"] | components["schemas"]["FixedLatentStepSpec-Output"];
         /**
          * LikelihoodSpec
-         * @description An indicator's conditional probability law and its scientific justification.
+         * @description An indicator's conditional probability law and observation standardization.
          */
         readonly "LikelihoodSpec-Output": {
             readonly law: components["schemas"]["ObservationLawSpec-Output"];
@@ -5274,16 +5245,6 @@ export interface components {
              * @default false
              */
             readonly standardized: boolean;
-            /**
-             * Reasoning
-             * @description Why this conditional law was chosen for the indicator
-             */
-            readonly reasoning: string;
-            /**
-             * Sources
-             * @default []
-             */
-            readonly sources: readonly components["schemas"]["LiteratureSource-Output"][];
         };
         /**
          * LiteralExpression
@@ -5297,28 +5258,6 @@ export interface components {
             readonly kind: "literal";
             /** Value */
             readonly value: number;
-        };
-        /**
-         * LiteratureSource
-         * @description A literature source records cited evidence supporting a scientific modeling decision.
-         */
-        readonly "LiteratureSource-Output": {
-            /**
-             * Title
-             * @description Title of the source (paper, meta-analysis, textbook, etc.)
-             */
-            readonly title: string;
-            /**
-             * Url
-             * @description URL of the source if available
-             * @default null
-             */
-            readonly url: string | null;
-            /**
-             * Snippet
-             * @description Relevant excerpt or paraphrase from the source
-             */
-            readonly snippet: string;
         };
         readonly Measurement: components["schemas"]["NumericMeasurement"] | components["schemas"]["LabeledMeasurement"];
         /** @description A persistent mechanism identity distinguishes additive terms through reordering and revision. */
@@ -6039,7 +5978,7 @@ export interface components {
         };
         /**
          * ParameterSpec
-         * @description A named uncertain quantity; fixed coefficients are literals in component slots.
+         * @description A named uncertain quantity and the scientific reasoning for its place in the model.
          */
         readonly "ParameterSpec-Output": {
             readonly id: components["schemas"]["ParameterId-Output"];
@@ -6048,29 +5987,14 @@ export interface components {
              * @description Authored parameter label; relationships use its persistent ID
              */
             readonly name: string;
-            /**
-             * Description
-             * @description Human-readable description of what this parameter represents
-             */
-            readonly description: string;
+            /** @description What this quantity means and, for an informative prior, where its values come from. Cite references with [n] in the text. */
+            readonly reasoning: components["schemas"]["ReasoningSpec-Output"];
             readonly transform: components["schemas"]["ParameterTransformSpec-Output"];
             /**
              * @description Membership in a native law in DynamicalModelSpec.distributions; may be joint. None means the law has not been assigned yet.
              * @default null
              */
             readonly distribution: components["schemas"]["DistributionId-Output"] | null;
-            /**
-             * Reasoning
-             * @description Why the authored prior law fits this quantity, and where its values come from.
-             * @default null
-             */
-            readonly reasoning: string | null;
-            /**
-             * Sources
-             * @description Evidence behind the authored prior law.
-             * @default []
-             */
-            readonly sources: readonly components["schemas"]["LiteratureSource-Output"][];
         };
         readonly "ParameterTransformSpec-Output": components["schemas"]["IdentityTransformSpec-Output"] | components["schemas"]["PersistenceTransformSpec-Output"] | components["schemas"]["IntervalEffectTransformSpec-Output"] | components["schemas"]["InitialCorrelationTransformSpec-Output"];
         /**
@@ -6630,6 +6554,23 @@ export interface components {
             readonly stretches: number;
             readonly refresh_quantiles: components["schemas"]["MovementQuantiles"] | null;
             readonly delta_quantiles: components["schemas"]["MovementQuantiles"] | null;
+        };
+        /**
+         * ReasoningSpec
+         * @description A scientific explanation with a consistent list of numbered references.
+         */
+        readonly "ReasoningSpec-Output": {
+            /**
+             * Text
+             * @description Scientific reasoning. Cite reference_urls with 1-based [n] markers, for example [1]. Every marker must select a URL and every URL must be cited. Text without citations needs no URLs.
+             */
+            readonly text: string;
+            /**
+             * Reference Urls
+             * @description URLs cited by [n] in text, ordered by their 1-based citation number.
+             * @default []
+             */
+            readonly reference_urls: readonly string[];
         };
         /**
          * RecordDependency

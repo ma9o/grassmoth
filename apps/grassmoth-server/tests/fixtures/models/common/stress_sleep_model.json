@@ -2,7 +2,6 @@
   "constructs": {
     "construct:98df502ac4daf088ca29": {
       "name": "Stress",
-      "description": "Stress",
       "indicators": {
         "indicator:3696aef3ff6f446744e5": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -166,22 +166,26 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Stress"
+      }
     },
     "construct:86d4bfae39331f91a35d": {
       "name": "unmeasured_outcome",
-      "description": "A downstream response outside the numerical fixture's measured states.",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "A downstream response outside the numerical fixture's measured states."
+      }
     },
     "construct:259490b93f7f2c38ed40": {
       "name": "Sleep",
-      "description": "Sleep",
       "indicators": {
         "indicator:7f807162156d3eb1b611": {
           "likelihood": {
@@ -218,9 +222,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -230,6 +232,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -345,58 +350,71 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Sleep"
+      }
     }
   },
   "edges": {
     "edge:ce37bac4ae29c547dca3": {
       "mechanisms": {},
-      "description": "Stress causes unmeasured_outcome",
-      "sources": [],
       "cause": "construct:98df502ac4daf088ca29",
-      "effect": "construct:86d4bfae39331f91a35d"
+      "effect": "construct:86d4bfae39331f91a35d",
+      "reasoning": {
+        "text": "Stress causes unmeasured_outcome"
+      }
     },
     "edge:54feae2fa823f4b9125d": {
       "mechanisms": {},
-      "description": "Sleep causes unmeasured_outcome",
-      "sources": [],
       "cause": "construct:259490b93f7f2c38ed40",
-      "effect": "construct:86d4bfae39331f91a35d"
+      "effect": "construct:86d4bfae39331f91a35d",
+      "reasoning": {
+        "text": "Sleep causes unmeasured_outcome"
+      }
     }
   },
   "parameters": {
     "parameter:79f4ef602a98b2a1c2a8e0e8a32712435c97386a960def454c1819643b151b71": {
       "name": "rho_Stress",
-      "description": "stiffness of rho_Stress",
       "distribution": "distribution:c59116070fd97f62e1481c1a813279a1f0c5ab452d6f4105f70fbfc3051be03b",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_Stress. Synthetic Beta prior for rho_Stress; its values define this test scenario."
       }
     },
     "parameter:d62df28df0722e5a90eb3d0084864b2e5446788390eb543739e0df14eb4022a8": {
       "name": "rho_Sleep",
-      "description": "stiffness of rho_Sleep",
       "distribution": "distribution:23926233bdfcdac7277090299d9b4fa760ca7d7cb39fbbed3aa6f77297a88490",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_Sleep. Synthetic Beta prior for rho_Sleep; its values define this test scenario."
       }
     },
     "parameter:a10f5942f9c664ae6dfdfc6d1517ae7d90c5d58b41a5115c70873fb2bb5c9ead": {
       "name": "sigma_Stress",
-      "description": "innovation.scale for sigma_Stress",
       "distribution": "distribution:1b42c10520f21b8f6fe4d6a0077f105e3a20182f4e478fcd177a13be70ad54c6",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_Stress. Synthetic HalfNormal prior for sigma_Stress; its values define this test scenario."
       }
     },
     "parameter:9621ac0aee1bc67ad5634d2508adf615c8e92ad21d5baa584a6741a6a020b729": {
       "name": "sigma_Sleep",
-      "description": "innovation.scale for sigma_Sleep",
       "distribution": "distribution:036f944dfb9be10b5c26aa7e4d7b3b60c0662aab4c4b615dd643dc4fb668e9c7",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_Sleep. Synthetic HalfNormal prior for sigma_Sleep; its values define this test scenario."
       }
     }
   },

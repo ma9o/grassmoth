@@ -25,7 +25,6 @@ from grassmoth.artifacts.identity import (
     EdgeId,
     ParameterId,
 )
-from grassmoth.artifacts.model.evidence import LiteratureSource
 from grassmoth.artifacts.model.expressions import (
     CONSTRUCT_COEFFICIENT_ROLES,
     CoefficientExpression,
@@ -34,6 +33,7 @@ from grassmoth.artifacts.model.expressions import (
 )
 from grassmoth.artifacts.model.indicator import IndicatorSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec, DynamicsMechanismSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.probability.families import DistributionFamily
 
 if TYPE_CHECKING:
@@ -61,7 +61,9 @@ class ConstructSpec(Value):
 
     id: ConstructId = Field(description="Persistent identity. Preserve when revising or renaming.")
     name: str = Field(description="Construct name (e.g., 'stress', 'sleep_quality')")
-    description: str = Field(description="What this theoretical construct represents")
+    reasoning: ReasoningSpec = Field(
+        description="What this construct is and why the model needs it. Cite references with [n] in the text."
+    )
     indicators: tuple[IndicatorSpec, ...] = ()
     dynamics: tuple[DynamicsMechanismSpec, ...] = ()
     coefficients: tuple[CoefficientExpression, ...] = ()
@@ -208,10 +210,8 @@ class CausalEdgeSpec(Value):
     effect: ConstructEndpoint = Field(
         description="Effect construct; shared endpoints have one identity."
     )
-    description: str = Field(description="Theoretical justification for this causal link")
-    sources: tuple[LiteratureSource, ...] = Field(
-        default_factory=tuple,
-        description="Literature sources supporting this causal link",
+    reasoning: ReasoningSpec = Field(
+        description="Why this causal link holds and why its mechanism has the specified form. Cite references with [n] in the text."
     )
 
     def with_endpoints(self, cause: ConstructSpec, effect: ConstructSpec) -> Self:
@@ -221,8 +221,7 @@ class CausalEdgeSpec(Value):
             mechanisms=self.mechanisms,
             cause=cause,
             effect=effect,
-            description=self.description,
-            sources=self.sources,
+            reasoning=self.reasoning,
         )
 
 

@@ -2,7 +2,6 @@
   "constructs": {
     "construct:f41a49956dbdbff5c9d6": {
       "name": "screen_gap",
-      "description": "Test state",
       "indicators": {
         "indicator:cbb3ae60fb004e37d3c6": {
           "likelihood": {
@@ -55,9 +54,7 @@
                 }
               }
             },
-            "standardized": false,
-            "reasoning": "Test likelihood",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -67,6 +64,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test likelihood"
           }
         }
       },
@@ -166,68 +166,84 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Test state"
+      }
     },
     "construct:numerical_test_outcome": {
       "name": "numerical_test_outcome",
-      "description": "Unmeasured downstream response joining the numerical test states.",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Unmeasured downstream response joining the numerical test states."
+      }
     }
   },
   "edges": {
     "edge:4ffb5631f8cf9e024ca1": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:f41a49956dbdbff5c9d6",
-      "effect": "construct:numerical_test_outcome"
+      "effect": "construct:numerical_test_outcome",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     }
   },
   "parameters": {
     "parameter:5243f7920370d9fe86357625c16d0be0a6f367806b5d976588d00ce7dd1f085c": {
       "name": "parameter:5243f7920370d9fe86357625c16d0be0a6f367806b5d976588d00ce7dd1f085c",
-      "description": "Fixture quantity",
       "distribution": "distribution:a3103fb2a5c8c30fccfa0bebd9349e00af3eb69025fd9fdb0a7c19640445faf0",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:5243f7920370d9fe86357625c16d0be0a6f367806b5d976588d00ce7dd1f085c; its values define this test scenario."
       }
     },
     "parameter:90be331f277802cea14e9f3de06edc9b23d289491ca5be1d0868c2b2a35cca79": {
       "name": "parameter:90be331f277802cea14e9f3de06edc9b23d289491ca5be1d0868c2b2a35cca79",
-      "description": "Fixture quantity",
       "distribution": "distribution:62528c909bacc47fbe4d70ae5e8f4859f6c68ab02dcfa53c10ab6b744b64e6d9",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:90be331f277802cea14e9f3de06edc9b23d289491ca5be1d0868c2b2a35cca79; its values define this test scenario."
       }
     },
     "parameter:dd0cf717029c72a3fdcc5b3f1c2a51d6509e5cd34e46ec0d9afde0c40c7e8d87": {
       "name": "parameter:dd0cf717029c72a3fdcc5b3f1c2a51d6509e5cd34e46ec0d9afde0c40c7e8d87",
-      "description": "Fixture quantity",
       "distribution": "distribution:02b2166e3e58497aaa3789f044d127060b70b37ce57ad236d20a72db761b604a",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:dd0cf717029c72a3fdcc5b3f1c2a51d6509e5cd34e46ec0d9afde0c40c7e8d87; its values define this test scenario."
       }
     },
     "parameter:bc0cf155753a1065c26ee1e9e8b166caa0472ed1ce6ec4e87dd976b523c2fafa": {
       "name": "parameter:bc0cf155753a1065c26ee1e9e8b166caa0472ed1ce6ec4e87dd976b523c2fafa",
-      "description": "Fixture quantity",
       "distribution": "distribution:cbe841afbfafafce01389fe80a74479bc70475e1a85d964bd89a185b743a09d0",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:bc0cf155753a1065c26ee1e9e8b166caa0472ed1ce6ec4e87dd976b523c2fafa; its values define this test scenario."
       }
     },
     "parameter:bac97683557f7dace2e2cd5dd012ab554cbf5e6ee48c4382aa3dd82da226269e": {
       "name": "obs_shape",
-      "description": "shape for obs_shape",
       "distribution": "distribution:bcd14ba72ab5a1e0ec09e071e70b33a2f8bbb2b93808fb4c19e6281c9401e362",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "shape for obs_shape. Synthetic Gamma prior for obs_shape; its values define this test scenario."
       }
     }
   },

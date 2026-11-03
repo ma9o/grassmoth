@@ -175,7 +175,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     prior = x_y_model()
     fitted = prior
     edited = fitted.with_entities(
-        edges=(fitted.edges[0].revised(description="X changes Y within a day"),)
+        edges=(fitted.edges[0].revised(reasoning={"text": "X changes Y within a day"}),)
     )
     store = ArtifactStore(workspace)
     for revision, (model, producer) in enumerate(
@@ -313,6 +313,6 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
         assert modal_fit.call_args.args[0].sampler.hardware is hardware
         assert modal_fit.call_args.kwargs["profile"] is True
     assert (
-        read_model(store, effects.effects.produced[0].revision).edges[0].description
-        == edited.edges[0].description
+        read_model(store, effects.effects.produced[0].revision).edges[0].reasoning
+        == edited.edges[0].reasoning
     )

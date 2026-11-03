@@ -36,6 +36,7 @@ from grassmoth.artifacts.model.likelihood import (
 from grassmoth.artifacts.model.parameter import SiteKind
 from grassmoth.artifacts.model.parameter_context import iter_coefficient_uses
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.compilation_errors import IncompleteModelError
 from grassmoth_test_support.fixtures import model_fixture_json
 from grassmoth_test_support.helpers import make_model
@@ -69,6 +70,7 @@ def _partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_comp
     sigma_x = parameter_named(dynamical_model_spec, "sigma_X")
     sigma_y = parameter_named(dynamical_model_spec, "sigma_Y")
     x_obs_revised = x_obs.revised(
+        reasoning={"text": "Partial"},
         likelihood=x_obs_likelihood.revised(
             law=NormalLawSpec[Expression](
                 loc=(
@@ -78,8 +80,7 @@ def _partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_comp
                 scale=coefficient(0.0, "observation_scale"),
             ),
             standardized=False,
-            reasoning="Partial",
-        )
+        ),
     )
     x_revised = x.revised(indicators=(x_obs_revised,))
     return dynamical_model_spec.with_entities(
@@ -92,8 +93,10 @@ def _partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_comp
             ParameterSpec(
                 id=_MANIFEST_MEAN_X_OBS_PARAMETER_ID,
                 name="manifest_mean_X_obs",
-                description="likelihood.intercept for manifest_mean_X_obs",
                 distribution=_MANIFEST_MEAN_X_OBS_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="likelihood.intercept for manifest_mean_X_obs. Synthetic prior for likelihood.intercept for manifest_mean_X_obs; its values define this test scenario."
+                ),
             ),
             sigma_y,
         ),
@@ -433,7 +436,7 @@ def test_authored_laws_preserve_coefficient_identities(
     assert authored.parsed.loadings[ConstructId("construct:x")].value == -1
     assert authored.parsed.intercept.value == scientific_id("parameter", "baseline")
     assert (authored.parsed.family, authored.parsed.link) == (family, link)
-    assert set(authored.model_dump()) == {"law", "standardized", "reasoning", "sources"}
+    assert set(authored.model_dump()) == {"law", "standardized"}
     assert LikelihoodSpec.model_validate_json(authored.model_dump_json()) == authored
 
 
@@ -482,7 +485,6 @@ def test_partial_law_is_explicit_and_unsupported_formulas_fail_before_execution(
         law=TypeAdapter(ObservationLawSpec).validate_json(
             model_fixture_json("likelihood_expressions/gaussian_identity_law.json")
         ),
-        reasoning="Partial",
     )
     assert all(operand.value is None for operand in likelihood.parsed.operands)
     with pytest.raises(ValidationError, match="affine"):
@@ -491,7 +493,6 @@ def test_partial_law_is_explicit_and_unsupported_formulas_fail_before_execution(
                 loc=function("exp", likelihood.parsed.predictor),
                 scale=coefficient(None, "observation_scale"),
             ),
-            reasoning="Unsupported nonlinear observation predictor",
         )
     with pytest.raises(ValidationError, match="Field required"):
         NormalLawSpec.model_validate({"rate": likelihood.parsed.predictor})
@@ -507,7 +508,6 @@ def test_partial_law_is_explicit_and_unsupported_formulas_fail_before_execution(
                 "likelihood_expressions/partial_law_is_explicit_and_unsupported_formulas_fail_before_execution_observation_law_2.json"
             )
         ),
-        reasoning="Partial",
     )
 
     def with_law(law):
@@ -530,7 +530,6 @@ def test_partial_law_is_explicit_and_unsupported_formulas_fail_before_execution(
         law=TypeAdapter(ObservationLawSpec).validate_json(
             model_fixture_json("common/observed_gaussian_observation_law.json")
         ),
-        reasoning="Wrong owner",
     )
     with pytest.raises(ValidationError, match="must include its measured construct"):
         with_law(wrong_owner)

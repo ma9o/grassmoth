@@ -6,6 +6,7 @@ import { formatFillNull, humanize } from "@/lib/model-asset/selection";
 import type { ScopeContext } from "@/lib/model-asset/scope";
 import { Hint, KeyValue, Section, StatusIcon } from "../scope-primitives";
 import { LawSections, SimulatedHistory } from "./law-sections";
+import { Reasoning } from "./reasoning";
 import { Katex } from "@/components/analysis-widgets/statistical-model-spec/ssm-equation-display";
 import { ObservationPlots, ObservedProfile } from "./recorded-history";
 import { FlowSection } from "./flow-sections";
@@ -25,6 +26,7 @@ export function IndicatorScope({ context, id }: { context: ScopeContext; id: Ind
   return (
     <>
       <Section title="Measurement">
+        <Reasoning value={indicator.reasoning} />
         <details>
           <summary className="cursor-pointer text-muted-foreground">Measurement settings</summary>
           <div className="mt-2">
