@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from grassmoth.models.ssm.preparation.preflight import (
     ObservationPreflightFailure,
-    validate_observations_for_fit,
+    validate_observation_support_for_fit,
     validate_sampler_support,
 )
 
@@ -38,7 +38,7 @@ def fit(
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | ObservationPreflightFailure | InitializationFailure:
     """Run exact joint inference once the observations and sampler pass preflight."""
-    failure = validate_observations_for_fit(priors, panel)
+    failure = validate_observation_support_for_fit(panel)
     if failure is not None:
         return failure
     failure = validate_sampler_support(panel.compiled_dynamical_model, sampler)

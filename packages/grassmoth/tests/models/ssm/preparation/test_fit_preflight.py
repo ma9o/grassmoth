@@ -1,4 +1,4 @@
-"""Tests for the fit-time observation/prior preflight checks."""
+"""Tests for fit admission without an intercept-based location restriction."""
 
 from __future__ import annotations
 
@@ -26,7 +26,7 @@ from grassmoth.artifacts.sampling import SamplerSpec
 from grassmoth.models.ssm.inference.fit import fit
 from grassmoth.models.ssm.preparation.preflight import (
     ObservationPreflightFailure,
-    validate_observations_for_fit,
+    validate_observation_support_for_fit,
 )
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fixture
@@ -242,90 +242,76 @@ def _panel(inputs, observations):
     )
 
 
-def test_returns_rejection_for_unreachable_free_manifest_mean():
-    fit_inputs = compile_fit_fixture(_raw_channels_model())
-    failure = validate_observations_for_fit(
-        fit_inputs.prior_runtime_bundle, _panel(fit_inputs, _observations(87.0, 0.1))
-    )
-    assert isinstance(failure, ObservationPreflightFailure)
-    assert "raw_channel" in failure.message
-
-
-def test_passes_when_free_mean_is_within_prior_reach():
+def test_natural_unit_readings_are_not_limited_by_the_intercept_prior():
     fit_inputs = compile_fit_fixture(_raw_channels_model())
     assert (
-        validate_observations_for_fit(
-            fit_inputs.prior_runtime_bundle, _panel(fit_inputs, _observations(0.5, -0.3))
-        )
-        is None
+        validate_observation_support_for_fit(_panel(fit_inputs, _observations(40.0, 0.1))) is None
     )
 
 
-def test_preflight_uses_compiled_authored_location_laws():
+def test_support_accepts_readings_near_the_intercept_prior():
+    fit_inputs = compile_fit_fixture(_raw_channels_model())
+    assert (
+        validate_observation_support_for_fit(_panel(fit_inputs, _observations(0.5, -0.3))) is None
+    )
+
+
+def test_support_accepts_authored_location_laws():
 
     dynamical_model_spec = (
         _preflight_uses_compiled_authored_location_laws_with_parameter_distributions()
     )
     fit_inputs = compile_fit_fixture(dynamical_model_spec)
     assert (
-        validate_observations_for_fit(
-            fit_inputs.prior_runtime_bundle, _panel(fit_inputs, _observations(87.0, 0.1))
-        )
-        is None
+        validate_observation_support_for_fit(_panel(fit_inputs, _observations(87.0, 0.1))) is None
     )
 
 
 def test_fixed_manifest_means_are_not_judged():
     fit_inputs = compile_fit_fixture(_fixed_manifest_means_are_not_judged__model())
     assert (
-        validate_observations_for_fit(
-            fit_inputs.prior_runtime_bundle, _panel(fit_inputs, _observations(87.0, 0.1))
-        )
-        is None
+        validate_observation_support_for_fit(_panel(fit_inputs, _observations(87.0, 0.1))) is None
     )
 
 
 def test_binding_standardizes_flagged_channels_before_preflight():
     fit_inputs = compile_fit_fixture(_standardized_channel_model())
     obs = _observations(87.0, 0.1)
-    assert (
-        validate_observations_for_fit(fit_inputs.prior_runtime_bundle, _panel(fit_inputs, obs))
-        is None
-    )
+    assert validate_observation_support_for_fit(_panel(fit_inputs, obs)) is None
 
 
 def test_non_identity_links_are_not_judged():
     fit_inputs = compile_fit_fixture(_non_identity_links_are_not_judged__model())
     obs = _observations(0.0, 0.1)
     obs[:, 0] = RNG.poisson(80.0, size=obs.shape[0]).astype(np.float64)
-    assert (
-        validate_observations_for_fit(fit_inputs.prior_runtime_bundle, _panel(fit_inputs, obs))
-        is None
-    )
+    assert validate_observation_support_for_fit(_panel(fit_inputs, obs)) is None
 
 
 def test_nan_only_channels_are_skipped():
     fit_inputs = compile_fit_fixture(_raw_channels_model())
     obs = _observations(0.2, 0.1)
     obs[:, 0] = np.nan
-    assert (
-        validate_observations_for_fit(fit_inputs.prior_runtime_bundle, _panel(fit_inputs, obs))
-        is None
-    )
+    assert validate_observation_support_for_fit(_panel(fit_inputs, obs)) is None
 
 
-def test_fit_runs_preflight_before_dispatch():
+def test_fit_dispatches_natural_unit_readings_with_a_zero_centered_intercept_prior(monkeypatch):
+    from grassmoth.models.ssm.inference.samplers.mpgibbs import fit as sampler_module
+
     fit_inputs = compile_fit_fixture(_raw_channels_model())
-    obs = _observations(87.0, 0.1)
-    failure = fit(
+    obs = _observations(40.0, 0.1)
+    panel = _panel(fit_inputs, obs)
+    dispatched = ObservationPreflightFailure.rejected("Fit dispatcher reached")
+
+    def record_dispatch(priors, supplied_panel, **_kwargs):
+        assert priors is fit_inputs.prior_runtime_bundle
+        assert supplied_panel is panel
+        return dispatched
+
+    monkeypatch.setattr(sampler_module, "fit_marginal_particle_gibbs", record_dispatch)
+    result = fit(
         fit_inputs.prior_runtime_bundle,
-        bind_panel_fixture(
-            fit_inputs.compiled_dynamical_model,
-            jnp.asarray(obs),
-            jnp.arange(obs.shape[0], dtype=jnp.float32),
-        ),
+        panel,
         sampler=SamplerSpec(),
         execution_context=EXECUTION_CONTEXT,
     )
-    assert isinstance(failure, ObservationPreflightFailure)
-    assert "raw_channel" in failure.message
+    assert result is dispatched
