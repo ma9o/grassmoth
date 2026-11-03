@@ -1,6 +1,7 @@
 """Convergence evidence on every independent latent coordinate, grouped by construct."""
 
 from dataclasses import dataclass
+from typing import Self
 
 import jax
 import jax.numpy as jnp
@@ -26,13 +27,22 @@ def joint_latent_paths(layout: JointLawLayout, atoms: NDArray, chains: int) -> N
     )
 
 
-def _selected_statistics(paths: jax.Array | NDArray, selected: NDArray) -> NDArray | None:
+@jax.jit
+def _frozen_chain(samples: jax.Array) -> jax.Array:
+    return jnp.any(jnp.all(samples == samples[:, :1], axis=1))
+
+
+def _selected_statistics(
+    paths: jax.Array | NDArray, dimension: int, selected: NDArray
+) -> NDArray | None:
     """Gather and check only one coordinate batch; a frozen chain fails the construct."""
     batch_size = chain_statistic_batch_size(*paths.shape[:2])
     batches = []
     for start in range(0, selected.size, batch_size):
-        samples = paths[:, :, selected[start : start + batch_size]]
-        if bool(jnp.any(jnp.all(samples == samples[:, :1], axis=1))):
+        # Select time and state together: slicing an entire state first would
+        # allocate chains × draws × times on the sampling device.
+        samples = jnp.asarray(paths[:, :, selected[start : start + batch_size], dimension])
+        if bool(_frozen_chain(samples)):
             return None
         batches.append(chain_statistics(samples))
     return np.concatenate(batches, axis=0)
@@ -40,26 +50,41 @@ def _selected_statistics(paths: jax.Array | NDArray, selected: NDArray) -> NDArr
 
 @dataclass(frozen=True)
 class LatentChainEvidence:
-    """Post-warmup paths and the compiler's independent, unobserved coordinates."""
+    """Host-owned paths and the full-chain summaries computed before transfer."""
 
-    paths: jax.Array | NDArray
+    paths: NDArray
     free_mask: NDArray
     states: tuple[tuple[ConstructRef, str], ...]
+    diagnostics: tuple[LatentDiagnostics, ...]
+
+    @classmethod
+    def from_draws(
+        cls,
+        paths: jax.Array | NDArray,
+        free_mask: NDArray,
+        states: tuple[tuple[ConstructRef, str], ...],
+    ) -> Self:
+        """Reduce bounded device batches, then transfer the full paths exactly once."""
+        diagnostics = _latent_chain_diagnostics(paths, free_mask, states)
+        return cls(jax.device_get(paths), free_mask, states, diagnostics)
 
     def __post_init__(self) -> None:
-        """Own immutable numerical evidence before projecting scalar diagnostics."""
+        """Share immutable host evidence between conditioning and report consumers."""
         freeze_fields(self)
 
 
-def latent_chain_diagnostics(evidence: LatentChainEvidence) -> tuple[LatentDiagnostics, ...]:
+def _latent_chain_diagnostics(
+    paths: jax.Array | NDArray,
+    free_mask: NDArray,
+    states: tuple[tuple[ConstructRef, str], ...],
+) -> tuple[LatentDiagnostics, ...]:
     """Report worst-time rank R-hat/ESS and explicitly fail frozen independent chains."""
-    paths = evidence.paths
     result = []
-    for dimension, (subject, label) in enumerate(evidence.states):
-        selected = np.flatnonzero(evidence.free_mask[:, dimension])
+    for dimension, (subject, label) in enumerate(states):
+        selected = np.flatnonzero(free_mask[:, dimension])
         if not selected.size:
             continue
-        metrics = _selected_statistics(paths[:, :, :, dimension], selected)
+        metrics = _selected_statistics(paths, dimension, selected)
 
         def worst(values: NDArray, *, largest: bool) -> float | None:
             if not np.all(np.isfinite(values)):

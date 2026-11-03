@@ -96,12 +96,12 @@ class ParticleChainResult:
     observation_log_probs: jnp.ndarray
     chain_extra_fields: Mapping[str, jnp.ndarray]
     warmup_chain_extra_fields: Mapping[str, jnp.ndarray]
-    all_chain_extra_fields: Mapping[str, jnp.ndarray]
+    all_chain_extra_fields: Mapping[str, np.ndarray[tuple[int, ...], np.dtype[np.generic]]]
     starting_values: Mapping[str, jnp.ndarray]
     complete_log_posterior_history: jnp.ndarray
     warmup_complete_log_posterior_history: jnp.ndarray
-    all_complete_log_posterior_history: jnp.ndarray
-    latent_paths: jnp.ndarray
+    all_complete_log_posterior_history: np.ndarray[tuple[int, ...], np.dtype[np.generic]]
+    latent_paths: jnp.ndarray | np.ndarray[tuple[int, ...], np.dtype[np.generic]]
     initial_param_step_size: jnp.ndarray
     final_param_step_size: jnp.ndarray
     final_parameter_chol: jax.Array
@@ -609,8 +609,10 @@ def run_marginal_particle_gibbs(
     posterior_extra = {
         name: value for name, value in run.history.posterior.items() if name not in draw_fields
     }
+    # Combined display histories need no device allocation alongside the full
+    # retained paths. Their consumers serialize or summarize host values.
     all_extra = {
-        name: jnp.concatenate((warmup_extra[name], value), axis=1)
+        name: np.concatenate((np.asarray(warmup_extra[name]), np.asarray(value)), axis=1)
         for name, value in posterior_extra.items()
     }
     complete_lp = run.history.posterior["log_posterior"]
@@ -628,8 +630,8 @@ def run_marginal_particle_gibbs(
         all_chain_extra_fields=all_extra,
         complete_log_posterior_history=complete_lp,
         warmup_complete_log_posterior_history=run.history.warmup["log_posterior"],
-        all_complete_log_posterior_history=jnp.concatenate(
-            (run.history.warmup["log_posterior"], complete_lp), axis=1
+        all_complete_log_posterior_history=np.concatenate(
+            (np.asarray(run.history.warmup["log_posterior"]), np.asarray(complete_lp)), axis=1
         ),
         latent_paths=run.history.posterior["paths"],
         initial_param_step_size=initial_param_step_size,

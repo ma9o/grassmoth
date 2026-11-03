@@ -219,10 +219,14 @@ def test_device_plot_summaries_use_full_draws_and_average_ties(constant):
 
 
 @pytest.mark.inference(concern="sampling")
-def test_latent_convergence_detects_stuck_paths_despite_well_mixed_parameters(particle_posterior):
+def test_latent_convergence_detects_stuck_paths_despite_well_mixed_parameters(
+    particle_posterior, monkeypatch
+):
     from dataclasses import replace
+    from unittest.mock import Mock
 
     from grassmoth.artifacts.identity import ConstructId, ConstructRef
+    from grassmoth.models.ssm.inference.diagnostics import latent
     from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
     from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 
@@ -240,8 +244,11 @@ def test_latent_convergence_detects_stuck_paths_despite_well_mixed_parameters(pa
         particle_posterior,
         diagnostics=replace(
             particle_posterior.diagnostics,
-            latent_chains=LatentChainEvidence(paths, free, states),
+            latent_chains=LatentChainEvidence.from_draws(paths, free, states),
         ),
+    )
+    monkeypatch.setattr(
+        latent, "chain_statistics", Mock(side_effect=AssertionError("Repeated latent reduction"))
     )
     refs = references([("alpha", ()), ("beta", (0,)), ("beta", (1,)), ("sigma", ())])
     report = posterior.get_mcmc_diagnostics(refs)
@@ -313,7 +320,7 @@ def test_joint_latent_paths_share_owned_atoms_with_parameter_stride():
     )
     owner = NumericalArray.from_numpy(np.arange(14 * 7, dtype=np.float32).reshape(14, 7))
     paths = joint_latent_paths(layout, owner.values, 2)
-    evidence = LatentChainEvidence(
+    evidence = LatentChainEvidence.from_draws(
         paths,
         np.ones((3, 2), dtype=bool),
         tuple((ConstructRef(id=identity), str(identity)) for identity in layout.constructs),
@@ -330,7 +337,10 @@ def test_joint_latent_paths_share_owned_atoms_with_parameter_stride():
 
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize("frozen", [False, True])
-def test_latent_diagnostics_bound_selection_and_detect_late_frozen_coordinate(monkeypatch, frozen):
+@pytest.mark.parametrize("device", [False, True])
+def test_latent_diagnostics_bound_selection_and_detect_late_frozen_coordinate(
+    monkeypatch, frozen, device
+):
     from grassmoth.artifacts.identity import ConstructId, ConstructRef
     from grassmoth.models.ssm.inference.diagnostics import latent
     from grassmoth.models.ssm.inference.diagnostics.chain_stats import chain_statistics
@@ -350,15 +360,29 @@ def test_latent_diagnostics_bound_selection_and_detect_late_frozen_coordinate(mo
         return chain_statistics(samples)
 
     monkeypatch.setattr(latent, "chain_statistics", record_selection)
-    evidence = latent.LatentChainEvidence(
-        paths,
+    source = jnp.asarray(paths) if device else paths
+    if device:
+        getitem = type(source).__getitem__
+
+        def bounded_getitem(value, index):
+            selected = getitem(value, index)
+            if value is source:
+                assert selected.size <= 2 * 64 * 256
+            return selected
+
+        monkeypatch.setattr(type(source), "__getitem__", bounded_getitem)
+    evidence = latent.LatentChainEvidence.from_draws(
+        source,
         free,
         tuple(
             (ConstructRef(id=ConstructId("construct:" + name)), name)
             for name in ("state", "observed")
         ),
     )
-    (report,) = latent.latent_chain_diagnostics(evidence)
+    (report,) = evidence.diagnostics
+    assert isinstance(evidence.paths, np.ndarray)
+    assert not evidence.paths.flags.writeable
+    np.testing.assert_array_equal(evidence.paths, paths)
     assert report.coordinates == 262
     assert selected_shapes
     assert max(shape[-1] for shape in selected_shapes) <= 256

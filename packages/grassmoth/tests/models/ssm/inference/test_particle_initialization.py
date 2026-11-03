@@ -107,6 +107,14 @@ def test_production_fit_consumes_gaussian_initialization(method, metrics):
     assert isinstance(evidence.initialization, GaussianInitializationDiagnostics)
     assert evidence.initialization.scale == 0.1
     assert evidence.parameter_preconditioned
-    assert result.draws.latent_paths is not None
+    assert isinstance(result.draws.latent_paths, np.ndarray)
     assert result.draws.latent_paths.shape == (6, len(panel.times), 1)
+    assert result.diagnostics.latent_chains is not None
+    assert np.shares_memory(result.draws.latent_paths, result.diagnostics.latent_chains.paths)
+    assert len(result.diagnostics.latent_chains.diagnostics) == 1
+    assert isinstance(result.diagnostics.all_complete_log_posterior_history, np.ndarray)
+    assert all(
+        isinstance(value, np.ndarray)
+        for value in result.diagnostics.phase_extra_fields["all"].values()
+    )
     assert np.isfinite(result.diagnostics.observation_log_probs).all()

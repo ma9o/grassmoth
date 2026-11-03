@@ -190,7 +190,9 @@ def _fit(
         final_latent_delta=retain(result.final_latent_delta),
     )
     with inference_phase("fit", "segment_diagnostics", execution_context=execution_context):
-        diagnostics = segment_diagnostics(conditioned, identity, evidence, sampler.num_chains)
+        diagnostics = segment_diagnostics(
+            conditioned, identity, evidence, sampler.num_chains, native.latent_chains
+        )
     metadata = InferenceMetadata(
         distribution=identity,
         segments=(
@@ -335,7 +337,7 @@ def inference_report(
             posterior = MCMCPosterior.from_run(
                 draws=JointPosteriorDraws(parameters=samples),
                 diagnostics=ProductionDiagnostics(
-                    latent_chains=LatentChainEvidence(
+                    latent_chains=LatentChainEvidence.from_draws(
                         paths=joint_latent_paths(layout, atoms[metadata.distribution], chains),
                         free_mask=np.asarray(evidence.latent_free_mask.values),
                         states=tuple(
@@ -346,7 +348,7 @@ def inference_report(
                             for identity in layout.constructs
                         ),
                     )
-                    if evidence.latent_free_mask is not None
+                    if evidence.latent_free_mask is not None and len(metadata.segments) != 1
                     else None,
                     mcmc=TrajectoryMCMCResult(
                         chain_samples={

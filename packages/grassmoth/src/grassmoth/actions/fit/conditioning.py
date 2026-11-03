@@ -37,7 +37,7 @@ def condition_model(
     are attached to the scientific model.
     """
     bindings = compiled_dynamical_model.bindings
-    samples = result.get_samples()
+    samples = {name: np.asarray(values) for name, values in result.get_samples().items()}
     paths = result.draws.latent_paths
     state_ids = numeric.state_ids(compiled_dynamical_model)
     modeled_ids = [
@@ -50,6 +50,9 @@ def condition_model(
         raise ValueError("Conditioning must retain the complete aligned latent trajectories")
     if result.draws.state_ids and tuple(result.draws.state_ids) != tuple(state_ids):
         raise ValueError("Engine latent trajectories do not match the model's state identities")
+    # Column selection and joint packing belong to the host. The production
+    # sampler already shares this host owner with its retained diagnostics.
+    paths = np.asarray(paths)
     conditioned_parameters = {binding.parameter_id for binding in bindings}
     layout = joint_law_layout(
         bindings,

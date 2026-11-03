@@ -174,7 +174,7 @@ def test_planner_uses_compiled_memory_without_executing_or_serializing_chains(
         )
 
 
-def test_history_budget_counts_posterior_paths_once_and_combined_diagnostics_twice(monkeypatch):
+def test_history_budget_places_combined_diagnostics_on_host(monkeypatch):
     monkeypatch.setattr(
         sweeps, "compiled_memory", lambda _: MemoryDemand(host_bytes=0, device_bytes=64)
     )
@@ -193,7 +193,11 @@ def test_history_budget_counts_posterior_paths_once_and_combined_diagnostics_twi
     plan = sweeps.compile_sweeps(
         program, initial, execution_context=context(900_000), sampler=sampler
     )
-    assert plan.memory.device_bytes == 64 + 100 * 2 * 1024 * 4 + 2 * 101 * 2 * 4
+    paths = 100 * 2 * 1024 * 4
+    diagnostics = 101 * 2 * 4
+    block = 25 * (2 * 1024 * 4 + 2 * 4)
+    assert plan.memory.device_bytes == 64 + paths + diagnostics
+    assert plan.memory.host_bytes == paths + 2 * diagnostics + block
     with pytest.raises(MemoryError, match="One sweep lane"):
         sweeps.compile_sweeps(program, initial, execution_context=context(800_000), sampler=sampler)
 

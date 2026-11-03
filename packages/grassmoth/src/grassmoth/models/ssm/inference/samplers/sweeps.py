@@ -109,12 +109,15 @@ def compile_sweeps[Carry](
         shape.size * shape.dtype.itemsize for shape in history_shapes.values()
     )
     # Host assembly buffers coexist with one device_get block, including its
-    # padded tail. XLA accounts for device block buffers. Returned phases and
-    # their combined diagnostics coexist on device, but posterior paths and
-    # positions are never concatenated with warmup and have only one copy.
+    # padded tail and the host-only combined diagnostics. XLA accounts for
+    # device block buffers; returned phases have one device owner. Posterior
+    # paths and positions are never concatenated with warmup.
     overhead = MemoryDemand(
-        host_bytes=history_bytes + transfer_bytes + additional_overhead.host_bytes,
-        device_bytes=history_bytes + combined_diagnostic_bytes + additional_overhead.device_bytes,
+        host_bytes=history_bytes
+        + combined_diagnostic_bytes
+        + transfer_bytes
+        + additional_overhead.host_bytes,
+        device_bytes=history_bytes + additional_overhead.device_bytes,
     )
     executable = compile_program()
     memory = compiled_memory(executable)

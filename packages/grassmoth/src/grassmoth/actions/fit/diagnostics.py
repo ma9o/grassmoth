@@ -4,16 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import jax.numpy as jnp
 import numpy as np
 
-from grassmoth.artifacts.identity import ConstructRef, ParameterRef
+from grassmoth.artifacts.identity import ParameterRef
 from grassmoth.artifacts.model.parameter import ParameterCoordinate
 from grassmoth.artifacts.probability.serialization import empirical_atoms
-from grassmoth.models.ssm.inference.diagnostics.latent import (
-    LatentChainEvidence,
-    joint_latent_paths,
-)
 from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
 from grassmoth.models.ssm.inference.types import (
     JointPosteriorDraws,
@@ -26,6 +21,7 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.reports.inference import InferenceEvidence
     from grassmoth.artifacts.reports.posterior_diagnostics import ChainDiagnostics
+    from grassmoth.models.ssm.inference.diagnostics.latent import LatentChainEvidence
 
 
 def segment_diagnostics(
@@ -33,14 +29,14 @@ def segment_diagnostics(
     distribution: DistributionId,
     evidence: InferenceEvidence,
     chains: int,
+    latent_chains: LatentChainEvidence | None,
 ) -> ChainDiagnostics:
     """Diagnose the current execution before earlier draws and telemetry are appended."""
     layout = model.law_layouts[distribution]
     atoms = empirical_atoms(model.distributions[distribution])
     count = atoms.shape[0] // chains
     parameters = {
-        str(element): jnp.asarray(atoms[:, column])
-        for element, column in layout.parameter_columns.items()
+        str(element): atoms[:, column] for element, column in layout.parameter_columns.items()
     }
     references = {
         ParameterCoordinate(site_name=str(element), indices=()): (
@@ -63,17 +59,18 @@ def segment_diagnostics(
                 num_chains=chains,
                 num_samples=count,
             ),
-            observation_log_probs=jnp.empty((chains, count, 0)),
-            latent_chains=LatentChainEvidence(
-                paths=joint_latent_paths(layout, atoms, chains),
-                free_mask=np.asarray(evidence.latent_free_mask.values),
-                states=tuple(
-                    (ConstructRef(id=identity), model.get_construct(identity).name)
-                    for identity in layout.constructs
-                ),
-            )
-            if evidence.latent_free_mask is not None
-            else None,
+            observation_log_probs=np.empty((chains, count, 0), dtype=np.float32),
+            latent_chains=latent_chains,
         ),
     )
-    return posterior.get_inference_diagnostics(references)
+    diagnostics = posterior.get_inference_diagnostics(references)
+    return diagnostics.revised(
+        per_latent=tuple(
+            entry
+            for identity in layout.constructs
+            for entry in diagnostics.per_latent
+            if entry.subject.id == identity
+        )
+        if diagnostics.per_latent is not None
+        else None,
+    )

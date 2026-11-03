@@ -112,9 +112,9 @@ class ProductionDiagnostics:
     public_sites: tuple[str, ...] | None = None
     exact_observation_rows: jnp.ndarray | NDArray | None = None
     sampler_diagnostics: ParticleSamplerDiagnostics | None = None
-    phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]] | None = None
+    phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray | NDArray]] | None = None
     warmup_complete_log_posterior_history: jnp.ndarray | None = None
-    all_complete_log_posterior_history: jnp.ndarray | None = None
+    all_complete_log_posterior_history: jnp.ndarray | NDArray | None = None
 
     def __post_init__(self) -> None:
         """Freeze phase-specific diagnostic mappings after construction."""
@@ -137,7 +137,7 @@ class JointPosteriorDraws:
     """Aligned parameter and latent-trajectory draws; the leading axis identifies one joint draw."""
 
     parameters: Mapping[str, jnp.ndarray | NDArray]
-    latent_paths: jnp.ndarray | None = None
+    latent_paths: jnp.ndarray | NDArray | None = None
     state_ids: tuple[ConstructId, ...] = ()
 
     def __post_init__(self) -> None:
@@ -201,7 +201,6 @@ class MCMCPosterior:
         import math
 
         from grassmoth.models.ssm.inference.diagnostics.chain_stats import chain_statistics
-        from grassmoth.models.ssm.inference.diagnostics.latent import latent_chain_diagnostics
 
         mcmc = self.diagnostics.mcmc
         chain_samples = mcmc.get_samples(group_by_chain=True)
@@ -236,7 +235,7 @@ class MCMCPosterior:
             num_chains=int(mcmc.num_chains),
             num_samples_per_chain=int(mcmc.num_samples),
             per_parameter=tuple(parameters),
-            per_latent=latent_chain_diagnostics(self.diagnostics.latent_chains)
+            per_latent=self.diagnostics.latent_chains.diagnostics
             if self.diagnostics.latent_chains is not None
             else None,
             latent_accept_prob_mean=average("latent_accept_prob"),
@@ -270,7 +269,7 @@ class MCMCPosterior:
         from arviz_stats.loo import loo
         from arviz_stats.utils import ELPDDataLOO
 
-        factors = self.diagnostics.observation_log_probs
+        factors = np.asarray(self.diagnostics.observation_log_probs)
         factors = factors[:, :, observed_rows]
         if factors.shape[1] == 0 or factors.shape[2] == 0:
             return None

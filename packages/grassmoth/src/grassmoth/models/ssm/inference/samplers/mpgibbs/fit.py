@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import jax
@@ -237,6 +238,21 @@ def fit_marginal_particle_gibbs(
 
     phase_t0 = clock()
     logger.info("phase 4/4: extracting public posterior samples...")
+    with inference_phase("mpgibbs", "latent_diagnostics", execution_context=execution_context):
+        latent_chains = LatentChainEvidence.from_draws(
+            paths=run_result.latent_paths,
+            free_mask=np.asarray(
+                bundle.runtime.state_density_mask
+                if bundle.exact_constraints is None
+                else bundle.runtime.state_density_mask & bundle.exact_constraints.free_mask
+            ),
+            states=tuple(
+                (ConstructRef(id=s.id), s.name) for s in panel.compiled_dynamical_model.states
+            ),
+        )
+    # Drop the retained device history before extraction and conditioning. Both
+    # posterior views below share the immutable host owner, with no device slices.
+    run_result = replace(run_result, latent_paths=latent_chains.paths)
     grouped_public_samples = extract_grouped_public_samples(
         run_result.grouped_positions,
         bundle=bundle,
@@ -316,17 +332,7 @@ def fit_marginal_particle_gibbs(
         mcmc=mcmc,
         public_sites=tuple(sorted(bundle.public_sites)),
         observation_log_probs=run_result.observation_log_probs,
-        latent_chains=LatentChainEvidence(
-            paths=run_result.latent_paths,
-            free_mask=np.asarray(
-                bundle.runtime.state_density_mask
-                if bundle.exact_constraints is None
-                else bundle.runtime.state_density_mask & bundle.exact_constraints.free_mask
-            ),
-            states=tuple(
-                (ConstructRef(id=s.id), s.name) for s in panel.compiled_dynamical_model.states
-            ),
-        ),
+        latent_chains=latent_chains,
         sampler_diagnostics=kernel_diagnostics,
         phase_extra_fields={
             "initialization" if continuation is None else "continued_start": starting_values,
@@ -347,7 +353,7 @@ def fit_marginal_particle_gibbs(
         (clock() - phase_t0),
         (clock() - overall_t0),
     )
-    latent_paths = run_result.latent_paths
+    latent_paths = latent_chains.paths
     return MCMCPosterior.from_run(
         draws=JointPosteriorDraws(
             parameters=mcmc.get_samples(),
