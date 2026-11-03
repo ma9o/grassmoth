@@ -43,9 +43,6 @@ def resolve_sampler_spec(
         compiler_reparameterization=configured.compiler_reparameterization
         if settings.compiler_reparameterization is None
         else settings.compiler_reparameterization,
-        scale_chart=configured.scale_chart
-        if settings.scale_chart is None
-        else settings.scale_chart,
         parameter_proposal=configured.parameter_proposal
         if settings.parameter_proposal is None
         else settings.parameter_proposal,

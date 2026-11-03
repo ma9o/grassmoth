@@ -124,22 +124,24 @@ class ParticleTarget:
         assert index is not None, "Path charts encode each state at its own time."
         return frame.encode(state, index)
 
-    def _encode_covariance(self, context: ParticleContext, covariance: jax.Array) -> jax.Array:
+    def _encode_covariance(
+        self, context: ParticleContext, covariance: jax.Array, index: jax.Array | int
+    ) -> jax.Array:
         """Express a physical Gaussian covariance in chart units."""
         frame = context[3]
         if not isinstance(frame, ScaledDeviationFrame):
             return covariance
-        inverse = jnp.exp(-frame.log_scale)
+        inverse = jnp.exp(-frame.log_scale[index])
         return covariance * inverse[:, None] * inverse[None, :]
 
     def _chart_log_jacobian(
-        self, context: ParticleContext, coordinates: tuple[int, ...]
+        self, context: ParticleContext, coordinates: tuple[int, ...], index: jax.Array | int
     ) -> jax.Array | float:
         """Log-determinant of one time slice's chart map over the modeled coordinates."""
         frame = context[3]
         if not isinstance(frame, ScaledDeviationFrame) or not coordinates:
             return 0.0
-        return jnp.sum(frame.log_scale[jnp.asarray(coordinates, dtype=jnp.int32)])
+        return jnp.sum(frame.log_scale[index, jnp.asarray(coordinates, dtype=jnp.int32)])
 
     def diffusion_scale_exponents(self, reference: jax.Array) -> jax.Array:
         """Differentiate each stochastic state's log diffusion scale at a parameter position.
@@ -304,7 +306,7 @@ class ParticleTarget:
         )  # The exact model producer declares a Gaussian initial law.
         return self.encode_state(
             context, jnp.asarray(distribution.mean), 0
-        ), self._encode_covariance(context, jnp.asarray(distribution.covariance_matrix))
+        ), self._encode_covariance(context, jnp.asarray(distribution.covariance_matrix), 0)
 
     def initial_log_prob(self, context, state):
         """Evaluate initial-state density on the modeled coordinates of the supplied state."""
@@ -312,7 +314,7 @@ class ParticleTarget:
         density = self._modeled_log_prob(
             self.dynamical_model(context).initial_condition, state, self.state_space.initial
         )
-        return density + self._chart_log_jacobian(context, self.state_space.initial)
+        return density + self._chart_log_jacobian(context, self.state_space.initial, 0)
 
     def _modeled_log_prob(self, distribution, state, density_indices):
         if not density_indices:
@@ -410,7 +412,7 @@ class ParticleTarget:
         current = self.project_state(context, current, index)
         indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
         density = noise.transitions.at(index).log_prob(current[indices] - mean())
-        return density + self._chart_log_jacobian(context, self.state_space.transition)
+        return density + self._chart_log_jacobian(context, self.state_space.transition, index)
 
     def observation_increment_with_noise(
         self,
@@ -449,7 +451,7 @@ class ParticleTarget:
             current,
             self.state_space.transition,
         )
-        return density + self._chart_log_jacobian(context, self.state_space.transition)
+        return density + self._chart_log_jacobian(context, self.state_space.transition, index)
 
     def transition_moments(
         self, context: ParticleContext, previous: jax.Array, index: jax.Array
@@ -460,7 +462,7 @@ class ParticleTarget:
         )
         return self.encode_state(
             context, jnp.asarray(distribution.mean), index
-        ), self._encode_covariance(context, jnp.asarray(distribution.covariance_matrix))
+        ), self._encode_covariance(context, jnp.asarray(distribution.covariance_matrix), index)
 
     def initial_path(self, context, *, exact_constraints: ExactStateConstraints | None = None):
         """Build an initialization path from successive transition means and any exact state constraints."""

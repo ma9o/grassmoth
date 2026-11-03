@@ -285,7 +285,6 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit"
       "n_parameter_particles": null,
       "path_update": null,
       "compiler_reparameterization": null,
-      "scale_chart": null,
       "parameter_proposal": null,
       "diagnostic_metrics": null,
       "param_target_accept": null,

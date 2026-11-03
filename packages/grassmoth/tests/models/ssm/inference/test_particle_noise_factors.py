@@ -30,9 +30,9 @@ from grassmoth.models.ssm.execution.observation_model import (
     grouped_density_with_noise,
     prepare_grouped_density,
 )
-from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth_test_support.interval_particle import interval_target
 from grassmoth_test_support.observation import observation_laws
+from packages.grassmoth.tests.models.ssm.inference.test_translation_chart import _translation_chart
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -298,7 +298,7 @@ def test_prepared_transition_means_preserve_charted_densities(translated):
     successors = jnp.array([[0.6, 0.1], [-0.2, -0.5]])
     indices = jnp.arange(1, len(times))
     position = jnp.array([0.45])
-    chart = TranslationChart(
+    chart = _translation_chart(
         jnp.broadcast_to(jnp.array([[-0.8], [0.3]]), (3, 2, 1)), jnp.array([-0.2])
     )
     chart_previous = (

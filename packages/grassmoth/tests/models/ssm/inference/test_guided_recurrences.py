@@ -29,7 +29,7 @@ from grassmoth.models.ssm.inference.samplers.particle.guided import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import _memory_guide
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
-from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
+from grassmoth.models.ssm.inference.targets.coordinates import PathChart
 from grassmoth.models.ssm.inference.targets.path_factors import prepare_path_factors
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth_test_support.interval_particle import interval_target
@@ -310,8 +310,18 @@ def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa)
 @pytest.mark.parametrize("translated", [False, True])
 def test_replayed_prefix_factors_match_whole_path_and_independent_recurrences(translated):
     physical = _target(1.0)
-    chart = TranslationChart(
-        jnp.broadcast_to(jnp.array([[-0.8], [0.0], [0.0]]), (4, 3, 1)), jnp.array([0.15])
+    chart = PathChart(
+        jnp.broadcast_to(jnp.array([[-0.8], [0.0], [0.0]]), (4, 3, 1)),
+        jnp.array([0.15]),
+        jnp.array(
+            [
+                [[0.2], [0.0], [0.0]],
+                [[-0.1], [0.0], [0.0]],
+                [[0.4], [0.0], [0.0]],
+                [[0.15], [0.0], [0.0]],
+            ]
+        ),
+        jnp.zeros((4, 3)),
     )
     target = physical.in_coordinates(chart) if translated else physical
     labels = jnp.array([[-0.45], [0.55]])
@@ -370,10 +380,13 @@ def test_replayed_prefix_factors_match_whole_path_and_independent_recurrences(tr
 
     def physical_density(path):
         return jax.vmap(
-            lambda label: physical.path_log_prob(
-                physical.context(label, physical.times),
-                chart.decode(label, path) if translated else path,
-                physical.observations,
+            lambda label: (
+                physical.path_log_prob(
+                    physical.context(label, physical.times),
+                    chart.decode(label, path) if translated else path,
+                    physical.observations,
+                )
+                + (jnp.sum(chart.log_scale(label)) if translated else 0.0)
             )
         )(labels)
 
@@ -462,3 +475,69 @@ def test_fixed_initial_state_without_memory_keeps_backward_selection():
     picks = np.asarray(traced.trace.selected_particles)
     parents = np.asarray(traced.trace.ancestors)
     assert np.any(picks[:, 1] != parents[np.arange(32), 1, picks[:, 2]])
+
+
+@pytest.mark.parametrize(
+    "method", ["particle_mgrad", "twisted_particle_agrad", "kalman_full", "kalman_blocked"]
+)
+def test_time_scaled_recurrence_and_overlapping_window_mixture_invariance(method):
+    from grassmoth.models.ssm.inference.samplers.particle.auxiliary_kalman import (
+        auxiliary_kalman_step,
+    )
+
+    physical, labels, starts, expected_mean, expected_second, label_masses = _recurrence_posterior()
+    chart = PathChart(
+        jnp.broadcast_to(jnp.array([[-0.8], [0.0], [0.0]]), (4, 3, 1)),
+        jnp.array([0.15]),
+        jnp.zeros((4, 3, 1)).at[:, 0, 0].set(jnp.array([0.2, -0.1, 0.4, 0.15])),
+        jnp.zeros((4, 3)),
+    )
+    # The deterministic initial coordinate identifies the generating label of each
+    # independent posterior start. Encode that joint draw, then sample in z units.
+    start_labels = starts[:, 0, 1:2] / 0.2
+    encoded = jax.vmap(chart.encode)(start_labels, starts)
+    target = physical.in_coordinates(chart)
+    setup = build_smoother_setup(
+        target, num_parameter_particles=2, free_mask=target.independent_mask, diagnostic_metrics=()
+    )
+    ctx = build_smoother_context(
+        setup,
+        jnp.asarray(labels[:, None]),
+        jnp.zeros(2),
+        reference=encoded[0],
+        delta=jnp.full(4, 0.3),
+        trajectory_dtype=starts.dtype,
+    )
+    guide = target.context(jnp.array([labels.mean()]), target.times)
+
+    def advance(path, key):
+        if method.startswith("kalman"):
+            return auxiliary_kalman_step(
+                target,
+                ctx,
+                guide,
+                key,
+                path,
+                block_length=2 if method == "kalman_blocked" else None,
+            ).latent_path
+        return guided_step(
+            target, ctx, guide, GuidedPathSpec(method=method, num_particles=8, kappa=1), key, path
+        ).latent_path
+
+    @jax.jit
+    def run(paths):
+        def sweep(current, key):
+            return jax.vmap(advance)(current, jax.random.split(key, len(current))), None
+
+        return jax.lax.scan(sweep, paths, jax.random.split(jax.random.key(371), 3))[0]
+
+    paths = run(encoded)
+    scores = jax.jit(jax.vmap(lambda path: ctx.score_labels(path).log_probs))(paths)
+    selected = jax.random.categorical(jax.random.key(981), scores)
+    selected_parameters = jnp.asarray(labels)[selected, None]
+    decoded = jax.vmap(chart.decode)(selected_parameters, paths)
+    draws = np.asarray(decoded[..., 0])
+    np.testing.assert_allclose(draws.mean(0), expected_mean, atol=0.04)
+    np.testing.assert_allclose(draws.T @ draws / len(draws), expected_second, atol=0.04)
+    np.testing.assert_allclose(np.asarray(jnp.exp(scores)).mean(0), label_masses, atol=0.025)
+    assert np.mean(np.any(np.asarray(paths[..., 0]) != np.asarray(encoded[..., 0]), axis=1)) > 0.3

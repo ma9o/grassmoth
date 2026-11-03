@@ -24,20 +24,25 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     _initialize_chain_state,
     run_marginal_particle_gibbs,
 )
-from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
+from grassmoth.models.ssm.inference.targets.coordinates import PathChart
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
-from grassmoth.models.ssm.inference.warmup.computed_chart import (
-    computed_chart,
-    computed_translation_slopes,
-)
+from grassmoth.models.ssm.inference.warmup.computed_chart import computed_chart
 from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
     prepare_particle_initialization,
 )
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
-from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
+from grassmoth_test_support.interval_particle import (
+    computed_translation_slopes,
+    initialize_interval_chain,
+    interval_target,
+)
 from packages.grassmoth.tests.models.ssm.inference.test_joint_coordinates import _direct_constraints
+
+
+def _translation_chart(slopes, reference):
+    return PathChart(slopes, reference, jnp.zeros_like(slopes), jnp.zeros(slopes.shape[:2]))
 
 
 def _gaussian_joint():
@@ -79,7 +84,7 @@ def test_translation_preserves_nonlinear_factors_gradients_and_proposal_moments(
 
     target = replace(base, dynamical_model=model)
     readings, times = target.observations, target.times
-    chart = TranslationChart(
+    chart = _translation_chart(
         computed_translation_slopes(target, jnp.array([0.3]), jnp.zeros((3, 1))), jnp.array([0.3])
     )
     translated = target.in_coordinates(chart)
@@ -150,7 +155,7 @@ def test_translation_preserves_nonlinear_factors_gradients_and_proposal_moments(
 @pytest.mark.parametrize("method", ["twisted_particle_agrad", "particle_mgrad"])
 def test_charted_joint_kernel_preserves_analytic_physical_posterior(method):
     target, mean, covariance = _gaussian_joint()
-    chart = TranslationChart(
+    chart = _translation_chart(
         computed_translation_slopes(target, jnp.array([0.3]), jnp.zeros((3, 1))), jnp.array([0.3])
     )
     kernel = build_marginal_particle_gibbs_kernel(
@@ -223,16 +228,20 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
         path_update=spec,
         num_parameter_particles=2,
         initial_chart=chart,
-        recompute_translation=True,
     )
     options = SamplerSpec(path_update=spec, compiler_reparameterization=True)
+    chart_builder = EXECUTION_CONTEXT.compiler(
+        lambda positions, paths: computed_chart(target, positions, paths),
+        initialization.positions,
+        initialization.paths,
+    ).call
 
     def run(warmup, draws, continuation=None):
         resumed_kernel = (
             kernel
             if continuation is None
             else kernel._replace(
-                initial_chart=TranslationChart(chart.slopes + 3.0, chart.reference + 7.0)
+                initial_chart=_translation_chart(chart.slopes + 3.0, chart.reference + 7.0)
             )
         )
         result = run_marginal_particle_gibbs(
@@ -243,6 +252,7 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
             initialization=initialization,
             execution_context=EXECUTION_CONTEXT,
             continuation=continuation,
+            chart_builder=chart_builder if warmup else None,
         )
         assert not isinstance(result, InitializationFailure)
         return result
@@ -254,7 +264,7 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
     )
     boundaries = np.asarray(covariance_windows(120))[:, 1]
     assert changed.any()
-    assert set(np.flatnonzero(changed)) <= set(boundaries)
+    assert set(np.flatnonzero(changed)) <= set(boundaries + 1)
     prefix = run(120, 2)
     assert not np.array_equal(prefix.final_chart.reference, chart.reference)
     np.testing.assert_array_equal(prefix.final_chart.slopes, chart.slopes)
@@ -275,13 +285,13 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
     np.testing.assert_array_equal(prefix.last_paths, prefix.latent_paths[:, -1])
 
     def failed_chart(_target, _positions, _paths):
-        return TranslationChart(jnp.full_like(chart.slopes, jnp.nan), chart.reference)
+        return _translation_chart(jnp.full_like(chart.slopes, jnp.nan), chart.reference)
 
-    monkeypatch.setattr(runner, "computed_chart", failed_chart)
     failed = run_marginal_particle_gibbs(
         target,
         kernel=kernel,
         sampler=options.revised(num_warmup=120, num_samples_per_chain=2, num_chains=1),
+        chart_builder=lambda positions, paths: failed_chart(target, positions, paths),
         key=jax.random.key(31),
         initialization=initialization,
         execution_context=EXECUTION_CONTEXT,
@@ -303,12 +313,11 @@ def test_partial_exact_observation_excludes_its_coordinate_from_translation():
         path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1),
         num_parameter_particles=2,
         exact_constraints=constraints,
-        initial_chart=TranslationChart(
+        initial_chart=_translation_chart(
             jnp.broadcast_to(jnp.array([[-1.0], [0.5]]), (4, 2, 1)), jnp.zeros(1)
         ),
-        recompute_translation=True,
     )
-    assert isinstance(kernel.initial_chart, TranslationChart)
+    assert isinstance(kernel.initial_chart, PathChart)
     np.testing.assert_array_equal(kernel.initial_chart.slopes[1], [[0.0], [0.5]])
     np.testing.assert_array_equal(kernel.initial_chart.slopes[0], [[-1.0], [0.5]])
     path = jnp.array([[0.0, 0.0], [0.25, 0.5], [0.4, 0.2], [0.1, 0.3]])

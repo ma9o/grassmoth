@@ -37,7 +37,8 @@ if TYPE_CHECKING:
     from grassmoth.compute.context import ModelExecutionContext
     from grassmoth.models.ssm.inference.samplers.sweep_plan import SweepProgram
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
-    from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
+
+from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 # The progress-event name of the one sampler that runs sweeps.
 SAMPLER = "mpgibbs"
@@ -210,7 +211,8 @@ def run_sweeps[Carry](
     *,
     execution_context: ModelExecutionContext,
     profile: Callable[[Carry, CompiledSweepPhase], FitProfileReport] | None = None,
-    warmup_failure: None = None,
+    warmup_boundaries: tuple[int, ...] = (),
+    warmup_boundary: None = None,
 ) -> SweepRun[Carry]: ...
 
 
@@ -221,7 +223,8 @@ def run_sweeps[Carry](
     *,
     execution_context: ModelExecutionContext,
     profile: Callable[[Carry, CompiledSweepPhase], FitProfileReport] | None = None,
-    warmup_failure: Callable[[Carry], InitializationFailure | None],
+    warmup_boundaries: tuple[int, ...],
+    warmup_boundary: Callable[[Carry], Carry | InitializationFailure] | None,
 ) -> SweepRun[Carry] | InitializationFailure: ...
 
 
@@ -231,7 +234,8 @@ def run_sweeps[Carry](
     *,
     execution_context: ModelExecutionContext,
     profile: Callable[[Carry, CompiledSweepPhase], FitProfileReport] | None = None,
-    warmup_failure: Callable[[Carry], InitializationFailure | None] | None = None,
+    warmup_boundaries: tuple[int, ...] = (),
+    warmup_boundary: Callable[[Carry], Carry | InitializationFailure] | None = None,
 ) -> SweepRun[Carry] | InitializationFailure:
     """Keep only requested phase outputs; padded block slots execute no transition."""
     clock = execution_context.clock
@@ -275,6 +279,11 @@ def run_sweeps[Carry](
                 remaining = phase.steps
                 while remaining:
                     count = 1 if completed == 0 else min(SWEEP_BLOCK_SIZE, remaining)
+                    if stage == "warmup":
+                        next_boundary = next(
+                            (end for end in warmup_boundaries if end > phase_draws), phase.steps
+                        )
+                        count = min(count, next_boundary - phase_draws)
                     transition: tuple[Carry, dict[str, jax.Array]] = phase.executable(
                         phase.arguments,
                         state,
@@ -290,10 +299,12 @@ def run_sweeps[Carry](
                             ),
                         }
                     host_block = jax.device_get({name: block[name] for name in buffers})
-                    if stage == "warmup" and warmup_failure is not None:
-                        failure = warmup_failure(state)
-                        if failure is not None:
-                            return failure
+                    if stage == "warmup" and phase_draws + count in warmup_boundaries:
+                        assert warmup_boundary is not None
+                        rebuilt = warmup_boundary(state)
+                        if isinstance(rebuilt, InitializationFailure):
+                            return rebuilt
+                        state = rebuilt
                     start = phase.steps - remaining
                     for name in buffers:
                         buffers[name][:, start : start + count] = host_block[name][:count].swapaxes(

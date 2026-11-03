@@ -47,11 +47,6 @@ def validate_sampler_support(
             "Exact inference currently requires Gaussian latent diffusion for every state."
         )
     intervals = any(item.support.support_kind == "interval" for item in compiled.observations)
-    point_readings = not compiled.state_space.recurrence and not intervals
-    if sampler.scale_chart and not point_readings:
-        return ObservationPreflightFailure.rejected(
-            "The scale chart requires point readings without deterministic recurrences."
-        )
     path_update = sampler.path_update
     if isinstance(path_update, AuxiliaryKalmanSpec):
         if {"particle_identity", "particle_weights"} & set(sampler.diagnostic_metrics):

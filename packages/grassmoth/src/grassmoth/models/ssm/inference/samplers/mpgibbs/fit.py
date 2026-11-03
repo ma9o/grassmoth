@@ -40,8 +40,6 @@ from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_p
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.targets.coordinates import (
     PathChart,
-    ScaleChart,
-    TranslationChart,
 )
 from grassmoth.models.ssm.inference.types import (
     JointPosteriorDraws,
@@ -132,52 +130,32 @@ def fit_marginal_particle_gibbs(
             )
     if isinstance(initialization, InitializationFailure):
         return initialization
-    translation: TranslationChart | None = None
-    if sampler.compiler_reparameterization and continuation is not None and sampler.num_warmup == 0:
-        # Shape template only: the runner restores the complete frozen native chart
-        # before any sweep, without rebuilding or revalidating its construction.
+    chart: PathChart | None = None
+    chart_builder = None
+    if sampler.compiler_reparameterization:
         positions, paths = jnp.asarray(initialization.positions), jnp.asarray(initialization.paths)
-        translation = TranslationChart(
-            jnp.zeros((*paths.shape[1:], positions.shape[-1]), paths.dtype),
-            jnp.mean(positions, axis=0),
-        )
-    elif sampler.compiler_reparameterization:
-        chart_started = clock()
-
-        def construct_chart(positions: jax.Array, paths: jax.Array) -> TranslationChart:
-            return computed_chart(bundle.runtime, positions, paths)
-
-        positions, paths = jnp.asarray(initialization.positions), jnp.asarray(initialization.paths)
-        translation = compiler(construct_chart, positions, paths).call(positions, paths)
-        slopes = np.asarray(translation.slopes)
-        if not np.isfinite(slopes).all():
-            return InitializationFailure.unavailable(
-                "Computed translation chart construction produced non-finite slopes."
+        if continuation is not None and sampler.num_warmup == 0:
+            # Only a native-shape template; restoration owns the frozen coefficients.
+            coefficients = jnp.zeros((*paths.shape[1:], positions.shape[-1]), paths.dtype)
+            chart = PathChart(
+                coefficients, jnp.mean(positions, axis=0), coefficients, jnp.zeros_like(paths[0])
             )
-        logger.info(
-            "computed translation chart: %.3fs shape=%s finite=%s nonzero=%d/%d "
-            "slopes min=%s mean=%s max=%s reference=%s",
-            clock() - chart_started,
-            slopes.shape,
-            bool(np.isfinite(slopes).all()),
-            int(np.count_nonzero(slopes)),
-            int(slopes.size),
-            slopes.min(axis=0).tolist(),
-            slopes.mean(axis=0).tolist(),
-            slopes.max(axis=0).tolist(),
-            np.asarray(translation.reference).tolist(),
-        )
-    chart: PathChart | None = translation
-    if sampler.scale_chart:
-        reference = jnp.mean(initialization.positions, axis=0)
-        paths = jnp.asarray(initialization.paths)
-        if translation is None:
-            translation = TranslationChart(
-                jnp.zeros((*paths.shape[1:], reference.size), paths.dtype), reference
+        else:
+            chart_started = clock()
+
+            def construct_chart(positions: jax.Array, paths: jax.Array) -> PathChart:
+                return computed_chart(bundle.runtime, positions, paths)
+
+            # This same executable serves the initial build and every host rebuild.
+            chart_builder = compiler(construct_chart, positions, paths).call
+            chart = chart_builder(positions, paths)
+            if not bool(chart.usable_at(positions)):
+                return InitializationFailure.unavailable(
+                    "Computed path chart construction produced non-finite coefficients or unrepresentable current scales."
+                )
+            logger.info(
+                "computed path chart: %.3fs shape=%s", clock() - chart_started, chart.slopes.shape
             )
-        # Warmup windows replace this initial center with mean translated paths.
-        center = jnp.mean(jax.vmap(translation.encode)(initialization.positions, paths), axis=0)
-        chart = ScaleChart(translation, bundle.runtime.diffusion_scale_exponents(reference), center)
 
     phase_t0 = clock()
     logger.info("phase 3/4: building marginalized Particle Gibbs joint kernel...")
@@ -194,7 +172,6 @@ def fit_marginal_particle_gibbs(
         diagnostic_metrics=sampler.diagnostic_metrics,
         path_update=sampler.path_update,
         initial_chart=chart,
-        recompute_translation=sampler.compiler_reparameterization,
     )
     run_result = run_marginal_particle_gibbs(
         bundle.runtime,
@@ -204,32 +181,25 @@ def fit_marginal_particle_gibbs(
         initialization=initialization,
         execution_context=execution_context,
         adaptation_scheme=sampler.adaptation_scheme,
+        chart_builder=chart_builder,
         continuation=continuation,
     )
     if isinstance(run_result, InitializationFailure):
         return run_result
     final_chart = run_result.final_chart
     if final_chart is not None:
-        translation = (
-            final_chart if isinstance(final_chart, TranslationChart) else final_chart.translation
-        )
         logger.info(
-            "frozen translation chart (sampler coordinates): shape=%s min=%s mean=%s max=%s reference=%s",
-            translation.slopes.shape,
-            np.asarray(translation.slopes).min(axis=0).tolist(),
-            np.asarray(translation.slopes).mean(axis=0).tolist(),
-            np.asarray(translation.slopes).max(axis=0).tolist(),
-            np.asarray(translation.reference).tolist(),
+            "frozen path chart: shape=%s reference=%s slopes range=%s exponents range=%s center range=%s",
+            final_chart.slopes.shape,
+            np.asarray(final_chart.reference).tolist(),
+            [float(np.min(final_chart.slopes)), float(np.max(final_chart.slopes))]
+            if final_chart.slopes.size
+            else [],
+            [float(np.min(final_chart.exponents)), float(np.max(final_chart.exponents))]
+            if final_chart.exponents.size
+            else [],
+            [float(np.min(final_chart.center)), float(np.max(final_chart.center))],
         )
-        if isinstance(final_chart, ScaleChart):
-            center = np.asarray(final_chart.center)
-            logger.info(
-                "frozen scale chart (sampler coordinates): exponents=%s center min=%s mean=%s max=%s",
-                np.asarray(final_chart.exponents).tolist(),
-                center.min(axis=0).tolist(),
-                center.mean(axis=0).tolist(),
-                center.max(axis=0).tolist(),
-            )
     tuning = (
         continuation.tuning
         if continuation is not None and isinstance(continuation.tuning, ParticleTuning)

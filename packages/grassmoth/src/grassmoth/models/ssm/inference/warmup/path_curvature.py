@@ -4,13 +4,12 @@ Dynamics are affine linearizations with their exact, possibly singular noise.
 Window memory joins the state as noise-free coordinates whose exact accumulators
 depend only on earlier states, so every interval reading becomes a factor of one
 augmented time point. Reading curvature is clipped to PSD in predictor space before
-pulling it back through the predictor Jacobian. Parameter cross terms differentiate
-means and predictors, holding this geometry fixed: Gaussian covariance parameters
-therefore have no mean cross term. These approximations shape coordinates, starts
+pulling it back through the predictor Jacobian. Chart mean responses also differentiate transition noise and its pin-conditioning
+algebra, while keeping dynamics Jacobians and reading quadratics frozen. These approximations shape coordinates, starts
 and proposals only; auxiliary Kalman moves correct against the exact target.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast
 
 import jax
@@ -126,6 +125,7 @@ class PathCurvature:
     """
 
     matrices: jax.Array
+    initial_covariance: jax.Array
     covariances: jax.Array
     regression: jax.Array
     pinned_precision: jax.Array
@@ -197,6 +197,25 @@ class PathCurvature:
             self.conditioned_matrices, conditioned_offsets, self.covariances, information
         )
 
+    def with_transition_noise(
+        self, target: ParticleTarget, context: ParticleContext, path: jax.Array
+    ) -> "PathCurvature":
+        """Vary raw transition Q and all derived pin conditioning in one frozen geometry.
+
+        The initial covariance, fixed support, reading curvature and dynamics/memory
+        Jacobians stay at the reference. This operation contains no linearization or
+        PSD clipping and is the only noise dependence differentiated by the chart.
+        """
+        covariances, regression, pinned_precision, _ = _path_noise(
+            target, context, path, self.memory, self.initial_covariance
+        )
+        return replace(
+            self,
+            covariances=covariances,
+            regression=regression,
+            pinned_precision=pinned_precision,
+        )
+
     def mean(self, target: ParticleTarget, context: ParticleContext, path: jax.Array) -> jax.Array:
         """Smooth the shared Gaussian proposal terms and return the state coordinates."""
         return smoothing_mean(*self.proposal_terms(target, context, path))[:, : path.shape[-1]]
@@ -213,25 +232,17 @@ def _block_diagonal(first: jax.Array, second: jax.Array) -> jax.Array:
     return jnp.concatenate((upper, lower), axis=-2)
 
 
-def linearize_path(
-    target: ParticleTarget, context: ParticleContext, path: jax.Array
-) -> PathCurvature:
-    """Own path curvature, exact pin conditioning and PSD reading quadratics.
-
-    The linearization point is the supplied path with its exact window memory.
-    Memory coordinates carry no noise and are never free; the readings they emit
-    supply information to the earlier states that fed each window.
-    """
-    steps, dimension = path.shape
+def _path_noise(
+    target: ParticleTarget,
+    context: ParticleContext,
+    path: jax.Array,
+    memory: jax.Array,
+    initial_covariance: jax.Array,
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array]:
+    """Condition supported transition noise, retaining stochastic pin information."""
+    steps = path.shape[0]
     indices = jnp.arange(steps)
-    intervals = target.intervals
-    memory = (
-        jnp.zeros((steps, 0), dtype=path.dtype)
-        if intervals is None
-        else intervals.memory_path(context, path).reshape(steps, -1)
-    )
-    size = dimension + memory.shape[-1]
-    augmented = jnp.concatenate((path, memory), axis=-1)
+    size = path.shape[1] + memory.shape[-1]
 
     def pad(values: jax.Array) -> jax.Array:
         return jnp.concatenate(
@@ -243,7 +254,6 @@ def linearize_path(
     if target.exact_constraints is not None:
         free = free & target.exact_constraints.free_mask
     free, density_mask = pad(free), pad(target.state_density_mask)
-    initial_covariance = target.initial_moments(context)[1]
     tail_covariances = jax.vmap(
         lambda previous, index: target.transition_moments(context, previous, index)[1]
     )(path[:-1], indices[1:])
@@ -270,6 +280,33 @@ def linearize_path(
         )
         * pinned[:, :, None]
         * pinned[:, None, :]
+    )
+    return conditioned_covariances, geometry.regression, jnp.asarray(pinned_precision), pinned
+
+
+def linearize_path(
+    target: ParticleTarget, context: ParticleContext, path: jax.Array
+) -> PathCurvature:
+    """Own path curvature, exact pin conditioning and PSD reading quadratics.
+
+    The linearization point is the supplied path with its exact window memory.
+    Memory coordinates carry no noise and are never free; the readings they emit
+    supply information to the earlier states that fed each window.
+    """
+    steps, dimension = path.shape
+    indices = jnp.arange(steps)
+    intervals = target.intervals
+    memory = (
+        jnp.zeros((steps, 0), dtype=path.dtype)
+        if intervals is None
+        else intervals.memory_path(context, path).reshape(steps, -1)
+    )
+    size = dimension + memory.shape[-1]
+    augmented = jnp.concatenate((path, memory), axis=-1)
+
+    initial_covariance = target.initial_moments(context)[1]
+    conditioned_covariances, regression, pinned_precision, pinned = _path_noise(
+        target, context, path, memory, initial_covariance
     )
     matrices = jax.vmap(
         jax.jacfwd(lambda previous, index: _augmented_mean(target, context, previous, index))
@@ -347,8 +384,9 @@ def linearize_path(
         gradient = jnp.concatenate((gradient, windows[3]), axis=-1)
     return PathCurvature(
         matrices,
+        initial_covariance,
         conditioned_covariances,
-        geometry.regression,
+        regression,
         pinned_precision,
         pinned | static[None],
         memory,

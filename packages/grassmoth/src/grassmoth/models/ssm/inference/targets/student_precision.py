@@ -93,25 +93,29 @@ class StudentTPrecisions:
                 if isinstance(group.laws[0], StudentTLawSpec):
 
                     def operands(
-                        state: jax.Array, group: LawGroup = group
+                        state: jax.Array, index: jax.Array, group: LawGroup = group
                     ) -> StudentTLawSpec[jax.Array]:
                         return cast(
                             "StudentTLawSpec[jax.Array]",
                             group.evaluate(
-                                model.linear_predictor(target.project_state(context, state, 0)),
+                                model.linear_predictor(target.project_state(context, state, index)),
                                 scales,
                             ),
                         )
 
-                    loading = jax.jacfwd(lambda state: operands(state).loc)(zero)
+                    times = jnp.arange(target.times.size)
+                    loading = jax.vmap(
+                        lambda index: jax.jacfwd(lambda state: operands(state, index).loc)(zero)
+                    )(times)
+                    reading_scales = jax.vmap(lambda index: operands(zero, index).scale)(times)
                     indices = jnp.asarray(group.indices)
                     precision = jnp.where(
                         self.observed[:, indices],
-                        jnp.exp(self.log_values[:, indices] - 2 * jnp.log(operands(zero).scale)),
+                        jnp.exp(self.log_values[:, indices] - 2 * jnp.log(reading_scales)),
                         0.0,
                     )
                     information = information + jnp.einsum(
-                        "tc,ci,cj->tij", precision, loading, loading
+                        "tc,tci,tcj->tij", precision, loading, loading
                     )
             information = jnp.where(free[:, :, None] & free[:, None, :], information, 0.0)
             return jnp.max(jnp.sum(jnp.abs(information), axis=-1), axis=-1)

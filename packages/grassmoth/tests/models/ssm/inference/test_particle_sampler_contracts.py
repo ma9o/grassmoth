@@ -119,9 +119,9 @@ def test_guided_configuration_roundtrip_and_continuation_identity(method):
 
 @pytest.mark.parametrize(
     ("support", "recurrences", "accepted"),
-    [("point", (), True), ("interval", (), False), ("point", (AdditiveRecurrences((0,)),), False)],
+    [("point", (), True), ("interval", (), True), ("point", (AdditiveRecurrences((0,)),), True)],
 )
-def test_scale_chart_admission(monkeypatch, support, recurrences, accepted):
+def test_unified_chart_admission(monkeypatch, support, recurrences, accepted):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
@@ -130,11 +130,9 @@ def test_scale_chart_admission(monkeypatch, support, recurrences, accepted):
         state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
         observations=(Mock(support=Mock(support_kind=support)),),
     )
-    sampler = SamplerSpec(compiler_reparameterization=True, scale_chart=True)
+    sampler = SamplerSpec(compiler_reparameterization=True)
     failure = validate_sampler_support(compiled, sampler)
     assert (failure is None) == accepted
-    if failure is not None:
-        assert "scale chart" in failure.message
 
 
 @pytest.mark.parametrize(

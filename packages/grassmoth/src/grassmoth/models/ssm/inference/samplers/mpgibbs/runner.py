@@ -75,10 +75,8 @@ from grassmoth.models.ssm.inference.samplers.sweeps import (
 )
 from grassmoth.models.ssm.inference.targets.coordinates import (
     PathChart,
-    ScaleChart,
 )
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
-from grassmoth.models.ssm.inference.warmup.computed_chart import computed_chart
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 from grassmoth.models.ssm.inference.warmup.parameter_adaptation import (
@@ -86,11 +84,6 @@ from grassmoth.models.ssm.inference.warmup.parameter_adaptation import (
     adapt_parameter_covariance,
     covariance_windows,
     initialize_parameter_covariance,
-)
-from grassmoth.models.ssm.inference.warmup.scale_adaptation import (
-    CenterMoments,
-    adapt_center,
-    initialize_center_moments,
 )
 from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
 
@@ -205,7 +198,6 @@ class _Population(NamedTuple):
     parameter_covariance: ParameterCovariance
     latent_geometry: jax.Array
     curvature_moments: CurvatureMoments
-    center_moments: CenterMoments | None
 
 
 # Gain of the simple step-size scheme; a fixed property of warmup, not a setting.
@@ -222,6 +214,7 @@ def run_marginal_particle_gibbs(
     execution_context: ModelExecutionContext,
     # Both adaptation policies stop updating after warmup.
     adaptation_scheme: AdaptationScheme = "simple",
+    chart_builder: Callable[[jax.Array, jax.Array], PathChart] | None = None,
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleChainResult | InitializationFailure:
     """Run marginalized Particle Gibbs chains from paired starts."""
@@ -325,12 +318,12 @@ def run_marginal_particle_gibbs(
         initialize_parameter_covariance(chain_init_positions, initialization.parameter_chol),
         latent_geometry,
         initialize_curvature_moments(latent_geometry),
-        initialize_center_moments(chain_init_positions, chain_initial_latents)
-        if isinstance(kernel.initial_chart, ScaleChart)
-        else None,
     )
     if continuation is not None and num_warmup == 0:
-        initial = restore_state(initial, continuation.native_state)
+        restored = restore_state(initial, continuation.native_state)
+        if isinstance(restored, InitializationFailure):
+            return restored
+        initial = restored
         scale = kernel.path_update.latent_step
         if isinstance(scale, FixedLatentStepSpec):
             delta = jnp.full_like(initial.chains.latent_delta, scale.delta)
@@ -346,7 +339,9 @@ def run_marginal_particle_gibbs(
     ) -> tuple[_Population, dict[str, jax.Array]]:
         next_key, step_key = random.split(current.random_key)
         keys = random.split(step_key, num_chains)
-        # The frozen metric is shared by every label/candidate in the update.
+        # Geometry is learned in physical units, equal to chart units at its reference.
+        # Its numbers then define one frozen chart-unit metric for every label;
+        # never rescale the auxiliary law separately for a candidate.
         # Keep its scalar controller in the state and saved response; expand
         # only the kernel operand, then restore it before adaptation.
         kernel_states = (
@@ -450,44 +445,6 @@ def run_marginal_particle_gibbs(
             )
 
         def adapt(updated: TrajectoryMCMCState) -> _Population:
-            center_moments = current.center_moments
-            if kernel.recompute_translation or center_moments is not None:
-                assert updated.chart is not None
-                chart = jax.tree.map(lambda value: value[0], updated.chart)
-                if kernel.recompute_translation:
-
-                    def rebuild() -> PathChart:
-                        translation = computed_chart(
-                            target, updated.position, updated.latent_trajectory
-                        )
-                        return (
-                            ScaleChart(translation, chart.exponents, chart.center)
-                            if isinstance(chart, ScaleChart)
-                            else translation
-                        )
-
-                    chart = jax.lax.cond(
-                        jnp.any(current.iteration == windows[:, 1]), rebuild, lambda: chart
-                    )
-                if center_moments is not None:
-                    assert isinstance(chart, ScaleChart)
-                    center_moments, chart = adapt_center(
-                        center_moments,
-                        chart,
-                        updated.position,
-                        updated.latent_trajectory,
-                        current.iteration,
-                        windows,
-                    )
-                # The durable state is physical. Each next sweep encodes it
-                # anew, so changing the chart preserves x and all physical caches.
-                updated = updated._replace(
-                    chart=jax.tree.map(
-                        lambda value, old: jnp.broadcast_to(value, old.shape),
-                        chart,
-                        updated.chart,
-                    )
-                )
             geometry = current.latent_geometry
             curvature_moments = current.curvature_moments
             if curvature_limited:
@@ -559,7 +516,6 @@ def run_marginal_particle_gibbs(
                 latent_geometry=geometry,
                 curvature_moments=curvature_moments,
                 parameter_covariance=covariance,
-                center_moments=center_moments,
             )
 
         next_population: _Population = jax.lax.cond(posterior, retain, adapt, updated)
@@ -619,21 +575,29 @@ def run_marginal_particle_gibbs(
             split_total=sum_timings(split),
         )
 
-    def chart_failure(current: _Population) -> InitializationFailure | None:
-        chart = current.chains.chart
-        translation = chart.translation if isinstance(chart, ScaleChart) else chart
-        if translation is not None and not np.isfinite(np.asarray(translation.slopes)).all():
+    def rebuild_chart(current: _Population) -> _Population | InitializationFailure:
+        assert chart_builder is not None
+        chart = chart_builder(current.chains.position, current.chains.latent_trajectory)
+        if not bool(chart.usable_at(current.chains.position)):
             return InitializationFailure.unavailable(
-                "Computed translation chart rebuild produced non-finite slopes."
+                "Computed path chart rebuild produced non-finite coefficients or unrepresentable current scales."
             )
-        return None
+        assert current.chains.chart is not None
+        installed = jax.tree.map(
+            lambda value, old: jnp.broadcast_to(value, old.shape), chart, current.chains.chart
+        )
+        # Physical state, caches, adaptation, iteration and keys are untouched.
+        return current._replace(chains=current.chains._replace(chart=installed))
 
     run = run_sweeps(
         plan,
         initial,
         execution_context=execution_context,
         profile=profile_state if execution_context.profile else None,
-        warmup_failure=chart_failure,
+        warmup_boundaries=tuple(int(end) + 1 for end in np.asarray(windows)[:, 1])
+        if chart_builder is not None
+        else (),
+        warmup_boundary=rebuild_chart if chart_builder is not None else None,
     )
     if isinstance(run, InitializationFailure):
         return run

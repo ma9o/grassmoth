@@ -166,16 +166,32 @@ def test_mixed_overlapping_intervals_match_independent_laws_and_gradients():
     np.testing.assert_allclose(current_scores, current_gradient, atol=2e-5)
 
 
-@pytest.mark.parametrize("block_length", [2, 4])
-def test_blocked_kalman_preserves_analytic_interval_posterior(block_length):
+@pytest.mark.parametrize(
+    "method", ["particle_mgrad", "twisted_particle_agrad", "kalman_full", "kalman_2", "kalman_4"]
+)
+def test_charted_updates_preserve_analytic_interval_posterior(method):
+    from grassmoth.models.ssm.inference.targets.coordinates import PathChart
+
     target, mean, covariance = gaussian_interval_case()
+    steps = len(target.times)
+    chart = PathChart(
+        jnp.full((steps, 1, 1), -0.7),
+        jnp.array([0.2]),
+        jnp.linspace(-0.4, 0.6, steps).reshape(steps, 1, 1),
+        jnp.asarray(mean[1:, None]),
+    )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
         num_parameter_particles=2,
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        path_update=AuxiliaryKalmanSpec(block_length=block_length),
+        path_update=(
+            AuxiliaryKalmanSpec(block_length=None if method == "kalman_full" else int(method[-1]))
+            if method.startswith("kalman")
+            else GuidedPathSpec(method=method, num_particles=8, kappa=1)
+        ),
+        initial_chart=chart,
     )
     chains = 4096
     joint = jnp.asarray(
@@ -184,6 +200,9 @@ def test_blocked_kalman_preserves_analytic_interval_posterior(block_length):
     initial = jax.jit(
         jax.vmap(lambda point: initialize_interval_chain(target, point, kernel=kernel))
     )(joint)
+    initial = initial._replace(
+        chart=jax.tree.map(lambda value: jnp.broadcast_to(value, (chains, *value.shape)), chart)
+    )
 
     @jax.jit
     def sample(states):

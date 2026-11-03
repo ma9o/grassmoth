@@ -12,6 +12,7 @@ import pytest
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanSpec,
     GaussianInitializationSpec,
     GuidedPathSpec,
     SamplerSpec,
@@ -21,27 +22,28 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import run_marginal_particle_gibbs
-from grassmoth.models.ssm.inference.targets.coordinates import ScaleChart, TranslationChart
-from grassmoth.models.ssm.inference.warmup.computed_chart import computed_translation_slopes
+from grassmoth.models.ssm.inference.targets.coordinates import PathChart
+from grassmoth.models.ssm.inference.warmup.computed_chart import computed_chart
 from grassmoth.models.ssm.inference.warmup.initialization import (
     ParticleInitialization,
     prepare_particle_initialization,
 )
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
-from grassmoth.models.ssm.inference.warmup.scale_adaptation import (
-    CenterMoments,
-    adapt_center,
-    initialize_center_moments,
-)
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
-from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
+from grassmoth_test_support.interval_particle import (
+    computed_translation_slopes,
+    initialize_interval_chain,
+    interval_target,
+)
+from packages.grassmoth.tests.models.ssm.inference.test_joint_coordinates import _direct_constraints
 from packages.grassmoth.tests.models.ssm.inference.test_translation_chart import _gaussian_joint
 
 
-def _chart() -> ScaleChart:
-    return ScaleChart(
-        TranslationChart(jnp.array([[[-0.85]], [[-0.7]], [[-0.95]]]), jnp.array([0.3])),
-        jnp.array([[0.4]]),
+def _chart() -> PathChart:
+    return PathChart(
+        jnp.array([[[-0.85]], [[-0.7]], [[-0.95]]]),
+        jnp.array([0.3]),
+        jnp.array([[[0.4]], [[-0.2]], [[0.65]]]),
         jnp.array([[0.2], [-0.1], [0.3]]),
     )
 
@@ -72,7 +74,7 @@ def test_scale_chart_pays_its_jacobian_and_expresses_moments_in_chart_units():
     context = scaled.context(position, scaled.times)
     log_scale = chart.log_scale(position)
     # One scaled coordinate in the initial slice and in both transition slices.
-    log_jacobian = 3 * log_scale[0]
+    log_jacobian = jnp.sum(log_scale)
     decode_jacobian = jax.jacfwd(lambda value: chart.decode(position, value).ravel())(encoded)
     np.testing.assert_allclose(chart.decode(position, encoded), path, atol=1e-6)
     np.testing.assert_allclose(
@@ -89,7 +91,7 @@ def test_scale_chart_pays_its_jacobian_and_expresses_moments_in_chart_units():
     expected_gradient = jax.grad(
         lambda parameter, coordinates: (
             target.log_posterior(parameter, chart.decode(parameter, coordinates), readings, times)
-            + 3 * chart.log_scale(parameter)[0]
+            + jnp.sum(chart.log_scale(parameter))
         ),
         argnums=(0, 1),
     )(position, encoded)
@@ -113,37 +115,54 @@ def test_scale_chart_pays_its_jacobian_and_expresses_moments_in_chart_units():
                     context, noise, encoded[index - 1], encoded[index], index
                 ),
                 target.transition_log_prob(physical_context, path[index - 1], path[index], index)
-                + log_scale[0],
+                + log_scale[index, 0],
                 atol=2e-6,
             )
         np.testing.assert_allclose(chart.frame(position).decode(chart_mean, index), mean, atol=1e-6)
         np.testing.assert_allclose(
-            chart_covariance * scale[:, None] * scale[None, :], covariance, rtol=1e-6
+            chart_covariance * scale[index, :, None] * scale[index, None, :], covariance, rtol=1e-6
         )
 
 
 @pytest.mark.inference(concern="sampling")
-@pytest.mark.parametrize("method", ["twisted_particle_agrad", "particle_mgrad"])
-def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method):
+@pytest.mark.parametrize(
+    "method", ["twisted_particle_agrad", "particle_mgrad", "kalman_full", "kalman_blocked"]
+)
+@pytest.mark.parametrize("pinned", [False, True])
+def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method, pinned):
     target, mean, covariance = _gaussian_joint()
+    if pinned:
+        gain = covariance[:, 2] / covariance[2, 2]
+        mean = mean + gain * (0.25 - mean[2])
+        covariance = covariance - gain[:, None] * covariance[2]
+        target = replace(
+            target,
+            exact_constraints=_direct_constraints(0.25, steps=3, state_names=("x",)),
+        )
     chart = replace(
         _chart(),
-        translation=TranslationChart(
-            computed_translation_slopes(target, jnp.array([0.3]), jnp.zeros((3, 1))),
-            jnp.array([0.3]),
-        ),
+        slopes=computed_translation_slopes(target, jnp.array([0.3]), jnp.zeros((3, 1))),
     )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=GuidedPathSpec(method=method, num_particles=8, kappa=1),
+        path_update=(
+            AuxiliaryKalmanSpec(block_length=2 if method == "kalman_blocked" else None)
+            if method.startswith("kalman")
+            else GuidedPathSpec(method=method, num_particles=8, kappa=1)
+        ),
         num_parameter_particles=2,
         param_step_size=0.3,
         initial_chart=chart,
+        exact_constraints=target.exact_constraints,
     )
     joint = jnp.asarray(np.random.default_rng(819).multivariate_normal(mean, covariance, 4096))
+    if pinned:
+        joint = joint.at[:, 2].set(0.25)
     initial = jax.vmap(lambda draw: initialize_interval_chain(target, draw, kernel=kernel))(joint)
     initial = initial._replace(
-        chart=jax.tree.map(lambda value: jnp.broadcast_to(value, (len(joint), *value.shape)), chart)
+        chart=jax.tree.map(
+            lambda value: jnp.broadcast_to(value, (len(joint), *value.shape)), kernel.initial_chart
+        )
     )
 
     @jax.jit
@@ -170,36 +189,6 @@ def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method
 
 
 @pytest.mark.inference(concern="warmup")
-def test_center_adaptation_freezes_each_window_mean_translated_path():
-    chart = ScaleChart(
-        TranslationChart(jnp.broadcast_to(jnp.array([[-1.0], [0.5]]), (3, 2, 1)), jnp.array([0.2])),
-        jnp.ones((2, 1)),
-        jnp.zeros((3, 2)),
-    )
-    keys = jax.random.split(jax.random.key(7), 7)
-    positions = jax.vmap(lambda key: jax.random.normal(key, (4, 1)))(keys)
-    paths = jax.vmap(lambda key: jax.random.normal(jax.random.fold_in(key, 1), (4, 3, 2)))(keys)
-    windows = jnp.array([[1, 2], [3, 5]])
-
-    def advance(state: tuple[CenterMoments, ScaleChart], index: jax.Array):
-        moments, current = adapt_center(*state, positions[index], paths[index], index, windows)
-        return (moments, current), current.center
-
-    (moments, learned), centers = jax.lax.scan(
-        advance, (initialize_center_moments(positions[0], paths[0]), chart), jnp.arange(7)
-    )
-    translated = jax.vmap(jax.vmap(chart.translation.encode))(positions, paths)
-    window_means = translated.mean(axis=1)
-    np.testing.assert_array_equal(centers[:2], 0.0)
-    np.testing.assert_allclose(centers[2], window_means[1:3].mean(axis=0), atol=1e-6)
-    np.testing.assert_allclose(centers[3:5], np.broadcast_to(centers[2], (2, 3, 2)))
-    np.testing.assert_allclose(centers[5], window_means[3:6].mean(axis=0), atol=1e-6)
-    np.testing.assert_array_equal(centers[6], centers[5])
-    assert int(moments.sample_count) == 0
-    np.testing.assert_array_equal(learned.exponents, chart.exponents)
-
-
-@pytest.mark.inference(concern="warmup")
 @pytest.mark.inference(concern="sampling")
 def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
     target, _, _ = _gaussian_joint()
@@ -216,7 +205,12 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
     kernel = build_marginal_particle_gibbs_kernel(
         target, path_update=spec, num_parameter_particles=2, initial_chart=chart
     )
-    options = SamplerSpec(path_update=spec, scale_chart=True)
+    options = SamplerSpec(path_update=spec, compiler_reparameterization=True)
+    chart_builder = EXECUTION_CONTEXT.compiler(
+        lambda positions, paths: computed_chart(target, positions, paths),
+        initialization.positions,
+        initialization.paths,
+    ).call
 
     def run(warmup, draws, continuation=None):
         # A resumed run must take the saved chart, never a rebuilt template.
@@ -224,8 +218,8 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
             kernel
             if continuation is None
             else kernel._replace(
-                initial_chart=ScaleChart(
-                    chart.translation, chart.exponents + 2.0, chart.center + 5.0
+                initial_chart=replace(
+                    chart, exponents=chart.exponents + 2.0, center=chart.center + 5.0
                 )
             )
         )
@@ -237,13 +231,14 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
             initialization=initialization,
             execution_context=EXECUTION_CONTEXT,
             continuation=continuation,
+            chart_builder=chart_builder if warmup else None,
         )
         assert not isinstance(result, InitializationFailure)
         return result
 
     full = run(120, 4)
     prefix = run(120, 2)
-    assert isinstance(full.final_chart, ScaleChart)
+    assert isinstance(full.final_chart, PathChart)
     assert not np.allclose(full.final_chart.center, chart.center)
     checkpoint = SamplerCheckpoint(
         settings=options,
@@ -259,3 +254,55 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
     np.testing.assert_array_equal(full.grouped_positions[:, 2:], continued.grouped_positions)
     for actual, expected in zip(continued.final_state, full.final_state, strict=True):
         np.testing.assert_array_equal(actual.values, expected.values)
+
+
+@pytest.mark.inference(concern="sampling")
+def test_float32_distant_scale_labels_have_zero_mass_without_saturating_the_map():
+    from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import _initialize_chain_state
+
+    target, _, _ = _gaussian_joint()
+    chart = replace(_chart(), exponents=jnp.full((3, 1, 1), 200.0))
+    assert bool(chart.representable(chart.reference))
+    assert not bool(chart.representable(chart.reference + 1.0))
+    assert not bool(chart.representable(chart.reference - 1.0))
+    kernel = build_marginal_particle_gibbs_kernel(
+        target,
+        num_parameter_particles=2,
+        path_update=GuidedPathSpec(method="particle_mgrad", num_particles=4, kappa=1),
+        initial_chart=chart,
+    )
+    state = _initialize_chain_state(
+        chart.reference,
+        observations=target.observations,
+        times=target.times,
+        target=target,
+        parameter_gradient_fn=kernel.parameter_gradient_fn,
+        parameter_chol=kernel.initial_parameter_chol,
+        initial_latent_delta=jnp.full((3,), 0.3),
+        param_step_size=1e3,
+        param_min_scale=1e-6,
+        param_max_scale=1e3,
+        initial_latent_trajectory=jnp.zeros((3, 1)),
+        chart=chart,
+    )
+    updated, info = jax.jit(kernel.step_fn)(state, jax.random.key(382))
+    np.testing.assert_array_equal(updated.position, state.position)
+    assert np.isfinite(updated.complete_log_posterior)
+    assert np.isfinite(updated.latent_trajectory).all()
+    np.testing.assert_array_equal(info["final_label_log_probs"], [0.0, -np.inf])
+
+
+@pytest.mark.inference(concern="warmup")
+@pytest.mark.parametrize("old_shape", ["translation", "scale"])
+def test_old_native_chart_shapes_return_expected_failure(old_shape):
+    from grassmoth.models.ssm.inference.continuation import restore_state, retain_state
+
+    chart = _chart()
+    old = (
+        retain_state((chart.slopes, chart.reference))
+        if old_shape == "translation"
+        else retain_state((chart.slopes, chart.reference, chart.exponents[0], chart.center))
+    )
+    outcome = restore_state(chart, old)
+    assert isinstance(outcome, InitializationFailure)
+    assert "incompatible" in outcome.message

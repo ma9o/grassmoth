@@ -1,4 +1,4 @@
-"""Frozen parameter-dependent charts of latent paths: translations and scaled deviations."""
+"""Frozen time-indexed affine charts of the independent latent path coordinates."""
 
 from __future__ import annotations
 
@@ -10,46 +10,11 @@ import jax.numpy as jnp
 
 @jax.tree_util.register_dataclass
 @dataclass(frozen=True, eq=False)
-class TranslationChart:
-    """Time-indexed latent/parameter slopes, fixed throughout each exact update.
-
-    The joint map is a shear: ``x = z + slopes @ (position - reference)``.
-    Its joint Jacobian is one even though the offset depends on the parameter.
-    Computing the slopes belongs to warmup; a poorly fitted chart affects mixing,
-    never the exact physical target evaluated through its inverse.
-    """
-
-    slopes: jax.Array
-    reference: jax.Array
-
-    def offset(self, position: jax.Array) -> jax.Array:
-        """Return the translation at every time slice at this position."""
-        return self.slopes @ (position - self.reference)
-
-    def encode(self, position: jax.Array, path: jax.Array) -> jax.Array:
-        """Express a physical trajectory in the chart."""
-        return path - self.offset(position)
-
-    def decode(self, position: jax.Array, path: jax.Array) -> jax.Array:
-        """Restore a physical trajectory from the chart."""
-        return path + self.offset(position)
-
-    def frame(self, position: jax.Array) -> ScaledDeviationFrame:
-        """Bind the time-indexed shear for every particle factor and proposal."""
-        offset = self.offset(position)
-        return ScaledDeviationFrame(
-            offset, jnp.zeros(offset.shape[-1], offset.dtype), jnp.zeros_like(offset)
-        )
-
-
-@jax.tree_util.register_dataclass
-@dataclass(frozen=True, eq=False)
 class ScaledDeviationFrame:
-    """One parameter label's affine map from chart to physical coordinates.
+    """One parameter label's map from chart to physical coordinates.
 
-    ``x_t = center_t + offset_t + exp(log_scale) * (z_t - center_t)``. The map
-    depends on time through the frozen slopes and center path, so every state is
-    decoded with its own time index.
+    ``x_t = center_t + offset_t + exp(log_scale_t) * (z_t - center_t)``.
+    Both endpoints of a transition use their own time-indexed frame.
     """
 
     offset: jax.Array
@@ -57,44 +22,72 @@ class ScaledDeviationFrame:
     center: jax.Array
 
     def decode(self, state: jax.Array, index: jax.Array | int) -> jax.Array:
-        """Restore physical coordinates of a state, batch or path at these times."""
+        """Restore physical coordinates at the supplied times."""
         center = self.center[index]
-        return center + self.offset[index] + jnp.exp(self.log_scale) * (state - center)
+        return center + self.offset[index] + jnp.exp(self.log_scale[index]) * (state - center)
 
     def encode(self, state: jax.Array, index: jax.Array | int) -> jax.Array:
-        """Express physical coordinates of a state, batch or path at these times."""
+        """Express physical coordinates in this frame at the supplied times."""
         center = self.center[index]
-        return center + (state - center - self.offset[index]) * jnp.exp(-self.log_scale)
+        return center + (state - center - self.offset[index]) * jnp.exp(-self.log_scale[index])
 
 
 @jax.tree_util.register_dataclass
 @dataclass(frozen=True, eq=False)
-class ScaleChart:
-    """A translation composed with parameter-dependent scaling of path deviations.
+class PathChart:
+    """One frozen translation and diagonal scaling of deviations from a Gaussian mean.
 
-    ``x_t = c_t + B (position - reference) + exp(A (position - reference)) * (z_t - c_t)``.
-    The exponents A take each stochastic state's change in log diffusion scale, so
-    changing that scale with z fixed rescales the path's deviations from the frozen
-    center path c instead of leaving its increments in place. The per-time Jacobian
-    is ``exp(sum(A (position - reference)))`` over the modeled coordinates; every
-    label pays it exactly. The center and exponents only shape mixing: deviations
-    that are not diffusion-driven, such as data-pinned slow modes, a poor center or
-    a nonlinear diffusion, cost efficiency, never the exact physical target.
+    ``x_t = c_t + B_t (position-reference) + exp(A_t (position-reference)) * (z_t-c_t)``.
+    Slopes B and exponents A vanish on excluded coordinates at each time. All
+    coefficients share one reference surrogate. Their approximation affects mixing;
+    physical densities and time-indexed Jacobians own the exact target.
     """
 
-    translation: TranslationChart
+    slopes: jax.Array
+    reference: jax.Array
     exponents: jax.Array
     center: jax.Array
 
+    def offset(self, position: jax.Array) -> jax.Array:
+        """Return the translation at every time slice."""
+        return self.slopes @ (position - self.reference)
+
     def log_scale(self, position: jax.Array) -> jax.Array:
-        """Return each coordinate's log scale relative to the chart reference."""
-        return self.exponents @ (position - self.translation.reference)
+        """Return the log scale at every time slice."""
+        return self.exponents @ (position - self.reference)
+
+    def representable(self, position: jax.Array) -> jax.Array:
+        """Require finite normal scale squares and reciprocals in the runtime dtype.
+
+        Distant labels outside this numerical domain receive zero proposal weight,
+        before they contribute to common guide geometry. Never clip the exponent:
+        every active label uses the declared exponential map and its exact Jacobian.
+        Initial and rebuilt charts must represent every current chain position.
+        """
+        logarithm = self.log_scale(position)
+        limit = (
+            jnp.minimum(
+                jnp.log(jnp.finfo(logarithm.dtype).max), -jnp.log(jnp.finfo(logarithm.dtype).tiny)
+            )
+            / 2
+        )
+        return jnp.all(jnp.isfinite(logarithm) & (jnp.abs(logarithm) < limit))
+
+    def usable_at(self, positions: jax.Array) -> jax.Array:
+        """Check complete coefficients and the current population at the builder boundary."""
+        finite = jnp.all(
+            jnp.stack(
+                tuple(
+                    jnp.all(jnp.isfinite(value))
+                    for value in (self.slopes, self.exponents, self.center, self.reference)
+                )
+            )
+        )
+        return finite & jnp.all(jax.vmap(self.representable)(positions))
 
     def frame(self, position: jax.Array) -> ScaledDeviationFrame:
-        """Bind this position's map for every particle density and proposal."""
-        return ScaledDeviationFrame(
-            self.translation.offset(position), self.log_scale(position), self.center
-        )
+        """Bind one label's map for every factor and proposal."""
+        return ScaledDeviationFrame(self.offset(position), self.log_scale(position), self.center)
 
     def encode(self, position: jax.Array, path: jax.Array) -> jax.Array:
         """Express a physical trajectory in the chart."""
@@ -103,6 +96,3 @@ class ScaleChart:
     def decode(self, position: jax.Array, path: jax.Array) -> jax.Array:
         """Restore a physical trajectory from the chart."""
         return self.frame(position).decode(path, jnp.arange(path.shape[0]))
-
-
-type PathChart = TranslationChart | ScaleChart

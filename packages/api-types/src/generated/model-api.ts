@@ -4394,11 +4394,6 @@ export interface components {
              * @default null
              */
             readonly compiler_reparameterization?: boolean | null;
-            /**
-             * Scale Chart
-             * @default null
-             */
-            readonly scale_chart?: boolean | null;
             /** @default null */
             readonly parameter_proposal?: components["schemas"]["ParameterProposal"] | null;
             /** @default null */
@@ -4467,11 +4462,6 @@ export interface components {
              * @default null
              */
             readonly compiler_reparameterization: boolean | null;
-            /**
-             * Scale Chart
-             * @default null
-             */
-            readonly scale_chart: boolean | null;
             /** @default null */
             readonly parameter_proposal: components["schemas"]["ParameterProposal"] | null;
             /** @default null */
@@ -6884,16 +6874,10 @@ export interface components {
             readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
             /**
              * Compiler Reparameterization
-             * @description Compute time-indexed path translations from Gauss-Newton mean cross curvature, including deterministic recurrences and interval readings. Build at mean initial parameters and their IEKS path; rebuild at the chains' mean parameters and their IEKS path at warmup window ends. Freeze before retained draws and preserve the chart in native continuation state. Every density and reported path retains the exact physical model. Local slopes, strong nonlinearity and multiple modes can limit mixing.
+             * @description Compute one time-indexed path chart with translation and structural diffusion scaling, including interval readings and deterministic recurrences. Its center and full mean response share a frozen Gaussian surrogate at mean parameters and their IEKS path; transition covariance and pin conditioning contribute to the response. Build once before warmup and rebuild between warmup blocks at adaptation boundaries. Freeze before retained draws. Every label pays the exact time-indexed Jacobian; densities, reported paths and diagnostics retain physical model units. Native continuation retains the complete chart; incompatible native state shapes are rejected. Strong nonlinearity, separated modes and data-pinned deviations can limit mixing.
              * @default false
              */
             readonly compiler_reparameterization: boolean;
-            /**
-             * Scale Chart
-             * @description Rescale each stochastic state's deviations from a center path by the change in its own diffusion scale, in the sampler's actual parameter coordinates: structural non-centring of the diffusion. The center is the mean warmup path in the translated chart, learned in the existing warmup windows and frozen before retained draws. Every label pays the exact log-Jacobian, and all densities and reported paths retain the exact physical model. Requires point readings without deterministic recurrences. Data-pinned deviations, a poor center or a state-dependent diffusion cost efficiency, never the target.
-             * @default false
-             */
-            readonly scale_chart: boolean;
             /**
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk

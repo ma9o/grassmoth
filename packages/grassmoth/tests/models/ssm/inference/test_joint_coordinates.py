@@ -43,7 +43,7 @@ def test_runtime_charts_preserve_each_fits_scientific_start():
         np.testing.assert_array_equal(bound.parameter_center, coordinates.parameter_center)
 
 
-def _direct_constraints(value):
+def _direct_constraints(value, *, steps=4, state_names=("x", "y")):
     from grassmoth.artifacts.identity import MechanismId
     from grassmoth.artifacts.model.construct import replace_constructs
     from grassmoth.artifacts.model.expressions import LiteralExpression, coefficient, state
@@ -56,7 +56,7 @@ def _direct_constraints(value):
     from grassmoth_test_support.helpers import make_model
     from grassmoth_test_support.inference import compile_fit_fixture
 
-    model = make_model(["x", "y"], [("x", "y")])
+    model = make_model(list(state_names), [("x", "y")] if len(state_names) == 2 else [])
     constructs = tuple(
         c.revised(
             coefficients=(
@@ -101,7 +101,7 @@ def _direct_constraints(value):
     channel = next(
         i for i, o in enumerate(compiled.observations) if isinstance(o.law, DeltaLawSpec)
     )
-    observations = jnp.full((4, len(compiled.observations)), jnp.nan).at[1, channel].set(value)
+    observations = jnp.full((steps, len(compiled.observations)), jnp.nan).at[1, channel].set(value)
     return compile_exact_state_constraints(compiled, observations)
 
 

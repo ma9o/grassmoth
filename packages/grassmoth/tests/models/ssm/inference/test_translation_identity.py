@@ -9,9 +9,9 @@ from grassmoth.artifacts.sampling import GuidedPathSpec
 from grassmoth.models.ssm.inference.samplers.mpgibbs import kernel as kernel_module
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import _initialize_chain_state
 from grassmoth.models.ssm.inference.samplers.particle.contract import ParticleSmootherResult
-from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
 from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
+from packages.grassmoth.tests.models.ssm.inference.test_translation_chart import _translation_chart
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -24,7 +24,7 @@ def test_retained_chart_coordinates_preserve_physical_identity_and_caches(
     """Isolate reconstruction from the particle-selection and parameter-selection laws."""
     times = np.arange(2.0)
     target = interval_target(times, np.zeros((2, 1)), times[:, None], ("last",), state_dim=2)
-    chart = TranslationChart(jnp.full((2, 2, 1), offset), jnp.zeros(1))
+    chart = _translation_chart(jnp.full((2, 2, 1), offset), jnp.zeros(1))
     position = jnp.ones(1)
     physical = jnp.array([[value, -value], [-value, value]])
     # Both scales genuinely lose physical bits under an ordinary float32 round trip.
@@ -84,7 +84,7 @@ def test_charted_profile_components_return_production_physical_paths_and_caches(
     """Component timing executes physical reconstruction and scoring for every chain."""
     times = np.arange(2.0)
     target = interval_target(times, np.array([[0.2], [-0.3]]), times[:, None], ("last",))
-    chart = TranslationChart(jnp.full((2, 1, 1), -0.85), jnp.array([0.3]))
+    chart = _translation_chart(jnp.full((2, 1, 1), -0.85), jnp.array([0.3]))
     kernel = kernel_module.build_marginal_particle_gibbs_kernel(
         target,
         num_parameter_particles=2,

@@ -11,7 +11,7 @@ import numpyro.distributions as dist
 import pytest
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import FixedLatentStepSpec, GuidedPathSpec
+from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, FixedLatentStepSpec, GuidedPathSpec
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
@@ -19,7 +19,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import _initialize_chain_state
-from grassmoth.models.ssm.inference.targets.coordinates import TranslationChart
+from grassmoth.models.ssm.inference.targets.coordinates import PathChart
 from grassmoth_test_support.interval_particle import interval_target
 from grassmoth_test_support.observation import observation_laws
 from grassmoth_test_support.student_reference import student_features, student_quadrature
@@ -104,6 +104,9 @@ def _initialize(target, kernel, joint):
         ("particle_mgrad", 1, "random_walk", False),
         ("twisted_particle_agrad", 1, "pseudo_langevin", False),
         ("twisted_particle_agrad", 1, "pseudo_langevin", True),
+        ("particle_mgrad", 1, "random_walk", True),
+        ("kalman_full", 1, "random_walk", True),
+        ("kalman_blocked", 1, "random_walk", True),
     ],
 )
 def test_augmented_sweep_preserves_joint_marginal_posterior(
@@ -118,10 +121,16 @@ def test_augmented_sweep_preserves_joint_marginal_posterior(
         num_parameter_particles=3,
         parameter_proposal=proposal,
         parameter_reference_path=jnp.zeros((2, 1)),
-        path_update=GuidedPathSpec(method=method, num_particles=8, kappa=kappa),
-        initial_chart=TranslationChart(
+        path_update=(
+            AuxiliaryKalmanSpec(block_length=1 if method == "kalman_blocked" else None)
+            if method.startswith("kalman")
+            else GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
+        ),
+        initial_chart=PathChart(
             jnp.broadcast_to(jnp.array([[-0.35, 0.2, 0.15]]), (2, 1, 3)),
             jnp.array([0.1, -0.2, 0.3]),
+            jnp.array([[[0.2, -0.1, 0.1]], [[-0.15, 0.25, 0.05]]]),
+            jnp.array([[0.2], [-0.1]]),
         )
         if translated
         else None,

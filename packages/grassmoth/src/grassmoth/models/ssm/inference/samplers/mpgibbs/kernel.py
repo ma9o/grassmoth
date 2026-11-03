@@ -83,8 +83,6 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
 from grassmoth.models.ssm.inference.targets.coordinates import (
     PathChart,
-    ScaleChart,
-    TranslationChart,
 )
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 from grassmoth.models.ssm.inference.tracing import (
@@ -185,21 +183,15 @@ class MarginalParticleGibbsKernel(NamedTuple):
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...]
     exact_constraints: ExactStateConstraints | None
     initial_chart: PathChart | None
-    recompute_translation: bool
 
 
 def _restrict_chart(chart: PathChart, movable: jax.Array) -> PathChart:
     """Leave coordinates that some label cannot move in their physical values."""
-    translation = chart if isinstance(chart, TranslationChart) else chart.translation
-    translation = TranslationChart(
-        jnp.where(movable[..., None], translation.slopes, 0.0), translation.reference
-    )
-    if isinstance(chart, TranslationChart):
-        return translation
-    return ScaleChart(
-        translation,
-        jnp.where(jnp.all(movable, axis=0)[:, None], chart.exponents, 0.0),
-        chart.center,
+    return PathChart(
+        jnp.where(movable[..., None], chart.slopes, 0.0),
+        chart.reference,
+        jnp.where(movable[..., None], chart.exponents, 0.0),
+        jnp.where(movable, chart.center, 0.0),
     )
 
 
@@ -216,7 +208,6 @@ def build_marginal_particle_gibbs_kernel(
     exact_constraints: ExactStateConstraints | None = None,
     diagnostic_metrics: tuple[ParticleDiagnosticMetric, ...] = _DEFAULT_OPTIONS.diagnostic_metrics,
     initial_chart: PathChart | None = None,
-    recompute_translation: bool = False,
 ) -> MarginalParticleGibbsKernel:
     """Build a marginalized Particle Gibbs joint state update."""
     diagnostic_flags = build_particle_diagnostic_flags(diagnostic_metrics=diagnostic_metrics)
@@ -247,8 +238,6 @@ def build_marginal_particle_gibbs_kernel(
     if initial_chart is not None:
         # A shared chart must preserve every label's constrained path support.
         initial_chart = _restrict_chart(initial_chart, latent_free_mask)
-    if recompute_translation:
-        assert initial_chart is not None
 
     def _theta_logpost_grad(z: Float[Array, " U"]) -> Float[Array, " U"]:
         # q(u | theta) uses a theta-only oracle, fixed for every kernel call.
@@ -347,6 +336,11 @@ def build_marginal_particle_gibbs_kernel(
                     ),
                     state.parameter_chol,
                 )
+            )
+
+        if state.chart is not None:
+            label_correction = jnp.where(
+                jax.vmap(state.chart.representable)(parameter_particles), label_correction, -jnp.inf
             )
 
         with jax.named_scope("build_context"):
@@ -758,5 +752,4 @@ def build_marginal_particle_gibbs_kernel(
         diagnostic_metrics=diagnostic_metrics,
         exact_constraints=exact_constraints,
         initial_chart=initial_chart,
-        recompute_translation=recompute_translation,
     )

@@ -32,7 +32,6 @@ class FitSettingsSpec(Value):
     n_parameter_particles: int | None = Field(default=None, ge=2)
     path_update: PathUpdateSpec | None = None
     compiler_reparameterization: bool | None = None
-    scale_chart: bool | None = None
     parameter_proposal: ParameterProposal | None = None
     diagnostic_metrics: ParticleDiagnosticMetrics | None = None
     param_target_accept: float | None = None
