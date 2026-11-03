@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from grassmoth.public import FitInputs, FitOutput, InferenceHardware, StructuralSelection
+from grassmoth.public import FitInputs, InferenceHardware, StructuralSelection
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import ContinueFitTarget, FitInput
 from grassmoth_server.actions.contracts.requests import (
@@ -101,22 +101,23 @@ def _fit_selected(
             profile=request.settings.profile,
             previous_cache=previous_cache,
         )
-        path = download_fit_result(directory, completion.transfer)
+        path = download_fit_result(directory, completion.transfer, retained=False)
         saved = store.import_result(
             call_id=call_id,
             path=path,
             law_arrays=completion.law_arrays,
             full_fit=completion.full_fit,
         )
-        result = store.read_result(saved, FitOutput)
+        has_model = completion.has_model
     else:
         result = run_fit(
             inputs, profile_dir=directory / "profiles" if request.settings.profile else None
         )
         saved = store.write_result(result, call_id=call_id)
+        has_model = result.dynamical_model_spec is not None
     produced = (
         (store.result_record("model", saved, derived_from=pins, produced_by="fit"),)
-        if result.dynamical_model_spec is not None and sampler.num_samples_per_chain > 0
+        if has_model and sampler.num_samples_per_chain > 0
         else ()
     )
     return Applied(result=saved, effects=ActionEffects(produced=produced))

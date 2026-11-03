@@ -105,7 +105,11 @@ def main() -> None:
     ):
         parser.error("--call must select a published successful Modal fit in --workspace")
     output = analyze_on_modal(
-        outcome.result.full_fit, Path(script[0]).read_bytes(), tuple(script[1:])
+        outcome.result.full_fit.entry, Path(script[0]).read_bytes(), tuple(script[1:])
     )
     print(output.log, end="")
     raise SystemExit(output.exit_code)
+
+
+if __name__ == "__main__":
+    main()

@@ -118,7 +118,11 @@ async def evaluate_model_checks_activity(activity_input: EvaluateChecksInput) ->
         fit = await asyncio.to_thread(
             lambda: store.read_result(activity_input.applied.result, FitOutput)
         )
-        return ChecksResult(reports={}, messages=fit_check_messages(fit.checks, datetime.now(UTC)))
+        at = datetime.now(UTC)
+        return ChecksResult(
+            reports={},
+            messages=(*fit_check_messages(fit.checks, at), *inference_messages(fit.inference, at)),
+        )
     if isinstance(activity_input.request, PrepareDataRequest):
         raise TypeError("Model checks require an edit or fit request")
     result = await asyncio.to_thread(
@@ -177,17 +181,18 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
         return existing
     record = activity_input.record
     messages = record.messages
-    if isinstance(record.attempt.outcome, Applied):
-        from grassmoth.public import DataDiffOutput, FitOutput, SimulateOutput
+    if isinstance(record.attempt.outcome, Applied) and record.attempt.action in {
+        "simulate",
+        "data_diff",
+    }:
+        from grassmoth.public import DataDiffOutput, SimulateOutput
         from grassmoth_server.study.queries.results import read_result
 
         store = ArtifactStore(activity_input.workspace_id)
         result = read_result(store, record.attempt.action, record.attempt.outcome.result)
         if messages:
             announcements = (
-                inference_messages(result.inference, messages[-1].timestamp)
-                if isinstance(result, FitOutput)
-                else simulation_messages(result.report, messages[-1].timestamp)
+                simulation_messages(result.report, messages[-1].timestamp)
                 if isinstance(result, SimulateOutput)
                 else comparison_messages(result.report, messages[-1].timestamp)
                 if isinstance(result, DataDiffOutput)

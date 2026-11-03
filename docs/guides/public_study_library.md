@@ -72,10 +72,11 @@ the local machine. Results belong on the Volume, never in an image.
 
 The [cache owner](../../apps/grassmoth-server/src/grassmoth_server/compute/analysis_cache.py)
 keeps the complete remote fit output by content hash, including earlier phase
-traces on continuations. The study journal owns publication through a
-[compact receipt](../../apps/grassmoth-server/src/grassmoth_server/compute/remote_receipts.py).
-Explicit result reads resolve and verify its complete body. Missing or corrupt
-bodies fail explicitly, without repeating computation.
+traces on continuations. Git holds the served (thinned) body, and
+[`call.json`](../../apps/grassmoth-server/src/grassmoth_server/study/persistence/call.py)
+holds the full-result pointer and continuation settings. Saved GETs read Git;
+only continuation and `grassmoth-server analyze` read the complete Volume copy.
+Missing or corrupt bodies fail explicitly, without repeating computation.
 
 Deploy the [daily retention job](../../apps/grassmoth-server/src/grassmoth_server/compute/analysis_deployment.py):
 
@@ -83,4 +84,4 @@ Deploy the [daily retention job](../../apps/grassmoth-server/src/grassmoth_serve
 uv run modal deploy apps/grassmoth-server/src/grassmoth_server/compute/analysis_deployment.py
 ```
 
-The cache owner defines temporary-data expiry and the retained namespace for receipt-backed results on the shared Volume.
+The cache owner defines temporary-data expiry for transfer copies and the retained namespace for full results on the shared Volume.

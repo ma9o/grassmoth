@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 from pydantic import Field
 
-from grassmoth.public import Value
+from grassmoth.public import SamplerSpec, Value
 from grassmoth_server.actions.contracts.identity import CallId
 
 # Every stack shares this Volume; only temporary data is collected by the daily job.
@@ -41,6 +41,13 @@ class AnalysisCacheEntry(Value):
     call: AnalysisCall
     sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     size: int = Field(ge=0)
+
+
+class RetainedFit(Value):
+    """Full fit location and checkpoint settings; absent settings mean no retained draw."""
+
+    entry: AnalysisCacheEntry
+    settings: SamplerSpec | None
 
 
 def fit_profile_directory(root: Path, call: AnalysisCall) -> Path:

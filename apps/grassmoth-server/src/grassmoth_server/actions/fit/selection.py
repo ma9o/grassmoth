@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from grassmoth.public import FitOutput, GitOid, SamplerSpec, Value
+from grassmoth.public import GitOid, SamplerSpec, Value
 from grassmoth_server.actions.contracts.inputs import FitTarget, NewFitTarget
 from grassmoth_server.compute.analysis_cache import AnalysisCacheEntry
 from grassmoth_server.study.errors import StudyLookupError
@@ -32,15 +32,14 @@ def prior_fit(store: ArtifactStore, revision: GitOid) -> FitContinuation | Rejec
             subject="inputs",
             detail="Local fits retain only their served result and cannot be continued. Start a new fit.",
         )
-    result = store.read_result(outcome.result.revision, FitOutput)
-    checkpoint = result.inference.evidence.checkpoint
-    if checkpoint is None:
+    full_fit = outcome.result.full_fit
+    if full_fit.settings is None:
         return Rejected(
             code="FIT_CONTINUATION_UNAVAILABLE",
             subject="inputs",
             detail="The selected fit has no last retained draw to continue",
         )
-    return FitContinuation(full_fit=outcome.result.full_fit, settings=checkpoint.settings)
+    return FitContinuation(full_fit=full_fit.entry, settings=full_fit.settings)
 
 
 def fit_source(store: ArtifactStore, target: FitTarget[GitOid]) -> NewFitTarget[GitOid]:

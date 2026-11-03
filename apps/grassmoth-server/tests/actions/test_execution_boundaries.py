@@ -268,7 +268,7 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
     def remote_fit(inputs, **kwargs):
         import modal
 
-        from grassmoth_server.compute.analysis_cache import cache_fit_result
+        from grassmoth_server.compute.analysis_cache import RetainedFit, cache_fit_result
         from grassmoth_server.compute.fit_results import RemoteFitResult
         from grassmoth_server.study.persistence.arrays import owned_arrays
         from grassmoth_server.study.persistence.codec import pack_result, unpack_result
@@ -284,8 +284,9 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
             lambda _name: Mock(read_file_into_fileobj=lambda _path, stream: stream.write(body)),
         )
         return RemoteFitResult(
-            full_fit=entry,
+            full_fit=RetainedFit(entry=entry, settings=None),
             transfer=entry,
+            has_model=True,
             law_arrays=tuple(owned_arrays(unpack_result(body)["dynamical_model_spec"])),
         )
 
@@ -297,6 +298,11 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
         "panel": artifact_revision(workspace, "panel", 1),
         "question": write_question(store).revision,
     }
+    monkeypatch.setattr(
+        ArtifactStore,
+        "read_result",
+        Mock(side_effect=AssertionError("The runner decoded a fit body")),
+    )
     effects = run_async(
         _run_fit(
             store,

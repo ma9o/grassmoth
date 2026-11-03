@@ -337,7 +337,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     from grassmoth.artifacts.sampling import InferenceHardware
     from grassmoth_server.actions.contracts.identity import CallId
     from grassmoth_server.actions.fit import remote
-    from grassmoth_server.compute.analysis_cache import AnalysisCall, cache_fit_result
+    from grassmoth_server.compute.analysis_cache import AnalysisCall, RetainedFit, cache_fit_result
     from grassmoth_server.compute.fit_results import RemoteFitResult
     from grassmoth_server.study.persistence.arrays import owned_arrays
 
@@ -348,13 +348,17 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         # A remote continuation sends only the retained identity, including prior traces.
         assert not isinstance(payload.previous, bytes)
         fitted = remote.execute_fit_compute(payload)
+        assert fitted.inference.evidence.checkpoint is not None
         body = pack_result(fitted)
         entry = cache_fit_result(tmp_path / "retained", payload.analysis_call, unpack_result(body))
         return remote.FitComputeResult(
             pack_result(
                 RemoteFitResult(
-                    full_fit=entry,
+                    full_fit=RetainedFit(
+                        entry=entry, settings=fitted.inference.evidence.checkpoint.settings
+                    ),
                     transfer=entry,
+                    has_model=fitted.dynamical_model_spec is not None,
                     law_arrays=tuple(owned_arrays(unpack_result(body)["dynamical_model_spec"])),
                 )
             )
@@ -383,7 +387,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         )
         return FitOutput.model_validate(
             unpack_result(
-                remote.retained_fit_result(tmp_path / "retained", receipt.full_fit).read_bytes()
+                remote.retained_fit_result(
+                    tmp_path / "retained", receipt.full_fit.entry
+                ).read_bytes()
             )
         )
 

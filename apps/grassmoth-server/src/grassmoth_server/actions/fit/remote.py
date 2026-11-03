@@ -23,6 +23,7 @@ from grassmoth_server.compute.analysis_cache import (
     ANALYSIS_CACHE_VOLUME,
     AnalysisCacheEntry,
     AnalysisCall,
+    RetainedFit,
     cache_fit_result,
     fit_profile_directory,
     retained_fit_result,
@@ -191,23 +192,19 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
         )
         del values
         # The full-result pointer serves analysis and continuation.
-        # Publish a separate immutable body for UI reads and downloads.
+        # The 14-day temporary cache outlives the four-hour fit activity and
+        # transport retries. Later checks/publication retries already read Git.
         transfer_values = result_payload(result, thin_fit_draws=True)
-        transferred = FitOutput.model_validate(transfer_values)
-        transfer = (
-            entry
-            if transferred.inference.core.inference_metadata.thinning_factor == 1
-            else cache_fit_result(
-                ANALYSIS_CACHE_ROOT / "retained",
-                payload.analysis_call,
-                transfer_values,
-            )
-        )
+        transfer = cache_fit_result(ANALYSIS_CACHE_ROOT, payload.analysis_call, transfer_values)
         started = time.perf_counter()
+        checkpoint = result.inference.evidence.checkpoint
         completion = RemoteFitResult(
-            full_fit=entry,
+            full_fit=RetainedFit(
+                entry=entry, settings=None if checkpoint is None else checkpoint.settings
+            ),
             transfer=transfer,
             law_arrays=tuple(owned_arrays(transfer_values.get("dynamical_model_spec"))),
+            has_model=result.dynamical_model_spec is not None,
         )
         logger.info(
             "Fit result_pointers complete: elapsed_seconds=%.6f", time.perf_counter() - started
@@ -222,7 +219,7 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
         logger.info(
             "Fit result_frame_encode complete: elapsed_seconds=%.6f", time.perf_counter() - started
         )
-        del result, transferred, transfer_values
+        del result, transfer_values
     yield from _result_chunks(frame)
 
 
@@ -310,6 +307,6 @@ def fit_on_modal(
         hardware=inputs.sampler.hardware,
     )
     completion = RemoteFitResult.model_validate(unpack_result(result.output))
-    if completion.full_fit.call != analysis_call or completion.transfer.call != analysis_call:
+    if completion.full_fit.entry.call != analysis_call or completion.transfer.call != analysis_call:
         raise ValueError("Remote fit completion belongs to a different call")
     return completion

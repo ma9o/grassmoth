@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 
     from grassmoth.public import DynamicalModelSpec, JsonObject, QuestionSpec
     from grassmoth_server.actions.contracts.identity import ArtifactId
-    from grassmoth_server.compute.analysis_cache import AnalysisCacheEntry
+    from grassmoth_server.compute.analysis_cache import RetainedFit
 
 
 def utc_now_iso() -> str:
@@ -128,7 +128,7 @@ class ArtifactStore:
         call_id: str,
         path: Path,
         law_arrays: tuple[str, ...],
-        full_fit: AnalysisCacheEntry | None,
+        full_fit: RetainedFit | None,
     ) -> GitOid:
         """Save encoded result bytes and their publication metadata without decoding them."""
         revision = GitOid(str(write_file_blob(self.repo, path)))

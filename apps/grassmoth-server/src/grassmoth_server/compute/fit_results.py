@@ -7,6 +7,7 @@ from grassmoth.public import FitOutput, Value
 from grassmoth_server.compute.analysis_cache import (
     ANALYSIS_CACHE_VOLUME,
     AnalysisCacheEntry,
+    RetainedFit,
     retained_fit_result,
     verified_fit_content,
 )
@@ -16,12 +17,13 @@ from grassmoth_server.study.persistence.codec import unpack_result
 class RemoteFitResult(Value):
     """Remote completion coordinates; the study retains only the full-result pointer."""
 
-    full_fit: AnalysisCacheEntry
+    full_fit: RetainedFit
     transfer: AnalysisCacheEntry
     law_arrays: tuple[str, ...]
+    has_model: bool
 
 
-def download_fit_result(root: Path, entry: AnalysisCacheEntry) -> Path:
+def download_fit_result(root: Path, entry: AnalysisCacheEntry, *, retained: bool) -> Path:
     """Stream once to local disk and verify every explicit read against the immutable pointer."""
     import modal
 
@@ -32,7 +34,8 @@ def download_fit_result(root: Path, entry: AnalysisCacheEntry) -> Path:
             temporary = Path(stream.name)
             try:
                 modal.Volume.from_name(ANALYSIS_CACHE_VOLUME).read_file_into_fileobj(
-                    "retained/results/" + entry.sha256 + ".msgpack", stream
+                    ("retained/" if retained else "") + "results/" + entry.sha256 + ".msgpack",
+                    stream,
                 )
                 stream.flush()
                 verified_fit_content(temporary, entry)
@@ -44,4 +47,6 @@ def download_fit_result(root: Path, entry: AnalysisCacheEntry) -> Path:
 
 def load_full_fit(root: Path, entry: AnalysisCacheEntry) -> FitOutput:
     """Read verified complete remote evidence into a local continuation call."""
-    return FitOutput.model_validate(unpack_result(download_fit_result(root, entry).read_bytes()))
+    return FitOutput.model_validate(
+        unpack_result(download_fit_result(root, entry, retained=True).read_bytes())
+    )

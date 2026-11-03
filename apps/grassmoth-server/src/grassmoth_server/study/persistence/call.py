@@ -14,7 +14,7 @@ from grassmoth_server.actions.contracts.requests import (
     ModelDiffRequest,
     ScientificActionRequest,
 )
-from grassmoth_server.compute.analysis_cache import AnalysisCacheEntry
+from grassmoth_server.compute.analysis_cache import RetainedFit
 from grassmoth_server.study.records import ActionMessage, Raised, Rejected
 from grassmoth_server.study.state import RetractedArtifact
 
@@ -24,7 +24,7 @@ class SavedResult(Value):
 
     revision: GitOid
     law_arrays: tuple[str, ...] = ()
-    full_fit: AnalysisCacheEntry | None = None
+    full_fit: RetainedFit | None = None
 
 
 class SavedApplied(Value):
