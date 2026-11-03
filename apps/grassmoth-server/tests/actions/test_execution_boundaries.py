@@ -270,13 +270,15 @@ def test_refit_after_an_edit_uses_selected_model_and_preserves_the_edit(
 
         result = fit(inputs)
         body = pack_result(result)
-        entry = cache_fit_result(tmp_path / "retained", kwargs["analysis_call"], body)
+        entry = cache_fit_result(
+            tmp_path / "retained", kwargs["analysis_call"], unpack_result(body)
+        )
         monkeypatch.setattr(
             modal.Volume,
             "from_name",
             lambda _name: Mock(read_file_into_fileobj=lambda _path, stream: stream.write(body)),
         )
-        return receipt_for(result, entry, tuple(owned_arrays(unpack_result(body))))
+        return receipt_for(result, entry, tuple(owned_arrays(unpack_result(body))), transfer=entry)
 
     modal_fit = Mock(side_effect=remote_fit)
     monkeypatch.setattr(flow, "run_fit", local_fit)

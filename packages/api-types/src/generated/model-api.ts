@@ -4417,6 +4417,11 @@ export interface components {
              */
             readonly num_chains?: number | null;
             /**
+             * Thinning
+             * @default null
+             */
+            readonly thinning?: boolean | null;
+            /**
              * Seed
              * @default null
              */
@@ -4484,6 +4489,11 @@ export interface components {
              * @default null
              */
             readonly num_chains: number | null;
+            /**
+             * Thinning
+             * @default null
+             */
+            readonly thinning: boolean | null;
             /**
              * Seed
              * @default null
@@ -4948,6 +4958,22 @@ export interface components {
             readonly distribution: components["schemas"]["DistributionId-Output"] | null;
             /** Num Samples Total */
             readonly num_samples_total: number;
+            /**
+             * Thinning Factor
+             * @description Uniform stride in this result's per-draw arrays. The certificate and summaries describe all full retained chains pooled across segments; transferred draws may be a thinned subset. The full Modal cache has stride one.
+             * @default 1
+             */
+            readonly thinning_factor: number;
+            /**
+             * Draws Sampled Per Chain
+             * @description Completed retained sweeps per chain across all segments, excluding warmup.
+             */
+            readonly draws_sampled_per_chain: number;
+            /**
+             * Draws Kept Per Chain
+             * @description Draws per chain present in this result's per-draw arrays after transfer thinning.
+             */
+            readonly draws_kept_per_chain: number;
             /**
              * Segments
              * @default []
@@ -6839,6 +6865,12 @@ export interface components {
              * @default 4
              */
             readonly num_chains: number;
+            /**
+             * Thinning
+             * @description Cap transferred posterior draws at 10,000,000 joint draw values using the smallest uniform integer stride; requests below the cap are unchanged. Modal retains the full result for analysis and continuation. R-hat, ESS, the convergence certificate, marginal summaries and rank histograms describe all retained draws pooled across every segment, computed before thinning. Transferred draws, traces and aligned telemetry are a subset; native last states are unchanged. Continuations thin the combined full cache from the same first draw of each chain. The actual completed count determines the stride, including an early checkpoint stop. If one draw per chain exceeds the heuristic cap, retain one per chain and report that stride and count. False transfers every draw.
+             * @default true
+             */
+            readonly thinning: boolean;
             /**
              * Seed
              * @description Seeds initialization and sampling; another seed is an independent replicate.

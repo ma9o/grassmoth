@@ -59,6 +59,8 @@ def inference_metadata(model):
         distribution=identity,
         duration_seconds=0,
         num_samples_total=len(empirical_atoms(model.distributions[identity])),
+        draws_sampled_per_chain=len(empirical_atoms(model.distributions[identity])),
+        draws_kept_per_chain=len(empirical_atoms(model.distributions[identity])),
         num_chains=1,
         sampler_diagnostics=None,
     )

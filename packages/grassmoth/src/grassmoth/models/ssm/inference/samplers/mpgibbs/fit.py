@@ -317,7 +317,7 @@ def fit_marginal_particle_gibbs(
         public_sites=tuple(sorted(bundle.public_sites)),
         observation_log_probs=run_result.observation_log_probs,
         latent_chains=LatentChainEvidence(
-            paths=np.asarray(run_result.latent_paths),
+            paths=run_result.latent_paths,
             free_mask=np.asarray(
                 bundle.runtime.state_density_mask
                 if bundle.exact_constraints is None

@@ -177,7 +177,7 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
     with local_compilation_cache(Path("/cache/jax-bundles"), commit=volume.commit):
         result = execute_fit_compute(payload)
         from grassmoth_server.study.persistence.arrays import owned_arrays
-        from grassmoth_server.study.persistence.codec import pack_payload, result_payload
+        from grassmoth_server.study.persistence.codec import result_payload
 
         started = time.perf_counter()
         values = result_payload(result)
@@ -185,18 +185,29 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
             "Fit result_payload complete: elapsed_seconds=%.6f", time.perf_counter() - started
         )
         started = time.perf_counter()
-        packed = pack_payload(values)
+        entry = cache_fit_result(ANALYSIS_CACHE_ROOT / "retained", payload.analysis_call, values)
         logger.info(
-            "Fit pack_payload complete: elapsed_seconds=%.6f", time.perf_counter() - started
+            "Fit streamed cache write complete: elapsed_seconds=%.6f", time.perf_counter() - started
+        )
+        del values
+        # The analysis alias and continuation receipt keep the complete result.
+        # Publish a separate immutable body for UI reads and downloads.
+        transfer_values = result_payload(result, thin_fit_draws=True)
+        transferred = FitOutput.model_validate(transfer_values)
+        transfer = (
+            entry
+            if transferred.inference.core.inference_metadata.thinning_factor == 1
+            else cache_fit_result(
+                ANALYSIS_CACHE_ROOT / "retained",
+                payload.analysis_call,
+                transfer_values,
+                publish_alias=False,
+            )
         )
         started = time.perf_counter()
-        entry = cache_fit_result(ANALYSIS_CACHE_ROOT / "retained", payload.analysis_call, packed)
-        logger.info(
-            "Fit cache_fit_result complete: elapsed_seconds=%.6f", time.perf_counter() - started
+        receipt = receipt_for(
+            transferred, entry, tuple(owned_arrays(transfer_values)), transfer=transfer
         )
-        del packed
-        started = time.perf_counter()
-        receipt = receipt_for(result, entry, tuple(owned_arrays(values)))
         logger.info(
             "Fit result_receipt complete: elapsed_seconds=%.6f", time.perf_counter() - started
         )
@@ -210,7 +221,7 @@ def _fit_gpu(payload: FitComputeInput, attempt: modal.Dict) -> Iterator[bytes]:
         logger.info(
             "Fit result_frame_encode complete: elapsed_seconds=%.6f", time.perf_counter() - started
         )
-        del result, values
+        del result, transferred, transfer_values
     yield from _result_chunks(frame)
 
 

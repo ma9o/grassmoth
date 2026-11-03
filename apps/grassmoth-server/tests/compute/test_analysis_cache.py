@@ -17,6 +17,7 @@ from grassmoth_server.compute.analysis_cache import (
     expire_analysis_cache,
     fit_profile_directory,
 )
+from grassmoth_server.study.persistence.codec import unpack_result
 
 pytestmark = pytest.mark.contract
 
@@ -24,8 +25,8 @@ pytestmark = pytest.mark.contract
 def test_cached_calls_share_exact_content_and_reject_corruption(tmp_path):
     first = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
     second = first.revised(call_id=CallId("call:" + "b" * 64))
-    left = cache_fit_result(tmp_path, first, b"complete-result")
-    right = cache_fit_result(tmp_path, second, b"complete-result")
+    left = cache_fit_result(tmp_path, first, {"body": b"complete-result"})
+    right = cache_fit_result(tmp_path, second, {"body": b"complete-result"})
     assert left.sha256 == right.sha256
     assert cached_fit_result(tmp_path, first) == cached_fit_result(tmp_path, second)
     assert len(tuple((tmp_path / "results").iterdir())) == 1
@@ -36,7 +37,7 @@ def test_cached_calls_share_exact_content_and_reject_corruption(tmp_path):
 
 def test_collection_removes_only_expired_aliases_and_content(tmp_path):
     call = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
-    old = cache_fit_result(tmp_path, call, b"old")
+    old = cache_fit_result(tmp_path, call, {"body": b"old"})
     paths = (
         tmp_path / "calls" / (call.identity + ".json"),
         tmp_path / "results" / (old.sha256 + ".msgpack"),
@@ -48,7 +49,7 @@ def test_collection_removes_only_expired_aliases_and_content(tmp_path):
     (old_profile / "trace.json").write_text("old trace")
     os.utime(old_profile, (1, 1))
     current = call.revised(call_id=CallId("call:" + "b" * 64))
-    cache_fit_result(tmp_path, current, b"current")
+    cache_fit_result(tmp_path, current, {"body": b"current"})
     current_profile = fit_profile_directory(tmp_path, current)
     current_profile.mkdir(parents=True)
     (current_profile / "trace.json").write_text("current trace")
@@ -56,16 +57,18 @@ def test_collection_removes_only_expired_aliases_and_content(tmp_path):
     assert removed == 3
     assert not old_profile.exists()
     assert (current_profile / "trace.json").read_text() == "current trace"
-    assert cached_fit_result(tmp_path, current).read_bytes() == b"current"
+    assert unpack_result(cached_fit_result(tmp_path, current).read_bytes()) == {"body": b"current"}
 
 
 def test_receipt_backed_results_survive_temporary_cache_expiry(tmp_path):
     call = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
-    cache_fit_result(tmp_path / "retained", call, b"published-evidence")
+    cache_fit_result(tmp_path / "retained", call, {"body": b"published-evidence"})
     for path in tmp_path.rglob("*"):
         os.utime(path, (1, 1))
     assert expire_analysis_cache(tmp_path, now_seconds=ANALYSIS_RETENTION_SECONDS + 2) == (0, 0)
-    assert cached_fit_result(tmp_path, call).read_bytes() == b"published-evidence"
+    assert unpack_result(cached_fit_result(tmp_path, call).read_bytes()) == {
+        "body": b"published-evidence"
+    }
 
 
 def test_cpu_script_receives_verified_path_and_preserves_exit_status(monkeypatch, tmp_path):
@@ -73,8 +76,12 @@ def test_cpu_script_receives_verified_path_and_preserves_exit_status(monkeypatch
 
     monkeypatch.setattr(analysis, "ANALYSIS_CACHE_ROOT", tmp_path)
     call = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
-    cache_fit_result(tmp_path, call, b"result")
-    script = b"import pathlib, sys\nprint(pathlib.Path(sys.argv[1]).read_bytes().decode(), sys.argv[2])\nsys.exit(7)\n"
+    cache_fit_result(tmp_path, call, {"body": b"result"})
+    script = (
+        b"import msgpack, pathlib, sys\n"
+        b"body = msgpack.unpackb(pathlib.Path(sys.argv[1]).read_bytes(), raw=False)['body']\n"
+        b"print(body.decode(), sys.argv[2])\nsys.exit(7)\n"
+    )
     (output,) = _analyze_cpu(call, script, ("argument",))
     assert output.exit_code == 7
     assert output.log == "result argument\n"
@@ -96,3 +103,30 @@ def test_analysis_dispatch_sends_only_the_script_to_cpu(monkeypatch):
     assert app.function.call_args.kwargs["memory"] == (32768, 32768)
     assert app.function.call_args.kwargs["env"]["JAX_PLATFORMS"] == "cpu"
     function.remote_gen.assert_called_once_with(call, b"print('done')", ())
+
+
+def test_streamed_cache_preserves_full_alias_and_bounded_wire_chunks(tmp_path, monkeypatch):
+    import io
+
+    from grassmoth_server.compute.analysis_cache import retained_fit_result
+    from grassmoth_server.study.persistence import codec
+
+    monkeypatch.setattr(codec, "_BINARY_CHUNK_BYTES", 32)
+    payload = {"array": b"a" * 257, "same": b"a" * 257}
+    chunks = []
+    sink = io.BytesIO()
+
+    def write(chunk):
+        chunks.append(len(chunk))
+        return sink.write(chunk)
+
+    codec.write_payload(payload, write)
+    assert max(chunks) <= 34
+    assert sink.getvalue() == codec.pack_payload(payload)
+    assert codec.unpack_result(sink.getvalue()) == payload
+    call = AnalysisCall(workspace_id="STREAM", call_id=CallId("call:" + "d" * 64))
+    full = cache_fit_result(tmp_path, call, payload)
+    small = cache_fit_result(tmp_path, call, {"array": b"a"}, publish_alias=False)
+    assert cached_fit_result(tmp_path, call) == retained_fit_result(tmp_path, full)
+    assert full.size > small.size
+    assert codec.unpack_result(retained_fit_result(tmp_path, small).read_bytes()) == {"array": b"a"}

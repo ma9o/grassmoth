@@ -66,8 +66,8 @@ def retained_case(tmp_path, monkeypatch):
     )
     call = AnalysisCall(workspace_id="RECEIPT", call_id=call_identity(request))
     body = pack_result(result)
-    entry = cache_fit_result(tmp_path / "volume" / "retained", call, body)
-    receipt = receipt_for(result, entry, tuple(owned_arrays(unpack_result(body))))
+    entry = cache_fit_result(tmp_path / "volume" / "retained", call, unpack_result(body))
+    receipt = receipt_for(result, entry, tuple(owned_arrays(unpack_result(body))), transfer=entry)
     return result, body, receipt, request
 
 
@@ -154,8 +154,9 @@ def test_corrupt_or_partial_download_is_never_installed(
     assert not tuple((root / "results").iterdir())
 
 
+@pytest.mark.parametrize("thinned", [False, True])
 def test_gpu_commits_complete_body_before_returning_only_receipt(
-    retained_case, monkeypatch, tmp_path
+    retained_case, monkeypatch, tmp_path, thinned
 ):
     import jax
 
@@ -163,6 +164,62 @@ def test_gpu_commits_complete_body_before_returning_only_receipt(
     from grassmoth_server.compute import compilation_cache
 
     result, body, receipt, _request = retained_case
+    if thinned:
+        from datetime import UTC, datetime
+
+        import jax.numpy as jnp
+
+        from grassmoth.actions.fit.conditioning import condition_model
+        from grassmoth.artifacts import fit_transfer
+        from grassmoth.artifacts.probability.serialization import empirical_atoms
+        from grassmoth.artifacts.reports.inference import FitRuntime, FitSegment
+        from grassmoth.artifacts.sampling import SamplerSpec
+        from grassmoth.models.ssm.inference.types import JointPosteriorDraws
+        from grassmoth_test_support.inference import (
+            compile_model_fixture,
+            parameter_draws,
+            particle_posterior,
+        )
+
+        model = result.dynamical_model_spec
+        conditioned, identity = condition_model(
+            model,
+            compile_model_fixture(model),
+            particle_posterior(
+                JointPosteriorDraws(parameter_draws(model, 52), jnp.zeros((52, 2, 2)))
+            ),
+            times=jnp.array([0.0, 1.0]),
+            time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+        )
+        metadata = result.inference.core.inference_metadata.revised(
+            distribution=identity,
+            num_samples_total=52,
+            draws_sampled_per_chain=13,
+            draws_kept_per_chain=13,
+            segments=(
+                FitSegment(
+                    start=0,
+                    stop=13,
+                    settings=SamplerSpec(num_samples_per_chain=13),
+                    runtime=FitRuntime(source_digest="test", versions={}, compiler={}, devices=()),
+                    phases=(),
+                    diagnostics=None,
+                    convergence=result.inference.core.convergence,
+                ),
+            ),
+        )
+        result = result.revised(
+            dynamical_model_spec=conditioned,
+            inference=result.inference.revised(
+                core=result.inference.core.revised(inference_metadata=metadata)
+            ),
+        )
+        body = pack_result(result)
+        monkeypatch.setattr(
+            fit_transfer,
+            "MAX_TRANSFER_DRAW_VALUES",
+            12 * empirical_atoms(conditioned.distributions[identity]).shape[1],
+        )
     monkeypatch.setenv(remote.FIT_CACHE_VOLUME_ENV, "test-compilation-cache")
     monkeypatch.setattr(jax, "default_backend", lambda: "gpu")
     monkeypatch.setattr(remote, "ANALYSIS_CACHE_ROOT", tmp_path / "worker")
@@ -175,11 +232,33 @@ def test_gpu_commits_complete_body_before_returning_only_receipt(
     chunks = remote._fit_gpu(Mock(analysis_call=receipt.cache.call), Mock())
     decoded = remote.decode_fit_result(b"".join(chunks))
     returned = RemoteFitReceipt.model_validate(unpack_result(decoded.output))
-    assert returned == receipt
+    if not thinned:
+        assert returned == receipt
     assert (
-        tmp_path / "worker" / "retained" / "results" / (receipt.cache.sha256 + ".msgpack")
+        tmp_path / "worker" / "retained" / "results" / (returned.cache.sha256 + ".msgpack")
     ).read_bytes() == body
+    from grassmoth_server.compute.analysis_cache import cached_fit_result
+
+    assert cached_fit_result(tmp_path / "worker", returned.cache.call).read_bytes() == body
     volume.commit.assert_called_once()
+    if thinned:
+        from grassmoth_server.compute.remote_receipts import load_remote_fit
+
+        monkeypatch.setattr(
+            volume,
+            "read_file_into_fileobj",
+            lambda path, stream: stream.write((tmp_path / "worker" / path).read_bytes()),
+        )
+        transfer_body = complete_remote_body(pack_result(returned), tmp_path / "local")
+        downloaded = FitOutput.model_validate(unpack_result(transfer_body))
+        assert downloaded.inference.core.inference_metadata.draws_kept_per_chain == 3
+        assert downloaded.inference.core.inference_metadata.thinning_factor == 5
+        assert downloaded.inference.core.inference_metadata.draws_sampled_per_chain == 13
+        assert returned.cache != returned.transfer
+        restored = load_remote_fit(tmp_path / "local", returned.cache)
+        assert restored.inference.core.inference_metadata.draws_kept_per_chain == 13
+        assert restored.inference.core.inference_metadata.thinning_factor == 1
+        assert pack_result(restored) == body
 
 
 def test_dispatch_rejects_receipt_for_another_call(retained_case, monkeypatch):

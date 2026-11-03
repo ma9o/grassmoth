@@ -7,6 +7,10 @@ import shutil
 import time
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from pydantic import Field
 
@@ -56,16 +60,28 @@ def _atomic_write(path: Path, data: bytes) -> None:
             temporary.unlink(missing_ok=True)
 
 
-def cache_fit_result(root: Path, call: AnalysisCall, output: bytes) -> AnalysisCacheEntry:
-    """Cache the already encoded body atomically, without another numerical copy."""
-    entry = AnalysisCacheEntry(
-        call=call, sha256=hashlib.sha256(output).hexdigest(), size=len(output)
-    )
-    target = root / "results" / (entry.sha256 + ".msgpack")
-    if not target.exists():
-        _atomic_write(target, output)
-    target.touch()
-    _atomic_write(root / "calls" / (call.identity + ".json"), entry.model_dump_json().encode())
+def cache_fit_result(
+    root: Path, call: AnalysisCall, output: Mapping[str, object], *, publish_alias: bool = True
+) -> AnalysisCacheEntry:
+    """Stream an atomic cache body without an additional full encoded copy."""
+    from grassmoth_server.study.persistence.codec import write_payload
+
+    directory = root / "results"
+    directory.mkdir(parents=True, exist_ok=True)
+    with NamedTemporaryFile(dir=directory, prefix=".pending-", delete=False) as stream:
+        temporary = Path(stream.name)
+        try:
+            write_payload(output, stream.write)
+            stream.flush()
+            with temporary.open("rb") as saved:
+                digest = hashlib.file_digest(saved, "sha256").hexdigest()
+            entry = AnalysisCacheEntry(call=call, sha256=digest, size=temporary.stat().st_size)
+            target = directory / (entry.sha256 + ".msgpack")
+            temporary.replace(target)
+        finally:
+            temporary.unlink(missing_ok=True)
+    if publish_alias:
+        _atomic_write(root / "calls" / (call.identity + ".json"), entry.model_dump_json().encode())
     return entry
 
 

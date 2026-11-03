@@ -25,6 +25,7 @@ class RemoteFitReceipt(Value):
 
     kind: Literal["remote_fit"] = "remote_fit"  # noqa: FIELD002 -- Storage discriminator is read from the decoded mapping before schema selection.
     cache: AnalysisCacheEntry
+    transfer: AnalysisCacheEntry
     checks: FitCheckReport
     inference: InferenceReport
     continuation: SamplerSpec | None
@@ -33,12 +34,17 @@ class RemoteFitReceipt(Value):
 
 
 def receipt_for(
-    result: FitOutput, entry: AnalysisCacheEntry, array_ids: tuple[str, ...]
+    result: FitOutput,
+    entry: AnalysisCacheEntry,
+    array_ids: tuple[str, ...],
+    *,
+    transfer: AnalysisCacheEntry,
 ) -> RemoteFitReceipt:
     """Keep native checks and convergence reports; numerical evidence stays on the Volume."""
     checkpoint = result.inference.evidence.checkpoint
     return RemoteFitReceipt(
         cache=entry,
+        transfer=transfer,
         checks=result.checks,
         continuation=None if checkpoint is None else checkpoint.settings,
         has_model=result.dynamical_model_spec is not None,
@@ -87,7 +93,7 @@ def complete_remote_body(payload: bytes, root: Path) -> bytes:
     if decoded.get("kind") != "remote_fit":
         return payload
     receipt = RemoteFitReceipt.model_validate(decoded)
-    return download_fit_result(root, receipt.cache).read_bytes()
+    return download_fit_result(root, receipt.transfer).read_bytes()
 
 
 def load_remote_fit(root: Path, entry: AnalysisCacheEntry) -> FitOutput:

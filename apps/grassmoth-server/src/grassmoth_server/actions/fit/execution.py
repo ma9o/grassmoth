@@ -29,6 +29,7 @@ def resolve_sampler_spec(
         if settings.num_samples_per_chain is None
         else settings.num_samples_per_chain,
         num_chains=configured.num_chains if settings.num_chains is None else settings.num_chains,
+        thinning=configured.thinning if settings.thinning is None else settings.thinning,
         seed=configured.seed if settings.seed is None else settings.seed,
         hardware=configured.hardware if settings.hardware is None else settings.hardware,
         time_limit_seconds=configured.time_limit_seconds

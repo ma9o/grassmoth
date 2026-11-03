@@ -293,6 +293,7 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/fit"
       "num_samples_per_chain": null,
       "num_warmup": null,
       "num_chains": null,
+      "thinning": null,
       "seed": null
     },
     "repeat": 0

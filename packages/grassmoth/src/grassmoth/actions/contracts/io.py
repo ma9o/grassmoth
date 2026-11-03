@@ -12,7 +12,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, ClassVar
 
-from pydantic import ConfigDict, Field
+from pydantic import (
+    ConfigDict,
+    Field,
+    SerializationInfo,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.identity import IndicatorId
@@ -202,6 +208,15 @@ class FitOutput(Value):
     profile: FitProfileReport | None = Field(
         default=None, description="Timings for this execution only when settings.profile is true."
     )
+
+    @model_serializer(mode="wrap")
+    def serialize_fit(self, handler: SerializerFunctionWrapHandler, info: SerializationInfo):  # noqa: ANN201 -- Retain the declared FitOutput schema through this serialization view.
+        """Apply the requested transfer view without changing the cached value."""
+        from grassmoth.artifacts.fit_transfer import transfer_fit
+
+        return handler(
+            transfer_fit(self) if info.context and info.context.get("thin_fit_draws") else self
+        )
 
 
 # simulate

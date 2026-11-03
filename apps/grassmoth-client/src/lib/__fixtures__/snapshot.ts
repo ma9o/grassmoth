@@ -63,6 +63,9 @@ const fit: InferenceReportCore = {
   inference_metadata: {
     distribution: "distribution:00000000000000000003",
     num_samples_total: 3,
+    thinning_factor: 1,
+    draws_sampled_per_chain: 3,
+    draws_kept_per_chain: 3,
     segments: [],
     num_chains: 1,
     duration_seconds: 0,

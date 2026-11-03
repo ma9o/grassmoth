@@ -16194,6 +16194,18 @@
             "default": null,
             "title": "Num Chains"
           },
+          "thinning": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Thinning"
+          },
           "seed": {
             "anyOf": [
               {
@@ -16379,6 +16391,18 @@
             "default": null,
             "title": "Num Chains"
           },
+          "thinning": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Thinning"
+          },
           "seed": {
             "anyOf": [
               {
@@ -16408,6 +16432,7 @@
           "num_samples_per_chain",
           "num_warmup",
           "num_chains",
+          "thinning",
           "seed"
         ],
         "title": "FitSettingsSpec",
@@ -17633,6 +17658,25 @@
             "title": "Num Samples Total",
             "type": "integer"
           },
+          "thinning_factor": {
+            "default": 1,
+            "description": "Uniform stride in this result's per-draw arrays. The certificate and summaries describe all full retained chains pooled across segments; transferred draws may be a thinned subset. The full Modal cache has stride one.",
+            "minimum": 1,
+            "title": "Thinning Factor",
+            "type": "integer"
+          },
+          "draws_sampled_per_chain": {
+            "description": "Completed retained sweeps per chain across all segments, excluding warmup.",
+            "minimum": 0,
+            "title": "Draws Sampled Per Chain",
+            "type": "integer"
+          },
+          "draws_kept_per_chain": {
+            "description": "Draws per chain present in this result's per-draw arrays after transfer thinning.",
+            "minimum": 0,
+            "title": "Draws Kept Per Chain",
+            "type": "integer"
+          },
           "segments": {
             "default": [],
             "items": {
@@ -17665,6 +17709,9 @@
         "required": [
           "distribution",
           "num_samples_total",
+          "thinning_factor",
+          "draws_sampled_per_chain",
+          "draws_kept_per_chain",
           "segments",
           "num_chains",
           "duration_seconds",
@@ -23728,6 +23775,12 @@
             "title": "Num Chains",
             "type": "integer"
           },
+          "thinning": {
+            "default": true,
+            "description": "Cap transferred posterior draws at 10,000,000 joint draw values using the smallest uniform integer stride; requests below the cap are unchanged. Modal retains the full result for analysis and continuation. R-hat, ESS, the convergence certificate, marginal summaries and rank histograms describe all retained draws pooled across every segment, computed before thinning. Transferred draws, traces and aligned telemetry are a subset; native last states are unchanged. Continuations thin the combined full cache from the same first draw of each chain. The actual completed count determines the stride, including an early checkpoint stop. If one draw per chain exceeds the heuristic cap, retain one per chain and report that stride and count. False transfers every draw.",
+            "title": "Thinning",
+            "type": "boolean"
+          },
           "seed": {
             "default": 0,
             "description": "Seeds initialization and sampling; another seed is an independent replicate.",
@@ -23794,6 +23847,7 @@
           "num_warmup",
           "num_samples_per_chain",
           "num_chains",
+          "thinning",
           "seed",
           "hardware",
           "time_limit_seconds",

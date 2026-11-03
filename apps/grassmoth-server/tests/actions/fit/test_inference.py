@@ -145,18 +145,12 @@ if TYPE_CHECKING:
     from grassmoth.models.ssm.preparation.binding import BoundPanel
 
 
+@pytest.mark.inference(concern="sampling")
 def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_evidence(
     monkeypatch, tmp_path
 ):
     from grassmoth.actions.contracts.io import FitOutput
     from grassmoth.actions.fit.action import _fit as fit
-    from grassmoth.artifacts.reports.posterior_diagnostics import ChainDiagnostics
-
-    segment_diagnostics = ChainDiagnostics(num_chains=2, num_samples_per_chain=1, per_parameter=())
-    monkeypatch.setattr(
-        "grassmoth.actions.fit.action.segment_diagnostics",
-        lambda *_args: segment_diagnostics,
-    )
     from grassmoth.artifacts.arrays import NumericalArray
     from grassmoth.artifacts.continuation import SamplerCheckpoint, TransferredTuning
     from grassmoth.artifacts.probability.serialization import empirical_atoms
@@ -260,7 +254,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             ),
         )
 
-    def output(result):
+    def output(result, *, render=False):
+        from grassmoth.actions.fit.action import inference_report
+
         return FitOutput(
             dynamical_model_spec=result.dynamical_model_spec,
             checks=FitCheckReport(
@@ -268,7 +264,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
                 preflight=(),
                 question=QuestionCheckReport(findings=()),
             ),
-            inference=InferenceReport(
+            inference=inference_report(result, model, (), execution_context=EXECUTION_CONTEXT)
+            if render
+            else InferenceReport(
                 evidence=result.evidence,
                 core=InferenceReportCore(
                     inference_metadata=result.metadata,
@@ -326,7 +324,9 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         )
     assert combined.metadata.segments[-1].settings.num_samples_per_chain == 1
     assert combined.metadata.num_samples_total == 6
-    assert combined.metadata.segments[-1].diagnostics == segment_diagnostics
+    assert (
+        combined.metadata.segments[-1].diagnostics == standalone.metadata.segments[-1].diagnostics
+    )
     assert [(segment.start, segment.stop) for segment in combined.metadata.segments] == [
         (0, 2),
         (2, 3),
@@ -349,16 +349,20 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
         assert not isinstance(payload.previous, bytes)
         fitted = remote.execute_fit_compute(payload)
         body = pack_result(fitted)
-        entry = cache_fit_result(tmp_path / "retained", payload.analysis_call, body)
+        entry = cache_fit_result(tmp_path / "retained", payload.analysis_call, unpack_result(body))
         return remote.FitComputeResult(
-            pack_result(receipt_for(fitted, entry, tuple(owned_arrays(unpack_result(body)))))
+            pack_result(
+                receipt_for(fitted, entry, tuple(owned_arrays(unpack_result(body))), transfer=entry)
+            )
         )
 
     monkeypatch.setattr(remote, "_dispatch_fit", dispatch_retained)
     analysis_call = AnalysisCall(workspace_id="TEST", call_id=CallId("call:" + "a" * 64))
 
     def remotely(count, previous):
-        parent = cache_fit_result(tmp_path / "retained", analysis_call, pack_result(previous))
+        parent = cache_fit_result(
+            tmp_path / "retained", analysis_call, unpack_result(pack_result(previous))
+        )
         receipt = remote.fit_on_modal(
             FitInputs(
                 selection=StructuralSelection(model, None),
@@ -418,4 +422,98 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
             "position"
         ].values,
         [1.0, 2.0],
+    )
+
+    from grassmoth.artifacts import fit_transfer
+    from grassmoth.artifacts.arrays import resolve_vector
+    from grassmoth_server.study.persistence.codec import result_payload
+
+    full = output(execute(posterior(65, 2), 100), render=True)
+    identity = full.inference.core.inference_metadata.distribution
+    atoms = empirical_atoms(full.dynamical_model_spec.distributions[identity])
+    # Use an actual shorter run than requested, as at an early retained checkpoint.
+    cap = 2 * atoms.shape[1] * 9
+    monkeypatch.setattr(fit_transfer, "MAX_TRANSFER_DRAW_VALUES", cap)
+
+    def transferred(value):
+        return FitOutput.model_validate(result_payload(value, thin_fit_draws=True))
+
+    small = transferred(full)
+    meta = small.inference.core.inference_metadata
+    assert meta.draws_sampled_per_chain == 65
+    assert meta.draws_kept_per_chain == 9
+    assert meta.thinning_factor == 8
+    selected = empirical_atoms(small.dynamical_model_spec.distributions[identity])
+    assert selected.size <= cap
+    np.testing.assert_array_equal(selected.reshape(2, 9, -1), atoms.reshape(2, 65, -1)[:, ::8])
+    assert small.inference.evidence.checkpoint == full.inference.evidence.checkpoint
+    assert small.inference.core.inference_diagnostics == full.inference.core.inference_diagnostics
+    assert small.inference.core.convergence == full.inference.core.convergence
+    assert small.inference.core.posterior_marginals == full.inference.core.posterior_marginals
+    assert small.inference.detail.rank_histograms == full.inference.detail.rank_histograms
+    for before, after in zip(
+        full.inference.detail.trace_data, small.inference.detail.trace_data, strict=True
+    ):
+        for full_chain, thin_chain in zip(before.chains, after.chains, strict=True):
+            assert resolve_vector(thin_chain) == resolve_vector(full_chain)[::8]
+    for name, value in small.inference.evidence.chain_extra_fields.items():
+        np.testing.assert_array_equal(
+            value.values, full.inference.evidence.chain_extra_fields[name].values[:, ::8]
+        )
+    assert transferred(small) == small
+    disabled = full.revised(
+        inference=full.inference.revised(
+            core=full.inference.core.revised(
+                inference_metadata=full.inference.core.inference_metadata.revised(
+                    segments=tuple(
+                        segment.revised(settings=segment.settings.revised(thinning=False))
+                        for segment in full.inference.core.inference_metadata.segments
+                    )
+                )
+            )
+        )
+    )
+    assert transferred(disabled) == disabled
+    extended = output(execute(posterior(38, 4), 38, full), render=True)
+    extended_small = transferred(extended)
+    extended_atoms = empirical_atoms(extended.dynamical_model_spec.distributions[identity]).reshape(
+        2, 103, -1
+    )
+    extended_meta = extended_small.inference.core.inference_metadata
+    assert extended_meta.thinning_factor == 12
+    np.testing.assert_array_equal(
+        empirical_atoms(extended_small.dynamical_model_spec.distributions[identity]).reshape(
+            2, 9, -1
+        ),
+        extended_atoms[:, ::12],
+    )
+    assert extended.inference.core.inference_diagnostics.num_samples_per_chain == 103
+    assert (
+        extended_small.inference.core.inference_diagnostics
+        == extended.inference.core.inference_diagnostics
+    )
+    assert extended_small.inference.core.convergence == extended.inference.core.convergence
+    assert (
+        extended_small.inference.core.posterior_marginals
+        == extended.inference.core.posterior_marginals
+    )
+    assert (
+        extended_small.inference.detail.rank_histograms == extended.inference.detail.rank_histograms
+    )
+    layout = extended.dynamical_model_spec.law_layouts[identity]
+    for marginal in extended.inference.core.posterior_marginals:
+        column = layout.parameter_columns[marginal.subject.element_id]
+        assert marginal.mean == pytest.approx(float(extended_atoms[..., column].mean()))
+    assert all(
+        sum(chain) == 103
+        for hist in extended.inference.detail.rank_histograms
+        for chain in hist.chains
+    )
+    monkeypatch.setattr(fit_transfer, "MAX_TRANSFER_DRAW_VALUES", 1)
+    irreducible = transferred(full)
+    assert irreducible.inference.core.inference_metadata.draws_kept_per_chain == 1
+    assert irreducible.inference.core.inference_metadata.thinning_factor == 65
+    np.testing.assert_array_equal(
+        empirical_atoms(irreducible.dynamical_model_spec.distributions[identity]),
+        atoms.reshape(2, 65, -1)[:, 0],
     )

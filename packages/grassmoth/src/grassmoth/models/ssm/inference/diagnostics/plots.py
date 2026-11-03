@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
+from functools import partial
 from typing import TYPE_CHECKING
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 
+from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.identity import ParameterRef
 from grassmoth.artifacts.model.parameter import ParameterCoordinate
-from grassmoth.artifacts.reports.histograms import empirical_distribution
+from grassmoth.artifacts.reports.empirical import EmpiricalDistribution
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     DensityCurve,
     ParetoKPoint,
@@ -19,7 +23,6 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 )
 
 if TYPE_CHECKING:
-    import jax.numpy as jnp
     from numpy.typing import NDArray
 
 
@@ -63,8 +66,6 @@ def build_rank_histograms(
     n_bins: int = 20,
 ) -> tuple[RankHistogram, ...]:
     """Build per-chain pooled-rank histograms for coordinates with scientific parameter references."""
-    from arviz_stats.base.array import array_stats
-
     histograms = []
     for coordinate, values in sample_coordinates(chain_samples, sample_dims=2):
         reference = references[coordinate]
@@ -72,13 +73,7 @@ def build_rank_histograms(
             continue
         _, subject = reference
         n_chains, n_samples = values.shape
-        total = n_chains * n_samples
-        ranks = np.asarray(
-            array_stats.compute_ranks(np.asarray(values).reshape(-1), axis=-1)
-        ).reshape(values.shape)
-        counts, _ = array_stats.histogram(
-            ranks, bins=n_bins, range=(1, total + 1), axis=1, density=False
-        )
+        counts = np.asarray(_rank_counts(jnp.asarray(values), n_bins))
         histograms.append(
             RankHistogram(
                 subject=subject,
@@ -92,40 +87,64 @@ def build_rank_histograms(
     return tuple(histograms)
 
 
-def _density_histogram(values: NDArray, n_bins: int) -> DensityCurve:
-    from arviz_stats.base.array import array_stats
-
-    v_min, v_max = float(np.min(values)), float(np.max(values))
-    padding = (v_max - v_min) * HIST_PADDING_RATIO if v_max > v_min else HIST_PADDING_DEFAULT
-    density, edges = array_stats.histogram(
-        values, bins=n_bins, range=(v_min - padding, v_max + padding), axis=-1, density=True
+@partial(jax.jit, static_argnums=(1,))
+def _rank_counts(values: jax.Array, n_bins: int) -> jax.Array:
+    # Rejected MCMC moves repeat floats. Average ties, as in rank-normalized
+    # convergence diagnostics, instead of assigning arbitrary sort-order ranks.
+    pooled = values.reshape(-1)
+    ordered = jnp.sort(pooled)
+    left = jnp.searchsorted(ordered, pooled, side="left")
+    right = jnp.searchsorted(ordered, pooled, side="right")
+    ranks = ((left.astype(jnp.float32) + right + 1) / 2).reshape(values.shape)
+    return jax.vmap(lambda chain: jnp.histogram(chain, bins=n_bins, range=(1, pooled.size + 1))[0])(
+        ranks
     )
-    centers = (edges[:-1] + edges[1:]) / 2.0
-    return DensityCurve(
-        x=tuple(float(v) for v in centers), density=tuple(float(v) for v in density)
+
+
+@partial(jax.jit, static_argnums=(1,))
+def _marginal_summary(draws: jax.Array, n_bins: int) -> tuple[jax.Array, ...]:
+    ordered = jnp.sort(draws)
+    width = min(int(0.94 * draws.size), draws.size - 1)
+    start = jnp.argmin(ordered[width:] - ordered[: draws.size - width])
+    padding = jnp.where(
+        ordered[-1] > ordered[0],
+        (ordered[-1] - ordered[0]) * HIST_PADDING_RATIO,
+        HIST_PADDING_DEFAULT,
+    )
+    density, edges = jnp.histogram(
+        draws, bins=n_bins, range=(ordered[0] - padding, ordered[-1] + padding), density=True
+    )
+    return (
+        (edges[:-1] + edges[1:]) / 2,
+        density,
+        jnp.stack((jnp.mean(draws), jnp.std(draws), ordered[start], ordered[start + width])),
     )
 
 
 def param_marginal(
     parameter: str, subject: ParameterRef, values: jnp.ndarray | NDArray, n_bins: int = 50
 ) -> PosteriorMarginal:
-    """Summarize scalar posterior draws with a density histogram, moments, and a 94% HDI."""
-    from arviz_stats.base.array import array_stats
-
-    draws = np.asarray(values)
-    histogram = _density_histogram(draws, n_bins)
-    low, high = array_stats.hdi(draws, prob=0.94, axis=-1)
+    """Reduce full-chain moments, density, HDI and empirical CDF on the device."""
+    draws = jnp.asarray(values, dtype=jnp.float32)
+    centers, density, summary = (np.asarray(value) for value in _marginal_summary(draws, n_bins))
+    unique, counts = jnp.unique(draws[jnp.isfinite(draws)], return_counts=True)
+    cumulative = jnp.cumsum(counts) / jnp.sum(counts)
     return PosteriorMarginal(
         parameter=parameter,
         subject=subject,
-        density_curve=histogram,
-        empirical=empirical_distribution(draws),
-        mean=float(np.mean(draws)),
-        sd=float(np.std(draws)),
+        density_curve=DensityCurve(
+            x=tuple(float(v) for v in centers), density=tuple(float(v) for v in density)
+        ),
+        empirical=EmpiricalDistribution(
+            values=NumericalArray.from_numpy(np.asarray(unique)),
+            probabilities=NumericalArray.from_numpy(np.asarray(cumulative)),
+        ),
+        mean=float(summary[0]),
+        sd=float(summary[1]),
         interval_kind="hdi",
         interval_mass=0.94,
-        lower=float(low),
-        upper=float(high),
+        lower=float(summary[2]),
+        upper=float(summary[3]),
     )
 
 

@@ -27,6 +27,7 @@ const source = { files: ["input/test.csv"] as const, hashes: {}, start: null, en
 const design = { start: "2026-01-01", horizon: "1d", interventions: [] };
 const settings = {
   profile: false,
+  thinning: null,
   hardware: null,
   time_limit_seconds: null,
   n_parameter_particles: null,

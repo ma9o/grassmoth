@@ -284,6 +284,22 @@ class SamplerSpec(Value):
             "Vehtari et al. (2021) recommend at least four."
         ),
     )
+    thinning: bool = Field(
+        default=True,
+        description=(
+            "Cap transferred posterior draws at 10,000,000 joint draw values using the "
+            "smallest uniform integer stride; requests below the cap are unchanged. "
+            "Modal retains the full result for analysis and continuation. R-hat, ESS, "
+            "the convergence certificate, marginal summaries and rank histograms describe "
+            "all retained draws pooled across every segment, computed before thinning. "
+            "Transferred draws, traces and aligned telemetry are a subset; native last "
+            "states are unchanged. Continuations thin the combined full cache from the "
+            "same first draw of each chain. The actual completed count determines the "
+            "stride, including an early checkpoint stop. If one draw per chain exceeds the "
+            "heuristic cap, retain one per chain and report that stride and count. "
+            "False transfers every draw."
+        ),
+    )
     seed: int = Field(
         default=0,
         ge=0,

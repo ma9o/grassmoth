@@ -40,18 +40,17 @@ def _metadata(value: object) -> object:
     return to_jsonable_python(value)
 
 
-def pack_payload(value: object) -> bytes:
-    """Encode shared buffers with bounded packer copies and binary chunk lengths."""
+def write_payload(value: object, write_bytes: Callable[[bytes], object]) -> None:
+    """Stream shared buffers with at most one bounded MessagePack chunk copy."""
     buffers: dict[bytes, int] = {}
     identities: dict[int, tuple[bytes, int]] = {}
-    output = BytesIO()
     packer = msgpack.Packer(use_bin_type=True)
 
     def write(item: object) -> None:
         if isinstance(item, bytes):
             prior = identities.get(id(item))
             if prior is not None:
-                output.write(
+                write_bytes(
                     packer.pack(msgpack.ExtType(_BUFFER_REFERENCE, prior[1].to_bytes(8, "big")))
                 )
                 return
@@ -64,38 +63,47 @@ def pack_payload(value: object) -> bytes:
             # repeated views must not compare multi-GB buffers for every visit.
             identities[id(item)] = (item, index)
             if not first:
-                output.write(
+                write_bytes(
                     packer.pack(msgpack.ExtType(_BUFFER_REFERENCE, index.to_bytes(8, "big")))
                 )
             elif len(item) <= _BINARY_CHUNK_BYTES:
-                output.write(packer.pack(item))
+                write_bytes(packer.pack(item))
             else:
                 count = (len(item) + _BINARY_CHUNK_BYTES - 1) // _BINARY_CHUNK_BYTES
-                output.write(packer.pack_array_header(count + 1))
-                output.write(
+                write_bytes(packer.pack_array_header(count + 1))
+                write_bytes(
                     packer.pack(msgpack.ExtType(_BUFFER_CHUNKS, len(item).to_bytes(8, "big")))
                 )
                 view = memoryview(item)
                 for start in range(0, len(item), _BINARY_CHUNK_BYTES):
-                    output.write(packer.pack(view[start : start + _BINARY_CHUNK_BYTES]))
+                    write_bytes(packer.pack(view[start : start + _BINARY_CHUNK_BYTES]))
         elif isinstance(item, Mapping):
-            output.write(packer.pack_map_header(len(item)))
+            write_bytes(packer.pack_map_header(len(item)))
             for key, child in item.items():
-                output.write(packer.pack(key))
+                write_bytes(packer.pack(key))
                 write(child)
         elif isinstance(item, (list, tuple)):
-            output.write(packer.pack_array_header(len(item)))
+            write_bytes(packer.pack_array_header(len(item)))
             for child in item:
                 write(child)
         else:
-            output.write(packer.pack(item))
+            write_bytes(packer.pack(item))
 
     write(value)
+
+
+def pack_payload(value: object) -> bytes:
+    """Encode a transport body with the same shared-buffer wire format as disk writes."""
+    output = BytesIO()
+    write_payload(value, output.write)
     return output.getvalue()
 
 
 def result_payload(
-    result: BaseModel, *, array_loader: Callable[[str], np.ndarray] | None = None
+    result: BaseModel,
+    *,
+    array_loader: Callable[[str], np.ndarray] | None = None,
+    thin_fit_draws: bool = False,
 ) -> Mapping[str, object]:
     """Serialize each numerical field at its owner, without a result-wide buffer map."""
     values = result.model_dump(
@@ -103,6 +111,7 @@ def result_payload(
         context={
             "binary_arrays": True,
             "distribution_array_loader": array_loader,
+            "thin_fit_draws": thin_fit_draws,
         },
     )
     return {key: _metadata(value) for key, value in values.items()}

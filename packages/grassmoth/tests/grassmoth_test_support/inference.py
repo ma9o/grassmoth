@@ -80,6 +80,8 @@ def _report(model):
             inference_metadata=InferenceMetadata(
                 distribution=DistributionId("distribution:fixture"),
                 num_samples_total=12,
+                draws_sampled_per_chain=3,
+                draws_kept_per_chain=3,
                 num_chains=4,
                 duration_seconds=0,
                 sampler_diagnostics=None,

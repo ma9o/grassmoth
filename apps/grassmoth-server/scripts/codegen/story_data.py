@@ -367,6 +367,8 @@ def fit() -> FitOutput:
                     "inference_metadata": {
                         "distribution": identity,
                         "num_samples_total": 4,
+                        "draws_sampled_per_chain": 2,
+                        "draws_kept_per_chain": 2,
                         "num_chains": 2,
                         "duration_seconds": 0,
                         "sampler_diagnostics": None,

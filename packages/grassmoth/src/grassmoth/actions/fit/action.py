@@ -131,6 +131,8 @@ def _fit(
             metadata=InferenceMetadata(
                 distribution=None,
                 num_samples_total=0,
+                draws_sampled_per_chain=0,
+                draws_kept_per_chain=0,
                 num_chains=sampler.num_chains,
                 duration_seconds=fitted.duration_seconds,
                 sampler_diagnostics=None,
@@ -198,6 +200,8 @@ def _fit(
         duration_seconds=fitted.duration_seconds,
         num_chains=native.mcmc.num_chains,
         num_samples_total=native.mcmc.num_chains * (old_count + native.mcmc.num_samples),
+        draws_sampled_per_chain=old_count + native.mcmc.num_samples,
+        draws_kept_per_chain=old_count + native.mcmc.num_samples,
         sampler_diagnostics=native.sampler_diagnostics,
     )
     if previous is not None:

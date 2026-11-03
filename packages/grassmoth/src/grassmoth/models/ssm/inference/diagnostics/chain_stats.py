@@ -120,7 +120,7 @@ def chain_statistic_batch_size(chains: int, draws: int) -> int:
     return min(256, max(1, 2**23 // (2 * chains * fft_size)))
 
 
-def chain_statistics(samples: NDArray) -> NDArray:
+def chain_statistics(samples: jax.Array | NDArray) -> NDArray:
     """Summarize (chain, draw, coordinate) inputs on JAX's default device.
 
     The columns are rank R-hat, bulk ESS, tail ESS and mean MCSE. Batches target
@@ -136,15 +136,15 @@ def chain_statistics(samples: NDArray) -> NDArray:
     # The xarray diagnostics resolve omitted tail probabilities through ArviZ's
     # configured interval probability, which need not be the conventional 0.95.
     tail_probability = validate_ci_prob(None)
-    batch_size = chain_statistic_batch_size(*samples.shape[:2])
+    batch_size = min(samples.shape[-1], chain_statistic_batch_size(*samples.shape[:2]))
     batches = []
     for start in range(0, samples.shape[-1], batch_size):
-        batch = np.ascontiguousarray(
-            samples[:, :, start : start + batch_size].transpose(2, 0, 1), dtype=np.float32
+        batch = jnp.asarray(samples[:, :, start : start + batch_size], dtype=jnp.float32).transpose(
+            2, 0, 1
         )
         count = batch.shape[0]
         padded = (
-            np.pad(batch, ((0, batch_size - count), (0, 0), (0, 0)))
+            jnp.pad(batch, ((0, batch_size - count), (0, 0), (0, 0)))
             if count < batch_size
             else batch
         )

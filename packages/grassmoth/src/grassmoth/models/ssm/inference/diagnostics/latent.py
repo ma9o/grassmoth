@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+import jax
+import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
@@ -24,13 +26,13 @@ def joint_latent_paths(layout: JointLawLayout, atoms: NDArray, chains: int) -> N
     )
 
 
-def _selected_statistics(paths: NDArray, selected: NDArray) -> NDArray | None:
+def _selected_statistics(paths: jax.Array | NDArray, selected: NDArray) -> NDArray | None:
     """Gather and check only one coordinate batch; a frozen chain fails the construct."""
     batch_size = chain_statistic_batch_size(*paths.shape[:2])
     batches = []
     for start in range(0, selected.size, batch_size):
         samples = paths[:, :, selected[start : start + batch_size]]
-        if np.any(np.all(samples == samples[:, :1], axis=1)):
+        if bool(jnp.any(jnp.all(samples == samples[:, :1], axis=1))):
             return None
         batches.append(chain_statistics(samples))
     return np.concatenate(batches, axis=0)
@@ -40,7 +42,7 @@ def _selected_statistics(paths: NDArray, selected: NDArray) -> NDArray | None:
 class LatentChainEvidence:
     """Post-warmup paths and the compiler's independent, unobserved coordinates."""
 
-    paths: NDArray
+    paths: jax.Array | NDArray
     free_mask: NDArray
     states: tuple[tuple[ConstructRef, str], ...]
 

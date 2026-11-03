@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from jax.stages import Compiled
-    from numpy.typing import ArrayLike
     from xarray import DataTree
 
     from grassmoth.artifacts.continuation import SamplerCheckpoint
@@ -26,7 +25,6 @@ import jax.numpy as jnp
 from numpy.typing import NDArray
 
 from grassmoth.artifacts.immutability import freeze_fields
-from grassmoth.artifacts.model.parameter import ParameterCoordinate
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     ChainDiagnostics,
     LOODiagnostics,
@@ -39,6 +37,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 from grassmoth.models.ssm.inference.diagnostics.plots import (
     ParameterReferences,
     pareto_k_points,
+    sample_coordinates,
 )
 from grassmoth.models.ssm.inference.diagnostics.plots import (
     build_rank_histograms as _build_rank_histograms,
@@ -201,9 +200,7 @@ class MCMCPosterior:
         """Reduce native chain estimators directly into scientifically referenced values."""
         import math
 
-        import numpy as np
-        from arviz_stats.sampling_diagnostics import ess, mcse, rhat
-
+        from grassmoth.models.ssm.inference.diagnostics.chain_stats import chain_statistics
         from grassmoth.models.ssm.inference.diagnostics.latent import latent_chain_diagnostics
 
         mcmc = self.diagnostics.mcmc
@@ -212,36 +209,28 @@ class MCMCPosterior:
         if public_sites is not None:
             chain_samples = _filter_public_samples(chain_samples, set(public_sites))
         parameters: list[ParameterDiagnostics] = []
-        if chain_samples:
-            idata = _arviz_idata_from_posterior(chain_samples)
-            r_hat = rhat(idata)
-            ess_bulk, ess_tail = ess(idata, method="bulk"), ess(idata, method="tail")
-            mcse_mean = mcse(idata, method="mean")
-
-            def metric(values: ArrayLike, indices: tuple[int, ...]) -> float | None:
-                value = float(np.asarray(values)[indices])
-                return value if math.isfinite(value) else None
-
-            for name in chain_samples:
-                for indices in np.ndindex(np.shape(r_hat[name].values)):
-                    coordinate = ParameterCoordinate(site_name=name, indices=indices)
-                    reference = references[coordinate]
-                    if reference is not None:
-                        label, subject = reference
-                        parameters.append(
-                            ParameterDiagnostics(
-                                parameter=label,
-                                subject=subject,
-                                r_hat=metric(r_hat[name].values, indices),
-                                ess_bulk=metric(ess_bulk[name].values, indices),
-                                ess_tail=metric(ess_tail[name].values, indices),
-                                mcse_mean=metric(mcse_mean[name].values, indices),
-                            )
-                        )
+        for coordinate, values in sample_coordinates(chain_samples, sample_dims=2):
+            reference = references[coordinate]
+            if reference is not None:
+                label, subject = reference
+                metrics = chain_statistics(jnp.asarray(values)[..., None])[0]
+                r_hat, bulk, tail, mcse_mean = (
+                    float(value) if math.isfinite(value) else None for value in metrics
+                )
+                parameters.append(
+                    ParameterDiagnostics(
+                        parameter=label,
+                        subject=subject,
+                        r_hat=r_hat,
+                        ess_bulk=bulk,
+                        ess_tail=tail,
+                        mcse_mean=mcse_mean,
+                    )
+                )
         extra = mcmc.get_extra_fields()
 
         def average(name: str) -> float | None:
-            return float(np.mean(np.asarray(extra[name]))) if name in extra else None
+            return float(jnp.mean(jnp.asarray(extra[name]))) if name in extra else None
 
         return ChainDiagnostics(
             num_chains=int(mcmc.num_chains),

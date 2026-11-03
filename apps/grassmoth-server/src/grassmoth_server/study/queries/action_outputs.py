@@ -35,5 +35,14 @@ def completed_call_msgpack(workspace_id: str, revision: StudyRevision) -> bytes:
     }
     from grassmoth_server.study.persistence.store import ArtifactStore
 
-    body = ArtifactStore(workspace_id).read_result_bytes(attempt.outcome.result)
-    return pack_envelope(metadata, body)
+    store = ArtifactStore(workspace_id)
+    if attempt.action == "fit":
+        from grassmoth.public import FitOutput
+        from grassmoth_server.compute.remote_receipts import published_fit_report
+        from grassmoth_server.study.persistence.codec import pack_payload, result_payload
+
+        saved = published_fit_report(store, attempt.outcome.result)
+        if isinstance(saved, FitOutput):
+            return pack_envelope(metadata, pack_payload(result_payload(saved, thin_fit_draws=True)))
+    # Remote transfer bodies are already capped. Serve their verified bytes unchanged.
+    return pack_envelope(metadata, store.read_result_bytes(attempt.outcome.result))

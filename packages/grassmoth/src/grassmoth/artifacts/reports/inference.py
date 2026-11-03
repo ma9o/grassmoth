@@ -75,6 +75,19 @@ class InferenceMetadata(Value):
 
     distribution: DistributionId | None
     num_samples_total: int = Field(ge=0)
+    thinning_factor: int = Field(
+        default=1,
+        ge=1,
+        description="Uniform stride in this result's per-draw arrays. The certificate and summaries describe all full retained chains pooled across segments; transferred draws may be a thinned subset. The full Modal cache has stride one.",
+    )
+    draws_sampled_per_chain: int = Field(
+        ge=0,
+        description="Completed retained sweeps per chain across all segments, excluding warmup.",
+    )
+    draws_kept_per_chain: int = Field(
+        ge=0,
+        description="Draws per chain present in this result's per-draw arrays after transfer thinning.",
+    )
     segments: tuple[FitSegment, ...] = ()
     num_chains: int = Field(ge=1)
     duration_seconds: float = Field(ge=0)

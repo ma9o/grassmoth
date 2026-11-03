@@ -230,6 +230,8 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
             inference_metadata=InferenceMetadata(
                 distribution=DistributionId("distribution:retained"),
                 num_samples_total=2,
+                draws_sampled_per_chain=2,
+                draws_kept_per_chain=2,
                 num_chains=1,
                 duration_seconds=3,
                 sampler_diagnostics=None,
@@ -401,7 +403,7 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
     first, second = response.body.data
     assert type(first[variables[0].id]) is type(prepared_history)
     assert values(first[variables[0].id].values) == (0.0, 0.0)
-    assert first[variables[0].id].times == (0.0, 1.0)
+    np.testing.assert_array_equal(first[variables[0].id].times.values, (0.0, 1.0))
     assert values(first[variables[0].id].support_start) == (-1.0, 0.0)
     assert values(second[variables[0].id].values) == (None, None)
     assert values(second[variables[1].id].values) == (7.0, 7.0)

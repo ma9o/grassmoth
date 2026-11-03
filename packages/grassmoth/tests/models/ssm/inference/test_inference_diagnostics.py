@@ -188,6 +188,37 @@ def test_posterior_marginals_and_traces_preserve_joint_draws_and_extra_fields(pa
 
 
 @pytest.mark.inference(concern="sampling")
+@pytest.mark.parametrize("constant", [False, True])
+def test_device_plot_summaries_use_full_draws_and_average_ties(constant):
+    from arviz_stats.base.array import array_stats
+    from scipy.stats import rankdata
+
+    from grassmoth.models.ssm.inference.diagnostics.plots import build_rank_histograms
+
+    values = np.round(np.random.default_rng(719).normal(size=(4, 101)), 1).astype(np.float32)
+    if constant:
+        values[:] = 2.0
+    refs = references([("x", ())])
+    (ranks,) = build_rank_histograms({"x": jnp.asarray(values)}, refs)
+    native_ranks = rankdata(values.reshape(-1), method="average").reshape(values.shape)
+    counts, _ = array_stats.histogram(
+        native_ranks, bins=20, range=(1, values.size + 1), axis=1, density=False
+    )
+    np.testing.assert_array_equal(ranks.chains, counts)
+    (marginal,) = compute_posterior_marginals({"x": jnp.asarray(values.reshape(-1))}, refs)
+    np.testing.assert_allclose(
+        (marginal.lower, marginal.upper), array_stats.hdi(values.reshape(-1), prob=0.94, axis=-1)
+    )
+    assert marginal.mean == pytest.approx(float(values.mean()), rel=1e-6, abs=1e-7)
+    assert marginal.sd == pytest.approx(float(values.std()), rel=1e-6, abs=1e-7)
+    unique, counts = np.unique(values, return_counts=True)
+    np.testing.assert_array_equal(marginal.empirical.values.values, unique)
+    np.testing.assert_allclose(
+        marginal.empirical.probabilities.values, counts.cumsum() / counts.sum(), rtol=1e-6
+    )
+
+
+@pytest.mark.inference(concern="sampling")
 def test_latent_convergence_detects_stuck_paths_despite_well_mixed_parameters(particle_posterior):
     from dataclasses import replace
 
@@ -289,6 +320,7 @@ def test_joint_latent_paths_share_owned_atoms_with_parameter_stride():
     )
     assert evidence.paths.shape == (2, 7, 3, 2)
     assert np.shares_memory(evidence.paths, owner.values)
+    assert isinstance(evidence.paths, np.ndarray)
     assert not evidence.paths.flags.writeable
     for dimension, span in enumerate(layout.trajectory_slices.values()):
         np.testing.assert_array_equal(
