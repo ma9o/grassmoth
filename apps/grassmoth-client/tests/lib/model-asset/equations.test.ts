@@ -24,8 +24,6 @@ function equation(law: ObservationLawSpec, indexed = entities) {
         likelihood: {
           law,
           standardized: false,
-          reasoning: "Authored test law.",
-          sources: [],
         },
       },
       indexed,

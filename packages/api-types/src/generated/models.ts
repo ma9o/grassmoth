@@ -81,7 +81,6 @@ export type FitCheckReport = components["schemas"]["FitCheckReport"];
 export type FitComponentTiming = components["schemas"]["FitComponentTiming"];
 export type FitOutput = components["schemas"]["FitOutput"];
 export type FitProfileReport = components["schemas"]["FitProfileReport"];
-export type FitReliability = components["schemas"]["FitReliability"];
 export type FitRuntime = components["schemas"]["FitRuntime"];
 export type FitSegment = components["schemas"]["FitSegment"];
 export type FitSettingsSpec = components["schemas"]["FitSettingsSpec-Output"];
@@ -129,7 +128,6 @@ export type LatentDiagnostics = components["schemas"]["LatentDiagnostics"];
 export type LatentStepSpec = components["schemas"]["LatentStepSpec-Output"];
 export type LikelihoodSpec = components["schemas"]["LikelihoodSpec-Output"];
 export type LiteralExpression = components["schemas"]["LiteralExpression-Output"];
-export type LiteratureSource = components["schemas"]["LiteratureSource-Output"];
 export type Measurement = components["schemas"]["Measurement"];
 export type MechanismId = components["schemas"]["MechanismId-Output"];
 export type MechanismRef = components["schemas"]["MechanismRef"];
@@ -212,6 +210,7 @@ export type QuestionSubject = components["schemas"]["QuestionSubject"];
 export type Raised = components["schemas"]["Raised"];
 export type RankHistogram = components["schemas"]["RankHistogram"];
 export type ReadingMovement = components["schemas"]["ReadingMovement"];
+export type ReasoningSpec = components["schemas"]["ReasoningSpec-Output"];
 export type RecordDependency = components["schemas"]["RecordDependency"];
 export type RecordedExtractionSpec = components["schemas"]["RecordedExtractionSpec-Output"];
 export type RegionalMovement = components["schemas"]["RegionalMovement"];
@@ -395,7 +394,7 @@ export type EditModelInput<RevisionT> = {
      * @description Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head.
      */
     readonly parent_ref: RevisionT;
-    /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. The action retains the merged spec and its findings. */
+    /** @description Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. */
     readonly dynamical_model_spec: components["schemas"]["DynamicalModelSpec-Input"];
 };
 export type EditModelRequest<RevisionT> = {

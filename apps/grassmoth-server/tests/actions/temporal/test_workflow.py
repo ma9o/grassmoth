@@ -83,13 +83,13 @@ def _proposed_model() -> dict[str, Any]:
         "constructs": {
             "construct:sleep": {
                 "name": "sleep",
-                "description": "sleep quality",
+                "reasoning": {"text": "sleep quality"},
                 "role": "endogenous",
                 "temporal_status": "time_varying",
             },
             "construct:unmeasured_outcome": {
                 "name": "unmeasured_outcome",
-                "description": "Downstream response outside the measured test states.",
+                "reasoning": {"text": "Downstream response outside the measured test states."},
                 "role": "endogenous",
                 "temporal_status": "time_varying",
             },
@@ -98,7 +98,7 @@ def _proposed_model() -> dict[str, Any]:
             "edge:test-outcome-0": {
                 "cause": "construct:sleep",
                 "effect": "construct:unmeasured_outcome",
-                "description": "Test state affects an unmeasured downstream response",
+                "reasoning": {"text": "Test state affects an unmeasured downstream response"},
             }
         },
     }
@@ -109,6 +109,7 @@ def _measured_model() -> dict[str, Any]:
     model["measurement_clock"] = "1d"
     graph_constructs(model)[0]["indicators"] = {
         "indicator:sleep": {
+            "reasoning": {"text": "Synthetic measurement of the construct for this test scenario."},
             "observation": {
                 "name": "sleep_steps_proxy",
                 "measurement": {"dtype": "continuous"},
@@ -307,7 +308,9 @@ def test_study_workflow_journey(machine_env, monkeypatch):
                 store = ArtifactStore(workspace_id)
                 measured = read_model(store, model_revision)
                 revised = measured.with_entities(
-                    edges=(measured.edges[0].revised(description="Sleep shapes the response"),)
+                    edges=(
+                        measured.edges[0].revised(reasoning={"text": "Sleep shapes the response"}),
+                    )
                 )
                 rewritten = await execute(
                     EditModelRequest[GitOid](

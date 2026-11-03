@@ -35,6 +35,7 @@ from grassmoth.artifacts.model.likelihood import (
     OrderedLogisticLawSpec,
 )
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.semantics import SummaryOperator
 from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
 from grassmoth.artifacts.probability.families import DistributionFamily
@@ -51,6 +52,7 @@ from grassmoth_test_support.model import (
     load_model_fixture,
     parameter_named,
     without_parameters,
+    without_prior,
 )
 
 
@@ -105,6 +107,9 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_2_f
     mood_revised = mood.revised(
         indicators=(
             IndicatorSpec(
+                reasoning=ReasoningSpec(
+                    text="Exact observation with an optional unknown calibration offset"
+                ),
                 observation=AuthoredObservationSpec(
                     id=_MOOD_RATING_INDICATOR_ID,
                     name="mood_rating",
@@ -114,7 +119,6 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_2_f
                 ),
                 likelihood=LikelihoodSpec(
                     law=DeltaLawSpec[Expression](v=state(mood.id)),
-                    reasoning="Exact observation with an optional unknown calibration offset",
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
@@ -143,10 +147,12 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_2_f
         edges=replace_constructs(dynamical_model_spec.edges, (mood_revised,)),
         parameters=(
             ParameterSpec(
-                id=_CINT_MOOD_PARAMETER_ID, name="cint_mood", description="center of cint_mood"
+                id=_CINT_MOOD_PARAMETER_ID,
+                name="cint_mood",
+                reasoning=ReasoningSpec(text="center of cint_mood"),
             ),
-            rho_mood.revised(distribution=None),
-            sigma_mood.revised(distribution=None),
+            without_prior(rho_mood),
+            without_prior(sigma_mood),
         ),
         distributions=distributions,
     )
@@ -200,6 +206,7 @@ def _free_center_without_standardized_channel_fails__with_likelihoods() -> Dynam
     mood_revised = mood.revised(
         indicators=(
             IndicatorSpec(
+                reasoning=ReasoningSpec(text="test"),
                 observation=AuthoredObservationSpec(
                     id=_MOOD_FLAG_INDICATOR_ID,
                     name="mood_flag",
@@ -216,7 +223,6 @@ def _free_center_without_standardized_channel_fails__with_likelihoods() -> Dynam
                             + (coefficient(1.0, "loading") * state(mood.id))
                         )
                     ),
-                    reasoning="test",
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
@@ -229,7 +235,7 @@ def _free_center_without_standardized_channel_fails__with_likelihoods() -> Dynam
             ParameterSpec(
                 id=_MANIFEST_MEAN_MOOD_FLAG_PARAMETER_ID,
                 name="manifest_mean_mood_flag",
-                description="likelihood.intercept for manifest_mean_mood_flag",
+                reasoning=ReasoningSpec(text="likelihood.intercept for manifest_mean_mood_flag"),
             ),
         ),
     )
@@ -267,7 +273,7 @@ def _exact_state_anchors_location_for_every_summary_complete_component_slots_tru
             ParameterSpec(
                 id=_MANIFEST_MEAN_MOOD_RATING_PARAMETER_ID,
                 name="manifest_mean_mood_rating",
-                description="Observation intercept for mood_rating",
+                reasoning=ReasoningSpec(text="Observation intercept for mood_rating"),
             ),
             cint_mood,
             rho_mood,
@@ -356,8 +362,10 @@ def _manifest_intercept_is_rejected_for_categorical_channel__with_likelihoods() 
             ParameterSpec(
                 id=_MANIFEST_MEAN_MOOD_KIND_PARAMETER_ID,
                 name="manifest_mean_mood_kind",
-                description="Observation intercept for mood_kind",
                 distribution=_MANIFEST_MEAN_MOOD_KIND_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="Observation intercept for mood_kind. Synthetic prior for Observation intercept for mood_kind; its values define this test scenario."
+                ),
             ),
             sigma_mood,
             obs_cat_intercepts,
@@ -387,6 +395,7 @@ def _static_t0_mean_gated_without_standardized_channel__with_likelihoods() -> Dy
     trait_revised = trait.revised(
         indicators=(
             IndicatorSpec(
+                reasoning=ReasoningSpec(text="test"),
                 observation=AuthoredObservationSpec(
                     id=_TRAIT_FLAG_INDICATOR_ID,
                     name="trait_flag",
@@ -403,7 +412,6 @@ def _static_t0_mean_gated_without_standardized_channel__with_likelihoods() -> Dy
                             + (coefficient(1.0, "loading") * state(trait.id))
                         )
                     ),
-                    reasoning="test",
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
@@ -421,8 +429,10 @@ def _static_t0_mean_gated_without_standardized_channel__with_likelihoods() -> Dy
             ParameterSpec(
                 id=_MANIFEST_MEAN_TRAIT_FLAG_PARAMETER_ID,
                 name="manifest_mean_trait_flag",
-                description="likelihood.intercept for manifest_mean_trait_flag",
                 distribution=_MANIFEST_MEAN_TRAIT_FLAG_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="likelihood.intercept for manifest_mean_trait_flag. Synthetic prior for likelihood.intercept for manifest_mean_trait_flag; its values define this test scenario."
+                ),
             ),
         ),
         distributions={
@@ -451,6 +461,7 @@ def _manifest_intercept_remains_free_for_binary_channel__with_likelihoods() -> D
     mood_revised = mood.revised(
         indicators=(
             IndicatorSpec(
+                reasoning=ReasoningSpec(text="test"),
                 observation=AuthoredObservationSpec(
                     id=_MOOD_FLAG_INDICATOR_ID,
                     name="mood_flag",
@@ -467,7 +478,6 @@ def _manifest_intercept_remains_free_for_binary_channel__with_likelihoods() -> D
                             + (coefficient(1.0, "loading") * state(mood.id))
                         )
                     ),
-                    reasoning="test",
                 ),
                 construct_polarity=IndicatorPolarity.POSITIVE,
             ),
@@ -483,8 +493,10 @@ def _manifest_intercept_remains_free_for_binary_channel__with_likelihoods() -> D
             ParameterSpec(
                 id=_MANIFEST_MEAN_MOOD_FLAG_PARAMETER_ID,
                 name="manifest_mean_mood_flag",
-                description="Observation intercept for mood_flag",
                 distribution=_MANIFEST_MEAN_MOOD_FLAG_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="Observation intercept for mood_flag. Synthetic prior for Observation intercept for mood_flag; its values define this test scenario."
+                ),
             ),
             sigma_mood,
         ),
@@ -537,8 +549,10 @@ def _manifest_intercept_is_rejected_for_standardized_channel__with_likelihoods()
             ParameterSpec(
                 id=_MANIFEST_MEAN_MOOD_RATING_PARAMETER_ID,
                 name="manifest_mean_mood_rating",
-                description="Observation intercept for mood_rating",
                 distribution=_MANIFEST_MEAN_MOOD_RATING_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="Observation intercept for mood_rating. Synthetic prior for Observation intercept for mood_rating; its values define this test scenario."
+                ),
             ),
             sigma_mood,
         ),
@@ -607,8 +621,10 @@ def _manifest_intercept_is_rejected_for_threshold_channel__with_likelihoods() ->
             ParameterSpec(
                 id=_MANIFEST_MEAN_MOOD_LEVEL_PARAMETER_ID,
                 name="manifest_mean_mood_level",
-                description="Observation intercept for mood_level",
                 distribution=_MANIFEST_MEAN_MOOD_LEVEL_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="Observation intercept for mood_level. Synthetic prior for Observation intercept for mood_level; its values define this test scenario."
+                ),
             ),
             sigma_mood,
             obs_ordered_base_mood_level,
@@ -654,6 +670,7 @@ def _indicator(
         "categorical": {"levels": ["a", "b", "c"]},
     }.get(dtype, {})
     return {
+        "reasoning": {"text": "Synthetic measurement of the construct for this test scenario."},
         "observation": {
             "id": fixture_entity_id("indicator", name),
             "name": name,

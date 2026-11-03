@@ -34,7 +34,6 @@ def summarize_causal_simulation(
     import jax.numpy as jnp
 
     from grassmoth.models.ssm.counterfactual.estimands import summarize_draws
-    from grassmoth.models.ssm.inference.diagnostics.convergence import convergence_failures
 
     def unavailable(detail: str) -> NotEvaluated[Literal["causal_effect"]]:
         return NotEvaluated(
@@ -50,7 +49,7 @@ def summarize_causal_simulation(
         return unavailable(
             "Causal effects require the question's outcome as a model state and a committed production fit for this model revision."
         )
-    model_ref, fit_report = fitted
+    model_ref, _ = fitted
     try:
         identification = selection.identification
         CertifiedCausalAnalysis(
@@ -94,15 +93,4 @@ def summarize_causal_simulation(
             for index, identity in enumerate(indicator_ids)
             if np.isfinite(manifest_differences[:, index]).all()
         },
-        warnings=(
-            *convergence_failures(fit_report.convergence),
-            *fit_report.convergence.warnings,
-            *(
-                ()
-                if np.isfinite(manifest_differences).all()
-                else (
-                    "Some indicator contrasts are unavailable because their measurement windows extend before simulation start.",
-                )
-            ),
-        ),
     )

@@ -26,6 +26,7 @@ from grassmoth.artifacts.model.parameter_spec import (
     IntervalEffectTransformSpec,
     ParameterSpec,
 )
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.probability.families import PriorDistributionFamily
 from grassmoth.artifacts.probability.native import distribution_from_params
 from grassmoth.models.ssm import compiled_access as numeric
@@ -146,9 +147,11 @@ def _x_z_measurements() -> DynamicalModelSpec:
             ParameterSpec(
                 id=_BETA_X_Y_PARAMETER_ID,
                 name="beta_X_Y",
-                description="weight of beta_X_Y",
                 transform=IntervalEffectTransformSpec(interval_days="model_clock"),
                 distribution=_BETA_X_Y_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="weight of beta_X_Y. Synthetic prior for weight of beta_X_Y; its values define this test scenario."
+                ),
             ),
             beta_y_z,
             sigma_x,
@@ -193,9 +196,11 @@ def _translate_spec_rejects_initial_state_correlation_parameters_with_scientific
             ParameterSpec(
                 id=_COR0_PARAMETER_ID,
                 name="cor0",
-                description="Unsupported pairwise initial correlation",
                 transform=InitialCorrelationTransformSpec(),
                 distribution=_COR0_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="Unsupported pairwise initial correlation. Synthetic prior for Unsupported pairwise initial correlation; its values define this test scenario."
+                ),
             ),
         ),
         distributions={
@@ -243,8 +248,10 @@ def _quartic_freed_only_for_self_limiting_construct_complete_test_model() -> Dyn
             ParameterSpec(
                 id=_SELF_LIMIT_Y_PARAMETER_ID,
                 name="self_limit_Y",
-                description="quartic of self_limit_Y",
                 distribution=_SELF_LIMIT_Y_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="quartic of self_limit_Y. Synthetic prior for quartic of self_limit_Y; its values define this test scenario."
+                ),
             ),
             rho_z,
             beta_x_y,
@@ -706,14 +713,13 @@ class TestRuntimeStructuralSupport:
     def test_translate_spec_rejects_self_initial_state_correlation_with_scientific_model(self):
         from grassmoth.artifacts.model.parameter_spec import (
             InitialCorrelationTransformSpec,
-            ParameterSpec,
         )
 
         dynamical_model_spec = _x_z_measurements()
         parameter = ParameterSpec(
             id="parameter:77f3ac548e5c828bd95649d677ae53ce71c8dd33c2b1526961592ea56d79f013",
             name="cor0",
-            description="Unsupported pairwise initial correlation",
+            reasoning=ReasoningSpec(text="Unsupported pairwise initial correlation"),
             transform=InitialCorrelationTransformSpec(),
         )
 

@@ -17,6 +17,7 @@ from grassmoth.artifacts.model.expressions import Expression, coefficient, state
 from grassmoth.artifacts.model.likelihood import NormalLawSpec
 from grassmoth.artifacts.model.parameter import SiteKind, SupportClass
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.execution.parameters import sample_sites
@@ -161,8 +162,10 @@ def _student_innovation_model() -> DynamicalModelSpec:
             ParameterSpec(
                 id=_PROC_DF_PARAMETER_ID,
                 name="proc_df",
-                description="degrees of freedom for proc_df",
                 distribution=_PROC_DF_DISTRIBUTION_ID,
+                reasoning=ReasoningSpec(
+                    text="degrees of freedom for proc_df. Synthetic prior for degrees of freedom for proc_df; its values define this test scenario."
+                ),
             ),
         ),
         distributions={
@@ -607,7 +610,7 @@ class TestCompiledArtifactIntegration:
         parameter = ParameterSpec(
             id="parameter:bd5e7c989f1fe5b6752e958831d287e988f8a43f9633886ba7281220ae168533",
             name="obs_ordered_base",
-            description="Unbound threshold",
+            reasoning=ReasoningSpec(text="Unbound threshold"),
         )
         with pytest.raises(ValueError, match="not referenced by component slots"):
             dynamical_model_spec.with_entities(

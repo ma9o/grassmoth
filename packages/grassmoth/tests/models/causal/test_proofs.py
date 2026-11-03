@@ -260,4 +260,38 @@ def test_unconverged_causal_summary_keeps_effect_and_failed_criteria():
     assert isinstance(result, CausalEffectResult)
     np.testing.assert_array_equal(result.differences.values, np.ones((2, 2)))
     assert result.summary.mean == 1.0
-    assert result.warnings == convergence.messages
+    from grassmoth.actions.contracts.io import FittedLaw
+    from grassmoth.actions.simulate.findings import _fit_findings
+    from grassmoth.artifacts.observations.reference import DataRef
+    from grassmoth.artifacts.reports.predictive_provenance import FittedLawProvenance
+
+    (finding,) = _fit_findings(
+        FittedLaw(
+            provenance=FittedLawProvenance(
+                fitted_data=DataRef(revision=git_oid(3), replicate_index=0),
+                fitted_model_revision=git_oid(2),
+                interpretation="posterior_predictive",
+            ),
+            report=report.revised(convergence=convergence),
+        )
+    )
+    assert finding.kind == "evaluated"
+    assert finding.code == "fit_reliability"
+    assert finding.outcome == "failed"
+    assert [(item.criterion, item.value, item.lower) for item in finding.evidence] == [
+        ("ess_bulk", 264.0, 400.0)
+    ]
+
+
+def test_fit_findings_distinguish_authored_laws_from_unknown_fit_history():
+    from grassmoth.actions.simulate.findings import _fit_findings
+    from grassmoth.artifacts.reports.predictive_provenance import (
+        AuthoredLawProvenance,
+        UnknownLawProvenance,
+    )
+
+    assert _fit_findings(AuthoredLawProvenance()) == ()
+    (finding,) = _fit_findings(UnknownLawProvenance())
+    assert finding.kind == "not_evaluated"
+    assert finding.code == "fit_reliability"
+    assert finding.reason == "NO_RETAINED_CHAINS"

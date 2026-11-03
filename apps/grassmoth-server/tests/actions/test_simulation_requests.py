@@ -98,7 +98,6 @@ def _response(origin: datetime = datetime(2026, 1, 1, tzinfo=UTC)):
         "summary": {"mean": 1, "median": 1, "lower_95": 0, "upper_95": 2, "prob_positive": 0.9},
         "reference_mean": 3,
         "manifest_effects": {},
-        "warnings": [],
     }
 
     evidence = {
@@ -140,7 +139,6 @@ def _response(origin: datetime = datetime(2026, 1, 1, tzinfo=UTC)):
         "evidence": evidence,
         "summary": empty_simulation_summary().model_dump(mode="json"),
         "law": AuthoredLawProvenance().model_dump(mode="json"),
-        "fit_reliability": "converged",
     }
 
 

@@ -66,10 +66,10 @@ def _exact_measurement(model):
 
     owner = model.constructs[0]
     indicator = owner.indicators[0].revised(
+        reasoning={"text": "An exact observation of the construct"},
         likelihood=LikelihoodSpec(
             law=DeltaLawSpec(v=state(owner.id)),
-            reasoning="An exact observation of the construct",
-        )
+        ),
     )
     return model.with_entities(
         edges=replace_constructs(

@@ -6,7 +6,5 @@
       "construct_id": "construct:x"
     }
   },
-  "standardized": false,
-  "reasoning": "Native density parity",
-  "sources": []
+  "standardized": false
 }

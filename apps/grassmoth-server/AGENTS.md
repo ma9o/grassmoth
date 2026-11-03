@@ -16,5 +16,5 @@ Read the [notebook guidance](notebooks/AGENTS.md) for work in `notebooks/`.
 
 ## Story scenarios
 
-- Declare synthetic examples in [story_data.py](scripts/codegen/story_data.py). [export_story_scenarios.py](scripts/codegen/export_story_scenarios.py) validates them with production response models and serializes them with the normal MessagePack codec, call identity and dependency owners.
-- Generate these interface examples through root `bun run codegen`, without loading a study or executing scientific actions. [Client stories](../grassmoth-client/AGENTS.md#story-scenarios) consume the generated responses; synthetic values are never scientific evidence.
+- Scenarios may use real study responses as well as synthetic examples declared in [story_data.py](scripts/codegen/story_data.py). Either way, [export_story_scenarios.py](scripts/codegen/export_story_scenarios.py) validates each response with production response models and serializes it with the normal MessagePack codec, call identity and dependency owners.
+- Generate the scenarios through root `bun run codegen` without a running stack or executing scientific actions, so real responses must be committed. [Client stories](../grassmoth-client/AGENTS.md#story-scenarios) consume the generated responses; story values are rendering examples, never scientific evidence.

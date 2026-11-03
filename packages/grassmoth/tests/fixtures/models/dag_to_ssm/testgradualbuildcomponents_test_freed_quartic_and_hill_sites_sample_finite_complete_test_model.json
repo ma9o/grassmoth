@@ -2,7 +2,6 @@
   "constructs": {
     "construct:311c9047b5ede16a8f26": {
       "name": "X",
-      "description": "Cause",
       "indicators": {
         "indicator:0f93ce57e1f1d1c96f5c": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         },
         "indicator:27a6125b251378d8dd23": {
@@ -88,9 +88,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -100,6 +98,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -215,11 +216,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Cause"
+      }
     },
     "construct:d90c52e59b79004188dc": {
       "name": "Y",
-      "description": "Mediator",
       "indicators": {
         "indicator:dec7b4916899d2109674": {
           "likelihood": {
@@ -256,9 +259,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -268,6 +269,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -383,11 +387,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Mediator"
+      }
     },
     "construct:a6b7873d58dac1ff1a02": {
       "name": "Z",
-      "description": "Downstream",
       "indicators": {
         "indicator:c26d752dbca8b5a287ac": {
           "likelihood": {
@@ -424,9 +430,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -436,6 +440,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -551,7 +558,10 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Downstream"
+      }
     }
   },
   "edges": {
@@ -647,10 +657,11 @@
           }
         }
       },
-      "description": "X causes Y",
-      "sources": [],
       "cause": "construct:311c9047b5ede16a8f26",
-      "effect": "construct:d90c52e59b79004188dc"
+      "effect": "construct:d90c52e59b79004188dc",
+      "reasoning": {
+        "text": "X causes Y"
+      }
     },
     "edge:57072ee1d1b7b3e7c0de": {
       "mechanisms": {
@@ -672,127 +683,156 @@
           }
         }
       },
-      "description": "Y causes Z",
-      "sources": [],
       "cause": "construct:d90c52e59b79004188dc",
-      "effect": "construct:a6b7873d58dac1ff1a02"
+      "effect": "construct:a6b7873d58dac1ff1a02",
+      "reasoning": {
+        "text": "Y causes Z"
+      }
     }
   },
   "parameters": {
     "parameter:f08d4a4d8120abb4df938bd884301a10972cc5ec4fe7caf2ee6f951f63b04e2e": {
       "name": "rho_X",
-      "description": "stiffness of rho_X",
       "distribution": "distribution:19c2f43487dd2be4177df68e40f2ce84a191d02af580e6e2895d41afae7017e6",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_X. Synthetic Beta prior for rho_X; its values define this test scenario."
       }
     },
     "parameter:6d4506cd6203ad744865ecc5484e379e4aa091c99315d8e4711529e94eb81c7a": {
       "name": "rho_Y",
-      "description": "stiffness of rho_Y",
       "distribution": "distribution:6c6e4b3d1c7806403f9f8a1d5b30faa0c3ad670b44500125517d1deef0e5ad7b",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_Y. Synthetic Beta prior for rho_Y; its values define this test scenario."
       }
     },
     "parameter:ab64427aa9da4f5f72753f200c603d31725edc0deb5ccbb6958c1186f5fd041b": {
       "name": "self_limit_Y",
-      "description": "quartic of self_limit_Y",
       "distribution": "distribution:c23e111a0f275ce7c22f2d507b6e4d06ed3faba49cd67be9841ff42a322a0d16",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "quartic of self_limit_Y. Synthetic HalfNormal prior for self_limit_Y; its values define this test scenario."
       }
     },
     "parameter:c908fb4c6d426a28827dbec003c6d47d622ad49553c557a3838ad8aca3623c21": {
       "name": "rho_Z",
-      "description": "stiffness of rho_Z",
       "distribution": "distribution:c82acd19b4fb889b23f520dfe3ea083afc9333eaf420ee02b43f5d0f446420a8",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_Z. Synthetic Beta prior for rho_Z; its values define this test scenario."
       }
     },
     "parameter:fb4a01e512af91149917f97254302dae7c577a7553f1878e4a39dd638fe0a510": {
       "name": "hill_emax_X_Y",
-      "description": "emax of hill_emax_X_Y",
       "distribution": "distribution:68872c0f86ff93a10f52a236ba9814a89d2af4d178af7e5ecedccf43241d8292",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "emax of hill_emax_X_Y. Synthetic HalfNormal prior for hill_emax_X_Y; its values define this test scenario."
       }
     },
     "parameter:f45d0d914f76c46967877e9e6952faa5672ef74244800d4fd6f64a5e1c7d4d56": {
       "name": "hill_ec50_X_Y",
-      "description": "ec50 of hill_ec50_X_Y",
       "distribution": "distribution:dceff855d272fda9739ef1d7f03d96183b9fb5cc14d34eb45cf1ab217382944e",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "ec50 of hill_ec50_X_Y. Synthetic HalfNormal prior for hill_ec50_X_Y; its values define this test scenario."
       }
     },
     "parameter:2c914ee73371d05ae3d320c925eefef846aa45e07bfca95fb21abcb485b78f4c": {
       "name": "hill_n_X_Y",
-      "description": "n of hill_n_X_Y",
       "distribution": "distribution:0bc41f61405983b2c968d51fd5bda6bbb06393c98d5d04bbb5e9b2e8675d9511",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "n of hill_n_X_Y. Synthetic HalfNormal prior for hill_n_X_Y; its values define this test scenario."
       }
     },
     "parameter:f59b8cb745dcf8aa378c189bc36027db2b3000760dd6d37dd55948973a3e0d42": {
       "name": "beta_Y_Z",
-      "description": "weight of beta_Y_Z",
       "distribution": "distribution:6f9d85aa5c6884aff9f3a4c2fa8b5f85f10f5a824e56c86a61d9847dfa7720ea",
       "transform": {
         "kind": "dt_effect_to_ct_rate",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "weight of beta_Y_Z. Synthetic Normal prior for beta_Y_Z; its values define this test scenario."
       }
     },
     "parameter:46a3c6de382a8360c4dad5c16186903011acf92719599690ea1f25719c4c64c9": {
       "name": "sigma_X",
-      "description": "innovation.scale for sigma_X",
       "distribution": "distribution:20d91718f0ffa05371965d7e575cc8ae6b53c2bf297ac4112d6b096cf9b7f8e6",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_X. Synthetic HalfNormal prior for sigma_X; its values define this test scenario."
       }
     },
     "parameter:0948bbaaba08dafdeab82501804fc55ea63b366544ee5cf0bd0bc9ee7a59a3e8": {
       "name": "obs_sd_x1",
-      "description": "likelihood.scale for obs_sd_x1",
       "distribution": "distribution:da616a2c0ae157fd85318c0f74a9151e84e66fdfb88e311f1d952cb7a08c2bab",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.scale for obs_sd_x1. Synthetic HalfNormal prior for obs_sd_x1; its values define this test scenario."
       }
     },
     "parameter:e0c1e17a75ad24dad1ad99d031606daa78e2f0e1fcc6286a45fa9d6b01f66803": {
       "name": "lambda_x2_X",
-      "description": "likelihood.loading.construct:311c9047b5ede16a8f26 for lambda_x2_X",
       "distribution": "distribution:124efa70b7b0bfb343346496304017a56c8b279ea5c82b49a5360ae0dd6da7dd",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.loading.construct:311c9047b5ede16a8f26 for lambda_x2_X. Synthetic Normal prior for lambda_x2_X; its values define this test scenario."
       }
     },
     "parameter:ac531130e24a08dc33642e643026ce46d2bbfb8df4531325aaf5f99809f498d5": {
       "name": "obs_sd_x2",
-      "description": "likelihood.scale for obs_sd_x2",
       "distribution": "distribution:36d63b430144e58e8a7badabc30b369cdf89b1e09110b07788ad73f152f24b88",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.scale for obs_sd_x2. Synthetic HalfNormal prior for obs_sd_x2; its values define this test scenario."
       }
     },
     "parameter:5d4ebb898b1d5ff69f921d2aa2c9a3d894693566ef2eeba7205f000df6ef07d8": {
       "name": "sigma_Y",
-      "description": "innovation.scale for sigma_Y",
       "distribution": "distribution:93777c8caea45abd264bac0da9ff92271e9884d9370829e035286fcb70de31bc",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_Y. Synthetic HalfNormal prior for sigma_Y; its values define this test scenario."
       }
     },
     "parameter:a34d9e9ffcc49711fb13fc5e71d2517d64117d8e5b00da6dcca0e7790238805d": {
       "name": "sigma_Z",
-      "description": "innovation.scale for sigma_Z",
       "distribution": "distribution:a53a486646cdf30053c0d3de7022ad0905a853aa9a811601a07e8ce3402fdbd7",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_Z. Synthetic HalfNormal prior for sigma_Z; its values define this test scenario."
       }
     }
   },

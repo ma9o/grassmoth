@@ -1,8 +1,9 @@
 import type { EdgeId } from "@grassmoth/api-types";
 import { ownLawUses } from "@/lib/model-asset/laws";
 import type { ScopeContext } from "@/lib/model-asset/scope";
-import { Prose, Section } from "../scope-primitives";
+import { Section } from "../scope-primitives";
 import { LawSections } from "./law-sections";
+import { Reasoning } from "./reasoning";
 import { modelFlowPlots } from "@/lib/model-asset/flow-plots";
 import { FlowInputs, FlowSection } from "./flow-sections";
 import { edgeEquation } from "@/lib/model-asset/equations";
@@ -16,30 +17,7 @@ export function EdgeScope({ context, id }: { context: ScopeContext; id: EdgeId }
   return (
     <>
       <Section title="Relationship">
-        <Prose>{edge.description}</Prose>
-        {edge.sources.length > 0 && (
-          <details>
-            <summary className="cursor-pointer text-muted-foreground">Sources</summary>
-            <ul className="mt-2 space-y-2">
-              {edge.sources.map((source) => (
-                <li key={source.title}>
-                  {source.url ? (
-                    <a
-                      href={source.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="underline underline-offset-2"
-                    >
-                      {source.title}
-                    </a>
-                  ) : (
-                    source.title
-                  )}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
+        <Reasoning value={edge.reasoning} />
       </Section>
       <FlowInputs
         context={context}

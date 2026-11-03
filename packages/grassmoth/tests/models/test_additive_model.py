@@ -36,17 +36,20 @@ def _model():
             "constructs": {
                 "construct:x": {
                     "name": "X",
-                    "description": "X",
+                    "reasoning": {"text": "X"},
                     "role": "endogenous",
                     "temporal_status": "time_varying",
                 },
                 "construct:y": {
                     "name": "Y",
-                    "description": "Y",
+                    "reasoning": {"text": "Y"},
                     "role": "endogenous",
                     "temporal_status": "time_varying",
                     "indicators": {
                         "indicator:y": {
+                            "reasoning": {
+                                "text": "Synthetic measurement of the construct for this test scenario."
+                            },
                             "observation": {
                                 "name": "measured_y",
                                 "measurement": {"dtype": "continuous"},
@@ -61,7 +64,7 @@ def _model():
                 "edge:xy": {
                     "cause": "construct:x",
                     "effect": "construct:y",
-                    "description": "X influences Y",
+                    "reasoning": {"text": "X influences Y"},
                     "mechanisms": {
                         "mechanism:linear": {
                             "kind": "drift",
@@ -79,8 +82,8 @@ def _model():
                 }
             },
             "parameters": {
-                weight: {"name": "effect", "description": "Linear effect"},
-                emax: {"name": "emax", "description": "Maximum Hill effect"},
+                weight: {"name": "effect", "reasoning": {"text": "Linear effect"}},
+                emax: {"name": "emax", "reasoning": {"text": "Maximum Hill effect"}},
             },
         }
     ).materialized()
@@ -93,7 +96,6 @@ def test_entities_gain_detail_with_one_owner_and_native_prior():
         "law": TypeAdapter(ObservationLawSpec)
         .validate_json(model_fixture_json("common/y_gaussian_observation_law.json"))
         .model_dump(mode="json"),
-        "reasoning": "Continuous measurement",
     }
 
     after = _entities_gain_detail_with_one_owner_and_native_prior_with_parameter_distributions()
@@ -176,7 +178,6 @@ def test_inconsistent_enrichment_is_rejected(change):
                 )
             )
             .model_dump(mode="json"),
-            "reasoning": "Wrong type",
         }
     with pytest.raises(ValidationError):
         DynamicalModelSpec.model_validate(payload).materialized()

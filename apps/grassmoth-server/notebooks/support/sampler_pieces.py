@@ -198,7 +198,10 @@ def _indicator(name: str, law: Json) -> Json:
             "aggregation": "last",
             "observation_window": CLOCK,
         },
-        "likelihood": {"law": law, "standardized": False, "reasoning": "Notebook model"},
+        "reasoning": {
+            "text": f"Notebook measurement of {name}, read using the specified {law['distribution']} law."
+        },
+        "likelihood": {"law": law, "standardized": False},
         "construct_polarity": "positive",
     }
 
@@ -209,7 +212,7 @@ def model_spec(*, reading_sd: float, free: bool) -> Json:
     constructs: Json = {
         "construct:x": {
             "name": "x",
-            "description": "Latent level pushed by the inputs",
+            "reasoning": {"text": "Latent level pushed by the inputs"},
             "role": "endogenous",
             "temporal_status": "time_varying",
             "coefficients": [
@@ -241,7 +244,7 @@ def model_spec(*, reading_sd: float, free: bool) -> Json:
         law = _law_id(construct)
         constructs[construct] = {
             "name": f"u{j + 1}",
-            "description": f"Known on/off input {j + 1}",
+            "reasoning": {"text": f"Known on/off input {j + 1}"},
             "role": "exogenous",
             "temporal_status": "time_varying",
             "distribution": law,
@@ -269,7 +272,7 @@ def model_spec(*, reading_sd: float, free: bool) -> Json:
         edges[f"edge:u{j + 1}-x"] = {
             "cause": construct,
             "effect": "construct:x",
-            "description": f"Input {j + 1} pushes x",
+            "reasoning": {"text": f"Input {j + 1} pushes x"},
             "mechanisms": {
                 f"mechanism:u{j + 1}-x": {
                     "kind": "drift",
@@ -282,7 +285,7 @@ def model_spec(*, reading_sd: float, free: bool) -> Json:
         if free:
             parameters[_parameter_id(f"beta{j + 1}")] = {
                 "name": f"beta{j + 1}",
-                "description": f"Effect of input {j + 1}",
+                "reasoning": {"text": f"Effect of input {j + 1}"},
                 "distribution": f"distribution:prior-beta{j + 1}",
             }
             distributions[f"distribution:prior-beta{j + 1}"] = {
@@ -292,7 +295,7 @@ def model_spec(*, reading_sd: float, free: bool) -> Json:
     if free:
         parameters[_parameter_id("sigma")] = {
             "name": "sigma",
-            "description": "Noise scale of x",
+            "reasoning": {"text": "Noise scale of x"},
             "distribution": "distribution:prior-sigma",
         }
         distributions["distribution:prior-sigma"] = {

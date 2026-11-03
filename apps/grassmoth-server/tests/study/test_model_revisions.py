@@ -107,7 +107,7 @@ def test_statistical_enrichment_preserves_structural_and_measurement_inputs():
 
     changed = input_fingerprints(
         measured.with_entities(
-            edges=(measured.edges[0].revised(description="Revised causal assumption"),)
+            edges=(measured.edges[0].revised(reasoning={"text": "Revised causal assumption"}),)
         )
     )
     assert changed["observations"] == before["observations"]
@@ -117,7 +117,7 @@ def test_statistical_enrichment_preserves_structural_and_measurement_inputs():
     reasoned = input_fingerprints(
         specified.with_entities(
             parameters=tuple(
-                parameter.revised(reasoning="A literature range for this quantity.")
+                parameter.revised(reasoning={"text": "A literature range for this quantity."})
                 for parameter in specified.parameters
             )
         )

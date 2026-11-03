@@ -30,6 +30,7 @@ from grassmoth.artifacts.model.expressions import (
     state,
 )
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec, DynamicsMechanismSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.models.ssm.dynamics.expression import EdgeDrift, ExpressionComponentSpec
 from grassmoth.models.ssm.dynamics.intervention import (
     ConstantValueFn,
@@ -233,7 +234,7 @@ def _model(expression):
         name: ConstructSpec(
             id=f"construct:{name}",
             name=name,
-            description=name,
+            reasoning=ReasoningSpec(text=name),
             role="endogenous",
             temporal_status="time_varying",
         )
@@ -245,11 +246,14 @@ def _model(expression):
                 id="edge:xy",
                 cause=nodes["x"],
                 effect=nodes["y"],
-                description="x affects y",
+                reasoning=ReasoningSpec(text="x affects y"),
                 mechanisms=(DriftMechanismSpec(id="mechanism:effect", expression=expression),),
             ),
             CausalEdgeSpec(
-                id="edge:xz", cause=nodes["x"], effect=nodes["z"], description="x affects z"
+                id="edge:xz",
+                cause=nodes["x"],
+                effect=nodes["z"],
+                reasoning=ReasoningSpec(text="x affects z"),
             ),
         )
     )
@@ -273,7 +277,7 @@ def test_composition_requires_all_causal_dependencies_and_valid_parameter_refere
                 id="edge:zy",
                 cause=base.get_construct("construct:z"),
                 effect=base.get_construct("construct:y"),
-                description="z moderates x",
+                reasoning=ReasoningSpec(text="z moderates x"),
             ),
         )
     )

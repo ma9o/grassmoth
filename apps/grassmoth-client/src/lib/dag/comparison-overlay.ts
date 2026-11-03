@@ -5,6 +5,7 @@ import type {
   DynamicalModelSpec,
   EdgeId,
   ModelDiffOutput,
+  ReasoningSpec,
 } from "@grassmoth/api-types";
 import type { DagLayoutEdge, DagLayoutNode, Point } from "@/lib/utils/dag-graph-layout";
 import { humanize } from "@/lib/model-asset/selection";
@@ -24,7 +25,7 @@ interface DifferenceMark {
   x: number;
   y: number;
   title: string;
-  detail: string;
+  detail: string | ReasoningSpec;
 }
 
 /** The point halfway along a routed polyline. */
@@ -157,7 +158,7 @@ export function placeComparisonOverlay(
         y: anchor.y,
         change: change,
         title: `${humanize(change)} connection`,
-        detail: definition.description,
+        detail: definition.reasoning,
       });
   }
   return {

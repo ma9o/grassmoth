@@ -2,7 +2,6 @@
   "constructs": {
     "construct:c270c8ac9df81ed2ec60": {
       "name": "treatment",
-      "description": "treatment",
       "indicators": {
         "indicator:596a220d972b1cfabd49": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -166,11 +166,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "treatment"
+      }
     },
     "construct:a1cddfa8657e4a8cb3ae": {
       "name": "outcome",
-      "description": "outcome",
       "indicators": {
         "indicator:b0d166cefc38804306fa": {
           "likelihood": {
@@ -207,9 +209,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -219,6 +219,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -334,7 +337,10 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "outcome"
+      }
     }
   },
   "edges": {
@@ -358,54 +364,65 @@
           }
         }
       },
-      "description": "treatment causes outcome",
-      "sources": [],
       "cause": "construct:c270c8ac9df81ed2ec60",
-      "effect": "construct:a1cddfa8657e4a8cb3ae"
+      "effect": "construct:a1cddfa8657e4a8cb3ae",
+      "reasoning": {
+        "text": "treatment causes outcome"
+      }
     }
   },
   "parameters": {
     "parameter:78d5767e06a3d1515ea8d5387cfb07bcd37096757720bb58606fc176a8c95c15": {
       "name": "rho_treatment",
-      "description": "stiffness of rho_treatment",
       "distribution": "distribution:e37f9ed0fc6066e18d6781800b495ba195dbf5b126cf069ffd45783000b4e6c3",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_treatment. Synthetic Beta prior for rho_treatment; its values define this test scenario."
       }
     },
     "parameter:279585fe4ef2bce5a87546777c0788476675435d79f539c6d25c67fa357e2778": {
       "name": "rho_outcome",
-      "description": "stiffness of rho_outcome",
       "distribution": "distribution:fcdb015423533a23553663a9e9b7a166c188112274a58c13a55c79cd16b3da04",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_outcome. Synthetic Beta prior for rho_outcome; its values define this test scenario."
       }
     },
     "parameter:58d9d11a14b807b28b376c88488612536f37b7af747725282c4177e6b16b610e": {
       "name": "beta_treatment_outcome",
-      "description": "weight of beta_treatment_outcome",
       "distribution": "distribution:10e9fb93e8e9e5671041c344ac23a436a3927b781dc048acda96fd8a46e8ca27",
       "transform": {
         "kind": "dt_effect_to_ct_rate",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "weight of beta_treatment_outcome. Synthetic Normal prior for beta_treatment_outcome; its values define this test scenario."
       }
     },
     "parameter:6a1b6341754182920efb9d3468d9e3c43857daa90cc063538e050cc85abb3404": {
       "name": "sigma_treatment",
-      "description": "innovation.scale for sigma_treatment",
       "distribution": "distribution:c4db19eacd2c2157ce259c8ff21db29739a50bae7b4681552be0464b3d1050ae",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_treatment. Synthetic HalfNormal prior for sigma_treatment; its values define this test scenario."
       }
     },
     "parameter:45ab650e8918992bbc18cb937edddf7e7750fa8fd64abcdc657ac2bd523b8550": {
       "name": "sigma_outcome",
-      "description": "innovation.scale for sigma_outcome",
       "distribution": "distribution:e0ec5595692fa23062a7accc6dfede288c79db2a50ae7684b0808745e833f700",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_outcome. Synthetic HalfNormal prior for sigma_outcome; its values define this test scenario."
       }
     }
   },

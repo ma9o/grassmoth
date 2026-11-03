@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Literal
 
 from grassmoth.public import (
     Assessment,
-    CausalEffectResult,
     ConstructRef,
     FindingSubject,
     NotEvaluated,
@@ -99,7 +98,7 @@ def edit_messages(
                     severity="warning",
                     code="MODEL_COMPONENTS_PRUNED",
                     subject="model",
-                    detail="Components outside the question's outcome ancestry were removed.",
+                    detail="Components outside the question's outcome component were removed.",
                 ),
             )
             if any((pruning.constructs, pruning.edges, pruning.parameters, pruning.distributions))
@@ -166,24 +165,25 @@ def simulation_messages(report: SimulationReport, timestamp: datetime) -> tuple[
     """Announce the findings actually evaluated on the generated histories."""
     arms = report.evidence.arms
     return (
-        *_findings(report.findings, timestamp),
+        *(
+            message
+            for finding in report.findings
+            for message in _findings(
+                (finding,),
+                timestamp,
+                unevaluated="warning"
+                if finding.code
+                in {
+                    "fit_reliability",
+                    "fit_reliability_unavailable",
+                    "causal_indicator_contrast",
+                }
+                else "info",
+            )
+        ),
         *(
             _findings((arms.causal,), timestamp)
             if isinstance(arms, PairedArmSimulation) and isinstance(arms.causal, NotEvaluated)
-            else ()
-        ),
-        *(
-            tuple(
-                ActionMessage(
-                    timestamp=timestamp,
-                    severity="warning",
-                    code="causal_effect",
-                    subject="causal_effect",
-                    detail=warning,
-                )
-                for warning in arms.causal.warnings
-            )
-            if isinstance(arms, PairedArmSimulation) and isinstance(arms.causal, CausalEffectResult)
             else ()
         ),
     )

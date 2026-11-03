@@ -2,7 +2,6 @@
   "constructs": {
     "construct:x": {
       "name": "X",
-      "description": "x",
       "indicators": {
         "indicator:x": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -166,11 +166,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "x"
+      }
     },
     "construct:y": {
       "name": "Y",
-      "description": "y",
       "indicators": {
         "indicator:y": {
           "likelihood": {
@@ -207,9 +209,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "Test Gaussian emission",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -219,6 +219,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test Gaussian emission"
           }
         }
       },
@@ -334,7 +337,10 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "y"
+      }
     }
   },
   "edges": {
@@ -358,54 +364,65 @@
           }
         }
       },
-      "description": "effect",
-      "sources": [],
       "cause": "construct:x",
-      "effect": "construct:y"
+      "effect": "construct:y",
+      "reasoning": {
+        "text": "effect"
+      }
     }
   },
   "parameters": {
     "parameter:8894ae3335f2fd610396295fc7ea32cef593e55ee4a381f27db8f0180cd32675": {
       "name": "rho_X",
-      "description": "stiffness of rho_X",
       "distribution": "distribution:8782b0c340a2b2bbe399c1be77b9152a56fe027fca058d8aed779907cfffa41e",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_X. Synthetic Beta prior for rho_X; its values define this test scenario."
       }
     },
     "parameter:8a2d1d2d0568148ecd7eded5aaddce0cf9477198c04ef1e7b2fcc78ae2a5a4ae": {
       "name": "rho_Y",
-      "description": "stiffness of rho_Y",
       "distribution": "distribution:0d86a85470f61adfa50e34090623ac4d58608b9610908e8ba91696987a180f74",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_Y. Synthetic Beta prior for rho_Y; its values define this test scenario."
       }
     },
     "parameter:8ab5c83eccffdbcde5f63d624233738830291587d21217ea7d8fac9b67fde071": {
       "name": "beta_X_Y",
-      "description": "weight of beta_X_Y",
       "distribution": "distribution:2d86e77412bd114f689ae226668d2848c74babbbe64513a48d29ff14b17a9be3",
       "transform": {
         "kind": "dt_effect_to_ct_rate",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "weight of beta_X_Y. Synthetic Normal prior for beta_X_Y; its values define this test scenario."
       }
     },
     "parameter:cd171692bc6cba9479f70e3c0917036e222e79c26ba1d8cf7fb7fea7db769af5": {
       "name": "sigma_X",
-      "description": "innovation.scale for sigma_X",
       "distribution": "distribution:7b8d31074fcf814907ddb1dfd71c81ac72ac761517c87c7b566d99f0d0c9bb5d",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_X. Synthetic HalfNormal prior for sigma_X; its values define this test scenario."
       }
     },
     "parameter:e40846afcecf7587eb038662e5536de26e5ecb3b7c916ca01a896eed2303b85b": {
       "name": "sigma_Y",
-      "description": "innovation.scale for sigma_Y",
       "distribution": "distribution:84a5f0b1d89a640fac4c8aa91a76ad7b51d182d174bfccc37977c9e79631c42e",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_Y. Synthetic HalfNormal prior for sigma_Y; its values define this test scenario."
       }
     }
   },

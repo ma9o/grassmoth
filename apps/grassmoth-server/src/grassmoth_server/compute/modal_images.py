@@ -40,8 +40,16 @@ def _image(*, gpu: bool) -> modal.Image:
             }
         )
         .add_local_file(SERVER / "config.yaml", "/root/apps/grassmoth-server/config.yaml")
-        .add_local_dir(LIBRARY / "src", "/root/packages/grassmoth/src")
-        .add_local_dir(SERVER / "src", "/root/apps/grassmoth-server/src")
+        .add_local_dir(
+            LIBRARY / "src",
+            "/root/packages/grassmoth/src",
+            ignore=["**/__pycache__/**", "**/*.pyc"],
+        )
+        .add_local_dir(
+            SERVER / "src",
+            "/root/apps/grassmoth-server/src",
+            ignore=["**/__pycache__/**", "**/*.pyc"],
+        )
     )
 
 

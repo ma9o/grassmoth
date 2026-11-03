@@ -65,6 +65,7 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
         dynamical_model_spec = make_model(["A", "B"], [("A", "B")])
         construct = dynamical_model_spec.constructs[1]
         indicator = construct.indicators[0].revised(
+            reasoning={"text": "Joint law with category-specific parameter elements"},
             observation=construct.indicators[0].observation.revised(
                 measurement=LabeledMeasurement(
                     dtype="categorical", levels=("low", "medium", "high")
@@ -77,7 +78,6 @@ def test_conditioning_revises_the_same_type_and_retains_joint_uncertainty(
                         "model_spec_execution/conditioning_revises_the_same_type_and_retains_joint_uncertainty_observation_law.json"
                     )
                 ),
-                reasoning="Joint law with category-specific parameter elements",
             ),
         )
         dynamical_model_spec = (

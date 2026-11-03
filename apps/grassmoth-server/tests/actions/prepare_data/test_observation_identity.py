@@ -8,6 +8,7 @@ import pytest
 from grassmoth.actions.contracts.io import SourceTable
 from grassmoth.actions.prepare_data.aggregations import compute_indicators
 from grassmoth.actions.prepare_data.rows import annotate_observation_rows, extracted_rows
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.preparation import DataPreparationSpec
 from grassmoth.artifacts.observations.spec import (
     AuthoredObservationSpec,
@@ -52,7 +53,13 @@ def test_one_observation_definition_is_shared_by_preparation_and_model():
         ),
     )
     assert recipe.observation_schema() == (observation,)
-    indicator = IndicatorSpec(observation=observation, construct_polarity="positive")
+    indicator = IndicatorSpec(
+        reasoning=ReasoningSpec(
+            text="Synthetic measurement of the construct for this test scenario."
+        ),
+        observation=observation,
+        construct_polarity="positive",
+    )
     assert indicator.observation == observation
     assert set(indicator.model_dump()) == {"observation", "likelihood", "construct_polarity"}
     assert "fill_null" not in recipe.observation_schema()[0].model_dump()

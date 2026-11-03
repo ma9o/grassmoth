@@ -272,7 +272,9 @@ def test_durable_replication_preserves_current_laws_without_comparison(
         json_files={
             "model.json": dynamical_model_spec.with_entities(
                 edges=(
-                    dynamical_model_spec.edges[0].revised(description="Revised justification"),
+                    dynamical_model_spec.edges[0].revised(
+                        reasoning={"text": "Revised justification"}
+                    ),
                     *dynamical_model_spec.edges[1:],
                 )
             ).model_dump(mode="json")
@@ -432,7 +434,6 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         evidence=evidence,
         law=AuthoredLawProvenance(),
         findings=(),
-        fit_reliability="converged",
     )
     fitted = (
         GitRef(workspace_id="TEST", revision=git_oid(2), path="model.json"),
@@ -510,11 +511,53 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         warned = summarize()
         assert isinstance(warned, CausalEffectResult)
         np.testing.assert_array_equal(warned.differences.values, expected)
-        assert set(convergence.messages) <= set(warned.warnings)
-        warned_report = report.revised(evidence=evidence.revised(arms=arms.revised(causal=warned)))
+        from grassmoth.actions.contracts.io import FittedLaw
+        from grassmoth.actions.simulate.findings import simulation_context_findings
+        from grassmoth.artifacts.reports.predictive_provenance import FittedLawProvenance
+
+        warned_evidence = evidence.revised(arms=arms.revised(causal=warned))
+        findings = simulation_context_findings(
+            warned_evidence,
+            FittedLaw(
+                provenance=FittedLawProvenance(
+                    fitted_data=DataRef(revision=git_oid(3), replicate_index=0),
+                    fitted_model_revision=model_ref.revision,
+                    interpretation="posterior_predictive",
+                ),
+                report=fitted[1],
+            ),
+        )
+        warned_report = report.revised(evidence=warned_evidence, findings=findings)
         messages = simulation_messages(warned_report, datetime(2024, 1, 1, tzinfo=UTC))
-        assert {message.detail for message in messages} == set(warned.warnings)
+        assert messages
+        assert {message.code for message in messages} == {finding.code for finding in findings}
+        assert any(message.code == "fit_reliability" for message in messages)
         assert all(message.severity == "warning" for message in messages)
+
+    from grassmoth.artifacts.arrays import NumericalArray
+    from grassmoth.artifacts.identity import IndicatorRef
+
+    missing_observations = np.array(arms.action.observations.values, copy=True)
+    missing_observations[:, -1, 0] = np.nan
+    missing_evidence = evidence.revised(
+        arms=arms.revised(
+            causal=result,
+            action=arms.action.revised(
+                observations=NumericalArray.from_numpy(missing_observations)
+            ),
+        )
+    )
+    (contrast_finding,) = simulation_context_findings(missing_evidence, AuthoredLawProvenance())
+    assert contrast_finding.kind == "not_evaluated"
+    assert contrast_finding.code == "causal_indicator_contrast"
+    assert contrast_finding.subject.target == IndicatorRef(
+        id=evidence.observation_layout.indicator_ids[0]
+    )
+    (contrast_message,) = simulation_messages(
+        report.revised(evidence=missing_evidence, findings=(contrast_finding,)),
+        datetime(2024, 1, 1, tzinfo=UTC),
+    )
+    assert contrast_message.severity == "warning"
 
     fitted = None
     unavailable = summarize()
@@ -543,7 +586,7 @@ def test_data_profile_survives_model_edits(tmp_path, monkeypatch):
     revised_model = stress_sleep_model()
     revised_model = revised_model.with_entities(
         edges=(
-            revised_model.edges[0].revised(description="Another scientific goal"),
+            revised_model.edges[0].revised(reasoning={"text": "Another scientific goal"}),
             *revised_model.edges[1:],
         )
     )
@@ -626,3 +669,151 @@ def test_simulation_retains_exact_histories_without_running_measurement_reducers
     np.testing.assert_array_equal(
         evidence.parameter_draws["future_parameter_site"].values, [1.0, 2.0]
     )
+
+
+@pytest.mark.inference(concern="simulation")
+def test_edited_downstream_branches_compile_and_remain_in_paired_causal_histories():
+    import numpyro.distributions as dist
+
+    from grassmoth.actions.edit_model import ModelEditFailure, edit_model
+    from grassmoth.actions.simulate.action import simulate
+    from grassmoth.artifacts.identity import GitRef, scientific_id
+    from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+    from grassmoth.artifacts.model.expressions import coefficient, restoring_potential, state
+    from grassmoth.artifacts.model.likelihood import LikelihoodSpec, NormalLawSpec
+    from grassmoth.artifacts.model.mechanism import DriftMechanismSpec, PotentialMechanismSpec
+    from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+    from grassmoth.artifacts.model.question import QuestionSpec
+    from grassmoth.artifacts.scenarios import CausalEffectResult, InterventionSpec
+    from grassmoth.models.causal.proofs import CausalCertificationError, certify_identified_estimand
+    from grassmoth.models.ssm import compiled_access as numeric
+    from grassmoth_server.compute.resources import read_compute_budget
+    from grassmoth_test_support.helpers import make_model
+    from grassmoth_test_support.inference import _report
+
+    source = make_model(["X", "Y", "Side", "Tail"], [("X", "Y"), ("X", "Side"), ("Y", "Tail")])
+    parameter_id = scientific_id("parameter", "branch weight")
+    constructs = tuple(
+        node.revised(
+            coefficients=(
+                coefficient(0.0, "initial_mean"),
+                coefficient(0.0, "initial_scale"),
+                coefficient(0.1, "diffusion_scale"),
+            ),
+            dynamics=(
+                PotentialMechanismSpec(
+                    id=scientific_id("mechanism", node.name + " restoring"),
+                    expression=restoring_potential(
+                        node.id, center=0.0, stiffness=0.3, quartic=0.05
+                    ),
+                ),
+            ),
+            indicators=tuple(
+                indicator.revised(
+                    observation=indicator.observation.revised(aggregation="last"),
+                    likelihood=LikelihoodSpec(
+                        law=NormalLawSpec(
+                            loc=coefficient(0.0, "observation_intercept")
+                            + coefficient(1.0, "loading") * state(node.id),
+                            scale=coefficient(0.2, "observation_scale"),
+                        )
+                    ),
+                )
+                for indicator in node.indicators
+            ),
+        )
+        for node in source.constructs
+    )
+    nodes = {node.name: node for node in constructs}
+    source = source.with_entities(
+        constructs=constructs,
+        edges=tuple(
+            edge.revised(
+                cause=nodes[edge.cause.name],
+                effect=nodes[edge.effect.name],
+                mechanisms=(
+                    DriftMechanismSpec(
+                        id=scientific_id("mechanism", edge.cause.name + edge.effect.name),
+                        expression=coefficient(
+                            parameter_id if edge.effect.name == "Y" else 0.5, "weight"
+                        )
+                        * state(edge.cause.id),
+                    ),
+                ),
+            )
+            for edge in source.edges
+        ),
+        parameters=(
+            ParameterSpec(
+                id=parameter_id,
+                name="branch_weight",
+                reasoning={"text": "A positive synthetic coupling for downstream responses."},
+                distribution="distribution:branch",
+            ),
+        ),
+        distributions={"distribution:branch": dist.Normal(0.5, 0.05)},
+    )
+    design = SimulationSpec(
+        start=date(2024, 1, 2),
+        horizon="2d",
+        interventions=(InterventionSpec(target=nodes["X"].id, value=1.0),),
+    )
+    question = QuestionSpec(
+        text="Effect of X on Y", outcome=nodes["Y"].id, queries={"raise": design}
+    )
+    edited = edit_model(question, DynamicalModelSpec(), source)
+    assert not isinstance(edited, ModelEditFailure)
+    assert edited.pruning.constructs == ()
+    assert all(
+        f.kind == "evaluated" and f.outcome == "passed" for f in edited.checks.question.findings
+    )
+    model = edited.dynamical_model_spec
+    revision = GitRef(workspace_id="TEST", revision=git_oid(5), path="model.json")
+    proof = certify_identified_estimand(
+        model, edited.identification, dynamical_model_spec_ref=revision, treatment="X", outcome="Y"
+    )
+    assert proof.treatment == "X"
+    with pytest.raises(CausalCertificationError, match="not identified"):
+        certify_identified_estimand(
+            model,
+            edited.identification,
+            dynamical_model_spec_ref=revision,
+            treatment="Side",
+            outcome="Y",
+        )
+    compiled = compile_model_fixture(model, nodes["Y"].id)
+    assert set(numeric.state_names(compiled)) == {"X", "Y", "Side", "Tail"}
+    assert set(numeric.observation_names(compiled)) == {"X_obs", "Y_obs", "Side_obs", "Tail_obs"}
+    model, _ = condition_model(
+        model,
+        compiled,
+        particle_posterior(JointPosteriorDraws(parameter_draws(model, 2), jnp.zeros((2, 2, 4)))),
+        times=jnp.array([0.0, 1.0]),
+        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+    result = simulate(
+        SimulationInputs(
+            selection=StructuralSelection(model, nodes["Y"].id),
+            design=design,
+            seed=1,
+            num_replicates=2,
+            law=AuthoredLawProvenance(),
+            fitted=(revision, _report(model).core),
+        ),
+        budget=read_compute_budget(),
+    )
+    assert not isinstance(result, ObservationPreflightFailure)
+    arms = result.report.evidence.arms
+    assert arms.kind == "paired"
+    assert isinstance(arms.causal, CausalEffectResult)
+    states = result.report.evidence.state_ids
+    for name in ("Y", "Side", "Tail"):
+        index = states.index(nodes[name].id)
+        contrast = (
+            arms.action.latent_paths.values[:, -1, index]
+            - arms.reference.latent_paths.values[:, -1, index]
+        )
+        assert np.all(contrast > 0), name
+    assert set(arms.causal.manifest_effects) == {
+        indicator.observation.id for indicator in model.indicators
+    }

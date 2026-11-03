@@ -73,6 +73,7 @@ def model(stage: Literal["structure", "measurement", "authored", "edited"]) -> E
         if measured and identity != BASELINE:
             reading = TREATMENT_READING if identity == TREATMENT else OUTCOME_READING
             indicators[reading] = {
+                "reasoning": {"text": "Synthetic reading law for interface coverage."},
                 "observation": {
                     key: value
                     for key, value in observation(reading, f"{name}_reading").items()
@@ -91,14 +92,13 @@ def model(stage: Literal["structure", "measurement", "authored", "edited"]) -> E
                         },
                     },
                     "standardized": False,
-                    "reasoning": "Synthetic reading law for interface coverage.",
                 }
                 if authored
                 else None,
             }
         constructs[identity] = {
             "name": name,
-            "description": f"Synthetic {name} for interface examples.",
+            "reasoning": {"text": f"Synthetic {name} for interface examples."},
             "role": "endogenous",
             "temporal_status": "time_invariant" if identity == BASELINE else "time_varying",
             "indicators": indicators,
@@ -167,7 +167,7 @@ def model(stage: Literal["structure", "measurement", "authored", "edited"]) -> E
                 "edge:00000000000000000001": {
                     "cause": BASELINE,
                     "effect": TREATMENT,
-                    "description": "Baseline affects treatment.",
+                    "reasoning": {"text": "Baseline affects treatment."},
                     "mechanisms": {
                         "mechanism:00000000000000000003": {
                             "kind": "drift",
@@ -208,23 +208,29 @@ def model(stage: Literal["structure", "measurement", "authored", "edited"]) -> E
                     }
                     if authored
                     else {},
-                    "description": "Revised synthetic assumption."
-                    if stage == "edited"
-                    else "Treatment affects the outcome.",
+                    "reasoning": {
+                        "text": "Revised synthetic assumption."
+                        if stage == "edited"
+                        else "Treatment affects the outcome."
+                    },
                 },
             },
             "parameters": {
                 DECAY: {
                     "name": "outcome_persistence",
-                    "description": "Synthetic persistence.",
                     "transform": {"kind": "dt_persistence_to_ct_decay", "interval_days": 1},
                     "distribution": "distribution:00000000000000000001",
+                    "reasoning": {
+                        "text": "Synthetic persistence. A symmetric Beta law keeps synthetic daily persistence between zero and one."
+                    },
                 },
                 DIFFUSION: {
                     "name": "outcome_diffusion",
-                    "description": "Synthetic noise.",
                     "transform": {"kind": "identity"},
                     "distribution": "distribution:00000000000000000002",
+                    "reasoning": {
+                        "text": "Synthetic noise. A unit HalfNormal law gives the synthetic process noise a positive scale."
+                    },
                 },
             }
             if authored
@@ -476,7 +482,6 @@ def simulation(*, causal: bool) -> SimulateOutput:
                             },
                             "reference_mean": 4.5,
                             "manifest_effects": {OUTCOME_READING: 1.5},
-                            "warnings": ["Synthetic interface example."],
                         }
                         if causal
                         else {
@@ -501,7 +506,6 @@ def simulation(*, causal: bool) -> SimulateOutput:
                     "reference_category_probabilities": {},
                 },
                 "law": {"kind": "authored"},
-                "fit_reliability": "not_fitted",
                 "findings": [],
             },
         }

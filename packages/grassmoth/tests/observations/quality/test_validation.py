@@ -18,6 +18,7 @@ from grassmoth.artifacts.model.construct import (
     replace_constructs,
 )
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.duration import Duration
 from grassmoth.artifacts.reports.checks import Evaluated
 from grassmoth.artifacts.reports.data_quality import DataProfileReport
@@ -78,7 +79,7 @@ def simple_causal_design():
                     id=fixture_entity_id("edge", "stress->sleep"),
                     cause=stress.constructs[0],
                     effect=sleep.constructs[0],
-                    description="Stress affects sleep",
+                    reasoning=ReasoningSpec(text="Stress affects sleep"),
                 ),
             ),
             (stress.constructs[0], sleep.constructs[0]),
@@ -179,14 +180,20 @@ def _make_spec(
         indicator.setdefault("measurement", {"dtype": "continuous"})
         indicator.setdefault("aggregation", "last")
         definitions.append(
-            {"observation": indicator, "construct_polarity": indicator.pop("construct_polarity")}
+            {
+                "reasoning": {
+                    "text": "Synthetic measurement of the construct for this test scenario."
+                },
+                "observation": indicator,
+                "construct_polarity": indicator.pop("construct_polarity"),
+            }
         )
     dynamical_model_spec = make_model([construct_name])
     construct = ConstructSpec.model_validate(
         {
             "id": fixture_entity_id("construct", construct_name),
             "name": construct_name,
-            "description": "Validation fixture",
+            "reasoning": {"text": "Validation fixture"},
             "role": "endogenous",
             "temporal_status": temporal_status,
             "indicators": definitions,

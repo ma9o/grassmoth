@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, Self
+from typing import Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, model_validator
 
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.identity import ConstructId
 from grassmoth.artifacts.simulation import SimulationSpec
+from grassmoth.artifacts.text import NonBlankText
 
-type QueryName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+type QueryName = NonBlankText
 
 
 class QuestionSpec(Value):
@@ -21,9 +22,7 @@ class QuestionSpec(Value):
     Constructs are named by identity before a model defines them.
     """
 
-    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)] = Field(
-        description="The user's question in their own words."
-    )
+    text: NonBlankText = Field(description="The user's question in their own words.")
     outcome: ConstructId = Field(description="The construct whose course answers the question.")
     queries: Mapping[QueryName, SimulationSpec] = Field(
         default_factory=dict,

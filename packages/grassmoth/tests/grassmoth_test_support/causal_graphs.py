@@ -4,6 +4,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from grassmoth.artifacts.model.construct import CausalEdgeSpec, ConstructSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth_test_support.helpers import fixture_entity_id
 
 
@@ -15,7 +16,7 @@ def make_graph(
         item["name"]: ConstructSpec(
             id=fixture_entity_id("construct", item["name"]),
             name=item["name"],
-            description=item["name"],
+            reasoning=ReasoningSpec(text=item["name"]),
             role=item.get("role", "endogenous"),
             temporal_status=item.get("temporal_status", "time_invariant"),
         )
@@ -26,7 +27,7 @@ def make_graph(
             id=fixture_entity_id("edge", f"{index}:{edge['cause']}->{edge['effect']}"),
             cause=by_name[edge["cause"]],
             effect=by_name[edge["effect"]],
-            description=f"{edge['cause']} causes {edge['effect']}",
+            reasoning=ReasoningSpec(text=f"{edge['cause']} causes {edge['effect']}"),
         )
         for index, edge in enumerate(edges)
     )

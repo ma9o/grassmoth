@@ -296,7 +296,6 @@ def question_edit_reason(
 ) -> str | None:
     """Reject edits that cannot answer the question or violate scoped parameter anchors."""
     from grassmoth.artifacts.model.construct import Role
-    from grassmoth.models.causal.graphs import get_all_treatments
 
     if missing := sorted(
         identity
@@ -307,22 +306,6 @@ def question_edit_reason(
     outcome_construct = dynamical_model_spec.get_construct(question.outcome)
     if outcome_construct.role != Role.ENDOGENOUS:
         return "The question's outcome must reference an endogenous construct"
-    ancestors = frozenset(
-        get_all_treatments(
-            dynamical_model_spec.constructs, dynamical_model_spec.edges, question.outcome
-        )
-    )
-    outside = sorted(
-        f"{construct.name!r} ({construct.id})"
-        for construct in dynamical_model_spec.constructs
-        if construct.id != question.outcome and construct.name not in ancestors
-    )
-    if outside:
-        return (
-            "Every construct must have a directed path to the question's outcome "
-            f"{outcome_construct.name!r} ({outcome_construct.id}). "
-            "No directed path: " + ", ".join(outside)
-        )
     try:
         StructuralSelection(dynamical_model_spec, question.outcome)
     except StructuralSelectionError as exc:

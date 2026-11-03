@@ -2,7 +2,6 @@
   "constructs": {
     "construct:98907cc586bfcf98c836": {
       "name": "latent_0",
-      "description": "Test state",
       "indicators": {
         "indicator:a6c99a629d09c47f8b69": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Test likelihood",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test likelihood"
           }
         }
       },
@@ -150,22 +150,26 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Test state"
+      }
     },
     "construct:numerical_test_outcome": {
       "name": "numerical_test_outcome",
-      "description": "Unmeasured downstream response joining the numerical test states.",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Unmeasured downstream response joining the numerical test states."
+      }
     },
     "construct:ecc61dc544b34662cb8a": {
       "name": "latent_1",
-      "description": "Test state",
       "indicators": {
         "indicator:c0bf518a25306a72d19b": {
           "likelihood": {
@@ -202,9 +206,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Test likelihood",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -214,6 +216,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test likelihood"
           }
         }
       },
@@ -329,11 +334,13 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Test state"
+      }
     },
     "construct:bdd133b02bb7223d3cf2": {
       "name": "latent_2",
-      "description": "Test state",
       "indicators": {
         "indicator:e42731c67d0a8f200d15": {
           "likelihood": {
@@ -370,9 +377,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Test likelihood",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -382,6 +387,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "Test likelihood"
           }
         }
       },
@@ -513,96 +521,114 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Test state"
+      }
     },
     "construct:dc8ac4979aae5507b92f": {
       "name": "innovation_1_0",
-      "description": "Explicit latent common cause",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Explicit latent common cause"
+      }
     },
     "construct:1da0f12b5ecba3a6579c": {
       "name": "initial_1_0",
-      "description": "Explicit latent common cause",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_invariant"
+      "temporal_status": "time_invariant",
+      "reasoning": {
+        "text": "Explicit latent common cause"
+      }
     },
     "construct:1dd82463d172d1ac996d": {
       "name": "innovation_2_0",
-      "description": "Explicit latent common cause",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Explicit latent common cause"
+      }
     },
     "construct:a27776e72d790f41c889": {
       "name": "initial_2_0",
-      "description": "Explicit latent common cause",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_invariant"
+      "temporal_status": "time_invariant",
+      "reasoning": {
+        "text": "Explicit latent common cause"
+      }
     },
     "construct:f5a4e9331ccfed28d333": {
       "name": "innovation_2_1",
-      "description": "Explicit latent common cause",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "Explicit latent common cause"
+      }
     },
     "construct:0ded8856e281dbfdb34a": {
       "name": "initial_2_1",
-      "description": "Explicit latent common cause",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_invariant"
+      "temporal_status": "time_invariant",
+      "reasoning": {
+        "text": "Explicit latent common cause"
+      }
     }
   },
   "edges": {
     "edge:22b7edc253c399fa0973": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:98907cc586bfcf98c836",
-      "effect": "construct:numerical_test_outcome"
+      "effect": "construct:numerical_test_outcome",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:be3583ef76b3b69c10eb": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:ecc61dc544b34662cb8a",
-      "effect": "construct:numerical_test_outcome"
+      "effect": "construct:numerical_test_outcome",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:2938db2ee172f5eaa010": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:bdd133b02bb7223d3cf2",
-      "effect": "construct:numerical_test_outcome"
+      "effect": "construct:numerical_test_outcome",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:91e3752a341b157801d9": {
       "mechanisms": {
@@ -624,10 +650,11 @@
           }
         }
       },
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:ecc61dc544b34662cb8a",
-      "effect": "construct:98907cc586bfcf98c836"
+      "effect": "construct:98907cc586bfcf98c836",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:526fc4fdfb79d78f0242": {
       "mechanisms": {
@@ -649,10 +676,11 @@
           }
         }
       },
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:bdd133b02bb7223d3cf2",
-      "effect": "construct:98907cc586bfcf98c836"
+      "effect": "construct:98907cc586bfcf98c836",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:810c972f8c643d724cd2": {
       "mechanisms": {
@@ -674,10 +702,11 @@
           }
         }
       },
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:98907cc586bfcf98c836",
-      "effect": "construct:ecc61dc544b34662cb8a"
+      "effect": "construct:ecc61dc544b34662cb8a",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:74d15f0d26227851147a": {
       "mechanisms": {
@@ -699,10 +728,11 @@
           }
         }
       },
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:bdd133b02bb7223d3cf2",
-      "effect": "construct:ecc61dc544b34662cb8a"
+      "effect": "construct:ecc61dc544b34662cb8a",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:3a8ae806e6ced9d36744": {
       "mechanisms": {
@@ -724,10 +754,11 @@
           }
         }
       },
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:98907cc586bfcf98c836",
-      "effect": "construct:bdd133b02bb7223d3cf2"
+      "effect": "construct:bdd133b02bb7223d3cf2",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:06790f042d210f5df5b2": {
       "mechanisms": {
@@ -749,311 +780,378 @@
           }
         }
       },
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:ecc61dc544b34662cb8a",
-      "effect": "construct:bdd133b02bb7223d3cf2"
+      "effect": "construct:bdd133b02bb7223d3cf2",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:fcf13fa40222a0910f6c": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:dc8ac4979aae5507b92f",
-      "effect": "construct:ecc61dc544b34662cb8a"
+      "effect": "construct:ecc61dc544b34662cb8a",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:371e4d7e86c335b026fc": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:dc8ac4979aae5507b92f",
-      "effect": "construct:98907cc586bfcf98c836"
+      "effect": "construct:98907cc586bfcf98c836",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:a649cf61875d69f65c63": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:1da0f12b5ecba3a6579c",
-      "effect": "construct:ecc61dc544b34662cb8a"
+      "effect": "construct:ecc61dc544b34662cb8a",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:1d5c7855449c820310fe": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:1da0f12b5ecba3a6579c",
-      "effect": "construct:98907cc586bfcf98c836"
+      "effect": "construct:98907cc586bfcf98c836",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:c7420ae0493c2166d261": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:1dd82463d172d1ac996d",
-      "effect": "construct:bdd133b02bb7223d3cf2"
+      "effect": "construct:bdd133b02bb7223d3cf2",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:bf702aabf3698c40ad02": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:1dd82463d172d1ac996d",
-      "effect": "construct:98907cc586bfcf98c836"
+      "effect": "construct:98907cc586bfcf98c836",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:9e6780478fbc59183157": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:a27776e72d790f41c889",
-      "effect": "construct:bdd133b02bb7223d3cf2"
+      "effect": "construct:bdd133b02bb7223d3cf2",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:4e2b8dc6bf5dee855f4d": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:a27776e72d790f41c889",
-      "effect": "construct:98907cc586bfcf98c836"
+      "effect": "construct:98907cc586bfcf98c836",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:de4b61a846f9032fe73d": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:f5a4e9331ccfed28d333",
-      "effect": "construct:bdd133b02bb7223d3cf2"
+      "effect": "construct:bdd133b02bb7223d3cf2",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:83c312c8851f54b1b65f": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:f5a4e9331ccfed28d333",
-      "effect": "construct:ecc61dc544b34662cb8a"
+      "effect": "construct:ecc61dc544b34662cb8a",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:678e98a0d69b2d29ed27": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:0ded8856e281dbfdb34a",
-      "effect": "construct:bdd133b02bb7223d3cf2"
+      "effect": "construct:bdd133b02bb7223d3cf2",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     },
     "edge:1f50d1443bd60e6c8b37": {
       "mechanisms": {},
-      "description": "Fixture causal assumption",
-      "sources": [],
       "cause": "construct:0ded8856e281dbfdb34a",
-      "effect": "construct:ecc61dc544b34662cb8a"
+      "effect": "construct:ecc61dc544b34662cb8a",
+      "reasoning": {
+        "text": "Fixture causal assumption"
+      }
     }
   },
   "parameters": {
     "parameter:e7e20d74af8aa47e58ffca403670f3912bcddafed670860906dee61462d2c669": {
       "name": "parameter:e7e20d74af8aa47e58ffca403670f3912bcddafed670860906dee61462d2c669",
-      "description": "Fixture quantity",
       "distribution": "distribution:4aca7dfa6f1b5e5e96daf4e0f6ee2ffa83e03759c22c1af544d80a9dcd5e1a52",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:e7e20d74af8aa47e58ffca403670f3912bcddafed670860906dee61462d2c669; its values define this test scenario."
       }
     },
     "parameter:e30e44b1dd1f2361bef849dae029b449283497dec4992a8a9343a39b4ebf618b": {
       "name": "parameter:e30e44b1dd1f2361bef849dae029b449283497dec4992a8a9343a39b4ebf618b",
-      "description": "Fixture quantity",
       "distribution": "distribution:e94855ec65861f6df736899e1f47fd915099afaed5874cbbf802eac7196beb15",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:e30e44b1dd1f2361bef849dae029b449283497dec4992a8a9343a39b4ebf618b; its values define this test scenario."
       }
     },
     "parameter:6fcd8bb87fd96c12cfa2de2b53d29f259b5cea273d06f88fd62f433d7cdbfcb5": {
       "name": "parameter:6fcd8bb87fd96c12cfa2de2b53d29f259b5cea273d06f88fd62f433d7cdbfcb5",
-      "description": "Fixture quantity",
       "distribution": "distribution:0f172c4c5c06e3ef30423fdda4e74abe3301df1366fe11a8ce8a2442c436014a",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:6fcd8bb87fd96c12cfa2de2b53d29f259b5cea273d06f88fd62f433d7cdbfcb5; its values define this test scenario."
       }
     },
     "parameter:fa6cc11cca3c271ae5d2f1caf029f7feed0d22519ecfbcb8c25f5bd837d05f02": {
       "name": "parameter:fa6cc11cca3c271ae5d2f1caf029f7feed0d22519ecfbcb8c25f5bd837d05f02",
-      "description": "Fixture quantity",
       "distribution": "distribution:8dff305c4a62374d3beb2a93017e310fb5528fc8b8c99fee484ff5a5315691c3",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:fa6cc11cca3c271ae5d2f1caf029f7feed0d22519ecfbcb8c25f5bd837d05f02; its values define this test scenario."
       }
     },
     "parameter:4ae0340e99dd1ad7e9fee4157ff4e7e699f29ac96bd6fe956d67adfe742f4eaf": {
       "name": "parameter:4ae0340e99dd1ad7e9fee4157ff4e7e699f29ac96bd6fe956d67adfe742f4eaf",
-      "description": "Fixture quantity",
       "distribution": "distribution:6e43564738470e70f2bc13f65c9411f5c5098176318ed70166344fb5c0e4b222",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:4ae0340e99dd1ad7e9fee4157ff4e7e699f29ac96bd6fe956d67adfe742f4eaf; its values define this test scenario."
       }
     },
     "parameter:ba8bd055b3287ef7165ff996eca6855d3f20093596d21561019603d3ab4088f1": {
       "name": "parameter:ba8bd055b3287ef7165ff996eca6855d3f20093596d21561019603d3ab4088f1",
-      "description": "Fixture quantity",
       "distribution": "distribution:b6d5e8c66e11d12c47e71030fc64f36d684d7d1f122c64ee8d539d19eaf57128",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:ba8bd055b3287ef7165ff996eca6855d3f20093596d21561019603d3ab4088f1; its values define this test scenario."
       }
     },
     "parameter:d1b0bbc5ad62eb1863c658e8f3c0be9f00b84fea01b5b7cc844af74352f8e354": {
       "name": "parameter:d1b0bbc5ad62eb1863c658e8f3c0be9f00b84fea01b5b7cc844af74352f8e354",
-      "description": "Fixture quantity",
       "distribution": "distribution:b0e0d0a62f6ce212742baa59fbd35f0a2b9d9a11cf5f4be3cae571fb171a4c0c",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:d1b0bbc5ad62eb1863c658e8f3c0be9f00b84fea01b5b7cc844af74352f8e354; its values define this test scenario."
       }
     },
     "parameter:4979bf92ce9acc312acdeb664d40de2ebd32ed74fd03b68fa8f8f41394104186": {
       "name": "parameter:4979bf92ce9acc312acdeb664d40de2ebd32ed74fd03b68fa8f8f41394104186",
-      "description": "Fixture quantity",
       "distribution": "distribution:a32efc05d39f3d1405829318b53138e54e16ef181ebc8313c4297414852c4085",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:4979bf92ce9acc312acdeb664d40de2ebd32ed74fd03b68fa8f8f41394104186; its values define this test scenario."
       }
     },
     "parameter:6ca127398c6023a41cfc37af5fc2ceee96a33c0aa298859b1bd942b0417adb1c": {
       "name": "parameter:6ca127398c6023a41cfc37af5fc2ceee96a33c0aa298859b1bd942b0417adb1c",
-      "description": "Fixture quantity",
       "distribution": "distribution:66e1b5c6a7fbbafe959a9f15169d80c51c5937278a69fe6ce1664ea53a85bda3",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:6ca127398c6023a41cfc37af5fc2ceee96a33c0aa298859b1bd942b0417adb1c; its values define this test scenario."
       }
     },
     "parameter:428e7de5d18c796563860ab8173a48433fdbf81b7aecf44b01d76044d80d5c10": {
       "name": "parameter:428e7de5d18c796563860ab8173a48433fdbf81b7aecf44b01d76044d80d5c10",
-      "description": "Fixture quantity",
       "distribution": "distribution:b58954baa704ad5ddc92db893300309e874c54365f3526674f27362589587169",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:428e7de5d18c796563860ab8173a48433fdbf81b7aecf44b01d76044d80d5c10; its values define this test scenario."
       }
     },
     "parameter:ee44072a88945905188a2251e020e6a450956ad7231815920b1261fe09e02430": {
       "name": "parameter:ee44072a88945905188a2251e020e6a450956ad7231815920b1261fe09e02430",
-      "description": "Fixture quantity",
       "distribution": "distribution:24b256ef9d59de25a35d8d1550a6d865dc124bde628cbd7f082f559c21212426",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:ee44072a88945905188a2251e020e6a450956ad7231815920b1261fe09e02430; its values define this test scenario."
       }
     },
     "parameter:f76097c73161c6cd52bf8da579d1f81d5e335f458a73237c793253bf8fb475a8": {
       "name": "parameter:f76097c73161c6cd52bf8da579d1f81d5e335f458a73237c793253bf8fb475a8",
-      "description": "Fixture quantity",
       "distribution": "distribution:5930f73e92e15e366f4fef0b7b9c21f6b99976dee09ff1e790ed8009eac5a57d",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:f76097c73161c6cd52bf8da579d1f81d5e335f458a73237c793253bf8fb475a8; its values define this test scenario."
       }
     },
     "parameter:1325cbdce1502c1fbe22f7f18ab961be43e288abf403cda31346ad09ab2adf94": {
       "name": "parameter:1325cbdce1502c1fbe22f7f18ab961be43e288abf403cda31346ad09ab2adf94",
-      "description": "Fixture quantity",
       "distribution": "distribution:8ae74a4ba698528e1b29a6a12bcab285f1f93fabaf4a69a4bbc6f8c4b67937f3",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:1325cbdce1502c1fbe22f7f18ab961be43e288abf403cda31346ad09ab2adf94; its values define this test scenario."
       }
     },
     "parameter:823d94524cb9f83621d583821627c05463076a191676a7eb46bc83d713100976": {
       "name": "parameter:823d94524cb9f83621d583821627c05463076a191676a7eb46bc83d713100976",
-      "description": "Fixture quantity",
       "distribution": "distribution:40f437c044e73fbcd77ad8f725335a97034bb2c7252404b765d54164c62fae3f",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:823d94524cb9f83621d583821627c05463076a191676a7eb46bc83d713100976; its values define this test scenario."
       }
     },
     "parameter:17304b5f9f25a75c49e5a4725f346f0caca8e8fc3da4afe4d64b942b73839596": {
       "name": "parameter:17304b5f9f25a75c49e5a4725f346f0caca8e8fc3da4afe4d64b942b73839596",
-      "description": "Fixture quantity",
       "distribution": "distribution:19ea10444b6dae82f5819bcb0032d55033ca1ab0b8122775fc7717dbf5842448",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:17304b5f9f25a75c49e5a4725f346f0caca8e8fc3da4afe4d64b942b73839596; its values define this test scenario."
       }
     },
     "parameter:af4798c7e1220a622fec046045ee2b5728f743d45c8c9c0a4eeb24cb7ba3ff99": {
       "name": "parameter:af4798c7e1220a622fec046045ee2b5728f743d45c8c9c0a4eeb24cb7ba3ff99",
-      "description": "Fixture quantity",
       "distribution": "distribution:3f869d7acba4a29b6887eee9701c89e5b00ff6839a34c79a80b37d981a51c27b",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:af4798c7e1220a622fec046045ee2b5728f743d45c8c9c0a4eeb24cb7ba3ff99; its values define this test scenario."
       }
     },
     "parameter:0d2a554237abaab480e491ef97d2bd37036ae4ee69628deede0eec136f165bef": {
       "name": "parameter:0d2a554237abaab480e491ef97d2bd37036ae4ee69628deede0eec136f165bef",
-      "description": "Fixture quantity",
       "distribution": "distribution:37add4c0f63e0477b02d5f8319fc8527c467007b2ece06c089b72e3de2c48b09",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Uniform prior for parameter:0d2a554237abaab480e491ef97d2bd37036ae4ee69628deede0eec136f165bef; its values define this test scenario."
       }
     },
     "parameter:dd01bbd69398edeed951541467ad9d9e4422a63fb1292833fecc2865ff1919ae": {
       "name": "parameter:dd01bbd69398edeed951541467ad9d9e4422a63fb1292833fecc2865ff1919ae",
-      "description": "Fixture quantity",
       "distribution": "distribution:b04277e36dc711e2eff99f63e33f574a47305b2df0cb5398ef57bb7d45db5457",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:dd01bbd69398edeed951541467ad9d9e4422a63fb1292833fecc2865ff1919ae; its values define this test scenario."
       }
     },
     "parameter:a29b42a9bcdf976c50ee9e26489ba0967ee2c4be496b178adfa27283a2f1db2c": {
       "name": "parameter:a29b42a9bcdf976c50ee9e26489ba0967ee2c4be496b178adfa27283a2f1db2c",
-      "description": "Fixture quantity",
       "distribution": "distribution:50ddbbd96f76d190e6f60296e716a6e4dd141cec7787480fa0d4f2578395839c",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:a29b42a9bcdf976c50ee9e26489ba0967ee2c4be496b178adfa27283a2f1db2c; its values define this test scenario."
       }
     },
     "parameter:b57321034ef17367d061123a9f27ae16c3b1dcf87fd2e670d34dfc6abf124f29": {
       "name": "parameter:b57321034ef17367d061123a9f27ae16c3b1dcf87fd2e670d34dfc6abf124f29",
-      "description": "Fixture quantity",
       "distribution": "distribution:288af37810b8e584d0cced0d683b2aa47f3a2f1202e1f4cca00941f8c7569da3",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:b57321034ef17367d061123a9f27ae16c3b1dcf87fd2e670d34dfc6abf124f29; its values define this test scenario."
       }
     },
     "parameter:49557af18d547a4b4ec86785d9f96d0b34b02bd6209937cd124eaae55596d6a1": {
       "name": "parameter:49557af18d547a4b4ec86785d9f96d0b34b02bd6209937cd124eaae55596d6a1",
-      "description": "Fixture quantity",
       "distribution": "distribution:8fb158a7f179a9ce844a2e382d2b18beeba6e23b97e8461116c9047d0cefed04",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:49557af18d547a4b4ec86785d9f96d0b34b02bd6209937cd124eaae55596d6a1; its values define this test scenario."
       }
     },
     "parameter:c45a6249a379697f655449195873000139af861429cb2080abcd0ae6eff748fc": {
       "name": "parameter:c45a6249a379697f655449195873000139af861429cb2080abcd0ae6eff748fc",
-      "description": "Fixture quantity",
       "distribution": "distribution:fcfe6f095f70e1fdfab250a3a5ea486f819a9ac190567ebe043ab8d810015617",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Uniform prior for parameter:c45a6249a379697f655449195873000139af861429cb2080abcd0ae6eff748fc; its values define this test scenario."
       }
     },
     "parameter:506c2756f40872a74d72b7ade6bff66a2d73d0d7018f8a1cc65bb183a906df6e": {
       "name": "parameter:506c2756f40872a74d72b7ade6bff66a2d73d0d7018f8a1cc65bb183a906df6e",
-      "description": "Fixture quantity",
       "distribution": "distribution:65fc9c9c9bd8cd710cd753077aa3beb03a7090dc2c6c5b4d1f32b54b41016755",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Normal prior for parameter:506c2756f40872a74d72b7ade6bff66a2d73d0d7018f8a1cc65bb183a906df6e; its values define this test scenario."
       }
     },
     "parameter:a509c81d86a107a991d402bf80d9f3ab53fcba247ea51e7250be41faa774fc12": {
       "name": "parameter:a509c81d86a107a991d402bf80d9f3ab53fcba247ea51e7250be41faa774fc12",
-      "description": "Fixture quantity",
       "distribution": "distribution:cd5e683cd8217e1dca423b3fe5a0df67d2877c0163dfd65ce7506f82c534ef3b",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic Uniform prior for parameter:a509c81d86a107a991d402bf80d9f3ab53fcba247ea51e7250be41faa774fc12; its values define this test scenario."
       }
     },
     "parameter:3eabd5ae1b7ca15eca2772cdf8298293985fe28dedeec57e8d543a043b9c2597": {
       "name": "parameter:3eabd5ae1b7ca15eca2772cdf8298293985fe28dedeec57e8d543a043b9c2597",
-      "description": "Fixture quantity",
       "distribution": "distribution:ede68b1107e3df64cd6babad8f8dc4e1227616b4ee3f999ab0114decbe5b4720",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:3eabd5ae1b7ca15eca2772cdf8298293985fe28dedeec57e8d543a043b9c2597; its values define this test scenario."
       }
     },
     "parameter:8e67cddb6050513bc1eb862a99d5f0fb6f7d021f136f2c8c4d099de9ea08c117": {
       "name": "parameter:8e67cddb6050513bc1eb862a99d5f0fb6f7d021f136f2c8c4d099de9ea08c117",
-      "description": "Fixture quantity",
       "distribution": "distribution:1f8ad5d6cd3d6d904ead693ffcca10624b5add5cccc9ab54be7708ba00bdda99",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:8e67cddb6050513bc1eb862a99d5f0fb6f7d021f136f2c8c4d099de9ea08c117; its values define this test scenario."
       }
     },
     "parameter:728a61007bc46531947d580d61ef11d66629607af2e5fa4ce338c23a4e7c38e6": {
       "name": "parameter:728a61007bc46531947d580d61ef11d66629607af2e5fa4ce338c23a4e7c38e6",
-      "description": "Fixture quantity",
       "distribution": "distribution:c3b498b93c72188b7d8b9461748e8ea4f92c69c0b8d305849597afab0b51b9f8",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "Fixture quantity. Synthetic HalfNormal prior for parameter:728a61007bc46531947d580d61ef11d66629607af2e5fa4ce338c23a4e7c38e6; its values define this test scenario."
       }
     }
   },

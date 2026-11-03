@@ -285,7 +285,6 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
     values = np.asarray([[[0], [1], [2]], [[1], [2], [3]], [[2], [3], [4]]], dtype=float)
     report = SimulationReport(
         summary=empty_simulation_summary(),
-        fit_reliability="not_fitted",
         law=AuthoredLawProvenance(),
         evidence=SimulationEvidence(
             time_origin=datetime(2026, 1, 1, tzinfo=UTC),

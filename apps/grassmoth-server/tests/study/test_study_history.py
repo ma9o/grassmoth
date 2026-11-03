@@ -465,7 +465,6 @@ def test_timeline_links_only_declared_refs_to_published_outputs():
             )
             report = SimulationReport(
                 summary=empty_simulation_summary(),
-                fit_reliability="not_fitted",
                 law=AuthoredLawProvenance(),
                 evidence=SimulationEvidence(
                     time_origin=datetime(2026, 1, 1, tzinfo=UTC),

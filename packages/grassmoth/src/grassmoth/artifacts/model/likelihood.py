@@ -11,7 +11,6 @@ from pydantic import ConfigDict, Field, model_validator
 
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.identity import ConstructId
-from grassmoth.artifacts.model.evidence import LiteratureSource
 from grassmoth.artifacts.model.expressions import (
     BinaryExpression,
     CallExpression,
@@ -464,15 +463,13 @@ def likelihood_terms(law: ObservationLawSpec) -> LikelihoodAnalysis:
 
 
 class LikelihoodSpec(Value):
-    """An indicator's conditional probability law and its scientific justification."""
+    """An indicator's conditional probability law and observation standardization."""
 
     law: ObservationLawSpec
     standardized: bool = Field(
         default=False,
         description="Whether observations are mean-centered and scaled before fitting.",
     )
-    reasoning: str = Field(description="Why this conditional law was chosen for the indicator")
-    sources: tuple[LiteratureSource, ...] = ()
 
     @model_validator(mode="after")
     def parse_expression(self) -> Self:

@@ -2,7 +2,6 @@
   "constructs": {
     "construct:x00": {
       "name": "x00",
-      "description": "Lorenz-96 cyclic state 0; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -152,16 +151,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 0; one day represents one Lorenz time unit"
       }
     },
     "construct:x01": {
       "name": "x01",
-      "description": "Lorenz-96 cyclic state 1; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -267,11 +270,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 1; one day represents one Lorenz time unit"
+      }
     },
     "construct:x02": {
       "name": "x02",
-      "description": "Lorenz-96 cyclic state 2; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -421,16 +426,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 2; one day represents one Lorenz time unit"
       }
     },
     "construct:x03": {
       "name": "x03",
-      "description": "Lorenz-96 cyclic state 3; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -536,11 +545,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 3; one day represents one Lorenz time unit"
+      }
     },
     "construct:x04": {
       "name": "x04",
-      "description": "Lorenz-96 cyclic state 4; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -690,16 +701,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 4; one day represents one Lorenz time unit"
       }
     },
     "construct:x05": {
       "name": "x05",
-      "description": "Lorenz-96 cyclic state 5; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -805,11 +820,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 5; one day represents one Lorenz time unit"
+      }
     },
     "construct:x06": {
       "name": "x06",
-      "description": "Lorenz-96 cyclic state 6; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -959,16 +976,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 6; one day represents one Lorenz time unit"
       }
     },
     "construct:x07": {
       "name": "x07",
-      "description": "Lorenz-96 cyclic state 7; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -1074,11 +1095,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 7; one day represents one Lorenz time unit"
+      }
     },
     "construct:x08": {
       "name": "x08",
-      "description": "Lorenz-96 cyclic state 8; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -1228,16 +1251,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 8; one day represents one Lorenz time unit"
       }
     },
     "construct:x09": {
       "name": "x09",
-      "description": "Lorenz-96 cyclic state 9; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -1343,11 +1370,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 9; one day represents one Lorenz time unit"
+      }
     },
     "construct:x10": {
       "name": "x10",
-      "description": "Lorenz-96 cyclic state 10; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -1497,16 +1526,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 10; one day represents one Lorenz time unit"
       }
     },
     "construct:x11": {
       "name": "x11",
-      "description": "Lorenz-96 cyclic state 11; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -1612,11 +1645,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 11; one day represents one Lorenz time unit"
+      }
     },
     "construct:x12": {
       "name": "x12",
-      "description": "Lorenz-96 cyclic state 12; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -1766,16 +1801,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 12; one day represents one Lorenz time unit"
       }
     },
     "construct:x13": {
       "name": "x13",
-      "description": "Lorenz-96 cyclic state 13; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -1881,11 +1920,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 13; one day represents one Lorenz time unit"
+      }
     },
     "construct:x14": {
       "name": "x14",
-      "description": "Lorenz-96 cyclic state 14; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -2035,16 +2076,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 14; one day represents one Lorenz time unit"
       }
     },
     "construct:x15": {
       "name": "x15",
-      "description": "Lorenz-96 cyclic state 15; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -2150,11 +2195,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 15; one day represents one Lorenz time unit"
+      }
     },
     "construct:x16": {
       "name": "x16",
-      "description": "Lorenz-96 cyclic state 16; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -2304,16 +2351,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 16; one day represents one Lorenz time unit"
       }
     },
     "construct:x17": {
       "name": "x17",
-      "description": "Lorenz-96 cyclic state 17; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -2419,11 +2470,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 17; one day represents one Lorenz time unit"
+      }
     },
     "construct:x18": {
       "name": "x18",
-      "description": "Lorenz-96 cyclic state 18; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -2573,16 +2626,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 18; one day represents one Lorenz time unit"
       }
     },
     "construct:x19": {
       "name": "x19",
-      "description": "Lorenz-96 cyclic state 19; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -2688,11 +2745,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 19; one day represents one Lorenz time unit"
+      }
     },
     "construct:x20": {
       "name": "x20",
-      "description": "Lorenz-96 cyclic state 20; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -2842,16 +2901,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 20; one day represents one Lorenz time unit"
       }
     },
     "construct:x21": {
       "name": "x21",
-      "description": "Lorenz-96 cyclic state 21; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -2957,11 +3020,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 21; one day represents one Lorenz time unit"
+      }
     },
     "construct:x22": {
       "name": "x22",
-      "description": "Lorenz-96 cyclic state 22; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -3111,16 +3176,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 22; one day represents one Lorenz time unit"
       }
     },
     "construct:x23": {
       "name": "x23",
-      "description": "Lorenz-96 cyclic state 23; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -3226,11 +3295,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 23; one day represents one Lorenz time unit"
+      }
     },
     "construct:x24": {
       "name": "x24",
-      "description": "Lorenz-96 cyclic state 24; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -3380,16 +3451,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 24; one day represents one Lorenz time unit"
       }
     },
     "construct:x25": {
       "name": "x25",
-      "description": "Lorenz-96 cyclic state 25; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -3495,11 +3570,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 25; one day represents one Lorenz time unit"
+      }
     },
     "construct:x26": {
       "name": "x26",
-      "description": "Lorenz-96 cyclic state 26; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -3649,16 +3726,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 26; one day represents one Lorenz time unit"
       }
     },
     "construct:x27": {
       "name": "x27",
-      "description": "Lorenz-96 cyclic state 27; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -3764,11 +3845,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 27; one day represents one Lorenz time unit"
+      }
     },
     "construct:x28": {
       "name": "x28",
-      "description": "Lorenz-96 cyclic state 28; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -3918,16 +4001,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 28; one day represents one Lorenz time unit"
       }
     },
     "construct:x29": {
       "name": "x29",
-      "description": "Lorenz-96 cyclic state 29; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -4033,11 +4120,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 29; one day represents one Lorenz time unit"
+      }
     },
     "construct:x30": {
       "name": "x30",
-      "description": "Lorenz-96 cyclic state 30; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -4187,16 +4276,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 30; one day represents one Lorenz time unit"
       }
     },
     "construct:x31": {
       "name": "x31",
-      "description": "Lorenz-96 cyclic state 31; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -4302,11 +4395,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 31; one day represents one Lorenz time unit"
+      }
     },
     "construct:x32": {
       "name": "x32",
-      "description": "Lorenz-96 cyclic state 32; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -4456,16 +4551,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 32; one day represents one Lorenz time unit"
       }
     },
     "construct:x33": {
       "name": "x33",
-      "description": "Lorenz-96 cyclic state 33; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -4571,11 +4670,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 33; one day represents one Lorenz time unit"
+      }
     },
     "construct:x34": {
       "name": "x34",
-      "description": "Lorenz-96 cyclic state 34; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -4725,16 +4826,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 34; one day represents one Lorenz time unit"
       }
     },
     "construct:x35": {
       "name": "x35",
-      "description": "Lorenz-96 cyclic state 35; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -4840,11 +4945,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 35; one day represents one Lorenz time unit"
+      }
     },
     "construct:x36": {
       "name": "x36",
-      "description": "Lorenz-96 cyclic state 36; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -4994,16 +5101,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 36; one day represents one Lorenz time unit"
       }
     },
     "construct:x37": {
       "name": "x37",
-      "description": "Lorenz-96 cyclic state 37; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -5109,11 +5220,13 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 37; one day represents one Lorenz time unit"
+      }
     },
     "construct:x38": {
       "name": "x38",
-      "description": "Lorenz-96 cyclic state 38; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -5263,16 +5376,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Independent Gaussian measurement error of an alternating Lorenz state."
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Independent Gaussian measurement error of an alternating Lorenz state."
+          }
         }
+      },
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 38; one day represents one Lorenz time unit"
       }
     },
     "construct:x39": {
       "name": "x39",
-      "description": "Lorenz-96 cyclic state 39; one day represents one Lorenz time unit",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -5378,15 +5495,16 @@
           }
         }
       },
-      "indicators": {}
+      "indicators": {},
+      "reasoning": {
+        "text": "Lorenz-96 cyclic state 39; one day represents one Lorenz time unit"
+      }
     }
   },
   "edges": {
     "edge:x01-x00": {
       "cause": "construct:x01",
       "effect": "construct:x00",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x01-x00": {
           "kind": "drift",
@@ -5403,20 +5521,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x39-x00": {
       "cause": "construct:x39",
       "effect": "construct:x00",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x38-x00": {
       "cause": "construct:x38",
       "effect": "construct:x00",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x38-x00": {
           "kind": "drift",
@@ -5441,13 +5561,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x02-x01": {
       "cause": "construct:x02",
       "effect": "construct:x01",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x02-x01": {
           "kind": "drift",
@@ -5464,20 +5585,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x00-x01": {
       "cause": "construct:x00",
       "effect": "construct:x01",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x39-x01": {
       "cause": "construct:x39",
       "effect": "construct:x01",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x39-x01": {
           "kind": "drift",
@@ -5502,13 +5625,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x03-x02": {
       "cause": "construct:x03",
       "effect": "construct:x02",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x03-x02": {
           "kind": "drift",
@@ -5525,20 +5649,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x01-x02": {
       "cause": "construct:x01",
       "effect": "construct:x02",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x00-x02": {
       "cause": "construct:x00",
       "effect": "construct:x02",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x00-x02": {
           "kind": "drift",
@@ -5563,13 +5689,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x04-x03": {
       "cause": "construct:x04",
       "effect": "construct:x03",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x04-x03": {
           "kind": "drift",
@@ -5586,20 +5713,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x02-x03": {
       "cause": "construct:x02",
       "effect": "construct:x03",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x01-x03": {
       "cause": "construct:x01",
       "effect": "construct:x03",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x01-x03": {
           "kind": "drift",
@@ -5624,13 +5753,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x05-x04": {
       "cause": "construct:x05",
       "effect": "construct:x04",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x05-x04": {
           "kind": "drift",
@@ -5647,20 +5777,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x03-x04": {
       "cause": "construct:x03",
       "effect": "construct:x04",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x02-x04": {
       "cause": "construct:x02",
       "effect": "construct:x04",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x02-x04": {
           "kind": "drift",
@@ -5685,13 +5817,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x06-x05": {
       "cause": "construct:x06",
       "effect": "construct:x05",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x06-x05": {
           "kind": "drift",
@@ -5708,20 +5841,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x04-x05": {
       "cause": "construct:x04",
       "effect": "construct:x05",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x03-x05": {
       "cause": "construct:x03",
       "effect": "construct:x05",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x03-x05": {
           "kind": "drift",
@@ -5746,13 +5881,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x07-x06": {
       "cause": "construct:x07",
       "effect": "construct:x06",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x07-x06": {
           "kind": "drift",
@@ -5769,20 +5905,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x05-x06": {
       "cause": "construct:x05",
       "effect": "construct:x06",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x04-x06": {
       "cause": "construct:x04",
       "effect": "construct:x06",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x04-x06": {
           "kind": "drift",
@@ -5807,13 +5945,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x08-x07": {
       "cause": "construct:x08",
       "effect": "construct:x07",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x08-x07": {
           "kind": "drift",
@@ -5830,20 +5969,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x06-x07": {
       "cause": "construct:x06",
       "effect": "construct:x07",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x05-x07": {
       "cause": "construct:x05",
       "effect": "construct:x07",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x05-x07": {
           "kind": "drift",
@@ -5868,13 +6009,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x09-x08": {
       "cause": "construct:x09",
       "effect": "construct:x08",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x09-x08": {
           "kind": "drift",
@@ -5891,20 +6033,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x07-x08": {
       "cause": "construct:x07",
       "effect": "construct:x08",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x06-x08": {
       "cause": "construct:x06",
       "effect": "construct:x08",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x06-x08": {
           "kind": "drift",
@@ -5929,13 +6073,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x10-x09": {
       "cause": "construct:x10",
       "effect": "construct:x09",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x10-x09": {
           "kind": "drift",
@@ -5952,20 +6097,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x08-x09": {
       "cause": "construct:x08",
       "effect": "construct:x09",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x07-x09": {
       "cause": "construct:x07",
       "effect": "construct:x09",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x07-x09": {
           "kind": "drift",
@@ -5990,13 +6137,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x11-x10": {
       "cause": "construct:x11",
       "effect": "construct:x10",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x11-x10": {
           "kind": "drift",
@@ -6013,20 +6161,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x09-x10": {
       "cause": "construct:x09",
       "effect": "construct:x10",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x08-x10": {
       "cause": "construct:x08",
       "effect": "construct:x10",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x08-x10": {
           "kind": "drift",
@@ -6051,13 +6201,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x12-x11": {
       "cause": "construct:x12",
       "effect": "construct:x11",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x12-x11": {
           "kind": "drift",
@@ -6074,20 +6225,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x10-x11": {
       "cause": "construct:x10",
       "effect": "construct:x11",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x09-x11": {
       "cause": "construct:x09",
       "effect": "construct:x11",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x09-x11": {
           "kind": "drift",
@@ -6112,13 +6265,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x13-x12": {
       "cause": "construct:x13",
       "effect": "construct:x12",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x13-x12": {
           "kind": "drift",
@@ -6135,20 +6289,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x11-x12": {
       "cause": "construct:x11",
       "effect": "construct:x12",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x10-x12": {
       "cause": "construct:x10",
       "effect": "construct:x12",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x10-x12": {
           "kind": "drift",
@@ -6173,13 +6329,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x14-x13": {
       "cause": "construct:x14",
       "effect": "construct:x13",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x14-x13": {
           "kind": "drift",
@@ -6196,20 +6353,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x12-x13": {
       "cause": "construct:x12",
       "effect": "construct:x13",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x11-x13": {
       "cause": "construct:x11",
       "effect": "construct:x13",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x11-x13": {
           "kind": "drift",
@@ -6234,13 +6393,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x15-x14": {
       "cause": "construct:x15",
       "effect": "construct:x14",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x15-x14": {
           "kind": "drift",
@@ -6257,20 +6417,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x13-x14": {
       "cause": "construct:x13",
       "effect": "construct:x14",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x12-x14": {
       "cause": "construct:x12",
       "effect": "construct:x14",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x12-x14": {
           "kind": "drift",
@@ -6295,13 +6457,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x16-x15": {
       "cause": "construct:x16",
       "effect": "construct:x15",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x16-x15": {
           "kind": "drift",
@@ -6318,20 +6481,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x14-x15": {
       "cause": "construct:x14",
       "effect": "construct:x15",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x13-x15": {
       "cause": "construct:x13",
       "effect": "construct:x15",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x13-x15": {
           "kind": "drift",
@@ -6356,13 +6521,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x17-x16": {
       "cause": "construct:x17",
       "effect": "construct:x16",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x17-x16": {
           "kind": "drift",
@@ -6379,20 +6545,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x15-x16": {
       "cause": "construct:x15",
       "effect": "construct:x16",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x14-x16": {
       "cause": "construct:x14",
       "effect": "construct:x16",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x14-x16": {
           "kind": "drift",
@@ -6417,13 +6585,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x18-x17": {
       "cause": "construct:x18",
       "effect": "construct:x17",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x18-x17": {
           "kind": "drift",
@@ -6440,20 +6609,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x16-x17": {
       "cause": "construct:x16",
       "effect": "construct:x17",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x15-x17": {
       "cause": "construct:x15",
       "effect": "construct:x17",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x15-x17": {
           "kind": "drift",
@@ -6478,13 +6649,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x19-x18": {
       "cause": "construct:x19",
       "effect": "construct:x18",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x19-x18": {
           "kind": "drift",
@@ -6501,20 +6673,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x17-x18": {
       "cause": "construct:x17",
       "effect": "construct:x18",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x16-x18": {
       "cause": "construct:x16",
       "effect": "construct:x18",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x16-x18": {
           "kind": "drift",
@@ -6539,13 +6713,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x20-x19": {
       "cause": "construct:x20",
       "effect": "construct:x19",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x20-x19": {
           "kind": "drift",
@@ -6562,20 +6737,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x18-x19": {
       "cause": "construct:x18",
       "effect": "construct:x19",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x17-x19": {
       "cause": "construct:x17",
       "effect": "construct:x19",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x17-x19": {
           "kind": "drift",
@@ -6600,13 +6777,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x21-x20": {
       "cause": "construct:x21",
       "effect": "construct:x20",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x21-x20": {
           "kind": "drift",
@@ -6623,20 +6801,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x19-x20": {
       "cause": "construct:x19",
       "effect": "construct:x20",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x18-x20": {
       "cause": "construct:x18",
       "effect": "construct:x20",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x18-x20": {
           "kind": "drift",
@@ -6661,13 +6841,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x22-x21": {
       "cause": "construct:x22",
       "effect": "construct:x21",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x22-x21": {
           "kind": "drift",
@@ -6684,20 +6865,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x20-x21": {
       "cause": "construct:x20",
       "effect": "construct:x21",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x19-x21": {
       "cause": "construct:x19",
       "effect": "construct:x21",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x19-x21": {
           "kind": "drift",
@@ -6722,13 +6905,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x23-x22": {
       "cause": "construct:x23",
       "effect": "construct:x22",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x23-x22": {
           "kind": "drift",
@@ -6745,20 +6929,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x21-x22": {
       "cause": "construct:x21",
       "effect": "construct:x22",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x20-x22": {
       "cause": "construct:x20",
       "effect": "construct:x22",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x20-x22": {
           "kind": "drift",
@@ -6783,13 +6969,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x24-x23": {
       "cause": "construct:x24",
       "effect": "construct:x23",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x24-x23": {
           "kind": "drift",
@@ -6806,20 +6993,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x22-x23": {
       "cause": "construct:x22",
       "effect": "construct:x23",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x21-x23": {
       "cause": "construct:x21",
       "effect": "construct:x23",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x21-x23": {
           "kind": "drift",
@@ -6844,13 +7033,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x25-x24": {
       "cause": "construct:x25",
       "effect": "construct:x24",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x25-x24": {
           "kind": "drift",
@@ -6867,20 +7057,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x23-x24": {
       "cause": "construct:x23",
       "effect": "construct:x24",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x22-x24": {
       "cause": "construct:x22",
       "effect": "construct:x24",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x22-x24": {
           "kind": "drift",
@@ -6905,13 +7097,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x26-x25": {
       "cause": "construct:x26",
       "effect": "construct:x25",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x26-x25": {
           "kind": "drift",
@@ -6928,20 +7121,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x24-x25": {
       "cause": "construct:x24",
       "effect": "construct:x25",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x23-x25": {
       "cause": "construct:x23",
       "effect": "construct:x25",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x23-x25": {
           "kind": "drift",
@@ -6966,13 +7161,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x27-x26": {
       "cause": "construct:x27",
       "effect": "construct:x26",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x27-x26": {
           "kind": "drift",
@@ -6989,20 +7185,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x25-x26": {
       "cause": "construct:x25",
       "effect": "construct:x26",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x24-x26": {
       "cause": "construct:x24",
       "effect": "construct:x26",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x24-x26": {
           "kind": "drift",
@@ -7027,13 +7225,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x28-x27": {
       "cause": "construct:x28",
       "effect": "construct:x27",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x28-x27": {
           "kind": "drift",
@@ -7050,20 +7249,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x26-x27": {
       "cause": "construct:x26",
       "effect": "construct:x27",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x25-x27": {
       "cause": "construct:x25",
       "effect": "construct:x27",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x25-x27": {
           "kind": "drift",
@@ -7088,13 +7289,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x29-x28": {
       "cause": "construct:x29",
       "effect": "construct:x28",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x29-x28": {
           "kind": "drift",
@@ -7111,20 +7313,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x27-x28": {
       "cause": "construct:x27",
       "effect": "construct:x28",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x26-x28": {
       "cause": "construct:x26",
       "effect": "construct:x28",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x26-x28": {
           "kind": "drift",
@@ -7149,13 +7353,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x30-x29": {
       "cause": "construct:x30",
       "effect": "construct:x29",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x30-x29": {
           "kind": "drift",
@@ -7172,20 +7377,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x28-x29": {
       "cause": "construct:x28",
       "effect": "construct:x29",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x27-x29": {
       "cause": "construct:x27",
       "effect": "construct:x29",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x27-x29": {
           "kind": "drift",
@@ -7210,13 +7417,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x31-x30": {
       "cause": "construct:x31",
       "effect": "construct:x30",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x31-x30": {
           "kind": "drift",
@@ -7233,20 +7441,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x29-x30": {
       "cause": "construct:x29",
       "effect": "construct:x30",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x28-x30": {
       "cause": "construct:x28",
       "effect": "construct:x30",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x28-x30": {
           "kind": "drift",
@@ -7271,13 +7481,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x32-x31": {
       "cause": "construct:x32",
       "effect": "construct:x31",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x32-x31": {
           "kind": "drift",
@@ -7294,20 +7505,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x30-x31": {
       "cause": "construct:x30",
       "effect": "construct:x31",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x29-x31": {
       "cause": "construct:x29",
       "effect": "construct:x31",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x29-x31": {
           "kind": "drift",
@@ -7332,13 +7545,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x33-x32": {
       "cause": "construct:x33",
       "effect": "construct:x32",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x33-x32": {
           "kind": "drift",
@@ -7355,20 +7569,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x31-x32": {
       "cause": "construct:x31",
       "effect": "construct:x32",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x30-x32": {
       "cause": "construct:x30",
       "effect": "construct:x32",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x30-x32": {
           "kind": "drift",
@@ -7393,13 +7609,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x34-x33": {
       "cause": "construct:x34",
       "effect": "construct:x33",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x34-x33": {
           "kind": "drift",
@@ -7416,20 +7633,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x32-x33": {
       "cause": "construct:x32",
       "effect": "construct:x33",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x31-x33": {
       "cause": "construct:x31",
       "effect": "construct:x33",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x31-x33": {
           "kind": "drift",
@@ -7454,13 +7673,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x35-x34": {
       "cause": "construct:x35",
       "effect": "construct:x34",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x35-x34": {
           "kind": "drift",
@@ -7477,20 +7697,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x33-x34": {
       "cause": "construct:x33",
       "effect": "construct:x34",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x32-x34": {
       "cause": "construct:x32",
       "effect": "construct:x34",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x32-x34": {
           "kind": "drift",
@@ -7515,13 +7737,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x36-x35": {
       "cause": "construct:x36",
       "effect": "construct:x35",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x36-x35": {
           "kind": "drift",
@@ -7538,20 +7761,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x34-x35": {
       "cause": "construct:x34",
       "effect": "construct:x35",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x33-x35": {
       "cause": "construct:x33",
       "effect": "construct:x35",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x33-x35": {
           "kind": "drift",
@@ -7576,13 +7801,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x37-x36": {
       "cause": "construct:x37",
       "effect": "construct:x36",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x37-x36": {
           "kind": "drift",
@@ -7599,20 +7825,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x35-x36": {
       "cause": "construct:x35",
       "effect": "construct:x36",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x34-x36": {
       "cause": "construct:x34",
       "effect": "construct:x36",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x34-x36": {
           "kind": "drift",
@@ -7637,13 +7865,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x38-x37": {
       "cause": "construct:x38",
       "effect": "construct:x37",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x38-x37": {
           "kind": "drift",
@@ -7660,20 +7889,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x36-x37": {
       "cause": "construct:x36",
       "effect": "construct:x37",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x35-x37": {
       "cause": "construct:x35",
       "effect": "construct:x37",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x35-x37": {
           "kind": "drift",
@@ -7698,13 +7929,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x39-x38": {
       "cause": "construct:x39",
       "effect": "construct:x38",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x39-x38": {
           "kind": "drift",
@@ -7721,20 +7953,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x37-x38": {
       "cause": "construct:x37",
       "effect": "construct:x38",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x36-x38": {
       "cause": "construct:x36",
       "effect": "construct:x38",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x36-x38": {
           "kind": "drift",
@@ -7759,13 +7993,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x00-x39": {
       "cause": "construct:x00",
       "effect": "construct:x39",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x00-x39": {
           "kind": "drift",
@@ -7782,20 +8017,22 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     },
     "edge:x38-x39": {
       "cause": "construct:x38",
       "effect": "construct:x39",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
-      "mechanisms": {}
+      "mechanisms": {},
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
+      }
     },
     "edge:x37-x39": {
       "cause": "construct:x37",
       "effect": "construct:x39",
-      "description": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices.",
-      "sources": [],
       "mechanisms": {
         "mechanism:x37-x39": {
           "kind": "drift",
@@ -7820,6 +8057,9 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Previous-time state enters the exact nonlinear Lorenz drift; feedback is across time slices."
       }
     }
   },

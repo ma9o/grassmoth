@@ -2,7 +2,6 @@
   "constructs": {
     "construct:y": {
       "name": "y",
-      "description": "Nonlinear stochastic state y",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -122,16 +121,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state y"
       }
     },
     "construct:u": {
       "name": "u",
-      "description": "Assigned input",
       "role": "exogenous",
       "temporal_status": "time_varying",
       "indicators": {
@@ -152,17 +155,21 @@
                 "construct_id": "construct:u"
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
       },
-      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1"
+      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1",
+      "reasoning": {
+        "text": "Assigned input"
+      }
     },
     "construct:x": {
       "name": "x",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -282,16 +289,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     },
     "construct:z2": {
       "name": "z2",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -411,16 +422,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     },
     "construct:z3": {
       "name": "z3",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -540,16 +555,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     },
     "construct:z4": {
       "name": "z4",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -669,16 +688,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     },
     "construct:z5": {
       "name": "z5",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -798,16 +821,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     },
     "construct:z6": {
       "name": "z6",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -927,16 +954,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     },
     "construct:z7": {
       "name": "z7",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -1056,11 +1087,16 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     }
   },
@@ -1068,7 +1104,6 @@
     "edge:u-y": {
       "cause": "construct:u",
       "effect": "construct:y",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:u-y": {
           "kind": "drift",
@@ -1087,12 +1122,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     },
     "edge:u-x": {
       "cause": "construct:u",
       "effect": "construct:x",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:u-x": {
           "kind": "drift",
@@ -1111,12 +1148,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     },
     "edge:x-z2": {
       "cause": "construct:x",
       "effect": "construct:z2",
-      "description": "Fixed suite chain coupling",
       "mechanisms": {
         "mechanism:x-z2": {
           "kind": "drift",
@@ -1135,12 +1174,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Fixed suite chain coupling"
       }
     },
     "edge:z2-z3": {
       "cause": "construct:z2",
       "effect": "construct:z3",
-      "description": "Fixed suite chain coupling",
       "mechanisms": {
         "mechanism:z2-z3": {
           "kind": "drift",
@@ -1159,12 +1200,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Fixed suite chain coupling"
       }
     },
     "edge:z3-z4": {
       "cause": "construct:z3",
       "effect": "construct:z4",
-      "description": "Fixed suite chain coupling",
       "mechanisms": {
         "mechanism:z3-z4": {
           "kind": "drift",
@@ -1183,12 +1226,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Fixed suite chain coupling"
       }
     },
     "edge:z4-z5": {
       "cause": "construct:z4",
       "effect": "construct:z5",
-      "description": "Fixed suite chain coupling",
       "mechanisms": {
         "mechanism:z4-z5": {
           "kind": "drift",
@@ -1207,12 +1252,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Fixed suite chain coupling"
       }
     },
     "edge:z5-z6": {
       "cause": "construct:z5",
       "effect": "construct:z6",
-      "description": "Fixed suite chain coupling",
       "mechanisms": {
         "mechanism:z5-z6": {
           "kind": "drift",
@@ -1231,12 +1278,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Fixed suite chain coupling"
       }
     },
     "edge:z6-z7": {
       "cause": "construct:z6",
       "effect": "construct:z7",
-      "description": "Fixed suite chain coupling",
       "mechanisms": {
         "mechanism:z6-z7": {
           "kind": "drift",
@@ -1255,12 +1304,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Fixed suite chain coupling"
       }
     },
     "edge:z7-y": {
       "cause": "construct:z7",
       "effect": "construct:y",
-      "description": "Fixed suite chain coupling",
       "mechanisms": {
         "mechanism:z7-y": {
           "kind": "drift",
@@ -1279,14 +1330,19 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Fixed suite chain coupling"
       }
     }
   },
   "parameters": {
     "parameter:2366c82cffc90e7355265181c33534a4faaa36e0e668c4fe9560b8f949819491": {
       "name": "input_effect",
-      "description": "Input effect",
-      "distribution": "distribution:tiny-beta"
+      "distribution": "distribution:tiny-beta",
+      "reasoning": {
+        "text": "Input effect"
+      }
     }
   },
   "distributions": {

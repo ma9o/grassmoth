@@ -758,7 +758,7 @@ def apply_model_edit(
     *,
     context: object = None,
 ) -> MaterializedModel:
-    """Merge a document, prune outside the outcome's ancestors, key joint laws, and parse."""
+    """Merge a document, keep the outcome's weakly connected component, key joint laws, and parse."""
     document = DynamicalModelSpec.model_validate(
         merge_fields(
             parent.model_dump(mode="python", context={"binary_arrays": True}),
@@ -769,7 +769,13 @@ def apply_model_edit(
     edges = graph.edges
     retained = frozenset({outcome})
     while (
-        expanded := retained | {cause for cause, effect in edges.values() if effect in retained}
+        expanded := retained
+        | {
+            endpoint
+            for cause, effect in edges.values()
+            if cause in retained or effect in retained
+            for endpoint in (cause, effect)
+        }
     ) != retained:
         retained = expanded
     constructs = {

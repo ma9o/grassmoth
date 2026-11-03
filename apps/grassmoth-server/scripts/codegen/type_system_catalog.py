@@ -173,7 +173,7 @@ CONCERNS = {
             "artifacts.model.question",
             "artifacts.model.dynamical_model_spec",
             "artifacts.model.construct",
-            "artifacts.model.evidence",
+            "artifacts.model.reasoning",
             "artifacts.model.indicator",
             "artifacts.observations.preparation",
             "artifacts.observations.reference",

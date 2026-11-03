@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 
 import numpy as np
 
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.preparation import (
     DataPreparationSpec,
     DataVariableSpec,
@@ -71,7 +72,13 @@ def preparation_input(store, preparation):
             tuple(
                 construct.revised(
                     indicators=(
-                        IndicatorSpec(observation=item.observation, construct_polarity="positive"),
+                        IndicatorSpec(
+                            reasoning=ReasoningSpec(
+                                text="Synthetic measurement of the construct for this test scenario."
+                            ),
+                            observation=item.observation,
+                            construct_polarity="positive",
+                        ),
                     )
                 )
                 for construct in dynamical_model_spec.constructs

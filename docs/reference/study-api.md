@@ -94,7 +94,7 @@ JSON
 
 ### POST `/api/studies/{workspace_id}/edit_model`
 
-Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Prune constructs outside the outcome ancestry with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
+Merge input.dynamical_model_spec into input.parent_ref: start empty for a question revision, or retain omitted fields from a model revision and its pinned question. Null entity entries delete their IDs. Retain the outcome's weakly connected component, following edges in either direction, and prune outside constructs with warnings, then validate and evaluate data-independent model checks. The body contains the produced model and its findings; messages retain all execution logging. GET polls the returned call_id.
 
 **Parameters**
 
@@ -107,7 +107,7 @@ Create or revise a model from a question or model parent.
 | Field | Type | Presence / default | Description |
 |---|---|---|---|
 | `parent_ref` | [`RevisionSelector`](../../apps/grassmoth-server/src/grassmoth_server/actions/contracts/identity.py) | required | Question or model revision to start from. A model parent supplies its pinned question. 'latest' selects the current model, otherwise the current question. An exact Git hash can select either parent without being the current head. |
-| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. The action retains the merged spec and its findings. |
+| `dynamical_model_spec` | [`DynamicalModelSpec`](../../packages/grassmoth/src/grassmoth/artifacts/model/dynamical_model_spec.py) | required | Scientific definitions merged by identity into a model parent, or into an empty model for a question parent. Omitted fields are retained; null entity entries delete their identities. Retain the outcome's weakly connected component: follow edges in either direction, then prune outside constructs and their owned parameters and laws with warnings. The action retains the scoped spec and its findings. |
 
 **Success body: [`EditModelOutput`](../../packages/grassmoth/src/grassmoth/actions/contracts/io.py)**
 
@@ -133,7 +133,10 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
       "constructs": {
         "construct:00000000000000000001": {
           "name": "baseline",
-          "description": "Synthetic baseline for interface examples.",
+          "reasoning": {
+            "text": "Synthetic baseline for interface examples.",
+            "reference_urls": []
+          },
           "indicators": {},
           "dynamics": {},
           "coefficients": [],
@@ -144,7 +147,10 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
         },
         "construct:00000000000000000002": {
           "name": "treatment",
-          "description": "Synthetic treatment for interface examples.",
+          "reasoning": {
+            "text": "Synthetic treatment for interface examples.",
+            "reference_urls": []
+          },
           "indicators": {},
           "dynamics": {},
           "coefficients": [],
@@ -155,7 +161,10 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
         },
         "construct:00000000000000000003": {
           "name": "outcome",
-          "description": "Synthetic outcome for interface examples.",
+          "reasoning": {
+            "text": "Synthetic outcome for interface examples.",
+            "reference_urls": []
+          },
           "indicators": {},
           "dynamics": {},
           "coefficients": [],
@@ -168,15 +177,19 @@ curl -s "${TOOL_SERVER_URL:-http://localhost:8100}/api/studies/WORKSPACE_ID/edit
       "edges": {
         "edge:00000000000000000001": {
           "mechanisms": {},
-          "description": "Baseline affects treatment.",
-          "sources": [],
+          "reasoning": {
+            "text": "Baseline affects treatment.",
+            "reference_urls": []
+          },
           "cause": "construct:00000000000000000001",
           "effect": "construct:00000000000000000002"
         },
         "edge:00000000000000000002": {
           "mechanisms": {},
-          "description": "Treatment affects the outcome.",
-          "sources": [],
+          "reasoning": {
+            "text": "Treatment affects the outcome.",
+            "reference_urls": []
+          },
           "cause": "construct:00000000000000000002",
           "effect": "construct:00000000000000000003"
         }

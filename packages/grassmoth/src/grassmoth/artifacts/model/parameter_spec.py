@@ -8,8 +8,8 @@ from pydantic import ConfigDict, Field
 
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.identity import DistributionId, ParameterId
-from grassmoth.artifacts.model.evidence import LiteratureSource
 from grassmoth.artifacts.model.parameter import PriorAuthoringTransform
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 
 
 class IdentityTransformSpec(Value):
@@ -54,14 +54,14 @@ type ParameterTransformSpec = Annotated[
 
 
 class ParameterSpec(Value):
-    """A named uncertain quantity; fixed coefficients are literals in component slots."""
+    """A named uncertain quantity and the scientific reasoning for its place in the model."""
 
     model_config = ConfigDict(revalidate_instances="always")
 
     id: ParameterId
     name: str = Field(description="Authored parameter label; relationships use its persistent ID")
-    description: str = Field(
-        description="Human-readable description of what this parameter represents"
+    reasoning: ReasoningSpec = Field(
+        description="What this quantity means and, for an informative prior, where its values come from. Cite references with [n] in the text."
     )
     transform: ParameterTransformSpec = Field(default_factory=IdentityTransformSpec)
     distribution: DistributionId | None = Field(
@@ -70,13 +70,6 @@ class ParameterSpec(Value):
             "Membership in a native law in DynamicalModelSpec.distributions; may be joint. "
             "None means the law has not been assigned yet."
         ),
-    )
-    reasoning: str | None = Field(
-        default=None,
-        description="Why the authored prior law fits this quantity, and where its values come from.",
-    )
-    sources: tuple[LiteratureSource, ...] = Field(
-        default=(), description="Evidence behind the authored prior law."
     )
 
     def conditioned(self, identity: DistributionId) -> ParameterSpec:

@@ -26,6 +26,7 @@ from grassmoth.artifacts.model.construct import (
 )
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.question import QuestionSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.duration import Duration
 from grassmoth.artifacts.observations.preparation import (
     ComputedExtractionSpec,
@@ -64,7 +65,7 @@ class TestModel:
             id="edge:stress-mood",
             cause=construct_factory("stress", Role.EXOGENOUS),
             effect=construct_factory("mood"),
-            description="Stress affects mood",
+            reasoning=ReasoningSpec(text="Stress affects mood"),
         )
         dynamical_model_spec = DynamicalModelSpec.from_entities(edges=(edge,))
         assert [construct.name for construct in dynamical_model_spec.constructs] == [
@@ -90,7 +91,7 @@ class TestModel:
                         id="edge:mood-weather",
                         cause=construct_factory("mood"),
                         effect=construct_factory("weather", Role.EXOGENOUS),
-                        description="Invalid edge",
+                        reasoning=ReasoningSpec(text="Invalid edge"),
                     ),
                 )
             )
@@ -105,7 +106,7 @@ class TestModel:
                         effect=construct_factory(
                             "trait", temporal_status=TemporalStatus.TIME_INVARIANT
                         ),
-                        description="Habit changes a fixed trait",
+                        reasoning=ReasoningSpec(text="Habit changes a fixed trait"),
                     ),
                 )
             )

@@ -5,6 +5,7 @@ from hashlib import sha256
 from typing import Any, Literal, overload
 
 from grassmoth.artifacts.identity import ConstructId, EdgeId, IndicatorId, MechanismId
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 
 
 @overload
@@ -46,11 +47,14 @@ def make_model(state_names: list[str], edges: Sequence[tuple[str, str]] = ()):
             {
                 "id": fixture_entity_id("construct", name),
                 "name": name,
-                "description": name,
+                "reasoning": {"text": name},
                 "role": "endogenous",
                 "temporal_status": "time_varying",
                 "indicators": [
                     {
+                        "reasoning": {
+                            "text": "Synthetic measurement of the construct for this test scenario."
+                        },
                         "observation": {
                             "id": fixture_entity_id("indicator", name + "_obs"),
                             "name": name + "_obs",
@@ -71,7 +75,9 @@ def make_model(state_names: list[str], edges: Sequence[tuple[str, str]] = ()):
         constructs[outcome] = ConstructSpec(
             id=fixture_entity_id("construct", outcome),
             name=outcome,
-            description="A downstream response outside the numerical fixture's measured states.",
+            reasoning=ReasoningSpec(
+                text="A downstream response outside the numerical fixture's measured states."
+            ),
             role="endogenous",
             temporal_status="time_varying",
         )
@@ -82,7 +88,7 @@ def make_model(state_names: list[str], edges: Sequence[tuple[str, str]] = ()):
                 id=fixture_entity_id("edge", cause + "->" + effect),
                 cause=constructs[cause],
                 effect=constructs[effect],
-                description=cause + " causes " + effect,
+                reasoning=ReasoningSpec(text=cause + " causes " + effect),
             )
             for cause, effect in edges
         ),

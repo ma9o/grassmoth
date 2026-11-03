@@ -86,6 +86,11 @@ def replace_parameters(
     return tuple(updated.get(parameter.id, parameter) for parameter in parameters)
 
 
+def without_prior(parameter: ParameterSpec) -> ParameterSpec:
+    """Keep the fixture quantity and its reasoning while removing its law."""
+    return parameter.revised(distribution=None)
+
+
 def without_parameters(
     dynamical_model_spec: DynamicalModelSpec, *removed: ParameterSpec
 ) -> tuple[tuple[ParameterSpec, ...], Mapping[DistributionId, NumPyroDistribution]]:
@@ -157,10 +162,10 @@ def _exact_model_model() -> DynamicalModelSpec:
     setting_obs_likelihood = likelihood_named(dynamical_model_spec, "setting_obs")
     manifest_mean_setting_obs = parameter_named(dynamical_model_spec, "manifest_mean_setting_obs")
     setting_obs_revised = setting_obs.revised(
+        reasoning={"text": "The recorded setting is exact at its observation anchor."},
         likelihood=setting_obs_likelihood.revised(
             law=DeltaLawSpec[Expression](v=state(setting.id)),
-            reasoning="The recorded setting is exact at its observation anchor.",
-        )
+        ),
     )
     setting_revised = setting.revised(indicators=(setting_obs_revised,))
     parameters, distributions = without_parameters(dynamical_model_spec, manifest_mean_setting_obs)

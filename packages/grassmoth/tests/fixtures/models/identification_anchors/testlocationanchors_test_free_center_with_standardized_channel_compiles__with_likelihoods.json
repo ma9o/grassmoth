@@ -2,7 +2,6 @@
   "constructs": {
     "construct:bbc87212909e45b9e6c3": {
       "name": "mood",
-      "description": "mood",
       "indicators": {
         "indicator:e05e217de7f4442abdc5": {
           "likelihood": {
@@ -39,9 +38,7 @@
                 "construct_ids": []
               }
             },
-            "standardized": true,
-            "reasoning": "test",
-            "sources": []
+            "standardized": true
           },
           "construct_polarity": "positive",
           "observation": {
@@ -51,6 +48,9 @@
               "dtype": "continuous"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "test"
           }
         },
         "indicator:f6e3cfa37e27221c32d7": {
@@ -82,9 +82,7 @@
                 }
               }
             },
-            "standardized": false,
-            "reasoning": "test",
-            "sources": []
+            "standardized": false
           },
           "construct_polarity": "positive",
           "observation": {
@@ -94,6 +92,9 @@
               "dtype": "binary"
             },
             "observation_window": null
+          },
+          "reasoning": {
+            "text": "test"
           }
         }
       },
@@ -209,77 +210,95 @@
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "mood"
+      }
     },
     "construct:86d4bfae39331f91a35d": {
       "name": "unmeasured_outcome",
-      "description": "A downstream response outside the numerical fixture's measured states.",
       "indicators": {},
       "dynamics": {},
       "coefficients": [],
       "innovation_family": "gaussian",
       "distribution": null,
       "role": "endogenous",
-      "temporal_status": "time_varying"
+      "temporal_status": "time_varying",
+      "reasoning": {
+        "text": "A downstream response outside the numerical fixture's measured states."
+      }
     }
   },
   "edges": {
     "edge:69b3e5a0672af7548dbc": {
       "mechanisms": {},
-      "description": "mood causes unmeasured_outcome",
-      "sources": [],
       "cause": "construct:bbc87212909e45b9e6c3",
-      "effect": "construct:86d4bfae39331f91a35d"
+      "effect": "construct:86d4bfae39331f91a35d",
+      "reasoning": {
+        "text": "mood causes unmeasured_outcome"
+      }
     }
   },
   "parameters": {
     "parameter:403d1ba7a1dc2ea4b423d3918766b7d70dc5cab41ad22f6f0251ee151e43952d": {
       "name": "cint_mood",
-      "description": "center of cint_mood",
       "distribution": "distribution:d79f65d0c3a6603d25b82ed47e122fc0e09ecf5a48f58169e2b11e7fc2eca1ea",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "center of cint_mood. Synthetic Normal prior for cint_mood; its values define this test scenario."
       }
     },
     "parameter:3dd6b7c9eb6876093f9fe0c1c1ce2864fd4a8c53e6dac3d6a1e5538016e1fdff": {
       "name": "rho_mood",
-      "description": "stiffness of rho_mood",
       "distribution": "distribution:180f0d57d4bc50a086c6f0f89527c6485cbf55a1177a18c8dbd5b0429158fd41",
       "transform": {
         "kind": "dt_persistence_to_ct_decay",
         "interval_days": "model_clock"
+      },
+      "reasoning": {
+        "text": "stiffness of rho_mood. Synthetic Beta prior for rho_mood; its values define this test scenario."
       }
     },
     "parameter:ea7fd5ac08160569f35431da4d1741f5ac0606585c802a602de991f3e3a51263": {
       "name": "sigma_mood",
-      "description": "innovation.scale for sigma_mood",
       "distribution": "distribution:2cf146fa915507aa42a7b63772ad16479aa4cbb18828a90beb23ee9c2b0edaa5",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "innovation.scale for sigma_mood. Synthetic HalfNormal prior for sigma_mood; its values define this test scenario."
       }
     },
     "parameter:dffee488204a13c5d792226ba1612760b10719710b7c7293ac88f7882fb8ad46": {
       "name": "obs_sd_mood_rating",
-      "description": "likelihood.scale for obs_sd_mood_rating",
       "distribution": "distribution:0a2092a029c292f50cbd3124da6aa410a55ec908e1b663b06ce9c52fa7393480",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.scale for obs_sd_mood_rating. Synthetic HalfNormal prior for obs_sd_mood_rating; its values define this test scenario."
       }
     },
     "parameter:394a9953e3e1d44ba3624b273b0c2dba1a55a17b480a8b36622d90deb14ca99f": {
       "name": "lambda_mood_flag_mood",
-      "description": "likelihood.loading.construct:bbc87212909e45b9e6c3 for lambda_mood_flag_mood",
       "distribution": "distribution:d6787d3887497306423f49eda0eb6a66905ffb03f8441252dab79c9423f8f334",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.loading.construct:bbc87212909e45b9e6c3 for lambda_mood_flag_mood. Synthetic Normal prior for lambda_mood_flag_mood; its values define this test scenario."
       }
     },
     "parameter:5313b06cc9f7da6557b18d034bbbec6f84b3c074a293f6f005019171296895ac": {
       "name": "manifest_mean_mood_flag",
-      "description": "likelihood.intercept for manifest_mean_mood_flag",
       "distribution": "distribution:486120e129bdc327a4b929d45b946276ec981c5012f53a603cf2875f1ba584f1",
       "transform": {
         "kind": "identity"
+      },
+      "reasoning": {
+        "text": "likelihood.intercept for manifest_mean_mood_flag. Synthetic Normal prior for manifest_mean_mood_flag; its values define this test scenario."
       }
     }
   },

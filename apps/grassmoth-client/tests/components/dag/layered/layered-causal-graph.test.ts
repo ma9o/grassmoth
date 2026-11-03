@@ -73,7 +73,6 @@ const report: SimulationReport = {
   },
   law: { kind: "authored", interpretation: "prior_predictive" },
   findings: [],
-  fit_reliability: "not_fitted",
 };
 const paths: SimulationPathsView = {
   action_category_probabilities: {},

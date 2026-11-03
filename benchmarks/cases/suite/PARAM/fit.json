@@ -2,7 +2,6 @@
   "constructs": {
     "construct:y": {
       "name": "y",
-      "description": "Nonlinear stochastic state y",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -122,16 +121,20 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state y"
       }
     },
     "construct:u": {
       "name": "u",
-      "description": "Assigned input",
       "role": "exogenous",
       "temporal_status": "time_varying",
       "indicators": {
@@ -152,17 +155,21 @@
                 "construct_id": "construct:u"
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
       },
-      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1"
+      "distribution": "distribution:d25ef2edbd54c9aa0cae8e5eee25e9cda737b8eb8bf53ea59b8a37309935c9f1",
+      "reasoning": {
+        "text": "Assigned input"
+      }
     },
     "construct:x": {
       "name": "x",
-      "description": "Nonlinear stochastic state x",
       "role": "endogenous",
       "temporal_status": "time_varying",
       "coefficients": [
@@ -282,10 +289,12 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         },
         "indicator:x-second": {
           "observation": {
@@ -310,11 +319,16 @@
                 "construct_ids": []
               }
             },
-            "standardized": false,
-            "reasoning": "Declared benchmark observation law"
+            "standardized": false
           },
-          "construct_polarity": "positive"
+          "construct_polarity": "positive",
+          "reasoning": {
+            "text": "Declared benchmark observation law"
+          }
         }
+      },
+      "reasoning": {
+        "text": "Nonlinear stochastic state x"
       }
     }
   },
@@ -322,7 +336,6 @@
     "edge:u-y": {
       "cause": "construct:u",
       "effect": "construct:y",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:u-y": {
           "kind": "drift",
@@ -341,12 +354,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     },
     "edge:u-x": {
       "cause": "construct:u",
       "effect": "construct:x",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:u-x": {
           "kind": "drift",
@@ -365,12 +380,14 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     },
     "edge:x-y": {
       "cause": "construct:x",
       "effect": "construct:y",
-      "description": "Declared benchmark causal relation",
       "mechanisms": {
         "mechanism:x-y": {
           "kind": "drift",
@@ -389,39 +406,54 @@
             }
           }
         }
+      },
+      "reasoning": {
+        "text": "Declared benchmark causal relation"
       }
     }
   },
   "parameters": {
     "parameter:2366c82cffc90e7355265181c33534a4faaa36e0e668c4fe9560b8f949819491": {
       "name": "input_effect",
-      "description": "Input effect",
-      "distribution": "distribution:tiny-beta"
+      "distribution": "distribution:tiny-beta",
+      "reasoning": {
+        "text": "Input effect"
+      }
     },
     "parameter:91d8c1b7ea645c9dcb8cf2b42a955c62469c4b82c7d3c7381af914f399462559": {
       "name": "sigma_x",
-      "description": "Preregistered suite parameter",
-      "distribution": "distribution:dd42e4c22ac8e88e93a7d21724f56441a7c4d750412d3a18410041350a44c154"
+      "distribution": "distribution:dd42e4c22ac8e88e93a7d21724f56441a7c4d750412d3a18410041350a44c154",
+      "reasoning": {
+        "text": "Preregistered suite parameter"
+      }
     },
     "parameter:c98a44dee4fae3d64e04d6b8f5046256444363f0bbd92a2880fcbf3340279f14": {
       "name": "sigma_y",
-      "description": "Preregistered suite parameter",
-      "distribution": "distribution:6ae66fb2c5db39f1509df5283f25c05ad04e3af240fed9860fe8cbb76f830dea"
+      "distribution": "distribution:6ae66fb2c5db39f1509df5283f25c05ad04e3af240fed9860fe8cbb76f830dea",
+      "reasoning": {
+        "text": "Preregistered suite parameter"
+      }
     },
     "parameter:66e4a43cc6494462f4015abff368acbc54261532fd2374efe005bf4b8b0ec811": {
       "name": "reading_sd_x",
-      "description": "Preregistered suite parameter",
-      "distribution": "distribution:02c5898cf34fe5510ebea9e987229509a8eee9dba75ac6828378c758deba4c79"
+      "distribution": "distribution:02c5898cf34fe5510ebea9e987229509a8eee9dba75ac6828378c758deba4c79",
+      "reasoning": {
+        "text": "Preregistered suite parameter"
+      }
     },
     "parameter:f0579914a9455e27a4b4d05c3b3df0d599e96bebc048927f64f43943aafe81fd": {
       "name": "reading_sd_x-second",
-      "description": "Preregistered suite parameter",
-      "distribution": "distribution:ff472cd25e53354f117ca0927d3a3eaefae69984c84aee04dbd770f8dda35d3f"
+      "distribution": "distribution:ff472cd25e53354f117ca0927d3a3eaefae69984c84aee04dbd770f8dda35d3f",
+      "reasoning": {
+        "text": "Preregistered suite parameter"
+      }
     },
     "parameter:65ead122bc7ab538ad552496ab27a8ad6093cb50b093ac6ca6d06c02031c5e5c": {
       "name": "cross_effect",
-      "description": "Preregistered suite parameter",
-      "distribution": "distribution:0b8a72cb99f36c0aa628b42048901261916ee7ed84656b0b5d08eee0ce30a403"
+      "distribution": "distribution:0b8a72cb99f36c0aa628b42048901261916ee7ed84656b0b5d08eee0ce30a403",
+      "reasoning": {
+        "text": "Preregistered suite parameter"
+      }
     }
   },
   "distributions": {

@@ -8,6 +8,7 @@ from pydantic import Field, model_validator
 
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.model.likelihood import LikelihoodSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.dtypes import VALID_LIKELIHOODS_FOR_DTYPE
 from grassmoth.artifacts.observations.spec import AuthoredObservationSpec
 
@@ -27,6 +28,12 @@ class IndicatorSpec(Value):
     """
 
     observation: AuthoredObservationSpec
+    reasoning: ReasoningSpec = Field(
+        description=(
+            "What this indicator measures and how it is read (for example exact, noisy or rounded), "
+            "including why its observation law is appropriate. Cite references with [n] in the text."
+        )
+    )
     likelihood: LikelihoodSpec | None = None
     construct_polarity: IndicatorPolarity = Field(
         description="Whether higher values move with (positive) or against (negative) the construct."

@@ -12,6 +12,7 @@ from grassmoth.artifacts.model.expressions import coefficient, state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec
 from grassmoth.artifacts.model.parameter_spec import ParameterSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.models.parameters import execution_parameters
 from grassmoth.models.ssm.compile.bindings import parameter_bindings
 from grassmoth.models.ssm.compile.layout.static_factors import _build_static_factor_structure
@@ -31,7 +32,7 @@ from grassmoth_test_support.inference import (
     compile_model_fixture,
     particle_posterior,
 )
-from grassmoth_test_support.model import load_model_fixture, x_model, x_y_model
+from grassmoth_test_support.model import load_model_fixture, without_prior, x_model, x_y_model
 
 
 def _severed_components_do_not_require_priors_or_bind_numerical_parameters_complete_test_model() -> (
@@ -95,7 +96,7 @@ def test_projected_coefficients_require_literals():
     parameter = ParameterSpec(
         id=scientific_id("parameter", "fixed-loading"),
         name="loading",
-        description="Known loading",
+        reasoning=ReasoningSpec(text="Known loading"),
     )
 
     def _with_loading(weight, parameters):
@@ -153,10 +154,10 @@ def _model_with_exact_measurement():
     )
     x, y, driver, history, u = dynamical_model_spec.constructs
     indicator = driver.indicators[0].revised(
+        reasoning={"text": "Direct exact driver observation"},
         likelihood=LikelihoodSpec(
             law=DeltaLawSpec(v=state(driver.id)),
-            reasoning="Direct exact driver observation",
-        )
+        ),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(
@@ -277,7 +278,7 @@ def test_severed_components_do_not_require_priors_or_bind_numerical_parameters()
     outcome = nodes["Y"].id
     unassigned = dynamical_model_spec.with_entities(
         parameters=tuple(
-            item.revised(distribution=None) if item.id == island_parameter.id else item
+            without_prior(item) if item.id == island_parameter.id else item
             for item in dynamical_model_spec.parameters
         ),
         distributions={

@@ -26,9 +26,8 @@ def _model():
     dynamical_model_spec = make_model(["Dose", "Mood"], [("Dose", "Mood")])
     dose = dynamical_model_spec.constructs[0]
     reading = dose.indicators[0].revised(
-        likelihood=LikelihoodSpec(
-            law=DeltaLawSpec(v=state(dose.id)), reasoning="The dose is read exactly."
-        )
+        reasoning={"text": "The dose is read exactly."},
+        likelihood=LikelihoodSpec(law=DeltaLawSpec(v=state(dose.id))),
     )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(
@@ -155,7 +154,7 @@ def test_an_edit_defines_the_question_and_models_its_outcome():
         ([("Dose", "Side"), ("Side", "Loop"), ("Loop", "Side")], ("Loop", "Side")),
     ],
 )
-def test_an_edit_rejects_connected_branches_without_a_path_to_the_outcome(extra_edges, outside):
+def test_an_edit_allows_connected_branches_without_a_path_to_the_outcome(extra_edges, outside):
     dynamical_model_spec = make_model(["Dose", "Mood", *outside], [("Dose", "Mood"), *extra_edges])
     draft = dynamical_model_spec.revised(measurement_clock=None).with_entities(
         edges=replace_constructs(
@@ -165,16 +164,7 @@ def test_an_edit_rejects_connected_branches_without_a_path_to_the_outcome(extra_
             ),
         ),
     )
-    reason = question_edit_reason(draft, _question(_model()))
-    assert reason is not None
-    assert "directed path to the question's outcome 'Mood'" in reason
-    assert reason.split("No directed path: ")[1] == ", ".join(
-        sorted(
-            f"{construct.name!r} ({construct.id})"
-            for construct in draft.constructs
-            if construct.name in outside
-        )
-    )
+    assert question_edit_reason(draft, _question(_model())) is None
 
 
 def test_an_edit_allows_upstream_causes_confounders_and_feedback_that_reaches_the_outcome():
@@ -198,7 +188,7 @@ def test_an_edit_allows_upstream_causes_confounders_and_feedback_that_reaches_th
     assert question_edit_reason(dynamical_model_spec, _question(_model())) is None
 
 
-def test_an_off_path_model_edit_retains_its_pruning_evidence(tmp_path, monkeypatch):
+def test_an_off_path_model_edit_retains_the_connected_branch(tmp_path, monkeypatch):
     from grassmoth_server.actions.contracts.requests import EditModelRequest
     from grassmoth_server.actions.edit_model import edit_model
     from grassmoth_server.storage import paths as data
@@ -226,7 +216,10 @@ def test_an_off_path_model_edit_retains_its_pruning_evidence(tmp_path, monkeypat
     assert isinstance(result, Applied)
     from grassmoth.actions.contracts.io import EditModelOutput
 
-    assert store.read_result(result.result, EditModelOutput).pruning.constructs == (
-        dynamical_model_spec.constructs[2].id,
+    saved = store.read_result(result.result, EditModelOutput)
+    assert saved.pruning.constructs == ()
+    assert (
+        saved.dynamical_model_spec.get_construct(dynamical_model_spec.constructs[2].id)
+        == (dynamical_model_spec.constructs[2])
     )
     assert len(result.effects.produced) == 1

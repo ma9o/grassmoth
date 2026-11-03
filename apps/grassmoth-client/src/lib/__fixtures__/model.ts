@@ -4,25 +4,29 @@ import type { ConstructSpec, DynamicalModelSpec, ParameterSpec } from "@grassmot
 export const decay: ParameterSpec = {
   id: "parameter:00000000000000000001",
   name: "outcome_persistence",
-  description: "Persistence of the outcome over one day.",
   transform: { kind: "dt_persistence_to_ct_decay", interval_days: 1 },
   distribution: "distribution:00000000000000000001",
-  reasoning: null,
-  sources: [],
+  reasoning: {
+    text: "Persistence of the outcome over one day. A symmetric Beta law keeps synthetic daily persistence between zero and one.",
+    reference_urls: [],
+  },
 };
 export const diffusion: ParameterSpec = {
   ...decay,
   id: "parameter:00000000000000000002",
   name: "outcome_diffusion",
-  description: "Outcome process noise.",
   transform: { kind: "identity" },
   distribution: "distribution:00000000000000000002",
+  reasoning: {
+    text: "Outcome process noise. A unit HalfNormal law gives the synthetic process noise a positive scale.",
+    reference_urls: [],
+  },
 };
 
 export const baseline: ConstructSpec = {
   id: "construct:00000000000000000001",
   name: "baseline",
-  description: "A static parent of treatment.",
+  reasoning: { text: "A static parent of treatment.", reference_urls: [] },
   role: "endogenous",
   temporal_status: "time_invariant",
   indicators: [],
@@ -35,7 +39,7 @@ export const treatment: ConstructSpec = {
   ...baseline,
   id: "construct:00000000000000000002",
   name: "treatment",
-  description: "A varying treatment.",
+  reasoning: { text: "A varying treatment.", reference_urls: [] },
   temporal_status: "time_varying",
   indicators: [
     {
@@ -46,6 +50,10 @@ export const treatment: ConstructSpec = {
         aggregation: "mean",
         observation_window: null,
       },
+      reasoning: {
+        text: "A synthetic reading tracks its construct for this interface example.",
+        reference_urls: [],
+      },
       construct_polarity: "positive",
       likelihood: null,
     },
@@ -55,7 +63,7 @@ export const outcome: ConstructSpec = {
   ...treatment,
   id: "construct:00000000000000000003",
   name: "outcome",
-  description: "The response to treatment.",
+  reasoning: { text: "The response to treatment.", reference_urls: [] },
   indicators: [
     {
       observation: {
@@ -64,6 +72,10 @@ export const outcome: ConstructSpec = {
         measurement: { dtype: "continuous" },
         aggregation: "mean",
         observation_window: null,
+      },
+      reasoning: {
+        text: "A synthetic reading tracks its construct for this interface example.",
+        reference_urls: [],
       },
       construct_polarity: "positive",
       likelihood: null,
@@ -117,15 +129,13 @@ export const modelFixture: DynamicalModelSpec = {
       cause: baseline.id,
       effect: treatment.id,
       mechanisms: {},
-      description: "Baseline affects treatment.",
-      sources: [],
+      reasoning: { text: "Baseline affects treatment.", reference_urls: [] },
     },
     "edge:00000000000000000002": {
       cause: treatment.id,
       effect: outcome.id,
       mechanisms: {},
-      description: "Treatment affects the outcome.",
-      sources: [],
+      reasoning: { text: "Treatment affects the outcome.", reference_urls: [] },
     },
   },
   parameters: Object.fromEntries([decay, diffusion].map(parameterEntry)),

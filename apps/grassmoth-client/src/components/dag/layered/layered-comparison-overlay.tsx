@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ReasoningText } from "@/components/model/scopes/reasoning";
 import { humanize } from "@/lib/model-asset/selection";
 import type { placeComparisonOverlay } from "@/lib/dag/comparison-overlay";
 import { COMPARISON_COLORS } from "@/lib/dag/palette";
@@ -41,6 +42,7 @@ export function LayeredComparisonOverlay({
       ))}
       {overlay.marks.map((mark) => {
         const color = COMPARISON_COLORS[mark.change];
+        const detail = typeof mark.detail === "string" ? mark.detail : mark.detail.text;
         const expanded = overlay.marks.length === 1 || hovered === mark.id;
         const left = mark.x > overlay.width / 2;
         const labelX = left ? -204 : 20;
@@ -52,14 +54,14 @@ export function LayeredComparisonOverlay({
             data-comparison-mark={mark.id}
             data-change={mark.change}
             role="img"
-            aria-label={`${mark.title}: ${mark.detail}`}
+            aria-label={`${mark.title}: ${detail}`}
             tabIndex={0}
             onPointerEnter={() => setHovered(mark.id)}
             onPointerLeave={() => setHovered(null)}
             onFocus={() => setHovered(mark.id)}
             onBlur={() => setHovered(null)}
           >
-            <title>{`${mark.title}: ${mark.detail}`}</title>
+            <title>{`${mark.title}: ${detail}`}</title>
             <circle r={8} fill={color} stroke="white" strokeWidth={2} />
             <text textAnchor="middle" y={3.5} fontSize={12} fontWeight={700} fill="white">
               {SYMBOLS[mark.change]}
@@ -85,7 +87,15 @@ export function LayeredComparisonOverlay({
                   {mark.title}
                 </text>
                 <text x={labelX + 10} y={labelY + 32} fontSize={12} fontWeight={600} fill="#1e293b">
-                  {mark.detail.length > 25 ? `${mark.detail.slice(0, 24)}…` : mark.detail}
+                  {typeof mark.detail === "string" ? (
+                    detail.length > 25 ? (
+                      `${detail.slice(0, 24)}…`
+                    ) : (
+                      detail
+                    )
+                  ) : (
+                    <ReasoningText value={mark.detail} maxLength={25} />
+                  )}
                 </text>
               </g>
             )}

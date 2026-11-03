@@ -15,6 +15,7 @@ from grassmoth.artifacts.model.construct import (
 from grassmoth.artifacts.model.expressions import LiteralExpression, coefficient, state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec, NormalLawSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec, PotentialMechanismSpec
+from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.sampling import FixedLatentStepSpec, GuidedPathSpec
 from grassmoth.models.ssm.compile.state_space import (
     AdditiveRecurrences,
@@ -93,12 +94,12 @@ def _model():
             ),
             indicators=tuple(
                 i.revised(
+                    reasoning={"text": "Known Gaussian instrument"},
                     observation=i.observation.revised(aggregation="last"),
                     likelihood=LikelihoodSpec(
                         law=NormalLawSpec(
                             loc=state(c.id), scale=coefficient(0.3, role="observation_scale")
                         ),
-                        reasoning="Known Gaussian instrument",
                         standardized=True,
                     ),
                 )
@@ -331,8 +332,10 @@ def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_
                 ParameterSpec(
                     id=identity,
                     name="level",
-                    description="Unknown constant level",
                     distribution=law,
+                    reasoning=ReasoningSpec(
+                        text="Unknown constant level. Synthetic prior for Unknown constant level; its values define this test scenario."
+                    ),
                 ),
             ),
             distributions={law: dist.Normal(0.0, 1.0)},
@@ -376,7 +379,7 @@ def test_static_promotion_keeps_correlated_initial_density_and_shared_coordinate
     common = ConstructSpec(
         id=ConstructId("construct:initial_common_cause"),
         name="initial_common_cause",
-        description="Marginalized root of the correlated initial law",
+        reasoning=ReasoningSpec(text="Marginalized root of the correlated initial law"),
         role="endogenous",
         temporal_status="time_invariant",
     )
@@ -385,7 +388,7 @@ def test_static_promotion_keeps_correlated_initial_density_and_shared_coordinate
             id=EdgeId("edge:initial_common_cause_" + child.name),
             cause=common,
             effect=child,
-            description="Shared initial cause",
+            reasoning=ReasoningSpec(text="Shared initial cause"),
         )
         for child in (baseline, driver)
     )
@@ -514,7 +517,12 @@ def test_staged_replay_matches_sequential_path_density_and_gradients():
             edges=edges,
             parameters=(
                 ParameterSpec(
-                    id=rate, name="rate", description="Affine flow rate", distribution=law
+                    id=rate,
+                    name="rate",
+                    distribution=law,
+                    reasoning=ReasoningSpec(
+                        text="Affine flow rate. Synthetic prior for Affine flow rate; its values define this test scenario."
+                    ),
                 ),
             ),
             distributions={law: dist.Normal(-0.25, 0.1)},
@@ -625,11 +633,11 @@ def test_parallel_accumulator_preserves_an_exact_random_initial_value():
         ),
         indicators=tuple(
             indicator.revised(
+                reasoning={"text": "An exact initial accumulator reading"},
                 likelihood=LikelihoodSpec(
                     law=DeltaLawSpec(v=state(total.id)),
-                    reasoning="An exact initial accumulator reading",
                     standardized=False,
-                )
+                ),
             )
             for indicator in total.indicators
         ),
@@ -674,11 +682,11 @@ def test_exact_static_readings_share_one_value_and_inconsistent_constraints_are_
         c.revised(
             indicators=tuple(
                 i.revised(
+                    reasoning={"text": "Exact coordinate"},
                     likelihood=LikelihoodSpec(
                         law=DeltaLawSpec(v=state(c.id)),
-                        reasoning="Exact coordinate",
                         standardized=False,
-                    )
+                    ),
                 )
                 for i in c.indicators
             )
