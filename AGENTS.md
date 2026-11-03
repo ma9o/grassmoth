@@ -26,6 +26,8 @@ Keep scope-specific guidance in its directory's `AGENTS.md` and link it from the
 
 - Never add backwards compatibility code or defensive fallbacks.
 
+- Changes may break saved studies. Don't keep them loading, migrate them or raise their breakage as a cost.
+
 - There is no baselining in this repo. Never record existing lint, type or test failures in a baseline, a bulk suppression or a "known failures" list. A new check ships with all its findings fixed, and a failing check gets fixed, not recorded. The only exception is an inline suppression of a genuine false positive, with its reason on the same line.
 
 - Run lint for static feedback and before committing: `bun run --cwd <workspace> lint` when a change touches only one workspace; it includes that workspace's checks and required drift checks. Otherwise run `bun run lint` at the repo root, which runs every workspace's checks, including the docs, and the cross-package checks. The [script organization guide](docs/guides/dev_setup.md#script-organization) owns command scope and naming.
