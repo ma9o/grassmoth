@@ -38,7 +38,7 @@ class MessagePackResponse(JSONResponse):
 
     media_type = "application/msgpack"
 
-    @override
+    @override  # noqa: V105 -- Starlette calls this response override during construction.
     def render(self, content: object) -> bytes:
         """Encode metadata already normalized by the response owner."""
         return pack_payload(content)

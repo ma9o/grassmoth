@@ -315,15 +315,15 @@ def test_durable_replication_preserves_current_laws_without_comparison(
 
 @pytest.mark.inference(concern="simulation")
 @pytest.mark.parametrize(
-    ("start_time", "origin", "complete_test_model_payload"),
+    ("start_time", "origin"),
     [
-        pytest.param(1.0, datetime(2026, 1, 1, tzinfo=UTC), x_y_model, id="1.0"),
-        pytest.param(0.0, datetime(2026, 1, 2, tzinfo=UTC), x_y_model, id="0.0"),
-        pytest.param(0.25, datetime(2026, 1, 1, 18, tzinfo=UTC), x_y_model, id="0.25"),
+        pytest.param(1.0, datetime(2026, 1, 1, tzinfo=UTC), id="1.0"),
+        pytest.param(0.0, datetime(2026, 1, 2, tzinfo=UTC), id="0.0"),
+        pytest.param(0.25, datetime(2026, 1, 1, 18, tzinfo=UTC), id="0.25"),
     ],
 )
 def test_retained_forecast_and_timed_intervention_preserve_joint_starts(
-    tmp_path, monkeypatch, start_time, origin, complete_test_model_payload
+    tmp_path, monkeypatch, start_time, origin
 ):
     from grassmoth.actions.simulate.action import _simulate as simulate
     from grassmoth.artifacts.scenarios import InterventionSpec

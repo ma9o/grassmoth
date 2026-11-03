@@ -93,6 +93,16 @@ def _report(model):
     )
 
 
+def _draw_count(draws: JointPosteriorDraws) -> int:
+    """Count aligned draws supplied to the test builders."""
+    counts = [values.shape[0] for values in draws.parameters.values()]
+    if draws.latent_paths is not None:
+        counts.append(draws.latent_paths.shape[0])
+    if not counts or counts[0] < 1:
+        raise ValueError("Posterior contains no draws")
+    return counts[0]
+
+
 def particle_posterior(draws):
     """Publish explicit single-chain test telemetry with fixed supplied draws."""
     from grassmoth.models.ssm.inference.mcmc_state import TrajectoryMCMCResult
@@ -102,7 +112,7 @@ def particle_posterior(draws):
     )
 
     chain_samples = {name: values[None, ...] for name, values in draws.parameters.items()}
-    n_samples = draws.describe().n_draws
+    n_samples = _draw_count(draws)
     return MCMCPosterior.from_run(
         draws=draws,
         diagnostics=ProductionDiagnostics(
@@ -288,7 +298,7 @@ def model_draws(
 
     retained = _scientific_draws(compiled_dynamical_model)
     samples = assemble_parameter_draws(
-        compiled_dynamical_model, retained.parameters, count=retained.describe().n_draws
+        compiled_dynamical_model, retained.parameters, count=_draw_count(retained)
     )
     paths = retained.latent_paths
     state_ids = [state.id for state in compiled_dynamical_model.states if not state.is_input]

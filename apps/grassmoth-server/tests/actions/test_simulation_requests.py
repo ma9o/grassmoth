@@ -233,7 +233,17 @@ def test_runner_uses_model_time_binding_without_reading_panels(
     expected_origin = fit_origin if conditioned else design.start_instant
     calls = []
 
-    def generate(_model, *, start, end, assignments, time_origin, compute_budget, seed, draws):
+    def generate(
+        _model,
+        *,
+        start,
+        end,
+        assignments,
+        time_origin,
+        compute_budget,  # noqa: V107 -- This stub retains the producer's keyword-only argument contract.
+        seed,
+        draws,
+    ):
         assert (seed, draws) == (73, 1)
         calls.append(time_origin)
         assert time_origin == expected_origin

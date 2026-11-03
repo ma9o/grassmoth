@@ -10,7 +10,7 @@ from pydantic import Field
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.continuation import SamplerCheckpoint
-from grassmoth.artifacts.identity import ConstructId, DistributionId, ParameterId
+from grassmoth.artifacts.identity import DistributionId, ParameterId
 from grassmoth.artifacts.reports.checks import SpecificationAssessment
 from grassmoth.artifacts.reports.data_quality import DataProfileReport
 from grassmoth.artifacts.reports.model_checks import QuestionCheckReport
@@ -79,13 +79,6 @@ class InferenceMetadata(Value):
     num_chains: int = Field(ge=1)
     duration_seconds: float = Field(ge=0)
     sampler_diagnostics: ParticleSamplerDiagnostics | None
-
-
-class PosteriorDrawsInfo(Value):
-    """Axes of aligned joint draws stored in the posterior's fitted payload."""
-
-    n_draws: int = Field(ge=1)
-    state_ids: tuple[ConstructId, ...] = ()
 
 
 class InferenceEvidence(Value):

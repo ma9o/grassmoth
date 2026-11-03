@@ -10,10 +10,10 @@ class ObservationRecord(TypedDict):
 
     indicator_id: IndicatorId
     value: str | int | float | bool | None
-    anchor_time: str | None
+    anchor_time: str | None  # noqa: V107 -- Polars reads this row key when constructing the observation frame.
     support_kind: str | None
     summary_operator: str | None
     anchor_policy: str | None
     observation_window: str | None
-    support_start: str | None
-    support_end: str | None
+    support_start: str | None  # noqa: V107 -- Polars reads this row key when constructing the observation frame.
+    support_end: str | None  # noqa: V107 -- Polars reads this row key when constructing the observation frame.

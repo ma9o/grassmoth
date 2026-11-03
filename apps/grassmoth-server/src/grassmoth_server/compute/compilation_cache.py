@@ -198,7 +198,7 @@ _ENTRIES = TypeAdapter(tuple[CacheEntry, ...])
 class CacheTransfer:
     """Boundary costs, including the commit required to expose persisted entries."""
 
-    phase: Literal["stage", "persist"]
+    phase: Literal["stage", "persist"]  # noqa: V107 -- _report serializes this field through dataclasses.asdict.
     partition: str
     files: int
     bytes: int

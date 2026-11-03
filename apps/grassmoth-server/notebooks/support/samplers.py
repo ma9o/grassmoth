@@ -185,7 +185,6 @@ class MultiPathfinderTrace:
     - ``candidate_positions`` (K·M, D): all per-path draws before resampling.
     - ``candidate_path_id`` (K·M,): which path each candidate came from.
     - ``draws`` (N, D): PSIR-resampled output.
-    - ``pareto_k``: PSIS khat diagnostic (``> 0.7`` ⇒ unreliable).
     """
 
     path_positions: Array
@@ -195,7 +194,6 @@ class MultiPathfinderTrace:
     candidate_positions: Array
     candidate_path_id: Array
     draws: Array
-    pareto_k: float
     summary: str
 
 
@@ -348,7 +346,6 @@ def run_multipath_pathfinder(
         candidate_positions=candidates,
         candidate_path_id=path_ids,
         draws=draws,
-        pareto_k=float(k_hat),
         summary=summary,
     )
 

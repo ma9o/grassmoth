@@ -27,7 +27,6 @@ from numpy.typing import NDArray
 
 from grassmoth.artifacts.immutability import freeze_fields
 from grassmoth.artifacts.model.parameter import ParameterCoordinate
-from grassmoth.artifacts.reports.inference import PosteriorDrawsInfo
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     ChainDiagnostics,
     LOODiagnostics,
@@ -162,18 +161,6 @@ class JointPosteriorDraws:
         if len(counts) > 1:
             raise ValueError("Posterior parameters and latent paths must share the draw axis")
         freeze_fields(self)
-
-    def describe(self) -> PosteriorDrawsInfo:
-        """Describe the retained draw count and state IDs, rejecting an entirely empty posterior."""
-        counts = [values.shape[0] for values in self.parameters.values()]
-        if self.latent_paths is not None:
-            counts.append(self.latent_paths.shape[0])
-        if not counts:
-            raise ValueError("Posterior contains no draws")
-        return PosteriorDrawsInfo(
-            n_draws=counts[0],
-            state_ids=self.state_ids,
-        )
 
 
 @dataclass(frozen=True)
