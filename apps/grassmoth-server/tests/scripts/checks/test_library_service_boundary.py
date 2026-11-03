@@ -10,7 +10,7 @@ import pytest
 pytestmark = pytest.mark.contract
 
 
-def test_library_exposes_only_the_seven_action_functions() -> None:
+def test_library_exposes_actions_and_preparation_helpers() -> None:
     from inspect import getmembers, isfunction
 
     from grassmoth import public
@@ -23,6 +23,8 @@ def test_library_exposes_only_the_seven_action_functions() -> None:
         "simulate",
         "model_diff",
         "data_diff",
+        "normalize_level_label",
+        "support_windows",
     }
 
 
