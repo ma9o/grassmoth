@@ -251,7 +251,12 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     assert isinstance(request.input.target, NewFitTarget)
     assert request.input.target.data_ref == source
     assert {info.artifact_id for info in applied.effects.produced} == {"model"}
-    assert not any(ref.startswith("refs/artifacts/panel/") for ref in store.repo.references)
+    published = history.append(
+        applied_record("TEST", applied, request=request, seq=history.latest_seq() + 1)
+    )
+    tree = store.repo[published.commit_id].tree
+    assert "records/model" in tree
+    assert "records/panel" not in tree
     for index in (2, 20):
         with pytest.raises(StudyLookupError, match="replicate"):
             run_async(
