@@ -28,12 +28,12 @@ Keep scope-specific guidance in its directory's `AGENTS.md` and link it from the
 
 - There is no baselining in this repo. Never record existing lint, type or test failures in a baseline, a bulk suppression or a "known failures" list. A new check ships with all its findings fixed, and a failing check gets fixed, not recorded. The only exception is an inline suppression of a genuine false positive, with its reason on the same line.
 
-- Run lint for static feedback and before committing: `bun run --cwd <workspace> lint` when a change touches only one workspace, otherwise `bun run lint` at the repo root, which adds the cross-package checks (knip, API types, and docs drift).
+- Run lint for static feedback and before committing: `bun run --cwd <workspace> lint` when a change touches only one workspace; it includes that workspace's checks and required drift checks. Otherwise run `bun run lint` at the repo root, which runs every workspace's checks, including the docs, and the cross-package checks. The [script organization guide](docs/guides/dev_setup.md#script-organization) owns command scope and naming.
   Fix findings at the owner named by the checker; rule details live in the checker docstrings.
 
 ## Shared architecture
 
-- The core follows functional programming. It is every module whose role is `domain`, `compiler`, `execution` or `projection` in [architecture_roles.py](apps/grassmoth-server/scripts/checks/architecture_roles.py), which owns module roles; only `edge` and `shell` modules do I/O or read clocks and configuration.
+- The core follows functional programming. It is every module whose role is `domain`, `compiler`, `execution` or `projection`. Each Python package owns its role assignments in `pyproject.toml`; [architecture_roles.py](packages/checks/src/grassmoth_checks/architecture_roles.py) applies them. Only `edge` and `shell` modules do I/O or read clocks and configuration.
   - Values are immutable: frozen, with `tuple`, `frozenset` and `Mapping` collections. Build records whole instead of mutating them.
   - Composition over inheritance: a value type subclasses only `Value` and composes other values as fields. Alternatives are sum types, not a tag plus optional fields.
   - Parse, don't validate: each invariant has one owner, a smart constructor or an edge parser, and nothing downstream re-checks it. Pass the owner, not values derived from it. Projections are total; if one seems to need a check, fix the core type.

@@ -9,7 +9,7 @@ from typing import override
 
 import pytest
 
-from scripts.checks import check_fields as checker
+from grassmoth_checks import check_fields as checker
 
 pytestmark = pytest.mark.contract
 
@@ -216,15 +216,7 @@ def test_typescript_reads_are_owned_and_only_production_reads_count(tmp_path):
     (web / "tsconfig.json").write_text(
         json.dumps({"compilerOptions": {"strict": True, "target": "ESNext"}, "include": ["src"]})
     )
-    (tmp_path / "knip.json").write_text(
-        json.dumps(
-            {
-                "workspaces": {
-                    "apps/grassmoth-client": {"project": ["src/**/*.ts", "!src/**/*.test.ts"]}
-                }
-            }
-        )
-    )
+    (web / "knip.json").write_text(json.dumps({"project": ["src/**/*.ts", "!src/**/*.test.ts"]}))
     (generated / "models.ts").write_text(
         "export interface Alpha { label: string; }\n"
         "export interface Beta { label: string; }\n"

@@ -17,9 +17,9 @@ pytestmark = pytest.mark.contract
 def _load_checker() -> Any:
     module_name = "check_architecture_boundaries_under_test"
     path = (
-        Path(__file__).resolve().parents[3]
-        / "scripts"
-        / "checks"
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "grassmoth_checks"
         / "check_architecture_boundaries.py"
     )
     spec = importlib.util.spec_from_file_location(module_name, path)
@@ -166,8 +166,7 @@ def test_pure_roles_reject_transitive_function_local_acquisition(tmp_path: Path)
         assert all(item.code == "ARCH008" for item in findings)
         assert all("grassmoth.models.shared ->" in item.message for item in findings)
     assert all(
-        "role=" in item.diagnostic(source_root) and "fix at" in item.diagnostic(source_root)
-        for item in violations
+        "role=" in item.diagnostic() and "fix at" in item.diagnostic() for item in violations
     )
 
 
@@ -223,7 +222,7 @@ def derive(path: File):
     }
     assert len(violations) == 9
     assert all(item.code == "ARCH009" for item in violations)
-    assert all("role=" in item.diagnostic(source_root) for item in violations)
+    assert all("role=" in item.diagnostic() for item in violations)
 
 
 def test_ambient_randomness_requires_explicit_local_seeds(tmp_path: Path) -> None:

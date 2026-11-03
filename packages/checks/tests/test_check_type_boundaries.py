@@ -16,7 +16,12 @@ pytestmark = pytest.mark.contract
 @lru_cache(maxsize=1)
 def _load_checker() -> Any:
     module_name = "check_type_boundaries_under_test"
-    path = Path(__file__).resolve().parents[3] / "scripts" / "checks" / "check_type_boundaries.py"
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "src"
+        / "grassmoth_checks"
+        / "check_type_boundaries.py"
+    )
     spec = importlib.util.spec_from_file_location(module_name, path)
     assert spec is not None
     assert spec.loader is not None
@@ -264,7 +269,7 @@ def test_core_initialization_is_local_to_constructor_scope() -> None:
 def test_core_owner_file_only_exempts_evidence_construction() -> None:
     checker = _load_checker()
     owner = (
-        Path(__file__).resolve().parents[5]
+        Path(__file__).resolve().parents[3]
         / "packages/grassmoth/src/grassmoth/models/ssm/compile/inputs.py"
     )
     violations = checker.scan_text(

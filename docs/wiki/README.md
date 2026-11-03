@@ -6,13 +6,13 @@ Generate a searchable Markdown wiki from the
 [author-hosted Bayesian Workflow PDF](https://users.aalto.fi/~ave/Bayesian-Workflow.pdf):
 
 ```bash
-bun run docs:bayesian-workflow
+bun run --cwd docs bayesian-workflow
 
 # Download the current edition again and rebuild the wiki
-bun run docs:bayesian-workflow --refresh
+bun run --cwd docs bayesian-workflow --refresh
 
 # Convert a few pages into the cache before rebuilding the entire wiki
-bun run docs:bayesian-workflow --pages 40 41 44 45
+bun run --cwd docs bayesian-workflow --pages 40 41 44 45
 ```
 
 The command requires `bun`, `uv`, `curl`, and `OPENROUTER_API_KEY` in the environment

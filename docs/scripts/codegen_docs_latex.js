@@ -12,7 +12,7 @@ const { TeX } = require("mathjax-full/js/input/tex.js");
 const { AllPackages } = require("mathjax-full/js/input/tex/AllPackages.js");
 const { SVG } = require("mathjax-full/js/output/svg.js");
 
-const repoRoot = resolve(__dirname, "..");
+const repoRoot = resolve(__dirname, "../..");
 const docsRoot = resolve(repoRoot, "docs");
 const assetRoot = resolve(docsRoot, "assets", "generated", "latex");
 const generatedBlockPattern =
@@ -38,7 +38,7 @@ function docsMarkdownFiles() {
   // Generated local references retain their own LaTeX and are gitignored.
   return execFileSync(
     "git",
-    ["ls-files", "--cached", "--others", "--exclude-standard", "--deduplicate", "-z", "--", "README.md", "docs"],
+    ["ls-files", "--cached", "--others", "--exclude-standard", "--deduplicate", "-z", "--", "docs"],
     { cwd: repoRoot, encoding: "utf8" },
   )
     .split("\0")
@@ -437,7 +437,7 @@ function main() {
   const changedAssets = syncAssets();
 
   if (checkOnly && (changedDocs.length > 0 || changedAssets.length > 0)) {
-    console.error("Docs LaTeX image codegen is out of date. Run `bun run docs:codegen`.");
+    console.error("Docs LaTeX image codegen is out of date. Run `bun run --cwd docs codegen`.");
     for (const filePath of [...changedDocs, ...changedAssets]) {
       console.error(`  ${filePath}`);
     }

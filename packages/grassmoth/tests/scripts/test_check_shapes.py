@@ -15,7 +15,7 @@ pytestmark = pytest.mark.contract
 @lru_cache(maxsize=1)
 def _checker() -> Any:
     name = "validate_config_under_test"
-    path = Path(__file__).resolve().parents[3] / "scripts/checks/validate_config.py"
+    path = Path(__file__).resolve().parents[2] / "scripts/check_shapes.py"
     spec = importlib.util.spec_from_file_location(name, path)
     assert spec is not None
     assert spec.loader is not None
@@ -31,15 +31,13 @@ def test_annotation_removal_cannot_silently_drop_required_module(tmp_path, monke
     monkeypatch.setattr(
         checker, "_REQUIRED_SHAPE_BOUNDARIES", (("mcmc_state", "make", ("position",)),)
     )
-    path = tmp_path / "packages/grassmoth/src/grassmoth/models/ssm/inference/mcmc_state.py"
+    path = tmp_path / "src/grassmoth/models/ssm/inference/mcmc_state.py"
     path.parent.mkdir(parents=True)
     path.write_text(
         "import jax\nfrom grassmoth.models.ssm.shapes import Array, Float\n"
         f"def make(position{annotation}): pass\n"
     )
-    (tmp_path / "pyproject.toml").write_text(
-        '[tool.pytest.ini_options]\naddopts = "--jaxtyping-packages=beartype.beartype"\n'
-    )
+    (tmp_path / "pyproject.toml").write_text("[tool.pytest.ini_options]\njaxtyping_modules = []\n")
     checker.sync_jaxtyping_wiring(tmp_path)
     errors, _ = checker.validate_jaxtyping_wiring(tmp_path)
     assert len(errors) == 1

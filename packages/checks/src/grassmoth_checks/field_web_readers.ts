@@ -16,10 +16,8 @@ const web = resolve(root, "apps/grassmoth-client");
 const configFile = ts.readConfigFile(resolve(web, "tsconfig.json"), ts.sys.readFile);
 if (configFile.error) throw new Error(ts.flattenDiagnosticMessageText(configFile.error.messageText, "\n"));
 const config = ts.parseJsonConfigFileContent(configFile.config, ts.sys, web);
-const knip = JSON.parse(readFileSync(resolve(root, "knip.json"), "utf8")) as {
-  workspaces: Record<string, { project: string[] }>;
-};
-const patterns = knip.workspaces["apps/grassmoth-client"].project;
+const knip = JSON.parse(readFileSync(resolve(web, "knip.json"), "utf8")) as { project: string[] };
+const patterns = knip.project;
 
 function productionFiles(): Set<string> {
   const included = new Set<string>();

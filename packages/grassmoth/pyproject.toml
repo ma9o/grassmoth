@@ -32,3 +32,298 @@ dependencies = [
 [build-system]
 requires = ["uv_build>=0.12.21,<0.13.0"]
 build-backend = "uv_build"
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+src = ["src", "."]
+
+[tool.ruff.lint.per-file-ignores]
+# The documentation contract belongs to src; fixtures and analysis cells are callers.
+"!**/src/**.py" = ["D"]
+# Argument counts are a boundary rule: the library's actions and the server take owners,
+# while numerical kernels pass the arrays a traced program needs.
+"**/tests/*.py" = [
+    "ARG001",  # unused function arguments (pytest fixtures)
+    "ARG002",  # unused method arguments (pytest fixtures)
+    "DTZ001",  # tests intentionally use naive datetimes as compact fixtures
+]
+"**/tests/**/*.py" = [
+    "ARG001",  # unused function arguments (pytest fixtures)
+    "ARG002",  # unused method arguments (pytest fixtures)
+    "DTZ001",  # tests intentionally use naive datetimes as compact fixtures
+]
+"!src/grassmoth/actions/**" = ["PLR0913"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["grassmoth", "grassmoth_server", "grassmoth_test_support", "grassmoth_server_test_support", "packages"]
+[tool.pydoclint]
+style = "google"
+check-style-mismatch = true
+# Annotations own types; docstrings describe semantics without duplicating them.
+arg-type-hints-in-signature = true
+arg-type-hints-in-docstring = false
+check-return-types = false
+check-yield-types = false
+check-arg-order = true
+# Google style permits a complete one-line description for simple operations.
+# Structured docstrings still receive every contract check configured below.
+skip-checking-short-docstrings = true
+skip-checking-private-functions = false
+skip-checking-raises = false
+should-declare-assert-error-if-assert-statement-exists = true
+should-document-star-arguments = true
+allow-init-docstring = true
+# The local runner counts Field descriptions without duplicating Attributes entries.
+check-class-attributes = true
+ignore-private-class-attributes = false
+ignore-special-dunder-class-attributes = false
+# Properties keep their own docstrings beside their implementations.
+treat-property-methods-as-class-attributes = false
+
+[tool.ty.environment]
+python-version = "3.12"
+extra-paths = ["tests", ".", "../.."]
+
+[tool.ty.src]
+include = ["src", "tests", "scripts"]
+exclude = ["**/.venv/**", "**/node_modules/**"]
+
+[tool.ty.rules]
+redundant-condition = "error"
+redundant-condition-strict = "error"
+missing-override-decorator = "error"
+missing-type-argument = "error"
+possibly-missing-attribute = "error"
+possibly-unresolved-reference = "error"
+unused-type-ignore-comment = "error"
+
+[[tool.ty.overrides]]
+include = ["src/**"]
+
+[tool.ty.overrides.rules]
+unsound-return-statement = "error"
+
+[tool.ty.analysis]
+respect-type-ignore-comments = true
+# These dependencies do not publish PEP 561 typing metadata, so ty treats their
+# import boundary as `Any`. The ArviZ component packages, Equinox, diffrax,
+# optimistix, and y0 publish typing metadata and remain checked.
+replace-imports-with-any = [
+    # Dual-averaging annotations declare scalars, but vmap carries array states.
+    "blackjax.adaptation.step_size",
+    "numpyro.**",
+]
+
+[tool.basedpyright]
+extends = "../../pyproject.toml"
+include = ["src"]
+venvPath = "../.."
+venv = ".venv"
+
+[tool.vulture]
+# grassmoth_checks.run_vulture checks source, scripts, notebooks, and tests as
+# independent ownership seams. External callers cannot make source code live.
+paths = ["src"]
+min_confidence = 60
+sort_by_size = true
+ignore_decorators = [
+    "@flow",
+    "@pytest.fixture",
+    "@app.*",
+    "@router.*",
+    "@*_router.*",
+    "@register_*",
+    "@field_validator",
+    "@field_serializer",
+    "@model_validator",
+    "@validator",
+    "@root_validator",
+    "@computed_field",
+    "@property",
+    "@*.defjvp",
+    "@*.defvjp",
+    "@*.list_tools",
+    "@*.call_tool",
+    "@workflow.signal",
+    "@workflow.update",
+    "@workflow.query",
+    # MCP gateway tools are invoked by the MCP runtime, never by our code
+    "@mcp.tool",
+]
+ignore_names = [
+    "test_*",
+    "model",
+    "model_config",
+    "pytestmark",
+    "should_exit",
+    "exc_type",
+    "exc_val",
+    "exc_tb",
+    # marimo notebooks emit this module-level provenance stamp (used by marimo, not us)
+    "__generated_with",
+    # jax.profiler.ProfileOptions attributes (consumed by JAX, invisible to vulture)
+    "host_tracer_level",
+    "python_tracer_level",
+    "include_dataset_ops",
+    "enable_hlo_proto",
+]
+
+[tool.deptry.per_rule_ignores]
+DEP002 = ["flatbuffers"]
+
+[tool.importlinter]
+root_packages = ["grassmoth", "grassmoth_server"]
+exclude_type_checking_imports = false
+
+[[tool.importlinter.contracts]]
+name = "ARCH001 The SSM compiler uses DynamicalModelSpec accessors, not identification internals"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm.compile"]
+forbidden_modules = [
+    "grassmoth.models.causal.graphs",
+    "grassmoth.models.causal.identification",
+]
+allow_indirect_imports = true
+
+[[tool.importlinter.contracts]]
+name = "ARCH002 The SSM layer consumes typed artifacts, not worker schemas"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm"]
+forbidden_modules = ["grassmoth.actions.prepare_data"]
+
+[[tool.importlinter.contracts]]
+name = "ARCH003 The compiler derives outputs without constructing a runtime"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm.compile"]
+forbidden_modules = ["grassmoth.models.ssm.preparation.panel"]
+
+[[tool.importlinter.contracts]]
+name = "ARCH004 Runtime construction names only the pure compiler entry point"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm.preparation.panel"]
+forbidden_modules = ["grassmoth.models.ssm.compile"]
+allow_indirect_imports = true
+# The entry point necessarily reaches its own lowering implementation.
+ignore_imports = ["grassmoth.models.ssm.preparation.panel -> grassmoth.models.ssm.compile.inputs"]
+unmatched_ignore_imports_alerting = "none"
+
+[[tool.importlinter.contracts]]
+name = "ARCH005 The executable SSM surface and hydration do not depend on inference"
+type = "forbidden"
+source_modules = [
+    "grassmoth.models.ssm.preparation.panel",
+    "grassmoth.models.ssm.execution",
+]
+forbidden_modules = ["grassmoth.models.ssm.inference"]
+
+[[tool.importlinter.contracts]]
+name = "ARCH006 Inference consumes the executable SSM surface, not runtime adapters"
+type = "forbidden"
+source_modules = ["grassmoth.models.ssm.inference"]
+forbidden_modules = ["grassmoth.models.ssm.preparation.panel"]
+
+[[tool.importlinter.contracts]]
+name = "ARCH012 The library never imports the service"
+type = "forbidden"
+source_modules = ["grassmoth"]
+forbidden_modules = ["grassmoth_server"]
+
+[tool.pytest.ini_options]
+pythonpath = [".", "tests", "../.."]
+testpaths = ["tests"]
+addopts = "-p grassmoth_test_support.pytest_policy --import-mode=importlib -n auto -m 'not (inference or workflow)' --strict-markers --tb=short -ra --instafail --timeout=300 --durations=10"
+markers = [
+    "contract: isolated routing, validation, schema, identity, and projection without scientific numerical execution",
+    "inference(concern): scientific numerical execution; concern must be sampling, warmup, simulation, predictive, or recovery",
+    "workflow: Temporal workflows and worker orchestration",
+]
+jaxtyping_config = "../../packages/grassmoth/pyproject.toml"
+jaxtyping_modules = [
+    "grassmoth.models.ssm.covariance",
+    "grassmoth.models.ssm.dynamics.vector_field",
+    "grassmoth.models.ssm.execution.emissions",
+    "grassmoth.models.ssm.inference.mcmc_state",
+    "grassmoth.models.ssm.inference.samplers.mpgibbs.kernel",
+    "grassmoth.models.ssm.inference.samplers.mpgibbs.runner",
+    "grassmoth.models.ssm.inference.samplers.particle.adaptation",
+    "grassmoth.models.ssm.inference.samplers.particle.context",
+    "grassmoth.models.ssm.inference.samplers.particle.guided",
+    "grassmoth.models.ssm.inference.samplers.particle.guided_geometry",
+    "grassmoth.models.ssm.inference.samplers.particle.guided_information",
+    "grassmoth.models.ssm.inference.samplers.particle.guided_selection",
+    "grassmoth.models.ssm.inference.samplers.particle.marginal",
+    "grassmoth.models.ssm.inference.samplers.particle.math",
+    "grassmoth.models.ssm.inference.samplers.particle.twist",
+    "grassmoth.models.ssm.inference.warmup.computed_chart",
+    "grassmoth.models.ssm.inference.warmup.initialization",
+    "grassmoth.models.ssm.inference.warmup.parameter_adaptation",
+    "grassmoth.models.ssm.inference.warmup.path_curvature",
+]
+
+[tool.grassmoth-checks]
+vulture-seams = ["scripts", "tests"]
+public-api = ["src/grassmoth/public.py"]
+
+[tool.grassmoth-checks.roles]
+annotation-modules = [
+    "models/diagnostics/history_comparison",
+    "models/ssm/execution/contracts",
+    "models/ssm/execution/dynamical_model",
+    "models/ssm/inference/mcmc_state",
+    "models/ssm/inference/parameter_tracing",
+    "models/ssm/inference/parameter_transform",
+    "models/ssm/inference/problem",
+    "models/ssm/inference/sample_projection",
+    "models/ssm/inference/samplers/mpgibbs/fit",
+    "models/ssm/inference/samplers/mpgibbs/runner",
+    "models/ssm/inference/types",
+    "models/ssm/predictive/observations",
+]
+
+[tool.grassmoth-checks.roles.directories]
+actions = "compiler"
+"actions/contracts" = "domain"
+artifacts = "domain"
+compute = "domain"
+llm = "domain"
+models = "compiler"
+"models/ssm" = "execution"
+"models/ssm/compile" = "compiler"
+"models/ssm/preparation" = "compiler"
+"models/ssm/structure" = "compiler"
+observations = "compiler"
+study = "domain"
+"study/projections" = "projection"
+
+[tool.grassmoth-checks.roles.modules]
+public = "compiler"
+"study/__init__" = "domain"
+__init__ = "domain"
+"actions/fit/conditioning" = "compiler"
+"actions/simulate/summaries" = "projection"
+"artifacts/model/coefficient_redundancy" = "compiler"
+"artifacts/model/semantics" = "compiler"
+"artifacts/probability/membership" = "compiler"
+"artifacts/reports/histograms" = "execution"
+compilation_errors = "domain"
+"compute/batching" = "compiler"
+json_types = "domain"
+"models/diagnostics/history_comparison" = "execution"
+"models/ssm/compiled_access" = "compiler"
+"models/ssm/constants" = "domain"
+"models/ssm/counterfactual/orchestration" = "compiler"
+"models/ssm/diagnostics/reachability" = "compiler"
+"models/ssm/dynamics/cache_identity" = "domain"
+"models/ssm/dynamics/spec" = "domain"
+"models/ssm/inference/samplers/sweep_plan" = "compiler"
+"models/ssm/inference/fit" = "execution"
+"models/ssm/inference/samplers/mpgibbs/fit" = "execution"
+"models/ssm/inference/samplers/mpgibbs/runner" = "execution"
+"models/ssm/inference/samplers/progress" = "execution"
+"models/ssm/inference/samplers/sweeps" = "execution"
+"models/ssm/inference/samplers/particle/context" = "compiler"
+"models/ssm/inference/samplers/particle/setup" = "compiler"
+"models/ssm/parameterization" = "compiler"
+"models/ssm/predictive/types" = "domain"
+"models/ssm/priors" = "compiler"
+"models/ssm/shapes" = "domain"

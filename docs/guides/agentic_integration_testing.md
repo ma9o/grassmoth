@@ -48,7 +48,7 @@ Use function or class markers in mixed files;
 a module's `pytestmark` applies only when every test shares the concern. A test can
 have multiple owners: an initialization recovery test carries both
 `pytest.mark.inference(concern="warmup")` and `pytest.mark.inference(concern="recovery")`.
-The [collection check](../../conftest.py) rejects unowned cases
+The [collection check](../../packages/grassmoth/tests/grassmoth_test_support/pytest_policy.py) rejects unowned cases
 and missing or invalid inference concerns before `-m` or `-k` can deselect them.
 Parameterization and timeout markers do not count as owners, and missing ownership
 is never assigned automatically.
@@ -70,7 +70,7 @@ Add `--collect-only` to inspect a selection without executing it. `test:all`
 includes every concern and requires an explicit request. Use `-n 0` for a serial
 run or `-n N` to limit the worker count. Pytest reports durations separately and rejects
 unregistered markers. Keep test files under their owning workspace’s `tests/` directory.
-Compilation dominates numerical tests, so the [root pytest configuration](../../conftest.py) keeps
+Compilation dominates numerical tests, so the [shared pytest policy](../../packages/grassmoth/tests/grassmoth_test_support/pytest_policy.py) keeps
 JAX's persistent cache in `~/.cache/grassmoth/jax-tests`; delete it to time a cold run.
 The default selection is `not (inference or workflow)`, which excludes every
 numerical child, including tests that also carry `contract`. Web unit tests belong to the named `contract` Vitest project;
@@ -98,7 +98,7 @@ which concerns need to run.
 | Estimation accuracy or uncertainty against known generating parameters | `inference(concern='recovery')` plus the changed fitting or warmup concern |
 | Temporal orchestration | Affected `workflow` tests and routing contracts |
 | Test selection or ownership configuration | Collection of the affected workspace without scientific execution |
-| Documentation only | `bun run docs:check` |
+| Documentation only | `bun run --cwd docs lint` |
 
 Include multiple children when the change affects their shared behavior. For
 example, an emission change may affect both exact density and predictive draws;
@@ -107,20 +107,23 @@ group when shared numerical changes affect all its children, or when explicitly
 requested. Run recovery tests when the change can affect fitted accuracy or
 uncertainty, rather than merely because it touches a fitting-related file.
 
-For a file-scoped Python run, invoke pytest directly from the repository root.
+For a file-scoped Python run, invoke pytest directly from the repository root
+with the owning package's configuration. Run the two suites separately; each
+owns its test selection and import paths.
 Library tests belong to `packages/grassmoth/tests`, service tests to
 `apps/grassmoth-server/tests`. Each suite owns its fixtures and test support:
 
 ```bash
-uv run pytest packages/grassmoth/tests/models/ssm/inference/test_particle_initialization.py -m "contract or inference(concern='warmup')" -n 0
-uv run pytest packages/grassmoth/tests/models/ssm/execution/test_emissions.py packages/grassmoth/tests/models/ssm/execution/test_observation_sampling.py -m "contract or inference(concern='sampling') or inference(concern='predictive')"
-uv run pytest packages/grassmoth/tests apps/grassmoth-server/tests --collect-only -m contract -n 0
+uv run pytest -c packages/grassmoth/pyproject.toml packages/grassmoth/tests/models/ssm/inference/test_particle_initialization.py -m "contract or inference(concern='warmup')" -n 0
+uv run pytest -c packages/grassmoth/pyproject.toml packages/grassmoth/tests/models/ssm/execution/test_emissions.py packages/grassmoth/tests/models/ssm/execution/test_observation_sampling.py -m "contract or inference(concern='sampling') or inference(concern='predictive')"
+bun run --cwd packages/grassmoth test --collect-only -m contract -n 0
+bun run --cwd apps/grassmoth-server test --collect-only -m contract -n 0
 ```
 
 Always supply the numerical or workflow selector when targeting those tests:
 the default excludes them even when their file is named explicitly. The Bun
-`test` wrapper includes `tests/` in its command, so appending a file does not
-narrow it to that file. Reserve that wrapper for a whole concern suite. Use
+`test` command runs pytest from its package, using that package's `testpaths`
+when no file is supplied. File arguments are relative to that package. Use
 `-n 0` for small selections when worker startup would dominate; the configured
 default remains `-n auto`.
 
@@ -245,7 +248,7 @@ curl -s -X POST http://localhost:8100/api/studies/$WORKSPACE_ID/edit_question \
   -d "{\"action\":\"edit_question\",\"input\":{\"question\":{\"text\":\"$QUESTION\"}}}"
 ```
 
-`GET /api/workspaces` includes the `X-Actions-Enabled` capability header. Poll the returned `call_id` using the [study API reference](../reference/study-api.md). A read-only facade serves saved calls, including failures and comparisons; unsaved POST calls return 403. The [action charts](../../README.md#documentation) show what each action does.
+`GET /api/workspaces` includes the `X-Actions-Enabled` capability header. Poll the returned `call_id` using the [study API reference](../reference/study-api.md). A read-only facade serves saved calls, including failures and comparisons; unsaved POST calls return 403. The [action charts](../README.md#documentation) show what each action does.
 
 ### 2. Observe the study
 

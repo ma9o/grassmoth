@@ -13,11 +13,11 @@ syntax is evidence for review, not full contract or semantic equivalence.
 ``bun run lint`` runs the default diff-aware audit.
 Usage from the repository root::
 
-    bun run --cwd apps/grassmoth-server lint:duplicates
-    bun run --cwd apps/grassmoth-server lint:duplicates --deep
-    bun run --cwd apps/grassmoth-server lint:duplicates --all
-    bun run --cwd apps/grassmoth-server lint:duplicates --include-reviewed
-    bun run --cwd apps/grassmoth-server lint:duplicates packages/grassmoth/src/grassmoth/models/ssm
+    bun run lint:duplicates
+    bun run lint:duplicates --deep
+    bun run lint:duplicates --all
+    bun run lint:duplicates --include-reviewed
+    bun run lint:duplicates packages/grassmoth/src/grassmoth/models/ssm
 
 Candidates are retrieval results, not claims of semantic equivalence. The
 reviewing agent decides whether to consolidate the pair, preserve an intentional
@@ -64,7 +64,7 @@ DEFAULT_FUNCTION_THRESHOLD = 0.82
 DEEP_FUNCTION_THRESHOLD = 0.72
 DEFAULT_MIN_FUNCTION_NODES = 35
 DEEP_MIN_FUNCTION_NODES = 25
-REVIEWED_PAIRS_PATH = REPO_ROOT / "apps/grassmoth-server/scripts/checks/duplicate_reviews.json"
+REVIEWED_PAIRS_PATH = Path(__file__).with_name("duplicate_reviews.json")
 TYPE_CATEGORIES = (
     "identical fields",
     "repeated row",
@@ -2466,7 +2466,7 @@ def _parse_args(argv: Sequence[str] | None) -> argparse.Namespace:
     parser.add_argument(
         "--include-reviewed",
         action="store_true",
-        help="show pairs classified in scripts/checks/duplicate_reviews.json",
+        help="show pairs classified in grassmoth_checks/duplicate_reviews.json",
     )
     args = parser.parse_args(argv)
     if args.all and args.targets:

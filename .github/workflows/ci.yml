@@ -39,8 +39,7 @@ jobs:
               - 'packages/grassmoth/**'
               - 'pyproject.toml'
               - 'uv.lock'
-              - 'conftest.py'
-              - 'scripts/check_python.py'
+              - 'packages/checks/**'
               - 'packages/api-types/**'
               - 'package.json'
               - '.github/workflows/ci.yml'
@@ -142,4 +141,8 @@ jobs:
       - run: uv sync --frozen --all-packages --group dev
         working-directory: apps/grassmoth-server
 
-      - run: bun run test:python
+      - run: bun run --cwd packages/grassmoth test
+
+      - run: bun run --cwd apps/grassmoth-server test
+
+      - run: bun run --cwd packages/checks test

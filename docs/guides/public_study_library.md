@@ -16,7 +16,7 @@ Callers import the library only through
 This module re-exports only the seven actions, their input, output and failure
 types, and two helpers that keep the workers' support windows and level labels
 identical to `prepare_data`'s. The
-[public import checker](../../apps/grassmoth-server/scripts/checks/check_public_imports.py)
+[public import checker](../../packages/checks/src/grassmoth_checks/check_public_imports.py)
 enforces this boundary with ARCH011 for external callers and ARCH013 for the
 service, including its maintenance tools. Both rules check type-only and dynamic
 imports. Tests may import internals.
@@ -28,22 +28,23 @@ as kernel timing or initializer scoring. The service contract is its request and
 response bodies, documented by the
 [OpenAPI schema](../../packages/api-types/schemas/openapi.json) and the generated
 [study API reference](../reference/study-api.md). The
-[action charts](../../README.md#documentation) own execution flow.
+[action charts](../README.md#documentation) own execution flow.
 
 Experiments needing a new capability patch its framework owner in an isolated
 checkout with its own server and study, then exercise that patch through the
 same actions.
 Keep the patch and experiment declaration in `scratchpad/`.
 
-The [ARCH011 checker](../../apps/grassmoth-server/scripts/checks/check_public_imports.py)
-checks all tracked and new non-ignored Python callers during normal lint, across
-every workspace, including scripts and notebooks. Explicit paths narrow the
-selection and can include gitignored experiments:
+The [ARCH011 checker](../../packages/checks/src/grassmoth_checks/check_public_imports.py)
+checks tracked and new non-ignored Python callers during normal lint. The root
+checks callers outside the Python packages; service lint checks its own source,
+scripts and notebooks. Together they cover the maintained caller tree. Explicit
+paths narrow the selection and can include gitignored experiments:
 
 ```bash
-bun run --cwd apps/grassmoth-server lint:public
-bun run --cwd apps/grassmoth-server lint:public ../../scratchpad/my_experiment
-bun run --cwd apps/grassmoth-server lint:public notebooks/my_notebook.py
+bun run lint:public
+bun run lint:public scratchpad/my_experiment
+bun run lint:public apps/grassmoth-server/notebooks/my_notebook.py
 ```
 
 It follows local helpers and package initializers, checks type-only and literal

@@ -10,7 +10,9 @@ FIELD002
     alternatives. Nor can every resolved production constructor supply the same
     constant. Defaults participate when a constructor omits the field. Literal
     types on producer expressions are resolved by basedpyright, without a second
-    dataflow engine. Delete the root constant and its copies, or compute an output.
+    dataflow engine. Public contract members remain open to external constructors
+    in package-local checks, so local call sites cannot prove them constant.
+    Delete the root constant and its copies, or compute an output.
 
 FIELD003
     An exported field (an OpenAPI component with x-python-module) needs a
@@ -25,7 +27,7 @@ Diagnostics include the recomputation, producer sites, or "no reader". The only
 suppression is an inline ``# noqa: FIELD00N -- genuine false-positive reason``;
 suppressed findings and their reasons are printed. There is no baseline.
 
-Usage: bun run --cwd apps/grassmoth-server lint:fields
+Usage: bun run lint:fields (package-local); bun run lint:fields at the root checks FIELD003
 """
 
 from __future__ import annotations
@@ -43,6 +45,8 @@ from queue import Empty, Queue
 from threading import Thread
 from typing import TYPE_CHECKING, Any
 from urllib.parse import unquote, urlparse
+
+from grassmoth_checks.public_contracts import public_contract_locations, public_exports
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -559,10 +563,10 @@ def _field_aliases(field: Field) -> frozenset[str]:
 class PythonReferences:
     """A single basedpyright workspace; await analysis before querying symbols."""
 
-    def __init__(self) -> None:
+    def __init__(self, project_root: Path = ROOT) -> None:
         self.process = subprocess.Popen(
             [str(ROOT / ".venv/bin/basedpyright-langserver"), "--stdio"],
-            cwd=ROOT,
+            cwd=project_root,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -578,9 +582,9 @@ class PythonReferences:
                 "initialize",
                 {
                     "processId": None,
-                    "rootPath": str(ROOT),
-                    "rootUri": ROOT.as_uri(),
-                    "workspaceFolders": [{"uri": ROOT.as_uri(), "name": "grassmoth"}],
+                    "rootPath": str(project_root),
+                    "rootUri": project_root.as_uri(),
+                    "workspaceFolders": [{"uri": project_root.as_uri(), "name": project_root.name}],
                     "capabilities": {
                         "window": {"workDoneProgress": True},
                         "workspace": {"configuration": True},
@@ -1156,10 +1160,11 @@ def _suppression(finding: Finding) -> str | None:
     return None
 
 
-def check(selected: frozenset[str]) -> CheckResult:
+def check(selected: frozenset[str], project_root: Path) -> CheckResult:
+    source_roots = SOURCE_ROOTS if project_root == ROOT else (project_root / "src",)
     sources = tuple(
         _source_file(path)
-        for path in sorted(path for root in SOURCE_ROOTS for path in root.rglob("*.py"))
+        for path in sorted(path for root in source_roots for path in root.rglob("*.py"))
     )
     by_path = {source.path: source for source in sources}
     fields = collect_fields(sources)
@@ -1175,7 +1180,7 @@ def check(selected: frozenset[str]) -> CheckResult:
         file=sys.stderr,
         flush=True,
     )
-    server = PythonReferences() if selected & {"FIELD002", "FIELD003"} else None
+    server = PythonReferences(project_root) if selected & {"FIELD002", "FIELD003"} else None
     outcomes: dict[str, FieldOutcome] = {}
     aliases = _type_aliases(sources)
     try:
@@ -1183,6 +1188,12 @@ def check(selected: frozenset[str]) -> CheckResult:
             producer_inventory(fields, sources, server)
             if server is not None and "FIELD002" in selected
             else ({}, frozenset())
+        )
+        public_locations = public_contract_locations(source_roots, public_exports(project_root))
+        open_producers |= frozenset(
+            field.identity
+            for field in fields
+            if (field.source.path, field.node.lineno) in public_locations
         )
         opaque = (
             _opaque_reads(fields, sources, server)
@@ -1310,7 +1321,7 @@ def check(selected: frozenset[str]) -> CheckResult:
             ),
         )
     if (
-        tuple(sorted(path for root in SOURCE_ROOTS for path in root.rglob("*.py")))
+        tuple(sorted(path for root in source_roots for path in root.rglob("*.py")))
         != tuple(source.path for source in sources)
         or any(source.path.read_text() != source.text for source in sources)
         or OPENAPI.read_text() != api_text
@@ -1329,7 +1340,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        result = check(frozenset(args.select or RULES))
+        result = check(frozenset(args.select or RULES), Path.cwd())
     except (RuntimeError, OSError, SyntaxError, json.JSONDecodeError) as exc:
         print(f"Field checks failed: {exc}", file=sys.stderr)
         return 2

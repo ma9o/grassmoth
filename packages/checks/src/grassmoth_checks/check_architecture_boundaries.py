@@ -39,7 +39,7 @@ from typing import override
 import grimp
 import networkx as nx
 
-from scripts.checks.architecture_roles import (
+from grassmoth_checks.architecture_roles import (
     PACKAGE,
     PURE_ROLES,
     SERVICE_PACKAGE,
@@ -375,7 +375,7 @@ class Violation:
     code: str
     message: str
 
-    def diagnostic(self, source_root: Path) -> str:
+    def diagnostic(self) -> str:
         path = self.ref.path.as_posix()
         role = role_for_module(self.ref.importer)
         owner_path = f"src/{self.ref.importer.replace('.', '/')}.py"
@@ -391,8 +391,8 @@ def find_violations(source_roots: tuple[Path, ...] = SOURCE_ROOTS) -> tuple[Viol
 
     # Resolve signatures by type ownership, including aliases and renamed arguments.
     # Raw data/configuration is bound before execution; native numerical leaves remain valid.
-    from scripts.checks.architecture_roles import role_for_path
-    from scripts.checks.check_type_boundaries import TypeIndex
+    from grassmoth_checks.architecture_roles import role_for_path
+    from grassmoth_checks.check_type_boundaries import TypeIndex
 
     roots = source_roots
     inventory = {path: role for root in roots for path, role in role_inventory(root).items()}
@@ -623,7 +623,7 @@ def main() -> int:
 
     violations = find_violations(tuple(args.source_roots))
     for violation in violations:
-        print(violation.diagnostic(args.source_roots[0]), file=sys.stderr)
+        print(violation.diagnostic(), file=sys.stderr)
     if violations:
         print(f"{len(violations)} architecture boundary violation(s)", file=sys.stderr)
         return 1

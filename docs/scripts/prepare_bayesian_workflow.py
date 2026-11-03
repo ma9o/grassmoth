@@ -26,7 +26,7 @@ from pypdf.generic import Destination
 
 type Outline = list[Destination | Outline]
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_URL = "https://users.aalto.fi/~ave/Bayesian-Workflow.pdf"
 PDF_PATH = REPO_ROOT / "scratchpad/Bayesian-Workflow.pdf"
 WIKI_PATH = REPO_ROOT / "docs/wiki/bayesian-workflow.md"

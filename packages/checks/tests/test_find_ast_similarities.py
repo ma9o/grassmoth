@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from scripts.checks import find_ast_similarities as checker
+from grassmoth_checks import find_ast_similarities as checker
 
 if TYPE_CHECKING:
     from pathlib import Path

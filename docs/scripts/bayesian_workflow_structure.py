@@ -402,7 +402,7 @@ def render_wiki(
         f"- SHA-256: `{digest}`.",
         "- OCR: Mistral through OpenRouter; original responses are cached locally.",
         f"- Structure: [Docling HierarchicalChunker]({DOCLING_DOCS}) (`docling-core {version('docling-core')}`).",
-        "- Rebuild: `bun run docs:bayesian-workflow` (add `--refresh` to download again).",
+        "- Rebuild: `bun run --cwd docs bayesian-workflow` (add `--refresh` to download again).",
         "",
         EDITION_NOTICE,
         "",

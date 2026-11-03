@@ -1,5 +1,6 @@
 """Require explicit concern owners before pytest applies marker selection."""
 
+import tomllib
 from pathlib import Path
 
 import jax
@@ -7,6 +8,22 @@ import pytest
 
 INFERENCE_CONCERNS = ("sampling", "warmup", "simulation", "predictive", "recovery")
 TEST_CONCERNS = frozenset({"contract", "inference", "workflow"})
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:  # noqa: V103 - pytest calls this hook to register the ini options.
+    """Declare the package-owned runtime instrumentation settings."""
+    parser.addini("jaxtyping_config", "Pyproject owning the runtime shape-check module list")
+    parser.addini("jaxtyping_modules", "Modules instrumented by jaxtyping", type="linelist")
+
+
+@pytest.hookimpl(tryfirst=True)  # noqa: V103 - pytest calls this hook before it loads conftests.
+def pytest_load_initial_conftests(early_config: pytest.Config, args: list[str]) -> None:
+    """Give jaxtyping the library's module list before either suite imports code."""
+    assert early_config.inipath is not None
+    owner = early_config.inipath.parent / early_config.getini("jaxtyping_config")
+    settings = tomllib.loads(owner.read_text())["tool"]["pytest"]["ini_options"]
+    modules = ",".join([*settings["jaxtyping_modules"], "beartype.beartype"])
+    args.append(f"--jaxtyping-packages={modules}")
 
 
 def pytest_configure() -> None:  # noqa: V103 - pytest calls this configuration hook before collection.
@@ -22,7 +39,7 @@ def pytest_configure() -> None:  # noqa: V103 - pytest calls this configuration 
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
 
 
-@pytest.hookimpl(tryfirst=True)
+@pytest.hookimpl(tryfirst=True)  # noqa: V103 - pytest calls this hook once collection finishes.
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
     """Validate ownership and inference subcategories before pytest deselects tests."""
     unowned = [

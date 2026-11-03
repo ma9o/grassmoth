@@ -30,9 +30,9 @@ def test_library_exposes_actions_and_preparation_helpers() -> None:
 
 @pytest.mark.parametrize("direction", ["runtime", "type_only", "service_to_library"])
 def test_library_service_import_contract(tmp_path: Path, direction: str) -> None:
-    settings = tomllib.loads((Path(__file__).resolve().parents[5] / "pyproject.toml").read_text())[
-        "tool"
-    ]["importlinter"]
+    settings = tomllib.loads(
+        (Path(__file__).resolve().parents[5] / "packages/grassmoth/pyproject.toml").read_text()
+    )["tool"]["importlinter"]
     contract = next(item for item in settings["contracts"] if item["name"].startswith("ARCH012 "))
     configuration = {
         "root_packages": settings["root_packages"],

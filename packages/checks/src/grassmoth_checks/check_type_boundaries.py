@@ -66,7 +66,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import override
 
-from scripts.checks.architecture_roles import (
+from grassmoth_checks.architecture_roles import (
     PACKAGE,
     PACKAGES,
     SOURCE_ROOTS,
@@ -75,7 +75,7 @@ from scripts.checks.architecture_roles import (
     role_for_path,
     role_inventory,
 )
-from scripts.checks.check_architecture_boundaries import _scope_bindings
+from grassmoth_checks.check_architecture_boundaries import _scope_bindings
 
 _DOMAIN_DICT_UNION = "CUSTOM002"
 _REJECT_ONLY_OPTIONAL_PARAMETER = "CUSTOM003"
@@ -1496,7 +1496,12 @@ def main(argv: list[str] | None = None) -> int:
 
     paths = [path if path.is_absolute() else Path.cwd() / path for path in args.paths]
     selected_rules = frozenset(args.select or _ALL_RULES)
-    role_inventory()
+    for root in SOURCE_ROOTS:
+        if any(
+            root.is_relative_to(path.resolve()) or path.resolve().is_relative_to(root)
+            for path in paths
+        ):
+            role_inventory(root)
     violations = scan_paths(paths, repo_root=repo_root, rules=selected_rules)
     for violation in violations:
         print(violation.diagnostic(), file=sys.stderr)

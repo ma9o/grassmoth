@@ -33,7 +33,7 @@ if TYPE_CHECKING:
 
 SOURCE_ROOTS = (
     Path(__file__).resolve().parents[4] / "packages/grassmoth/src",
-    Path(__file__).resolve().parents[2] / "src",
+    Path(__file__).resolve().parents[4] / "apps/grassmoth-server/src",
 )
 _FIELD_NAMES = frozenset({"pydantic.Field", "pydantic.fields.Field"})
 _ANNOTATED_NAMES = frozenset({"typing.Annotated", "typing_extensions.Annotated"})
@@ -180,7 +180,7 @@ class SourceDescriptionVisitor(Visitor):
         if described:
             for violation in self.violations[first_violation:]:
                 if violation.line == node.lineno and 600 < violation.code < 700:
-                    violation.msg += (
+                    violation.msg += (  # noqa: V101 -- pydoclint formats this diagnostic attribute outside the checker package.
                         f" Fields owned by Field(description=...): {', '.join(described)};"
                         " omit them from Attributes."
                     )

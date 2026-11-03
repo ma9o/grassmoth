@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.checks.check_public_imports import find_public_import_violations
+from grassmoth_checks.check_public_imports import find_public_import_violations
 
 pytestmark = pytest.mark.contract
 
@@ -135,7 +135,7 @@ def test_repository_discovery_covers_callers_and_exempts_only_test_entry_points(
 def test_default_selection_covers_tracked_and_new_files_with_explicit_ignored_callers(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    from scripts.checks import check_public_imports
+    from grassmoth_checks import check_public_imports
 
     subprocess.run(["git", "init", "--quiet", str(tmp_path)], check=True)
     (tmp_path / ".gitignore").write_text("scratchpad/\n")

@@ -1,0 +1,19 @@
+{
+  "name": "@grassmoth/docs",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "turbo run lint:workspace --continue=always",
+    "lint:workspace": "bun run --parallel --no-exit-on-error lint:markdown lint:spell",
+    "lint:markdown": "markdownlint-cli2 --config .markdownlint-docs.json \"**/*.md\" \"#node_modules\"",
+    "lint:spell": "cspell --config ../cspell.config.json --no-progress --show-suggestions \"**/*.md\"",
+    "codegen": "bun scripts/codegen_docs_latex.js",
+    "codegen:check": "bun run codegen --check",
+    "bayesian-workflow": "uv run --script scripts/prepare_bayesian_workflow.py"
+  },
+  "devDependencies": {
+    "cspell": "^10.0.0",
+    "markdownlint-cli2": "^0.22.0",
+    "mathjax-full": "3.2.2"
+  }
+}

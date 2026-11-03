@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from pydoclint.visitor import Visitor
 
-from scripts.checks import run_pydoclint as checker
+from grassmoth_checks import run_pydoclint as checker
 
 pytestmark = pytest.mark.contract
 
@@ -180,7 +180,7 @@ class Observation:
     value: float
 '''
     )
-    config = Path(__file__).resolve().parents[5] / "pyproject.toml"
+    config = Path(__file__).resolve().parents[3] / "packages/grassmoth/pyproject.toml"
     args = ["--quiet", "--config", str(config), str(source)]
     with pytest.raises(SystemExit) as success:
         checker.main(args)

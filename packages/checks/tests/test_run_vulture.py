@@ -2,6 +2,7 @@
 
 import ast
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -10,8 +11,8 @@ from pathlib import Path
 import pytest
 import vulture.core as vulture_core
 
-from scripts.checks import run_vulture
-from scripts.checks.run_vulture import _scan_string_type_node, _write_phantom
+from grassmoth_checks import run_vulture
+from grassmoth_checks.run_vulture import _scan_string_type_node, _write_phantom
 
 pytestmark = pytest.mark.contract
 
@@ -58,7 +59,9 @@ def test_exported_inherited_fields_are_suppressed_by_location_only(tmp_path, mon
         )
     )
     monkeypatch.setattr(run_vulture, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(run_vulture, "PACKAGE_ROOT", tmp_path)
     monkeypatch.setattr(run_vulture, "SOURCE_ROOTS", (pipeline / "src",))
+    monkeypatch.setattr(run_vulture, "public_exports", lambda _root: frozenset())
     exported = run_vulture._collect_exported_field_locations([Path("apps/grassmoth-server/src")])
     assert exported == frozenset({(source.resolve(), 3)})
     analyzer = vulture_core.Vulture()
@@ -94,6 +97,7 @@ def test_key_reads_and_typed_iteration_do_not_make_unread_fields_live(tmp_path, 
         "optional = data.get('optional_key')\n"
     )
     monkeypatch.setattr(run_vulture, "REPO_ROOT", tmp_path)
+    monkeypatch.setattr(run_vulture, "PACKAGE_ROOT", tmp_path)
     assert run_vulture._collect_subscript_reads(["src"]) == {
         "mean",
         "spread",
@@ -103,27 +107,28 @@ def test_key_reads_and_typed_iteration_do_not_make_unread_fields_live(tmp_path, 
 
 
 @pytest.mark.parametrize("used_locally", [False, True])
-def test_concurrent_passes_preserve_ownership_and_clean_caches(tmp_path, used_locally):
-    script = tmp_path / "apps/grassmoth-server/scripts/checks/run_vulture.py"
-    script.parent.mkdir(parents=True)
-    shutil.copyfile(Path(run_vulture.__file__), script)
-    (tmp_path / "pyproject.toml").write_text(
-        '[tool.vulture]\npaths = ["packages/grassmoth/src", "apps/grassmoth-server/src"]\nmin_confidence = 60\n'
+def test_concurrent_passes_preserve_package_ownership_public_sinks_and_clean_caches(
+    tmp_path, used_locally
+):
+    shared = tmp_path / "packages/checks/src/grassmoth_checks"
+    shared.mkdir(parents=True)
+    for filename in ("__init__.py", "run_vulture.py", "public_contracts.py"):
+        shutil.copyfile(Path(run_vulture.__file__).with_name(filename), shared / filename)
+    package = tmp_path / "packages/example"
+    package.mkdir(parents=True)
+    (package / "pyproject.toml").write_text(
+        '[tool.vulture]\npaths = ["src"]\nmin_confidence = 60\n'
+        '[tool.grassmoth-checks]\nvulture-seams = ["scripts", "notebooks", "tests"]\n'
+        'public-api = ["src/public.py"]\n'
     )
-    for directory in (
-        "apps/grassmoth-server/src",
-        "apps/grassmoth-server/tests",
-        "packages/grassmoth/tests",
-    ):
-        (tmp_path / directory).mkdir(parents=True, exist_ok=True)
     files = {
-        "packages/grassmoth/src/api.py": ("production_helper", ""),
-        "apps/grassmoth-server/scripts/usage.py": ("scripts_helper", ""),
-        "apps/grassmoth-server/notebooks/demo.py": (
+        "src/api.py": ("production_helper", ""),
+        "scripts/usage.py": ("scripts_helper", ""),
+        "notebooks/demo.py": (
             "notebook_helper",
             "from scripts.usage import scripts_helper\nscripts_helper()\n",
         ),
-        "packages/grassmoth/tests/test_usage.py": (
+        "tests/test_usage.py": (
             "fixture_helper",
             "from src.api import production_helper\n"
             "from notebooks.demo import notebook_helper\n"
@@ -131,14 +136,20 @@ def test_concurrent_passes_preserve_ownership_and_clean_caches(tmp_path, used_lo
         ),
     }
     for relative, (helper, imports) in files.items():
-        path = tmp_path / relative
+        path = package / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         local_use = f"{helper}()\n" if used_locally else ""
         path.write_text(f"{imports}\ndef {helper}():\n    return 1\n\n{local_use}")
+    (package / "src/published.py").write_text("def exported(): return 1\n")
+    (package / "src/public.py").write_text("from published import exported as exported\n")
+    sibling = tmp_path / "apps/server/src/caller.py"
+    sibling.parent.mkdir(parents=True)
+    sibling.write_text("from api import production_helper\nproduction_helper()\n")
 
     completed = subprocess.run(
-        [sys.executable, str(script)],
-        cwd=tmp_path,
+        [sys.executable, "-m", "grassmoth_checks.run_vulture"],
+        cwd=package,
+        env={**os.environ, "PYTHONPATH": str(shared.parent)},
         capture_output=True,
         text=True,
         check=False,
@@ -151,4 +162,4 @@ def test_concurrent_passes_preserve_ownership_and_clean_caches(tmp_path, used_lo
     assert len(findings) == len(expected_helpers)
     for finding, helper in zip(findings, expected_helpers, strict=True):
         assert f"unused function '{helper}'" in finding
-    assert not list((tmp_path / ".vulture_cache").iterdir())
+    assert not list((package / ".vulture_cache").iterdir())

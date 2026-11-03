@@ -1,0 +1,21 @@
+{
+  "name": "@grassmoth/checks",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "lint": "turbo run lint:workspace --continue=always",
+    "lint:workspace": "bun run --parallel --no-exit-on-error lint:ruff lint:ty lint:type-boundaries lint:type-boundaries:tests lint:vulture format:check",
+    "lint:fix": "uv run --all-packages ruff check --fix src tests && bun run format",
+    "lint:ruff": "uv run --all-packages ruff check --no-fix src tests",
+    "lint:ty": "uv run --all-packages ty check",
+    "lint:type-boundaries": "uv run --all-packages python -m grassmoth_checks.check_type_boundaries src",
+    "lint:type-boundaries:tests": "uv run --all-packages python -m grassmoth_checks.check_type_boundaries --select CORE001 --select CORE002 tests",
+    "lint:vulture": "uv run --all-packages python -m grassmoth_checks.run_vulture",
+    "format": "uv run --all-packages ruff format src tests",
+    "format:check": "uv run --all-packages ruff format --check src tests",
+    "test": "uv run --all-packages pytest"
+  },
+  "devDependencies": {
+    "typescript": "^5"
+  }
+}

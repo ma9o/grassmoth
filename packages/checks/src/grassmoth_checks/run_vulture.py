@@ -28,11 +28,12 @@ subscript reads count as actual references, including TypedDict readers.
 Additionally, vulture's built-in treatment of ``__all__`` entries as "uses" is
 disabled (see ``_run_vulture``) so that symbols which are only ever re-exported
 from a package ``__init__`` — but never actually referenced — are reported as
-dead instead of being kept alive by their ``__all__`` listing.
+dead instead of being kept alive by their ``__all__`` listing. Explicit re-exports
+from the package's configured public API are uses; other packages are not scanned.
 
 Usage:
-    cd apps/grassmoth-server
-    uv run python scripts/checks/run_vulture.py                # standard run
+    bun run --cwd packages/grassmoth lint:vulture
+    bun run --cwd apps/grassmoth-server lint:vulture
 """
 
 from __future__ import annotations
@@ -55,17 +56,14 @@ from pathlib import Path
 
 import vulture.core as vulture_core
 
+from grassmoth_checks.public_contracts import public_contract_locations, public_exports
+
 REPO_ROOT = Path(__file__).resolve().parents[4]
-SOURCE_ROOTS = (REPO_ROOT / "packages/grassmoth/src", REPO_ROOT / "apps/grassmoth-server/src")
-NOTEBOOKS_DIR = REPO_ROOT / "apps/grassmoth-server/notebooks"
-CACHE_ROOT = REPO_ROOT / ".vulture_cache"
-SEAM_PATHS = (
-    "apps/grassmoth-server/scripts",
-    "apps/grassmoth-server/notebooks",
-    "tests",
-)
-TEST_PATHS = ("apps/grassmoth-server/tests", "packages/grassmoth/tests")
-PYPROJECT = REPO_ROOT / "pyproject.toml"
+PACKAGE_ROOT = Path.cwd()
+SOURCE_ROOTS = (PACKAGE_ROOT / "src",)
+NOTEBOOKS_DIR = PACKAGE_ROOT / "notebooks"
+CACHE_ROOT = PACKAGE_ROOT / ".vulture_cache"
+PYPROJECT = PACKAGE_ROOT / "pyproject.toml"
 
 BACKTICK_SPAN = re.compile(r"`([^`\n]+)`")
 IDENT = re.compile(r"\b([a-zA-Z_][a-zA-Z0-9_]*)\b")
@@ -129,7 +127,7 @@ def _collect_exported_field_locations(paths: list[Path]) -> frozenset[tuple[Path
     classes_by_file: dict[Path, list[ast.ClassDef]] = {}
     trees: dict[Path, ast.Module] = {}
     for root in paths:
-        root_path = REPO_ROOT / root
+        root_path = PACKAGE_ROOT / root
         if not root_path.exists():
             continue
         for py_path in root_path.rglob("*.py"):
@@ -228,6 +226,8 @@ def _collect_exported_field_locations(paths: list[Path]) -> frozenset[tuple[Path
             .removesuffix("-Output"),
         )
         exported.setdefault(f"{module}.{name}", set()).update(schema.get("properties", {}))
+    for identity in public_exports(PACKAGE_ROOT):
+        exported.setdefault(identity, set()).update(declarations.get(identity, {}))
     locations: set[tuple[Path, int]] = set()
     for identity, fields in declarations.items():
         names = exported.get(identity, set())
@@ -262,7 +262,9 @@ def _collect_subscript_reads(paths: list[str]) -> set[str]:
     """
     refs: set[str] = set()
     trees = [
-        ast.parse(path.read_text()) for root in paths for path in (REPO_ROOT / root).rglob("*.py")
+        ast.parse(path.read_text())
+        for root in paths
+        for path in (PACKAGE_ROOT / root).rglob("*.py")
     ]
     dictionaries = {
         node.name: {
@@ -348,7 +350,7 @@ def _collect_string_type_refs(paths: list[Path]) -> set[str]:
     """Extract identifiers from string-quoted type positions (cast/Annotated/forward annotations)."""
     refs: set[str] = set()
     for root in paths:
-        root_path = REPO_ROOT / root
+        root_path = PACKAGE_ROOT / root
         if not root_path.exists():
             continue
         for py_path in root_path.rglob("*.py"):
@@ -395,7 +397,7 @@ def _collect_top_level_defs(roots: list[str]) -> dict[str, list[tuple[str, int, 
     """
     found: dict[str, list[tuple[str, int, str]]] = {}
     for root in roots:
-        root_path = REPO_ROOT / root
+        root_path = PACKAGE_ROOT / root
         if not root_path.exists():
             continue
         for py_path in root_path.rglob("*.py"):
@@ -453,9 +455,9 @@ def _warn_name_collisions(vulture, defs: dict[str, list[tuple[str, int, str]]]) 
 def _is_under_roots(filename: str | Path, roots: list[str]) -> bool:
     path = Path(filename)
     if not path.is_absolute():
-        path = REPO_ROOT / path
+        path = PACKAGE_ROOT / path
     resolved = path.resolve()
-    return any(resolved.is_relative_to((REPO_ROOT / root).resolve()) for root in roots)
+    return any(resolved.is_relative_to((PACKAGE_ROOT / root).resolve()) for root in roots)
 
 
 def _report_vulture(
@@ -500,7 +502,7 @@ def _run_vulture(
     2. After the normal report, warn about referenced names defined in more than
        one file (see ``_warn_name_collisions``).
     3. A seam pass may analyze source code while reporting only definitions owned
-       by that seam. Source liveness includes the maintained library callers.
+       by that seam. Only the configured public contract exports count as external uses.
 
     Replicates ``vulture.core.main`` rather than calling it, so we hold the
     ``Vulture`` instance for the collision pass; config discovery, exit codes, and
@@ -511,8 +513,8 @@ def _run_vulture(
     # defined-but-unused module attribute and flag our own override as dead code.
     setattr(vulture_core, "_assigns_special_variable__all__", lambda _node: False)  # noqa: B010 - direct assignment makes Vulture flag its own monkeypatch as an unused module attribute
     saved_argv, saved_cwd = sys.argv, Path.cwd()
-    sys.argv = ["vulture", *argv]
-    os.chdir(REPO_ROOT)
+    sys.argv = ["vulture", "--config", str(PYPROJECT), *argv]
+    os.chdir(PACKAGE_ROOT)
     try:
         try:
             config = vulture_core.make_config()
@@ -534,7 +536,8 @@ def _run_vulture(
             report_roots=report_roots,
             exported_fields=_collect_exported_field_locations(
                 [Path(path) for path in config["paths"]]
-            ),
+            )
+            | public_contract_locations(SOURCE_ROOTS, public_exports(PACKAGE_ROOT)),
         )
         if not config["make_whitelist"] and collision_roots:
             _warn_name_collisions(vulture, _collect_top_level_defs(collision_roots))
@@ -545,12 +548,14 @@ def _run_vulture(
 
 
 def _cache_path(cache_dir: Path) -> str:
-    return str(cache_dir.relative_to(REPO_ROOT))
+    return str(cache_dir.relative_to(PACKAGE_ROOT))
 
 
 def _build_phantom_refs(cache_dir: Path, paths: list[str]) -> None:
     cache_dir.mkdir(parents=True, exist_ok=True)
     source_paths = [Path(path) for path in paths]
+    exports = public_exports(PACKAGE_ROOT)
+    _write_phantom(cache_dir, "_public_api_refs.py", {name.rsplit(".", 1)[-1] for name in exports})
     _write_phantom(
         cache_dir,
         "_string_type_refs.py",
@@ -579,18 +584,12 @@ def _run_pass(
 ) -> VulturePassResult:
     stdout, stderr = StringIO(), StringIO()
     with redirect_stdout(stdout), redirect_stderr(stderr):
-        owned_paths = (
-            list(TEST_PATHS)
-            if seam_path == "tests"
-            else [seam_path]
-            if seam_path is not None
-            else source_paths
-        )
+        owned_paths = [seam_path] if seam_path is not None else source_paths
         analysis_paths = [*source_paths, *owned_paths] if seam_path is not None else source_paths
         pass_cache_dir = cache_dir / (seam_path if seam_path is not None else "src")
         _build_phantom_refs(pass_cache_dir, analysis_paths)
         report_roots = owned_paths
-        if seam_path == "apps/grassmoth-server/notebooks":
+        if seam_path == "notebooks":
             markdown_refs = _marimo_markdown_refs()
             _write_phantom(pass_cache_dir, "_notebook_markdown_refs.py", markdown_refs)
             report_roots.append(_cache_path(pass_cache_dir))
@@ -608,7 +607,7 @@ def main() -> int:
     try:
         config = tomllib.loads(PYPROJECT.read_text())
         source_paths = config["tool"]["vulture"]["paths"]
-        passes = (None, *SEAM_PATHS)
+        passes = (None, *config["tool"]["grassmoth-checks"]["vulture-seams"])
         # Vulture mutates sys.argv, cwd and module globals, so passes need processes.
         with ProcessPoolExecutor(max_workers=len(passes), mp_context=get_context("spawn")) as pool:
             futures = [

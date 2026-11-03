@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "project": [
+    "src/**/*.{ts,tsx}!",
+    "!src/**/*.stories.tsx",
+    "!src/**/*.test.{ts,tsx}",
+    "!src/**/__fixtures__/**",
+    "!src/integration/**"
+  ],
+  "ignoreDependencies": ["@tailwindcss/typography", "shadcn", "tailwindcss", "tw-animate-css"]
+}

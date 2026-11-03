@@ -5,21 +5,6 @@
     ".env.local"
   ],
   "tasks": {
-    "//#docs:check": {
-      "cache": false
-    },
-    "//#knip": {
-      "inputs": [
-        "knip.json",
-        "package.json",
-        "bun.lock",
-        "apps/grassmoth-client/package.json",
-        "apps/grassmoth-client/*.config.*",
-        "apps/grassmoth-client/tsconfig.json",
-        "apps/grassmoth-client/src/**/*.{ts,tsx,css}"
-      ],
-      "outputs": []
-    },
     "dev": {
       "persistent": true,
       "cache": false
@@ -36,7 +21,24 @@
         "NEXT_PUBLIC_*"
       ]
     },
-    "lint": {
+    "lint:workspace": {
+      "dependsOn": [
+        "codegen:check"
+      ],
+      "cache": false
+    },
+    "@grassmoth/grassmoth#lint:workspace": {
+      "dependsOn": [
+        "@grassmoth/api-types#codegen:check",
+        "@grassmoth/grassmoth-client#codegen:check"
+      ],
+      "cache": false
+    },
+    "@grassmoth/grassmoth-server#lint:workspace": {
+      "dependsOn": [
+        "@grassmoth/api-types#codegen:check",
+        "@grassmoth/grassmoth-client#codegen:check"
+      ],
       "cache": false
     },
     "lint:fix": {
@@ -64,25 +66,13 @@
       ],
       "cache": false
     },
-    "storybook": {
-      "persistent": true,
+    "codegen:check": {
       "cache": false
     },
-    "//#lint:python": {
-      "cache": false
-    },
-    "lint:workspace": {
-      "cache": false
-    },
-    "@grassmoth/grassmoth#lint:workspace": {
+    "//#lint:root": {
       "dependsOn": [
-        "//#lint:python"
-      ],
-      "cache": false
-    },
-    "@grassmoth/grassmoth-server#lint:workspace": {
-      "dependsOn": [
-        "//#lint:python"
+        "@grassmoth/api-types#codegen:check",
+        "@grassmoth/grassmoth-client#codegen:check"
       ],
       "cache": false
     }

@@ -46,7 +46,7 @@ from multiprocessing import cpu_count, get_context
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Literal, cast, override
 
-from scripts.checks.find_duplicates import (
+from grassmoth_checks.find_duplicates import (
     DEFAULT_MIN_FUNCTION_NODES,
     REPO_ROOT,
     DuplicateAuditError,

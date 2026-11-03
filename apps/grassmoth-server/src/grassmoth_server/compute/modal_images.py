@@ -24,6 +24,11 @@ def _image(*, gpu: bool) -> modal.Image:
         .add_local_file(
             SERVER / "pyproject.toml", "/root/apps/grassmoth-server/pyproject.toml", copy=True
         )
+        .add_local_file(
+            ROOT / "packages/checks/pyproject.toml",
+            "/root/packages/checks/pyproject.toml",
+            copy=True,
+        )
         .run_commands(
             "uv sync --project /root --frozen --all-packages --no-install-workspace " + groups
         )

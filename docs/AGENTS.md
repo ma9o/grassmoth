@@ -6,9 +6,11 @@
 
 - A change to an action's behavior updates its chart in the same commit.
 
+- The repository README lives here as [README.md](README.md); the root `README.md` is a symlink to it. Write its links as repository-root paths such as `/docs/assumptions.md`, which resolve from both locations, and link other documents to `docs/README.md`.
+
 ## Generated documentation
 
-- Use root `bun run docs:codegen` to regenerate mathematical SVGs in `README.md` and `docs/`, then `bun run docs:check` to check generated math, Markdown and spelling. [The LaTeX generator](../scripts/codegen_docs_latex.js) owns the rendering; retain its `docs-latex` source metadata alongside generated embeds.
+- Run `bun run --cwd docs codegen` to regenerate mathematical SVGs, then `bun run --cwd docs lint` to check generated math, Markdown and spelling. [The LaTeX generator](scripts/codegen_docs_latex.js) owns the rendering; retain its `docs-latex` source metadata alongside generated embeds.
 - Follow the [API generation workflow](../packages/api-types/AGENTS.md#code-generation) for generated API documentation. Edit field and endpoint descriptions at their Python owners; the [API exporter](../apps/grassmoth-server/scripts/codegen/export_api.py) generates the study API reference and agent skill.
 
 ## Action-flow charts

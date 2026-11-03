@@ -1,6 +1,6 @@
 # Assumptions and limits
 
-These are the scientific commitments behind every result: what the model can express, what identification assumes, and how far each output can be read. The [action charts](../README.md#documentation) show where each commitment is checked. The library defines the supported [observation laws](../packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py) and [prior authoring vocabulary](../packages/grassmoth/src/grassmoth/artifacts/probability/native.py).
+These are the scientific commitments behind every result: what the model can express, what identification assumes, and how far each output can be read. The [action charts](README.md#documentation) show where each commitment is checked. The library defines the supported [observation laws](../packages/grassmoth/src/grassmoth/artifacts/model/likelihood.py) and [prior authoring vocabulary](../packages/grassmoth/src/grassmoth/artifacts/probability/native.py).
 
 ## Model class
 

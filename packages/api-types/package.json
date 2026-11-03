@@ -9,7 +9,8 @@
     "src"
   ],
   "scripts": {
-    "lint": "bun run --parallel --no-exit-on-error lint:biome lint:tsc codegen:check",
+    "lint": "turbo run lint:workspace --continue=always",
+    "lint:workspace": "bun run --parallel --no-exit-on-error lint:biome lint:tsc",
     "lint:fix": "biome check --fix .",
     "lint:biome": "biome check .",
     "lint:tsc": "tsc --noEmit",
@@ -18,8 +19,7 @@
     "codegen:schemas": "uv run --all-packages --directory ../../apps/grassmoth-server python -m scripts.codegen.export_api",
     "codegen:schemas:check": "bun run codegen:schemas --check",
     "codegen:types": "bun run scripts/generate.ts",
-    "codegen:types:check": "bun run codegen:types --check",
-    "lint:workspace": "bun run lint"
+    "codegen:types:check": "bun run codegen:types --check"
   },
   "devDependencies": {
     "@grassmoth/typescript-config": "workspace:*",

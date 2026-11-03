@@ -26,7 +26,6 @@ cp .env.example.dev .env
 
 # 4. Code generation
 bun run codegen
-bun run docs:codegen
 ```
 
 Edit `.env` and fill in at minimum:
@@ -65,18 +64,32 @@ The web viewer works standalone with mock data. Live studies also need the Tempo
 ## Workspace layout
 
 The Python library lives in `packages/grassmoth` (`grassmoth`), the service in
-`apps/grassmoth-server` (`grassmoth_server`), and the viewer in
+`apps/grassmoth-server` (`grassmoth_server`), the repository checkers in
+`packages/checks` (`grassmoth_checks`), and the viewer in
 `apps/grassmoth-client`. The service declares its library dependency explicitly.
-The [root Python configuration](../../pyproject.toml) owns the uv workspace,
-shared tool settings, and test selection; `uv.lock` and `.venv/` also live at the root.
+The `docs` workspace owns the documentation, its generators and the README; the
+root `README.md` is a symlink to `docs/README.md`.
+The [root Python configuration](../../pyproject.toml) owns the uv workspace and
+shared Ruff and `basedpyright` defaults; `uv.lock` and `.venv/` also live at the root.
+The [library](../../packages/grassmoth/pyproject.toml),
+[service](../../apps/grassmoth-server/pyproject.toml) and
+[checks](../../packages/checks/pyproject.toml) packages own their tool scopes and
+pytest configuration; the library and service also own dependency checks, module
+roles and public exports.
 
 Library tests live in `packages/grassmoth/tests`, service tests in
-`apps/grassmoth-server/tests`, and client contracts in `apps/grassmoth-client/tests`.
-Each Python suite owns its fixtures and a distinct test-support package inside
-its `tests/` directory. Server tests may import `grassmoth_test_support` from the
+`apps/grassmoth-server/tests`, checker tests in `packages/checks/tests`, and client
+contracts in `apps/grassmoth-client/tests`.
+The library and service suites each own their fixtures and a distinct
+test-support package inside their `tests/` directory. Server tests may import `grassmoth_test_support` from the
 library suite; library tests never depend on server test support or configuration.
-The [Python check runner](../../scripts/check_python.py) runs package checks with
-the shared configuration; Turbo schedules checks across both Python packages once.
+Package commands run tools in their own directory. The custom checkers live in
+the [checks package](../../packages/checks/src/grassmoth_checks); packages run them
+as `python -m grassmoth_checks.<checker>`, which reads the invoking package's
+configuration.
+Each Vulture source pass scans one package. Declared public exports and their
+signature types count as external uses; another package's references cannot
+keep internal code alive. Tests, scripts and notebooks have separate passes.
 
 ## Common Commands
 
@@ -85,18 +98,17 @@ Turbo across the workspaces; generators and maintenance commands run in their
 owning package.
 
 ```bash
-bun run lint          # Every static check, including types and generated-artifact drift
+bun run lint          # Every static check, including types, docs and generated-artifact drift
 bun run lint:fix      # Apply lint and formatting fixes
-bun run test          # Python contract suites and client contracts
-bun run codegen:check # Generated API artifact drift
-bun run docs:check    # Generated documentation drift and markdown
+bun run test          # Python contract suites, checker tests and client contracts
+bun run codegen:check # Generated API, story-fixture and documentation drift
 ```
 
 Python source docstrings use [Google style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings).
 The standard Python lint command checks public docstring presence
 and formatting with Ruff, then checks structured docstrings against signatures,
 returns, yields, exceptions, and attributes with `pydoclint`. The
-[configuration](../../pyproject.toml) keeps types in annotations
+[package configuration](../../packages/grassmoth/pyproject.toml) keeps types in annotations
 and property descriptions beside their implementations. Summary-only docstrings
 are allowed for simple operations. Describe behavior, units, shapes, ownership,
 and meaningful absence or failure conditions where relevant; repeating a name
@@ -106,7 +118,7 @@ Each field has one documentation owner. Prefer Pydantic
 [`Field(description=...)`](https://docs.pydantic.dev/latest/concepts/fields/#customizing-json-schema)
 for model field meanings, so the same prose reaches JSON Schema, OpenAPI, and
 generated clients. The
-[pydoclint adapter](../../apps/grassmoth-server/scripts/checks/run_pydoclint.py)
+[pydoclint adapter](../../packages/checks/src/grassmoth_checks/run_pydoclint.py)
 recognizes these descriptions, including `Annotated` metadata, without duplicate
 `Attributes:` entries. Use `Attributes:` for ordinary classes and dataclasses.
 The class docstring explains the record's purpose and relationships. Add a
@@ -120,19 +132,53 @@ generation, maintenance, and install hooks. Aggregate commands come before their
 subcommands. Related commands share a colon namespace; artifact checks end in
 `:check`, fixes in `:fix`, and updates in `:update`.
 
+Each workspace owns its commands. Use the same names for the same jobs:
+`lint`, `lint:fix`, `format`, `format:check`, `test`, `codegen`, `codegen:check`,
+`dev` and `build`, where applicable. Each command has one owner; do not keep
+aliases or forwarding scripts at another level of the tree.
+
+Every workspace's `lint` invokes `turbo run lint:workspace --continue=always`.
+Its `lint:workspace` holds the local checks, while
+[`turbo.json`](../../turbo.json) declares the prerequisite checks that a change
+in that workspace can affect. Client lint includes Knip and story-fixture drift;
+API-types lint includes API drift; docs lint includes generated-math drift. Both
+Python workspace lints run their local checks and both API and story-fixture
+drift checks. Turbo runs each prerequisite once per invocation.
+
+The root fans out workspace commands and owns only the checks that need the whole
+tree, under `lint:root`: exported-field readers (`lint:fields`, FIELD003), callers
+outside the Python packages (`lint:public`, ARCH011), and the duplicate audit
+(`lint:duplicates`). `similarity` is the matching on-demand report.
+Package-local FIELD001/002 check stored-field redundancy. The service checks its
+own callers and configuration; the library owns import contracts and shape-check
+wiring. `lint:fix` updates each owner's files, so the library's shape list is
+synchronized once.
+
+The library and service suites load the
+[pytest policy](../../packages/grassmoth/tests/grassmoth_test_support/pytest_policy.py)
+from the library's test support for concern validation, compilation caching and
+the library's runtime shape instrumentation; the checks suite holds only
+contracts and runs without it. CI runs each Python package's `test` as its own
+step, so each suite uses its own configuration and two `-n auto` pools never
+overlap.
+
 | Workflow | Root commands |
 |----------|---------------|
-| Development | `dev`, `build`, `storybook`, `integration:start` |
-| Quality | `lint`, `lint:fix`, `test`, `test:all`, `knip`, `complexity` |
-| API generation | `codegen`, `codegen:check` |
-| Documentation | `docs:codegen`, `docs:check`; individual tasks under `docs:latex`, `docs:markdown:check`, `docs:spell:check` |
+| Development | `dev`, `build`, `integration:start` |
+| Quality | `lint`, `lint:fix`, `test`, `test:all`, `similarity`; whole-tree checks under `lint:root` |
+| Generation | `codegen`, `codegen:check` |
 
 Use `bun run` to list root scripts, or `bun run --cwd <workspace>` to list one
 package's scripts. Run focused tasks in their workspace, for example:
 
 ```bash
-bun run --cwd apps/grassmoth-client storybook:build
-bun run --cwd apps/grassmoth-server lint:type-boundaries:tests
+bun run --cwd apps/grassmoth-client storybook
+bun run --cwd apps/grassmoth-client lint:knip
+bun run --cwd apps/grassmoth-server lint:ruff
+bun run --cwd packages/grassmoth lint:type-boundaries:tests
+bun run --cwd packages/grassmoth complexity
+bun run --cwd docs lint
+bun run lint:public scratchpad/my_experiment
 bun run --cwd packages/api-types codegen:schemas:check
 ```
 

@@ -27,7 +27,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from scripts.checks.architecture_roles import (
+from grassmoth_checks.architecture_roles import (
     PACKAGE,
     PACKAGES,
     PROJECT_ROOT,
@@ -299,11 +299,21 @@ def main() -> int:
     """Check maintained callers or explicitly selected local experiment paths."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", type=Path)
+    parser.add_argument(
+        "--outside-packages",
+        action="store_true",
+        help="Check root callers; package lints own their callers",
+    )
     args = parser.parse_args()
     for path in args.paths:
         if not path.exists():
             parser.error(f"Caller path does not exist: {path}")
     paths = tuple(args.paths) or _repository_callers()
+    if args.outside_packages and not args.paths:
+        packages = tuple(root.parents[1] for root in SOURCE_ROOTS)
+        paths = tuple(
+            path for path in paths if not any(path.is_relative_to(package) for package in packages)
+        )
     violations = find_public_import_violations(paths)
     for violation in violations:
         print(violation.diagnostic())

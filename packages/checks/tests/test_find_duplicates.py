@@ -17,7 +17,7 @@ pytestmark = pytest.mark.contract
 
 def _load_checker() -> Any:
     module_name = "find_duplicates_under_test"
-    path = Path(__file__).resolve().parents[3] / "scripts" / "checks" / "find_duplicates.py"
+    path = Path(__file__).resolve().parents[1] / "src" / "grassmoth_checks" / "find_duplicates.py"
     spec = importlib.util.spec_from_file_location(module_name, path)
     assert spec is not None
     assert spec.loader is not None

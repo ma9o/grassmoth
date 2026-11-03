@@ -1,0 +1,69 @@
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"
+
+[project]
+name = "grassmoth-checks"
+version = "0.1.0"
+description = "Repository checkers that the Grassmoth packages run on their own code"
+license = "Apache-2.0"
+authors = [{ name = "ma9o" }]
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "grimp>=3.17",
+    "networkx>=3.7",
+    "pydoclint==0.11.0", # run_pydoclint.py extends its Visitor
+    "vulture>=2.16",
+]
+
+[tool.ruff]
+extend = "../../pyproject.toml"
+src = ["src", "tests"]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*.py" = [
+    "ARG001",  # unused function arguments (pytest fixtures)
+    "ARG002",  # unused method arguments (pytest fixtures)
+    "DTZ001",  # tests intentionally use naive datetimes as compact fixtures
+]
+
+[tool.vulture]
+# run_vulture.py checks source and tests as independent ownership seams.
+paths = ["src"]
+min_confidence = 60
+sort_by_size = true
+ignore_decorators = [
+    "@pytest.fixture",
+    "@property",
+]
+ignore_names = [
+    "test_*",
+    "pytestmark",
+]
+
+[tool.grassmoth-checks]
+vulture-seams = ["tests"]
+public-api = []
+
+[tool.ty.environment]
+python-version = "3.12"
+
+[tool.ty.src]
+include = ["src", "tests"]
+exclude = ["**/.venv/**", "**/node_modules/**"]
+
+[tool.ty.rules]
+redundant-condition = "error"
+redundant-condition-strict = "error"
+missing-override-decorator = "error"
+missing-type-argument = "error"
+possibly-missing-attribute = "error"
+possibly-unresolved-reference = "error"
+unused-type-ignore-comment = "error"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--import-mode=importlib -n auto --strict-markers --tb=short -ra --instafail --timeout=300 --durations=10"
+markers = [
+    "contract: isolated routing, validation, schema, identity, and projection without scientific numerical execution",
+]
