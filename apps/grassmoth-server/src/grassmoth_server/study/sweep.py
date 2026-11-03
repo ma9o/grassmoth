@@ -5,33 +5,28 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from grassmoth_server.actions.contracts.requests import call_identity
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.storage import paths
 
 
 def collect_completed_runs(workspace_id: str) -> int:
-    """Remove saved calls' temporary state, including leftovers after a publication crash."""
-    from grassmoth_server.study.persistence.history import StudyRepository
+    """Collect temporary call directories using ref existence, without parsing saved calls."""
+    from grassmoth_server.study.persistence.git_objects import open_repository
 
+    temporary = Path(paths.tmp_dir(workspace_id))
+    if not temporary.exists():
+        return 0
+    repository = open_repository(workspace_id)
     removed = 0
-    for revision in StudyRepository(workspace_id).attempts():
-        request = revision.record.attempt.request
-        assert request is not None
-        directory = paths.call_dir(workspace_id, call_identity(request))
-        if storage.exists(directory):
-            storage.rm_tree(directory)
+    for directory in temporary.iterdir():
+        if (
+            directory.is_dir()
+            and directory.name.startswith("call:")
+            and f"refs/calls/{directory.name.removeprefix('call:')}" in repository.references
+        ):
+            storage.rm_tree(str(directory))
             removed += 1
     return removed
-
-
-def cleanup_saved_calls() -> None:
-    """Recover completed-call leftovers at startup without touching unfinished calls or uploads."""
-    root = Path(paths.data_root())
-    root.mkdir(parents=True, exist_ok=True)
-    for directory in root.iterdir():
-        if directory.is_dir() and Path(paths.history_dir(directory.name)).is_dir():
-            collect_completed_runs(directory.name)
 
 
 def sweep_cli() -> None:

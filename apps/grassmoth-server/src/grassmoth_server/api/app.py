@@ -55,10 +55,8 @@ and alternatives.
 @asynccontextmanager
 async def _lifespan(_app: StudyAPI) -> AsyncIterator[None]:
     from grassmoth_server.config import configure_jax_persistent_cache
-    from grassmoth_server.study.sweep import cleanup_saved_calls
 
     configure_jax_persistent_cache()
-    cleanup_saved_calls()
     yield
 
 

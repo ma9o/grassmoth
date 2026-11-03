@@ -227,7 +227,9 @@ also retain an immutable full-result pointer there for continuation and analysis
 The [fit chart](../assets/action-flows/fit.svg) owns those branches.
 
 `uv run grassmoth-sweep WORKSPACE_ID` removes temporary directories only for
-saved calls, including failures. Startup performs the same idempotent cleanup.
+saved calls, including failures, by checking call refs without parsing saved calls.
+The same cleanup runs after publication in that workspace. Startup opens no studies;
+crash leftovers wait for the next publication or an explicit sweep.
 If publication fails, the temporary work remains. With the workspace stopped,
 `uv run grassmoth-sweep WORKSPACE_ID --offline` clears all of `tmp/`, including
 uploads and captures abandoned before acceptance. Nothing is removed by age.
@@ -238,9 +240,7 @@ Hand-authored relative source folders remain valid alongside `tmp/input/`.
 
 ### Publishing a workspace
 
-Hosted R2 serving and synchronization of format-32 histories are not implemented.
-The existing skip-existing copier does not publish this layout. Keep validation
-studies local until that separate workflow is implemented.
+Hosted R2 serving is not implemented for format 32.
 
 ## Step-by-Step Flow
 
