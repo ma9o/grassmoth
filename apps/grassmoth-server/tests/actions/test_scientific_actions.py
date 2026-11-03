@@ -490,6 +490,32 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         evidence.arms.action.observations.values[0],
         equal_nan=True,
     )
+    from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
+    from grassmoth_server.actions.messages import simulation_messages
+
+    model_ref, fit_report = fitted
+    diagnostics = fit_report.inference_diagnostics
+    assert diagnostics is not None
+    for chains in (
+        diagnostics.revised(
+            per_parameter=tuple(
+                row.revised(r_hat=1.05, ess_bulk=264.0, ess_tail=90.0)
+                for row in diagnostics.per_parameter
+            )
+        ),
+        None,
+    ):
+        convergence = chain_convergence(chains)
+        fitted = (model_ref, fit_report.revised(convergence=convergence))
+        warned = summarize()
+        assert isinstance(warned, CausalEffectResult)
+        np.testing.assert_array_equal(warned.differences.values, expected)
+        assert set(convergence.messages) <= set(warned.warnings)
+        warned_report = report.revised(evidence=evidence.revised(arms=arms.revised(causal=warned)))
+        messages = simulation_messages(warned_report, datetime(2024, 1, 1, tzinfo=UTC))
+        assert {message.detail for message in messages} == set(warned.warnings)
+        assert all(message.severity == "warning" for message in messages)
+
     fitted = None
     unavailable = summarize()
     assert isinstance(unavailable, NotEvaluated)

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Literal
 
 from grassmoth.public import (
     Assessment,
+    CausalEffectResult,
     ConstructRef,
     FindingSubject,
     NotEvaluated,
@@ -169,6 +170,20 @@ def simulation_messages(report: SimulationReport, timestamp: datetime) -> tuple[
         *(
             _findings((arms.causal,), timestamp)
             if isinstance(arms, PairedArmSimulation) and isinstance(arms.causal, NotEvaluated)
+            else ()
+        ),
+        *(
+            tuple(
+                ActionMessage(
+                    timestamp=timestamp,
+                    severity="warning",
+                    code="causal_effect",
+                    subject="causal_effect",
+                    detail=warning,
+                )
+                for warning in arms.causal.warnings
+            )
+            if isinstance(arms, PairedArmSimulation) and isinstance(arms.causal, CausalEffectResult)
             else ()
         ),
     )

@@ -155,61 +155,19 @@ def test_conditioning_rejects_warmup_statically(tmp_path):
     assert "ParticleInitialization" in checked.stdout
 
 
-def test_causal_reporting_requires_retained_uncertainty_and_converged_exact_engine_evidence():
+def test_causal_reporting_requires_retained_uncertainty_and_matching_model():
     from grassmoth.models.causal.proofs import certify_conditioned_model
 
     dynamical_model_spec = _conditioned_treatment_outcome()
-    from grassmoth_test_support.inference import _report
-
-    report = _report(dynamical_model_spec)
-    certify_conditioned_model(dynamical_model_spec, dynamical_model_spec, report.core)
+    certify_conditioned_model(dynamical_model_spec, dynamical_model_spec)
     with pytest.raises(CausalCertificationError, match="differs from"):
-        certify_conditioned_model(
-            _treatment_outcome(),
-            dynamical_model_spec,
-            report.core,
-        )
+        certify_conditioned_model(_treatment_outcome(), dynamical_model_spec)
     prior = _treatment_outcome()
     with pytest.raises(CausalCertificationError, match="retained joint uncertainty"):
-        certify_conditioned_model(prior, prior, _report(prior).core)
-    from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
-
-    diagnostics = report.core.inference_diagnostics
-    assert diagnostics is not None
-    warning_chains = diagnostics.revised(
-        per_parameter=tuple(row.revised(r_hat=1.03) for row in diagnostics.per_parameter),
-        per_latent=tuple(row.revised(r_hat=1.03) for row in diagnostics.per_latent),
-    )
-    warning_gate = chain_convergence(warning_chains)
-    assert warning_gate.status == "passed"
-    assert warning_gate.warnings
-    assert not warning_gate.messages
-    certify_conditioned_model(
-        dynamical_model_spec,
-        dynamical_model_spec,
-        report.core.revised(inference_diagnostics=warning_chains, convergence=warning_gate),
-    )
-    poorly_mixed = diagnostics.revised(
-        **{
-            "per_parameter": tuple(
-                row.revised(**{"r_hat": 1.05, "ess_tail": 90.0})
-                for row in diagnostics.per_parameter
-            )
-        }
-    )
-    mixed_poorly = report.revised(
-        core=report.core.revised(
-            inference_diagnostics=poorly_mixed,
-            convergence=chain_convergence(poorly_mixed),
-        )
-    )
-    with pytest.raises(CausalCertificationError, match=r"r_hat fails.*ess_tail fails"):
-        certify_conditioned_model(dynamical_model_spec, dynamical_model_spec, mixed_poorly.core)
+        certify_conditioned_model(prior, prior)
 
 
 def test_causal_analysis_joins_matching_proofs():
-    from grassmoth_test_support.inference import _report
-
     design = _conditioned_treatment_outcome()
     design_ref = GitRef(workspace_id="workspace", revision=git_oid(2), path="model.json")
     analysis = CertifiedCausalAnalysis(
@@ -226,7 +184,6 @@ def test_causal_analysis_joins_matching_proofs():
             ),
         ),
         fitted_dynamical_model_spec=design,
-        report=_report(design).core,
     )
     assert analysis.treatments == ["treatment"]
     assert analysis.outcome == "outcome"
@@ -244,3 +201,63 @@ def test_causal_analysis_joins_matching_proofs():
 def test_joint_posterior_rejects_misaligned_or_ambiguous_draw_axes(parameters, paths, message):
     with pytest.raises(ValueError, match=message):
         JointPosteriorDraws(parameters=parameters, latent_paths=paths)
+
+
+def test_unconverged_causal_summary_keeps_effect_and_failed_criteria():
+    from datetime import date
+
+    import numpy as np
+
+    from grassmoth.actions.contracts.io import SimulationInputs
+    from grassmoth.actions.simulate.effects import summarize_causal_simulation
+    from grassmoth.artifacts.arrays import NumericalArray
+    from grassmoth.artifacts.reports.predictive_provenance import AuthoredLawProvenance
+    from grassmoth.artifacts.scenarios import CausalEffectResult, InterventionSpec
+    from grassmoth.artifacts.simulation import SimulationArm, SimulationSpec
+    from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
+    from grassmoth.models.structure import StructuralSelection
+    from grassmoth_test_support.inference import _report
+
+    model = _conditioned_treatment_outcome()
+    treatment, outcome = (construct.id for construct in model.constructs)
+    report = _report(model).core
+    assert report.inference_diagnostics is not None
+    convergence = chain_convergence(
+        report.inference_diagnostics.revised(
+            per_parameter=tuple(
+                row.revised(ess_bulk=264.0) for row in report.inference_diagnostics.per_parameter
+            )
+        )
+    )
+    assert convergence.status == "failed"
+    result = summarize_causal_simulation(
+        SimulationInputs(
+            selection=StructuralSelection(model, outcome),
+            design=SimulationSpec(
+                start=date(2024, 1, 1),
+                horizon="1d",
+                interventions=(InterventionSpec(target=treatment, value=1.0),),
+            ),
+            seed=0,
+            num_replicates=2,
+            law=AuthoredLawProvenance(),
+            fitted=(
+                GitRef(workspace_id="workspace", revision=git_oid(2), path="model.json"),
+                report.revised(convergence=convergence),
+            ),
+        ),
+        action=SimulationArm(
+            latent_paths=NumericalArray.from_numpy(np.ones((2, 2, 2))),
+            observations=NumericalArray.from_numpy(np.ones((2, 2, 0))),
+        ),
+        reference=SimulationArm(
+            latent_paths=NumericalArray.from_numpy(np.zeros((2, 2, 2))),
+            observations=NumericalArray.from_numpy(np.zeros((2, 2, 0))),
+        ),
+        state_ids=(treatment, outcome),
+        indicator_ids=(),
+    )
+    assert isinstance(result, CausalEffectResult)
+    np.testing.assert_array_equal(result.differences.values, np.ones((2, 2)))
+    assert result.summary.mean == 1.0
+    assert result.warnings == convergence.messages
