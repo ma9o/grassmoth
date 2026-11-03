@@ -121,7 +121,6 @@ def test_full_categories_and_paired_paths_are_saved_once(tmp_path, monkeypatch):
     )
     report = SimulationReport(
         summary=empty_simulation_summary(),
-        fit_reliability="not_fitted",
         law=AuthoredLawProvenance(),
         evidence=SimulationEvidence(
             times=(5, 7),

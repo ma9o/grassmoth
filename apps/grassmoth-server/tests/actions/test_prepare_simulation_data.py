@@ -128,7 +128,6 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     design = SimulationSpec(start=date(2026, 1, 6), horizon="2d")
     report = SimulationReport(
         summary=empty_simulation_summary(),
-        fit_reliability="not_fitted",
         law=AuthoredLawProvenance(),
         evidence=SimulationEvidence(
             time_origin=datetime(2026, 1, 1, tzinfo=UTC),
@@ -285,7 +284,6 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
         values[0, 0] = 2
     report = SimulationReport(
         summary=empty_simulation_summary(),
-        fit_reliability="not_fitted",
         law=AuthoredLawProvenance(),
         evidence=SimulationEvidence(
             time_origin=datetime(2026, 1, 1, tzinfo=UTC),

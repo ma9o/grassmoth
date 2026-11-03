@@ -2775,13 +2775,6 @@
             },
             "title": "Manifest Effects",
             "type": "object"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
           }
         },
         "required": [
@@ -2791,8 +2784,7 @@
           "frame",
           "summary",
           "reference_mean",
-          "manifest_effects",
-          "warnings"
+          "manifest_effects"
         ],
         "title": "CausalEffectResult",
         "type": "object",
@@ -15686,18 +15678,6 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "FitReliability": {
-        "enum": [
-          "not_fitted",
-          "converged",
-          "unconverged",
-          "unknown"
-        ],
-        "type": "string",
-        "x-python-module": "grassmoth.artifacts.simulation",
-        "x-layer": "findings",
-        "x-concern": "scientific_model"
-      },
       "FitRequest_Annotated_Any__WithJsonSchema__": {
         "additionalProperties": false,
         "description": "Fit the selected model to the selected history; return ``FitOutput``.",
@@ -24364,17 +24344,13 @@
             },
             "title": "Findings",
             "type": "array"
-          },
-          "fit_reliability": {
-            "$ref": "#/components/schemas/FitReliability"
           }
         },
         "required": [
           "evidence",
           "summary",
           "law",
-          "findings",
-          "fit_reliability"
+          "findings"
         ],
         "title": "SimulationReport",
         "type": "object",
@@ -26167,13 +26143,6 @@
             },
             "title": "Manifest Effects",
             "type": "object"
-          },
-          "warnings": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Warnings",
-            "type": "array"
           }
         },
         "required": [
@@ -26183,8 +26152,7 @@
           "frame",
           "summary",
           "reference_mean",
-          "manifest_effects",
-          "warnings"
+          "manifest_effects"
         ],
         "title": "CausalEffectResult",
         "type": "object",
@@ -36557,17 +36525,13 @@
             },
             "title": "Findings",
             "type": "array"
-          },
-          "fit_reliability": {
-            "$ref": "#/components/schemas/FitReliability"
           }
         },
         "required": [
           "evidence",
           "summary",
           "law",
-          "findings",
-          "fit_reliability"
+          "findings"
         ],
         "title": "SimulationReport",
         "type": "object",

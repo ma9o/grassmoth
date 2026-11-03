@@ -482,7 +482,6 @@ def simulation(*, causal: bool) -> SimulateOutput:
                             },
                             "reference_mean": 4.5,
                             "manifest_effects": {OUTCOME_READING: 1.5},
-                            "warnings": ["Synthetic interface example."],
                         }
                         if causal
                         else {
@@ -507,7 +506,6 @@ def simulation(*, causal: bool) -> SimulateOutput:
                     "reference_category_probabilities": {},
                 },
                 "law": {"kind": "authored"},
-                "fit_reliability": "not_fitted",
                 "findings": [],
             },
         }

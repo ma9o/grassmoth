@@ -9,7 +9,6 @@ import numpy as np
 from grassmoth.actions.contracts.io import FittedLaw, SimulateOutput
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.simulation import (
-    FitReliability,
     PairedArmSimulation,
     SimulationArm,
     SimulationEvidence,
@@ -124,28 +123,16 @@ def simulation_report(
     import jax
     import jax.numpy as jnp
 
+    from grassmoth.actions.simulate.findings import simulation_context_findings
     from grassmoth.actions.simulate.summaries import simulation_summary
     from grassmoth.models.ssm.compile.inputs import compile_executable_model
     from grassmoth.models.ssm.diagnostics.simulation import DesignInfo
-    from grassmoth.models.ssm.inference.diagnostics.convergence import convergence_failures
     from grassmoth.models.ssm.predictive.registry_runtime import _predictive_models
     from grassmoth.models.ssm.predictive.simulation import SimulationBatch
     from grassmoth.models.ssm.predictive.types import PredictiveDraws, PredictiveTrajectory
     from grassmoth.models.ssm.preparation.observations import recorded_observation_support
 
-    reliability: FitReliability
-    match law:
-        case FittedLaw(provenance=provenance, report=report):
-            reliability = (
-                "unknown"
-                if report.inference_diagnostics is None
-                else "unconverged"
-                if convergence_failures(report.convergence)
-                else "converged"
-            )
-        case _:
-            provenance = law
-            reliability = "unknown" if law.kind == "unknown" else "not_fitted"
+    provenance = law.provenance if isinstance(law, FittedLaw) else law
     latents = evidence.arms.action.latent_paths.values
     observations = evidence.arms.action.observations.values
     mask = evidence.observation_layout.mask.values
@@ -231,8 +218,7 @@ def simulation_report(
         evidence=evidence,
         summary=summary,
         law=provenance,
-        findings=findings,
-        fit_reliability=reliability,
+        findings=(*findings, *simulation_context_findings(evidence, law)),
     )
 
 

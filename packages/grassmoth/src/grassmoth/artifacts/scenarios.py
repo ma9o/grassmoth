@@ -45,4 +45,3 @@ class CausalEffectResult(Value):
     manifest_effects: Mapping[IndicatorId, FiniteFloat] = Field(
         description="Mean final-time indicator contrasts where every paired draw is finite."
     )
-    warnings: tuple[str, ...] = Field(default_factory=tuple)

@@ -106,9 +106,6 @@ class CategoryProbabilitySummary(Value):
     n_draws: tuple[int, ...]
 
 
-type FitReliability = Literal["not_fitted", "converged", "unconverged", "unknown"]
-
-
 class SimulationArm(Value):
     """One arm's exact state and observation draws."""
 
@@ -174,4 +171,3 @@ class SimulationReport(Value):
     summary: SimulationSummary
     law: PredictiveLawProvenance
     findings: tuple[PredictiveAssessment, ...] = ()
-    fit_reliability: FitReliability

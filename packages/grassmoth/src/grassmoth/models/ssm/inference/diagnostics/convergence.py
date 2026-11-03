@@ -104,8 +104,3 @@ def chain_convergence(chains: ChainDiagnostics | None) -> ConvergenceReport:
             if r_hat is not None and R_HAT_WARNING <= r_hat < R_HAT_LIMIT
         ),
     )
-
-
-def convergence_failures(report: ConvergenceReport) -> tuple[str, ...]:
-    """Action messages use the same measured verdict, without reconstruction."""
-    return report.messages

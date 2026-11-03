@@ -800,8 +800,6 @@ export interface components {
              * @description Mean final-time indicator contrasts where every paired draw is finite.
              */
             readonly manifest_effects: Readonly<Partial<Record<components["schemas"]["IndicatorId-Output"], number>>>;
-            /** Warnings */
-            readonly warnings: readonly string[];
         };
         /**
          * ChainDiagnostics
@@ -4241,8 +4239,6 @@ export interface components {
              */
             readonly split_total: components["schemas"]["TimingSpread"] | null;
         };
-        /** @enum {string} */
-        readonly FitReliability: "not_fitted" | "converged" | "unconverged" | "unknown";
         /**
          * FitRequest[GitOid]
          * @description Fit the selected model to the selected history; return ``FitOutput``.
@@ -7111,7 +7107,6 @@ export interface components {
              * @default []
              */
             readonly findings: readonly components["schemas"]["PredictiveAssessment"][];
-            readonly fit_reliability: components["schemas"]["FitReliability"];
         };
         /**
          * SimulationSpec

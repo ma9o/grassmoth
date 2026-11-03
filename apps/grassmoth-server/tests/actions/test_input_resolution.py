@@ -156,7 +156,6 @@ def study(tmp_path, monkeypatch):
                                     evidence=evidence.revised(seed=seed),
                                     summary=empty_simulation_summary(),
                                     law=AuthoredLawProvenance(),
-                                    fit_reliability="not_fitted",
                                 )
                             )
                         }

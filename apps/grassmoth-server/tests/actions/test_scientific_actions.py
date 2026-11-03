@@ -429,7 +429,6 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         evidence=evidence,
         law=AuthoredLawProvenance(),
         findings=(),
-        fit_reliability="converged",
     )
     fitted = (
         GitRef(workspace_id="TEST", revision=git_oid(2), path="model.json"),
@@ -507,11 +506,53 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
         warned = summarize()
         assert isinstance(warned, CausalEffectResult)
         np.testing.assert_array_equal(warned.differences.values, expected)
-        assert set(convergence.messages) <= set(warned.warnings)
-        warned_report = report.revised(evidence=evidence.revised(arms=arms.revised(causal=warned)))
+        from grassmoth.actions.contracts.io import FittedLaw
+        from grassmoth.actions.simulate.findings import simulation_context_findings
+        from grassmoth.artifacts.reports.predictive_provenance import FittedLawProvenance
+
+        warned_evidence = evidence.revised(arms=arms.revised(causal=warned))
+        findings = simulation_context_findings(
+            warned_evidence,
+            FittedLaw(
+                provenance=FittedLawProvenance(
+                    fitted_data=DataRef(revision=git_oid(3), replicate_index=0),
+                    fitted_model_revision=model_ref.revision,
+                    interpretation="posterior_predictive",
+                ),
+                report=fitted[1],
+            ),
+        )
+        warned_report = report.revised(evidence=warned_evidence, findings=findings)
         messages = simulation_messages(warned_report, datetime(2024, 1, 1, tzinfo=UTC))
-        assert {message.detail for message in messages} == set(warned.warnings)
+        assert messages
+        assert {message.code for message in messages} == {finding.code for finding in findings}
+        assert any(message.code == "fit_reliability" for message in messages)
         assert all(message.severity == "warning" for message in messages)
+
+    from grassmoth.artifacts.arrays import NumericalArray
+    from grassmoth.artifacts.identity import IndicatorRef
+
+    missing_observations = np.array(arms.action.observations.values, copy=True)
+    missing_observations[:, -1, 0] = np.nan
+    missing_evidence = evidence.revised(
+        arms=arms.revised(
+            causal=result,
+            action=arms.action.revised(
+                observations=NumericalArray.from_numpy(missing_observations)
+            ),
+        )
+    )
+    (contrast_finding,) = simulation_context_findings(missing_evidence, AuthoredLawProvenance())
+    assert contrast_finding.kind == "not_evaluated"
+    assert contrast_finding.code == "causal_indicator_contrast"
+    assert contrast_finding.subject.target == IndicatorRef(
+        id=evidence.observation_layout.indicator_ids[0]
+    )
+    (contrast_message,) = simulation_messages(
+        report.revised(evidence=missing_evidence, findings=(contrast_finding,)),
+        datetime(2024, 1, 1, tzinfo=UTC),
+    )
+    assert contrast_message.severity == "warning"
 
     fitted = None
     unavailable = summarize()

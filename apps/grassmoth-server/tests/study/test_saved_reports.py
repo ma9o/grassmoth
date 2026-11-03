@@ -307,7 +307,6 @@ def test_action_reports_are_published_once_and_loaded_without_checks(tmp_path, m
         summary=empty_simulation_summary(),
         evidence=evidence,
         law=AuthoredLawProvenance(),
-        fit_reliability="not_fitted",
     )
     monkeypatch.setattr(
         "grassmoth.actions.simulate.action.simulation_report", unexpected_evaluation

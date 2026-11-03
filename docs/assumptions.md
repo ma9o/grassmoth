@@ -239,7 +239,7 @@ Some parameter pairs are only weakly separated, and the invariant deliberately d
 
 Otherwise it still returns the generated histories and records why no effect is reported. Interventions are dated state assignments, after which the model's dynamics resume. Effects are reported for the question's outcome only. Certification covers the identified treatment and outcome; it does not add a separate identification proof for a general timed joint intervention.
 
-Failed or unavailable [convergence criteria](assets/action-flows/fit.svg) are reported as warnings alongside the effect; the report retains its fit reliability. Convergence diagnostics do not withhold effects. Read those warnings, the [sampler diagnostics' limits](#reading-results), predictive checks and LOO before trusting a reported effect.
+Failed or unavailable [convergence criteria](assets/action-flows/fit.svg) are retained as report findings and announced as warnings alongside the effect. Authored, unfitted laws have no fit-reliability finding; missing fit evidence for other laws is explicitly unevaluated. Convergence diagnostics do not withhold effects. Read those warnings, the [sampler diagnostics' limits](#reading-results), predictive checks and LOO before trusting a reported effect.
 
 ## Reading results
 

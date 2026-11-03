@@ -193,11 +193,6 @@ export function SimulationEvidence({ context }: { context: ScopeContext }) {
               title="Paired effect"
               height={160}
             />
-            {effect.warnings.map((warning) => (
-              <Hint key={warning} issue>
-                {warning}
-              </Hint>
-            ))}
           </>
         ) : (
           report.evidence.arms.kind === "paired" &&
@@ -210,7 +205,6 @@ export function SimulationEvidence({ context }: { context: ScopeContext }) {
             ["Start", timeLabel(report.evidence.times[0])],
             ["End", timeLabel(report.evidence.times.at(-1) ?? report.evidence.times[1])],
             ["Draws", report.evidence.draws.toLocaleString()],
-            ["Fit reliability", humanize(report.fit_reliability)],
             ["Laws", humanize(report.law.interpretation)],
           ]}
         />

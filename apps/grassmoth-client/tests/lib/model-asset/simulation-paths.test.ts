@@ -48,7 +48,6 @@ it.each([
                   summary: { mean: 2, median: 2, lower_95: 1, upper_95: 3, prob_positive: 1 },
                   reference_mean: 0,
                   manifest_effects: {},
-                  warnings: [],
                 },
               },
         observation_layout: {

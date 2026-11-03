@@ -81,7 +81,6 @@ export type FitCheckReport = components["schemas"]["FitCheckReport"];
 export type FitComponentTiming = components["schemas"]["FitComponentTiming"];
 export type FitOutput = components["schemas"]["FitOutput"];
 export type FitProfileReport = components["schemas"]["FitProfileReport"];
-export type FitReliability = components["schemas"]["FitReliability"];
 export type FitRuntime = components["schemas"]["FitRuntime"];
 export type FitSegment = components["schemas"]["FitSegment"];
 export type FitSettingsSpec = components["schemas"]["FitSettingsSpec-Output"];
