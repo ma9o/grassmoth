@@ -225,7 +225,7 @@ class AuxiliaryKalmanSpec(Value):
     block_length: int | None = Field(
         default=300,
         ge=1,
-        description="Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. With deterministic recurrences or window memory, each block pays its change in the whole label-conditional path density, and blocks update one at a time unless every window fits within a block.",
+        description="Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates.",
     )
     latent_step: LatentStepSpec = Field(
         default_factory=AdaptedLatentStepSpec,
