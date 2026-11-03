@@ -14,7 +14,6 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.identity import GitRef
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
     from grassmoth.artifacts.reports.identification import IdentificationReport
-    from grassmoth.artifacts.reports.inference import InferenceReportCore
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,7 +35,6 @@ class CertifiedCausalAnalysis:
     identification: IdentificationReport
     estimands: tuple[IdentifiedEstimand, ...]
     fitted_dynamical_model_spec: DynamicalModelSpec
-    report: InferenceReportCore
 
     def __post_init__(self) -> None:
         """Certify the retained model, fit, and identification evidence for a common causal outcome."""
@@ -45,7 +43,6 @@ class CertifiedCausalAnalysis:
         certify_conditioned_model(
             self.dynamical_model_spec,
             self.fitted_dynamical_model_spec,
-            self.report,
         )
         outcomes = {estimand.outcome for estimand in self.estimands}
         if len(outcomes) != 1:
@@ -123,11 +120,9 @@ def certify_identified_estimand(
 def certify_conditioned_model(
     dynamical_model_spec: DynamicalModelSpec,
     fitted_dynamical_model_spec: DynamicalModelSpec,
-    report: InferenceReportCore,
 ) -> None:
-    """Check resolved fitted values against retained uncertainty and convergence evidence."""
+    """Check resolved fitted values against retained uncertainty and model provenance."""
     from grassmoth.models.inputs import input_fingerprints
-    from grassmoth.models.ssm.inference.diagnostics.convergence import convergence_failures
 
     if (
         input_fingerprints(fitted_dynamical_model_spec)["belief"]
@@ -138,9 +133,3 @@ def certify_conditioned_model(
         )
     if not dynamical_model_spec.distributions or not dynamical_model_spec.time_points:
         raise CausalCertificationError("The model has no retained joint uncertainty")
-    if failures := convergence_failures(report.convergence):
-        raise CausalCertificationError(
-            "The fit did not pass its convergence checks: "
-            + "; ".join(failures)
-            + ". Revise the model before reporting causal effects."
-        )

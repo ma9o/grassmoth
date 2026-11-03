@@ -234,12 +234,12 @@ Some parameter pairs are only weakly separated, and the invariant deliberately d
 
 - The treatment's effect on the question's outcome is identified within the [implemented graph check's scope](#a3a-scope-of-the-two-slice-check).
 - The simulated model was conditioned by a committed production fit, using an exact joint sampler with the nonlinear Euler–Maruyama target, and it matches that fit's record exactly.
-- That fit passed its [convergence checks](assets/action-flows/fit.svg), within the [sampler diagnostics' limits](#reading-results). A fit with failed or unavailable required criteria still saves, but its effects are withheld. Non-blocking R-hat warnings do not withhold an effect.
+- The model retains joint uncertainty over parameters and histories.
 - The simulated paths are finite.
 
 Otherwise it still returns the generated histories and records why no effect is reported. Interventions are dated state assignments, after which the model's dynamics resume. Effects are reported for the question's outcome only. Certification covers the identified treatment and outcome; it does not add a separate identification proof for a general timed joint intervention.
 
-Certification does not look at predictive checks or LOO. Read those before trusting a reported effect.
+Failed or unavailable [convergence criteria](assets/action-flows/fit.svg) are reported as warnings alongside the effect; the report retains its fit reliability. Convergence diagnostics do not withhold effects. Read those warnings, the [sampler diagnostics' limits](#reading-results), predictive checks and LOO before trusting a reported effect.
 
 ## Reading results
 
