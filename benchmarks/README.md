@@ -203,6 +203,21 @@ Run records go in the run folder's `notes.md`: date, study workspace, the calls'
 IDs, outcome per case and the proposed decision. This section keeps the current
 decisions, newest first.
 
+### Convergence ESS bar — 2026-11-03
+
+The production check now requires bulk and tail ESS of at least 400 in total,
+the minimum Vehtari et al. (2021) recommend, instead of 100 per chain. ESS pools
+the chains, so per chain it measures only chain length in autocorrelation times,
+which R̂ already measures: at stationarity, split R̂ is about 1 + chains/ESS.
+Every SV record in [suite/notes.md](suite/notes.md) with at least 25 effective
+draws per chain fits that within 0.007. The per-chain bar therefore acted as an
+R̂ ≤ 1.01 gate, and its total grew with every added chain.
+- **Unchanged:** four-chain fits, including every suite case, where both bars
+  are 400.
+- **Records keep the verdicts they were judged under.** Under the new bar, the
+  SV mGRAD, both blocked-Kalman and the centred-NUTS fits would pass. The
+  whole-path Kalman SV fit and the Lorenz-96 fits would still fail.
+
 ### Second scorecard — 2026-10-24
 
 This scorecard ran on master `4572dc7b` at the full schedule, with early

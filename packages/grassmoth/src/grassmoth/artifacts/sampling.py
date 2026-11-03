@@ -280,8 +280,8 @@ class SamplerSpec(Value):
         ge=1,
         description=(
             "Independent chains, which the convergence checks compare: rank-normalized R-hat, "
-            "and bulk and tail ESS of at least 100 per chain. Vehtari et al. (2021) recommend "
-            "at least four."
+            "and bulk and tail ESS of at least 400 in total, however many chains run. "
+            "Vehtari et al. (2021) recommend at least four."
         ),
     )
     seed: int = Field(

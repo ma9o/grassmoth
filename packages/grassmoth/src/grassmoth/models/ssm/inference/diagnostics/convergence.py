@@ -20,7 +20,12 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 # https://doi.org/10.1214/20-BA1221. Neither is a familywise error guarantee.
 R_HAT_LIMIT = 1.05
 R_HAT_WARNING = 1.01
-ESS_PER_CHAIN = 100
+# Vehtari et al. (2021) recommend a rank-normalized ESS of 400 as typically enough
+# for a stable Monte Carlo standard error. ESS pools every chain, so the bar stays
+# fixed as chains are added. Per chain, ESS is chain length in autocorrelation
+# times, which R-hat already measures: at stationarity, split R-hat is about
+# 1 + chains / ESS, so R_HAT_LIMIT implies about 20 per chain.
+ESS_MINIMUM = 400
 
 
 def chain_convergence(chains: ChainDiagnostics | None) -> ConvergenceReport:
@@ -37,7 +42,6 @@ def chain_convergence(chains: ChainDiagnostics | None) -> ConvergenceReport:
             ),
         )
     findings = []
-    minimum = ESS_PER_CHAIN * chains.num_chains
     coordinates = tuple(
         (
             ConvergenceSubject(parameter=p.subject, label=p.parameter),
@@ -62,8 +66,8 @@ def chain_convergence(chains: ChainDiagnostics | None) -> ConvergenceReport:
     for subject, r_hat, ess_bulk, ess_tail in coordinates:
         for criterion, value, lower, upper in (
             (ConvergenceCriterion.R_HAT, r_hat, None, R_HAT_LIMIT),
-            (ConvergenceCriterion.ESS_BULK, ess_bulk, float(minimum), None),
-            (ConvergenceCriterion.ESS_TAIL, ess_tail, float(minimum), None),
+            (ConvergenceCriterion.ESS_BULK, ess_bulk, float(ESS_MINIMUM), None),
+            (ConvergenceCriterion.ESS_TAIL, ess_tail, float(ESS_MINIMUM), None),
         ):
             if value is None:
                 findings.append(
@@ -75,7 +79,7 @@ def chain_convergence(chains: ChainDiagnostics | None) -> ConvergenceReport:
                     )
                 )
             else:
-                passes = value < upper if upper is not None else value >= minimum
+                passes = value < upper if upper is not None else value >= ESS_MINIMUM
                 evidence = NumericCriterionEvidence(
                     criterion=criterion.value,
                     value=value,

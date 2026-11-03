@@ -6853,7 +6853,7 @@ export interface components {
             readonly num_samples_per_chain: number;
             /**
              * Num Chains
-             * @description Independent chains, which the convergence checks compare: rank-normalized R-hat, and bulk and tail ESS of at least 100 per chain. Vehtari et al. (2021) recommend at least four.
+             * @description Independent chains, which the convergence checks compare: rank-normalized R-hat, and bulk and tail ESS of at least 400 in total, however many chains run. Vehtari et al. (2021) recommend at least four.
              * @default 4
              */
             readonly num_chains: number;
