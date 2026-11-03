@@ -13,7 +13,6 @@ from pydantic import ValidationError
 from grassmoth.actions.fit.conditioning import condition_model
 from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.scenarios import StateAssignment
 from grassmoth.models.ssm.compile.inputs import IncompleteModel, compile_model
 from grassmoth.models.ssm.inference.types import JointPosteriorDraws
@@ -31,6 +30,7 @@ from grassmoth.models.ssm.preparation.binding import (
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_test_support.compute import COMPUTE_BUDGET, compile_program
+from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.inference import (
     compile_model_fixture,
     parameter_draws,
@@ -113,7 +113,7 @@ def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_re
             for day, value in zip((1, 2, 3), values, strict=True)
         ]
     )
-    panel = ObservationDataset.from_frame(rows, variables, time_origin=_ORIGIN)
+    panel = observation_dataset(rows, variables, time_origin=_ORIGIN)
     bound = bind_panel(
         panel,
         compiled_dynamical_model=compiled_dynamical_model,
@@ -123,7 +123,7 @@ def test_fit_binds_model_path_at_every_change_and_rejects_contradictory_exact_re
     np.testing.assert_array_equal(bound.times, [0, 0.5, 1, 2, 2.5, 3])
     np.testing.assert_array_equal(bound.input_values[:, 0], [1, 3, 3, 3, 2, 2])
     assert np.isnan(bound.observations[:, 0]).all()
-    contradictory = ObservationDataset.from_frame(
+    contradictory = observation_dataset(
         rows.with_columns(
             pl.when(pl.col("indicator_id") == variables[0].id)
             .then(pl.col("value") + 1)

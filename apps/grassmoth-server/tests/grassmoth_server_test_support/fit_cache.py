@@ -15,7 +15,6 @@ from grassmoth.actions.contracts.io import FitInputs, FitOutput
 from grassmoth.actions.fit.action import fit
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.question import QuestionSpec
-from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.reports.inference import FitRuntime
 from grassmoth.artifacts.sampling import (
     GaussianInitializationSpec,
@@ -27,6 +26,7 @@ from grassmoth.compute.context import ModelExecutionContext
 from grassmoth.models.ssm.compile.inputs import compile_executable_model
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.compute.compilation_cache import compile_program, prepare_program
+from grassmoth_test_support.helpers import observation_dataset
 
 ROOT = Path(__file__).resolve().parents[4]
 ORIGIN = datetime(2020, 1, 1, tzinfo=UTC)
@@ -66,7 +66,7 @@ def fixture(scale=1.0, offset=0.0):
         for variable in variables
         for index in range(3)
     ]
-    data = ObservationDataset.from_frame(pl.DataFrame(rows), variables, time_origin=ORIGIN)
+    data = observation_dataset(pl.DataFrame(rows), variables, time_origin=ORIGIN)
     return question, selection, data
 
 

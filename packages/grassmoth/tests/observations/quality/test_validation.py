@@ -5,7 +5,7 @@ This module tests:
 2. Validation checks - timestamps, dtype, coverage, gaps, hallucination, correlations
 """
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 import polars as pl
@@ -20,12 +20,12 @@ from grassmoth.artifacts.model.construct import (
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
 from grassmoth.artifacts.model.reasoning import ReasoningSpec
 from grassmoth.artifacts.observations.duration import Duration
+from grassmoth.artifacts.observations.time import ObservationInstant
 from grassmoth.artifacts.reports.checks import Evaluated
 from grassmoth.artifacts.reports.data_quality import DataProfileReport
-from grassmoth.observations.quality.checks import parse_timestamp_series
 from grassmoth.observations.quality.profile import profile_data
 from grassmoth.observations.quality.profile import validate_extraction as validate_model_data
-from grassmoth_test_support.helpers import fixture_entity_id, make_model
+from grassmoth_test_support.helpers import fixture_entity_id, make_model, observation_dataset
 
 pytestmark = pytest.mark.contract
 
@@ -47,7 +47,9 @@ def test_recorded_point_cadence_uses_declared_window_and_only_observed_times():
             "support_end": times,
         }
     )
-    complete = profile_data(data, definitions=(definition,))
+    complete = profile_data(
+        observation_dataset(data, (definition,), time_origin=datetime(2020, 1, 1, 13, tzinfo=UTC))
+    )
     time_findings = {
         item.code: item
         for item in complete.indicators[definition.id].findings
@@ -62,7 +64,9 @@ def test_recorded_point_cadence_uses_declared_window_and_only_observed_times():
         .otherwise(pl.col("value"))
         .alias("value")
     )
-    sparse = profile_data(masked, definitions=(definition,))
+    sparse = profile_data(
+        observation_dataset(masked, (definition,), time_origin=datetime(2020, 1, 1, 13, tzinfo=UTC))
+    )
     gaps = [item for item in _all_issues(sparse) if item.code == "large_timestamp_gap"]
     assert len(gaps) == 1
     assert "27h" in gaps[0].evidence
@@ -112,21 +116,37 @@ def validate_extraction(
     for definition in definitions:
         assert isinstance(definition.observation_window, Duration)
         windows[definition.id] = definition.observation_window.seconds
+    dataframes = [ObservationInstant.normalize_column(frame, "anchor_time") for frame in dataframes]
     dataframes = [
         frame.with_columns(
             (
-                parse_timestamp_series(frame["anchor_time"])
+                frame["anchor_time"]
                 - frame.select(
                     pl.duration(seconds=pl.col("indicator_id").replace_strict(windows))
                 ).to_series()
             ).alias("support_start"),
-            parse_timestamp_series(frame["anchor_time"]).alias("support_end"),
+            frame["anchor_time"].alias("support_end"),
         )
         for frame in dataframes
     ]
-    data = pl.concat(dataframes).with_columns(pl.col("value").cast(pl.Float64, strict=False))
-    profile = profile_data(data, definitions=definitions)
-    compatibility = validate_model_data(dynamical_model_spec, dataframes)
+    data = (
+        pl.concat(dataframes).with_columns(pl.col("value").cast(pl.Float64, strict=False))
+        if dataframes
+        else pl.DataFrame(
+            schema={
+                "indicator_id": pl.String,
+                "value": pl.Float64,
+                "anchor_time": pl.Datetime,
+                "support_start": pl.Datetime,
+                "support_end": pl.Datetime,
+            }
+        )
+    )
+    observations = observation_dataset(
+        data, definitions, time_origin=datetime(2024, 1, 1, 13, tzinfo=UTC)
+    )
+    profile = profile_data(observations)
+    compatibility = validate_model_data(dynamical_model_spec, observations)
     return profile.revised(findings=(*profile.findings, *compatibility.findings))
 
 
@@ -167,7 +187,10 @@ def _make_spec(
             "id": fixture_entity_id("indicator", indicator_name),
             "construct_id": fixture_entity_id("construct", construct_name),
             "name": indicator_name,
-            "measurement": {"dtype": dtype},
+            "measurement": {
+                "dtype": dtype,
+                **({"levels": ("low", "high")} if dtype in ("ordinal", "categorical") else {}),
+            },
         },
     ]
     if extra_indicators:
@@ -214,7 +237,7 @@ class TestValidateExtraction:
 
     def test_empty_results_returns_error(self, simple_causal_design):
         """Empty worker results returns error."""
-        result = validate_model_data(simple_causal_design, [])
+        result = validate_extraction(simple_causal_design, [])
         assert any(i.code == "no_data" for i in _all_issues(result))
 
     def test_valid_data_no_issues(self, simple_causal_design):
@@ -478,7 +501,12 @@ class TestCheckTimestamps:
             for i in range(20)
         ]
         result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
-        ts_issues = [i for i in _all_issues(result) if i.code == "timestamps"]
+        ts_issues = [
+            finding
+            for audit in result.indicators.values()
+            for finding in audit.findings
+            if finding.code == "timestamps"
+        ]
         assert len(ts_issues) == 0
 
     def test_native_datetime_timestamps_are_parseable(self):
@@ -492,7 +520,12 @@ class TestCheckTimestamps:
             }
         )
         result = validate_extraction(dynamical_model_spec, [df])
-        ts_issues = [i for i in _all_issues(result) if i.code == "timestamps"]
+        ts_issues = [
+            finding
+            for audit in result.indicators.values()
+            for finding in audit.findings
+            if finding.code == "timestamps"
+        ]
         assert len(ts_issues) == 0
 
     def test_all_unparseable_is_error(self):
@@ -506,13 +539,11 @@ class TestCheckTimestamps:
             }
             for i in range(20)
         ]
-        result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
-        ts_issues = [i for i in _all_issues(result) if i.code == "timestamps"]
-        assert len(ts_issues) == 1
-        assert ts_issues[0].outcome == "failed"
+        with pytest.raises((ValueError, pl.exceptions.PolarsError)):
+            validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
 
-    def test_majority_unparseable_is_warning(self):
-        """Over 50% unparseable timestamps → warning."""
+    def test_majority_unparseable_is_rejected(self):
+        """Ingress rejects malformed anchors before profiling."""
         dynamical_model_spec = _make_spec()
         records = []
         for i in range(20):
@@ -524,13 +555,11 @@ class TestCheckTimestamps:
                     "anchor_time": ts,
                 }
             )
-        result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
-        ts_issues = [i for i in _all_issues(result) if i.code == "timestamps"]
-        assert len(ts_issues) == 1
-        assert ts_issues[0].outcome == "failed"
+        with pytest.raises((ValueError, pl.exceptions.PolarsError)):
+            validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
 
-    def test_minority_unparseable_no_issue(self):
-        """Under 50% unparseable timestamps → no timestamp issue."""
+    def test_minority_unparseable_is_rejected(self):
+        """Ingress rejects even a minority of malformed anchors."""
         dynamical_model_spec = _make_spec()
         records = []
         for i in range(20):
@@ -542,9 +571,8 @@ class TestCheckTimestamps:
                     "anchor_time": ts,
                 }
             )
-        result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
-        ts_issues = [i for i in _all_issues(result) if i.code == "timestamps"]
-        assert len(ts_issues) == 0
+        with pytest.raises((ValueError, pl.exceptions.PolarsError)):
+            validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
 
 
 # ==============================================================================
@@ -555,9 +583,10 @@ class TestCheckTimestamps:
 class TestCheckDtypeRange:
     """Test dtype range conformance checks."""
 
-    def test_binary_valid(self):
-        """Binary values in {0, 1} produce no dtype issues."""
-        dynamical_model_spec = _make_spec(dtype="binary")
+    @pytest.mark.parametrize("dtype", ["binary", "count", "ordinal", "categorical"])
+    def test_admitted_discrete_values_have_no_dtype_findings(self, dtype):
+        """Discrete validity belongs to admission, with no redundant profile result."""
+        dynamical_model_spec = _make_spec(dtype=dtype)
         records = [
             {
                 "indicator_id": "indicator:3696aef3ff6f446744e5",
@@ -567,7 +596,12 @@ class TestCheckDtypeRange:
             for i, v in enumerate(["0", "1", "0", "1", "1", "0", "1", "0", "1", "0"] * 2)
         ]
         result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
-        dtype_issues = [i for i in _all_issues(result) if i.code == "dtype_violation"]
+        dtype_issues = [
+            finding
+            for audit in result.indicators.values()
+            for finding in audit.findings
+            if finding.code == "dtype_violation"
+        ]
         assert len(dtype_issues) == 0
 
     def test_binary_violation_is_error(self):
@@ -581,10 +615,8 @@ class TestCheckDtypeRange:
             }
             for i, v in enumerate(["0", "1", "2", "0.5", "1", "0", "1", "0", "1", "0"])
         ]
-        result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
-        dtype_issues = [i for i in _all_issues(result) if i.code == "dtype_violation"]
-        assert len(dtype_issues) == 1
-        assert dtype_issues[0].outcome == "failed"
+        with pytest.raises(ValueError, match="requires"):
+            validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
 
     def test_count_negative_is_error(self):
         """Count indicator with negative values → error."""
@@ -597,10 +629,8 @@ class TestCheckDtypeRange:
             }
             for i, v in enumerate(["3", "5", "-1", "2", "4", "0", "1", "6", "3", "2"])
         ]
-        result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
-        dtype_issues = [i for i in _all_issues(result) if i.code == "dtype_violation"]
-        assert any(i.outcome == "failed" for i in dtype_issues)
-        assert any("negative" in i.evidence for i in dtype_issues)
+        with pytest.raises(ValueError, match="requires"):
+            validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
 
     def test_count_fractional_is_error(self):
         """Count indicator with fractional values → error."""
@@ -613,10 +643,8 @@ class TestCheckDtypeRange:
             }
             for i, v in enumerate(["3", "5", "2.5", "2", "4", "0", "1", "6", "3", "2"])
         ]
-        result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
-        dtype_issues = [i for i in _all_issues(result) if i.code == "dtype_violation"]
-        assert any(i.outcome == "failed" for i in dtype_issues)
-        assert any("fractional" in i.evidence for i in dtype_issues)
+        with pytest.raises(ValueError, match="requires"):
+            validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
 
     def test_continuous_outlier_warning(self):
         """Continuous data with extreme outlier → warning."""
@@ -648,8 +676,15 @@ class TestCheckDtypeRange:
             for i in range(20)
         ]
         result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))
-        dtype_issues = [i for i in _all_issues(result) if i.code == "dtype_violation"]
-        assert len(dtype_issues) == 0
+        dtype_issues = [
+            finding
+            for audit in result.indicators.values()
+            for finding in audit.findings
+            if finding.code == "dtype_violation"
+        ]
+        assert len(dtype_issues) == 1
+        assert isinstance(dtype_issues[0], Evaluated)
+        assert dtype_issues[0].outcome == "passed"
 
 
 # ==============================================================================
@@ -964,7 +999,7 @@ class TestCheckConstructCorrelations:
                 {
                     "indicator_id": "indicator:4ff8be7491bd87d28af4",
                     "value": str(val + 0.5),  # Positively correlated
-                    "anchor_time": f"2024-01-{i + 1:02d} 10:00",
+                    "anchor_time": f"2024-01-{i + 1:02d} 21:00",
                 }
             )
         result = validate_extraction(dynamical_model_spec, _create_worker_dfs(records))

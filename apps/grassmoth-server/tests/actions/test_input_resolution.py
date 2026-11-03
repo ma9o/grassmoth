@@ -350,6 +350,42 @@ def test_latest_is_pinned_by_input_type_before_running_call_deduplication(
     assert len(dispatched) == 1
 
 
+@pytest.mark.parametrize("source_kind", ["panel", "prepare_data", "simulate"])
+def test_fit_input_state_resolves_source_kind_without_decoding_outputs(
+    study, monkeypatch, source_kind
+):
+    from grassmoth.actions.contracts.io import PrepareDataOutput, SimulateOutput
+
+    repository, _, models, panel, simulation = study
+    preparation = next(
+        revision.commit_id
+        for revision in repository.attempts()
+        if revision.record.attempt.action == "prepare_data"
+        and isinstance(revision.record.attempt.outcome, Applied)
+        and panel in revision.record.attempt.outcome.effects.produced
+    )
+    source = {"panel": panel.revision, "prepare_data": preparation, "simulate": simulation}[
+        source_kind
+    ]
+
+    def unexpected_decode(*_args, **_kwargs):
+        pytest.fail("Input routing decoded an observation output")
+
+    monkeypatch.setattr(PrepareDataOutput, "model_validate", unexpected_decode)
+    monkeypatch.setattr(SimulateOutput, "model_validate", unexpected_decode)
+    request = FitRequest[GitOid](
+        input=FitInput[GitOid](
+            target=NewFitTarget(
+                dynamical_model_spec_ref=models[-1].revision,
+                data_ref=DataRef[GitOid, int](revision=source, replicate_index=0),
+            )
+        )
+    )
+    state = input_state(repository, request)
+    assert state.current["model"] == models[-1]
+    assert state.get("panel") == (None if source_kind == "simulate" else panel)
+
+
 def _prepare_folder(http, source):
     return http.post(
         "/api/studies/LATEST/prepare_data",

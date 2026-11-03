@@ -1,11 +1,44 @@
 """Shared model fixtures and async test helpers."""
 
-from collections.abc import Sequence
-from hashlib import sha256
-from typing import Any, Literal, overload
+from __future__ import annotations
 
-from grassmoth.artifacts.identity import ConstructId, EdgeId, IndicatorId, MechanismId
+from hashlib import sha256
+from typing import TYPE_CHECKING, Any, Literal, overload
+
 from grassmoth.artifacts.model.reasoning import ReasoningSpec
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+    from datetime import datetime
+
+    import polars as pl
+
+    from grassmoth.artifacts.identity import ConstructId, EdgeId, IndicatorId, MechanismId
+    from grassmoth.artifacts.observations.dataset import ObservationDataset
+    from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
+
+
+def observation_dataset(
+    rows: pl.DataFrame, variables: tuple[ResolvedObservationSpec, ...], *, time_origin: datetime
+) -> ObservationDataset:
+    """Admit row-shaped test fixtures through preparation's ingress and the history owner."""
+    import polars as pl
+
+    from grassmoth.actions.prepare_data.materialization import parse_observation_rows
+    from grassmoth.artifacts.observations.dataset import ObservationDataset
+    from grassmoth.study.projections.visuals import observation_history
+
+    parsed = parse_observation_rows(rows, variables)
+    return ObservationDataset.from_histories(
+        {
+            variable.id: observation_history(
+                time_origin, parsed.filter(pl.col("indicator_id") == variable.id)
+            )
+            for variable in variables
+        },
+        variables,
+        time_origin=time_origin,
+    )
 
 
 @overload

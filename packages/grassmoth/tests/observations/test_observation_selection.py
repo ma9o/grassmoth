@@ -14,6 +14,7 @@ from grassmoth.artifacts.observations.dataset import (
 from grassmoth.artifacts.observations.spec import LabeledMeasurement, ResolvedObservationSpec
 from grassmoth.models.ssm.preparation.binding import PanelPreparationFailure, bind_panel
 from grassmoth_test_support.compute import compile_program
+from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import one_state_gaussian_model
 
@@ -23,7 +24,7 @@ _ORIGIN = datetime(2024, 1, 1, tzinfo=UTC)
 
 def _dataset(variable):
     anchors = [_ORIGIN + timedelta(days=i) for i in range(2)]
-    return ObservationDataset.from_frame(
+    return observation_dataset(
         pl.DataFrame(
             {
                 "indicator_id": [variable.id] * 2,
@@ -49,8 +50,10 @@ def test_selection_accepts_renames_and_equivalent_windows_but_requires_identity(
     selected = dataset.select((renamed,))
     assert isinstance(selected, SelectedObservations)
     assert selected.series[0].observation == observation
-    assert selected.frame["value"].to_list() == [1, 2]
+    assert list(selected.series[0].history.values) == [1, 2]
     assert selected.time_origin == _ORIGIN
+    assert selected.series[0] is dataset.series[observation.id]
+    assert ObservationDataset.model_validate(dataset.model_dump()) == dataset
     missing = dataset.select((renamed.revised(id="indicator:another"),))
     assert isinstance(missing, MissingObservation)
     assert missing.indicator_id == "indicator:another"
@@ -69,13 +72,12 @@ def test_fit_rejects_changed_definitions_before_projecting_observations(changes,
     # The recorded panel has a valid, independently declared definition.
     recorded = required.revised(**changes)
     if recorded.support_kind == "interval":
-        original = _dataset(required).recorded.frame
-        frame = original.with_columns(
-            (pl.col("support_start") - pl.duration(days=1)).alias("support_start"),
-            pl.lit("interval").alias("support_kind"),
-            pl.lit(recorded.aggregation.value).alias("summary_operator"),
+        original = _dataset(required).series[required.id].history
+        dataset = ObservationDataset.from_histories(
+            {recorded.id: original.revised(support_start=(-1.0, 0.0))},
+            (recorded,),
+            time_origin=_ORIGIN,
         )
-        dataset = ObservationDataset.from_frame(frame, (recorded,), time_origin=_ORIGIN)
     else:
         dataset = _dataset(recorded)
     mismatch = dataset.select((required,))
@@ -117,3 +119,53 @@ def test_definition_equality_preserves_ordered_codebooks():
 
     mismatch = _dataset(observation).select((reordered,))
     assert isinstance(mismatch, ObservationDefinitionMismatch)
+
+
+@pytest.mark.parametrize("anchors", [(0.0, float("nan")), (0.0, 5e-9)])
+def test_history_structure_defers_anchor_semantics_to_series_admission(anchors):
+    import numpy as np
+
+    from grassmoth.artifacts.arrays import NumericalArray
+
+    observation = compile_model_fixture(one_state_gaussian_model()).observations[0].observation
+    history = (
+        _dataset(observation)
+        .series[observation.id]
+        .history.revised(times=NumericalArray.from_numpy(np.asarray(anchors)))
+    )
+    with pytest.raises(ValueError, match="anchors"):
+        ObservationDataset.from_histories(
+            {observation.id: history}, (observation,), time_origin=_ORIGIN
+        )
+
+
+def test_vector_presence_is_boolean_and_masked_infinities_are_rejected():
+    import numpy as np
+
+    from grassmoth.artifacts.arrays import ArrayVector, NumericalArray
+
+    values = NumericalArray.from_numpy(np.asarray([1.0, np.inf]))
+    with pytest.raises(ValueError, match="mask must be boolean"):
+        ArrayVector(
+            array=values,
+            indices=(None,),
+            mask=ArrayVector(array=NumericalArray.from_numpy(np.asarray([1, 0])), indices=(None,)),
+        )
+    observation = compile_model_fixture(one_state_gaussian_model()).observations[0].observation
+    history = (
+        _dataset(observation)
+        .series[observation.id]
+        .history.revised(
+            values=ArrayVector(
+                array=values,
+                indices=(None,),
+                mask=ArrayVector(
+                    array=NumericalArray.from_numpy(np.asarray([True, False])), indices=(None,)
+                ),
+            )
+        )
+    )
+    with pytest.raises(ValueError, match="Observed values must be finite"):
+        ObservationDataset.from_histories(
+            {observation.id: history}, (observation,), time_origin=_ORIGIN
+        )

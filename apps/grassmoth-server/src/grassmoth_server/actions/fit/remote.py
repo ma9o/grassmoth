@@ -30,18 +30,16 @@ from grassmoth_server.compute.analysis_cache import (
 )
 from grassmoth_server.compute.fit_results import RemoteFitResult
 from grassmoth_server.compute.resources import HOST_MEMORY_ALLOCATION_ENV
-from grassmoth_server.study.persistence.codec import pack_result, unpack_result
+from grassmoth_server.study.persistence.codec import pack_payload, pack_result, unpack_result
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from datetime import datetime
 
     import modal
 
     from grassmoth.public import (
         InferenceHardware,
         QuestionSpec,
-        ResolvedObservationSpec,
         SamplerSpec,
     )
 
@@ -58,9 +56,7 @@ class FitComputeInput:
 
     dynamical_model_spec_bytes: bytes
     question: QuestionSpec
-    panel_parquet: bytes
-    variables: tuple[ResolvedObservationSpec, ...]
-    time_origin: datetime
+    observations: bytes
     sampler: SamplerSpec
     compute_loo_diagnostics: bool
     analysis_call: AnalysisCall
@@ -108,7 +104,6 @@ def execute_fit_compute(payload: FitComputeInput) -> FitOutput:
     from grassmoth_server.bootstrap import initialize_numerical_runtime
 
     initialize_numerical_runtime()
-    import polars as pl
 
     from grassmoth.public import StructuralSelection
     from grassmoth_server.actions.fit.action import run_fit
@@ -125,11 +120,7 @@ def execute_fit_compute(payload: FitComputeInput) -> FitOutput:
         FitInputs(
             selection=StructuralSelection.for_question(dynamical_model_spec, payload.question),
             question=payload.question,
-            data_for_model=ObservationDataset.from_frame(
-                pl.read_parquet(io.BytesIO(payload.panel_parquet)),
-                payload.variables,
-                time_origin=payload.time_origin,
-            ),
+            data_for_model=ObservationDataset.model_validate(unpack_result(payload.observations)),
             sampler=payload.sampler,
             compute_loo_diagnostics=payload.compute_loo_diagnostics,
             previous=FitOutput.model_validate(unpack_result(previous))
@@ -277,6 +268,26 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
         return decode_fit_result(frame.getvalue())
 
 
+def pack_observations(observations: ObservationDataset) -> bytes:
+    """Pack selected readings without retaining their parent simulation buffers."""
+    series = {}
+    for identity, selected in observations.series.items():
+        history = selected.history
+        readings = history.readings()
+        series[identity] = {
+            "observation": selected.observation.model_dump(mode="python"),
+            "history": {
+                **history.model_dump(
+                    mode="python", exclude={"values", "support_start", "support_end"}
+                ),
+                "values": tuple(row[1] for row in readings),
+                "support_start": tuple(row[2] for row in readings),
+                "support_end": tuple(row[3] for row in readings),
+            },
+        }
+    return pack_payload({"series": series, "time_origin": observations.time_origin.isoformat()})
+
+
 def fit_on_modal(
     inputs: FitInputs,
     *,
@@ -285,15 +296,11 @@ def fit_on_modal(
     previous_cache: AnalysisCacheEntry | None = None,
 ) -> RemoteFitResult:
     """Compute once on Modal; return reports only after retaining the complete result."""
-    panel = io.BytesIO()
-    inputs.data_for_model.recorded.frame.write_parquet(panel)
     result = _dispatch_fit(
         FitComputeInput(
             dynamical_model_spec_bytes=pack_result(inputs.selection.dynamical_model_spec),
             question=inputs.question,
-            panel_parquet=panel.getvalue(),
-            variables=inputs.data_for_model.variables,
-            time_origin=inputs.data_for_model.time_origin,
+            observations=pack_observations(inputs.data_for_model),
             sampler=inputs.sampler,
             compute_loo_diagnostics=inputs.compute_loo_diagnostics,
             analysis_call=analysis_call,

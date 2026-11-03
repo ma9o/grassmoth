@@ -10,7 +10,6 @@ from pydantic import ValidationError
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.comparison import Dataset
-from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.observations.preparation import PreparedDataMetadata
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.observations.semantics import AnchorPolicy
@@ -43,9 +42,12 @@ from grassmoth_server_test_support.action import applied_record, empty_simulatio
 from grassmoth_server_test_support.git import artifact_revisions
 from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.git import git_oid
+from grassmoth_test_support.helpers import observation_dataset
 
 
-def _dataset(values, *, number=1, times=None, variable=None):
+def _dataset(
+    values, *, number=1, times=None, variable=None, origin=datetime(1970, 1, 1, tzinfo=UTC)
+):
     variable = variable or ResolvedObservationSpec(
         id="indicator:y",
         name="Y",
@@ -54,7 +56,6 @@ def _dataset(values, *, number=1, times=None, variable=None):
         observation_window="1d",
     )
     times = list(range(len(values))) if times is None else times
-    origin = datetime(1970, 1, 1, tzinfo=UTC)
     anchors = [origin + timedelta(days=day) for day in times]
     width = timedelta(days=1) if variable.support_kind.value == "interval" else timedelta()
     frame = pl.DataFrame(
@@ -71,9 +72,9 @@ def _dataset(values, *, number=1, times=None, variable=None):
         },
         schema_overrides={"value": pl.Float64},
     )
-    return Dataset.from_observations(
-        DataRef[GitOid, int](replicate_index=0, revision=git_oid(number)),
-        ObservationDataset.from_frame(frame, (variable,), time_origin=origin),
+    return Dataset(
+        source=DataRef[GitOid, int](replicate_index=0, revision=git_oid(number)),
+        observations=observation_dataset(frame, (variable,), time_origin=origin),
     )
 
 
@@ -102,7 +103,7 @@ def test_selection_contracts_require_nonempty_explicit_sources():
 @pytest.mark.inference(concern="predictive")
 def test_single_histories_report_values_missingness_and_schedule_changes():
     left = _dataset([1, None, 3], times=[0, 1, 2])
-    right = _dataset([1, 4, 8], times=[0, 1, 3], number=2)
+    right = _dataset([1, 4, 8], times=[-1, 0, 2], number=2, origin=datetime(1970, 1, 2, tzinfo=UTC))
     variable = compare_data_variables((left,), (right,))[0]
     assert variable.predictive is None
     assert [item.kind for item in variable.changes] == ["revised", "removed", "added"]
@@ -157,18 +158,23 @@ def test_predictive_support_follows_the_model_observation_semantics(aggregation)
         observation_window="1d",
     )
     observed = _dataset([1, 2, 3], variable=variable, times=[1, 2, 3])
-    series = observed.series[variable.id]
-    width = timedelta(days=1)
-    points = tuple(
-        point.revised(support_end=point.anchor_time + width)
+    series = observed.observations.series[variable.id]
+    history = series.history
+    bounds = (
+        {"support_end": tuple(time + 1 for time in history.times.values)}
         if variable.anchor_policy == AnchorPolicy.SUPPORT_START
-        else point.revised(
-            support_start=point.anchor_time
-            - width * (2 if variable.requires_interval_summary_measurement else 1)
-        )
-        for point in series.points
+        else {
+            "support_start": tuple(
+                time - (2 if variable.requires_interval_summary_measurement else 1)
+                for time in history.times.values
+            )
+        }
     )
-    observed = observed.revised(series={variable.id: series.revised(points=points)})
+    observed = observed.revised(
+        observations=observed.observations.revised(
+            series={variable.id: series.revised(history=history.revised(**bounds))}
+        )
+    )
     replicas = tuple(
         _dataset([1, 2, 3], number=n, variable=variable, times=[1, 2, 3]) for n in (2, 3)
     )
@@ -207,7 +213,7 @@ def test_measurement_mismatches_and_uncovered_times_do_not_produce_predictive_ch
     assert isinstance(missing.predictive.evaluation, NotEvaluated)
     assert missing.predictive.evaluation.reason == "MISSING_REPLICATE_VALUES"
     assert missing.findings == ()
-    original = next(iter(observed.series.values())).variable
+    original = next(iter(observed.observations.series.values())).observation
     replicas = [
         _dataset([1, 2, 3], number=n, variable=original.revised(aggregation="mean")) for n in (2, 3)
     ]
@@ -221,7 +227,7 @@ def test_measurement_mismatches_and_uncovered_times_do_not_produce_predictive_ch
     first = _dataset([1, 2, 3], variable=original.revised(aggregation="first"))
     assert compare_data_variables((first,), (first,))[0].changes == ()
     with pytest.raises(ValidationError):
-        observed.revised(time_origin=None)
+        observed.observations.revised(time_origin=None)
 
 
 @pytest.mark.inference(concern="predictive")
@@ -256,7 +262,7 @@ def test_invalid_histories_and_duplicate_sources_are_rejected_before_comparison(
         compare_data_variables([], (data,))
     with pytest.raises(ValueError, match="counted twice"):
         compare_data_variables([data, data], (data,))
-    with pytest.raises(ValueError, match="duplicate anchors"):
+    with pytest.raises(ValueError, match="duplicate or unordered anchors"):
         compare_data_variables((_dataset([1, 2], times=[0, 0]),), (data,))
     with pytest.raises(ValueError, match="finite"):
         compare_data_variables((_dataset([1, np.inf]),), (data,))
@@ -300,7 +306,9 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
                 ),
             ),
             observation_layout=SimulationObservationLayout(
-                variables=tuple(series.variable for series in observed.series.values()),
+                variables=tuple(
+                    series.observation for series in observed.observations.series.values()
+                ),
                 support_start_times=NumericalArray.from_numpy(np.arange(3.0)[:, None]),
                 support_end_times=NumericalArray.from_numpy(np.arange(3.0)[:, None]),
                 mask=NumericalArray.from_numpy(np.ones_like(values, dtype=bool)),
@@ -353,10 +361,10 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
                     default_window="1d",
                     variables=tuple(
                         DataVariableSpec(
-                            observation=series.variable,
+                            observation=series.observation,
                             extraction=SemanticExtractionSpec(how_to_measure="Read Y"),
                         )
-                        for series in observed.series.values()
+                        for series in observed.observations.series.values()
                     ),
                 ),
                 time_origin=origin,
@@ -371,7 +379,11 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
         )
     )
     refs_before = sorted(store.repo.references)
-    output = read_data_diff("DIFF", request).model_dump(mode="json")
+    import json
+
+    from grassmoth_server.study.persistence.codec import json_result, pack_result
+
+    output = json.loads(json_result(pack_result(read_data_diff("DIFF", request))))
     assert set(output) == {"report"}
     result = output["report"]
     assert len(result["left"]) == 3
@@ -403,7 +415,7 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
         read_data_diff("DIFF", bad)
 
     # Saved histories keep absolute model days, and materialization keeps their dates.
-    from grassmoth_server.study.queries.data import read_simulation_observations
+    from grassmoth_server_test_support.data import simulation_output
 
     origin = datetime(2026, 1, 1, tzinfo=UTC)
     commits = []
@@ -462,5 +474,6 @@ def test_reads_saved_draws_without_generation_or_writing_models(tmp_path, monkey
         (origin + timedelta(days=7), "revised"),
         (origin + timedelta(days=8), "added"),
     ]
-    materialized = read_simulation_observations(saved, 1)
-    assert materialized["anchor_time"][0] == (origin + timedelta(days=6)).replace(tzinfo=None)
+    materialized = simulation_output(report.revised(evidence=saved)).observations(1)
+    assert materialized.time_origin == origin
+    assert materialized.series["indicator:y"].history.times.values[0] == 6

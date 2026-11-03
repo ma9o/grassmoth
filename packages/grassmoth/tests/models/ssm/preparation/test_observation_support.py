@@ -5,6 +5,7 @@ import pytest
 
 from grassmoth.artifacts.observations.dataset import ObservationDataset, SelectedObservations
 from grassmoth.models.ssm import compiled_access as numeric
+from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import mixed_family_model
 
@@ -26,7 +27,7 @@ def _single_row_panel(spec, **overrides: float) -> ObservationDataset:
     }
     values.update(overrides)
     variables = tuple(item.observation for item in compile_model_fixture(spec).observations)
-    return ObservationDataset.from_frame(
+    return observation_dataset(
         pl.DataFrame(
             [
                 {

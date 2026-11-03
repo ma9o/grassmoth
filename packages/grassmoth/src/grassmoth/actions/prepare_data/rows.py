@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 import polars as pl
 
-from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.observations.semantics import AnchorPolicy
 from grassmoth.artifacts.observations.time import ObservationInstant
 
@@ -18,6 +17,14 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
 
 # Computed and worker extraction both emit one value per indicator and support-window start.
+OBSERVATION_ROW_SCHEMA = {
+    "indicator_id": pl.Utf8,
+    "value": pl.Utf8,
+    "anchor_time": pl.Utf8,
+    "support_start": pl.Utf8,
+    "support_end": pl.Utf8,
+}
+
 EXTRACTION_ROW_SCHEMA = {"indicator_id": pl.Utf8, "value": pl.Utf8, "timestamp": pl.Utf8}
 
 
@@ -179,66 +186,12 @@ def annotate_observation_rows(
     not preserved from any caller-supplied row metadata.
     """
     if df.is_empty():
-        return pl.DataFrame(schema=ObservationDataset.row_schema())
+        return pl.DataFrame(schema=OBSERVATION_ROW_SCHEMA)
     if "indicator_id" not in df.columns:
         raise ValueError("Extraction rows must carry an indicator_id")
-    indicator_ids = {variable.id for variable in variables}
-    unknown = set(df["indicator_id"].unique()) - indicator_ids
-    if unknown:
+    if unknown := set(df["indicator_id"].unique()) - {variable.id for variable in variables}:
         raise ValueError(f"Extraction rows reference unknown indicators: {unknown}")
-    for col_name, dtype in ObservationDataset.row_schema().items():
-        if col_name not in df.columns:
-            df = df.with_columns(pl.lit(None, dtype=dtype).alias(col_name))
-
-    indicator_rows = [
-        {
-            "indicator_id": variable.id,
-            "support_kind_meta": variable.support_kind.value,
-            "summary_operator_meta": variable.summary_operator.value,
-            "anchor_policy_meta": variable.anchor_policy.value,
-            "observation_window_meta": variable.observation_window.source,
-        }
-        for variable in variables
-    ]
-    kind_df = (
-        pl.DataFrame(
-            indicator_rows,
-            schema={
-                "indicator_id": pl.Utf8,
-                "support_kind_meta": pl.Utf8,
-                "summary_operator_meta": pl.Utf8,
-                "anchor_policy_meta": pl.Utf8,
-                "observation_window_meta": pl.Utf8,
-            },
-        )
-        if indicator_rows
-        else pl.DataFrame(
-            schema={
-                "indicator_id": pl.Utf8,
-                "support_kind_meta": pl.Utf8,
-                "summary_operator_meta": pl.Utf8,
-                "anchor_policy_meta": pl.Utf8,
-                "observation_window_meta": pl.Utf8,
-            }
-        )
-    )
-
-    if kind_df.height > 0:
-        df = df.join(kind_df, on="indicator_id", how="left")
-    else:
-        df = df.with_columns(
-            pl.lit(None, dtype=pl.Utf8).alias("support_kind_meta"),
-            pl.lit(None, dtype=pl.Utf8).alias("summary_operator_meta"),
-            pl.lit(None, dtype=pl.Utf8).alias("anchor_policy_meta"),
-            pl.lit(None, dtype=pl.Utf8).alias("observation_window_meta"),
-        )
-
-    ts_expr = (
-        # extraction merges support-window starts coming from both paths:
-        # computed rows use naive bucket strings while semantic rows can carry
-        # the same UTC boundary with an explicit `+00:00` suffix from the
-        # worker header. Normalize the redundant UTC suffix so mixed batches
-        # parse consistently into the same support bounds.
+    timestamp = (
         pl.col(time_col)
         .str.replace(r"[Zz]$", "")
         .str.replace(r"[+-]\d{2}:\d{2}$", "")
@@ -246,38 +199,19 @@ def annotate_observation_rows(
         if df.schema.get(time_col) == pl.Utf8
         else pl.col(time_col)
     )
-    observation_window_expr = pl.col("observation_window_meta")
-    support_kind_expr = pl.col("support_kind_meta")
-    summary_operator_expr = pl.col("summary_operator_meta")
-    anchor_policy_expr = pl.col("anchor_policy_meta")
-    support_start, support_end = indicator_window_bounds(
-        ts_expr, variables, anchor_policy=AnchorPolicy.SUPPORT_START
+    start, end = indicator_window_bounds(
+        timestamp, variables, anchor_policy=AnchorPolicy.SUPPORT_START
     )
-    support_start_expr, support_end_expr = (
-        bound.dt.to_string("%Y-%m-%dT%H:%M:%S") for bound in (support_start, support_end)
+    anchor = pl.coalesce(
+        pl.when(pl.col("indicator_id") == variable.id).then(
+            start if variable.anchor_policy == AnchorPolicy.SUPPORT_START else end
+        )
+        for variable in variables
     )
-    anchor_time_expr = (
-        pl.when(anchor_policy_expr == AnchorPolicy.SUPPORT_START.value)
-        .then(support_start_expr)
-        .otherwise(support_end_expr)
+    return df.select(
+        "indicator_id",
+        "value",
+        anchor.dt.to_string("%Y-%m-%dT%H:%M:%S").alias("anchor_time"),
+        start.dt.to_string("%Y-%m-%dT%H:%M:%S").alias("support_start"),
+        end.dt.to_string("%Y-%m-%dT%H:%M:%S").alias("support_end"),
     )
-
-    df = df.with_columns(
-        anchor_time_expr.alias("anchor_time"),
-        support_kind_expr.alias("support_kind"),
-        summary_operator_expr.alias("summary_operator"),
-        anchor_policy_expr.alias("anchor_policy"),
-        observation_window_expr.alias("observation_window"),
-        support_start_expr.alias("support_start"),
-        support_end_expr.alias("support_end"),
-    ).drop(
-        "support_kind_meta",
-        "summary_operator_meta",
-        "anchor_policy_meta",
-        "observation_window_meta",
-    )
-
-    if time_col != "anchor_time" and time_col in df.columns:
-        df = df.drop(time_col)
-
-    return df

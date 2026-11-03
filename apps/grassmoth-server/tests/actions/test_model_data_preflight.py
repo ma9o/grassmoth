@@ -8,7 +8,6 @@ import pytest
 from grassmoth.actions.checks import check_specification
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.question import QuestionSpec
-from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.artifacts.observations.preparation import DataPreparationResult
 from grassmoth.artifacts.observations.reference import DataRef
 from grassmoth.artifacts.sampling import SamplerSpec
@@ -28,6 +27,7 @@ from grassmoth_server_test_support.model import stress_sleep_causal_model
 from grassmoth_server_test_support.runner_fixtures import panel_frame, panel_metadata
 from grassmoth_server_test_support.storage import seed_record
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
+from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.inference import compile_fit_fixture
 from grassmoth_test_support.model import construct_named
 
@@ -71,7 +71,7 @@ def test_noisy_interval_summary_passes_fit_admission_and_dispatches(monkeypatch)
         stress_sleep_causal_model(),
         panel_frame(n_days=4),
     )
-    panel = ObservationDataset.from_frame(
+    panel = observation_dataset(
         panel, panel_metadata().variables, time_origin=panel_metadata().time_origin
     )
     inputs = compile_fit_fixture(dynamical_model_spec)

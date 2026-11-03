@@ -5,11 +5,18 @@ from __future__ import annotations
 from functools import cache
 from typing import TYPE_CHECKING
 
-from grassmoth.public import SimulationEvidence, data_diff
+from grassmoth.public import SimulateOutput, data_diff
 from grassmoth_server.actions.contracts.requests import SimulateRequest
 
 if TYPE_CHECKING:
-    from grassmoth.public import DataDiffOutput, DataRef, Dataset, GitOid, IndicatorId
+    from grassmoth.public import (
+        DataDiffOutput,
+        DataRef,
+        Dataset,
+        GitOid,
+        IndicatorId,
+        PrepareDataOutput,
+    )
     from grassmoth_server.actions.contracts.inputs import DataSelection
     from grassmoth_server.actions.contracts.requests import DataDiffRequest
 
@@ -19,15 +26,19 @@ def read_data_diff(workspace_id: str, request: DataDiffRequest[GitOid]) -> DataD
     from grassmoth.public import Dataset
     from grassmoth_server.study.persistence.history import StudyRepository
     from grassmoth_server.study.persistence.store import ArtifactStore, read_model
-    from grassmoth_server.study.queries.data import read_data_histories, read_data_source
+    from grassmoth_server.study.queries.data import read_data_source, select_data_histories
 
     store = ArtifactStore(workspace_id)
     input_indicators: set[IndicatorId] = set()
 
     @cache
+    def source_output(revision: GitOid) -> PrepareDataOutput | SimulateOutput:
+        return read_data_source(store, revision)
+
+    @cache
     def load(source: DataRef[GitOid, int | None]) -> tuple[Dataset, ...]:
-        producer = read_data_source(store, source.revision)
-        if isinstance(producer, SimulationEvidence):
+        producer = source_output(source.revision)
+        if isinstance(producer, SimulateOutput):
             recorded = StudyRepository(workspace_id).record(source.revision).record.attempt.request
             assert isinstance(recorded, SimulateRequest)
             dynamical_model_spec = read_model(store, recorded.input.dynamical_model_spec_ref)
@@ -38,8 +49,8 @@ def read_data_diff(workspace_id: str, request: DataDiffRequest[GitOid]) -> DataD
                 for indicator in construct.indicators
             )
         return tuple(
-            Dataset.from_observations(history.source, history.observations)
-            for history in read_data_histories(store, source)
+            Dataset(source=history.source, observations=history.observations)
+            for history in select_data_histories(source, producer)
         )
 
     def selection(value: DataSelection[GitOid]) -> tuple[Dataset, ...]:

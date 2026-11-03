@@ -6,10 +6,13 @@ import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
+import numpy as np
 import polars as pl
 
+from grassmoth.artifacts.arrays import vector_values
 from grassmoth.artifacts.identity import IndicatorId, IndicatorRef
 from grassmoth.artifacts.observations.semantics import SupportKind
+from grassmoth.artifacts.observations.time import ModelTime, ObservationInstant
 from grassmoth.artifacts.reports.checks import CheckOutcome, Evaluated, NotEvaluated
 from grassmoth.artifacts.reports.data_quality import (
     DataFinding,
@@ -18,23 +21,16 @@ from grassmoth.artifacts.reports.data_quality import (
 )
 from grassmoth.observations.quality.checks import (
     MIN_OBSERVATIONS,
-    OBSERVATION_TIME_COLUMN,
-    check_dtype_range,
+    check_continuous_range,
     check_hallucination_signals,
     check_time_coverage,
     check_timestamp_gaps,
-    parse_timestamp_series,
-    timestamp_issue_specs,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from datetime import datetime
 
-    from grassmoth.artifacts.model.construct import ConstructSpec
-    from grassmoth.artifacts.observations.spec import (
-        AuthoredObservationSpec,
-        ResolvedObservationSpec,
-    )
+    from grassmoth.artifacts.observations.dataset import ObservationSeries
 
 
 @dataclass(frozen=True)
@@ -42,16 +38,12 @@ class IndicatorContext:
     """Parsed observations shared by the indicator's data-quality checks."""
 
     name: IndicatorId
-    ind_data: pl.DataFrame
     values: pl.Series
     n_obs: int
     variance: float | None
     dtype: str | None
-    is_time_invariant: bool
     model_clock_hours: float | None
     parsed_ts: pl.Series
-    n_unparseable: int
-    n_total_ts: int
 
 
 def no_data_validation_result() -> DataProfileReport:
@@ -67,21 +59,21 @@ def no_data_validation_result() -> DataProfileReport:
 
 
 def indicator_findings(
-    indicator_id: IndicatorId,
-    data: pl.DataFrame,
-    definitions: Mapping[IndicatorId, ResolvedObservationSpec],
+    series: ObservationSeries,
+    time_origin: datetime,
 ) -> tuple[DataFinding, ...]:
-    """Evaluate data quality once, with codes and evidence independent of action severity."""
-    ctx = _build_indicator_context(indicator_id, data, definitions, {})
-    subject = IndicatorRef(id=indicator_id)
+    """Evaluate data quality from an admitted series, without reparsing readings."""
+    ctx = _build_indicator_context(series, time_origin)
+    subject = IndicatorRef(id=series.observation.id)
     if ctx is None:
+        empty = series.history.times.layout[0][0] == 0
         return (
             Evaluated(
-                code="missing" if data.is_empty() else "no_numeric",
+                code="missing" if empty else "no_numeric",
                 subject=subject,
                 outcome="failed",
                 evidence="No observations were extracted."
-                if data.is_empty()
+                if empty
                 else "No numeric observations were retained.",
             ),
         )
@@ -91,37 +83,28 @@ def indicator_findings(
         findings.append(Evaluated(code=code, subject=subject, outcome=outcome, evidence=evidence))
 
     measured("data_availability", f"{ctx.n_obs} usable observations.")
-    timestamp_problems = timestamp_issue_specs(ctx.n_total_ts, ctx.n_unparseable)
-    measured(
-        "timestamps",
-        "; ".join(timestamp_problems)
-        if timestamp_problems
-        else f"{ctx.n_unparseable}/{ctx.n_total_ts} timestamps are unparseable.",
-        outcome="failed" if timestamp_problems else "passed",
-    )
     measured(
         "sample_size",
         f"{ctx.n_obs} observations; recommended minimum {MIN_OBSERVATIONS}.",
         outcome="failed" if ctx.n_obs < MIN_OBSERVATIONS else "passed",
     )
-    if not ctx.is_time_invariant:
-        if ctx.variance is None:
-            findings.append(
-                NotEvaluated(
-                    code="variance",
-                    subject=subject,
-                    reason="INSUFFICIENT_OBSERVATIONS",
-                    detail="Variance requires at least two observations.",
-                )
+    if ctx.variance is None:
+        findings.append(
+            NotEvaluated(
+                code="variance",
+                subject=subject,
+                reason="INSUFFICIENT_OBSERVATIONS",
+                detail="Variance requires at least two observations.",
             )
-        else:
-            measured(
-                "variance",
-                f"Observed variance: {ctx.variance:g}.",
-                outcome="failed" if ctx.variance == 0 else "passed",
-            )
-    if ctx.dtype is not None:
-        problems, violations = check_dtype_range(ctx.values, ctx.dtype, ctx.name)
+        )
+    else:
+        measured(
+            "variance",
+            f"Observed variance: {ctx.variance:g}.",
+            outcome="failed" if ctx.variance == 0 else "passed",
+        )
+    if ctx.dtype == "continuous":
+        problems, violations = check_continuous_range(ctx.values, ctx.name)
         if problems:
             findings.extend(problems)
         else:
@@ -136,7 +119,7 @@ def indicator_findings(
             "suspicious_pattern",
             f"Largest repeated-value fraction: {duplicate_fraction:g}; arithmetic sequence: {arithmetic}.",
         )
-    if not ctx.is_time_invariant and ctx.model_clock_hours is not None:
+    if ctx.model_clock_hours is not None:
         for code, check in (
             ("insufficient_coverage", check_time_coverage),
             ("large_timestamp_gap", check_timestamp_gaps),
@@ -159,69 +142,48 @@ def indicator_findings(
 
 
 def _build_indicator_context(
-    indicator_id: IndicatorId,
-    ind_data: pl.DataFrame,
-    indicator_lookup: Mapping[IndicatorId, AuthoredObservationSpec | ResolvedObservationSpec],
-    construct_lookup: Mapping[str, ConstructSpec],
+    series: ObservationSeries, time_origin: datetime
 ) -> IndicatorContext | None:
-    values_df = ind_data.select(pl.col("value").cast(pl.Float64, strict=False)).drop_nulls()
-    n_obs = len(values_df)
-    if n_obs == 0:
+    history, observation = series.history, series.observation
+    numeric = vector_values(history.values)
+    observed = ~np.isnan(numeric)
+    values = pl.Series(numeric[observed])
+    if not len(values):
         return None
-
-    values = values_df["value"]
-    variance = cast("float | None", values.var())
-
-    indicator_meta = indicator_lookup.get(indicator_id)
-    dtype = indicator_meta.measurement.dtype if indicator_meta is not None else None
-    model_clock_hours = (
-        ind_data.filter(pl.col("value").is_not_null())
-        .select(
-            ((pl.col("support_end") - pl.col("support_start")).dt.total_seconds() / 3600).median()
-        )
-        .item()
+    origin = ObservationInstant(time_origin)
+    instants = pl.Series(
+        [
+            ModelTime(float(day)).at(origin).value.replace(tzinfo=None)
+            for day in history.times.values
+        ],
+        dtype=pl.Datetime("us"),
     )
-    construct_meta = construct_lookup.get(indicator_id)
-    is_time_invariant = (
-        construct_meta is not None and construct_meta.temporal_status == "time_invariant"
-    )
-
-    timestamps = ind_data[OBSERVATION_TIME_COLUMN]
-    parsed = parse_timestamp_series(timestamps)
-    if (
-        indicator_meta is not None
-        and indicator_meta.support_kind == SupportKind.POINT
-        and (window := indicator_meta.observation_window) is not None
-    ):
-        # A point's support has zero width. Its declared observation window owns
-        # cadence; calendar windows retain their actual elapsed length.
+    widths = vector_values(history.support_end) - vector_values(history.support_start)
+    model_clock_hours = float(np.median(widths[observed]) * 24)
+    if observation.support_kind == SupportKind.POINT:
         model_clock_hours = (
-            parsed.to_frame("anchor")
+            instants.to_frame("anchor")
             .select(
                 (
                     (
-                        pl.col("anchor").dt.offset_by(window.polars_interval) - pl.col("anchor")
+                        pl.col("anchor").dt.offset_by(
+                            observation.observation_window.polars_interval
+                        )
+                        - pl.col("anchor")
                     ).dt.total_seconds()
                     / 3600
                 ).median()
             )
             .item()
         )
-
     return IndicatorContext(
-        name=indicator_id,
-        ind_data=ind_data,
+        name=observation.id,
         values=values,
-        n_obs=n_obs,
-        variance=variance,
-        dtype=dtype,
-        is_time_invariant=is_time_invariant,
+        n_obs=len(values),
+        variance=cast("float | None", values.var()),
+        dtype=observation.measurement.dtype,
         model_clock_hours=model_clock_hours,
-        parsed_ts=parsed.filter(
-            ind_data["value"].cast(pl.Float64, strict=False).is_not_null()
-        ).drop_nulls(),
-        n_unparseable=parsed.null_count(),
-        n_total_ts=len(timestamps),
+        parsed_ts=instants.filter(pl.Series(observed)),
     )
 
 
@@ -231,18 +193,13 @@ def _float_or_none(value: float | None) -> float | None:
     return None if math.isnan(value) else value
 
 
-def compute_empirical_profile(
-    indicator_id: IndicatorId,
-    model_data: pl.DataFrame,
-) -> IndicatorEmpiricalProfile | None:
+def compute_empirical_profile(series: ObservationSeries) -> IndicatorEmpiricalProfile | None:
     """Summarize the retained values of one indicator without model assumptions."""
-    ind_model = model_data.filter(pl.col("indicator_id") == indicator_id)
-    values_df = ind_model.select(pl.col("value").cast(pl.Float64, strict=False)).drop_nulls()
-    n_obs = len(values_df)
+    numeric = vector_values(series.history.values)
+    values = pl.Series(numeric[~np.isnan(numeric)])
+    n_obs = len(values)
     if n_obs == 0:
         return None
-
-    values = values_df["value"]
     return IndicatorEmpiricalProfile(
         n_obs=n_obs,
         min=_float_or_none(cast("float | None", values.min())),

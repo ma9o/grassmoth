@@ -1,7 +1,6 @@
 """Modal dispatch uses the selected hardware and the unchanged resolved sampler."""
 
 from contextlib import nullcontext
-from datetime import UTC, datetime
 from unittest.mock import Mock
 
 import modal
@@ -68,9 +67,7 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
     payload = FitComputeInput(
         dynamical_model_spec_bytes=b"pinned-model",
         question=QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
-        panel_parquet=b"pinned-history",
-        variables=(),
-        time_origin=datetime(2024, 1, 1, tzinfo=UTC),
+        observations=b"pinned-history",
         sampler=SamplerSpec(
             path_update=GuidedPathSpec(method="twisted_particle_agrad"),
             num_chains=4,
@@ -119,8 +116,6 @@ def test_modal_timeout_propagates_without_another_call(monkeypatch, isolated_att
         b"model",
         QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
         b"history",
-        (),
-        datetime.now(UTC),
         SamplerSpec(),
         False,
         _ANALYSIS_CALL,
@@ -162,6 +157,10 @@ def test_profile_flag_reaches_gpu_compute_with_a_volume_scoped_directory(monkeyp
         )
     payload = dispatch.call_args.args[0]
     assert payload.profile is True
+    from grassmoth.public import ObservationDataset
+    from grassmoth_server.study.persistence.codec import unpack_result
+
+    assert ObservationDataset.model_validate(unpack_result(payload.observations)) == data
     compute = Mock(side_effect=ReachedCompute)
     monkeypatch.setattr(action, "run_fit", compute)
     with pytest.raises(ReachedCompute):
@@ -207,8 +206,6 @@ def test_interrupted_result_stream_does_not_decode_partial_output(monkeypatch):
         b"model",
         QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
         b"history",
-        (),
-        datetime.now(UTC),
         SamplerSpec(),
         False,
         _ANALYSIS_CALL,

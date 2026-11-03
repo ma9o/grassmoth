@@ -96,7 +96,7 @@ def fit_model(
     data_for_model, sampler = inputs.data_for_model, inputs.sampler
     logger.info(
         "Fitting model: rows=%d indicators=%d sampler=%s",
-        sum(len(series.rows) for series in data_for_model.series.values()),
+        sum(series.history.times.layout[0][0] for series in data_for_model.series.values()),
         len(data_for_model.series),
         sampler.path_update.method,
     )

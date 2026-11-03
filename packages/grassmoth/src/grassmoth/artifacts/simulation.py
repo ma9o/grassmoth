@@ -161,6 +161,29 @@ class SimulationEvidence(Value):
         """Own the generated histories' strictly increasing time axis."""
         if any(right <= left for left, right in pairwise(self.times)):
             raise ValueError("Simulation times must be strictly increasing")
+        layout = self.observation_layout
+        support_shape = (len(self.times), len(layout.variables))
+        observation_shape = (self.draws, *support_shape)
+        for bounds in (layout.support_start_times, layout.support_end_times):
+            shape, dtype = bounds.layout
+            if shape != support_shape or dtype.kind != "f":
+                raise ValueError(
+                    "Simulation support must be floating arrays on the observation layout"
+                )
+        shape, dtype = layout.mask.layout
+        if shape != observation_shape or dtype.kind != "b":
+            raise ValueError("Simulation observation mask must be boolean and align with draws")
+        arms = (
+            (self.arms.action, self.arms.reference)
+            if isinstance(self.arms, PairedArmSimulation)
+            else (self.arms.action,)
+        )
+        for arm in arms:
+            shape, dtype = arm.observations.layout
+            if shape != observation_shape or dtype.kind != "f":
+                raise ValueError(
+                    "Simulation observations must be floating arrays on the recorded draws and design"
+                )
         return self
 
 

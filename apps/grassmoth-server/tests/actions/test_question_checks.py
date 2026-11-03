@@ -10,11 +10,10 @@ from grassmoth.artifacts.model.construct import replace_constructs
 from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec
 from grassmoth.artifacts.model.question import QuestionSpec
-from grassmoth.artifacts.observations.dataset import ObservationDataset
 from grassmoth.models.causal.question_checks import question_edit_reason, question_findings
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_server.actions.contracts.inputs import EditModelInput
-from grassmoth_test_support.helpers import make_model
+from grassmoth_test_support.helpers import make_model, observation_dataset
 
 pytestmark = pytest.mark.contract
 
@@ -74,7 +73,7 @@ def _findings(question, model, panel):
     history = (
         None
         if panel is None
-        else ObservationDataset.from_frame(
+        else observation_dataset(
             panel.with_columns(
                 pl.col("support_end").alias("anchor_time"),
                 pl.lit(variable.support_kind.value).alias("support_kind"),
@@ -118,6 +117,9 @@ def test_queries_are_checked_against_the_model_and_the_record():
         ("window", "evaluated", "passed"),
         ("range", "evaluated", "passed"),
     }
+    assert ("window", "not_evaluated", "not_evaluated") in _findings(
+        _question(dynamical_model_spec), dynamical_model_spec, panel.head(0)
+    )
     outside = _findings(
         _question(dynamical_model_spec, start="2023-12-25", value=0.0), dynamical_model_spec, panel
     )

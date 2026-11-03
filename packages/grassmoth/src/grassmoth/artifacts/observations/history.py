@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-import numpy as np
 from pydantic import Field, model_validator
 
-from grassmoth.artifacts.arrays import NumericalArray, ScalarValues, resolve_vector
+from grassmoth.artifacts.arrays import ArrayVector, NumericalArray, ScalarValues, resolve_vector
 from grassmoth.artifacts.base import Value
 from grassmoth.artifacts.identity import IndicatorId
 from grassmoth.artifacts.reports.empirical import EmpiricalDistribution
@@ -25,10 +24,15 @@ class ObservationHistory(Value):
     empirical: EmpiricalDistribution
 
     @model_validator(mode="after")
-    def finite_anchors(self) -> ObservationHistory:
-        """Establish finite model-day coordinates at the history boundary."""
-        if len(self.times.layout[0]) != 1 or not np.isfinite(self.times.values).all():
-            raise ValueError("Observation times must be a finite vector")
+    def aligned_vectors(self) -> ObservationHistory:
+        """Establish aligned vector extents without admitting observation semantics."""
+        shape, _ = self.times.layout
+        if len(shape) != 1:
+            raise ValueError("Observation times must be a vector")
+        for values in (self.values, self.support_start, self.support_end):
+            length = values.length if isinstance(values, ArrayVector) else len(values)
+            if length != shape[0]:
+                raise ValueError("Observation values and support must align with anchors")
         return self
 
     def readings(self) -> tuple[tuple[float, float | None, float | None, float | None], ...]:

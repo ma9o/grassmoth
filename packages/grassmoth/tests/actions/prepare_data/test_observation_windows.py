@@ -7,10 +7,10 @@ import pytest
 
 from grassmoth.actions.contracts.io import SourceTable
 from grassmoth.actions.prepare_data.aggregations import compute_indicators
+from grassmoth.actions.prepare_data.materialization import parse_observation_rows
 from grassmoth.actions.prepare_data.rows import annotate_observation_rows
 from grassmoth.artifacts.observations.duration import CalendarDuration
 from grassmoth.artifacts.observations.preparation import DataPreparationSpec
-from grassmoth.artifacts.observations.rows import validate_observation_rows
 from grassmoth.artifacts.observations.semantics import AnchorPolicy
 from grassmoth.artifacts.observations.spec import (
     ResolvedObservationSpec,
@@ -64,7 +64,7 @@ def test_period_counts_keep_exact_bounds_and_missing_windows(window, start, miss
     source = SourceTable(
         rows=raw.to_arrow(), start=date.fromisoformat(start), end=date.fromisoformat(end)
     )
-    rows = validate_observation_rows(
+    rows = parse_observation_rows(
         annotate_observation_rows(compute_indicators(source, definition), (variable,)),
         (variable,),
     )
@@ -113,7 +113,7 @@ def test_mixed_indicator_windows_keep_their_own_calendar_bounds():
             "timestamp": ["1938-01-01"] * len(variables),
         }
     )
-    rows = validate_observation_rows(annotate_observation_rows(raw, variables), variables)
+    rows = parse_observation_rows(annotate_observation_rows(raw, variables), variables)
     by_indicator = {row["indicator_id"]: row for row in rows.to_dicts()}
     for window, end in zip(
         windows, ("1938-02-01", "1938-04-01", "1940-01-01", "1938-01-08"), strict=True

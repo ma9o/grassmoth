@@ -33,7 +33,6 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     import numpy as np
-    import polars as pl
     from pydantic import BaseModel
 
     from grassmoth.public import DynamicalModelSpec, JsonObject, QuestionSpec
@@ -236,13 +235,3 @@ class ArtifactStore:
             artifact_id
         ]
         return cast("JsonObject", output[key])
-
-    def read_panel(self, revision: str) -> pl.DataFrame:
-        """Restore prepared observations from their result owner."""
-        from grassmoth.public import PrepareDataOutput
-        from grassmoth_server.study.persistence.codec import unpack_result
-
-        self.read_meta("panel", revision)
-        return PrepareDataOutput.model_validate(
-            unpack_result(read_file(self.repo, revision, "result.msgpack"))
-        ).observation_frame()

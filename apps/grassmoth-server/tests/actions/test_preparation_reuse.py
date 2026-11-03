@@ -241,7 +241,7 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
         finalize_measurements_activity,
     )
     from grassmoth_server.actions.temporal.extraction.messages import MeasurementsFinalizeInput
-    from grassmoth_server.study.queries.lineage import read_data_metadata
+    from grassmoth_server.study.queries.data import read_data_source
 
     monkeypatch.setattr(data, "_DATA_URI", str(tmp_path))
     raw = pl.DataFrame(
@@ -318,12 +318,17 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
         )
     )
     revision = effects.effects.produced[0].revision
-    panel = store.read_panel(revision)
-    assert panel["value"].to_list() == [None, 2.0, None]
-    assert panel["anchor_time"].to_list() == [datetime(2026, 1, day + offset) for day in (3, 5, 7)]
-    assert panel["support_start"].to_list() == [datetime(2026, 1, day) for day in (3, 5, 7)]
-    assert panel["support_end"].to_list() == [datetime(2026, 1, day) for day in (5, 7, 9)]
-    assert read_data_metadata(store, revision).time_origin == datetime(2026, 1, 2, tzinfo=UTC)
+    from grassmoth.actions.contracts.io import PrepareDataOutput
+
+    output = read_data_source(store, revision)
+    assert isinstance(output, PrepareDataOutput)
+    series = next(iter(output.observations().series.values()))
+    readings = series.history.readings()
+    assert [row[1] for row in readings] == [None, 2.0, None]
+    assert [row[0] for row in readings] == [day + offset for day in (1, 3, 5)]
+    assert [row[2] for row in readings] == [1, 3, 5]
+    assert [row[3] for row in readings] == [3, 5, 7]
+    assert output.metadata.time_origin == datetime(2026, 1, 2, tzinfo=UTC)
     assert len(list((tmp_path / ".preparation-cache/measurement_extraction").iterdir())) == 1
 
     computed_variable = DataVariableSpec(
@@ -340,5 +345,7 @@ def test_multiday_span_and_empty_semantic_windows_materialize_without_requests(
         DataPreparationSpec(default_window="2d", variables=(computed_variable,)),
     )
     rows = annotate_observation_rows(computed, preparation.definition.observation_schema())
-    assert rows["anchor_time"].to_list() == [value.isoformat() for value in panel["anchor_time"]]
+    assert rows["anchor_time"].to_list() == [
+        datetime(2026, 1, day + offset).isoformat() for day in (3, 5, 7)
+    ]
     assert computed["value"].to_list() == [None, "2", None]

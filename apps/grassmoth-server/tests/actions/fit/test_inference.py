@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 
 import jax.numpy as jnp
 import numpy as np
-import polars as pl
 import pytest
 
 from grassmoth.actions.contracts.io import FitInputs
@@ -94,6 +93,31 @@ def _make_panel(inputs: CompiledFitInputs) -> BoundPanel:
     )
 
 
+def _panel_observations(panel):
+    from grassmoth.artifacts.arrays import NumericalArray
+    from grassmoth.artifacts.observations.history import ObservationHistory
+    from grassmoth.artifacts.reports.histograms import empirical_distribution
+
+    def nullable(values):
+        return tuple(None if np.isnan(value) else float(value) for value in values)
+
+    variables = tuple(item.observation for item in panel.compiled_dynamical_model.observations)
+    return ObservationDataset.from_histories(
+        {
+            variable.id: ObservationHistory(
+                times=NumericalArray.from_numpy(np.asarray(panel.times)),
+                values=nullable(np.asarray(panel.values[:, column])),
+                support_start=nullable(panel.observation_support.support_start_times[:, column]),
+                support_end=nullable(panel.observation_support.support_end_times[:, column]),
+                empirical=empirical_distribution(np.asarray(panel.values[:, column])),
+            )
+            for column, variable in enumerate(variables)
+        },
+        variables,
+        time_origin=panel.time_origin,
+    )
+
+
 def test_fit_model_logs_runtime_summary_and_diagnostic_boundaries(monkeypatch, caplog):
     fake_result = _fake_result()
     dynamical_model_spec = _sleep_state_model()
@@ -104,11 +128,7 @@ def test_fit_model_logs_runtime_summary_and_diagnostic_boundaries(monkeypatch, c
     monkeypatch.setattr(runtime_module, "bind_panel", lambda *_args, **_kwargs: runtime)
     monkeypatch.setattr(inference_fit, "fit", lambda _priors, _panel, **_kwargs: fake_result)
 
-    data_for_model = ObservationDataset.from_frame(
-        pl.DataFrame(runtime.rows),
-        tuple(item.observation for item in runtime.compiled_dynamical_model.observations),
-        time_origin=runtime.time_origin,
-    )
+    data_for_model = _panel_observations(runtime)
 
     with caplog.at_level(logging.INFO, logger=__name__):
         result = stage5_inference.fit_model(
@@ -174,11 +194,7 @@ def test_continued_fit_appends_within_chains_and_zero_draws_keep_existing_eviden
     monkeypatch.setattr(MCMCPosterior, "get_loo_diagnostics", lambda *_args, **_kwargs: None)
     model = _sleep_state_model()
     panel = _make_panel(compile_fit_fixture(model))
-    dataset = ObservationDataset.from_frame(
-        pl.DataFrame(panel.rows),
-        tuple(item.observation for item in panel.compiled_dynamical_model.observations),
-        time_origin=panel.time_origin,
-    )
+    dataset = _panel_observations(panel)
     settings = SamplerSpec(
         num_chains=2,
         num_warmup=0,

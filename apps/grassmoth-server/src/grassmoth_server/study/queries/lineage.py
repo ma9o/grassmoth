@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from pydantic import TypeAdapter
-
 from grassmoth.public import (
     AuthoredLawProvenance,
     FittedLawProvenance,
     MixedLawProvenance,
     PredictiveLawProvenance,
-    PreparedDataMetadata,
     UnknownLawProvenance,
 )
 from grassmoth_server.study.persistence.store import read_model
@@ -23,13 +20,6 @@ if TYPE_CHECKING:
     from grassmoth.public import DataRef, DynamicalModelSpec, GitOid, InferenceReportCore
     from grassmoth_server.study.persistence.store import ArtifactStore
     from grassmoth_server.study.state import ArtifactRecord
-
-
-def read_data_metadata(store: ArtifactStore, revision: GitOid) -> PreparedDataMetadata:
-    """Parse the preparation metadata owned by an exact panel artifact revision."""
-    return TypeAdapter[PreparedDataMetadata](PreparedDataMetadata).validate_python(
-        store.read_document("panel", revision)
-    )
 
 
 def fitted_law_report(

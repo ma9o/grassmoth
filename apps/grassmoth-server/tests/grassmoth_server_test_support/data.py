@@ -100,3 +100,19 @@ def preparation_input(store, preparation):
         extraction={item.observation.id: item.extraction for item in variables},
         context=preparation.definition.context,
     )
+
+
+def simulation_output(report):
+    """Retain a simulation fixture with the production history views."""
+    from grassmoth.actions.contracts.io import SimulateOutput
+    from grassmoth.study.projections.visuals import simulation_observation_histories
+
+    evidence = report.evidence
+    return SimulateOutput(
+        report=report,
+        data=simulation_observation_histories(
+            evidence,
+            evidence.arms.action.observations.values,
+            evidence.observation_layout.mask.values,
+        ),
+    )

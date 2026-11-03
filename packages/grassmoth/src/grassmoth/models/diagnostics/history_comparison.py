@@ -10,10 +10,10 @@ from typing import TYPE_CHECKING
 
 import numpy as np
 
-from grassmoth.artifacts.arrays import NumericalArray
+from grassmoth.artifacts.arrays import NumericalArray, vector_values
 from grassmoth.artifacts.identity import IndicatorId, IndicatorRef
 from grassmoth.artifacts.observations.spec import LabeledMeasurement
-from grassmoth.artifacts.observations.time import ObservationInstant
+from grassmoth.artifacts.observations.time import ModelTime, ObservationInstant
 from grassmoth.artifacts.reports.checks import (
     Assessment,
     CheckOutcome,
@@ -49,7 +49,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
     from datetime import datetime
 
-    from grassmoth.artifacts.observations.comparison import DataSeries, Dataset
+    from grassmoth.artifacts.observations.comparison import Dataset
+    from grassmoth.artifacts.observations.dataset import ObservationSeries
     from grassmoth.artifacts.reports.data_quality import DataFinding
 
 
@@ -502,17 +503,20 @@ def measure_predictive_checks(
 
 
 def _statistics(
-    left: tuple[DataSeries | None, ...], right: tuple[DataSeries | None, ...]
+    left: tuple[ObservationSeries | None, ...], right: tuple[ObservationSeries | None, ...]
 ) -> tuple[DataStatisticComparison, ...]:
-    def measure(series: DataSeries | None) -> dict[tuple[DataStatistic, str | None], float | None]:
+    def measure(
+        series: ObservationSeries | None,
+    ) -> dict[tuple[DataStatistic, str | None], float | None]:
         if series is None:
             return {}
-        values = np.asarray([point.value for point in series.points if point.value is not None])
+        readings = vector_values(series.history.values)
+        values = readings[~np.isnan(readings)]
         statistics: dict[tuple[DataStatistic, str | None], float | None] = {
             ("observed_count", None): float(len(values)),
-            ("missing_count", None): float(len(series.points) - len(values)),
+            ("missing_count", None): float(len(readings) - len(values)),
         }
-        levels = series.variable.levels
+        levels = series.observation.levels
         if levels:
             statistics.update(
                 {
@@ -546,16 +550,51 @@ def _statistics(
     return tuple(result)
 
 
+type CalendarReading = tuple[datetime | None, datetime | None, float | None]
+
+
+def _calendar_readings(dataset: Dataset, identity: IndicatorId) -> dict[datetime, CalendarReading]:
+    series = dataset.observations.series.get(identity)
+    if series is None:
+        return {}
+    origin = ObservationInstant(dataset.observations.time_origin)
+    return {
+        ModelTime(day).at(origin).value: (
+            ModelTime(start).at(origin).value if start is not None else None,
+            ModelTime(end).at(origin).value if end is not None else None,
+            value,
+        )
+        for day, value, start, end in series.history.readings()
+    }
+
+
+def _measurement_support(
+    series: ObservationSeries, anchor: datetime, reading: CalendarReading
+) -> tuple[datetime | None, datetime | None]:
+    return (
+        reading[:2]
+        if series.observation.requires_interval_summary_measurement
+        else (anchor, anchor)
+    )
+
+
+def _changed_point(anchor: datetime, reading: CalendarReading) -> DataPoint:
+    return DataPoint(
+        anchor_time=anchor, support_start=reading[0], support_end=reading[1], value=reading[2]
+    )
+
+
 def _predictive_comparison(
     identity: IndicatorId,
-    reference: DataSeries,
-    replicas: tuple[DataSeries, ...],
+    reference: Dataset,
+    replicas: tuple[Dataset, ...],
     reference_side: ComparisonSide,
-    time_origin: datetime,
 ) -> PredictiveComparison | DataFinding:
-    """Align reference anchors once; retain compatibility failures with the outer comparison."""
+    """Align reference calendar anchors while computing statistics from owned readings."""
     subject = IndicatorRef(id=identity)
-    if not any(point.value is not None for point in reference.points):
+    points = _calendar_readings(reference, identity)
+    reference_series = reference.observations.series[identity]
+    if not any(point[2] is not None for point in points.values()):
         return PredictiveComparison(
             reference_side=reference_side,
             evaluation=NotEvaluated(
@@ -566,22 +605,23 @@ def _predictive_comparison(
             ),
         )
     aligned = []
-    for series in replicas:
-        lookup = {point.anchor_time: point for point in series.points}
+    for replica in replicas:
+        series = replica.observations.series[identity]
+        lookup = _calendar_readings(replica, identity)
         values = []
-        for point in reference.points:
-            candidate = lookup.get(point.anchor_time)
-            if point.value is not None:
-                if candidate is None or series.measurement_support(
-                    candidate
-                ) != reference.measurement_support(point):
+        for anchor, point in points.items():
+            candidate = lookup.get(anchor)
+            if point[2] is not None:
+                if candidate is None or _measurement_support(
+                    series, anchor, candidate
+                ) != _measurement_support(reference_series, anchor, point):
                     return Evaluated(
                         code="observation_support",
                         subject=subject,
                         outcome="failed",
                         evidence="Replicates must cover the support of every observed reference anchor.",
                     )
-                if candidate.value is None:
+                if candidate[2] is None:
                     return PredictiveComparison(
                         reference_side=reference_side,
                         evaluation=NotEvaluated(
@@ -592,19 +632,16 @@ def _predictive_comparison(
                         ),
                     )
             values.append(
-                candidate.value if candidate is not None and candidate.value is not None else np.nan
+                candidate[2] if candidate is not None and candidate[2] is not None else np.nan
             )
         aligned.append(values)
-    observed = [point.value if point.value is not None else np.nan for point in reference.points]
+    observed = vector_values(reference_series.history.values)
     checks = measure_predictive_checks(
         jnp.asarray(aligned)[:, :, None],
         jnp.asarray(observed)[:, None],
         (identity,),
-        times=tuple(
-            ObservationInstant(point.anchor_time).relative_to(ObservationInstant(time_origin)).days
-            for point in reference.points
-        ),
-        time_origin=time_origin,
+        times=tuple(float(day) for day in reference_series.history.times.values),
+        time_origin=reference.observations.time_origin,
         standardized=(False,),
     )
     return PredictiveComparison(reference_side=reference_side, evaluation=checks)
@@ -624,12 +661,17 @@ def compare_data_variables(
             {(dataset.source.revision, dataset.source.replicate_index) for dataset in side}
         ) != len(side):
             raise ValueError("A dataset cannot be counted twice within a comparison side")
-    variables = sorted(set().union(*(dataset.series.keys() for dataset in (*left, *right))))
+    variables = sorted(
+        set().union(*(dataset.observations.series.keys() for dataset in (*left, *right)))
+    )
     comparisons: list[IndicatorComparison] = []
     for identity in variables:
         if identity in input_indicators:
             continue
-        a, b = (tuple(dataset.series.get(identity) for dataset in side) for side in (left, right))
+        a, b = (
+            tuple(dataset.observations.series.get(identity) for dataset in side)
+            for side in (left, right)
+        )
         present = tuple(series for series in (*a, *b) if series is not None)
         subject = IndicatorRef(id=identity)
         findings: list[DataFinding] = []
@@ -644,7 +686,8 @@ def compare_data_variables(
                 )
             )
         same_definition = all(
-            series.variable.definition == present[0].variable.definition for series in present[1:]
+            series.observation.definition == present[0].observation.definition
+            for series in present[1:]
         )
         if not same_definition:
             findings.append(
@@ -657,9 +700,14 @@ def compare_data_variables(
             )
         schedules = {
             tuple(
-                (point.anchor_time, *series.measurement_support(point)) for point in series.points
+                (
+                    anchor,
+                    *_measurement_support(dataset.observations.series[identity], anchor, reading),
+                )
+                for anchor, reading in _calendar_readings(dataset, identity).items()
             )
-            for series in present
+            for dataset in (*left, *right)
+            if identity in dataset.observations.series
         }
         if len(schedules) > 1:
             findings.append(
@@ -672,18 +720,18 @@ def compare_data_variables(
             )
         changes: list[Change[DataPoint]] = []
         if len(a) == len(b) == 1:
-            old, new = (
-                {point.anchor_time: point for point in series.points} if series is not None else {}
-                for series in (a[0], b[0])
-            )
+            old, new = (_calendar_readings(dataset, identity) for dataset in (left[0], right[0]))
             for anchor in sorted(old.keys() | new.keys()):
                 if old.get(anchor) != new.get(anchor):
                     changes.append(
-                        Added(after=new[anchor])
+                        Added(after=_changed_point(anchor, new[anchor]))
                         if anchor not in old
-                        else Removed(before=old[anchor])
+                        else Removed(before=_changed_point(anchor, old[anchor]))
                         if anchor not in new
-                        else Revised(before=old[anchor], after=new[anchor])
+                        else Revised(
+                            before=_changed_point(anchor, old[anchor]),
+                            after=_changed_point(anchor, new[anchor]),
+                        )
                     )
         statistics = _statistics(a, b)
         predictive: PredictiveComparison | None = None
@@ -691,7 +739,7 @@ def compare_data_variables(
             complete
             and same_definition
             and (len(a) == 1) != (len(b) == 1)
-            and not isinstance(present[0].variable.measurement, LabeledMeasurement)
+            and not isinstance(present[0].observation.measurement, LabeledMeasurement)
         ):
             reference_side: ComparisonSide = "left" if len(a) == 1 else "right"
             reference_group, replica_group = (
@@ -700,10 +748,9 @@ def compare_data_variables(
             reference_dataset = reference_group[0]
             aligned = _predictive_comparison(
                 identity,
-                reference_dataset.series[identity],
-                tuple(dataset.series[identity] for dataset in replica_group),
+                reference_dataset,
+                tuple(replica_group),
                 reference_side,
-                reference_dataset.time_origin,
             )
             if isinstance(aligned, PredictiveComparison):
                 predictive = aligned

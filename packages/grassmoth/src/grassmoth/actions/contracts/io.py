@@ -38,9 +38,8 @@ from grassmoth.artifacts.reports.profiling import FitProfileReport
 from grassmoth.artifacts.simulation import SimulationReport
 
 if TYPE_CHECKING:
-    from datetime import date, datetime
+    from datetime import date
 
-    import polars as pl
     import pyarrow as pa
 
     from grassmoth.artifacts.identity import GitRef
@@ -135,44 +134,13 @@ class PrepareDataOutput(Value):
         description="Retained extraction workers, failed chunks and reuse counts."
     )
 
-    def observation_frame(self) -> pl.DataFrame:
-        """Reconstruct the canonical table retained by this preparation."""
-        import polars as pl
-
+    def observations(self) -> ObservationDataset:
+        """Admit the stored histories under their preparation's recorded definitions."""
         from grassmoth.artifacts.observations.dataset import ObservationDataset
-        from grassmoth.artifacts.observations.time import ModelTime, ObservationInstant
 
-        rows = []
-        for variable in self.metadata.variables:
-            history = self.data[variable.id]
-            origin = ObservationInstant(self.metadata.time_origin)
-
-            def instant(day: float | None, origin: ObservationInstant = origin) -> datetime | None:
-                return (
-                    ModelTime(day).at(origin).value.replace(tzinfo=None)
-                    if day is not None
-                    else None
-                )
-
-            rows.extend(
-                {
-                    "indicator_id": variable.id,
-                    "value": value,
-                    "anchor_time": instant(day),
-                    "support_start": instant(start),
-                    "support_end": instant(end),
-                    "support_kind": variable.support_kind.value,
-                    "summary_operator": variable.summary_operator.value,
-                    "anchor_policy": variable.anchor_policy.value,
-                    "observation_window": str(variable.observation_window),
-                }
-                for day, value, start, end in history.readings()
-            )
-        schema = ObservationDataset.row_schema() | {
-            "value": pl.Float64,
-            **{name: pl.Datetime("us") for name in ("anchor_time", "support_start", "support_end")},
-        }
-        return pl.DataFrame(rows, schema=schema).sort("indicator_id", "anchor_time")
+        return ObservationDataset.from_histories(
+            self.data, self.metadata.variables, time_origin=self.metadata.time_origin
+        )
 
 
 # fit
@@ -259,6 +227,17 @@ class SimulateOutput(Value):
         ),
     )
     report: SimulationReport = Field(description="Generation evidence and evaluated findings.")
+
+    def observations(self, replicate: int) -> ObservationDataset:
+        """Admit one replicate; the caller establishes 0 <= replicate < evidence.draws."""
+        from grassmoth.artifacts.observations.dataset import ObservationDataset
+
+        evidence = self.report.evidence
+        return ObservationDataset.from_histories(
+            self.data[replicate],
+            evidence.observation_layout.variables,
+            time_origin=evidence.time_origin,
+        )
 
 
 # data_diff

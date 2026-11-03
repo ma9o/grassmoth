@@ -11,23 +11,20 @@ import numpy as np
 import polars as pl
 
 from grassmoth.artifacts.observations.dataset import ObservationDataset, SelectedObservations
-from grassmoth.artifacts.observations.time import ObservationInstant
+from grassmoth.artifacts.observations.time import ObservationInstant, model_time_indices
 from grassmoth.artifacts.scenarios import StateAssignment
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.counterfactual.orchestration import ResolvedIntervention
 from grassmoth.models.ssm.preparation.observations import (
-    augment_wide_data_with_support_boundaries,
     compile_observation_support_runtime,
     validate_observation_support,
 )
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
-from grassmoth.observations.rows import pivot_to_wide
+from grassmoth.observations.rows import observation_grid, pivot_to_wide
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
     from datetime import datetime
-
-    import pyarrow as pa
 
     from grassmoth.artifacts.identity import IndicatorId
     from grassmoth.compute.programs import ProgramCompiler
@@ -42,7 +39,6 @@ class BoundPanel:
     """Immutable observations and exogenous bindings on one compiled model's axes."""
 
     compiled_dynamical_model: CompiledDynamicalModel
-    rows: pa.Table
     time_origin: datetime
     values: jax.Array
     times: jax.Array
@@ -73,13 +69,11 @@ class BoundPanel:
 
 
 def reading_level(
-    value: float, support_start: datetime, support_end: datetime, summary_operator: str
+    value: float, support_start: float, support_end: float, summary_operator: str
 ) -> float:
     """An input reading's constant level: its value, or a count or sum per model day."""
     if summary_operator in {"count", "sum"}:
-        return value / (
-            ObservationInstant(support_end).relative_to(ObservationInstant(support_start)).days
-        )
+        return value / (support_end - support_start)
     return value
 
 
@@ -200,30 +194,19 @@ def bind_panel(
     compiled_dynamical_model: CompiledDynamicalModel,
     compiler: ProgramCompiler,
 ) -> BoundPanel | PanelPreparationFailure:
-    """Own compatibility once, retaining the exact identity-bearing input rows."""
+    """Bind admitted histories to the model and its numerical execution grid."""
     observation_selection = observations.select(
         tuple(item.observation for item in compiled_dynamical_model.observations)
     )
     if not isinstance(observation_selection, SelectedObservations):
         return PanelPreparationFailure(observation_selection.message)
-    data_for_model = observation_selection.frame
-    time_origin = ObservationInstant(observations.time_origin).value
-    if data_for_model.is_empty():
-        return PanelPreparationFailure("Cannot bind an empty observation panel")
+    time_origin = observations.time_origin
     projected = project_observation_data(
-        data_for_model, compiled_dynamical_model=compiled_dynamical_model, time_origin=time_origin
+        observation_selection, compiled_dynamical_model=compiled_dynamical_model
     )
     if isinstance(projected, ObservationPreflightFailure):
         return PanelPreparationFailure(projected.message)
-    wide, selected = projected
-    rows = selected
-    labels = {
-        observation.id: observation.name for observation in compiled_dynamical_model.observations
-    }
-    support_rows = rows.with_columns(
-        pl.col("indicator_id").replace_strict(labels).alias("indicator")
-    )
-    wide = augment_wide_data_with_support_boundaries(support_rows, wide, time_origin=time_origin)
+    wide = projected
     support_failure = validate_observation_support(compiled_dynamical_model, wide)
     if support_failure is not None:
         return PanelPreparationFailure(support_failure.message)
@@ -236,12 +219,16 @@ def bind_panel(
     if isinstance(events, ObservationPreflightFailure):
         return PanelPreparationFailure(events.message)
     if events:
-        boundaries = pl.DataFrame({"time": sorted({event.spec.time for event in events})})
-        wide = wide.join(boundaries, on="time", how="full", coalesce=True).sort("time")
+        grid = observation_grid(observation_selection, tuple(event.spec.time for event in events))
+        labels = {str(item.id): item.name for item in compiled_dynamical_model.observations}
+        wide = pivot_to_wide(observation_selection, grid).rename(labels)
+        indices = model_time_indices(grid, np.asarray([event.spec.time for event in events]))
+        events = tuple(
+            ResolvedIntervention(event.index, event.spec.revised(time=float(grid[index])))
+            for event, index in zip(events, indices, strict=True)
+        )
     values, times, names, wide = prepare_fit_inputs(compiled_dynamical_model, wide)
-    support = compile_observation_support_runtime(
-        support_rows, wide, names, time_origin=time_origin
-    )
+    support = compile_observation_support_runtime(observation_selection, wide, names)
     if isinstance(support, ObservationPreflightFailure):
         return PanelPreparationFailure(support.message)
     input_values = input_trajectory_values(compiled_dynamical_model, times, events)
@@ -272,7 +259,6 @@ def bind_panel(
                 )
     return BoundPanel(
         compiled_dynamical_model,
-        selected.to_arrow(),
         time_origin,
         values,
         times,
@@ -283,21 +269,22 @@ def bind_panel(
 
 
 def project_observation_data(
-    data_for_model: pl.DataFrame,
+    observations: SelectedObservations,
     *,
     compiled_dynamical_model: CompiledDynamicalModel,
-    time_origin: datetime,
-) -> tuple[pl.DataFrame, pl.DataFrame] | ObservationPreflightFailure:
-    """Project selected identities to display columns without changing the exact rows."""
-    labels = {indicator.id: indicator.name for indicator in compiled_dynamical_model.observations}
-    selected = data_for_model.filter(pl.col("indicator_id").is_in(list(labels)))
-    present = set(selected["indicator_id"])
+) -> pl.DataFrame | ObservationPreflightFailure:
+    """Bind selected identities to display columns on the tolerance-merged execution grid."""
     missing = [
-        f"{name} ({identity})" for identity, name in labels.items() if identity not in present
+        series.observation.id
+        for series in observations.series
+        if series.history.times.layout[0][0] == 0
     ]
     if missing:
         return ObservationPreflightFailure.rejected(
             "Prepared observations are missing model indicators: " + ", ".join(missing)
         )
-    wide_data = pivot_to_wide(selected, time_origin=time_origin)
-    return wide_data.rename({str(identity): name for identity, name in labels.items()}), selected
+    grid = observation_grid(observations)
+    if not len(grid):
+        return ObservationPreflightFailure.rejected("Cannot bind an empty observation panel")
+    labels = {str(item.id): item.name for item in compiled_dynamical_model.observations}
+    return pivot_to_wide(observations, grid).rename(labels)

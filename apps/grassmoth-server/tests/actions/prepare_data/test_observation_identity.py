@@ -15,10 +15,8 @@ from grassmoth.artifacts.observations.spec import (
     NumericMeasurement,
     ResolvedObservationSpec,
 )
-from grassmoth.observations.quality.profile import validate_extraction
 from grassmoth_server.actions.prepare_data.context import MeasurementContext
 from grassmoth_server.actions.prepare_data.worker_output import validate_worker_output
-from grassmoth_test_support.helpers import make_model
 
 pytestmark = pytest.mark.contract
 
@@ -61,7 +59,12 @@ def test_one_observation_definition_is_shared_by_preparation_and_model():
         construct_polarity="positive",
     )
     assert indicator.observation == observation
-    assert set(indicator.model_dump()) == {"observation", "likelihood", "construct_polarity"}
+    assert set(indicator.model_dump()) == {
+        "observation",
+        "likelihood",
+        "construct_polarity",
+        "reasoning",
+    }
     assert "fill_null" not in recipe.observation_schema()[0].model_dump()
 
 
@@ -151,10 +154,6 @@ def test_observation_producers_reject_owners_outside_the_pinned_measurement():
                 ),
             ),
         )
-    report = validate_extraction(make_model(["mood"]), [rows])
-    assert any(
-        finding.kind == "evaluated" and finding.outcome == "failed" for finding in report.findings
-    )
     worker, errors = validate_worker_output(
         {
             "extractions": [

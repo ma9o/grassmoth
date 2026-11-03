@@ -15,9 +15,8 @@ from grassmoth_test_support.model import one_state_gaussian_model
 @pytest.mark.contract
 def test_selected_indicators_keep_the_panel_origin_and_initial_grid_point():
     from grassmoth.actions.prepare_data.rows import prepared_time_origin
-    from grassmoth.models.ssm.preparation.observations import (
-        augment_wide_data_with_support_boundaries,
-    )
+    from grassmoth.artifacts.observations.dataset import SelectedObservations
+    from grassmoth_test_support.helpers import observation_dataset
 
     early = one_state_gaussian_model()
     late = DynamicalModelSpec.model_validate_json(
@@ -40,13 +39,15 @@ def test_selected_indicators_keep_the_panel_origin_and_initial_grid_point():
     )
     origin = prepared_time_origin(rows, None)
     assert origin == datetime(2024, 1, 1, tzinfo=UTC)
+    variables = tuple(
+        compile_model_fixture(model).observations[0].observation for model in (early, late)
+    )
+    dataset = observation_dataset(rows, variables, time_origin=origin)
     for model, expected in ((early, 1.0), (late, 11.0)):
-        projected = project_observation_data(
-            rows, compiled_dynamical_model=compile_model_fixture(model), time_origin=origin
-        )
-        assert not isinstance(projected, ObservationPreflightFailure)
-        (wide, selected) = projected
-        assert wide["time"].to_list() == [expected]
-        augmented = augment_wide_data_with_support_boundaries(selected, wide, time_origin=origin)
-        assert augmented["time"].to_list() == [0.0, expected]
-        assert augmented[model.indicators[0].observation.name][0] is None
+        compiled = compile_model_fixture(model)
+        selected = dataset.select(tuple(item.observation for item in compiled.observations))
+        assert isinstance(selected, SelectedObservations)
+        wide = project_observation_data(selected, compiled_dynamical_model=compiled)
+        assert not isinstance(wide, ObservationPreflightFailure)
+        assert wide["time"].to_list() == [0.0, expected]
+        assert wide[model.indicators[0].observation.name][0] is None

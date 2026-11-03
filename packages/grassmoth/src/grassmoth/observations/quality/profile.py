@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING
 
-import polars as pl
-
-from grassmoth.artifacts.identity import IndicatorId, IndicatorRef
+from grassmoth.artifacts.identity import IndicatorRef
 from grassmoth.artifacts.observations.preparation import PreparedDataMetadata
 from grassmoth.artifacts.reports.checks import Evaluated
 from grassmoth.artifacts.reports.data_quality import (
@@ -24,89 +21,45 @@ from grassmoth.observations.quality.rules import (
 
 if TYPE_CHECKING:
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-    from grassmoth.artifacts.observations.spec import ResolvedObservationSpec
+    from grassmoth.artifacts.observations.dataset import ObservationDataset
 
 
 def validate_extraction(
     dynamical_model_spec: DynamicalModelSpec,
-    dataframes: list[pl.DataFrame],
+    observations: ObservationDataset,
 ) -> DataProfileReport:
     """Assess model-dependent compatibility; preparation owns empirical profiles."""
-    frames = [frame for frame in dataframes if not frame.is_empty()]
-    if not frames:
-        return no_data_validation_result()
     constructs = {
         indicator.observation.id: construct
         for construct, indicator in dynamical_model_spec.iter_indicators()
     }
-    combined = pl.concat(frames, how="vertical").filter(
-        pl.col("indicator_id").is_in(list(constructs))
-    )
-    if combined.is_empty():
+    if not any(
+        series.history.times.layout[0][0]
+        for identity, series in observations.series.items()
+        if identity in constructs
+    ):
         return no_data_validation_result()
     return DataProfileReport(
-        indicators={}, findings=tuple(check_construct_correlations(combined, constructs))
+        indicators={}, findings=tuple(check_construct_correlations(observations, constructs))
     )
 
 
 def profile_data(
-    data: pl.DataFrame,
+    observations: ObservationDataset,
     *,
-    definitions: tuple[ResolvedObservationSpec, ...] = (),
     metadata: PreparedDataMetadata | None = None,
 ) -> DataProfileReport:
-    """Measure recorded data under its own definitions, without a selected model."""
-    if data.is_empty():
+    """Measure admitted data under its own definitions, without a selected model."""
+    if not any(series.history.times.layout[0][0] for series in observations.series.values()):
         return no_data_validation_result()
-    definitions = metadata.variables if metadata is not None else definitions
-    lookup = {item.id: item for item in definitions}
-    identities = {IndicatorId(value) for value in data["indicator_id"].unique()} | set(lookup)
     findings: list[DataFinding] = []
     audits = {
         identity: IndicatorAudit(
-            profile=compute_empirical_profile(identity, data),
-            findings=indicator_findings(
-                identity, data.filter(pl.col("indicator_id") == identity), lookup
-            ),
+            profile=compute_empirical_profile(series),
+            findings=indicator_findings(series, observations.time_origin),
         )
-        for identity in sorted(identities)
+        for identity, series in sorted(observations.series.items())
     }
-    if definitions:
-        unknown = set(data["indicator_id"].unique()) - set(lookup)
-        if unknown:
-            findings.append(
-                Evaluated(
-                    code="undeclared_variables",
-                    subject="dataset",
-                    outcome="failed",
-                    evidence=f"{len(unknown)} observed variables have no definitions in the prepared-data metadata.",
-                )
-            )
-        for variable in definitions:
-            levels = variable.levels
-            values = data.filter(pl.col("indicator_id") == variable.id)["value"].drop_nulls()
-            if levels and any(
-                value < 0 or value >= len(levels) or value != int(value)
-                for value in values
-                if value is not None and math.isfinite(value)
-            ):
-                audits[variable.id] = audits[variable.id].with_finding(
-                    Evaluated(
-                        code="codebook_bounds",
-                        subject=IndicatorRef(id=variable.id),
-                        outcome="failed",
-                        evidence="Observed codes must index the declared codebook",
-                    )
-                )
-            if not values.is_finite().all():
-                audits[variable.id] = audits[variable.id].with_finding(
-                    Evaluated(
-                        code="nonfinite_values",
-                        subject=IndicatorRef(id=variable.id),
-                        outcome="failed",
-                        evidence="Observed numeric values must be finite",
-                    )
-                )
     if isinstance(metadata, PreparedDataMetadata):
         from grassmoth.artifacts.observations.preparation import check_semantic_collisions
 

@@ -19,11 +19,6 @@ if TYPE_CHECKING:
     from grassmoth.artifacts.simulation import SimulationEvidence
 
 
-def finite_values(values: np.ndarray) -> tuple[float | None, ...]:
-    """Convert numerical values to JSON-safe scalars, representing non-finite entries as ``None``."""
-    return tuple(float(value) if np.isfinite(value) else None for value in values)
-
-
 def observation_history(time_origin: datetime, panel: pl.DataFrame) -> ObservationHistory:
     """Project recorded rows into model-day coordinates with their support intervals and empirical CDF."""
     origin = ObservationInstant(time_origin)
@@ -44,7 +39,7 @@ def observation_history(time_origin: datetime, panel: pl.DataFrame) -> Observati
                 ]
             )
         ),
-        values=finite_values(values),
+        values=tuple(float(value) if value is not None else None for value in panel["value"]),
         support_start=days("support_start"),
         support_end=days("support_end"),
         empirical=empirical_distribution(values),

@@ -169,7 +169,10 @@ ignore_names = [
 ]
 
 [tool.deptry.per_rule_ignores]
-DEP002 = ["flatbuffers"]
+DEP002 = [
+    "flatbuffers",
+    "pyarrow", # SourceTable owns Arrow rows; Polars loads pyarrow dynamically at ingress.
+]
 
 [tool.importlinter]
 root_packages = ["grassmoth", "grassmoth_server"]

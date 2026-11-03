@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from grassmoth_server.storage import paths
 from grassmoth_server.study.persistence.call import SavedResult
+from grassmoth_test_support.helpers import observation_dataset
 
 
 def result_blob(store, result, *, call_id=None):
@@ -46,7 +47,6 @@ def seed_record(
     from grassmoth.actions.contracts.io import EditModelOutput, EditQuestionOutput
     from grassmoth.actions.prepare_data.action import prepared_output
     from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-    from grassmoth.artifacts.observations.dataset import ObservationDataset
     from grassmoth.artifacts.observations.preparation import (
         DataPreparationResult,
         PreparedDataMetadata,
@@ -68,7 +68,7 @@ def seed_record(
         assert parquet_files is not None
         metadata = PreparedDataMetadata.model_validate(documents["metadata.json"])
         output = prepared_output(
-            ObservationDataset.from_frame(
+            observation_dataset(
                 parquet_files["panel.parquet"], metadata.variables, time_origin=metadata.time_origin
             ),
             metadata,

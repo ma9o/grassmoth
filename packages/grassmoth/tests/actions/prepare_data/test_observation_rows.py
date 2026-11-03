@@ -38,9 +38,6 @@ class TestAnnotateObservationRows:
 
         assert "timestamp" not in annotated.columns
         assert annotated["anchor_time"][0] == "2024-01-02T00:00:00"
-        assert annotated["support_kind"][0] == "interval"
-        assert annotated["summary_operator"][0] == "mean"
-        assert annotated["anchor_policy"][0] == "support_end"
         assert annotated["support_start"][0] == "2024-01-01T00:00:00"
         assert annotated["support_end"][0] == "2024-01-02T00:00:00"
 
@@ -68,7 +65,6 @@ class TestAnnotateObservationRows:
 
         assert "timestamp" not in annotated.columns
         assert annotated["anchor_time"][0] == "2024-01-08T00:00:00"
-        assert annotated["observation_window"][0] == "1w"
         assert annotated["support_start"][0] == "2024-01-01T00:00:00"
         assert annotated["support_end"][0] == "2024-01-08T00:00:00"
 
@@ -94,9 +90,6 @@ class TestAnnotateObservationRows:
 
         annotated = annotate_observation_rows(raw, variables)
 
-        assert annotated["support_kind"][0] == "point"
-        assert annotated["summary_operator"][0] == "last"
-        assert annotated["anchor_policy"][0] == "support_end"
         assert annotated["anchor_time"][0] == "2024-01-02T00:00:00"
         assert annotated["support_start"][0] == "2024-01-01T00:00:00"
         assert annotated["support_end"][0] == "2024-01-02T00:00:00"

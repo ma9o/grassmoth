@@ -135,6 +135,8 @@ class ArrayVector(Value):
             raise ValueError("Vector range exceeds the owned buffer")
         if self.mask is not None and self.mask.length != self.length:
             raise ValueError("Vector mask must align with its values")
+        if self.mask is not None and self.mask.array.layout[1] != np.dtype(bool):
+            raise ValueError("Vector mask must be boolean")
         return self
 
     @property
@@ -147,6 +149,31 @@ class ArrayVector(Value):
 
 
 type ScalarValues = tuple[FiniteFloat | None, ...] | ArrayVector
+
+
+def vector_data(value: ScalarValues) -> np.ndarray:
+    """Read the selected numerical buffer before applying its observation mask."""
+    if not isinstance(value, ArrayVector):
+        return np.asarray(value, dtype=float)
+    indices = tuple(slice(None) if index is None else index for index in value.indices)
+    return value.array.values[indices][value.start : value.stop]
+
+
+def vector_mask(value: ScalarValues) -> np.ndarray:
+    """Read explicit observation presence, retaining non-finite present readings for admission."""
+    if isinstance(value, ArrayVector) and value.mask is not None:
+        return vector_values(value.mask) == 1
+    return ~np.isnan(vector_data(value))
+
+
+def vector_values(value: ScalarValues) -> np.ndarray:
+    """Read numerical values with absent readings represented by NaN."""
+    data = vector_data(value)
+    return (
+        np.where(vector_mask(value), data, np.nan)
+        if isinstance(value, ArrayVector) and value.mask is not None
+        else data
+    )
 
 
 def resolve_vector(value: ScalarValues) -> tuple[float | None, ...]:

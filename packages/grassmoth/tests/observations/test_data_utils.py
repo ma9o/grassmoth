@@ -2,10 +2,47 @@
 
 from datetime import UTC, datetime, timedelta
 
+import numpy as np
 import polars as pl
 import pytest
 
+from grassmoth.artifacts.observations.dataset import SelectedObservations
+from grassmoth.artifacts.observations.spec import NumericMeasurement, ResolvedObservationSpec
+from grassmoth.observations.rows import observation_grid, pivot_to_wide
+from grassmoth_test_support.helpers import observation_dataset
+
 pytestmark = pytest.mark.contract
+
+
+def _project(rows):
+    origin = datetime(2024, 1, 1, tzinfo=UTC)
+    if rows.schema["anchor_time"].is_numeric():
+        rows = rows.with_columns(
+            pl.Series(
+                "anchor_time", [origin + timedelta(days=value) for value in rows["anchor_time"]]
+            )
+        )
+    variables = tuple(
+        ResolvedObservationSpec(
+            id=identity,
+            name=identity,
+            measurement=NumericMeasurement(dtype="continuous"),
+            aggregation="last",
+            observation_window="1d",
+        )
+        for identity in rows["indicator_id"].unique(maintain_order=True)
+    )
+    observations = observation_dataset(
+        rows.with_columns(
+            pl.col("anchor_time").alias("support_start"), pl.col("anchor_time").alias("support_end")
+        ),
+        variables,
+        time_origin=origin,
+    )
+    selected = observations.select(variables)
+    assert isinstance(selected, SelectedObservations)
+    return pivot_to_wide(selected, observation_grid(selected))
+
 
 # =============================================================================
 # pivot_to_wide
@@ -27,26 +64,20 @@ class TestPivotToWide:
                 "value": [10.0, 20.0, 30.0, 40.0],
             }
         )
-        from grassmoth.observations.rows import pivot_to_wide
-
-        wide = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+        wide = _project(df)
         assert "time" in wide.columns
         assert "indicator:1f4c67cecb9238ee1a80" in wide.columns
         assert "indicator:3316cd345d83d02fe3fc" in wide.columns
-        assert wide.height == 2
+        assert wide.height == 3
 
     def test_empty_dataframe(self):
         """Empty input returns empty output."""
-        from grassmoth.observations.rows import pivot_to_wide
-
         df = pl.DataFrame({"anchor_time": [], "indicator_id": [], "value": []})
-        result = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+        result = _project(df)
         assert result.is_empty()
 
     def test_datetime_to_fractional_days(self):
         """Datetime timestamps are converted to fractional days from t0."""
-        from grassmoth.observations.rows import pivot_to_wide
-
         t0 = datetime(2024, 1, 1)
         t1 = t0 + timedelta(days=1)
         t2 = t0 + timedelta(days=2)
@@ -61,7 +92,7 @@ class TestPivotToWide:
                 "value": [1.0, 2.0, 3.0],
             }
         )
-        wide = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+        wide = _project(df)
         assert "time" in wide.columns
         times = wide["time"].to_list()
         assert abs(times[0]) < 0.001  # t0 should be 0
@@ -70,8 +101,6 @@ class TestPivotToWide:
 
     def test_sorted_by_time(self):
         """Output should be sorted by time."""
-        from grassmoth.observations.rows import pivot_to_wide
-
         df = pl.DataFrame(
             {
                 "anchor_time": [3.0, 1.0, 2.0],
@@ -83,14 +112,12 @@ class TestPivotToWide:
                 "value": [30.0, 10.0, 20.0],
             }
         )
-        wide = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+        wide = _project(df)
         times = wide["time"].to_list()
         assert times == sorted(times)
 
     def test_missing_values_as_null(self):
         """Indicators without values at certain times should be null."""
-        from grassmoth.observations.rows import pivot_to_wide
-
         df = pl.DataFrame(
             {
                 "anchor_time": [1.0, 2.0, 2.0],
@@ -102,15 +129,13 @@ class TestPivotToWide:
                 "value": [10.0, 20.0, 30.0],
             }
         )
-        wide = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+        wide = _project(df)
         # y has no value at t=1, so it should be null
         y_at_t1 = wide.filter(pl.col("time") == 1.0)["indicator:3316cd345d83d02fe3fc"].to_list()
         assert y_at_t1[0] is None
 
     def test_string_timestamps_parsed(self):
         """String timestamps should be parsed to datetime."""
-        from grassmoth.observations.rows import pivot_to_wide
-
         df = pl.DataFrame(
             {
                 "anchor_time": ["2024-01-01", "2024-01-02"],
@@ -121,7 +146,7 @@ class TestPivotToWide:
                 "value": [1.0, 2.0],
             }
         )
-        wide = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+        wide = _project(df)
         assert "time" in wide.columns
         times = wide["time"].to_list()
         assert abs(times[0]) < 0.001
@@ -129,8 +154,6 @@ class TestPivotToWide:
 
     def test_string_values_cast_to_float(self):
         """String values should be cast to Float64."""
-        from grassmoth.observations.rows import pivot_to_wide
-
         df = pl.DataFrame(
             {
                 "anchor_time": [1.0, 2.0],
@@ -141,14 +164,12 @@ class TestPivotToWide:
                 "value": ["10.5", "20.3"],
             }
         )
-        wide = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+        wide = _project(df)
         assert wide["indicator:1f4c67cecb9238ee1a80"].dtype == pl.Float64
-        assert abs(wide["indicator:1f4c67cecb9238ee1a80"][0] - 10.5) < 0.001
+        assert abs(wide["indicator:1f4c67cecb9238ee1a80"][1] - 10.5) < 0.001
 
-    def test_duplicate_values_aggregated_with_mean(self):
-        """Multiple values at same time for same indicator should be averaged."""
-        from grassmoth.observations.rows import pivot_to_wide
-
+    def test_duplicate_values_rejected_at_admission(self):
+        """The series owner rejects duplicate coordinates before pivoting."""
         df = pl.DataFrame(
             {
                 "anchor_time": [1.0, 1.0, 2.0],
@@ -160,16 +181,11 @@ class TestPivotToWide:
                 "value": [10.0, 20.0, 30.0],
             }
         )
-        wide = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
-        assert wide.height == 2
-        # At t=1, mean of 10 and 20 is 15
-        x_at_t1 = wide.filter(pl.col("time") == 1.0)["indicator:1f4c67cecb9238ee1a80"][0]
-        assert abs(x_at_t1 - 15.0) < 0.001
+        with pytest.raises(ValueError, match="duplicate"):
+            _project(df)
 
     def test_single_indicator(self):
         """Minimal case with just one indicator."""
-        from grassmoth.observations.rows import pivot_to_wide
-
         df = pl.DataFrame(
             {
                 "anchor_time": [1.0],
@@ -177,10 +193,10 @@ class TestPivotToWide:
                 "value": [42.0],
             }
         )
-        wide = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
-        assert wide.height == 1
+        wide = _project(df)
+        assert wide.height == 2
         assert "indicator:1f4c67cecb9238ee1a80" in wide.columns
-        assert wide["indicator:1f4c67cecb9238ee1a80"][0] == 42.0
+        assert wide["indicator:1f4c67cecb9238ee1a80"][1] == 42.0
 
 
 class TestPivotToWideSparsity:
@@ -189,8 +205,6 @@ class TestPivotToWideSparsity:
     def test_pivot_warns_on_sparse_matrix(self, caplog):
         """Sparse multi-granularity data triggers a warning."""
         import logging
-
-        from grassmoth.observations.rows import pivot_to_wide
 
         rows = []
         for h in range(24):
@@ -212,16 +226,14 @@ class TestPivotToWideSparsity:
         logger = logging.getLogger("grassmoth.observations.rows")
         logger.propagate = True
         with caplog.at_level(logging.WARNING, logger="grassmoth.observations.rows"):
-            wide = pivot_to_wide(raw, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+            wide = _project(raw)
 
         assert wide.height == 24
-        assert wide.null_count().sum_horizontal().item() == 46
+        assert np.isnan(wide.to_numpy()).sum() == 46
 
     def test_pivot_no_warning_on_complete_matrix(self, caplog):
         """Complete data should not trigger sparsity warning."""
         import logging
-
-        from grassmoth.observations.rows import pivot_to_wide
 
         rows = []
         for t in range(10):
@@ -242,7 +254,7 @@ class TestPivotToWideSparsity:
 
         raw = pl.DataFrame(rows)
         with caplog.at_level(logging.WARNING, logger="grassmoth.observations.rows"):
-            pivot_to_wide(raw, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+            _project(raw)
 
         assert not any("Sparse" in msg for msg in caplog.messages)
 
@@ -250,8 +262,6 @@ class TestPivotToWideSparsity:
 class TestPivotToWideTimezoneStrings:
     def test_utc_string_timestamps_parsed(self):
         """UTC timestamps with timezone suffix should parse to fractional days."""
-        from grassmoth.observations.rows import pivot_to_wide
-
         df = pl.DataFrame(
             {
                 "anchor_time": ["2024-01-01T00:00:00Z", "2024-01-02T12:00:00Z"],
@@ -262,7 +272,7 @@ class TestPivotToWideTimezoneStrings:
                 "value": [1.0, 2.0],
             }
         )
-        wide = pivot_to_wide(df, time_origin=datetime(2024, 1, 1, tzinfo=UTC))
+        wide = _project(df)
 
         assert wide.schema["time"] == pl.Float64
         times = wide["time"].to_list()

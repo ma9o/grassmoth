@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from grassmoth.artifacts.immutability import freeze_fields
+from grassmoth.artifacts.observations.time import OBSERVATION_TIME_TOLERANCE
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
 
 if TYPE_CHECKING:
@@ -101,7 +102,7 @@ def compile_window_plan(
     manifest_names: Sequence[str],
 ) -> CompiledWindowPlan | ObservationPreflightFailure:
     """Resolve window invariants and trapezoidal stencils before choosing an executor."""
-    tolerance = 1e-8
+    tolerance = OBSERVATION_TIME_TOLERANCE
     times = np.asarray(times, dtype=np.float64)
     windows = []
     for manifest, (kind, name) in enumerate(zip(support_kinds, manifest_names, strict=True)):
@@ -110,17 +111,6 @@ def compile_window_plan(
         rows = np.flatnonzero(np.isfinite(starts[:, manifest]) & np.isfinite(ends[:, manifest]))
         for row in rows:
             start, end = float(starts[row, manifest]), float(ends[row, manifest])
-            anchor = float(times[row])
-            if end + tolerance < start:
-                return ObservationPreflightFailure.rejected(
-                    f"Indicator '{name}' has support_end before support_start "
-                    f"at row {row}: {start} -> {end}"
-                )
-            if abs(anchor - end) > tolerance:
-                return ObservationPreflightFailure.rejected(
-                    f"Indicator '{name}' has support_end={end} that does not match "
-                    f"its anchored observation time {anchor} at row {row}."
-                )
             if start < times[0] - tolerance:
                 return ObservationPreflightFailure.rejected(
                     f"Indicator '{name}' has support starting before the first model time. "

@@ -6,6 +6,7 @@ import pytest
 from grassmoth.actions.contracts.io import SourceTable
 from grassmoth.actions.prepare_data.materialization import (
     materialize_panel,
+    parse_observation_rows,
     recorded_observations,
 )
 from grassmoth.artifacts.observations.preparation import (
@@ -13,7 +14,6 @@ from grassmoth.artifacts.observations.preparation import (
     DataVariableSpec,
     RecordedExtractionSpec,
 )
-from grassmoth.artifacts.observations.rows import validate_observation_rows
 from grassmoth.artifacts.observations.spec import AuthoredObservationSpec, NumericMeasurement
 
 pytestmark = pytest.mark.contract
@@ -54,7 +54,7 @@ def test_recorded_readings_preserve_irregular_overlapping_support_and_missing_va
     rows = recorded_observations(
         SourceTable(rows=data.to_arrow(), start=None, end=None), definition
     )
-    panel = validate_observation_rows(
+    panel = parse_observation_rows(
         materialize_panel(rows, definition), definition.observation_schema()
     )
     assert panel.height == 6

@@ -50,6 +50,7 @@ from grassmoth.models.ssm.preparation.binding import (
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
 from grassmoth.models.structure import StructuralSelection
 from grassmoth_test_support.compute import COMPUTE_BUDGET, EXECUTION_CONTEXT, compile_program
+from grassmoth_test_support.helpers import observation_dataset
 from grassmoth_test_support.inference import (
     bind_panel_fixture,
     compile_fit_fixture,
@@ -553,7 +554,7 @@ class TestPrepareFitInputs:
 
 class TestPrepareModelRuntime:
     @pytest.mark.contract
-    def test_preserves_long_observation_metadata_and_augments_support_boundaries(self, caplog):
+    def test_augments_numeric_grid_with_support_boundaries(self, caplog):
         data_for_model = pl.DataFrame(
             {
                 "indicator_id": ["indicator:3696aef3ff6f446744e5"],
@@ -572,7 +573,7 @@ class TestPrepareModelRuntime:
 
         with caplog.at_level("INFO"):
             runtime = bind_panel(
-                ObservationDataset.from_frame(
+                observation_dataset(
                     data_for_model,
                     tuple(
                         item.observation for item in inputs.compiled_dynamical_model.observations
@@ -584,10 +585,6 @@ class TestPrepareModelRuntime:
             )
 
         assert isinstance(runtime, BoundPanel)
-        assert runtime.rows.column_names == data_for_model.columns
-        assert pl.DataFrame(runtime.rows)["observation_window"][0] == "31d"
-        assert pl.DataFrame(runtime.rows)["support_end"][0] == datetime(2024, 2, 1)
-        assert pl.DataFrame(runtime.rows)["anchor_time"][0] == datetime(2024, 2, 1)
         assert isinstance(runtime, BoundPanel)
         assert runtime.times.tolist() == [0.0, 31.0]
         assert runtime.observation_support is not None
@@ -634,7 +631,7 @@ class TestPrepareModelRuntime:
         inputs = compile_fit_fixture(_stress_interval_model("2d"))
 
         runtime = bind_panel(
-            ObservationDataset.from_frame(
+            observation_dataset(
                 data_for_model,
                 tuple(item.observation for item in inputs.compiled_dynamical_model.observations),
                 time_origin=datetime(2024, 1, 1, tzinfo=UTC),
@@ -681,7 +678,7 @@ class TestPrepareModelRuntime:
         )
         model = compile_fit_fixture(_stress_interval_model())
         runtime = bind_panel(
-            ObservationDataset.from_frame(
+            observation_dataset(
                 data_for_model,
                 tuple(item.observation for item in model.compiled_dynamical_model.observations),
                 time_origin=datetime(2024, 1, 1, tzinfo=UTC),
@@ -730,7 +727,7 @@ def test_compiled_inputs_own_runtime_derivations(monkeypatch):
     assert panel.indicator_ids == tuple(
         observation.id for observation in inputs.compiled_dynamical_model.observations
     )
-    assert panel.rows.column("indicator_id").to_pylist() == [str(panel.indicator_ids[0])] * 2
+    assert panel.values.shape == (2, 1)
     with pytest.raises(AttributeError):
         panel.compiled_dynamical_model = inputs.compiled_dynamical_model
     with pytest.raises(ValueError, match="read-only"):

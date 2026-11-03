@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -35,7 +35,7 @@ from grassmoth_server.actions.runners import run_action
 from grassmoth_server.study.errors import StudyLookupError
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
-from grassmoth_server.study.queries.data import read_data_history, read_simulation_observations
+from grassmoth_server.study.queries.data import _read_history, read_data_history
 from grassmoth_server.study.records import Applied
 from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.action import applied_record, empty_simulation_summary
@@ -43,7 +43,6 @@ from grassmoth_server_test_support.data import metadata_for_model, simulation_la
 from grassmoth_server_test_support.helpers import run_async
 from grassmoth_server_test_support.storage import result_blob, seed_record
 from grassmoth_test_support.git import git_oid
-from grassmoth_test_support.helpers import make_model
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.model import construct_named, indicator_named, x_y_model
 
@@ -81,7 +80,13 @@ pytestmark = pytest.mark.contract
 
 
 def _model(**observation_changes):
-    dynamical_model_spec = make_model(["X", "Y"], [("X", "Y")])
+    from grassmoth_test_support.helpers import make_model
+
+    dynamical_model_spec = (
+        x_y_model()
+        if observation_changes["aggregation"] == "mean"
+        else make_model(["X", "Y"], [("X", "Y")])
+    )
     return dynamical_model_spec.with_entities(
         edges=replace_constructs(
             dynamical_model_spec.edges,
@@ -205,14 +210,18 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
     assert selected.source == source
     assert selected.metadata is None
     assert set(store.repo.references) == refs_before
-    panel = selected.observations.recorded.frame
+    panel = selected.observations
+    from grassmoth.artifacts.observations.dataset import SelectedObservations
+
+    selection = panel.select(panel.variables)
+    assert isinstance(selection, SelectedObservations)
     projected = project_observation_data(
-        panel,
+        selection,
         compiled_dynamical_model=compile_model_fixture(dynamical_model_spec),
-        time_origin=selected.time_origin,
     )
     assert not isinstance(projected, ObservationPreflightFailure)
-    (wide, _) = projected
+    assert projected["time"][0] == 0
+    wide = projected.filter(pl.col("time") > 0)
     np.testing.assert_allclose(wide["time"].to_numpy(), np.asarray(times) + 5)
     np.testing.assert_allclose(
         wide.select(
@@ -220,14 +229,14 @@ def test_fit_reads_selected_history_without_preparing_a_panel(tmp_path, monkeypa
         ).to_numpy(),
         draws[1],
     )
-    assert panel["anchor_time"].min() == datetime(2026, 1, 6)
-    assert set(panel["support_kind"]) == {"point"}
+    assert all(series.history.times.values[0] == 5 for series in panel.series.values())
+    assert all(series.observation.support_kind == "point" for series in panel.series.values())
 
     from grassmoth_server.actions.fit import action as fit_module
     from grassmoth_test_support.inference import _report
 
     def fit(inputs, **_kwargs):
-        assert inputs.data_for_model.recorded.frame.equals(panel)
+        assert inputs.data_for_model == panel
         assert inputs.data_for_model.time_origin == selected.time_origin
         from grassmoth.actions.checks import fit_check_report
         from grassmoth.actions.contracts.io import FitOutput
@@ -286,16 +295,16 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
             }
         )
     )
-    values = np.array([[[np.nan, np.nan], [2, 2], [2, 2]]])
+    values = np.repeat(np.array([[[np.nan, np.nan], [2, 2], [2, 2]]]), 4, axis=0)
     if not interval:
-        values[0, 0] = 2
+        values[:, 0] = 2
     report = SimulationReport(
         summary=empty_simulation_summary(),
         law=AuthoredLawProvenance(),
         evidence=SimulationEvidence(
             time_origin=datetime(2026, 1, 1, tzinfo=UTC),
             times=(0, 1, 2.5),
-            draws=1,
+            draws=4,
             seed=0,
             state_ids=tuple(item.id for item in dynamical_model_spec.constructs),
             parameter_draws={},
@@ -313,7 +322,7 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
                     else np.array([[0, 0], [1, 1], [2.5, 2.5]])
                 ),
                 support_end_times=NumericalArray.from_numpy(
-                    np.array([[np.nan, np.nan], [1, 1], [2.5, 2.5]])
+                    np.array([[np.nan, np.nan], [1 + 5e-9, 1 + 5e-9], [2.5, 2.5]])
                     if interval
                     else np.array([[0, 0], [1, 1], [2.5, 2.5]])
                 ),
@@ -324,22 +333,52 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
             ),
         ),
     )
-    panel = read_simulation_observations(report.evidence, 0)
-    assert panel["value"].drop_nulls().to_list() == [2.0] * (4 if interval else 6)
-    assert panel["anchor_time"].min() == datetime(2026, 1, 1)
+    from grassmoth_server_test_support.data import simulation_output
+
+    output = simulation_output(report)
+    panel = output.observations(0)
+    from grassmoth.artifacts.observations.dataset import ObservationDataset
+    from grassmoth_server.actions.fit.remote import pack_observations
+    from grassmoth_server.study.persistence.codec import unpack_result
+
+    packed = pack_observations(panel)
+    restored = ObservationDataset.model_validate(unpack_result(packed))
+    assert report.evidence.arms.action.observations.npy not in packed
+    assert report.evidence.observation_layout.mask.npy not in packed
+    assert restored.time_origin == panel.time_origin
+    assert {
+        identity: series.history.readings() for identity, series in restored.series.items()
+    } == {identity: series.history.readings() for identity, series in panel.series.items()}
     if interval:
-        rows = panel.filter(pl.col("value").is_not_null())
-        assert (rows["support_end"] - rows["support_start"]).to_list() == [timedelta(days=1)] * 4
-        assert panel.filter(pl.col("value").is_null())["support_start"].null_count() == 2
+        from grassmoth.models.ssm.preparation.binding import BoundPanel, bind_panel
+        from grassmoth_test_support.compute import compile_program
+
+        bound = bind_panel(
+            restored,
+            compiled_dynamical_model=compile_model_fixture(dynamical_model_spec),
+            compiler=compile_program,
+        )
+        assert isinstance(bound, BoundPanel)
+        np.testing.assert_allclose(bound.times, [0, 1, 1.5, 2.5])
+        assert np.all(np.diff(bound.times) > 1e-8)
+    readings = tuple(
+        reading for series in panel.series.values() for reading in series.history.readings()
+    )
+    assert [reading[1] for reading in readings if reading[1] is not None] == [2.0] * (
+        4 if interval else 6
+    )
+    assert all(series.history.times.values[0] == 0 for series in panel.series.values())
+    if interval:
+        assert [
+            reading[3] - reading[2] for reading in readings if reading[1] is not None
+        ] == pytest.approx([1.0] * 4)
+        assert sum(reading[2] is None for reading in readings) == 2
     else:
-        assert panel["support_start"].to_list() == panel["anchor_time"].to_list()
+        assert all(reading[2] == reading[0] for reading in readings)
     from grassmoth_server.study.errors import StudyLookupError
 
     with pytest.raises(StudyLookupError, match="replicate"):
-        read_simulation_observations(
-            report.evidence,
-            1,
-        )
+        _read_history(DataRef[GitOid, int](revision=git_oid(1), replicate_index=4), output)
     values[0, 1, 0] = np.nan
     report = report.revised(
         evidence=report.evidence.revised(
@@ -350,11 +389,8 @@ def test_reading_preserves_measurement_support_and_numeric_codes(interval):
             )
         )
     )
-    with pytest.raises(ValueError, match="non-finite emissions"):
-        read_simulation_observations(
-            report.evidence,
-            0,
-        )
+    with pytest.raises(ValueError, match="Observed values must be finite"):
+        simulation_output(report).observations(0)
 
 
 @pytest.mark.parametrize(

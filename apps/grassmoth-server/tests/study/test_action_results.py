@@ -130,7 +130,6 @@ def test_numerical_owner_normalizes_numpy_values_and_rejects_nonportable_wire_bu
 
 def test_prepared_observations_round_trip_through_the_published_body(monkeypatch, tmp_path):
     import polars as pl
-    from polars.testing import assert_frame_equal
 
     from grassmoth.artifacts.identity import GitOid
     from grassmoth.artifacts.observations.preparation import DataPreparationResult
@@ -169,7 +168,7 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
     )
     expected = read_data_history(
         store, DataRef[GitOid, int](revision=panel.revision, replicate_index=0)
-    ).observations.recorded.frame
+    ).observations
     profile = profile_data(expected, metadata=metadata)
     request = PrepareDataRequest[GitOid, FileSourceRef](
         input=PrepareDataInput[GitOid, FileSourceRef](
@@ -181,12 +180,9 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
         )
     )
     from grassmoth.actions.prepare_data.action import prepared_output
-    from grassmoth.artifacts.observations.dataset import ObservationDataset
 
     prepared = prepared_output(
-        ObservationDataset.from_frame(
-            expected, metadata.variables, time_origin=metadata.time_origin
-        ),
+        expected,
         metadata,
         DataPreparationResult(),
     )
@@ -205,8 +201,8 @@ def test_prepared_observations_round_trip_through_the_published_body(monkeypatch
     assert published.revision == published_panel.revision
     actual = read_data_history(
         store, DataRef[GitOid, int](revision=revision.commit_id, replicate_index=0)
-    ).observations.recorded.frame
-    assert_frame_equal(actual, expected)
+    ).observations
+    assert actual == expected
     body = msgpack.unpackb(completed_call_msgpack(workspace, revision))["body"]
     assert set(body) == {"data", "metadata", "profile", "extraction"}
     assert body["metadata"] == metadata.model_dump(mode="json")

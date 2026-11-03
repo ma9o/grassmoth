@@ -51,7 +51,6 @@ def applied_record(
         FitOutput,
         SimulateOutput,
     )
-    from grassmoth.actions.prepare_data.action import prepared_output
     from grassmoth.artifacts.model.dynamical_model_spec import ModelEditResult
     from grassmoth.artifacts.observations.preparation import DataPreparationResult
     from grassmoth.artifacts.reports.identification import IdentificationReport
@@ -89,19 +88,9 @@ def applied_record(
         question = read_question(store, state.current["question"].revision)
         match result.result:
             case DataPreparationResult():
-                from grassmoth.artifacts.observations.dataset import ObservationDataset
-                from grassmoth_server.study.queries.lineage import read_data_metadata
+                from grassmoth_server.study.queries.data import read_data_source
 
-                revision = state.current["panel"].revision
-                data = read_data_metadata(store, revision)
-                frame = store.read_panel(revision)
-                output = prepared_output(
-                    ObservationDataset.from_frame(
-                        frame, data.variables, time_origin=data.time_origin
-                    ),
-                    data,
-                    result.result,
-                )
+                output = read_data_source(store, state.current["panel"].revision)
                 if "data-profile" in reports:
                     from grassmoth.artifacts.reports.data_quality import DataProfileReport
 
@@ -286,7 +275,6 @@ def data_profile(store, source):
 
     history = read_data_history(store, source)
     return profile_data(
-        history.observations.recorded.frame,
-        definitions=history.variables,
+        history.observations,
         metadata=history.metadata,
     )

@@ -16,6 +16,7 @@ from grassmoth.models.ssm.parameter_draws import assemble_parameter_draws
 from grassmoth.models.ssm.preparation.observations import ObservationSupportRuntime
 from grassmoth.models.ssm.preparation.preflight import ObservationPreflightFailure
 from grassmoth_test_support.compute import compile_program
+from grassmoth_test_support.helpers import observation_dataset
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -222,12 +223,11 @@ def compile_model_fixture(
 def bind_panel_fixture(
     compiled_dynamical_model: CompiledDynamicalModel, observations, times, *, support=None
 ):
-    """Publish a complete numerical test panel, including its identity-bearing rows."""
+    """Bind a numerical test fixture through the observation owners."""
     from datetime import UTC, datetime, timedelta
 
     import polars as pl
 
-    from grassmoth.artifacts.observations.dataset import ObservationDataset
     from grassmoth.models.ssm.preparation.binding import BoundPanel, bind_panel
     from grassmoth.models.ssm.preparation.observations import simulation_observation_support
 
@@ -261,7 +261,7 @@ def bind_panel_fixture(
                     "observation_window": support.observation_windows[i],
                 }
             )
-    dataset = ObservationDataset.from_frame(
+    dataset = observation_dataset(
         pl.DataFrame(rows, schema_overrides={"value": pl.Float64}),
         tuple(item.observation for item in compiled_dynamical_model.observations),
         time_origin=origin,

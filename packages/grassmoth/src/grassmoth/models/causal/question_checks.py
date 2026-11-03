@@ -5,11 +5,12 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import TYPE_CHECKING
 
-import polars as pl
+import numpy as np
 
+from grassmoth.artifacts.arrays import vector_values
 from grassmoth.artifacts.identity import ConstructRef
 from grassmoth.artifacts.model.construct import Role, TemporalStatus
-from grassmoth.artifacts.observations.time import ObservationInstant
+from grassmoth.artifacts.observations.time import ModelTime, ObservationInstant
 from grassmoth.artifacts.reports.checks import (
     Evaluated,
     NotEvaluated,
@@ -27,7 +28,6 @@ from grassmoth.models.structure import (
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
-    from datetime import datetime
 
     from grassmoth.artifacts.identity import ConstructId
     from grassmoth.artifacts.model.construct import ConstructSpec
@@ -48,14 +48,13 @@ def question_findings(
     dynamical_model_spec = selection.dynamical_model_spec
     constructs = {construct.id: construct for construct in dynamical_model_spec.constructs}
     if history is not None:
-        panel = history.recorded.frame
         return tuple(
             finding
             for name, query in question.queries.items()
             for finding in (
-                _window_finding(name, query, panel, history.time_origin),
+                _window_finding(name, query, history),
                 *(
-                    _range_finding(name, target, query, constructs.get(target), panel)
+                    _range_finding(name, target, query, constructs.get(target), history)
                     for target in sorted({event.target for event in query.interventions})
                 ),
             )
@@ -192,9 +191,10 @@ def _identification_finding(
 
 
 def _window_finding(
-    query: str, design: SimulationSpec, panel: pl.DataFrame, time_origin: datetime
+    query: str, design: SimulationSpec, history: ObservationDataset
 ) -> QuestionAssessment:
     subject = QueryWindowSubject(query=query)
+    time_origin = history.time_origin
     if design.start_instant < time_origin:
         return Evaluated(
             code="window",
@@ -203,7 +203,20 @@ def _window_finding(
             evidence=f"It starts on {design.start}, before the record begins on "
             f"{time_origin.date()}; the initial-state law applies only from then.",
         )
-    record_end = ObservationInstant(panel.select(pl.col("support_end").max()).item()).value
+    ends = [
+        float(end)
+        for series in history.series.values()
+        for end in vector_values(series.history.support_end)
+        if np.isfinite(end)
+    ]
+    if not ends:
+        return NotEvaluated(
+            code="window",
+            subject=subject,
+            reason="NO_OBSERVATIONS",
+            detail="The record has no known measurement support.",
+        )
+    record_end = ModelTime(max(ends)).at(ObservationInstant(time_origin)).value
     window_end = design.start_instant + timedelta(seconds=design.horizon.seconds)
     return Evaluated(
         code="window",
@@ -224,7 +237,7 @@ def _range_finding(
     target: ConstructId,
     design: SimulationSpec,
     construct: ConstructSpec | None,
-    panel: pl.DataFrame,
+    history: ObservationDataset,
 ) -> QuestionAssessment:
     subject = QueryTargetSubject(query=query, target=ConstructRef(id=target))
     if construct is None:
@@ -241,7 +254,7 @@ def _range_finding(
             reason="STATE_NOT_RECORDED",
             detail="The record measures this state only through its indicators.",
         )
-    levels = tuple(_recorded_levels(construct, panel))
+    levels = tuple(_recorded_levels(construct, history))
     if not levels:
         return Evaluated(
             code="range",
@@ -280,16 +293,19 @@ def _range_finding(
     )
 
 
-def _recorded_levels(construct: ConstructSpec, panel: pl.DataFrame) -> Iterator[float]:
+def _recorded_levels(construct: ConstructSpec, history: ObservationDataset) -> Iterator[float]:
     for indicator in construct.indicators:
-        rows = panel.filter(pl.col("indicator_id") == indicator.observation.id).drop_nulls("value")
-        for row in rows.iter_rows(named=True):
-            yield reading_level(
-                float(row["value"]),
-                row["support_start"],
-                row["support_end"],
-                indicator.observation.summary_operator,
-            )
+        series = history.series.get(indicator.observation.id)
+        if series is None:
+            continue
+        values = vector_values(series.history.values)
+        starts = vector_values(series.history.support_start)
+        ends = vector_values(series.history.support_end)
+        for value, start, end in zip(values, starts, ends, strict=True):
+            if not np.isnan(value):
+                yield reading_level(
+                    float(value), float(start), float(end), indicator.observation.summary_operator
+                )
 
 
 def question_edit_reason(

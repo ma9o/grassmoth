@@ -122,7 +122,7 @@ def fit_check_report(
     from grassmoth.observations.quality.profile import validate_extraction
 
     return FitCheckReport(
-        data=validate_extraction(selection.dynamical_model_spec, [observations.recorded.frame]),
+        data=validate_extraction(selection.dynamical_model_spec, observations),
         preflight=(
             Evaluated(
                 code="fit_preflight",

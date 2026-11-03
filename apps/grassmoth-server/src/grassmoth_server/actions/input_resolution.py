@@ -229,11 +229,11 @@ def input_state(
     )
     panel: GitOid | None = None
     if source is not None:
-        from grassmoth.public import PreparedDataMetadata
-        from grassmoth_server.study.queries.data import panel_revision, read_data_source
+        from grassmoth_server.study.queries.data import PreparedDataSourceRef, resolve_data_source
 
-        if isinstance(read_data_source(store, source.data_ref.revision), PreparedDataMetadata):
-            panel = panel_revision(store, source.data_ref.revision)
+        data_source = resolve_data_source(store, source.data_ref.revision)
+        if isinstance(data_source, PreparedDataSourceRef):
+            panel = data_source.revision
     if dynamical_model_spec_revision is not None:
         current["model"] = store.read_meta("model", dynamical_model_spec_revision)
         if source is not None:

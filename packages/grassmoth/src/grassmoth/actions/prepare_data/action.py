@@ -48,8 +48,15 @@ def prepare_data(
         preparation=definition, time_origin=prepared_time_origin(observed, source.start)
     )
     return prepared_output(
-        ObservationDataset.from_frame(
-            observed, metadata.variables, time_origin=metadata.time_origin
+        ObservationDataset.from_histories(
+            {
+                variable.id: observation_history(
+                    metadata.time_origin, observed.filter(pl.col("indicator_id") == variable.id)
+                )
+                for variable in metadata.variables
+            },
+            metadata.variables,
+            time_origin=metadata.time_origin,
         ),
         metadata,
         extraction,
@@ -62,16 +69,9 @@ def prepared_output(
     extraction: DataPreparationResult,
 ) -> PrepareDataOutput:
     """Retain complete histories and quality findings for the parsed panel."""
-    panel = observations.recorded.frame
     return PrepareDataOutput(
-        data={
-            variable.id: observation_history(
-                metadata.time_origin,
-                panel.filter(pl.col("indicator_id") == variable.id).sort("anchor_time"),
-            )
-            for variable in metadata.variables
-        },
+        data={identity: series.history for identity, series in observations.series.items()},
         metadata=metadata,
-        profile=profile_data(panel, definitions=metadata.variables, metadata=metadata),
+        profile=profile_data(observations, metadata=metadata),
         extraction=extraction,
     )

@@ -390,7 +390,6 @@ def _layer_for(name: str, module: str) -> str:
         "NonIdentifiableTreatmentStatus",
         "TreatmentIdentification",
         "InferenceMetadata",
-        "ObservationRecord",
     }:
         return "findings"
     if module.startswith("grassmoth.artifacts."):

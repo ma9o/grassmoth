@@ -6,13 +6,19 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+import numpy as np
 import polars as pl
 
 from grassmoth.artifacts.observations.duration import CalendarDuration
 from grassmoth.artifacts.observations.semantics import AnchorPolicy
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from grassmoth.artifacts.observations.spec import ObservationWindow
+
+
+OBSERVATION_TIME_TOLERANCE = 1e-8
 
 
 @dataclass(frozen=True)
@@ -76,3 +82,17 @@ class ModelTime:
             (instants - pl.lit(origin.value.replace(tzinfo=None))).dt.total_microseconds()
             / 86400000000
         ).cast(pl.Float64)
+
+
+def merge_model_times(times: Sequence[float] | np.ndarray) -> np.ndarray:
+    """Merge sorted coordinates whose distance from the retained representative is within tolerance."""
+    merged: list[float] = []
+    for time in np.sort(times):
+        if not merged or time - merged[-1] > OBSERVATION_TIME_TOLERANCE:
+            merged.append(float(time))
+    return np.asarray(merged, dtype=float)
+
+
+def model_time_indices(grid: np.ndarray, times: np.ndarray) -> np.ndarray:
+    """Locate original coordinates in the tolerance-merged union that contains them."""
+    return np.searchsorted(grid, times, side="right") - 1

@@ -35,7 +35,7 @@ from grassmoth_server.actions.temporal.extraction.messages import (
 )
 from grassmoth_server.storage import backend as storage
 from grassmoth_server.study.persistence.store import ArtifactStore
-from grassmoth_server.study.queries.lineage import read_data_metadata
+from grassmoth_server.study.queries.data import read_data_source
 from grassmoth_server.study.state import StudyState
 from grassmoth_server_test_support.action import prepared_profile
 from grassmoth_server_test_support.helpers import run_async
@@ -166,8 +166,16 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
         "raw_data": raw.revision,
         "model": prepared_input.dynamical_model_spec_ref,
     }
-    observations = store.read_panel(panel.revision)
-    assert observations.select("indicator_id", "value").rows() == [
+    from grassmoth.actions.contracts.io import PrepareDataOutput
+
+    output = read_data_source(store, panel.revision)
+    assert isinstance(output, PrepareDataOutput)
+    observations = output.observations()
+    assert [
+        (identity, reading[1])
+        for identity, series in observations.series.items()
+        for reading in series.history.readings()
+    ] == [
         ("indicator:steps", 4),
         ("indicator:steps", 0),
         ("indicator:steps", 8),
@@ -175,7 +183,7 @@ def test_preparation_from_model_combines_computed_and_semantic_workers(monkeypat
         ("indicator:stress", None),
         ("indicator:stress", 2),
     ]
-    metadata = read_data_metadata(store, panel.revision)
+    metadata = output.metadata
     assert metadata.preparation is not None
     assert (
         metadata.preparation.variables[1].extraction.how_to_measure

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 import jax
 import jax.numpy as jnp
 import numpy as np
+import polars as pl
 import pytest
 
 from grassmoth.actions.contracts.io import SimulateOutput, SimulationInputs
@@ -298,16 +299,18 @@ def test_durable_replication_preserves_current_laws_without_comparison(
     selected = read_data_history(
         store, DataRef[GitOid, int](revision=commit_id("TEST", 2), replicate_index=1)
     )
-    panel = selected.observations.recorded.frame
+    panel = selected.observations
+    from grassmoth.artifacts.observations.dataset import SelectedObservations
     from grassmoth.models.ssm.preparation.binding import project_observation_data
 
+    selection = panel.select(panel.variables)
+    assert isinstance(selection, SelectedObservations)
     projected = project_observation_data(
-        panel,
+        selection,
         compiled_dynamical_model=compile_model_fixture(dynamical_model_spec),
-        time_origin=report.evidence.time_origin,
     )
     assert not isinstance(projected, ObservationPreflightFailure)
-    (wide, _) = projected
+    wide = projected
     np.testing.assert_allclose(
         wide.select(
             [
@@ -475,16 +478,20 @@ def test_causal_action_uses_common_generator_and_requires_matching_engine_eviden
 
     assert SimulationReport.model_validate(unpack_result(pack_result(report))) == report
     from grassmoth.models.ssm.preparation.binding import project_observation_data
-    from grassmoth_server.study.queries.data import read_simulation_observations
+    from grassmoth_server_test_support.data import simulation_output
 
-    panel = read_simulation_observations(evidence, 0)
+    panel = simulation_output(report).observations(0)
+    from grassmoth.artifacts.observations.dataset import SelectedObservations
+
+    selection = panel.select(panel.variables)
+    assert isinstance(selection, SelectedObservations)
     projected = project_observation_data(
-        panel,
+        selection,
         compiled_dynamical_model=compile_model_fixture(dynamical_model_spec),
-        time_origin=evidence.time_origin,
     )
     assert not isinstance(projected, ObservationPreflightFailure)
-    (wide, _) = projected
+    assert np.all(np.diff(projected["time"].to_numpy()) > 1e-8)
+    wide = projected.filter(pl.col("time").is_in(list(evidence.times)))
     np.testing.assert_allclose(
         wide.select(
             numeric.observation_names(compile_model_fixture(dynamical_model_spec))
