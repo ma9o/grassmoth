@@ -6838,8 +6838,8 @@ export interface components {
              */
             readonly param_target_accept: number;
             /**
-             * @description How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2).
-             * @default simple
+             * @description How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step.
+             * @default dual_averaging
              */
             readonly adaptation_scheme: components["schemas"]["AdaptationScheme"];
             /** @description Independent Gaussian starts, which also set the initial proposal scale. */

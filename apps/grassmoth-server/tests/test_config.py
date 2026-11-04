@@ -51,6 +51,7 @@ class TestSamplerSpec:
         encoded = result.model_dump_json()
         assert SamplerSpec.model_validate_json(encoded) == result
         assert result.param_target_accept == 0.2
+        assert result.adaptation_scheme == "dual_averaging"
 
     def test_public_overrides_resolve_without_mutating_defaults(self, monkeypatch):
         from grassmoth_server import config as config_module
@@ -98,6 +99,9 @@ class TestSamplerSpec:
             configured.seed,
         ) == (10, 20, 2, 3)
         assert resolve_sampler_spec(FitSettingsSpec()) == configured
+        assert resolve_sampler_spec(FitSettingsSpec(adaptation_scheme="simple")) == (
+            configured.revised(adaptation_scheme="simple")
+        )
         assert configured.time_limit_seconds == 14400
         assert resolve_sampler_spec(FitSettingsSpec(), resolved).time_limit_seconds == 90
         assert (

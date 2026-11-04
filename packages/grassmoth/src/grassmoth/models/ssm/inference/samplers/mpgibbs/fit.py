@@ -181,7 +181,6 @@ def fit_marginal_particle_gibbs(
         key=sampling_key,
         initialization=initialization,
         execution_context=execution_context,
-        adaptation_scheme=sampler.adaptation_scheme,
         chart_builder=chart_builder,
         continuation=continuation,
     )

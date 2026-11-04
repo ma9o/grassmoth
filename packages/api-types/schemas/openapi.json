@@ -23606,8 +23606,8 @@
           },
           "adaptation_scheme": {
             "$ref": "#/components/schemas/AdaptationScheme",
-            "default": "simple",
-            "description": "How warmup adapts the parameter step: simple uses a constant gain and keeps the last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2)."
+            "default": "dual_averaging",
+            "description": "How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step."
           },
           "initialization": {
             "$ref": "#/components/schemas/GaussianInitializationSpec-Output",

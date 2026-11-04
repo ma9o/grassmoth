@@ -45,3 +45,4 @@ inference:
         target: 0.5
     parameter_proposal: random_walk
     param_target_accept: 0.2
+    adaptation_scheme: dual_averaging

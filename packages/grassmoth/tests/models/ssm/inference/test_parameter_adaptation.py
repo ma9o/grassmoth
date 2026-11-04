@@ -93,7 +93,6 @@ def test_adapted_particle_kernel_recovers_correlated_unequal_scale_gaussian(prop
         kernel=kernel,
         sampler=SamplerSpec(num_warmup=1000, num_samples_per_chain=4000, num_chains=4),
         key=jax.random.key(293),
-        adaptation_scheme="dual_averaging",
         initialization=initialization,
         execution_context=EXECUTION_CONTEXT,
     )

@@ -390,11 +390,11 @@ class SamplerSpec(Value):
         ),
     )
     adaptation_scheme: AdaptationScheme = Field(
-        default="simple",
+        default="dual_averaging",
         description=(
-            "How warmup adapts the parameter step: simple uses a constant gain and keeps the "
-            "last step; dual_averaging keeps the averaged step at the end of warmup (Hoffman & "
-            "Gelman 2014, section 3.2)."
+            "How warmup adapts the parameter step: dual_averaging (default) keeps the averaged "
+            "step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a "
+            "constant gain and keeps the last step."
         ),
     )
     initialization: GaussianInitializationSpec = Field(

@@ -23,7 +23,6 @@ from grassmoth.artifacts.reports.profiling import (
     TimingSpread,
 )
 from grassmoth.artifacts.sampling import (
-    AdaptationScheme,
     AuxiliaryKalmanSpec,
     FixedLatentStepSpec,
     GuidedPathSpec,
@@ -212,8 +211,6 @@ def run_marginal_particle_gibbs(
     key: PRNGKeyArray,
     initialization: ParticleInitialization,
     execution_context: ModelExecutionContext,
-    # Both adaptation policies stop updating after warmup.
-    adaptation_scheme: AdaptationScheme = "simple",
     chart_builder: Callable[[jax.Array, jax.Array], PathChart] | None = None,
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleChainResult | InitializationFailure:
@@ -223,7 +220,8 @@ def run_marginal_particle_gibbs(
     compiler = execution_context.compiler
     clock = execution_context.clock
     windows = covariance_windows(num_warmup)
-    use_dual_averaging = adaptation_scheme == "dual_averaging"
+    # Both adaptation policies stop updating after warmup.
+    use_dual_averaging = sampler.adaptation_scheme == "dual_averaging"
     observations = target.observations
     times = target.times
     num_steps = int(observations.shape[0])
