@@ -285,13 +285,17 @@ def _path_noise(
 
 
 def linearize_path(
-    target: ParticleTarget, context: ParticleContext, path: jax.Array
+    target: ParticleTarget,
+    context: ParticleContext,
+    path: jax.Array,
+    log_precisions: jax.Array | None = None,
 ) -> PathCurvature:
     """Own path curvature, exact pin conditioning and PSD reading quadratics.
 
     The linearization point is the supplied path with its exact window memory.
     Memory coordinates carry no noise and are never free; the readings they emit
-    supply information to the earlier states that fed each window.
+    supply information to the earlier states that fed each window. Supplied
+    precisions replace each StudentT reading with its conditional Gaussian.
     """
     steps, dimension = path.shape
     indices = jnp.arange(steps)
@@ -334,7 +338,13 @@ def linearize_path(
         eta = predictor(value)
 
         def density(eta: jax.Array) -> jax.Array:
-            return grouped_density_with_noise(observation, readings[index], eta, noise.at(index))
+            return grouped_density_with_noise(
+                observation,
+                readings[index],
+                eta,
+                noise.at(index),
+                None if log_precisions is None else log_precisions[index],
+            )
 
         return (
             eta,
@@ -365,6 +375,7 @@ def linearize_path(
                 jnp.nan_to_num(reading, nan=0.0),
                 observation.measurement.manifest_cov,
                 emitted & jnp.isfinite(reading),
+                None if log_precisions is None else log_precisions[index],
             )
 
             def density(means: jax.Array) -> jax.Array:

@@ -15,10 +15,12 @@ from grassmoth.models.ssm.execution.observation_model import precision_normal_lo
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import trace_guided_step
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
+from grassmoth.models.ssm.inference.targets.path_factors import prepare_path_factors
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth.models.ssm.inference.targets.student_precision import (
     draw_student_precisions,
 )
+from grassmoth.models.ssm.inference.warmup.path_curvature import linearize_path
 from grassmoth_test_support.interval_particle import interval_target
 
 pytestmark = pytest.mark.inference(concern="sampling")
@@ -92,6 +94,14 @@ def test_emitted_precision_moments_and_exact_conditional_factors(summary):
     )
     np.testing.assert_allclose(np.asarray(observed)[present], expected, atol=5e-6)
     assert np.all(np.asarray(observed)[~present] == 0)
+    factors = prepare_path_factors(target, context, target.observations, precision.log_values)
+    np.testing.assert_allclose(jax.jit(factors.initialize)(path).observations, observed, atol=5e-6)
+    curvature = linearize_path(target, context, path, precision.log_values)
+    np.testing.assert_allclose(
+        np.trace(np.asarray(curvature.reading_precision), axis1=1, axis2=2),
+        np.where(present, np.exp(np.asarray(precision.log_values[:, 0])) / 0.2, 0.0),
+        rtol=1e-5,
+    )
 
 
 def test_extreme_residual_uses_log_precision_without_clipping():

@@ -408,6 +408,9 @@ def build_marginal_particle_gibbs_kernel(
                     block_key,
                     x_ref,
                     block_length=path_update.block_length,
+                    log_precisions=boundary.precisions.log_values
+                    if isinstance(boundary, PrecisionPathUpdate)
+                    else None,
                 )
             else:
                 guide = chart_target.context(ctx.guide_position, runtime_times)

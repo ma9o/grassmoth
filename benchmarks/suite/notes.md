@@ -315,3 +315,26 @@ Every retained transition took 31 leapfrog steps. Mean acceptance was 0.87, with
 - **Failed attempt.** Seed 29's first attempt, `call:2b93521b870e9331b3c5dfacccca135d8438fbd597a64019388fb92059f9aa60`, lost its runner to Modal preemption. It isn't a sampling result.
 
 Study: `TAIL_KALMAN_20261104`, local and gitignored. Calls: seed 19 `call:81265585311ff9934d2c6ff16bb900a588ff310e6043ea178a17f6badd6042ed`, seed 29 `call:0afa481a1f1e9ee9223de0e96e5879ad43b8df1048e1a67a2ab4cbad7c4af68c`. Modal cost $0.52, including restarts. No decision is proposed; the next comparison is a guided fit on the same history.
+
+## TAIL with blocked auxiliary Kalman and Student-t precisions — 2026-11-04
+
+**Conditioning on the precisions about doubles path ESS and leaves parameter ESS unchanged.** This change draws the guided updates' precisions for auxiliary Kalman too, and uses them in its proposal and acceptance ratio. It landed with this entry; the fits ran on `35234163` plus the same code before its docstrings (digest `22fb735c`). The fits use the same settings, seeds and L40S as the [previous section](#tail-with-blocked-auxiliary-kalman--2026-11-04), in an isolated copy of that study, so the model and data revisions are identical.
+
+| | Seed 19 without | Seed 19 with | Seed 29 without | Seed 29 with |
+|---|---:|---:|---:|---:|
+| Worst path R̂ | 1.0095 | 1.0045 | 1.0074 | 1.0036 |
+| Worst path bulk ESS | 799 | 1,865 | 726 | 1,480 |
+| Worst path tail ESS | 1,240 | 2,573 | 1,183 | 2,169 |
+| Worst parameter R̂ | 1.0031 | 1.0041 | 1.0032 | 1.0023 |
+| Worst parameter bulk ESS | 1,295 | 1,223 | 1,063 | 1,007 |
+| Worst parameter tail ESS | 1,620 | 1,337 | 1,381 | 1,552 |
+| Path step δ | 0.047 | 1.59 | 0.044 | 1.58 |
+| Path move RMS | 0.047 | 0.062 | 0.047 | 0.062 |
+| Warmup and sampling | 12.7 s | 16.4 s | 14.6 s | 15.7 s |
+
+- **Mechanism.** Both arms sit near the 50% acceptance target, but the precisions allow a step about 35 times larger. The Student-t mismatch was throttling the whole step, not rejecting at outlier readings.
+- **Per second.** Over warmup and sampling, worst path bulk ESS per second rises 1.8–1.9 times. Parameters are now the limit, so the worst over every coordinate rises 1.2–1.3 times. Total execution time isn't comparable: it ranges from 25 to 89 s across these fits, almost all in setup and compilation.
+- **Block edges.** All 40 slowest times lie within one step of a block edge, and movement there is about 15% lower than in block interiors.
+- **Posteriors agree** within Monte Carlo uncertainty: input effect 0.727 and 0.726 against 0.727 and 0.728, df 5.59 and 5.59 against 5.58 and 5.58.
+
+Study: `TAIL_KALMAN_T_20261104`, under `.local/tail-kalman-student-20261104/data`. Calls: seed 19 `call:88be0d1aeff61f935bbec38fe73440df5c23ca318388377a4d96f1fa021b699e`, seed 29 `call:b4b03513a6294e005732014a41989d6e29e19ad5dbc20442dbd649a5e7ede8b5`. Modal cost $0.13.

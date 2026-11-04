@@ -42,13 +42,14 @@ class PathFactors(NamedTuple):
 
 @dataclass(frozen=True)
 class PathFactorRuntime:
-    """Prepared density operators whose cache belongs to one sweep's fixed label."""
+    """Prepared density operators whose cache belongs to one sweep's label and precisions."""
 
     target: ParticleTarget
     context: ParticleContext
     readings: jax.Array
     noise: ParticleNoiseFactors
     interval_noise: tuple[GaussianNoiseFactors, ...]
+    log_precisions: jax.Array | None = None
 
     @property
     def reach(self) -> int:
@@ -88,7 +89,11 @@ class PathFactorRuntime:
             transitions = jnp.where(indices == 0, initial, transitions)
         observations = jax.vmap(
             lambda index: target.observation_increment_with_noise(
-                context, self.noise, path[index], index
+                context,
+                self.noise,
+                path[index],
+                index,
+                None if self.log_precisions is None else self.log_precisions[index],
             )
         )(indices)
         intervals = target.intervals
@@ -108,6 +113,7 @@ class PathFactorRuntime:
                     observation.measurement.manifest_cov,
                     emitted & jnp.isfinite(self.readings[index]),
                     tuple(factor.at(index) for factor in self.interval_noise),
+                    None if self.log_precisions is None else self.log_precisions[index],
                 )
                 return density(means)
 
@@ -165,7 +171,10 @@ class PathFactorRuntime:
 
 
 def prepare_path_factors(
-    target: ParticleTarget, context: ParticleContext, readings: jax.Array
+    target: ParticleTarget,
+    context: ParticleContext,
+    readings: jax.Array,
+    log_precisions: jax.Array | None = None,
 ) -> PathFactorRuntime:
     """Prepare parameter-dependent noise once before the block updates."""
     intervals = target.intervals
@@ -186,5 +195,10 @@ def prepare_path_factors(
             jnp.where(emitted, readings, jnp.nan),
         )
     return PathFactorRuntime(
-        target, context, readings, target.prepare_noise_factors(context, readings), interval_noise
+        target,
+        context,
+        readings,
+        target.prepare_noise_factors(context, readings),
+        interval_noise,
+        log_precisions,
     )

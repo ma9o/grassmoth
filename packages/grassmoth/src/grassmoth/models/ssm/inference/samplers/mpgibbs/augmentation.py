@@ -84,14 +84,12 @@ def begin_path_update(
     caller has already formed the product. Fixed, window and replay geometry
     keep their existing behavior. No augmentation enters the persisted state.
     """
-    precisions = None
-    if isinstance(path_update, GuidedPathSpec):
-        precision_key, conditional_block_key = random.split(block_key)
-        precisions = draw_student_precisions(
-            target, state.latent_context, state.latent_trajectory, precision_key
-        )
-        if precisions is not None:
-            block_key = conditional_block_key
+    precision_key, conditional_block_key = random.split(block_key)
+    precisions = draw_student_precisions(
+        target, state.latent_context, state.latent_trajectory, precision_key
+    )
+    if precisions is not None:
+        block_key = conditional_block_key
     conditional_static = (
         static
         if precisions is None

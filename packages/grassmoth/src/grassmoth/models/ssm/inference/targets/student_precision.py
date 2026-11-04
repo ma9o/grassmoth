@@ -1,4 +1,4 @@
-"""Transient StudentT precision augmentation for exact guided path updates.
+"""Transient StudentT precision augmentation for exact path updates.
 
 The parameter ensemble is formed independently of these precisions. After the
 conditional path move, discard them before selecting the marginal parameter label.

@@ -13,6 +13,11 @@ linearizes at the guide's exact replay of its own independent coordinates, the
 Gaussian carries those coordinates as noise-free affine rows, and its density
 reads only the free coordinates. Every label then replays them exactly.
 
+StudentT readings condition on the sweep's transient precisions: the Gaussian
+carries their exact conditional curvature, and every density here is the
+conditional target. MPGibbs discards the precisions before the final label draw.
+Ambiguous outliers switch only through precision updates.
+
 Gaussian approximations to nonlinear dynamics, non-Gaussian observations, long
 memory or separated label modes can cause rejection. They never replace the target.
 """
@@ -57,9 +62,10 @@ def _proposal(
     auxiliary: jax.Array,
     variance: jax.Array,
     free: jax.Array,
+    log_precisions: jax.Array | None = None,
 ) -> GaussianPathProposal:
     path = target.replay_path(guide, reference)
-    curvature = linearize_path(target, guide, path)
+    curvature = linearize_path(target, guide, path, log_precisions)
     terms = curvature.proposal_terms(target, guide, path)
     local = terms.information
     free = curvature.augment(free, fill=False)
@@ -81,15 +87,16 @@ def auxiliary_kalman_move(
     auxiliary: jax.Array,
     variance: jax.Array,
     sampling_key: jax.Array,
+    log_precisions: jax.Array | None = None,
 ) -> AuxiliaryKalmanMove:
     """Propose and score both directions at the same auxiliary and label ensemble."""
     free = ctx.latent_free_mask
     with jax.named_scope("kalman_forward_proposal"):
-        forward = _proposal(target, guide, reference, auxiliary, variance, free)
+        forward = _proposal(target, guide, reference, auxiliary, variance, free, log_precisions)
         draw, forward_density = forward.sample_with_log_density(sampling_key)
         proposed = draw[:, : reference.shape[-1]]
     with jax.named_scope("kalman_reverse_proposal"):
-        reverse = _proposal(target, guide, proposed, auxiliary, variance, free)
+        reverse = _proposal(target, guide, proposed, auxiliary, variance, free, log_precisions)
         # Memory rows are replayed by the reverse proposal itself; their entries are unread.
         reverse_density = reverse.log_density(
             jnp.concatenate((reference, jnp.zeros_like(draw[:, reference.shape[-1] :])), axis=-1)
@@ -120,10 +127,13 @@ def _auxiliary_kalman_step(
     *,
     record_trace: bool,
     block_length: int | None,
+    log_precisions: jax.Array | None = None,
 ) -> ParticleSmootherResult | TracedResult[ParticleSmootherResult, AuxiliaryKalmanTraceRecord]:
     """Return an exact path update with the existing marginal parameter-label scores."""
     if block_length is not None:
-        blocked = blocked_kalman_step(target, ctx, key, reference, block_length=block_length)
+        blocked = blocked_kalman_step(
+            target, ctx, key, reference, block_length=block_length, log_precisions=log_precisions
+        )
         return blocked if record_trace else blocked.result
     auxiliary_key, sampling_key, acceptance_key = jax.random.split(key, 3)
     free = ctx.latent_free_mask
@@ -133,7 +143,9 @@ def _auxiliary_kalman_step(
         jnp.sqrt(variance) * jax.random.normal(auxiliary_key, reference.shape, reference.dtype),
         0.0,
     )
-    move = auxiliary_kalman_move(target, ctx, guide, reference, auxiliary, variance, sampling_key)
+    move = auxiliary_kalman_move(
+        target, ctx, guide, reference, auxiliary, variance, sampling_key, log_precisions
+    )
     accepted = (
         jnp.log(jax.random.uniform(acceptance_key, dtype=reference.dtype)) < move.log_acceptance
     )
@@ -173,10 +185,18 @@ def auxiliary_kalman_step(
     reference: jax.Array,
     *,
     block_length: int | None = None,
+    log_precisions: jax.Array | None = None,
 ) -> ParticleSmootherResult:
     """Perform the Gaussian path update without retaining proposal internals."""
     result = _auxiliary_kalman_step(
-        target, ctx, guide, key, reference, record_trace=False, block_length=block_length
+        target,
+        ctx,
+        guide,
+        key,
+        reference,
+        record_trace=False,
+        block_length=block_length,
+        log_precisions=log_precisions,
     )
     assert not isinstance(result, TracedResult)
     return result
@@ -190,10 +210,18 @@ def trace_auxiliary_kalman_step(
     reference: jax.Array,
     *,
     block_length: int | None = None,
+    log_precisions: jax.Array | None = None,
 ) -> TracedResult[ParticleSmootherResult, AuxiliaryKalmanTraceRecord]:
     """Expose the proposal and MH decision from the same numerical transition."""
     result = _auxiliary_kalman_step(
-        target, ctx, guide, key, reference, record_trace=True, block_length=block_length
+        target,
+        ctx,
+        guide,
+        key,
+        reference,
+        record_trace=True,
+        block_length=block_length,
+        log_precisions=log_precisions,
     )
     assert isinstance(result, TracedResult)
     return result

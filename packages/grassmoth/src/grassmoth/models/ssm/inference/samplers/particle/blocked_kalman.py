@@ -11,6 +11,9 @@ across colours and refreshed only for accepted blocks and their outgoing
 transitions. Auxiliary and normalized proposal densities remain explicit in each
 Metropolis ratio. Random half-block shifts prevent permanent boundaries.
 
+StudentT readings condition on the sweep's transient precisions: the proposal and
+the cached factors use each reading's conditional Gaussian.
+
 Window memory carries a block's influence past its neighbours. Colours separate
 blocks by the full window support, and cached exact factors cover each affected
 region. Deterministic recurrences that reach a density or later reading require
@@ -196,6 +199,7 @@ def blocked_kalman_step(
     reference: jax.Array,
     *,
     block_length: int,
+    log_precisions: jax.Array | None = None,
 ) -> TracedResult[ParticleSmootherResult, AuxiliaryKalmanTraceRecord]:
     """Update all block groups under one exact conditional label and one auxiliary."""
     label_key, shift_key, auxiliary_key, colour_key = jax.random.split(key, 4)
@@ -209,7 +213,7 @@ def blocked_kalman_step(
         0.0,
     )
     point = target.replay_path(context, auxiliary)
-    curvature = linearize_path(target, context, point)
+    curvature = linearize_path(target, context, point, log_precisions)
     raw = curvature.proposal_terms(target, context, point)
     augmented_free = curvature.augment(free, fill=False)
     augmented_variance = curvature.augment(variance, fill=1.0)
@@ -241,7 +245,7 @@ def blocked_kalman_step(
     memory = bool(target.state_space.recurrence) or target.intervals is not None
 
     if memory:
-        factors = prepare_path_factors(target, context, ctx.runtime_observations)
+        factors = prepare_path_factors(target, context, ctx.runtime_observations, log_precisions)
         initial = factors.initialize(target.replay_path(context, reference))
 
         def augmented(cache: PathFactors) -> jax.Array:
@@ -402,7 +406,11 @@ def blocked_kalman_step(
             transitions = jnp.where(selected == 0, initial, transitions)
         observations = jax.vmap(
             lambda index: target.observation_increment_with_noise(
-                context, noise, path[index], index
+                context,
+                noise,
+                path[index],
+                index,
+                None if log_precisions is None else log_precisions[index],
             )
         )(selected)
         return transitions, observations
