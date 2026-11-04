@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from jax.stages import Compiled
+    from pydantic import Field
     from xarray import DataTree
 
     from grassmoth.artifacts.continuation import SamplerCheckpoint
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Self
+from typing import Annotated, Self
 
 import jax.numpy as jnp
 from numpy.typing import NDArray
@@ -48,6 +49,26 @@ from grassmoth.models.ssm.inference.diagnostics.plots import (
 from grassmoth.models.ssm.inference.sample_projection import _filter_public_samples
 
 type ArviZArrayMapping = Mapping[str, jnp.ndarray | NDArray]
+
+_PARETO_K_WARNING: Annotated[
+    float,
+    Field(
+        description=(
+            "Vehtari, Gelman & Gabry (2017), https://arxiv.org/abs/1507.04544, section 2.1: warn "
+            "above 0.5."
+        )
+    ),
+] = 0.5
+_PARETO_K_BAD: Annotated[
+    float,
+    Field(
+        description=(
+            "Vehtari, Gelman & Gabry (2017), section 2.1: good performance observed up to 0.7; "
+            "above it they advise sampling directly, K-fold cross-validation or a more robust "
+            "model."
+        )
+    ),
+] = 0.7
 
 
 def _arviz_idata_from_posterior(
@@ -292,6 +313,8 @@ class MCMCPosterior:
             p_loo=float(estimate.p),
             se=float(estimate.se),
             n_data_points=int(estimate.n_data_points),
-            n_bad_k=sum(value > 0.7 for value in values) if values else None,
-            n_warn_k=sum(0.5 < value <= 0.7 for value in values) if values else None,
+            n_bad_k=sum(value > _PARETO_K_BAD for value in values) if values else None,
+            n_warn_k=sum(_PARETO_K_WARNING < value <= _PARETO_K_BAD for value in values)
+            if values
+            else None,
         ), points

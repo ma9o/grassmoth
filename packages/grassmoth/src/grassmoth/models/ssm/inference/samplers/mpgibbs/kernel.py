@@ -1,9 +1,9 @@
 """Marginalized Particle Gibbs joint parameter/trajectory kernel.
 
-Implements the M=2-by-default collapsed Particle Gibbs construction from
-Corenflos (2025), "Particle Gibbs without the Gibbs bit", for directly
-evaluable SSM potentials. The parameter proposal is formed in unconstrained
-space via the auxiliary decomposition
+Implements the collapsed Particle Gibbs construction from Corenflos (2025),
+"Particle Gibbs without the Gibbs bit", for directly evaluable SSM potentials,
+with M = 2 by default as its section 5 recommends. The parameter proposal is
+formed in unconstrained space via the auxiliary decomposition
 
     u | theta  ~ N(theta + a L b(theta), 2 delta Sigma)
     theta' | u ~ N(u, 2 delta Sigma)
@@ -28,22 +28,22 @@ of each half, not the conventional MALA step. The combined kernel has variance
 step ``h`` corresponds to ``delta = h / 4``. Fits start at
 ``INITIAL_PARAM_STEP_SIZE``; warmup adapts ``delta`` within the step bounds and
 rescales it whenever ``Sigma`` is re-estimated, keeping the average variance.
-"""
 
-# References:
-#   https://arxiv.org/abs/2505.04611 — Corenflos (2025), "Particle Gibbs
-#     without the Gibbs bit" (arXiv:2505.04611): the collapsed M-ensemble parameter
-#     proposal (§3.1 pseudo-Langevin) and Barker label-selection weights live here.
+Reference: Corenflos (2025), https://arxiv.org/abs/2505.04611. The collapsed
+M-ensemble parameter proposal (section 3.1, pseudo-Langevin) and Barker
+label-selection weights live here.
+"""
 
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import NamedTuple, cast
+from typing import Annotated, NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
 from jax import random
 from jax.scipy.linalg import solve_triangular
+from pydantic import Field
 
 from grassmoth.artifacts.sampling import (
     AuxiliaryKalmanSpec,
@@ -96,10 +96,34 @@ from grassmoth.models.ssm.inference.tracing import (
 from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
 
 _DEFAULT_OPTIONS = SamplerSpec()
-# Warmup adapts the step from here; fits always run warmup, so these are not settings.
-INITIAL_PARAM_STEP_SIZE = 0.02
-PARAM_STEP_SIZE_MIN = 1e-6
-PARAM_STEP_SIZE_MAX = 1e3
+INITIAL_PARAM_STEP_SIZE: Annotated[
+    float,
+    Field(
+        description=(
+            "Warmup adapts the step from here; fits always run warmup, so this is not a setting. "
+            "Heuristic: no paper or recorded benchmark sets it. Corenflos (2025, section 4) fixes "
+            "the whole-move variance at 0.15^2 for its three-parameter model instead of adapting."
+        )
+    ),
+] = 0.02
+PARAM_STEP_SIZE_MIN: Annotated[
+    float,
+    Field(
+        description=(
+            "Lower bound on warmup's parameter step. "
+            "Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 1e-6
+PARAM_STEP_SIZE_MAX: Annotated[
+    float,
+    Field(
+        description=(
+            "Upper bound on warmup's parameter step. "
+            "Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 1e3
 type MarginalParticleStepResult = tuple[TrajectoryMCMCState, dict[str, jnp.ndarray]]
 
 
@@ -578,6 +602,10 @@ def build_marginal_particle_gibbs_kernel(
             )
 
             def particle_identity() -> dict[str, jax.Array]:
+                """Summarize the selected particles.
+
+                Auxiliary Kalman has two candidates per time: the current path and the proposal.
+                """
                 candidate_count = (
                     2 if isinstance(path_update, AuxiliaryKalmanSpec) else path_update.num_particles
                 )

@@ -621,7 +621,7 @@ export interface components {
             readonly method: "auxiliary_kalman";
             /**
              * Block Length
-             * @description Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates.
+             * @description Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.
              * @default 300
              */
             readonly block_length?: number | null;
@@ -645,7 +645,7 @@ export interface components {
             readonly method: "auxiliary_kalman";
             /**
              * Block Length
-             * @description Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates.
+             * @description Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.
              * @default 300
              */
             readonly block_length: number | null;
@@ -4485,7 +4485,7 @@ export interface components {
             readonly kind: "fixed";
             /**
              * Delta
-             * @description Twice the auxiliary variance at every time step: each sweep refreshes the auxiliary point around the current state with variance delta/2, and the same variance ties the candidates to it (Corenflos & Finke 2024, Algorithms 6 and 7). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving.
+             * @description Twice the auxiliary variance at every time step: each sweep refreshes the auxiliary point around the current state with variance delta/2, and the same variance ties the candidates to it (Corenflos & Finke 2024, Algorithms 6 and 7). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving. The default is the starting step of their Appendix F, Algorithm 16.
              * @default 0.01
              */
             readonly delta?: number;
@@ -4502,7 +4502,7 @@ export interface components {
             readonly kind: "fixed";
             /**
              * Delta
-             * @description Twice the auxiliary variance at every time step: each sweep refreshes the auxiliary point around the current state with variance delta/2, and the same variance ties the candidates to it (Corenflos & Finke 2024, Algorithms 6 and 7). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving.
+             * @description Twice the auxiliary variance at every time step: each sweep refreshes the auxiliary point around the current state with variance delta/2, and the same variance ties the candidates to it (Corenflos & Finke 2024, Algorithms 6 and 7). It is in the state's own units and shared by all its coordinates. Fix it to compare proposals at a matched scale, or when adaptation settles on a scale at which the path stops moving. The default is the starting step of their Appendix F, Algorithm 16.
              * @default 0.01
              */
             readonly delta: number;
@@ -4582,7 +4582,7 @@ export interface components {
         readonly "GaussianInitializationSpec-Input": {
             /**
              * Scale
-             * @description Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity, and MPGibbs re-estimates it in warmup windows.
+             * @description Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity, and MPGibbs re-estimates it in warmup windows. The default is a heuristic; no paper or recorded benchmark sets it.
              * @default 0.1
              */
             readonly scale?: number;
@@ -4600,7 +4600,7 @@ export interface components {
         readonly "GaussianInitializationSpec-Output": {
             /**
              * Scale
-             * @description Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity, and MPGibbs re-estimates it in warmup windows.
+             * @description Standard deviation of the starts around the native starting values, in the centred chart. The initial parameter preconditioner is scale times the identity, and MPGibbs re-estimates it in warmup windows. The default is a heuristic; no paper or recorded benchmark sets it.
              * @default 0.1
              */
             readonly scale: number;
@@ -4625,7 +4625,7 @@ export interface components {
             readonly method: "particle_mgrad" | "twisted_particle_agrad";
             /**
              * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary.
              * @default 64
              */
             readonly num_particles?: number;
@@ -4633,14 +4633,14 @@ export interface components {
             readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
             /**
              * Kappa
-             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
              * @default 1
              * @enum {integer}
              */
             readonly kappa?: 0 | 1;
             /**
              * Scan Unroll
-             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.
              * @default 8
              */
             readonly scan_unroll?: number;
@@ -4667,7 +4667,7 @@ export interface components {
             readonly method: "particle_mgrad" | "twisted_particle_agrad";
             /**
              * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7).
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary.
              * @default 64
              */
             readonly num_particles: number;
@@ -4675,14 +4675,14 @@ export interface components {
             readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
             /**
              * Kappa
-             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance.
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
              * @default 1
              * @enum {integer}
              */
             readonly kappa: 0 | 1;
             /**
              * Scan Unroll
-             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling.
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.
              * @default 8
              */
             readonly scan_unroll: number;
@@ -6768,13 +6768,13 @@ export interface components {
         readonly SamplerSpec: {
             /**
              * Num Warmup
-             * @description Warmup sweeps per chain. Every adaptive step, scale and covariance is learned here and frozen before draws are retained. Zero keeps the tuning as it is: a continued fit's frozen tuning, or the starting values of a new fit. With zero samples as well, both sweep programs compile and neither runs. Changing the sampler kernel on a continued fit requires warmup.
+             * @description Warmup sweeps per chain. Every adaptive step, scale and covariance is learned here and frozen before draws are retained. Zero keeps the tuning as it is: a continued fit's frozen tuning, or the starting values of a new fit. With zero samples as well, both sweep programs compile and neither runs. Changing the sampler kernel on a continued fit requires warmup. The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Särkkä (2025, section 4) adapt for 2,500 to 5,000 sweeps and Corenflos & Finke (2024, section 5.2) for 10,000.
              * @default 4000
              */
             readonly num_warmup: number;
             /**
              * Num Samples Per Chain
-             * @description Retained draws per chain after warmup. Every fit runs this exact count; a continued fit appends this many draws to each chain. Zero returns checks without a conditioned model.
+             * @description Retained draws per chain after warmup. Every fit runs this exact count; a continued fit appends this many draws to each chain. Zero returns checks without a conditioned model. The default is a heuristic; no paper or recorded benchmark sets it.
              * @default 1000
              */
             readonly num_samples_per_chain: number;
@@ -6833,7 +6833,7 @@ export interface components {
             readonly diagnostic_metrics: components["schemas"]["ParticleDiagnosticMetrics"];
             /**
              * Param Target Accept
-             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023).
+             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.
              * @default 0.2
              */
             readonly param_target_accept: number;

@@ -8,6 +8,7 @@ import jax.numpy as jnp
 from jax.typing import DTypeLike
 
 from grassmoth.models.ssm.inference.samplers.particle.math import (
+    TRITON_NUM_WARPS,
     _masked_normal_log_prob,
     label_logsumexp,
 )
@@ -91,7 +92,7 @@ def _cached_backward(
                 jax.ShapeDtypeStruct((labels,), scores.dtype),
             ),
             interpret=interpret,
-            compiler_params=pltriton.CompilerParams(num_warps=4),
+            compiler_params=pltriton.CompilerParams(num_warps=TRITON_NUM_WARPS),
             name="exact_cached_backward",
         )(*args)
 

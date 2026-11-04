@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Annotated
+
 from grassmoth.artifacts.reports.checks import (
     ConvergenceCriterion,
     ConvergenceSubject,
@@ -15,17 +17,39 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     ConvergenceReport,
 )
 
-# Practical cutoff documented by RStan: https://mc-stan.org/rstan/reference/Rhat.html.
-# The warning retains Vehtari et al. (2021)'s stricter diagnostic signal:
-# https://doi.org/10.1214/20-BA1221. Neither is a familywise error guarantee.
-R_HAT_LIMIT = 1.05
-R_HAT_WARNING = 1.01
-# Vehtari et al. (2021) recommend a rank-normalized ESS of 400 as typically enough
-# for a stable Monte Carlo standard error. ESS pools every chain, so the bar stays
-# fixed as chains are added. Per chain, ESS is chain length in autocorrelation
-# times, which R-hat already measures: at stationarity, split R-hat is about
-# 1 + chains / ESS, so R_HAT_LIMIT implies about 20 per chain.
-ESS_MINIMUM = 400
+if TYPE_CHECKING:
+    from pydantic import Field
+
+R_HAT_LIMIT: Annotated[
+    float,
+    Field(
+        description=(
+            "Practical cutoff documented by RStan: https://mc-stan.org/rstan/reference/Rhat.html. "
+            "Not a familywise error guarantee."
+        )
+    ),
+] = 1.05
+R_HAT_WARNING: Annotated[
+    float,
+    Field(
+        description=(
+            "Retains Vehtari et al. (2021)'s stricter diagnostic signal: "
+            "https://doi.org/10.1214/20-BA1221. Not a familywise error guarantee."
+        )
+    ),
+] = 1.01
+ESS_MINIMUM: Annotated[
+    int,
+    Field(
+        description=(
+            "Vehtari et al. (2021) recommend a rank-normalized ESS of 400 as typically enough "
+            "for a stable Monte Carlo standard error. ESS pools every chain, so the bar stays "
+            "fixed as chains are added. Per chain, ESS is chain length in autocorrelation "
+            "times, which R-hat already measures: at stationarity, split R-hat is about "
+            "1 + chains / ESS, so R_HAT_LIMIT implies about 20 per chain."
+        )
+    ),
+] = 400
 
 
 def chain_convergence(chains: ChainDiagnostics | None) -> ConvergenceReport:

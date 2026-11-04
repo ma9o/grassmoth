@@ -30,7 +30,8 @@ def ieks_path(
     after every trial. Backtracking accepts only improvement of the exact path
     density, including every interval reading. A failed numerical solve
     propagates a non-finite result to the initializer's typed failure boundary;
-    it never selects a replacement flat path.
+    it never selects a replacement flat path. The limits of twenty iterations and
+    eight step halvings are heuristics; no paper or recorded benchmark sets them.
     """
 
     def score(path: jax.Array) -> jax.Array:

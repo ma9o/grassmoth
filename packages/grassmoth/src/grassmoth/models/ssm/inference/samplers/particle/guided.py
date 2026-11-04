@@ -77,6 +77,7 @@ from grassmoth.models.ssm.inference.samplers.particle.marginal import (
     marginal_geometry,
 )
 from grassmoth.models.ssm.inference.samplers.particle.math import (
+    TRITON_NUM_WARPS,
     _masked_normal_log_prob,
     label_logsumexp,
 )
@@ -189,7 +190,7 @@ def _killing_fused(
             jax.ShapeDtypeStruct(logits.shape, logits.dtype),
         ),
         interpret=interpret,
-        compiler_params=plt.CompilerParams(num_warps=4),
+        compiler_params=plt.CompilerParams(num_warps=TRITON_NUM_WARPS),
         name="conditional_killing",
     )(logits, noise.survival, noise.replacement, noise.rotation)
     return cast("jax.Array", result)

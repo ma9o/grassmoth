@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 import jax
 
@@ -12,10 +12,20 @@ if TYPE_CHECKING:
     import logging
     from collections.abc import Callable, Sequence
 
+    from pydantic import Field
+
     from grassmoth.artifacts.reports.profiling import FitProfileReport
     from grassmoth.models.ssm.inference.samplers.sweep_plan import CompiledSweepPhase
 
-REPETITIONS = 10
+REPETITIONS: Annotated[
+    int,
+    Field(
+        description=(
+            "Only has to support a median and range. "
+            "Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 10
 
 
 def log_profile(report: FitProfileReport, logger: logging.Logger) -> None:

@@ -133,7 +133,10 @@ def _adapt_scale(
     min_scale: float | Float[Array, ""] = 1e-6,
     max_scale: float | Float[Array, ""] = 1e3,
 ) -> Float[Array, " *shape"]:
-    """Simple exponential step-size adaptation on per-step binary accept."""
+    """Simple exponential step-size adaptation on per-step binary accept.
+
+    The default bounds match PARAM_STEP_SIZE_MIN and PARAM_STEP_SIZE_MAX, which are heuristics.
+    """
     dtype = scale.dtype
     accepted_arr = jnp.asarray(accepted, dtype=dtype)
     target_accept_arr = jnp.asarray(target_accept, dtype=dtype)

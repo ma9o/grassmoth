@@ -11,7 +11,7 @@ Supports:
 from __future__ import annotations
 
 from itertools import chain
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 import jax
 import jax.numpy as jnp
@@ -31,6 +31,8 @@ from grassmoth.models.ssm.execution.dynamical_model import (
 from grassmoth.models.ssm.execution.parameters import assemble_model_matrices, sample_sites
 
 if TYPE_CHECKING:
+    from pydantic import Field
+
     from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
     from grassmoth.models.ssm.execution.contracts import InitializationLikelihoodBackend
     from grassmoth.models.ssm.preparation.binding import BoundPanel
@@ -45,10 +47,23 @@ from grassmoth.models.ssm.parameterization import (
     process_sites,
 )
 
+_CORRELATION_PENALTY_SLOPE: Annotated[
+    float,
+    Field(
+        description=(
+            "Slope of the penalty on a non-positive-definite t0 correlation. "
+            "Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 1e6
+
 
 @jax.custom_vjp
 def _nan_safe_ll(ll):
-    """Return ll if finite, else -1e30. Gradient is zeroed when ll is non-finite."""
+    """Return ll if finite, else -1e30. Gradient is zeroed when ll is non-finite.
+
+    The value is a heuristic: far below any plausible log density, yet finite in float32.
+    """
     return jnp.where(jnp.isfinite(ll), ll, -1e30)
 
 
@@ -83,7 +98,7 @@ def sample_parameters(
         jnp.where(
             min_eigenvalue > INITIAL_STATE_COV_MIN_EIGENVALUE,
             0.0,
-            -1e6 * (INITIAL_STATE_COV_MIN_EIGENVALUE - min_eigenvalue),
+            -_CORRELATION_PENALTY_SLOPE * (INITIAL_STATE_COV_MIN_EIGENVALUE - min_eigenvalue),
         ),
     )
     return matrices

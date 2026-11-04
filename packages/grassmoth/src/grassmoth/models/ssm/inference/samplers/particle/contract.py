@@ -1,6 +1,7 @@
-"""Shared smoother contract types and per-step conditional or marginalized targets."""
+"""Shared smoother contract types and per-step conditional or marginalized targets.
 
-# References: see ../mpgibbs/kernel.py for algorithm provenance.
+See ``../mpgibbs/kernel.py`` for algorithm provenance.
+"""
 
 from collections.abc import Callable, Mapping
 from typing import NamedTuple

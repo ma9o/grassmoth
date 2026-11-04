@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 import jax
 import jax.numpy as jnp
@@ -15,9 +15,18 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from jax.stages import Compiled
+    from pydantic import Field
 
 
-SWEEP_BLOCK_SIZE = 25
+SWEEP_BLOCK_SIZE: Annotated[
+    int,
+    Field(
+        description=(
+            "Bounds output buffers and host progress latency. "
+            "Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 25
 
 
 @dataclass(frozen=True)

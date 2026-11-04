@@ -1,9 +1,8 @@
-"""Builds the per-step :class:`SmootherContext` for MPGibbs latent smoothers."""
+"""Builds the per-step :class:`SmootherContext` for MPGibbs latent smoothers.
 
-# References:
-#   https://arxiv.org/abs/2505.04611 — Corenflos (2025), arXiv:2505.04611:
-#     the per-step posterior mixture over the parameter ensemble that the smoothers
-#     condition on.
+Reference: Corenflos (2025), https://arxiv.org/abs/2505.04611. The per-step posterior
+mixture over the parameter ensemble that the smoothers condition on.
+"""
 
 from collections.abc import Callable
 

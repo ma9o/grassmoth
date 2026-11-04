@@ -1,10 +1,11 @@
 """Warmup-only path scales, with observation-curvature limits for guided drift."""
 
 from collections.abc import Callable
-from typing import NamedTuple, cast
+from typing import Annotated, NamedTuple, cast
 
 import jax
 import jax.numpy as jnp
+from pydantic import Field
 
 from grassmoth.artifacts.sampling import FixedLatentStepSpec, PathUpdateSpec
 from grassmoth.compute.programs import scalar_operand
@@ -13,14 +14,32 @@ from grassmoth.models.ssm.inference.targets.particle import ParticleContext, Par
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int
 
-INITIAL_DELTA = 0.01
-ADAPTATION_WINDOW = 100
-ADAPTATION_TOLERANCE = 0.05
-ADAPTATION_RHO = 0.5
-ADAPTATION_RHO_MIN = 1e-3
-ADAPTATION_GAMMA = -0.5
-DELTA_MIN = 1e-5
-DELTA_MAX = 10.0
+INITIAL_DELTA: Annotated[
+    float, Field(description="delta[0] in Corenflos & Finke (2024), Algorithm 16.")
+] = 0.01
+ADAPTATION_WINDOW: Annotated[
+    int, Field(description="W in Corenflos & Finke (2024), Algorithm 16.")
+] = 100
+ADAPTATION_TOLERANCE: Annotated[
+    float, Field(description="sigma in Corenflos & Finke (2024), Algorithm 16.")
+] = 0.05
+ADAPTATION_RHO: Annotated[
+    float, Field(description="rho in Corenflos & Finke (2024), Algorithm 16.")
+] = 0.5
+ADAPTATION_RHO_MIN: Annotated[
+    float, Field(description="rho_min in Corenflos & Finke (2024), Algorithm 16.")
+] = 1e-3
+ADAPTATION_GAMMA: Annotated[
+    float, Field(description="gamma in Corenflos & Finke (2024), Algorithm 16.")
+] = -0.5
+DELTA_MIN: Annotated[
+    float,
+    Field(description="Lower clip in the stochastic volatility experiment of the authors' code."),
+] = 1e-5
+DELTA_MAX: Annotated[
+    float,
+    Field(description="Upper clip in the stochastic volatility experiment of the authors' code."),
+] = 10.0
 
 
 def _curvature_sizes(
@@ -171,7 +190,10 @@ class LatentAdaptation(NamedTuple):
 
 
 def latent_adaptation(spec: PathUpdateSpec) -> LatentAdaptation:
-    """Resolve the authored scale policy before tracing any transitions."""
+    """Resolve the authored scale policy before tracing any transitions.
+
+    A fixed step disables adaptation, so its placeholder target is never used.
+    """
     return LatentAdaptation(
         enabled=scalar_operand(value=not isinstance(spec.latent_step, FixedLatentStepSpec)),
         target=scalar_operand(
@@ -211,7 +233,13 @@ def adapt_scales(
     num_warmup: int | Int[Array, ""],
     maximum: Float[Array, "*batch T"],
 ) -> ScaleAdaptationState:
-    """Adapt only proposed coordinates; freeze scales and windows after warmup."""
+    """Adapt only proposed coordinates; freeze scales and windows after warmup.
+
+    The update is Corenflos & Finke (2024), https://arxiv.org/abs/2401.14868, Appendix F,
+    Algorithm 16. The printed algorithm lacks the factor of delta and the wait for a full
+    window; both come from the authors' code, https://github.com/AdrienCorenflos/particle_mala,
+    gradient_csmc/utils/mcmc_utils.py.
+    """
     target = settings.target[0]
 
     def update() -> ScaleAdaptationState:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import pairwise
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated
 
 import numpy as np
 from scipy.fft import dct
@@ -24,13 +24,30 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from numpy.typing import NDArray
+    from pydantic import Field
 
     from grassmoth.artifacts.identity import ConstructId
     from grassmoth.artifacts.probability.joint_layout import JointLawLayout
 
 
-_DRAW_BLOCK = 128
-_BAND_EDGES = (0, 16, 64, 128, 256, 512, 1024, 2049)
+_DRAW_BLOCK: Annotated[
+    int,
+    Field(
+        description=(
+            "Draws per block, which bounds working memory. "
+            "Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 128
+_BAND_EDGES: Annotated[
+    tuple[int, ...],
+    Field(
+        description=(
+            "Groups DCT modes for reporting, up to a 2,049-point grid. "
+            "Heuristic: no paper or recorded benchmark sets these."
+        )
+    ),
+] = (0, 16, 64, 128, 256, 512, 1024, 2049)
 
 
 def _refresh_ratio(paths: NDArray, *, frequency: bool) -> NDArray | None:

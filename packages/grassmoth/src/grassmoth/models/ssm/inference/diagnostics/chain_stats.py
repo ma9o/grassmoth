@@ -15,6 +15,10 @@ def _split(values: jax.Array) -> jax.Array:
 
 
 def _rank_normalize(values: jax.Array, ordered: jax.Array) -> jax.Array:
+    """Return normal scores with Blom's offset.
+
+    As in Vehtari et al. (2021), https://arxiv.org/abs/1903.08008, equation 14.
+    """
     pooled = values.reshape(values.shape[0], -1)
     left = jax.vmap(lambda a, v: jnp.searchsorted(a, v, side="left"))(ordered, pooled)
     right = jax.vmap(lambda a, v: jnp.searchsorted(a, v, side="right"))(ordered, pooled)
@@ -40,7 +44,11 @@ def _rhat(values: jax.Array) -> jax.Array:
 
 
 def _ess(values: jax.Array) -> jax.Array:
-    """Reduce all lags together, preserving ArviZ's terminal-even-lag convention."""
+    """Reduce all lags together, preserving ArviZ's terminal-even-lag convention.
+
+    ESS is capped at S log10(S) for short antithetic chains (Vehtari et al. 2021, section 3.2).
+    The absolute 1e-15 constant-input threshold is ArviZ's, not float32 resolution.
+    """
     values = values.astype(jnp.float32)
     chains, draws = values.shape[-2:]
     fft_size = 1 << (2 * draws - 1).bit_length()
@@ -72,7 +80,6 @@ def _ess(values: jax.Array) -> jax.Array:
     tau = jnp.maximum(-1 + 2 * prefix + terminal, 1 / jnp.log10(jnp.float32(total)))
     result = total / tau
     result = jnp.where(jnp.isnan(rho[:, :2]).any(axis=-1), jnp.nan, result)
-    # Preserve ArviZ's absolute constant-input threshold, not float32 resolution.
     constant = jnp.ptp(values, axis=(-2, -1)) < 1e-15
     return jnp.where(constant, total, result)
 
@@ -115,7 +122,10 @@ def _chunk_statistics(samples: jax.Array, tail_probability: float) -> jax.Array:
 
 
 def chain_statistic_batch_size(chains: int, draws: int) -> int:
-    """Bound coordinate batches by their padded FFT chain-lag workspace."""
+    """Bound coordinate batches by their padded FFT chain-lag workspace.
+
+    The 2**23 workspace and the 256 cap are heuristics; no paper or recorded benchmark sets them.
+    """
     fft_size = 1 << (2 * (draws // 2) - 1).bit_length()
     return min(256, max(1, 2**23 // (2 * chains * fft_size)))
 

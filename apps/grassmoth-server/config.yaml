@@ -30,6 +30,8 @@ inference:
   # Local studies retain their store/history here; only numerical fitting runs on GPU.
   compute_loo_diagnostics: false
   sampler:
+    # SamplerSpec in packages/grassmoth/src/grassmoth/artifacts/sampling.py owns each field's
+    # meaning and the source of its default.
     hardware: L40S
     num_warmup: 4000
     num_samples_per_chain: 1000

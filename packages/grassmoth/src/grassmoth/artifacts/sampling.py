@@ -2,25 +2,25 @@
 
 Each field description says what the choice does and why it is offered. Defaults
 are starting values; adaptation constants not listed here are fixed.
-"""
 
-# References:
-#   https://doi.org/10.1111/j.1467-9868.2009.00736.x — Andrieu, Doucet & Holenstein (2010),
-#     "Particle Markov chain Monte Carlo methods": Particle Gibbs (section 2.4.3).
-#   https://arxiv.org/abs/2303.00301 — Corenflos & Särkkä (2025), "Auxiliary MCMC samplers for
-#     parallelisable inference in high-dimensional latent dynamical systems": Gaussian path
-#     proposals (2.2-2.4) and per-time-step targets (4).
-#   https://arxiv.org/abs/2401.14868 — Corenflos & Finke (2024), "Particle-MALA and
-#     Particle-mGRAD": Particle-aGRAD (Algorithm 6, twisted in 4.4) and Particle-mGRAD
-#     (Algorithm 7).
-#   https://arxiv.org/abs/2505.04611 — Corenflos (2025), "Particle Gibbs without the Gibbs bit":
-#     the auxiliary proposal (3.1), Barker selection (3.3), adaptation (3.4) and M = 2 (5).
-#   https://arxiv.org/abs/1111.4246 — Hoffman & Gelman (2014), "The No-U-Turn Sampler": dual
-#     averaging (3.2).
-#   https://doi.org/10.1214/aoap/1034625254 — Roberts, Gelman & Gilks (1997): optimal scaling.
-#   https://arxiv.org/abs/2104.02020 — Agrawal, Vats, Łatuszyński & Roberts (2023): optimal
-#     scaling of Barker's acceptance.
-#   https://doi.org/10.1214/20-BA1221 — Vehtari et al. (2021): rank-normalized R-hat.
+References:
+  https://doi.org/10.1111/j.1467-9868.2009.00736.x — Andrieu, Doucet & Holenstein (2010),
+    "Particle Markov chain Monte Carlo methods": Particle Gibbs (section 2.4.3).
+  https://arxiv.org/abs/2303.00301 — Corenflos & Särkkä (2025), "Auxiliary MCMC samplers for
+    parallelisable inference in high-dimensional latent dynamical systems": Gaussian path
+    proposals (2.2-2.4) and per-time-step targets (4).
+  https://arxiv.org/abs/2401.14868 — Corenflos & Finke (2024), "Particle-MALA and
+    Particle-mGRAD": Particle-aGRAD (Algorithm 6, twisted in 4.4) and Particle-mGRAD
+    (Algorithm 7).
+  https://arxiv.org/abs/2505.04611 — Corenflos (2025), "Particle Gibbs without the Gibbs bit":
+    the auxiliary proposal (3.1), Barker selection (3.3), adaptation (3.4) and M = 2 (5).
+  https://arxiv.org/abs/1111.4246 — Hoffman & Gelman (2014), "The No-U-Turn Sampler": dual
+    averaging (3.2).
+  https://doi.org/10.1214/aoap/1034625254 — Roberts, Gelman & Gilks (1997): optimal scaling.
+  https://arxiv.org/abs/2104.02020 — Agrawal, Vats, Łatuszyński & Roberts (2023): optimal
+    scaling of Barker's acceptance.
+  https://doi.org/10.1214/20-BA1221 — Vehtari et al. (2021): rank-normalized R-hat.
+"""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ class FixedLatentStepSpec(Value):
             "the candidates to it (Corenflos & Finke 2024, Algorithms 6 and 7). It is in the "
             "state's own units and shared by all its coordinates. Fix it to compare proposals "
             "at a matched scale, or when adaptation settles on a scale at which the path stops "
-            "moving."
+            "moving. The default is the starting step of their Appendix F, Algorithm 16."
         ),
     )
 
@@ -136,7 +136,8 @@ class GaussianInitializationSpec(Value):
         description=(
             "Standard deviation of the starts around the native starting values, in the "
             "centred chart. The initial parameter preconditioner is scale times the identity, "
-            "and MPGibbs re-estimates it in warmup windows."
+            "and MPGibbs re-estimates it in warmup windows. The default is a heuristic; no paper "
+            "or recorded benchmark sets it."
         ),
     )
 
@@ -144,7 +145,10 @@ class GaussianInitializationSpec(Value):
 _GUIDED_PARTICLES = (
     "Particles per sweep, including the current path. Each extends a parent chosen at the "
     "previous time, so work grows linearly in particles and times, and the filter's depth "
-    "grows linearly with the number of times (Corenflos & Finke 2024, section 4.7)."
+    "grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default "
+    "is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section "
+    "5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat "
+    "arbitrary."
 )
 _GUIDED_STEP = (
     "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep "
@@ -155,16 +159,19 @@ _GUIDED_KAPPA = (
     "1 shifts the auxiliary point along the gradient of the observation densities, mixed "
     "over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is "
     "a Langevin step on the observation term: for a Gaussian reading it overshoots once the "
-    "scale exceeds four times that reading's variance."
+    "scale exceeds four times that reading's variance. The default 1 is the gradient-informed "
+    "form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted "
+    "Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the "
+    "default method."
 )
-# The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10,
-# with identical transitions. Retune it per device and model size.
 _GUIDED_SCAN_UNROLL = (
     "Time steps per iteration of the forward filter and backward-selection loops. Unrolling "
     "changes how XLA compiles these sequential loops, not the algorithm or its target. Each "
     "step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; "
     "unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has "
-    "little such overhead to remove. 1 disables unrolling."
+    "little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, "
+    "4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune "
+    "it per device and model size."
 )
 
 
@@ -218,14 +225,10 @@ class AuxiliaryKalmanSpec(Value):
     """
 
     method: Literal["auxiliary_kalman"] = "auxiliary_kalman"
-    # 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic
-    # volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second;
-    # the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps,
-    # 25-step blocks gave a quarter of the whole path's, so retune per model.
     block_length: int | None = Field(
         default=300,
         ge=1,
-        description="Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates.",
+        description="Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.",
     )
     latent_step: LatentStepSpec = Field(
         default_factory=AdaptedLatentStepSpec,
@@ -263,7 +266,9 @@ class SamplerSpec(Value):
             "learned here and frozen before draws are retained. Zero keeps the tuning as it "
             "is: a continued fit's frozen tuning, or the starting values of a new fit. With "
             "zero samples as well, both sweep programs compile and neither runs. Changing the "
-            "sampler kernel on a continued fit requires warmup."
+            "sampler kernel on a continued fit requires warmup. The default is a heuristic; no "
+            "paper or recorded benchmark sets it. Corenflos & Särkkä (2025, section 4) adapt for "
+            "2,500 to 5,000 sweeps and Corenflos & Finke (2024, section 5.2) for 10,000."
         ),
     )
     num_samples_per_chain: int = Field(
@@ -272,7 +277,8 @@ class SamplerSpec(Value):
         description=(
             "Retained draws per chain after warmup. Every fit runs this exact count; "
             "a continued fit appends this many draws to each chain. "
-            "Zero returns checks without a conditioned model."
+            "Zero returns checks without a conditioned model. The default is a heuristic; no "
+            "paper or recorded benchmark sets it."
         ),
     )
     num_chains: int = Field(
@@ -375,18 +381,17 @@ class SamplerSpec(Value):
             "convergence check reads them; they explain a failing sampler."
         ),
     )
-    # 0.2 sits between Barker's optimal rates for random-walk proposals and near the 18%
-    # that m-PGibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a
-    # six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD,
-    # which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of
-    # the optimal step.
     param_target_accept: float = Field(
         default=0.2,
         description=(
             "Target fraction of sweeps in which the parameters move to a proposed particle. "
             "Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate "
             "for random-walk proposals is about 0.27 in one dimension and 0.158 in high "
-            "dimension (Agrawal et al. 2023)."
+            "dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near "
+            "the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, "
+            "warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 "
+            "posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per "
+            "effective draw of the optimal step."
         ),
     )
     adaptation_scheme: AdaptationScheme = Field(

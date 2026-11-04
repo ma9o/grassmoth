@@ -1,9 +1,22 @@
 """Numerical primitives for conditional trajectory kernels."""
 
+from typing import Annotated
+
 import jax
 import jax.numpy as jnp
+from pydantic import Field
 
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int
+
+TRITON_NUM_WARPS: Annotated[
+    int,
+    Field(
+        description=(
+            "Warps per fused GPU kernel, at 32 threads each. "
+            "Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 4
 
 
 def label_logsumexp(values: Float[Array, "*batch K"]) -> Float[Array, " *batch"]:

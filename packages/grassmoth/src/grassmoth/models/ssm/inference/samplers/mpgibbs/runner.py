@@ -3,7 +3,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import NamedTuple
+from typing import Annotated, NamedTuple
 
 import jax
 import jax.numpy as jnp
@@ -11,6 +11,7 @@ import jax.random as random
 import numpy as np
 from blackjax.adaptation.step_size import DualAveragingAdaptationState, dual_averaging_adaptation
 from jax.stages import Compiled
+from pydantic import Field
 
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.continuation import SamplerCheckpoint
@@ -199,8 +200,24 @@ class _Population(NamedTuple):
     curvature_moments: CurvatureMoments
 
 
-# Gain of the simple step-size scheme; a fixed property of warmup, not a setting.
-ADAPTATION_RATE = 0.05
+ADAPTATION_RATE: Annotated[
+    float,
+    Field(
+        description=(
+            "Gain of the simple step-size scheme, a fixed property of warmup rather than a "
+            "setting. Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 0.05
+INITIAL_MOVEMENT_MULTIPLIER: Annotated[
+    float,
+    Field(
+        description=(
+            "Where warmup starts the per-time movement multiplier under curvature limits. "
+            "Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 0.25
 
 
 def run_marginal_particle_gibbs(
@@ -281,7 +298,9 @@ def run_marginal_particle_gibbs(
                 target, state.latent_context, state.latent_trajectory, latent_free_mask
             )
             # The public per-time scale is the movement multiplier in (0, 1].
-            state = state._replace(latent_delta=jnp.full_like(state.latent_delta, 0.25))
+            state = state._replace(
+                latent_delta=jnp.full_like(state.latent_delta, INITIAL_MOVEMENT_MULTIPLIER)
+            )
         return state, geometry
 
     with inference_phase("mpgibbs", "initializing_chains", execution_context=execution_context):

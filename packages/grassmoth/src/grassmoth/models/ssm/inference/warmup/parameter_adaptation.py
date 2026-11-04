@@ -57,7 +57,9 @@ def adapt_parameter_covariance(
     Averaging within-chain covariance excludes between-chain mean dispersion.
     Five reference observations regularize the estimate towards the initial
     positive-definite covariance. Their weight decreases with the window length.
-    The returned matrix is fixed for the next complete transition.
+    The five follows Stan's n / (n + 5) regularization (covar_adaptation.hpp),
+    which shrinks towards 1e-3 I instead. The returned matrix is fixed for the
+    next complete transition.
     """
     active = jnp.any((iteration >= windows[:, 0]) & (iteration <= windows[:, 1]))
     boundary = jnp.any(iteration == windows[:, 1])
