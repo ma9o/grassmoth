@@ -19,11 +19,9 @@
       "!**/.next",
       "!**/.turbo",
       "!**/dist",
-      "!**/storybook-static",
       "!**/generated",
       "!packages/api-types/schemas",
       "!apps/grassmoth-client/public/perspective",
-      "!apps/grassmoth-client/public/mockServiceWorker.js",
       "!apps/grassmoth-client/src/app/globals.css"
     ]
   }

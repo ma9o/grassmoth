@@ -101,7 +101,7 @@ owning package.
 bun run lint          # Every static check, including types, docs and generated-artifact drift
 bun run lint:fix      # Apply lint and formatting fixes
 bun run test          # Python contract suites, checker tests and client contracts
-bun run codegen:check # Generated API, story-fixture and documentation drift
+bun run codegen:check # Generated API and documentation drift
 ```
 
 Python source docstrings use [Google style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings).
@@ -140,10 +140,10 @@ aliases or forwarding scripts at another level of the tree.
 Every workspace's `lint` invokes `turbo run lint:workspace --continue=always`.
 Its `lint:workspace` holds the local checks, while
 [`turbo.json`](../../turbo.json) declares the prerequisite checks that a change
-in that workspace can affect. Client lint includes Knip and story-fixture drift;
-API-types lint includes API drift; docs lint includes generated-math drift. Both
-Python workspace lints run their local checks and both API and story-fixture
-drift checks. Turbo runs each prerequisite once per invocation.
+in that workspace can affect. Client lint includes Knip; API-types lint includes
+API drift; docs lint includes generated-math drift. Both Python workspace lints
+run their local checks and the API drift check. Turbo runs each prerequisite once
+per invocation.
 
 The root fans out workspace commands and owns only the checks that need the whole
 tree, under `lint:root`: exported-field readers (`lint:fields`, FIELD003), callers
@@ -172,7 +172,6 @@ Use `bun run` to list root scripts, or `bun run --cwd <workspace>` to list one
 package's scripts. Run focused tasks in their workspace, for example:
 
 ```bash
-bun run --cwd apps/grassmoth-client storybook
 bun run --cwd apps/grassmoth-client lint:knip
 bun run --cwd apps/grassmoth-server lint:ruff
 bun run --cwd packages/grassmoth lint:type-boundaries:tests

@@ -1,6 +1,6 @@
 # Web client architecture
 
-- Follow the [workbench design principles](#workbench-design) before changing the UI. Design in client components and their stories, never in artifacts.
+- Follow the [workbench design principles](#workbench-design) before changing the UI. Design in client components, never in artifacts.
 
 - Keep domain logic and statistical computations in the backend, except for frontend visualization: evaluate or sample saved probability laws, evaluate saved model expressions, and transform aligned draws. Preserve joint dependence and declared parameter transforms. These display evaluations never feed inference, trajectory generation, diagnostics, predictive checks, or scientific decisions, which remain backend-owned.
 
@@ -37,11 +37,9 @@ The workbench (`/workspaces/{workspaceId}`) shows what the agent harness did to 
 ### Code
 
 - The backend's types define the UI's parts and how they nest; the UI adds no domain concepts of its own.
-- Storybook shows the workbench and its panes exactly as the workbench renders them, in states the backend produced.
 - Narrow saved assessment, effect and comparison alternatives before reading their evidence or absence reason. Consume the producer's scientific classifications and inference plot series directly.
 
-## Story scenarios
+## Development data
 
-- Serve [France's saved responses](../grassmoth-server/AGENTS.md#story-scenarios) through the [MSW handlers](src/components/__fixtures__/study-scenario.ts), production API client, hooks and view composition. The generated native MessagePack assets are served unchanged. Keep generated snapshots and parallel buffer formats out of stories.
-- Stories cover the successful France timeline, including the pilot and full fit, one story per call. The generated fixture needs no running study; regenerating it requires the untracked local France history. There is no story-fixture drift check.
-- Pure unit tests use France responses where they exercise that timeline, and small typed values in `src/lib/__fixtures__` for states France lacks. Synthetic unit values are rendering examples, never benchmark evidence.
+- Develop the workbench in the normal local stack against real saved studies. Keep exports, generated snapshots and mock APIs out of development.
+- Pure unit tests use small typed values in `src/lib/__fixtures__`. Synthetic unit values are rendering examples, never benchmark evidence.

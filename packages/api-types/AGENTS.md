@@ -8,7 +8,7 @@
 
 ## Code generation
 
-- After changing an artifact, read model, study record, endpoint contract or facade response, run `bun run codegen` from the repository root and commit the owner and generated changes together. `bun run codegen:check` verifies API drift. Story fixtures are regenerated explicitly from local France history and have no CI drift check.
+- After changing an artifact, read model, study record, endpoint contract or facade response, run `bun run codegen` from the repository root and commit the owner and generated changes together. `bun run codegen:check` verifies API drift.
 - The [Python exporter](../../apps/grassmoth-server/AGENTS.md#contract-exports) owns `schemas/openapi.json`; [generate.ts](scripts/generate.ts) owns `src/generated/models.ts` and `src/generated/model-api.ts`. [src/index.ts](src/index.ts) owns hand-written re-exports. Register new artifact contracts with their Python owner and expose needed named exports here.
 - Keep generated output properties, arrays and tuples readonly. Preserve named map keys as `Readonly<Partial<Record<Id, T>>>` and fixed tuple dimensions. For presence mismatches, inspect validation and serialization schemas separately; [Value](../grassmoth/src/grassmoth/artifacts/base.py) owns whether fields are emitted, nullable, defaulted or excluded.
 - Upload inputs use native `Blob` values, serialized as `FormData` by the caller. Decode responses through the shared client before reading scientific fields.

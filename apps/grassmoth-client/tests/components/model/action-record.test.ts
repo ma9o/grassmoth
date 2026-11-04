@@ -43,7 +43,7 @@ const tick: TimelineRevision = {
 const render = (selected: TimelineRevision | undefined, running: readonly RunningAction[] = []) =>
   renderToStaticMarkup(
     createElement(ActionRecord, {
-      workspaceId: "STORYBOOK",
+      workspaceId: "TEST",
       context: null,
       tick: selected,
       running,

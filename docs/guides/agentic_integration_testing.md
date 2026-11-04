@@ -73,8 +73,7 @@ unregistered markers. Keep test files under their owning workspace’s `tests/` 
 Compilation dominates numerical tests, so the [shared pytest policy](../../packages/grassmoth/tests/grassmoth_test_support/pytest_policy.py) keeps
 JAX's persistent cache in `~/.cache/grassmoth/jax-tests`; delete it to time a cold run.
 The default selection is `not (inference or workflow)`, which excludes every
-numerical child, including tests that also carry `contract`. Web unit tests belong to the named `contract` Vitest project;
-the separate `visual` project owns screenshot stories.
+numerical child, including tests that also carry `contract`. Web unit tests belong to the named `contract` Vitest project.
 
 The [server pytest fixtures](../../apps/grassmoth-server/tests/conftest.py) force fitting onto
 `local` and reject live Modal app runs. Hardware routing contracts exercise the
@@ -291,7 +290,6 @@ curl -s "http://localhost:8100/api/studies/$WORKSPACE_ID/$ACTION/$CALL_ID" \
 
 - `http://localhost:3000/workspaces/{WORKSPACE_ID}` is the model workbench, the default destination from the workspace list.
 - After each backend action, check that the workbench shows the question, graph, entity details, data, findings, history and action log. The workbench is read-only: the agent submits every change through the backend API.
-- Storybook's **Model / Workbench / Complete** story and one story per successful France call replay [FRANCE1940SIMPLE's saved responses](../../apps/grassmoth-server/AGENTS.md#story-scenarios), including the full fit, through MSW and the production API reader. Viewing needs no stack or study history. Regeneration requires the gitignored local France history; lint and CI have no story-fixture drift check.
 
 If the UI behaves unexpectedly, check Next.js devtools MCP errors before debugging the browser script.
 

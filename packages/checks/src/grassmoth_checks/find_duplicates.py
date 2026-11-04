@@ -54,7 +54,7 @@ SOURCE_ROOTS = (
 PYTHON_SOURCE_ROOTS = (Path("packages/grassmoth/src"), Path("apps/grassmoth-server/src"))
 SUPPORTED_SUFFIXES = frozenset({".py", ".ts", ".tsx"})
 IGNORED_PARTS = frozenset({"generated", "node_modules", "__pycache__", ".next"})
-IGNORED_NAME_MARKERS = (".test.", ".spec.", ".stories.")
+IGNORED_NAME_MARKERS = (".test.", ".spec.")
 
 DEFAULT_LIMIT = 30
 DEEP_LIMIT = 60
@@ -2176,7 +2176,7 @@ def run_jscpd(
             "--format",
             "python,typescript,tsx",
             "--ignore",
-            "**/generated/**,**/*.test.*,**/*.spec.*,**/*.stories.*",
+            "**/generated/**,**/*.test.*,**/*.spec.*",
             "--reporters",
             "json",
             "--output",
