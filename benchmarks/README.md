@@ -115,9 +115,11 @@ scorecard requests and run notes are in [`suite`](suite). Their status:
   MODE's two same-well readings leave about 0.70 of the posterior mass on
   staying and 0.30 on visiting the other well and returning, under the exact
   Euler–Maruyama law. The records are in [`suite/notes.md`](suite/notes.md).
-- **TAIL is valid, and both of its fits fail.** About a quarter of the
+- **TAIL is valid, and both of its scorecard fits fail.** About a quarter of the
   latent time points never move in retention; see
-  [suite/notes.md](suite/notes.md).
+  [suite/notes.md](suite/notes.md). Outside the scorecard, blocked auxiliary
+  Kalman later
+  [passed at both seeds](suite/notes.md#tail-with-blocked-auxiliary-kalman--2026-11-04).
 - **C7 and C8** pass zero-sweep public fits with the interval-mean channel and
   observed deterministic stages intact. These check admission and compilation,
   not convergence; supported model limits and the recurrence sampler's

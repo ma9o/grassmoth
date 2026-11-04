@@ -299,3 +299,19 @@ Every retained transition took 31 leapfrog steps. Mean acceptance was 0.87, with
   - Speedups: the blocked fit predates the blocked-sampler speedups that landed with the sampler in `6aebcf79`. A separate H200 test of the speedups cut Lorenz-96 sweep time by 27% and lengthened compilation by 19%. [Results](../../scratchpad/blocked-speed-20261031/results.json).
   - Master since `05bc217d` keeps unobserved coupled states and builds charts for a model with no free parameters. It lacks the bounded pair scoring, CUDA 12 and autotuning off.
 - **NUTS:** the probe reported 26 of its 51 warmup sweeps after 48 min 55 s and was stopped at 78 minutes, with no retained draw.
+
+## TAIL with blocked auxiliary Kalman — 2026-11-04
+
+**Both seeds pass the production convergence check, with no Student-t precision augmentation.** The fits use TAIL's schedule of 4 chains, 2,000 warmup sweeps and 4,000 draws, with 300-step blocks and an adapted step. This is a quick look, not a scorecard result: it ran on an L40S rather than an A10 and skipped the prior-bank gate. The truth-path gate passed.
+
+| Seed | Worst R̂ | Worst bulk ESS | Worst tail ESS | Total | Sampling | Input effect (truth 0.7) | df (truth 5) |
+|---|---:|---:|---:|---:|---:|---|---|
+| 19 | 1.0095 | 799 | 1,240 | 24.8 s | 8.4 s | 0.73 [0.57, 0.89] | 5.58 [4.92, 6.20] |
+| 29 | 1.0074 | 726 | 1,183 | 88.9 s | 9.1 s | 0.73 [0.55, 0.89] | 5.58 [4.95, 6.26] |
+
+- **Slowest times are block edges, not outliers.** Of each seed's 20 slowest times by movement, 20 and 19 lie within one step of a multiple of 150, which covers 2% of times. Three of each 20 have a convex reading, against 14% of all times. Movement RMS at convex readings matches central ones: 0.0467 against 0.0463 at seed 19, 0.0475 against 0.0470 at seed 29. Acceptance is per block and the step adapts to it, so this doesn't show that augmentation would add nothing.
+- **Data.** `simulate` with seed 721 on `35234163` gives latent paths that differ from the October history, because of `9986d2fe` (RMS difference 0.57–0.68, path RMS 0.54–0.82). The measurement noise matches to 3e-7, so the gate's numbers are unchanged. The [October fits](#tail--2026-10-24) predate that fix and the precision augmentation in `52807ada`, so they aren't a comparison. No current guided fit exists on this history.
+- **Source.** Seed 19 ran on clean `35234163` (digest `18fa4d7f`) with the study service hosted on Modal CPU. Seed 29 ran from a local stack on the shared checkout (digest `a0bca1c8`), whose uncommitted edits change only the default adaptation scheme; the request pins `simple`. Seed 29's longer total is almost all setup and compilation.
+- **Failed attempt.** Seed 29's first attempt, `call:2b93521b870e9331b3c5dfacccca135d8438fbd597a64019388fb92059f9aa60`, lost its runner to Modal preemption. It isn't a sampling result.
+
+Study: `TAIL_KALMAN_20261104`, local and gitignored. Calls: seed 19 `call:81265585311ff9934d2c6ff16bb900a588ff310e6043ea178a17f6badd6042ed`, seed 29 `call:0afa481a1f1e9ee9223de0e96e5879ad43b8df1048e1a67a2ab4cbad7c4af68c`. Modal cost $0.52, including restarts. No decision is proposed; the next comparison is a guided fit on the same history.
