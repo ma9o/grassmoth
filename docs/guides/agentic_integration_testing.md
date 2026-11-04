@@ -291,7 +291,7 @@ curl -s "http://localhost:8100/api/studies/$WORKSPACE_ID/$ACTION/$CALL_ID" \
 
 - `http://localhost:3000/workspaces/{WORKSPACE_ID}` is the model workbench, the default destination from the workspace list.
 - After each backend action, check that the workbench shows the question, graph, entity details, data, findings, history and action log. The workbench is read-only: the agent submits every change through the backend API.
-- Storybook's **Model / Workbench / Complete** story covers the workbench with [server-validated responses](../../apps/grassmoth-server/AGENTS.md#story-scenarios), served through MSW and the production API reader. It needs no running study. Extend it rather than adding separate stories.
+- Storybook's **Model / Workbench / Complete** story and one story per successful France call replay [FRANCE1940SIMPLE's saved responses](../../apps/grassmoth-server/AGENTS.md#story-scenarios), including the full fit, through MSW and the production API reader. Viewing needs no stack or study history. Regeneration requires the gitignored local France history; lint and CI have no story-fixture drift check.
 
 If the UI behaves unexpectedly, check Next.js devtools MCP errors before debugging the browser script.
 

@@ -42,5 +42,6 @@ The workbench (`/workspaces/{workspaceId}`) shows what the agent harness did to 
 
 ## Story scenarios
 
-- Serve the [server-generated scenarios](../grassmoth-server/AGENTS.md#story-scenarios) through the [MSW handlers](src/components/__fixtures__/study-scenario.ts), production API client, hooks and view composition. Keep generated snapshots and parallel buffer formats out of stories.
-- Pure unit tests use typed values from the same validated response owners. Synthetic scientific values are rendering examples, never benchmark evidence.
+- Serve [France's saved responses](../grassmoth-server/AGENTS.md#story-scenarios) through the [MSW handlers](src/components/__fixtures__/study-scenario.ts), production API client, hooks and view composition. The generated native MessagePack assets are served unchanged. Keep generated snapshots and parallel buffer formats out of stories.
+- Stories cover the successful France timeline, including the pilot and full fit, one story per call. The generated fixture needs no running study; regenerating it requires the untracked local France history. There is no story-fixture drift check.
+- Pure unit tests use France responses where they exercise that timeline, and small typed values in `src/lib/__fixtures__` for states France lacks. Synthetic unit values are rendering examples, never benchmark evidence.

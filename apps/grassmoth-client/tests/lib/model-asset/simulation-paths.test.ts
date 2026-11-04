@@ -2,12 +2,20 @@ import type { SimulateOutput } from "@grassmoth/api-types";
 import { dump } from "npyjs";
 import { expect, it } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { scenarioResult } from "@/components/__fixtures__/study-scenario";
+import { simulatedResult, unavailableEffect } from "@/lib/__fixtures__/action-results";
 import { outcome } from "@/lib/__fixtures__/model";
 import { fittedSnapshot } from "@/lib/__fixtures__/snapshot";
 import { pathsView } from "@/lib/model-asset/result-values";
 
-const simulation = scenarioResult("simulated").body;
+const simulation = simulatedResult;
+
+it("keeps both recorded arms when the causal evaluation is unavailable", () => {
+  const paths = pathsView(unavailableEffect, fixtureValue(fittedSnapshot.dynamical_model_spec));
+  expect(unavailableEffect.report.evidence.arms.kind).toBe("paired");
+  expect(paths.states[outcome.id]?.action).toHaveLength(2);
+  expect(paths.states[outcome.id]?.reference).toHaveLength(2);
+  expect(paths.effect).toBeNull();
+});
 
 function array(shape: number[], values: number[], dtype: "f8" | "b1" = "f8") {
   return { npy: new Uint8Array(dump(values, shape, { dtype })) };

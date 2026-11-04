@@ -1,4 +1,4 @@
-import { scenarioResult } from "@/components/__fixtures__/study-scenario";
+import { authoredResult } from "@/lib/__fixtures__/action-results";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -179,7 +179,7 @@ describe("edit change summaries after history compaction", () => {
       commit_id: tick.commit_id,
       messages: [],
       body: {
-        ...scenarioResult("authored").body,
+        ...authoredResult,
         checks: {
           question: { findings: [] },
           specification: [

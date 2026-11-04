@@ -1,7 +1,7 @@
 import type { ActionSuccess, RecordDependency, TimelineRevision } from "@grassmoth/api-types";
 import { describe, expect, it } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { scenarioResult } from "@/components/__fixtures__/study-scenario";
+import { simulatedResult, authoredResult, fittedResult } from "@/lib/__fixtures__/action-results";
 import { outcome } from "@/lib/__fixtures__/model";
 import { authoredSnapshot } from "@/lib/__fixtures__/snapshot";
 import {
@@ -11,12 +11,12 @@ import {
 } from "@/lib/model-asset/call-dependencies";
 import { composeCallView } from "@/lib/model-asset/compose-call-view";
 
-const simulationReport = scenarioResult("simulated").body.report;
+const simulationReport = simulatedResult.report;
 
 const WORKSPACE = "TEST";
 const oid = (seq: number) => seq.toString(16).padStart(40, "0");
 const question = fixtureValue(authoredSnapshot.question);
-const model = () => scenarioResult("authored").body;
+const model = () => authoredResult;
 const observation = fixtureValue(outcome.indicators[0]).observation;
 const extraction = {
   kind: "semantic" as const,
@@ -203,7 +203,7 @@ function savedResult(seq: number): ActionSuccess {
         ...envelope,
         action: "fit",
         body: {
-          ...scenarioResult("fitted").body,
+          ...fittedResult,
         },
       };
     case "simulate":
@@ -257,7 +257,7 @@ describe("views composed from recorded call dependencies", () => {
     if (fitted.action !== "fit" || simulated.action !== "simulate") throw new Error("Fixture");
     const { calls, view } = compose(entry(9));
     expect(view.dynamical_model_spec).toEqual(fitted.body.dynamical_model_spec);
-    expect(view.fit).toEqual(scenarioResult("fitted").body.inference.core);
+    expect(view.fit).toEqual(fittedResult.inference.core);
     expect(view.simulation).toEqual(simulated.body.report);
     expect(view.metadata).toBeNull();
     expect(view.state.data).toBeNull();

@@ -16,5 +16,6 @@ Read the [notebook guidance](notebooks/AGENTS.md) for work in `notebooks/`.
 
 ## Story scenarios
 
-- Scenarios may use real study responses as well as synthetic examples declared in [story_data.py](scripts/codegen/story_data.py). Either way, [export_story_scenarios.py](scripts/codegen/export_story_scenarios.py) validates each response with production response models and serializes it with the normal MessagePack codec, call identity and dependency owners.
-- Generate the scenarios through root `bun run codegen` without a running stack or executing scientific actions, so real responses must be committed. [Client stories](../grassmoth-client/AGENTS.md#story-scenarios) consume the generated responses; story values are rendering examples, never scientific evidence.
+- [export_story_scenarios.py](scripts/codegen/export_story_scenarios.py) reads FRANCE1940SIMPLE's happy path, each action's first successful call plus the last successful fit as the full fit, through the server's saved timeline and completed-call readers. It exports the native MessagePack responses unchanged, with a typed timeline manifest; no scientific actions run during codegen.
+- Generate explicitly with root `bun run codegen`, without a stack. Generation requires local `data/FRANCE1940SIMPLE/history.git`, which remains gitignored. The generated client fixtures are self-contained; lint and CI do not check them against the untracked history.
+- [Client stories](../grassmoth-client/AGENTS.md#story-scenarios) cover the saved happy path, including the pilot and full fit. Contract tests own small typed examples for actions and statuses absent from France.

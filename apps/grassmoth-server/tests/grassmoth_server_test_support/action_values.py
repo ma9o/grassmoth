@@ -1,4 +1,4 @@
-"""Tiny synthetic values for rendering stories, never scientific execution.
+"""Small typed scientific values for HTTP contracts; no scientific execution.
 
 These declarations choose illustrative UI states. Public value constructors own
 all parsing; no preparation, inference, diagnostics or simulation runs here.
@@ -38,7 +38,7 @@ def oid(seq: int) -> str:
 
 def array(values: object) -> NumericalArray:
     """Encode explicit example coordinates with the production numerical owner."""
-    return NumericalArray.from_numpy(np.asarray(values))
+    return NumericalArray.from_numpy(np.asarray(values, dtype=float))
 
 
 def observation(identity: str, name: str, *, resolved: bool = False) -> dict[str, object]:
@@ -306,7 +306,7 @@ def preparation() -> PrepareDataOutput:
                     "variables": [
                         {"observation": item, "extraction": EXTRACTION} for item in OBSERVATIONS
                     ],
-                    "context": "Synthetic story panel.",
+                    "context": "Synthetic contract panel.",
                 },
                 "time_origin": ORIGIN,
                 "variables": OBSERVATIONS,
@@ -500,9 +500,13 @@ def simulation(*, causal: bool) -> SimulateOutput:
                     },
                     "observation_layout": {
                         "variables": OBSERVATIONS,
-                        "support_start_times": array([[-1, -1], [0, 0], [1, 1], [2, 2]]),
-                        "support_end_times": array([[0, 0], [1, 1], [2, 2], [3, 3]]),
-                        "mask": array(np.ones((2, 4, 2), dtype=bool)),
+                        "support_start_times": array(
+                            np.array([[-1, -1], [0, 0], [1, 1], [2, 2]], dtype=float)
+                        ),
+                        "support_end_times": array(
+                            np.array([[0, 0], [1, 1], [2, 2], [3, 3]], dtype=float)
+                        ),
+                        "mask": NumericalArray.from_numpy(np.ones((2, 4, 2), dtype=bool)),
                     },
                 },
                 "summary": {

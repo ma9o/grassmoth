@@ -1,7 +1,7 @@
 import type { ArrayVector, FitOutput } from "@grassmoth/api-types";
 import { dump } from "npyjs";
 import { expect, it } from "vitest";
-import { scenarioResult } from "@/components/__fixtures__/study-scenario";
+import { fittedResult } from "@/lib/__fixtures__/action-results";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
 import { drawsView, inferenceView, scalarValues } from "@/lib/model-asset/result-values";
 
@@ -10,7 +10,7 @@ function array(shape: number[], values: number[], dtype: "f8" | "b1" = "f8") {
 }
 
 it("selects original joint posterior atoms and native chain evidence without reducing them", () => {
-  const base = scenarioResult("fitted").body;
+  const base = fittedResult;
   const identity = "distribution:unit-test-joint-law";
   const model = fixtureValue(base.dynamical_model_spec);
   const atoms = array([4, 4], [-5, 1, 90, 91, 5, -1, 92, 93, -5, 0, 94, 95, 5, 1, 96, 97]);

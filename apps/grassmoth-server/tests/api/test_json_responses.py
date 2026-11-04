@@ -12,8 +12,8 @@ from grassmoth_server.actions.contracts.polling import ActionResult, StudyError
 from grassmoth_server.api.app import app
 from grassmoth_server.study import calls
 from grassmoth_server.study.persistence.codec import json_result, pack_payload, pack_result
+from grassmoth_server_test_support.action_examples import examples
 from scripts.codegen.export_api import export_openapi
-from scripts.codegen.export_story_scenarios import examples
 
 pytestmark = pytest.mark.contract
 

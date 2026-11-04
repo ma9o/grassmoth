@@ -1,0 +1,187 @@
+[
+  {
+    "action": "data_diff",
+    "input": {
+      "left_ref": [
+        {
+          "revision": "0000069000000000000000000000000000000000",
+          "replicate_index": 0
+        }
+      ],
+      "right_ref": [
+        {
+          "revision": "0000009000000000000000000000000000000000",
+          "replicate_index": 0
+        },
+        {
+          "revision": "0000009000000000000000000000000000000000",
+          "replicate_index": 1
+        }
+      ]
+    }
+  },
+  {
+    "action": "edit_model",
+    "input": {
+      "parent_ref": "0000065000000000000000000000000000000000",
+      "dynamical_model_spec": {
+        "constructs": {
+          "construct:00000000000000000001": {
+            "name": "baseline",
+            "reasoning": {
+              "text": "Synthetic baseline for interface examples.",
+              "reference_urls": []
+            },
+            "indicators": {},
+            "dynamics": {},
+            "coefficients": [],
+            "innovation_family": "gaussian",
+            "distribution": null,
+            "role": "endogenous",
+            "temporal_status": "time_invariant"
+          },
+          "construct:00000000000000000002": {
+            "name": "treatment",
+            "reasoning": {
+              "text": "Synthetic treatment for interface examples.",
+              "reference_urls": []
+            },
+            "indicators": {},
+            "dynamics": {},
+            "coefficients": [],
+            "innovation_family": "gaussian",
+            "distribution": null,
+            "role": "endogenous",
+            "temporal_status": "time_varying"
+          },
+          "construct:00000000000000000003": {
+            "name": "outcome",
+            "reasoning": {
+              "text": "Synthetic outcome for interface examples.",
+              "reference_urls": []
+            },
+            "indicators": {},
+            "dynamics": {},
+            "coefficients": [],
+            "innovation_family": "gaussian",
+            "distribution": null,
+            "role": "endogenous",
+            "temporal_status": "time_varying"
+          }
+        },
+        "edges": {
+          "edge:00000000000000000001": {
+            "mechanisms": {},
+            "reasoning": {
+              "text": "Baseline affects treatment.",
+              "reference_urls": []
+            },
+            "cause": "construct:00000000000000000001",
+            "effect": "construct:00000000000000000002"
+          },
+          "edge:00000000000000000002": {
+            "mechanisms": {},
+            "reasoning": {
+              "text": "Treatment affects the outcome.",
+              "reference_urls": []
+            },
+            "cause": "construct:00000000000000000002",
+            "effect": "construct:00000000000000000003"
+          }
+        },
+        "parameters": {},
+        "distributions": {},
+        "law_layouts": {},
+        "measurement_clock": null
+      }
+    }
+  },
+  {
+    "action": "edit_question",
+    "input": {
+      "question": {
+        "text": "Synthetic example: how does treatment affect the outcome?",
+        "outcome": "construct:00000000000000000003",
+        "queries": {}
+      }
+    }
+  },
+  {
+    "action": "fit",
+    "input": {
+      "target": {
+        "kind": "new",
+        "dynamical_model_spec_ref": "0000068000000000000000000000000000000000",
+        "data_ref": {
+          "revision": "0000069000000000000000000000000000000000",
+          "replicate_index": 0
+        }
+      },
+      "settings": {
+        "profile": false,
+        "hardware": "local",
+        "time_limit_seconds": null,
+        "n_parameter_particles": null,
+        "path_update": null,
+        "compiler_reparameterization": null,
+        "parameter_proposal": null,
+        "diagnostic_metrics": null,
+        "param_target_accept": null,
+        "adaptation_scheme": null,
+        "initialization": null,
+        "num_samples_per_chain": null,
+        "num_warmup": null,
+        "num_chains": null,
+        "thinning": null,
+        "seed": null
+      },
+      "repeat": 0
+    }
+  },
+  {
+    "action": "model_diff",
+    "input": {
+      "before_ref": "0000068000000000000000000000000000000000",
+      "after_ref": "000006e000000000000000000000000000000000"
+    }
+  },
+  {
+    "action": "prepare_data",
+    "input": {
+      "dynamical_model_spec_ref": "0000068000000000000000000000000000000000",
+      "source": "input",
+      "extraction": {
+        "indicator:00000000000000000001": {
+          "kind": "semantic",
+          "how_to_measure": "Synthetic example reading.",
+          "source_columns": []
+        },
+        "indicator:00000000000000000002": {
+          "kind": "semantic",
+          "how_to_measure": "Synthetic example reading.",
+          "source_columns": []
+        }
+      },
+      "context": ""
+    }
+  },
+  {
+    "action": "simulate",
+    "input": {
+      "dynamical_model_spec_ref": "0000068000000000000000000000000000000000",
+      "simulation": {
+        "start": "2026-01-01",
+        "horizon": "3d",
+        "interventions": [
+          {
+            "target": "construct:00000000000000000002",
+            "after": "1d",
+            "value": 2.0
+          }
+        ]
+      },
+      "seed": 0,
+      "num_replicates": 2
+    }
+  }
+]

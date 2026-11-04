@@ -33,7 +33,7 @@ and alternatives.
 
 ## Endpoints
 
-Example requests come from the [synthetic interface scenarios](../../apps/grassmoth-server/scripts/codegen/story_data.py). Replace their revision hashes with `latest` or revisions from your study's timeline.
+Example requests come from the [declared HTTP examples](../../apps/grassmoth-server/scripts/codegen/api_requests.json). Replace their revision hashes with `latest` or revisions from your study's timeline.
 
 ### POST `/api/studies/{workspace_id}/data_diff`
 

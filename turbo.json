@@ -29,15 +29,13 @@
     },
     "@grassmoth/grassmoth#lint:workspace": {
       "dependsOn": [
-        "@grassmoth/api-types#codegen:check",
-        "@grassmoth/grassmoth-client#codegen:check"
+        "@grassmoth/api-types#codegen:check"
       ],
       "cache": false
     },
     "@grassmoth/grassmoth-server#lint:workspace": {
       "dependsOn": [
-        "@grassmoth/api-types#codegen:check",
-        "@grassmoth/grassmoth-client#codegen:check"
+        "@grassmoth/api-types#codegen:check"
       ],
       "cache": false
     },
@@ -71,8 +69,7 @@
     },
     "//#lint:root": {
       "dependsOn": [
-        "@grassmoth/api-types#codegen:check",
-        "@grassmoth/grassmoth-client#codegen:check"
+        "@grassmoth/api-types#codegen:check"
       ],
       "cache": false
     }

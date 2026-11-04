@@ -9,7 +9,6 @@ from __future__ import annotations
 import argparse
 import inspect
 import json
-import posixpath
 import re
 import sys
 from pathlib import Path
@@ -33,14 +32,17 @@ from grassmoth.public import (
 )
 from grassmoth_server.actions.contracts.polling import ActionPoll
 from grassmoth_server.actions.contracts.progress import ProgressEvent
-from grassmoth_server.actions.contracts.requests import DataDiffRequest, ModelDiffRequest
+from grassmoth_server.actions.contracts.requests import (
+    ActionInput,
+    DataDiffRequest,
+    ModelDiffRequest,
+)
 from grassmoth_server.actions.contracts.timeline import TimelineResponse, TimelineRevision
 from grassmoth_server.api.schema import with_json_responses
 from grassmoth_server.llm.traces import LLMTrace
 from grassmoth_server.study.records import StudyRevision
 from grassmoth_server.study.snapshot import ModelSnapshot
 from scripts.artifact_contracts import ARTIFACT_CONTRACTS
-from scripts.codegen.export_story_scenarios import examples
 from scripts.codegen.reference_types import render_action_types
 from scripts.codegen.type_system_catalog import (
     ContractJsonSchema,
@@ -176,23 +178,14 @@ _BASE_URL = "${TOOL_SERVER_URL:-http://localhost:8100}"
 
 
 def _example_requests() -> Mapping[str, JsonSchemaValue]:
-    """Each action's first synthetic scenario request, as an HTTP caller sends it.
-
-    Saved preparation requests capture source files; callers name their folder.
-    """
-    requests: dict[str, JsonSchemaValue] = {}
-    for example in examples():
-        body = example.request.model_dump(mode="json")
-        if body["action"] in requests:
-            continue
-        del body["reasoning"]
-        if body["action"] == "prepare_data":
-            files = body["input"]["source"]["files"]
-            body["input"]["source"] = posixpath.commonpath(
-                [posixpath.dirname(path) for path in files]
-            )
-        requests[body["action"]] = body
-    return requests
+    """Parse the documentation's seven HTTP request examples through their production owner."""
+    examples = TypeAdapter(tuple[ActionInput, ...]).validate_json(
+        Path(__file__).with_name("api_requests.json").read_bytes()
+    )
+    return {
+        request.action: request.model_dump(mode="json", exclude={"reasoning"})
+        for request in examples
+    }
 
 
 def _enum(schema: JsonSchemaValue, components: JsonSchemaValue) -> tuple[str, ...]:
@@ -337,13 +330,13 @@ def render_reference(openapi: JsonSchemaValue) -> str:
     info = openapi["info"]
     components = openapi["components"]["schemas"]
     requests = _example_requests()
-    scenarios = _link(Path(__file__).with_name("story_data.py"), REFERENCE_PATH)
+    scenarios = _link(Path(__file__).with_name("api_requests.json"), REFERENCE_PATH)
     blocks: list[str | None] = [
         f"# {info['title']} reference",
         _GENERATED,
         inspect.cleandoc(info["description"]),
         "## Endpoints",
-        f"Example requests come from the [synthetic interface scenarios]({scenarios}). Replace "
+        f"Example requests come from the [declared HTTP examples]({scenarios}). Replace "
         "their revision hashes with `latest` or revisions from your study's timeline.",
     ]
 

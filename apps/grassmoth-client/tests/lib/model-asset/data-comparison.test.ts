@@ -7,12 +7,12 @@ import type {
 import { dump } from "npyjs";
 import { expect, it } from "vitest";
 import { fixtureValue } from "@/components/__fixtures__/fixture-value";
-import { scenarioResult } from "@/components/__fixtures__/study-scenario";
+import { simulatedResult } from "@/lib/__fixtures__/action-results";
 import { dataComparisonChart } from "@/components/charts/series-adapters";
 import { outcome } from "@/lib/__fixtures__/model";
 import { dataComparisonView, type DataSourceResult } from "@/lib/model-asset/data-comparison";
 
-const simulationReport = scenarioResult("simulated").body.report;
+const simulationReport = simulatedResult.report;
 
 const observation = {
   ...fixtureValue(outcome.indicators[0]).observation,
