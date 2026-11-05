@@ -1,0 +1,349 @@
+/* Scaling-laws notebook: one typeface, cool neutrals, and nothing competing with the two drawings. */
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,400..700&display=swap");
+
+:root {
+  --marimo-heading-font: "Archivo", system-ui, sans-serif;
+  --marimo-text-font: "Archivo", system-ui, sans-serif;
+  --sl-ink: #17212b;
+  --sl-secondary: #5a6673;
+  --sl-muted: #a9b2bb;
+  --sl-line: #dfe4e9;
+  --sl-critical: #c8352b;
+}
+
+.dark,
+.dark-theme {
+  --sl-ink: #e9edf1;
+  --sl-secondary: #a7b1bb;
+  --sl-muted: #6d7883;
+  --sl-line: #39424b;
+  --sl-critical: #f0695e;
+}
+
+.sl {
+  color: var(--sl-ink);
+  font-family: "Archivo", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.sl .sl-title {
+  color: var(--sl-secondary);
+  font-size: 14px;
+  line-height: 20px;
+  margin: 0 0 10px;
+}
+
+.sl .sl-headline {
+  color: var(--sl-ink);
+  font-family: inherit;
+  font-size: 28px;
+  font-stretch: 94%;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 34px;
+  margin: 0 0 6px;
+  max-width: 820px;
+  min-height: 68px;
+}
+
+.sl .sl-detail {
+  color: var(--sl-secondary);
+  font-size: 15px;
+  line-height: 22px;
+  margin: 0 0 6px;
+}
+
+.sl .sl-section {
+  color: var(--sl-ink);
+  font-family: inherit;
+  font-size: 18px;
+  font-stretch: 94%;
+  font-weight: 600;
+  line-height: 24px;
+  margin: 18px 0 2px;
+}
+
+.sl .sl-caption {
+  color: var(--sl-secondary);
+  font-size: 13px;
+  line-height: 19px;
+  margin: 0 0 6px;
+}
+
+.sl .sl-caption code {
+  font-family: inherit;
+  font-weight: 600;
+}
+
+.sl .sl-basis {
+  color: var(--sl-secondary);
+  font-size: 13px;
+  line-height: 19px;
+  margin: 4px 0 0;
+  max-width: 820px;
+}
+
+.sl .sl-details {
+  color: var(--sl-secondary);
+  font-size: 13px;
+  line-height: 19px;
+  margin: 4px 0 0;
+  max-width: 820px;
+}
+
+.sl .sl-details summary {
+  cursor: pointer;
+}
+
+.sl .sl-details ul {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+}
+
+.sl-drawing {
+  display: block;
+  height: auto;
+  max-width: 960px;
+  width: 100%;
+}
+
+.sl-drawing text {
+  fill: var(--sl-ink);
+  font-family: "Archivo", system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.sl-drawing .axis {
+  fill: var(--sl-secondary);
+  font-size: 12px;
+  font-stretch: 90%;
+}
+
+.sl-drawing .axis.strong,
+.sl-drawing .lane {
+  fill: var(--sl-ink);
+  font-weight: 600;
+}
+
+.sl-drawing .lane {
+  font-size: 14px;
+}
+
+.sl-drawing .big {
+  fill: var(--sl-ink);
+  font-size: 17px;
+  font-stretch: 88%;
+  font-weight: 600;
+}
+
+.sl-drawing .state {
+  fill: var(--sl-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.sl-drawing .state.bad {
+  fill: var(--sl-critical);
+}
+
+.sl-drawing .band {
+  fill: var(--sl-muted);
+  font-size: 11.5px;
+}
+
+.sl-drawing .small {
+  fill: var(--sl-secondary);
+  font-size: 12px;
+}
+
+.sl-drawing .small.strong {
+  fill: var(--sl-ink);
+  font-weight: 600;
+}
+
+.sl-drawing .stage {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.sl-drawing .over {
+  fill: var(--sl-critical);
+}
+
+.sl-drawing .gpu {
+  fill: var(--sl-secondary);
+  font-size: 12.5px;
+}
+
+.sl-drawing .gpu.strong,
+.sl-drawing .value.strong {
+  fill: var(--sl-ink);
+  font-weight: 600;
+}
+
+.sl-drawing .value {
+  fill: var(--sl-secondary);
+  font-size: 12.5px;
+}
+
+.sl-drawing .heading {
+  fill: var(--sl-secondary);
+  font-size: 12px;
+}
+
+.sl-grid {
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-size: 13px;
+  margin: 4px 0 0;
+}
+
+.sl-grid th,
+.sl-grid td {
+  border: 0;
+}
+
+.sl-grid thead th {
+  color: var(--sl-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  padding: 1px 0;
+  text-align: center;
+}
+
+.sl-grid thead th.group {
+  border-bottom: 2px solid var(--sl-hue);
+  color: var(--sl-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.sl-grid tbody th {
+  font-weight: 400;
+  padding: 0 8px 0 0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.sl-grid td {
+  font-stretch: 92%;
+  font-weight: 600;
+  height: 26px;
+  padding: 0 1px;
+  text-align: center;
+  width: 42px;
+}
+
+.sl-grid .gap {
+  height: auto;
+  padding: 0;
+  width: 8px;
+}
+
+.sl-grid td.flat {
+  color: var(--sl-muted);
+  font-weight: 400;
+}
+
+.sl-grid td.unused {
+  color: var(--sl-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.sl-grid td.measured {
+  background: color-mix(in srgb, var(--sl-hue) 22%, transparent);
+}
+
+.sl-grid td.pair {
+  outline: 1.5px solid var(--sl-hue);
+  outline-offset: -1.5px;
+}
+
+.sl-grid td.code {
+  font-weight: 400;
+  outline: 1.5px dashed var(--sl-secondary);
+  outline-offset: -1.5px;
+}
+
+.sl .sl-key {
+  color: var(--sl-secondary);
+  font-size: 12.5px;
+  margin: 8px 0 0;
+}
+
+.sl-swatch {
+  display: inline-block;
+  height: 11px;
+  margin: 0 5px 0 14px;
+  vertical-align: -1px;
+  width: 14px;
+}
+
+.sl-swatch:first-child {
+  margin-left: 0;
+}
+
+.sl-swatch.measured {
+  background: color-mix(in srgb, var(--sl-hue) 22%, transparent);
+}
+
+.sl-swatch.pair {
+  border: 1.5px solid var(--sl-hue);
+}
+
+.sl-swatch.code {
+  border: 1.5px dashed var(--sl-secondary);
+}
+
+/* Blue means mGRAD on this page, so the one slider goes neutral. The variable reaches its shadow DOM. */
+.sl-side {
+  --color-blue-500: #5a6673;
+  --font-mono: "Archivo", system-ui, sans-serif;
+  --marimo-monospace-font: "Archivo", system-ui, sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-family: "Archivo", system-ui, sans-serif;
+}
+
+.sl-side-group {
+  align-items: center;
+  color: var(--sl-ink);
+  display: flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.sl-side-dot {
+  border-radius: 50%;
+  display: inline-block;
+  height: 8px;
+  width: 8px;
+}
+
+.sl-side-group:first-child {
+  margin-top: 0;
+}
+
+.sl-side-label {
+  color: var(--sl-ink);
+  font-size: 13.5px;
+  line-height: 18px;
+  margin-bottom: 2px;
+}
+
+.sl-side-note {
+  color: var(--sl-secondary);
+  font-size: 12px;
+  line-height: 16px;
+  margin-top: -8px;
+}
+
+/* The page keeps one measure, so charts and drawings share a right edge on wide screens. */
+.marimo-cell {
+  max-width: 960px;
+}
