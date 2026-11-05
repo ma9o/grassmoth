@@ -11,6 +11,7 @@ from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.sampling import (
     GuidedPathSpec,
     InferenceHardware,
+    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth_server.actions.contracts.identity import CallId
@@ -69,9 +70,11 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
         question=QuestionSpec(text="Test", outcome=fixture_entity_id("construct", "outcome")),
         observations=b"pinned-history",
         sampler=SamplerSpec(
-            path_update=GuidedPathSpec(method="twisted_particle_agrad"),
             num_chains=4,
             time_limit_seconds=time_limit,
+            algorithm=MarginalParticleGibbsSpec(
+                path_update=GuidedPathSpec(method="twisted_particle_agrad")
+            ),
         ),
         compute_loo_diagnostics=False,
         analysis_call=_ANALYSIS_CALL,

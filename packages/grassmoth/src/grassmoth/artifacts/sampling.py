@@ -247,86 +247,131 @@ class AuxiliaryKalmanSpec(Value):
 type PathUpdateSpec = Annotated[GuidedPathSpec | AuxiliaryKalmanSpec, Field(discriminator="method")]
 
 
-class SamplerSpec(Value):
-    """Fully resolved controls for exact joint state and parameter inference.
+type JointParameterization = Literal["centred", "non_centred", "mixed"]
 
-    The sampler is marginalized particle Gibbs. m-PGibbs (Corenflos 2025) proposes
-    parameter particles around a shared auxiliary point, runs conditional SMC against the
-    posterior mixture over them and selects a parameter together with the new path.
-    Parameter moves are thus marginalized over paths, as in PMMH, instead of conditioned on
-    one. The proposal covariance starts from the initializer and is re-estimated at the end
-    of each warmup window (section 3.4).
+
+class NutsTrajectorySpec(Value):
+    """A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014)."""
+
+    kind: Literal["nuts"] = "nuts"
+    max_tree_depth: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "Maximum number of trajectory doublings per transition, so at most "
+            "2^max_tree_depth - 1 leapfrog steps. The report gives the fraction of transitions "
+            "that reach it; frequent hits mean the step is small against the posterior's "
+            "longest scale, and each extra level can double the cost. 10 is the NumPyro and "
+            "Stan default."
+        ),
+    )
+
+
+class FixedTrajectorySpec(Value):
+    """A fixed number of leapfrog steps, with the step size jittered by up to 20%."""
+
+    kind: Literal["fixed"] = "fixed"
+    steps: int = Field(
+        default=8,
+        ge=1,
+        description=(
+            "Leapfrog steps per transition. The default 8 and jitter width 20% are heuristics; "
+            "no paper or recorded benchmark sets them. Each transition scales the adapted step size by a "
+            "uniform factor in [0.8, 1.2], so trajectories cannot stay periodic (Neal 2011, "
+            "section 5.3.2). Every transition costs the same number of gradients, so chains "
+            "advanced together never wait for the longest NUTS tree, which limits NUTS on "
+            "accelerators (Hoffman, Radul & Sountsov 2021)."
+        ),
+    )
+
+
+type JointTrajectorySpec = Annotated[
+    NutsTrajectorySpec | FixedTrajectorySpec, Field(discriminator="kind")
+]
+
+
+class JointSmootherSpec(Value):
+    """Include free latent coordinates in the Hamiltonian update."""
+
+    method: Literal["joint"] = "joint"
+
+
+type NutsSmootherSpec = Annotated[
+    JointSmootherSpec | GuidedPathSpec | AuxiliaryKalmanSpec, Field(discriminator="method")
+]
+
+
+class NutsDASpec(Value):
+    """Hamiltonian updates with dual averaging and diagonal mass adaptation.
+
+    The joint smoother moves parameters and free latent coordinates together.
+    Other smoothers alternate the same Hamiltonian parameter kernel with an exact
+    conditional path update. Both reconstruct deterministic recurrences exactly
+    and target the same joint posterior.
     """
 
-    num_warmup: int = Field(
-        default=4000,
-        ge=0,
+    method: Literal["nuts_da"] = "nuts_da"
+    smoother: NutsSmootherSpec = Field(
+        default_factory=JointSmootherSpec,
         description=(
-            "Warmup sweeps per chain. Every adaptive step, scale and covariance is "
-            "learned here and frozen before draws are retained. Zero keeps the tuning as it "
-            "is: a continued fit's frozen tuning, or the starting values of a new fit. With "
-            "zero samples as well, both sweep programs compile and neither runs. Changing the "
-            "sampler kernel on a continued fit requires warmup. The default is a heuristic; no "
-            "paper or recorded benchmark sets it. Corenflos & Särkkä (2025, section 4) adapt for "
-            "2,500 to 5,000 sweeps and Corenflos & Finke (2024, section 5.2) for 10,000."
+            "joint moves parameters and free latent coordinates together. Selecting a path "
+            "smoother alternates NUTS on parameters conditional on the current path coordinates "
+            "with that exact path update at the new parameters. The configured parameterization "
+            "also applies to this conditional parameter block; non-centred holds innovations "
+            "fixed, centred holds states fixed. Both preserve the same joint posterior."
         ),
     )
-    num_samples_per_chain: int = Field(
-        default=1000,
-        ge=0,
+    parameterization: JointParameterization = Field(
+        default="centred",
         description=(
-            "Retained draws per chain after warmup. Every fit runs this exact count; "
-            "a continued fit appends this many draws to each chain. "
-            "Zero returns checks without a conditioned model. The default is a heuristic; no "
-            "paper or recorded benchmark sets it."
+            "Coordinates the sampler moves in; the posterior is the same in all three, only "
+            "its geometry changes. centred samples each path directly, standardized by the "
+            "prior's per-step covariances at the starting parameters. non_centred samples each "
+            "free coordinate's Euler-Maruyama innovation and rebuilds the path from the current "
+            "parameters. mixed keeps coordinates with a direct point reading centred and makes "
+            "the rest non-centred. Centred mixes well where data pin the states, non-centred "
+            "where data are weak against the dynamics (Papaspiliopoulos, Roberts & Sköld 2007). "
+            "Frozen per fit; changing it on a continued fit requires warmup."
         ),
     )
-    num_chains: int = Field(
-        default=4,
-        ge=1,
+    target_accept_prob: float = Field(
+        default=0.8,
+        gt=0,
+        lt=1,
+        allow_inf_nan=False,
         description=(
-            "Independent chains, which the convergence checks compare: rank-normalized R-hat, "
-            "and bulk and tail ESS of at least 400 in total, however many chains run. "
-            "Vehtari et al. (2021) recommend at least four."
+            "Mean acceptance statistic that dual averaging steers the step size towards during "
+            "warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks "
+            "the step, which removes divergences in strongly curved regions at the cost of "
+            "longer trajectories. 0.8 is the NumPyro and Stan default."
         ),
     )
-    thinning: bool = Field(
-        default=True,
-        description=(
-            "Cap transferred posterior draws at 10,000,000 joint draw values using the "
-            "smallest uniform integer stride; requests below the cap are unchanged. "
-            "Modal retains the full result for analysis and continuation. R-hat, ESS, "
-            "the convergence certificate, marginal summaries and rank histograms describe "
-            "all retained draws pooled across every segment, computed before thinning. "
-            "Transferred draws, traces and aligned telemetry are a subset; native last "
-            "states are unchanged. Continuations thin the combined full cache from the "
-            "same first draw of each chain. The actual completed count determines the "
-            "stride, including an early checkpoint stop. If one draw per chain exceeds the "
-            "heuristic cap, retain one per chain and report that stride and count. "
-            "False transfers every draw."
-        ),
+    trajectory: JointTrajectorySpec = Field(
+        default_factory=NutsTrajectorySpec,
+        description="NUTS chooses each trajectory's length; fixed runs a set number of steps.",
     )
-    seed: int = Field(
-        default=0,
-        ge=0,
-        description="Seeds initialization and sampling; another seed is an independent replicate.",
-    )
-    hardware: InferenceHardware = Field(
-        default=InferenceHardware.L40S,
-        description=(
-            "local runs in the server process; any other value requests that Modal GPU type. "
-            "Modal may run A100 on an 80 GB card at the same price, and H100 on an H200 unless "
-            "it is written H100!. The fit records the device it ran on."
-        ),
-    )
-    time_limit_seconds: int = Field(
-        default=14400,
-        ge=1,
-        description=(
-            "Modal startup and execution timeout per phase. Reaching it fails the fit, with no "
-            "retry. Local fits have no enforced timeout."
-        ),
-    )
+
+    @property
+    def kernel_identity(self) -> tuple[str | int, ...]:
+        """Identify native coordinates and the trajectory law required by continuation."""
+        trajectory = self.trajectory
+        return (
+            self.method,
+            self.parameterization,
+            self.smoother.method,
+            self.smoother.kappa if isinstance(self.smoother, GuidedPathSpec) else 0,
+            self.smoother.prefix_mixture if isinstance(self.smoother, GuidedPathSpec) else False,
+            trajectory.kind,
+            trajectory.max_tree_depth
+            if isinstance(trajectory, NutsTrajectorySpec)
+            else trajectory.steps,
+        )
+
+
+class MarginalParticleGibbsSpec(Value):
+    """Exact marginalized parameter and path updates with particle-specific tuning."""
+
+    method: Literal["mpgibbs"] = "mpgibbs"
     n_parameter_particles: int = Field(
         default=2,
         ge=2,
@@ -413,9 +458,106 @@ class SamplerSpec(Value):
         path_update = self.path_update
         guided = isinstance(path_update, GuidedPathSpec)
         return (
+            "mpgibbs",
             path_update.method,
             path_update.kappa if guided else 0,
             path_update.prefix_mixture if guided else False,
             self.parameter_proposal,
             self.compiler_reparameterization,
         )
+
+
+type InferenceAlgorithmSpec = Annotated[
+    MarginalParticleGibbsSpec | NutsDASpec, Field(discriminator="method")
+]
+
+
+class SamplerSpec(Value):
+    """Fully resolved controls for exact joint state and parameter inference.
+
+    The default algorithm is marginalized particle Gibbs. m-PGibbs (Corenflos 2025) proposes
+    parameter particles around a shared auxiliary point, runs conditional SMC against the
+    posterior mixture over them and selects a parameter together with the new path.
+    Parameter moves are thus marginalized over paths, as in PMMH, instead of conditioned on
+    one. The proposal covariance starts from the initializer and is re-estimated at the end
+    of each warmup window (section 3.4).
+    """
+
+    num_warmup: int = Field(
+        default=4000,
+        ge=0,
+        description=(
+            "Warmup sweeps per chain. Every adaptive step, scale and covariance is "
+            "learned here and frozen before draws are retained. Zero keeps the tuning as it "
+            "is: a continued fit's frozen tuning, or the starting values of a new fit. With "
+            "zero samples as well, both sweep programs compile and neither runs. Changing the "
+            "sampler kernel on a continued fit requires warmup. The default is a heuristic; no "
+            "paper or recorded benchmark sets it. Corenflos & Särkkä (2025, section 4) adapt for "
+            "2,500 to 5,000 sweeps and Corenflos & Finke (2024, section 5.2) for 10,000."
+        ),
+    )
+    num_samples_per_chain: int = Field(
+        default=1000,
+        ge=0,
+        description=(
+            "Retained draws per chain after warmup. Every fit runs this exact count; "
+            "a continued fit appends this many draws to each chain. "
+            "Zero returns checks without a conditioned model. The default is a heuristic; no "
+            "paper or recorded benchmark sets it."
+        ),
+    )
+    num_chains: int = Field(
+        default=4,
+        ge=1,
+        description=(
+            "Independent chains, which the convergence checks compare: rank-normalized R-hat, "
+            "and bulk and tail ESS of at least 400 in total, however many chains run. "
+            "Vehtari et al. (2021) recommend at least four."
+        ),
+    )
+    thinning: bool = Field(
+        default=True,
+        description=(
+            "Cap transferred posterior draws at 10,000,000 joint draw values using the "
+            "smallest uniform integer stride; requests below the cap are unchanged. "
+            "Modal retains the full result for analysis and continuation. R-hat, ESS, "
+            "the convergence certificate, marginal summaries and rank histograms describe "
+            "all retained draws pooled across every segment, computed before thinning. "
+            "Transferred draws, traces and aligned telemetry are a subset; native last "
+            "states are unchanged. Continuations thin the combined full cache from the "
+            "same first draw of each chain. The actual completed count determines the "
+            "stride, including an early checkpoint stop. If one draw per chain exceeds the "
+            "heuristic cap, retain one per chain and report that stride and count. "
+            "False transfers every draw."
+        ),
+    )
+    seed: int = Field(
+        default=0,
+        ge=0,
+        description="Seeds initialization and sampling; another seed is an independent replicate.",
+    )
+    hardware: InferenceHardware = Field(
+        default=InferenceHardware.L40S,
+        description=(
+            "local runs in the server process; any other value requests that Modal GPU type. "
+            "Modal may run A100 on an 80 GB card at the same price, and H100 on an H200 unless "
+            "it is written H100!. The fit records the device it ran on."
+        ),
+    )
+    time_limit_seconds: int = Field(
+        default=14400,
+        ge=1,
+        description=(
+            "Modal startup and execution timeout per phase. Reaching it fails the fit, with no "
+            "retry. Local fits have no enforced timeout."
+        ),
+    )
+    algorithm: InferenceAlgorithmSpec = Field(
+        default_factory=MarginalParticleGibbsSpec,
+        description="Exact joint sampler: MPGibbs parameter/path updates or NUTS-DA.",
+    )
+
+    @property
+    def kernel_identity(self) -> tuple[str | int, ...]:
+        """Identify the algorithm whose private state the checkpoint retains."""
+        return self.algorithm.kernel_identity

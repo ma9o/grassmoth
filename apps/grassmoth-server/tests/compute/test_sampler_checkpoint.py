@@ -8,6 +8,9 @@ import pytest
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
     GuidedPathSpec,
+    MarginalParticleGibbsSpec,
+    NutsDASpec,
+    NutsTrajectorySpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.fit import fit
@@ -21,20 +24,33 @@ pytestmark = pytest.mark.inference(concern="sampling")
 
 
 @pytest.mark.parametrize(
-    "path_update",
+    "algorithm",
     [
-        GuidedPathSpec(method="particle_mgrad", num_particles=4),
-        GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
+        MarginalParticleGibbsSpec(
+            path_update=GuidedPathSpec(method="particle_mgrad", num_particles=4)
+        ),
+        MarginalParticleGibbsSpec(
+            path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4)
+        ),
+        NutsDASpec(parameterization="mixed", trajectory=NutsTrajectorySpec(max_tree_depth=3)),
+        pytest.param(
+            NutsDASpec(
+                smoother=GuidedPathSpec(num_particles=4),
+                parameterization="non_centred",
+                trajectory=NutsTrajectorySpec(max_tree_depth=3),
+            ),
+            id="nuts-smoother",
+        ),
     ],
 )
 @pytest.mark.inference(concern="warmup")
-def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(path_update):
+def test_continuation_matches_uninterrupted_fit_after_checkpoint_roundtrip(algorithm):
     prepared, panel = nonlinear_fit_fixture()
     settings = SamplerSpec(
-        path_update=path_update,
         num_warmup=40,
         num_samples_per_chain=4,
         num_chains=2,
+        algorithm=algorithm,
     )
 
     def run(options, checkpoint=None):
@@ -52,7 +68,8 @@ def test_particle_continuation_matches_uninterrupted_fit_after_checkpoint_roundt
         return result
 
     full = run(settings)
-    assert full.diagnostics.sampler_diagnostics.initialization.source == "gaussian"
+    assert full.diagnostics.sampler_diagnostics is not None
+    assert full.diagnostics.sampler_diagnostics.method == algorithm.method
     first = run(settings.revised(num_samples_per_chain=2))
     checkpoint = SamplerCheckpoint.model_validate(
         unpack_result(pack_result(first.diagnostics.checkpoint))

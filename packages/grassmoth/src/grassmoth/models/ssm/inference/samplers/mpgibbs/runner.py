@@ -27,6 +27,7 @@ from grassmoth.artifacts.sampling import (
     AuxiliaryKalmanSpec,
     FixedLatentStepSpec,
     GuidedPathSpec,
+    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.compute.context import ModelExecutionContext
@@ -46,6 +47,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     DELTA_MAX,
+    INITIAL_MOVEMENT_MULTIPLIER,
     CurvatureMoments,
     ScaleAdaptationState,
     adapt_curvature_geometry,
@@ -209,15 +211,6 @@ ADAPTATION_RATE: Annotated[
         )
     ),
 ] = 0.05
-INITIAL_MOVEMENT_MULTIPLIER: Annotated[
-    float,
-    Field(
-        description=(
-            "Where warmup starts the per-time movement multiplier under curvature limits. "
-            "Heuristic: no paper or recorded benchmark sets it."
-        )
-    ),
-] = 0.25
 
 
 def run_marginal_particle_gibbs(
@@ -238,7 +231,9 @@ def run_marginal_particle_gibbs(
     clock = execution_context.clock
     windows = covariance_windows(num_warmup)
     # Both adaptation policies stop updating after warmup.
-    use_dual_averaging = sampler.adaptation_scheme == "dual_averaging"
+    options = sampler.algorithm
+    assert isinstance(options, MarginalParticleGibbsSpec)
+    use_dual_averaging = options.adaptation_scheme == "dual_averaging"
     observations = target.observations
     times = target.times
     num_steps = int(observations.shape[0])

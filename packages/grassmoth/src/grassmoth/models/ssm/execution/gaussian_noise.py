@@ -21,7 +21,11 @@ class GaussianNoiseFactors:
     def from_cholesky(cls, chol: jax.Array) -> GaussianNoiseFactors:
         """Prepare one exact noise law outside the repeated state evaluation."""
         dimension = chol.shape[-1]
-        inverse = solve_triangular(chol, jnp.eye(dimension, dtype=chol.dtype), lower=True)
+        inverse = (
+            jnp.reciprocal(chol)
+            if dimension == 1
+            else solve_triangular(chol, jnp.eye(dimension, dtype=chol.dtype), lower=True)
+        )
         constant = -jnp.sum(jnp.log(jnp.diag(chol))) - 0.5 * dimension * jnp.log(2 * jnp.pi)
         return cls(inverse, constant)
 

@@ -4,15 +4,7 @@ from __future__ import annotations
 
 from pydantic import Field
 
-from grassmoth.public import (
-    AdaptationScheme,
-    GaussianInitializationSpec,
-    InferenceHardware,
-    ParameterProposal,
-    ParticleDiagnosticMetrics,
-    PathUpdateSpec,
-    Value,
-)
+from grassmoth.public import InferenceAlgorithmSpec, InferenceHardware, Value
 
 
 class FitSettingsSpec(Value):
@@ -29,14 +21,10 @@ class FitSettingsSpec(Value):
     )
     hardware: InferenceHardware | None = None
     time_limit_seconds: int | None = Field(default=None, ge=1)
-    n_parameter_particles: int | None = Field(default=None, ge=2)
-    path_update: PathUpdateSpec | None = None
-    compiler_reparameterization: bool | None = None
-    parameter_proposal: ParameterProposal | None = None
-    diagnostic_metrics: ParticleDiagnosticMetrics | None = None
-    param_target_accept: float | None = None
-    adaptation_scheme: AdaptationScheme | None = None
-    initialization: GaussianInitializationSpec | None = None
+    algorithm: InferenceAlgorithmSpec | None = Field(
+        default=None,
+        description="Replace the complete configured or continued algorithm; omitted inherits it. Variant defaults fill unspecified algorithm fields.",
+    )
     num_samples_per_chain: int | None = Field(default=None, ge=0)
     num_warmup: int | None = Field(default=None, ge=0)
     num_chains: int | None = Field(default=None, ge=1)

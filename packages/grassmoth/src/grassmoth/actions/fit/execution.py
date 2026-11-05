@@ -98,7 +98,7 @@ def fit_model(
         "Fitting model: rows=%d indicators=%d sampler=%s",
         sum(series.history.times.layout[0][0] for series in data_for_model.series.values()),
         len(data_for_model.series),
-        sampler.path_update.method,
+        sampler.algorithm.method,
     )
     t0 = clock()
 

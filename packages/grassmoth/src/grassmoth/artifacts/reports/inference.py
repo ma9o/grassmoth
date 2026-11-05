@@ -21,9 +21,9 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     LOODiagnostics,
     LOOPITPoint,
     ParetoKPoint,
-    ParticleSamplerDiagnostics,
     PosteriorMarginal,
     RankHistogram,
+    SamplerDiagnostics,
     TraceSeries,
 )
 from grassmoth.artifacts.reports.scorecard import FrequencyRefresh, RegionalMovement
@@ -91,7 +91,7 @@ class InferenceMetadata(Value):
     segments: tuple[FitSegment, ...] = ()
     num_chains: int = Field(ge=1)
     duration_seconds: float = Field(ge=0)
-    sampler_diagnostics: ParticleSamplerDiagnostics | None
+    sampler_diagnostics: SamplerDiagnostics | None
 
 
 class InferenceEvidence(Value):

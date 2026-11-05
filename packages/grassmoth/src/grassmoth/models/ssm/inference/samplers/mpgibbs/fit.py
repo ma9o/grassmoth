@@ -19,7 +19,7 @@ from grassmoth.artifacts.identity import ConstructRef
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     ParticleSamplerDiagnostics,
 )
-from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec
+from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, MarginalParticleGibbsSpec
 from grassmoth.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
@@ -72,6 +72,8 @@ def fit_marginal_particle_gibbs(
     continuation: SamplerCheckpoint | None = None,
 ) -> MCMCPosterior | UnretainedRun | InitializationFailure:
     """Run exact particle inference with resolved choices and owned warmup outputs."""
+    options = sampler.algorithm
+    assert isinstance(options, MarginalParticleGibbsSpec)
     compiler = execution_context.compiler
     clock = execution_context.clock
     logger = execution_context.logger
@@ -85,11 +87,11 @@ def fit_marginal_particle_gibbs(
         sampler.num_samples_per_chain,
         int(observations.shape[0]),
         int(observations.shape[1]) if observations.ndim >= 2 else 0,
-        sampler.path_update.method,
+        options.path_update.method,
         None
-        if isinstance(sampler.path_update, AuxiliaryKalmanSpec)
-        else sampler.path_update.num_particles,
-        sampler.n_parameter_particles,
+        if isinstance(options.path_update, AuxiliaryKalmanSpec)
+        else options.path_update.num_particles,
+        options.n_parameter_particles,
     )
 
     base_key = random.key(sampler.seed)
@@ -124,7 +126,7 @@ def fit_marginal_particle_gibbs(
         ):
             initialization = prepare_particle_initialization(
                 bundle.runtime,
-                spec=sampler.initialization,
+                spec=options.initialization,
                 key=initialization_key,
                 num_chains=sampler.num_chains,
                 execution_context=execution_context,
@@ -133,7 +135,7 @@ def fit_marginal_particle_gibbs(
         return initialization
     chart: PathChart | None = None
     chart_builder = None
-    if sampler.compiler_reparameterization:
+    if options.compiler_reparameterization:
         positions, paths = jnp.asarray(initialization.positions), jnp.asarray(initialization.paths)
         if continuation is not None and sampler.num_warmup == 0:
             # Only a native-shape template; restoration owns the frozen coefficients.
@@ -163,15 +165,15 @@ def fit_marginal_particle_gibbs(
     kernel = build_marginal_particle_gibbs_kernel(
         bundle.runtime,
         exact_constraints=bundle.exact_constraints,
-        num_parameter_particles=sampler.n_parameter_particles,
-        target_accept=sampler.param_target_accept,
+        num_parameter_particles=options.n_parameter_particles,
+        target_accept=options.param_target_accept,
         parameter_preconditioner_chol=initialization.parameter_chol,
-        parameter_proposal=sampler.parameter_proposal,
+        parameter_proposal=options.parameter_proposal,
         parameter_reference_path=jax.device_put(continuation.tuning.parameter_reference_path.values)
         if continuation is not None and isinstance(continuation.tuning, ParticleTuning)
         else initialization.paths[0],
-        diagnostic_metrics=sampler.diagnostic_metrics,
-        path_update=sampler.path_update,
+        diagnostic_metrics=options.diagnostic_metrics,
+        path_update=options.path_update,
         initial_chart=chart,
     )
     run_result = run_marginal_particle_gibbs(
@@ -277,7 +279,7 @@ def fit_marginal_particle_gibbs(
     kernel_diagnostics = ParticleSamplerDiagnostics(
         settings=sampler,
         parameter_kernel="m_pgibbs_random_walk"
-        if sampler.parameter_proposal == "random_walk"
+        if options.parameter_proposal == "random_walk"
         else "m_pgibbs_pseudo_langevin",
         mcmc_phase_seconds=float(mcmc_phase_seconds),
         drift="none"
@@ -299,11 +301,11 @@ def fit_marginal_particle_gibbs(
         path_weights=summarize_particle_weights(
             summary_extra_fields,
             num_steps=len(bundle.runtime.times),
-            num_particles=sampler.path_update.num_particles,
+            num_particles=options.path_update.num_particles,
             phase=diagnostic_summary_phase,
         )
         if "particle_weights" in kernel.diagnostic_metrics
-        and not isinstance(sampler.path_update, AuxiliaryKalmanSpec)
+        and not isinstance(options.path_update, AuxiliaryKalmanSpec)
         else None,
         latent_move_rms_mean=float(jnp.mean(summary_extra_fields["latent_move_rms"]))
         if "latent_move_rms" in summary_extra_fields

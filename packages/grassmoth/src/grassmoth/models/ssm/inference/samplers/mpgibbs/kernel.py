@@ -47,10 +47,10 @@ from pydantic import Field
 
 from grassmoth.artifacts.sampling import (
     AuxiliaryKalmanSpec,
+    MarginalParticleGibbsSpec,
     ParameterProposal,
     ParticleDiagnosticMetric,
     PathUpdateSpec,
-    SamplerSpec,
 )
 from grassmoth.compute.programs import ProgramCompiler, scalar_operand
 from grassmoth.models.ssm.inference.conditioning import ExactStateConstraints
@@ -62,10 +62,12 @@ from grassmoth.models.ssm.inference.mcmc_state import (
 from grassmoth.models.ssm.inference.samplers.mpgibbs.augmentation import (
     ConditionalPathScores,
     MarginalLabelScores,
+    finish_path_update,
+)
+from grassmoth.models.ssm.inference.samplers.particle.augmentation import (
     PathUpdateBoundary,
     PrecisionPathUpdate,
     begin_path_update,
-    finish_path_update,
 )
 from grassmoth.models.ssm.inference.samplers.particle.auxiliary_kalman import (
     auxiliary_kalman_step,
@@ -95,7 +97,7 @@ from grassmoth.models.ssm.inference.tracing import (
 )
 from grassmoth.models.ssm.shapes import Array, Float, PRNGKeyArray
 
-_DEFAULT_OPTIONS = SamplerSpec()
+_DEFAULT_OPTIONS = MarginalParticleGibbsSpec()
 INITIAL_PARAM_STEP_SIZE: Annotated[
     float,
     Field(
@@ -391,7 +393,9 @@ def build_marginal_particle_gibbs_kernel(
                 chart_target,
                 chart_setup,
                 path_update,
-                chart_state,
+                chart_state.latent_context,
+                chart_state.latent_trajectory,
+                chart_state.latent_delta,
                 parameter_particles,
                 label_correction,
                 block_key,

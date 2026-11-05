@@ -80,6 +80,7 @@ class SweepPlan:
     warmup: SweepPhase
     posterior: SweepPhase
     compiled_step: Compiled
+    sampler: str
     memory: MemoryDemand = NO_MEMORY_DEMAND
     projection: Compiled | None = None
     projection_arguments: tuple[jax.Array, ...] = ()

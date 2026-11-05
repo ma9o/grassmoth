@@ -16,6 +16,7 @@ from grassmoth.models.ssm.compile.state_space import (
 )
 from grassmoth.models.ssm.execution.affine import compose_affine_maps
 from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
+from grassmoth.models.ssm.execution.innovations import GaussianPathMap
 from grassmoth.models.ssm.execution.observation_model import (
     ObservationDensityFactors,
     grouped_density_with_noise,
@@ -69,6 +70,7 @@ class ParticleTarget:
     times: jax.Array
     state_space: StateSpace
     output_coordinates: tuple[int, ...]
+    point_reading_mask: jax.Array
     intervals: ParticleIntervalObservations | None = None
     exact_constraints: ExactStateConstraints | None = None
 
@@ -289,6 +291,37 @@ class ParticleTarget:
                 coordinates = coordinates.at[:, deterministic].set(values)
         return coordinates
 
+    def innovation_map(
+        self, context: ParticleContext, innovation_mask: jax.Array
+    ) -> GaussianPathMap:
+        """Bind exact moments, support and pinned values for a frozen parameterization policy."""
+        fixed = (
+            jnp.full(self.independent_mask.shape, jnp.nan, dtype=self.observations.dtype)
+            if self.exact_constraints is None
+            else self.exact_constraints.values
+        )
+        static = jnp.asarray(self.state_space.static, dtype=jnp.int32)
+        fixed = self.encode_state(
+            context, fixed.at[:, static].set(context[2][static]), jnp.arange(fixed.shape[0])
+        )
+        initial_mean, initial_covariance = self.initial_moments(context)
+        # continuous_state_evolution binds the compiled diffusion as an array in
+        # FullDiffusion, never a state function. Its EM covariance therefore
+        # depends only on the parameters and time interval. A fixed state can
+        # expose those exact covariances before the nonlinear recurrence runs.
+        covariances = jax.vmap(
+            lambda index: self.transition_moments(context, initial_mean, index)[1]
+        )(jnp.arange(1, self.times.size))
+        return GaussianPathMap(
+            initial_mean,
+            lambda previous, index: self.transition_moments(context, previous, index)[0],
+            jnp.concatenate((initial_covariance[None], covariances)),
+            self.state_density_mask,
+            self.independent_mask,
+            innovation_mask,
+            fixed,
+        )
+
     @property
     def initial_position(self):
         """Initial unconstrained parameter position supplied by the parameter target."""
@@ -319,6 +352,13 @@ class ParticleTarget:
     def _modeled_log_prob(self, distribution, state, density_indices):
         if not density_indices:
             return jnp.asarray(0.0, dtype=state.dtype)
+        if len(density_indices) == 1:
+            # Exact scalar Gaussian arithmetic avoids launching batched 1x1
+            # Cholesky and triangular-solve GPU kernels at every leapfrog.
+            index = density_indices[0]
+            variance = distribution.covariance_matrix[index, index]
+            residual = state[index] - distribution.mean[index]
+            return -0.5 * (residual**2 / variance + jnp.log(2 * jnp.pi * variance))
         indices = jnp.asarray(density_indices, dtype=jnp.int32)
         # The declared Gaussian embeds its factor on precisely these stochastic
         # coordinates. Reusing it avoids rebuilding the full-state covariance

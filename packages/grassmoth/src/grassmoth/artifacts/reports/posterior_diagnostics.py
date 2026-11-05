@@ -329,6 +329,7 @@ class SequentialWeightDiagnostics(Value):
 class ParticleSamplerDiagnostics(Value):
     """Typed exact-sampler settings and transition telemetry from the native producer."""
 
+    method: Literal["mpgibbs"] = "mpgibbs"
     settings: SamplerSpec
     parameter_kernel: str
     mcmc_phase_seconds: float
@@ -352,3 +353,21 @@ class ParticleSamplerDiagnostics(Value):
     amala_grad_norm_max: float | None = None
     initialization: InitializationDiagnostics
     path_weights: SequentialWeightDiagnostics | None
+
+
+class NutsDADiagnostics(Value):
+    """Retained joint Hamiltonian transition evidence and frozen step sizes."""
+
+    method: Literal["nuts_da"] = "nuts_da"
+    settings: SamplerSpec
+    mcmc_phase_seconds: float
+    divergences: int
+    mean_accept_prob: float
+    mean_num_steps: float
+    final_step_size: tuple[float, ...]
+    max_tree_depth_fraction: float | None
+
+
+type SamplerDiagnostics = Annotated[
+    ParticleSamplerDiagnostics | NutsDADiagnostics, Field(discriminator="method")
+]

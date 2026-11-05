@@ -192,8 +192,11 @@ For local-study GPU fits, select `inference.sampler.hardware: L40S` (the default
 [`config.yaml`](../../apps/grassmoth-server/config.yaml) and restart the worker.
 Use `local` to fit on this machine; the other
 [hardware enum values](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py)
-select Modal GPUs. `inference.sampler.path_update` selects Particle-mGRAD (the default),
-twisted Particle-aGRAD or auxiliary Kalman in the [sampler contract](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
+select Modal GPUs. `inference.sampler.algorithm` selects MPGibbs (the default) or NUTS-DA.
+MPGibbs owns `algorithm.path_update`: Particle-mGRAD, twisted Particle-aGRAD or
+auxiliary Kalman in the [sampler contract](../../packages/grassmoth/src/grassmoth/artifacts/sampling.py).
+NUTS owns `algorithm.smoother`: `joint` moves parameters and paths together;
+selecting an existing path smoother alternates parameter NUTS with that update.
 The [Modal compute adapter](../../apps/grassmoth-server/src/grassmoth_server/actions/fit/remote.py)
 uses the installed Modal credentials, creates an ephemeral
 `grassmoth-server` app with the current source, and reuses

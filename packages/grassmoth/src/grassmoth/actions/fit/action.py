@@ -25,6 +25,7 @@ from grassmoth.artifacts.reports.inference import (
     InferenceReportDetail,
 )
 from grassmoth.artifacts.reports.profiling import ProgramCompileReport
+from grassmoth.artifacts.sampling import MarginalParticleGibbsSpec
 from grassmoth.models.ssm.inference.diagnostics.convergence import chain_convergence
 from grassmoth.models.ssm.inference.samplers.profiling import compilation_seconds, log_profile
 from grassmoth.models.ssm.inference.samplers.progress import capture_phases, inference_phase
@@ -177,7 +178,11 @@ def _fit(
         if inputs.compute_loo_diagnostics
         else None,
         observed_rows=retain(np.any(np.isfinite(fitted.panel.observations), axis=1))
-        if inputs.compute_loo_diagnostics or "regional_movement" in sampler.diagnostic_metrics
+        if inputs.compute_loo_diagnostics
+        or (
+            isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
+            and "regional_movement" in sampler.algorithm.diagnostic_metrics
+        )
         else None,
         exact_observation_rows=retain(native.exact_observation_rows),
         phase_extra_fields={
@@ -395,7 +400,8 @@ def inference_report(
         metrics = frozenset(
             metric
             for segment in metadata.segments[-1:]
-            for metric in segment.settings.diagnostic_metrics
+            if isinstance(segment.settings.algorithm, MarginalParticleGibbsSpec)
+            for metric in segment.settings.algorithm.diagnostic_metrics
         )
         labels = {
             identity: dynamical_model_spec.get_construct(identity).name

@@ -122,6 +122,12 @@ def interval_target(
             (),
         ),
         output_coordinates=(),
+        point_reading_mask=jnp.broadcast_to(
+            jnp.any(
+                jnp.asarray(np.isfinite(observations) & (np.asarray(kinds) == "point")), axis=1
+            )[:, None],
+            (len(times), state_dim),
+        ),
         intervals=intervals,
     )
 

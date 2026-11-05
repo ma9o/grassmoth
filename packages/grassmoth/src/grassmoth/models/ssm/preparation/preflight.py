@@ -9,7 +9,12 @@ import numpy as np
 
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, SamplerSpec
+from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanSpec,
+    JointSmootherSpec,
+    NutsDASpec,
+    SamplerSpec,
+)
 from grassmoth.models.ssm import compiled_access as numeric
 
 if TYPE_CHECKING:
@@ -38,10 +43,15 @@ def validate_sampler_support(
         return ObservationPreflightFailure.rejected(
             "Exact inference currently requires Gaussian latent diffusion for every state."
         )
+    options = sampler.algorithm
+    path_update = options.smoother if isinstance(options, NutsDASpec) else options.path_update
+    if isinstance(path_update, JointSmootherSpec):
+        return None
     intervals = any(item.support.support_kind == "interval" for item in compiled.observations)
-    path_update = sampler.path_update
     if isinstance(path_update, AuxiliaryKalmanSpec):
-        if {"particle_identity", "particle_weights"} & set(sampler.diagnostic_metrics):
+        if not isinstance(options, NutsDASpec) and {"particle_identity", "particle_weights"} & set(
+            options.diagnostic_metrics
+        ):
             return ObservationPreflightFailure.rejected(
                 "Auxiliary Kalman has no particle bank; particle identity and weight diagnostics "
                 "require a particle path update."

@@ -12,6 +12,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 )
 from grassmoth.artifacts.sampling import (
     GuidedPathSpec,
+    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.fit import fit
@@ -85,8 +86,10 @@ def test_production_fit_consumes_gaussian_initialization(method, metrics):
             num_samples_per_chain=3,
             num_chains=2,
             seed=7,
-            diagnostic_metrics=metrics,
-            path_update=GuidedPathSpec(method=method, num_particles=4),
+            algorithm=MarginalParticleGibbsSpec(
+                diagnostic_metrics=metrics,
+                path_update=GuidedPathSpec(method=method, num_particles=4),
+            ),
         ),
         execution_context=EXECUTION_CONTEXT,
     )

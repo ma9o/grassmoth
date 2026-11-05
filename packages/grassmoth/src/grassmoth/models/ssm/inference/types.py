@@ -31,8 +31,8 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     LOODiagnostics,
     ParameterDiagnostics,
     ParetoKPoint,
-    ParticleSamplerDiagnostics,
     RankHistogram,
+    SamplerDiagnostics,
     TraceSeries,
 )
 from grassmoth.models.ssm.inference.diagnostics.plots import (
@@ -132,7 +132,7 @@ class ProductionDiagnostics:
     compiled_step: Compiled | None = None
     public_sites: tuple[str, ...] | None = None
     exact_observation_rows: jnp.ndarray | NDArray | None = None
-    sampler_diagnostics: ParticleSamplerDiagnostics | None = None
+    sampler_diagnostics: SamplerDiagnostics | None = None
     phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray | NDArray]] | None = None
     warmup_complete_log_posterior_history: jnp.ndarray | None = None
     all_complete_log_posterior_history: jnp.ndarray | NDArray | None = None

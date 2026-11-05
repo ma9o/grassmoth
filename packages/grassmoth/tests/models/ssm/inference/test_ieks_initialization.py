@@ -45,6 +45,9 @@ def gaussian_case():
 
 def _seed(target):
     coordinates = build_joint_coordinates(target, compiler=compile_program)
+    from grassmoth.models.ssm.inference.joint_coordinates import CentredParameterization
+
+    assert isinstance(coordinates.parameterization, CentredParameterization)
     initial_path = coordinates.parameterization.path_center
     context = target.context(target.initial_position, target.times)
     return jax.jit(lambda path: ieks_path(target, context, path))(initial_path), initial_path

@@ -802,6 +802,17 @@ export interface components {
             readonly manifest_effects: Readonly<Partial<Record<components["schemas"]["IndicatorId-Output"], number>>>;
         };
         /**
+         * CentredParameterizationRecord
+         * @description The original frozen affine parameterization, reconstructed from the pinned target and seed.
+         */
+        readonly CentredParameterizationRecord: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "centred";
+        };
+        /**
          * ChainDiagnostics
          * @description Compact retained-chain measurements; plot series compose the report detail.
          */
@@ -4330,30 +4341,10 @@ export interface components {
              */
             readonly time_limit_seconds?: number | null;
             /**
-             * N Parameter Particles
+             * @description Replace the complete configured or continued algorithm; omitted inherits it. Variant defaults fill unspecified algorithm fields.
              * @default null
              */
-            readonly n_parameter_particles?: number | null;
-            /** @default null */
-            readonly path_update?: components["schemas"]["PathUpdateSpec-Input"] | null;
-            /**
-             * Compiler Reparameterization
-             * @default null
-             */
-            readonly compiler_reparameterization?: boolean | null;
-            /** @default null */
-            readonly parameter_proposal?: components["schemas"]["ParameterProposal"] | null;
-            /** @default null */
-            readonly diagnostic_metrics?: components["schemas"]["ParticleDiagnosticMetrics"] | null;
-            /**
-             * Param Target Accept
-             * @default null
-             */
-            readonly param_target_accept?: number | null;
-            /** @default null */
-            readonly adaptation_scheme?: components["schemas"]["AdaptationScheme"] | null;
-            /** @default null */
-            readonly initialization?: components["schemas"]["GaussianInitializationSpec-Input"] | null;
+            readonly algorithm?: components["schemas"]["InferenceAlgorithmSpec-Input"] | null;
             /**
              * Num Samples Per Chain
              * @default null
@@ -4403,30 +4394,10 @@ export interface components {
              */
             readonly time_limit_seconds: number | null;
             /**
-             * N Parameter Particles
+             * @description Replace the complete configured or continued algorithm; omitted inherits it. Variant defaults fill unspecified algorithm fields.
              * @default null
              */
-            readonly n_parameter_particles: number | null;
-            /** @default null */
-            readonly path_update: components["schemas"]["PathUpdateSpec-Output"] | null;
-            /**
-             * Compiler Reparameterization
-             * @default null
-             */
-            readonly compiler_reparameterization: boolean | null;
-            /** @default null */
-            readonly parameter_proposal: components["schemas"]["ParameterProposal"] | null;
-            /** @default null */
-            readonly diagnostic_metrics: components["schemas"]["ParticleDiagnosticMetrics"] | null;
-            /**
-             * Param Target Accept
-             * @default null
-             */
-            readonly param_target_accept: number | null;
-            /** @default null */
-            readonly adaptation_scheme: components["schemas"]["AdaptationScheme"] | null;
-            /** @default null */
-            readonly initialization: components["schemas"]["GaussianInitializationSpec-Output"] | null;
+            readonly algorithm: components["schemas"]["InferenceAlgorithmSpec-Output"] | null;
             /**
              * Num Samples Per Chain
              * @default null
@@ -4508,6 +4479,40 @@ export interface components {
             readonly delta: number;
         };
         /**
+         * FixedTrajectorySpec
+         * @description A fixed number of leapfrog steps, with the step size jittered by up to 20%.
+         */
+        readonly "FixedTrajectorySpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "fixed";
+            /**
+             * Steps
+             * @description Leapfrog steps per transition. The default 8 and jitter width 20% are heuristics; no paper or recorded benchmark sets them. Each transition scales the adapted step size by a uniform factor in [0.8, 1.2], so trajectories cannot stay periodic (Neal 2011, section 5.3.2). Every transition costs the same number of gradients, so chains advanced together never wait for the longest NUTS tree, which limits NUTS on accelerators (Hoffman, Radul & Sountsov 2021).
+             * @default 8
+             */
+            readonly steps?: number;
+        };
+        /**
+         * FixedTrajectorySpec
+         * @description A fixed number of leapfrog steps, with the step size jittered by up to 20%.
+         */
+        readonly "FixedTrajectorySpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "fixed";
+            /**
+             * Steps
+             * @description Leapfrog steps per transition. The default 8 and jitter width 20% are heuristics; no paper or recorded benchmark sets them. Each transition scales the adapted step size by a uniform factor in [0.8, 1.2], so trajectories cannot stay periodic (Neal 2011, section 5.3.2). Every transition costs the same number of gradients, so chains advanced together never wait for the longest NUTS tree, which limits NUTS on accelerators (Hoffman, Radul & Sountsov 2021).
+             * @default 8
+             */
+            readonly steps: number;
+        };
+        /**
          * FrequencyRefresh
          * @description Frequency-localized movement for one construct's complete retained trajectory.
          */
@@ -4539,7 +4544,7 @@ export interface components {
              */
             readonly median_refresh: number | null;
         };
-        readonly FrozenSamplerTuning: components["schemas"]["ParticleTuning"] | components["schemas"]["TransferredTuning"];
+        readonly FrozenSamplerTuning: components["schemas"]["ParticleTuning"] | components["schemas"]["JointTuning"] | components["schemas"]["TransferredTuning"];
         /**
          * GammaLawSpec[Expression]
          * @description The Gamma conditional law.
@@ -4865,6 +4870,8 @@ export interface components {
             /** @description Whether higher values move with (positive) or against (negative) the construct. */
             readonly construct_polarity: components["schemas"]["IndicatorPolarity"];
         };
+        readonly "InferenceAlgorithmSpec-Input": components["schemas"]["MarginalParticleGibbsSpec-Input"] | components["schemas"]["NutsDASpec-Input"];
+        readonly "InferenceAlgorithmSpec-Output": components["schemas"]["MarginalParticleGibbsSpec-Output"] | components["schemas"]["NutsDASpec-Output"];
         /**
          * InferenceEvidence
          * @description Native telemetry buffers; posterior atoms and coordinates belong to the model.
@@ -4938,7 +4945,7 @@ export interface components {
             readonly num_chains: number;
             /** Duration Seconds */
             readonly duration_seconds: number;
-            readonly sampler_diagnostics: components["schemas"]["ParticleSamplerDiagnostics"] | null;
+            readonly sampler_diagnostics: components["schemas"]["SamplerDiagnostics"] | null;
         };
         /**
          * InferencePhase
@@ -5100,6 +5107,45 @@ export interface components {
             /** Labels */
             readonly labels: Readonly<Partial<Record<components["schemas"]["ParameterElementId-Output"], string>>>;
         };
+        /** @enum {string} */
+        readonly JointParameterization: "centred" | "non_centred" | "mixed";
+        readonly JointParameterizationRecord: components["schemas"]["CentredParameterizationRecord"] | components["schemas"]["NonCentredParameterizationRecord"] | components["schemas"]["MixedParameterizationRecord"];
+        /**
+         * JointSmootherSpec
+         * @description Include free latent coordinates in the Hamiltonian update.
+         */
+        readonly "JointSmootherSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "joint";
+        };
+        /**
+         * JointSmootherSpec
+         * @description Include free latent coordinates in the Hamiltonian update.
+         */
+        readonly "JointSmootherSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "joint";
+        };
+        readonly "JointTrajectorySpec-Input": components["schemas"]["NutsTrajectorySpec-Input"] | components["schemas"]["FixedTrajectorySpec-Input"];
+        readonly "JointTrajectorySpec-Output": components["schemas"]["NutsTrajectorySpec-Output"] | components["schemas"]["FixedTrajectorySpec-Output"];
+        /**
+         * JointTuning
+         * @description Frozen native joint coordinates, including the mixed reading mask.
+         */
+        readonly JointTuning: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "joint";
+            readonly parameterization: components["schemas"]["JointParameterizationRecord"];
+        };
         /** @description A JSON scalar transports a string, number, boolean, or null. */
         readonly JsonScalar: boolean | number | string | null;
         /**
@@ -5243,6 +5289,102 @@ export interface components {
             /** Value */
             readonly value: number;
         };
+        /**
+         * MarginalParticleGibbsSpec
+         * @description Exact marginalized parameter and path updates with particle-specific tuning.
+         */
+        readonly "MarginalParticleGibbsSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "mpgibbs";
+            /**
+             * N Parameter Particles
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).
+             * @default 2
+             */
+            readonly n_parameter_particles?: number;
+            /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */
+            readonly path_update?: components["schemas"]["PathUpdateSpec-Input"];
+            /**
+             * Compiler Reparameterization
+             * @description Compute one time-indexed path chart with translation and structural diffusion scaling, including interval readings and deterministic recurrences. Its center and full mean response share a frozen Gaussian surrogate at mean parameters and their IEKS path; transition covariance and pin conditioning contribute to the response. Build once before warmup and rebuild between warmup blocks at adaptation boundaries. Freeze before retained draws. Every label pays the exact time-indexed Jacobian; densities, reported paths and diagnostics retain physical model units. Native continuation retains the complete chart; incompatible native state shapes are rejected. Strong nonlinearity, separated modes and data-pinned deviations can limit mixing.
+             * @default false
+             */
+            readonly compiler_reparameterization?: boolean;
+            /**
+             * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
+             * @default random_walk
+             */
+            readonly parameter_proposal?: components["schemas"]["ParameterProposal"];
+            /**
+             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
+             * @default []
+             */
+            readonly diagnostic_metrics?: components["schemas"]["ParticleDiagnosticMetrics"];
+            /**
+             * Param Target Accept
+             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.
+             * @default 0.2
+             */
+            readonly param_target_accept?: number;
+            /**
+             * @description How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step.
+             * @default dual_averaging
+             */
+            readonly adaptation_scheme?: components["schemas"]["AdaptationScheme"];
+            /** @description Independent Gaussian starts, which also set the initial proposal scale. */
+            readonly initialization?: components["schemas"]["GaussianInitializationSpec-Input"];
+        };
+        /**
+         * MarginalParticleGibbsSpec
+         * @description Exact marginalized parameter and path updates with particle-specific tuning.
+         */
+        readonly "MarginalParticleGibbsSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "mpgibbs";
+            /**
+             * N Parameter Particles
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).
+             * @default 2
+             */
+            readonly n_parameter_particles: number;
+            /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */
+            readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
+            /**
+             * Compiler Reparameterization
+             * @description Compute one time-indexed path chart with translation and structural diffusion scaling, including interval readings and deterministic recurrences. Its center and full mean response share a frozen Gaussian surrogate at mean parameters and their IEKS path; transition covariance and pin conditioning contribute to the response. Build once before warmup and rebuild between warmup blocks at adaptation boundaries. Freeze before retained draws. Every label pays the exact time-indexed Jacobian; densities, reported paths and diagnostics retain physical model units. Native continuation retains the complete chart; incompatible native state shapes are rejected. Strong nonlinearity, separated modes and data-pinned deviations can limit mixing.
+             * @default false
+             */
+            readonly compiler_reparameterization: boolean;
+            /**
+             * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
+             * @default random_walk
+             */
+            readonly parameter_proposal: components["schemas"]["ParameterProposal"];
+            /**
+             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
+             * @default []
+             */
+            readonly diagnostic_metrics: components["schemas"]["ParticleDiagnosticMetrics"];
+            /**
+             * Param Target Accept
+             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.
+             * @default 0.2
+             */
+            readonly param_target_accept: number;
+            /**
+             * @description How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step.
+             * @default dual_averaging
+             */
+            readonly adaptation_scheme: components["schemas"]["AdaptationScheme"];
+            /** @description Independent Gaussian starts, which also set the initial proposal scale. */
+            readonly initialization: components["schemas"]["GaussianInitializationSpec-Output"];
+        };
         readonly Measurement: components["schemas"]["NumericMeasurement"] | components["schemas"]["LabeledMeasurement"];
         /** @description A persistent mechanism identity distinguishes additive terms through reordering and revision. */
         readonly "MechanismId-Input": `mechanism:${string}`;
@@ -5278,6 +5420,29 @@ export interface components {
              * @constant
              */
             readonly interpretation: "mixed";
+        };
+        /**
+         * MixedParameterizationRecord
+         * @description Centred free coordinates, in the full checkpoint path's time/state axis order.
+         */
+        readonly MixedParameterizationRecord: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "mixed";
+            /** Centred Mask */
+            readonly centred_mask: readonly (readonly boolean[])[];
+            /**
+             * Mask Identity
+             * @description Content identity of the actual mask, including its time and state dimensions.
+             */
+            readonly mask_identity: string;
+            /**
+             * Equals Non Centred
+             * @description Whether the available-reading policy selects no centred free coordinate.
+             */
+            readonly equals_non_centred: boolean;
         };
         /**
          * ModelCheckReport
@@ -5505,6 +5670,17 @@ export interface components {
             readonly kind: "new";
             readonly dynamical_model_spec_ref: components["schemas"]["RevisionSelector"];
             readonly data_ref: components["schemas"]["DataRef_RevisionSelector_int_"];
+        };
+        /**
+         * NonCentredParameterizationRecord
+         * @description Exact conditional innovations in every unpinned independent path coordinate.
+         */
+        readonly NonCentredParameterizationRecord: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "non_centred";
         };
         /**
          * NonIdentifiableTreatmentStatus
@@ -5772,6 +5948,128 @@ export interface components {
              */
             readonly npy: Uint8Array;
         };
+        /**
+         * NutsDADiagnostics
+         * @description Retained joint Hamiltonian transition evidence and frozen step sizes.
+         */
+        readonly NutsDADiagnostics: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "nuts_da";
+            readonly settings: components["schemas"]["SamplerSpec"];
+            /** Mcmc Phase Seconds */
+            readonly mcmc_phase_seconds: number;
+            /** Divergences */
+            readonly divergences: number;
+            /** Mean Accept Prob */
+            readonly mean_accept_prob: number;
+            /** Mean Num Steps */
+            readonly mean_num_steps: number;
+            /** Final Step Size */
+            readonly final_step_size: readonly number[];
+            /** Max Tree Depth Fraction */
+            readonly max_tree_depth_fraction: number | null;
+        };
+        /**
+         * NutsDASpec
+         * @description Hamiltonian updates with dual averaging and diagonal mass adaptation.
+         *
+         *     The joint smoother moves parameters and free latent coordinates together.
+         *     Other smoothers alternate the same Hamiltonian parameter kernel with an exact
+         *     conditional path update. Both reconstruct deterministic recurrences exactly
+         *     and target the same joint posterior.
+         */
+        readonly "NutsDASpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "nuts_da";
+            /** @description joint moves parameters and free latent coordinates together. Selecting a path smoother alternates NUTS on parameters conditional on the current path coordinates with that exact path update at the new parameters. The configured parameterization also applies to this conditional parameter block; non-centred holds innovations fixed, centred holds states fixed. Both preserve the same joint posterior. */
+            readonly smoother?: components["schemas"]["NutsSmootherSpec-Input"];
+            /**
+             * @description Coordinates the sampler moves in; the posterior is the same in all three, only its geometry changes. centred samples each path directly, standardized by the prior's per-step covariances at the starting parameters. non_centred samples each free coordinate's Euler-Maruyama innovation and rebuilds the path from the current parameters. mixed keeps coordinates with a direct point reading centred and makes the rest non-centred. Centred mixes well where data pin the states, non-centred where data are weak against the dynamics (Papaspiliopoulos, Roberts & Sköld 2007). Frozen per fit; changing it on a continued fit requires warmup.
+             * @default centred
+             */
+            readonly parameterization?: components["schemas"]["JointParameterization"];
+            /**
+             * Target Accept Prob
+             * @description Mean acceptance statistic that dual averaging steers the step size towards during warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks the step, which removes divergences in strongly curved regions at the cost of longer trajectories. 0.8 is the NumPyro and Stan default.
+             * @default 0.8
+             */
+            readonly target_accept_prob?: number;
+            /** @description NUTS chooses each trajectory's length; fixed runs a set number of steps. */
+            readonly trajectory?: components["schemas"]["JointTrajectorySpec-Input"];
+        };
+        /**
+         * NutsDASpec
+         * @description Hamiltonian updates with dual averaging and diagonal mass adaptation.
+         *
+         *     The joint smoother moves parameters and free latent coordinates together.
+         *     Other smoothers alternate the same Hamiltonian parameter kernel with an exact
+         *     conditional path update. Both reconstruct deterministic recurrences exactly
+         *     and target the same joint posterior.
+         */
+        readonly "NutsDASpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "nuts_da";
+            /** @description joint moves parameters and free latent coordinates together. Selecting a path smoother alternates NUTS on parameters conditional on the current path coordinates with that exact path update at the new parameters. The configured parameterization also applies to this conditional parameter block; non-centred holds innovations fixed, centred holds states fixed. Both preserve the same joint posterior. */
+            readonly smoother: components["schemas"]["NutsSmootherSpec-Output"];
+            /**
+             * @description Coordinates the sampler moves in; the posterior is the same in all three, only its geometry changes. centred samples each path directly, standardized by the prior's per-step covariances at the starting parameters. non_centred samples each free coordinate's Euler-Maruyama innovation and rebuilds the path from the current parameters. mixed keeps coordinates with a direct point reading centred and makes the rest non-centred. Centred mixes well where data pin the states, non-centred where data are weak against the dynamics (Papaspiliopoulos, Roberts & Sköld 2007). Frozen per fit; changing it on a continued fit requires warmup.
+             * @default centred
+             */
+            readonly parameterization: components["schemas"]["JointParameterization"];
+            /**
+             * Target Accept Prob
+             * @description Mean acceptance statistic that dual averaging steers the step size towards during warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks the step, which removes divergences in strongly curved regions at the cost of longer trajectories. 0.8 is the NumPyro and Stan default.
+             * @default 0.8
+             */
+            readonly target_accept_prob: number;
+            /** @description NUTS chooses each trajectory's length; fixed runs a set number of steps. */
+            readonly trajectory: components["schemas"]["JointTrajectorySpec-Output"];
+        };
+        readonly "NutsSmootherSpec-Input": components["schemas"]["JointSmootherSpec-Input"] | components["schemas"]["GuidedPathSpec-Input"] | components["schemas"]["AuxiliaryKalmanSpec-Input"];
+        readonly "NutsSmootherSpec-Output": components["schemas"]["JointSmootherSpec-Output"] | components["schemas"]["GuidedPathSpec-Output"] | components["schemas"]["AuxiliaryKalmanSpec-Output"];
+        /**
+         * NutsTrajectorySpec
+         * @description A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).
+         */
+        readonly "NutsTrajectorySpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "nuts";
+            /**
+             * Max Tree Depth
+             * @description Maximum number of trajectory doublings per transition, so at most 2^max_tree_depth - 1 leapfrog steps. The report gives the fraction of transitions that reach it; frequent hits mean the step is small against the posterior's longest scale, and each extra level can double the cost. 10 is the NumPyro and Stan default.
+             * @default 10
+             */
+            readonly max_tree_depth?: number;
+        };
+        /**
+         * NutsTrajectorySpec
+         * @description A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).
+         */
+        readonly "NutsTrajectorySpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "nuts";
+            /**
+             * Max Tree Depth
+             * @description Maximum number of trajectory doublings per transition, so at most 2^max_tree_depth - 1 leapfrog steps. The report gives the fraction of transitions that reach it; frequent hits mean the step is small against the posterior's longest scale, and each extra level can double the cost. 10 is the NumPyro and Stan default.
+             * @default 10
+             */
+            readonly max_tree_depth: number;
+        };
         readonly ObservationData: Readonly<Partial<Record<components["schemas"]["IndicatorId-Output"], components["schemas"]["ObservationHistory"]>>>;
         /**
          * ObservationHistory
@@ -6004,6 +6302,11 @@ export interface components {
          * @description Typed exact-sampler settings and transition telemetry from the native producer.
          */
         readonly ParticleSamplerDiagnostics: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "mpgibbs";
             readonly settings: components["schemas"]["SamplerSpec"];
             /** Parameter Kernel */
             readonly parameter_kernel: string;
@@ -6754,11 +7057,12 @@ export interface components {
             readonly native_state: readonly components["schemas"]["NumericalArray"][];
             readonly tuning: components["schemas"]["FrozenSamplerTuning"];
         };
+        readonly SamplerDiagnostics: components["schemas"]["ParticleSamplerDiagnostics"] | components["schemas"]["NutsDADiagnostics"];
         /**
          * SamplerSpec
          * @description Fully resolved controls for exact joint state and parameter inference.
          *
-         *     The sampler is marginalized particle Gibbs. m-PGibbs (Corenflos 2025) proposes
+         *     The default algorithm is marginalized particle Gibbs. m-PGibbs (Corenflos 2025) proposes
          *     parameter particles around a shared auxiliary point, runs conditional SMC against the
          *     posterior mixture over them and selects a parameter together with the new path.
          *     Parameter moves are thus marginalized over paths, as in PMMH, instead of conditioned on
@@ -6807,43 +7111,8 @@ export interface components {
              * @default 14400
              */
             readonly time_limit_seconds: number;
-            /**
-             * N Parameter Particles
-             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).
-             * @default 2
-             */
-            readonly n_parameter_particles: number;
-            /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */
-            readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
-            /**
-             * Compiler Reparameterization
-             * @description Compute one time-indexed path chart with translation and structural diffusion scaling, including interval readings and deterministic recurrences. Its center and full mean response share a frozen Gaussian surrogate at mean parameters and their IEKS path; transition covariance and pin conditioning contribute to the response. Build once before warmup and rebuild between warmup blocks at adaptation boundaries. Freeze before retained draws. Every label pays the exact time-indexed Jacobian; densities, reported paths and diagnostics retain physical model units. Native continuation retains the complete chart; incompatible native state shapes are rejected. Strong nonlinearity, separated modes and data-pinned deviations can limit mixing.
-             * @default false
-             */
-            readonly compiler_reparameterization: boolean;
-            /**
-             * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
-             * @default random_walk
-             */
-            readonly parameter_proposal: components["schemas"]["ParameterProposal"];
-            /**
-             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
-             * @default []
-             */
-            readonly diagnostic_metrics: components["schemas"]["ParticleDiagnosticMetrics"];
-            /**
-             * Param Target Accept
-             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.
-             * @default 0.2
-             */
-            readonly param_target_accept: number;
-            /**
-             * @description How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step.
-             * @default dual_averaging
-             */
-            readonly adaptation_scheme: components["schemas"]["AdaptationScheme"];
-            /** @description Independent Gaussian starts, which also set the initial proposal scale. */
-            readonly initialization: components["schemas"]["GaussianInitializationSpec-Output"];
+            /** @description Exact joint sampler: MPGibbs parameter/path updates or NUTS-DA. */
+            readonly algorithm: components["schemas"]["InferenceAlgorithmSpec-Output"];
         };
         /**
          * ScalarStatisticComparison

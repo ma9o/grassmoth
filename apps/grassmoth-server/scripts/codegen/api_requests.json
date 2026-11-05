@@ -121,19 +121,12 @@
         "profile": false,
         "hardware": "local",
         "time_limit_seconds": null,
-        "n_parameter_particles": null,
-        "path_update": null,
-        "compiler_reparameterization": null,
-        "parameter_proposal": null,
-        "diagnostic_metrics": null,
-        "param_target_accept": null,
-        "adaptation_scheme": null,
-        "initialization": null,
         "num_samples_per_chain": null,
         "num_warmup": null,
         "num_chains": null,
         "thinning": null,
-        "seed": null
+        "seed": null,
+        "algorithm": null
       },
       "repeat": 0
     }

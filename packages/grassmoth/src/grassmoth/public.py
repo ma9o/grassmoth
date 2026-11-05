@@ -279,10 +279,31 @@ from grassmoth.artifacts.sampling import (
     AdaptationScheme as AdaptationScheme,
 )
 from grassmoth.artifacts.sampling import (
+    FixedTrajectorySpec as FixedTrajectorySpec,
+)
+from grassmoth.artifacts.sampling import (
     GaussianInitializationSpec as GaussianInitializationSpec,
 )
 from grassmoth.artifacts.sampling import (
+    InferenceAlgorithmSpec as InferenceAlgorithmSpec,
+)
+from grassmoth.artifacts.sampling import (
     InferenceHardware as InferenceHardware,
+)
+from grassmoth.artifacts.sampling import (
+    JointSmootherSpec as JointSmootherSpec,
+)
+from grassmoth.artifacts.sampling import (
+    MarginalParticleGibbsSpec as MarginalParticleGibbsSpec,
+)
+from grassmoth.artifacts.sampling import (
+    NutsDASpec as NutsDASpec,
+)
+from grassmoth.artifacts.sampling import (
+    NutsSmootherSpec as NutsSmootherSpec,
+)
+from grassmoth.artifacts.sampling import (
+    NutsTrajectorySpec as NutsTrajectorySpec,
 )
 from grassmoth.artifacts.sampling import (
     ParameterProposal as ParameterProposal,

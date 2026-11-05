@@ -15,6 +15,7 @@ from grassmoth.artifacts.sampling import (
     AuxiliaryKalmanSpec,
     GaussianInitializationSpec,
     GuidedPathSpec,
+    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.continuation import frozen_particle_tuning
@@ -205,7 +206,9 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
     kernel = build_marginal_particle_gibbs_kernel(
         target, path_update=spec, num_parameter_particles=2, initial_chart=chart
     )
-    options = SamplerSpec(path_update=spec, compiler_reparameterization=True)
+    options = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(path_update=spec, compiler_reparameterization=True)
+    )
     chart_builder = EXECUTION_CONTEXT.compiler(
         lambda positions, paths: computed_chart(target, positions, paths),
         initialization.positions,

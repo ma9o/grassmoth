@@ -37,14 +37,16 @@ inference:
     num_samples_per_chain: 1000
     num_chains: 4
     seed: 0
-    n_parameter_particles: 2
-    # path_update.method: particle_mgrad, twisted_particle_agrad or auxiliary_kalman.
-    path_update:
-      num_particles: 64
-      method: particle_mgrad
-      latent_step:
-        kind: adapted
-        target: 0.5
-    parameter_proposal: random_walk
-    param_target_accept: 0.2
-    adaptation_scheme: dual_averaging
+    algorithm:
+      method: mpgibbs
+      n_parameter_particles: 2
+      # path_update.method: particle_mgrad, twisted_particle_agrad or auxiliary_kalman.
+      path_update:
+        num_particles: 64
+        method: particle_mgrad
+        latent_step:
+          kind: adapted
+          target: 0.5
+      parameter_proposal: random_walk
+      param_target_accept: 0.2
+      adaptation_scheme: dual_averaging

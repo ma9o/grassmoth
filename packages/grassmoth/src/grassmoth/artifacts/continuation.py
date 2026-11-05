@@ -6,6 +6,7 @@ from pydantic import Field
 
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.base import Value
+from grassmoth.artifacts.joint_parameterization import JointParameterizationRecord
 from grassmoth.artifacts.reports.posterior_diagnostics import InitializationDiagnostics
 from grassmoth.artifacts.sampling import (
     SamplerSpec,
@@ -27,8 +28,15 @@ class ParticleTuning(Value):
     initialization: InitializationDiagnostics
 
 
+class JointTuning(Value):
+    """Frozen native joint coordinates, including the mixed reading mask."""
+
+    kind: Literal["joint"] = "joint"
+    parameterization: JointParameterizationRecord
+
+
 type FrozenSamplerTuning = Annotated[
-    ParticleTuning | TransferredTuning, Field(discriminator="kind")
+    ParticleTuning | JointTuning | TransferredTuning, Field(discriminator="kind")
 ]
 
 

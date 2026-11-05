@@ -5,7 +5,7 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.sampling import GuidedPathSpec, MarginalParticleGibbsSpec
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     _curvature_limits,
     adapt_curvature_geometry,
@@ -366,7 +366,7 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
     full = run(120, 4)
     prefix = run(120, 2)
     checkpoint = SamplerCheckpoint(
-        settings=SamplerSpec(path_update=spec),
+        settings=SamplerSpec(algorithm=MarginalParticleGibbsSpec(path_update=spec)),
         parameters=NumericalArray.from_numpy(np.asarray(prefix.last_parameters)),
         paths=NumericalArray.from_numpy(np.asarray(prefix.last_paths)),
         random_key=NumericalArray.from_numpy(np.asarray(jax.random.key_data(prefix.random_key))),

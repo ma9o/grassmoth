@@ -40,9 +40,6 @@ if TYPE_CHECKING:
 
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 
-# The progress-event name of the one sampler that runs sweeps.
-SAMPLER = "mpgibbs"
-
 
 @dataclass(frozen=True)
 class SweepHistory:
@@ -133,6 +130,7 @@ def compile_sweeps[Carry](
         if num_samples or num_warmup + num_samples == 0
         else EmptySweepPhase(history_shapes),
         executable,
+        sampler=sampler.algorithm.method,
         memory=MemoryDemand(
             host_bytes=memory.host_bytes + overhead.host_bytes,
             device_bytes=memory.device_bytes + overhead.device_bytes,
@@ -178,7 +176,9 @@ def compile_projected_sweeps[Carry](
 
     def compile_projection() -> Compiled:
         with inference_phase(
-            SAMPLER, "compiling_observation_projection", execution_context=execution_context
+            sampler.algorithm.method,
+            "compiling_observation_projection",
+            execution_context=execution_context,
         ):
             return compile_program()
 
@@ -252,7 +252,7 @@ def run_sweeps[Carry](
 
     def profile_copy(phase: CompiledSweepPhase) -> FitProfileReport:
         assert profile is not None
-        with inference_phase(SAMPLER, "profiling", execution_context=execution_context):
+        with inference_phase(plan.sampler, "profiling", execution_context=execution_context):
             copied = jax.block_until_ready(jax.tree.map(jnp.copy, state))
             return profile(copied, phase)
 
@@ -273,7 +273,7 @@ def run_sweeps[Carry](
         if isinstance(phase, CompiledSweepPhase):
             phase_started = clock()
             with inference_phase(
-                SAMPLER,
+                plan.sampler,
                 stage,
                 execution_context=execution_context,
                 total=phase.steps,
@@ -322,7 +322,7 @@ def run_sweeps[Carry](
                         if profile is not None and plan.warmup.steps == 0:
                             profiling = profile_copy(phase)
                     log_inference_event(
-                        SAMPLER,
+                        plan.sampler,
                         stage,
                         "progress",
                         execution_context=execution_context,
@@ -334,7 +334,7 @@ def run_sweeps[Carry](
                 profiling = profile_copy(phase)
         else:
             log_inference_event(
-                SAMPLER, stage, "skipped", execution_context=execution_context, total=0
+                plan.sampler, stage, "skipped", execution_context=execution_context, total=0
             )
         history = {name: jnp.asarray(value[:, :phase_draws]) for name, value in buffers.items()}
         if stage == "sampling":

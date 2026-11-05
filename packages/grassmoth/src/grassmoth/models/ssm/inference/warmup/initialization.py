@@ -48,6 +48,7 @@ def prepare_particle_initialization(
     coordinates = build_joint_coordinates(target, compiler=execution_context.compiler)
 
     def seeded_chart(chart: JointChart) -> JointChart:
+        assert chart.affine is not None
         context = target.context(chart.parameter_center, target.times)
         center = ieks_path(target, context, chart.affine.path_center)
         return JointChart(
@@ -58,6 +59,7 @@ def prepare_particle_initialization(
     if not execution_context.budget.capacity(compiled_memory(seed_program.executable), limit=1):
         raise MemoryError("IEKS initialization exceeds the numerical execution memory budget")
     chart = seed_program.call(coordinates.chart)
+    assert chart.affine is not None
     if not np.isfinite(np.asarray(chart.affine.path_center)).all():
         return InitializationFailure.unavailable(
             "The IEKS initializer produced a non-finite path seed"

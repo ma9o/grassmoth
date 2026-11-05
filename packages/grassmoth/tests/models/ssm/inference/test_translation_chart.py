@@ -14,6 +14,7 @@ from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
     GaussianInitializationSpec,
     GuidedPathSpec,
+    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.continuation import frozen_particle_tuning
@@ -229,7 +230,9 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
         num_parameter_particles=2,
         initial_chart=chart,
     )
-    options = SamplerSpec(path_update=spec, compiler_reparameterization=True)
+    options = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(path_update=spec, compiler_reparameterization=True)
+    )
     chart_builder = EXECUTION_CONTEXT.compiler(
         lambda positions, paths: computed_chart(target, positions, paths),
         initialization.positions,

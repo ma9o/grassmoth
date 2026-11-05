@@ -7,6 +7,13 @@ import { Hint, KeyValue, Section, StatusIcon } from "../scope-primitives";
 import { FitCalibration } from "./fit-calibration";
 import { PosteriorPairs } from "./law-sections";
 
+const smootherLabels = {
+  joint: "Joint NUTS-DA",
+  particle_mgrad: "Particle-mGRAD",
+  twisted_particle_agrad: "Twisted Particle-aGRAD",
+  auxiliary_kalman: "Auxiliary Kalman",
+};
+
 export function FitOutcome({ context }: { context: ScopeContext }) {
   const fit = context.modelSnapshot.fit;
   if (!fit) return <Hint>No inference report recorded.</Hint>;
@@ -18,11 +25,11 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
     <Section title="Chain convergence">
       <Hint>
         {settings
-          ? {
-              particle_mgrad: "Particle-mGRAD",
-              twisted_particle_agrad: "Twisted Particle-aGRAD",
-              auxiliary_kalman: "Auxiliary Kalman",
-            }[settings.path_update.method]
+          ? settings.algorithm.method === "nuts_da"
+            ? settings.algorithm.smoother.method === "joint"
+              ? smootherLabels.joint
+              : `NUTS-DA + ${smootherLabels[settings.algorithm.smoother.method]}`
+            : smootherLabels[settings.algorithm.path_update.method]
           : "Unavailable"}{" "}
         · {mcmc?.num_chains ?? "Unavailable"} chains ×{" "}
         {mcmc?.num_samples_per_chain ?? "Unavailable"} draws ·{" "}
@@ -34,8 +41,8 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
       </div>
       {convergence.findings
         .filter((finding) => finding.kind === "not_evaluated" || finding.outcome === "failed")
-        .map((finding, index) => (
-          <p key={index} className="text-amber-700">
+        .map((finding) => (
+          <p key={JSON.stringify(finding)} className="text-amber-700">
             {finding.code === "fit_mixing" && "Mixing advisory: "}
             {finding.kind === "not_evaluated"
               ? finding.detail
@@ -59,7 +66,9 @@ export function FitDetails({ context }: { context: ScopeContext }) {
   const report = fit;
   const plot = detail.data?.detail;
   const mcmc = report.inference_diagnostics;
-  const gibbs = report.inference_metadata.sampler_diagnostics;
+  const diagnostics = report.inference_metadata.sampler_diagnostics;
+  const gibbs = diagnostics?.method === "mpgibbs" ? diagnostics : null;
+  const nuts = diagnostics?.method === "nuts_da" ? diagnostics : null;
   const weights = gibbs?.path_weights;
   const stages = weights?.filters.map((stage, index) => ({
     label: `Step ${index}`,
@@ -75,6 +84,24 @@ export function FitDetails({ context }: { context: ScopeContext }) {
   return (
     <>
       <FitCalibration context={context} />
+      {nuts && (
+        <Section title="Hamiltonian transitions">
+          <KeyValue
+            rows={[
+              ["Divergences", String(nuts.divergences)],
+              ["Mean acceptance", formatSignificant(nuts.mean_accept_prob)],
+              ["Mean leapfrog steps", formatSignificant(nuts.mean_num_steps)],
+              ["Final step sizes", nuts.final_step_size.map(formatSignificant).join(", ")],
+              [
+                "Tree depth limit reached",
+                nuts.max_tree_depth_fraction === null
+                  ? "Fixed trajectory"
+                  : formatSignificant(nuts.max_tree_depth_fraction),
+              ],
+            ]}
+          />
+        </Section>
+      )}
       {weights && lowestWeightStages && (
         <Section title="Particle weights">
           <Hint>

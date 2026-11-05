@@ -10,6 +10,7 @@ from grassmoth.actions.contracts.io import FitInputs
 from grassmoth.artifacts.sampling import (
     GaussianInitializationSpec,
     GuidedPathSpec,
+    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth_server.actions.fit.action import run_fit
@@ -25,8 +26,9 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
         num_chains=2,
         num_warmup=2,
         num_samples_per_chain=2,
-        initialization=GaussianInitializationSpec(),
-        path_update=GuidedPathSpec(num_particles=4),
+        algorithm=MarginalParticleGibbsSpec(
+            initialization=GaussianInitializationSpec(), path_update=GuidedPathSpec(num_particles=4)
+        ),
     )
     inputs = FitInputs(
         selection=selection,
@@ -118,8 +120,10 @@ def test_profile_compile_only_and_first_sweep(draws, tmp_path):
                 num_chains=1,
                 num_warmup=0,
                 num_samples_per_chain=draws,
-                initialization=GaussianInitializationSpec(),
-                path_update=GuidedPathSpec(num_particles=4),
+                algorithm=MarginalParticleGibbsSpec(
+                    initialization=GaussianInitializationSpec(),
+                    path_update=GuidedPathSpec(num_particles=4),
+                ),
             ),
             compute_loo_diagnostics=False,
         ),

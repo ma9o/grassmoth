@@ -19,6 +19,7 @@ from grassmoth.artifacts.reports.inference import FitRuntime
 from grassmoth.artifacts.sampling import (
     GaussianInitializationSpec,
     GuidedPathSpec,
+    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.compute.budget import ComputeBudget, SharedMemoryBudget
@@ -151,9 +152,11 @@ def run(phase, output):
             num_chains=2,
             num_warmup=2,
             num_samples_per_chain=16,
-            path_update=GuidedPathSpec(method=method, num_particles=4),
-            initialization=GaussianInitializationSpec(),
-            diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights"),
+            algorithm=MarginalParticleGibbsSpec(
+                path_update=GuidedPathSpec(method=method, num_particles=4),
+                initialization=GaussianInitializationSpec(),
+                diagnostic_metrics=("particle_identity", "parameter_movement", "particle_weights"),
+            ),
         )
         for name, method in (("mgrad", "particle_mgrad"), ("twisted", "twisted_particle_agrad"))
     }

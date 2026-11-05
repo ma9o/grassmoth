@@ -23,6 +23,7 @@ from grassmoth.artifacts.sampling import (
     FixedLatentStepSpec,
     GaussianInitializationSpec,
     GuidedPathSpec,
+    MarginalParticleGibbsSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
@@ -92,8 +93,7 @@ def test_auxiliary_kalman_runner_retains_paths_and_freezes_step(fixed, block_len
             num_warmup=0 if fixed else 110,
             num_samples_per_chain=3,
             num_chains=1,
-            path_update=spec,
-            diagnostic_metrics=(),
+            algorithm=MarginalParticleGibbsSpec(path_update=spec, diagnostic_metrics=()),
         ),
         key=jax.random.key(9),
         initialization=initialization,

@@ -17,6 +17,15 @@ from grassmoth.models.ssm.shapes import Array, Bool, Float, Int
 INITIAL_DELTA: Annotated[
     float, Field(description="delta[0] in Corenflos & Finke (2024), Algorithm 16.")
 ] = 0.01
+INITIAL_MOVEMENT_MULTIPLIER: Annotated[
+    float,
+    Field(
+        description=(
+            "Where warmup starts the per-time movement multiplier under curvature limits. "
+            "Heuristic: no paper or recorded benchmark sets it."
+        )
+    ),
+] = 0.25
 ADAPTATION_WINDOW: Annotated[
     int, Field(description="W in Corenflos & Finke (2024), Algorithm 16.")
 ] = 100
