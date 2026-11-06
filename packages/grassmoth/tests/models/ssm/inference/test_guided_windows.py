@@ -14,6 +14,7 @@ from scipy.stats import multivariate_normal, nbinom, norm
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.artifacts.sampling import (
     GuidedMethodSpec,
+    ParameterMeanProposalSpec,
     PathUpdateSpec,
 )
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import guided_delta_limit
@@ -155,7 +156,10 @@ def _window_posterior():
 )
 def test_guided_windows_preserve_joint_path_and_label_posterior(method, kappa):
     target, labels, starts, expected_mean, expected_second, probabilities = _window_posterior()
-    spec = PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa))
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa),
+        proposal=ParameterMeanProposalSpec(),
+    )
     setup = build_smoother_setup(
         target,
         num_parameter_particles=2,

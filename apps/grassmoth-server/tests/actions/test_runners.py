@@ -69,7 +69,7 @@ def test_unsupported_path_update_is_rejected_before_data_loading_or_dispatch(mon
                 "method": "mpgibbs",
                 "path_update": {
                     "method": {"kind": "particle_mgrad"},
-                    "proposal": {"kind": "parameter_mixture", "weights": "running_prefix"},
+                    "proposal": {"kind": "parameter_mixture", "weights": "prior"},
                 },
             },
         }
@@ -89,5 +89,5 @@ def test_unsupported_path_update_is_rejected_before_data_loading_or_dispatch(mon
     result = runners._fit_selected(Mock(), {}, request.input, call_identity(request))
     assert isinstance(result, Rejected)
     assert result.code == "UNSUPPORTED_PATH_UPDATE"
-    assert "Particle-mGRAD" in result.detail
+    assert "running_prefix" in result.detail
     read.assert_not_called()

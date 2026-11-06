@@ -64,7 +64,8 @@ def validate_sampler_support(
         compiled.state_space.requires_replay or intervals
     ):
         return ObservationPreflightFailure.rejected(
-            "Running-prefix mixture proposals support point readings without replay."
+            "Running-prefix mixture proposals support point readings without replay; "
+            "select parameter_mean for interval readings or deterministic recurrences."
         )
     return None
 

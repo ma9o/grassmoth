@@ -16,6 +16,7 @@ from grassmoth.artifacts.sampling import (
     MarginalParticleGibbsSpec,
     NutsDASpec,
     NutsTrajectorySpec,
+    ParameterMixtureProposalSpec,
     PathUpdateSpec,
     SamplerSpec,
 )
@@ -53,6 +54,7 @@ class TestSamplerSpec:
         assert result.algorithm.path_update.method.kind == "particle_mgrad"
         assert result.algorithm.path_update.method.num_particles == 64
         assert result.algorithm.path_update.method.kappa == 1
+        assert result.algorithm.path_update.proposal == ParameterMixtureProposalSpec()
         assert result.algorithm.path_update.latent_step == AdaptedLatentStepSpec(target=0.5)
         assert result.algorithm.parameter_proposal == "random_walk"
         encoded = result.model_dump_json()

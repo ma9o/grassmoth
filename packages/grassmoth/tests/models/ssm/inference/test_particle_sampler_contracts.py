@@ -128,7 +128,9 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(
     )
     sampler = SamplerSpec(
         algorithm=MarginalParticleGibbsSpec(
-            path_update=PathUpdateSpec(method=GuidedMethodSpec(kind=method)),
+            path_update=PathUpdateSpec(
+                method=GuidedMethodSpec(kind=method), proposal=ParameterMeanProposalSpec()
+            ),
         )
     )
     assert validate_sampler_support(compiled, sampler) is None
@@ -161,7 +163,10 @@ def test_guided_configuration_roundtrip_and_continuation_identity(method):
     [
         ("twisted_particle_agrad", 1, "point", (), True),
         ("twisted_particle_agrad", 0, "point", (), False),
-        ("particle_mgrad", 1, "point", (), False),
+        ("particle_mgrad", 1, "point", (), True),
+        ("particle_mgrad", 0, "point", (), True),
+        ("particle_mgrad", 1, "interval", (), False),
+        ("particle_mgrad", 1, "point", (AdditiveRecurrences((0,)),), False),
         ("twisted_particle_agrad", 1, "interval", (), False),
         ("twisted_particle_agrad", 1, "point", (AdditiveRecurrences((0,)),), False),
     ],
@@ -192,11 +197,27 @@ def test_prefix_mixture_admission(monkeypatch, method, kappa, support, recurrenc
         )
     )
     assert sampler.kernel_identity != ordinary.kernel_identity
-    assert isinstance(PathUpdateSpec().proposal, ParameterMeanProposalSpec)
+    assert isinstance(PathUpdateSpec().proposal, ParameterMixtureProposalSpec)
     failure = validate_sampler_support(compiled, sampler)
     assert (failure is None) == accepted
     if failure is not None:
         assert "mixture" in failure.message
+
+
+@pytest.mark.parametrize("method", ["particle_mgrad", "twisted_particle_agrad", "auxiliary_kalman"])
+def test_path_proposal_default_depends_on_method_and_preserves_explicit_choice(method):
+    path = PathUpdateSpec.model_validate({"method": {"kind": method}})
+    assert path.proposal == (
+        ParameterMixtureProposalSpec()
+        if method == "particle_mgrad"
+        else ParameterMeanProposalSpec()
+    )
+    assert path.support_failure is None
+    explicit = PathUpdateSpec.model_validate(
+        {"method": {"kind": method}, "proposal": {"kind": "parameter_mean"}}
+    )
+    assert explicit.proposal == ParameterMeanProposalSpec()
+    assert PathUpdateSpec.model_validate_json(path.model_dump_json()) == path
 
 
 @pytest.mark.parametrize(
@@ -360,7 +381,8 @@ def test_initialization_failure_stops_production_before_sampling(monkeypatch):
         ("auxiliary_kalman", "whole_path", "parameter_mean", None, True),
         ("twisted_particle_agrad", "whole_path", "parameter_mixture", "running_prefix", True),
         ("auxiliary_kalman", "blocked", "conditional_parameter", None, True),
-        ("particle_mgrad", "whole_path", "parameter_mixture", "running_prefix", False),
+        ("particle_mgrad", "whole_path", "parameter_mixture", "running_prefix", True),
+        ("particle_mgrad", "whole_path", "parameter_mixture", "prior", False),
         ("twisted_particle_agrad", "whole_path", "parameter_mixture", "prior", False),
         ("auxiliary_kalman", "whole_path", "parameter_mixture", "prior", False),
         ("auxiliary_kalman", "whole_path", "parameter_mixture", "running_prefix", False),

@@ -13,6 +13,7 @@ from grassmoth.artifacts.sampling import (
     JointSmootherSpec,
     NutsDASpec,
     NutsTrajectorySpec,
+    ParameterMeanProposalSpec,
     PathUpdateSpec,
     SamplerSpec,
 )
@@ -41,13 +42,19 @@ pytestmark = pytest.mark.inference(concern="sampling")
         pytest.param(
             "centred",
             NutsTrajectorySpec(),
-            PathUpdateSpec(method=GuidedMethodSpec(num_particles=16)),
+            PathUpdateSpec(
+                method=GuidedMethodSpec(num_particles=16),
+                proposal=ParameterMeanProposalSpec(),
+            ),
             id="conditional-centred-mgrad",
         ),
         pytest.param(
             "non_centred",
             NutsTrajectorySpec(),
-            PathUpdateSpec(method=GuidedMethodSpec(num_particles=16)),
+            PathUpdateSpec(
+                method=GuidedMethodSpec(num_particles=16),
+                proposal=ParameterMeanProposalSpec(),
+            ),
             id="conditional-noncentred-mgrad",
         ),
         pytest.param(
@@ -148,7 +155,10 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior():
 @pytest.mark.parametrize(
     "smoother",
     [
-        PathUpdateSpec(method=GuidedMethodSpec(num_particles=8)),
+        PathUpdateSpec(
+            method=GuidedMethodSpec(num_particles=8),
+            proposal=ParameterMeanProposalSpec(),
+        ),
         PathUpdateSpec(
             method=AuxiliaryKalmanMethodSpec(),
             update=BlockedPathUpdateSpec(block_length=2),
@@ -209,7 +219,10 @@ def test_conditional_nuts_keeps_exact_replay_and_reading_scores(feature, smoothe
         pytest.param(
             "non_centred",
             NutsTrajectorySpec(max_tree_depth=3),
-            PathUpdateSpec(method=GuidedMethodSpec(num_particles=8)),
+            PathUpdateSpec(
+                method=GuidedMethodSpec(num_particles=8),
+                proposal=ParameterMeanProposalSpec(),
+            ),
             id="conditional-mgrad",
         ),
         pytest.param(

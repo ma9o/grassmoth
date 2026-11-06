@@ -15,6 +15,7 @@ from scipy.stats import multivariate_normal, norm
 
 from grassmoth.artifacts.sampling import (
     GuidedMethodSpec,
+    ParameterMeanProposalSpec,
     PathUpdateSpec,
 )
 from grassmoth.models.ssm.compile.state_space import (
@@ -263,7 +264,10 @@ def _recurrence_posterior():
 )
 def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa):
     target, labels, starts, expected_mean, expected_second, label_masses = _recurrence_posterior()
-    spec = PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa))
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa),
+        proposal=ParameterMeanProposalSpec(),
+    )
     setup = build_smoother_setup(
         target,
         num_parameter_particles=2,
@@ -485,7 +489,10 @@ def test_recurrence_and_overlapping_window_mixture_invariance(method):
             target,
             ctx,
             guide,
-            PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=1)),
+            PathUpdateSpec(
+                method=GuidedMethodSpec(kind=method, num_particles=8, kappa=1),
+                proposal=ParameterMeanProposalSpec(),
+            ),
             key,
             path,
         ).latent_path

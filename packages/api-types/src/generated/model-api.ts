@@ -6288,19 +6288,22 @@ export interface components {
         };
         /**
          * ParameterMixtureProposalSpec
-         * @description Mix parameter-specific proposals and pay the complete proposal density.
+         * @description Mix parameter-specific proposals with exact density or auxiliary-label corrections.
          *
          *     Corenflos (2025), section 3.4 motivates running-prefix transition mixtures.
-         *     The implemented twisted-aGRAD variant uses local Gaussian components with a
-         *     shared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not
-         *     implemented. Early label collapse and poor shared guidance can reduce mixing.
+         *     Particle-mGRAD retains each proposal component label and integrates out the
+         *     Gaussian path auxiliary, extending Corenflos & Finke (2024), Appendix D.2.
+         *     Twisted Particle-aGRAD pays the full mixture density with a shared auxiliary
+         *     and look-ahead. Both require point observations without deterministic
+         *     recurrences. Prior-weighted and Kalman mixtures are not implemented. Early
+         *     label collapse and poor shared guidance can reduce mixing.
          *
          *     Design decision (2026-11-06): use candidate-specific proposal coverage to
          *     address parameter/path mismatch directly, without learned translation or
-         *     diffusion-scale charts. Exact mixture-density corrections preserve the target;
+         *     diffusion-scale charts. Exact proposal corrections preserve the target;
          *     they do not guarantee efficient mixing. A scalar low-diffusion experiment
-         *     found that the running-prefix mixture in physical coordinates matched the
-         *     charted mean-guide control in total effective samples per second. The separate
+         *     found that twisted-aGRAD's running-prefix mixture in physical coordinates
+         *     matched the charted mean-guide control in total effective samples per second. The separate
          *     SV blocked-Kalman run used conditional-parameter proposals, not this mixture,
          *     and retained parameter R-hat of 1.07--1.11; it does not establish general chart
          *     replacement. Source runs: scratchpad/chart-replacement-20261106 and
@@ -6322,19 +6325,22 @@ export interface components {
         };
         /**
          * ParameterMixtureProposalSpec
-         * @description Mix parameter-specific proposals and pay the complete proposal density.
+         * @description Mix parameter-specific proposals with exact density or auxiliary-label corrections.
          *
          *     Corenflos (2025), section 3.4 motivates running-prefix transition mixtures.
-         *     The implemented twisted-aGRAD variant uses local Gaussian components with a
-         *     shared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not
-         *     implemented. Early label collapse and poor shared guidance can reduce mixing.
+         *     Particle-mGRAD retains each proposal component label and integrates out the
+         *     Gaussian path auxiliary, extending Corenflos & Finke (2024), Appendix D.2.
+         *     Twisted Particle-aGRAD pays the full mixture density with a shared auxiliary
+         *     and look-ahead. Both require point observations without deterministic
+         *     recurrences. Prior-weighted and Kalman mixtures are not implemented. Early
+         *     label collapse and poor shared guidance can reduce mixing.
          *
          *     Design decision (2026-11-06): use candidate-specific proposal coverage to
          *     address parameter/path mismatch directly, without learned translation or
-         *     diffusion-scale charts. Exact mixture-density corrections preserve the target;
+         *     diffusion-scale charts. Exact proposal corrections preserve the target;
          *     they do not guarantee efficient mixing. A scalar low-diffusion experiment
-         *     found that the running-prefix mixture in physical coordinates matched the
-         *     charted mean-guide control in total effective samples per second. The separate
+         *     found that twisted-aGRAD's running-prefix mixture in physical coordinates
+         *     matched the charted mean-guide control in total effective samples per second. The separate
          *     SV blocked-Kalman run used conditional-parameter proposals, not this mixture,
          *     and retained parameter R-hat of 1.07--1.11; it does not establish general chart
          *     replacement. Source runs: scratchpad/chart-replacement-20261106 and
@@ -6552,6 +6558,7 @@ export interface components {
         readonly "PathUpdateSpec-Input": {
             readonly method?: components["schemas"]["PathMethodSpec-Input"];
             readonly update?: components["schemas"]["PathUpdateScopeSpec-Input"];
+            /** @description Heuristic: Particle-mGRAD defaults to a running-prefix parameter mixture to cover individual parameter candidates; an ESS advantage has not been established. Other methods default to parameter_mean. Mixtures currently require point observations without deterministic recurrences; select parameter_mean explicitly for mGRAD with intervals or recurrences. */
             readonly proposal?: components["schemas"]["PathProposalSpec-Input"];
             /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & Särkkä 2025, sections 2.2–2.4). */
             readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
@@ -6566,6 +6573,7 @@ export interface components {
         readonly "PathUpdateSpec-Output": {
             readonly method: components["schemas"]["PathMethodSpec-Output"];
             readonly update: components["schemas"]["PathUpdateScopeSpec-Output"];
+            /** @description Heuristic: Particle-mGRAD defaults to a running-prefix parameter mixture to cover individual parameter candidates; an ESS advantage has not been established. Other methods default to parameter_mean. Mixtures currently require point observations without deterministic recurrences; select parameter_mean explicitly for mGRAD with intervals or recurrences. */
             readonly proposal: components["schemas"]["PathProposalSpec-Output"];
             /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & Särkkä 2025, sections 2.2–2.4). */
             readonly latent_step: components["schemas"]["LatentStepSpec-Output"];

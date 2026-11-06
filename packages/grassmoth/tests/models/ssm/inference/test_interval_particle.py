@@ -197,7 +197,10 @@ def test_updates_preserve_analytic_interval_posterior(method):
                 else ConditionalParameterProposalSpec(),
             )
             if method.startswith("kalman")
-            else PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=1))
+            else PathUpdateSpec(
+                method=GuidedMethodSpec(kind=method, num_particles=8, kappa=1),
+                proposal=ParameterMeanProposalSpec(),
+            )
         ),
     )
     chains = 4096

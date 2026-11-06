@@ -270,6 +270,12 @@ def _correlated_gaussian_case(sample_count=4096):
     + [
         ("particle_mgrad", 0.0, 0, False, 3, 2, False),
         ("particle_mgrad", 0.7, 1, True, 3, 1, False),
+        pytest.param("particle_mgrad", 0.0, 1, False, 3, 2, True, id="mgrad_mixture_gaussian"),
+        pytest.param("particle_mgrad", 0.0, 0, False, 3, 2, True, id="mgrad_mixture_unshifted"),
+        pytest.param("particle_mgrad", 0.0, 1, False, 1, 1, True, id="mgrad_mixture_single_time"),
+        pytest.param(
+            "particle_mgrad", 0.7, 1, True, 3, 1, True, id="mgrad_mixture_nonlinear_pinned"
+        ),
         pytest.param(
             "twisted_particle_agrad", 0.0, 1, False, 3, 2, True, id="prefix_mixture_gaussian"
         ),
@@ -287,6 +293,10 @@ def test_guided_updates_preserve_path_and_label_posterior(
     target, labels, starts, expected_mean, expected_second, expected_labels = _case(
         cubic, pinned=pinned, steps=steps, dimension=dimension
     )
+    if prefix_mixture and method == "particle_mgrad" and dimension == 2:
+        target, labels, starts, expected_mean, expected_second, expected_labels = (
+            _correlated_gaussian_case()
+        )
     spec = PathUpdateSpec(
         method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa),
         proposal=ParameterMixtureProposalSpec() if prefix_mixture else ParameterMeanProposalSpec(),

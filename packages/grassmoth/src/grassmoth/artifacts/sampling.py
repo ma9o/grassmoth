@@ -25,7 +25,7 @@ References:
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 
 from pydantic import AfterValidator, Field
 
@@ -252,19 +252,22 @@ class ParameterMeanProposalSpec(Value):
 
 
 class ParameterMixtureProposalSpec(Value):
-    """Mix parameter-specific proposals and pay the complete proposal density.
+    """Mix parameter-specific proposals with exact density or auxiliary-label corrections.
 
     Corenflos (2025), section 3.4 motivates running-prefix transition mixtures.
-    The implemented twisted-aGRAD variant uses local Gaussian components with a
-    shared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not
-    implemented. Early label collapse and poor shared guidance can reduce mixing.
+    Particle-mGRAD retains each proposal component label and integrates out the
+    Gaussian path auxiliary, extending Corenflos & Finke (2024), Appendix D.2.
+    Twisted Particle-aGRAD pays the full mixture density with a shared auxiliary
+    and look-ahead. Both require point observations without deterministic
+    recurrences. Prior-weighted and Kalman mixtures are not implemented. Early
+    label collapse and poor shared guidance can reduce mixing.
 
     Design decision (2026-11-06): use candidate-specific proposal coverage to
     address parameter/path mismatch directly, without learned translation or
-    diffusion-scale charts. Exact mixture-density corrections preserve the target;
+    diffusion-scale charts. Exact proposal corrections preserve the target;
     they do not guarantee efficient mixing. A scalar low-diffusion experiment
-    found that the running-prefix mixture in physical coordinates matched the
-    charted mean-guide control in total effective samples per second. The separate
+    found that twisted-aGRAD's running-prefix mixture in physical coordinates
+    matched the charted mean-guide control in total effective samples per second. The separate
     SV blocked-Kalman run used conditional-parameter proposals, not this mixture,
     and retained parameter R-hat of 1.07--1.11; it does not establish general chart
     replacement. Source runs: scratchpad/chart-replacement-20261106 and
@@ -298,6 +301,16 @@ type PathProposalSpec = Annotated[
 ]
 
 
+def _default_path_proposal(data: dict[str, object]) -> PathProposalSpec:
+    """Resolve the authored method's proposal default before constructing its value."""
+    method = cast("PathMethodSpec", data["method"])
+    return (
+        ParameterMixtureProposalSpec()
+        if method.kind == "particle_mgrad"
+        else ParameterMeanProposalSpec()
+    )
+
+
 class UnsupportedPathUpdate(Value):
     """An authored path configuration for which no execution kernel is implemented."""
 
@@ -313,7 +326,16 @@ class PathUpdateSpec(Value):
 
     method: PathMethodSpec = Field(default_factory=GuidedMethodSpec)
     update: PathUpdateScopeSpec = Field(default_factory=WholePathUpdateSpec)
-    proposal: PathProposalSpec = Field(default_factory=ParameterMeanProposalSpec)
+    proposal: PathProposalSpec = Field(
+        default_factory=_default_path_proposal,
+        description=(
+            "Heuristic: Particle-mGRAD defaults to a running-prefix parameter mixture to "
+            "cover individual parameter candidates; an ESS advantage has not been established. "
+            "Other methods default to parameter_mean. Mixtures currently require point "
+            "observations without deterministic recurrences; select parameter_mean explicitly "
+            "for mGRAD with intervals or recurrences."
+        ),
+    )
     latent_step: LatentStepSpec = Field(
         default_factory=AdaptedLatentStepSpec, description=_PATH_STEP
     )
@@ -342,15 +364,11 @@ class PathUpdateSpec(Value):
             return UnsupportedPathUpdate(
                 message="Parameter-mixture proposals are not implemented for auxiliary Kalman."
             )
-        if method.kind != "twisted_particle_agrad":
-            return UnsupportedPathUpdate(
-                message="Parameter-mixture proposals are not implemented for Particle-mGRAD."
-            )
         if proposal.weights != "running_prefix":
             return UnsupportedPathUpdate(
-                message="Twisted Particle-aGRAD implements only running_prefix mixture weights."
+                message="Particle proposals implement only running_prefix mixture weights."
             )
-        if method.kappa != 1:
+        if method.kind == "twisted_particle_agrad" and method.kappa != 1:
             return UnsupportedPathUpdate(
                 message="Running-prefix mixture proposals require twisted Particle-aGRAD with kappa=1."
             )
