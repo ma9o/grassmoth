@@ -5329,8 +5329,8 @@ export interface components {
             readonly method: "mpgibbs";
             /**
              * N Parameter Particles
-             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).
-             * @default 2
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Heuristic: default M = 8; no ESS advantage has been established.
+             * @default 8
              */
             readonly n_parameter_particles?: number;
             /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */
@@ -5371,8 +5371,8 @@ export interface components {
             readonly method: "mpgibbs";
             /**
              * N Parameter Particles
-             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024).
-             * @default 2
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Heuristic: default M = 8; no ESS advantage has been established.
+             * @default 8
              */
             readonly n_parameter_particles: number;
             /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */

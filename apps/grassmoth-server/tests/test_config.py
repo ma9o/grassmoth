@@ -48,7 +48,7 @@ class TestSamplerSpec:
     def test_marginal_particle_gibbs_defaults(self):
         result = InferenceConfig().sampler
         assert isinstance(result.algorithm, MarginalParticleGibbsSpec)
-        assert result.algorithm.n_parameter_particles == 2
+        assert result.algorithm.n_parameter_particles == 8
         assert isinstance(result.algorithm.path_update.method, GuidedMethodSpec)
         assert result.algorithm.path_update.method.kind == "particle_mgrad"
         assert result.algorithm.path_update.method.num_particles == 64

@@ -496,12 +496,12 @@ class MarginalParticleGibbsSpec(Value):
 
     method: Literal["mpgibbs"] = "mpgibbs"
     n_parameter_particles: int = Field(
-        default=2,
+        default=8,
         ge=2,
         description=(
             "Parameter particles M per sweep: the current value and M - 1 proposals around "
-            "one auxiliary point. Work grows as O(TNM); Corenflos (2025, section 5) recommends "
-            "M = 2, given the weak performance of larger ensembles (Pozza & Zanella 2024)."
+            "one auxiliary point. Work grows as O(TNM). Heuristic: default M = 8; "
+            "no ESS advantage has been established."
         ),
     )
     path_update: PathUpdateSpec = Field(

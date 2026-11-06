@@ -39,7 +39,7 @@ inference:
     seed: 0
     algorithm:
       method: mpgibbs
-      n_parameter_particles: 2
+      n_parameter_particles: 8
       # path_update.method.kind: particle_mgrad, twisted_particle_agrad or auxiliary_kalman.
       path_update:
         method:
