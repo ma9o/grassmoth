@@ -13,7 +13,10 @@ from grassmoth.models.ssm.inference.samplers.particle.guided import (
     _killing_noise,
     _killing_reference,
 )
-from grassmoth.models.ssm.inference.samplers.particle.guided_selection import _cached_backward
+from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
+    _cached_backward,
+    _chunked_backward,
+)
 from grassmoth.models.ssm.inference.samplers.particle.math import label_logsumexp
 
 pytestmark = pytest.mark.inference(concern="sampling")
@@ -89,7 +92,8 @@ def test_cached_backward_preserves_selection_and_complete_label_suffix(steps, co
 
     select = jax.jit(jax.vmap(_cached_backward))
     picks, suffix = select(
-        *(jnp.asarray(v) for v in (weights, links, scores, observations, gumbels, last))
+        *(jnp.asarray(v) for v in (weights, links, scores, observations, gumbels)),
+        (jnp.asarray(last), jnp.asarray(observations[np.arange(2), -1, last])),
     )
     np.testing.assert_array_equal(picks, expected_picks)
     np.testing.assert_allclose(suffix, expected_suffix, atol=2e-6, rtol=2e-6)
@@ -107,3 +111,41 @@ def test_small_label_reduction_preserves_zero_mass_and_large_log_densities(label
         atol=2e-6,
         rtol=2e-6,
     )
+
+
+@pytest.mark.parametrize("steps", [1, 17, 129, 130, 259])
+def test_chunked_backward_preserves_path_and_label_suffix(steps):
+    rng = np.random.default_rng(392)
+    chains, count, labels = 2, 7, 3
+    weights = jnp.asarray(rng.normal(size=(chains, steps, count)), dtype=jnp.float32)
+    links = jnp.asarray(
+        rng.normal(size=(chains, steps - 1, count, count, labels)), dtype=jnp.float32
+    )
+    scores = jnp.asarray(rng.normal(size=(chains, steps, count, labels)), dtype=jnp.float32)
+    observations = jnp.asarray(rng.normal(size=(chains, steps, count, labels)), dtype=jnp.float32)
+    gumbels = jnp.asarray(rng.gumbel(size=(chains, steps - 1, count)), dtype=jnp.float32)
+    scores = scores.at[..., -1].set(-jnp.inf)
+    observations = observations.at[..., -1].set(-jnp.inf)
+    last = jnp.arange(chains, dtype=jnp.int32) + 3
+    expected = jax.jit(jax.vmap(_cached_backward))(
+        weights,
+        links,
+        scores,
+        observations,
+        gumbels,
+        (last, observations[jnp.arange(chains), -1, last]),
+    )
+
+    def select(weights, links, scores, observations, gumbels, last):
+        return _chunked_backward(
+            lambda start, length: jax.lax.dynamic_slice_in_dim(links, start, length),
+            weights,
+            scores,
+            observations,
+            gumbels,
+            last,
+        )
+
+    actual = jax.jit(jax.vmap(select))(weights, links, scores, observations, gumbels, last)
+    np.testing.assert_array_equal(actual[0], expected[0])
+    np.testing.assert_array_equal(actual[1], expected[1])

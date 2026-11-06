@@ -24,7 +24,7 @@ def _cached_backward(
     scores: Float[Array, "T P K"],
     observations: Float[Array, "T P K"],
     gumbels: Float[Array, "T-1 P"],
-    last: Int[Array, ""],
+    terminal: tuple[Int[Array, ""], Float[Array, " K"]],
 ) -> tuple[Int[Array, " T"], Float[Array, " K"]]:
     """Keep the exact label suffix on device for the complete backward traversal."""
     from functools import partial
@@ -33,8 +33,9 @@ def _cached_backward(
     from jax.experimental.pallas import triton as pltriton
 
     steps, count, labels = scores.shape
+    last, terminal_suffix = terminal
     if steps == 1:
-        return last[None], observations[0, last]
+        return last[None], terminal_suffix
     particle_block = pl.next_power_of_2(count)
     label_block = pl.next_power_of_2(labels)
 
@@ -44,16 +45,14 @@ def _cached_backward(
         scores_ref,
         observations_ref,
         gumbels_ref,
-        last_ref,
+        terminal_ref,
         picks_ref,
         suffix_ref,
     ):
         p = jnp.arange(particle_block)
         k = jnp.arange(label_block)
-        last_pick = last_ref[()]
-        initial_suffix = pltriton.load(
-            observations_ref.at[steps - 1, last_pick, k], mask=k < labels, other=0.0
-        )
+        last_pick = terminal_ref[0][()]
+        initial_suffix = pltriton.load(terminal_ref[1].at[k], mask=k < labels, other=0.0)
         picks_ref[steps - 1] = last_pick
 
         def body(offset, carry):
@@ -102,11 +101,51 @@ def _cached_backward(
         scores,
         observations,
         gumbels,
-        last,
+        terminal,
         cpu=partial(run, interpret=True),
         cuda=partial(run, interpret=False),
     )
     return cast("tuple[jax.Array, jax.Array]", result)
+
+
+def _chunked_backward(
+    links: Callable[[jax.Array, int], jax.Array],
+    weights: Float[Array, "T P"],
+    scores: Float[Array, "T P K"],
+    observations: Float[Array, "T P K"],
+    gumbels: Float[Array, "T-1 P"],
+    last: Int[Array, ""],
+) -> tuple[Int[Array, " T"], Float[Array, " K"]]:
+    """Cache at most 128 transitions, carrying the complete suffix between chunks.
+
+    Heuristic: 128 transitions retain time-parallel scoring while bounding the
+    float32 pair table to 64 MiB for 256 particles and two parameter labels.
+    Chunking changes only evaluation scheduling, not scores or random draws.
+    """
+    steps = scores.shape[0]
+    chunk = 128
+    blocks, remainder = divmod(steps - 1, chunk)
+    initial = (jnp.zeros((steps,), dtype=jnp.int32).at[-1].set(last), observations[-1, last])
+
+    def select(carry, start, length):
+        picks, suffix = carry
+        current, suffix = _cached_backward(
+            jax.lax.dynamic_slice_in_dim(weights, start, length + 1),
+            jax.lax.optimization_barrier(links(start, length)),
+            jax.lax.dynamic_slice_in_dim(scores, start, length + 1),
+            jax.lax.dynamic_slice_in_dim(observations, start, length + 1),
+            jax.lax.dynamic_slice_in_dim(gumbels, start, length),
+            (picks[start + length], suffix),
+        )
+        return jax.lax.dynamic_update_slice_in_dim(picks, current, start, axis=0), suffix
+
+    def body(offset, carry):
+        return select(carry, steps - 1 - (offset + 1) * chunk, chunk)
+
+    carry = jax.lax.fori_loop(0, blocks, body, initial) if blocks else initial
+    if remainder:
+        carry = select(carry, jnp.asarray(0), remainder)
+    return cast("tuple[jax.Array, jax.Array]", carry)
 
 
 def _window_backward(
@@ -287,9 +326,7 @@ def select_path(
             )
         )(memory_bank[:-1], jnp.arange(1, steps))
 
-        # All candidate successors are known after filtering. Materialize exact
-        # links over time and both particle axes before the suffix recursion.
-        # This trades O(T P^2 K) storage for parallel transition scoring.
+        # Score all particle pairs within one bounded time chunk.
         def pairwise(
             current: Float[Array, "P R"],
             index: Int[Array, ""],
@@ -301,15 +338,18 @@ def select_path(
                 )(transition_means)
             )(current)
 
-        links_bank = jax.lax.optimization_barrier(
-            jax.vmap(pairwise)(memory_bank[1:], jnp.arange(1, steps), means).astype(scores.dtype)
-        )
+        def links(start: jax.Array, length: int) -> jax.Array:
+            return jax.vmap(pairwise)(
+                jax.lax.dynamic_slice_in_dim(memory_bank, start + 1, length),
+                start + jnp.arange(1, length + 1),
+                jax.lax.dynamic_slice_in_dim(means, start, length),
+            ).astype(scores.dtype)
 
         gumbels = jax.vmap(lambda k: jax.random.gumbel(k, (count,), dtype=reference_dtype))(
             jax.random.split(earlier_key, steps - 1)
         )[::-1]
-        picks, suffix = _cached_backward(
-            backward_weights, links_bank, scores, observation_bank, gumbels, last
+        picks, suffix = _chunked_backward(
+            links, backward_weights, scores, observation_bank, gumbels, last
         )
         initial_selected = picks[0]
         # The backward suffix already contains every selected exact observation and
