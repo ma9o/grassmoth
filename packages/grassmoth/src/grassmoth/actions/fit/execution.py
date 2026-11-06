@@ -94,6 +94,8 @@ def fit_model(
     clock = execution_context.clock
     logger = execution_context.logger
     data_for_model, sampler = inputs.data_for_model, inputs.sampler
+    if (failure := sampler.support_failure) is not None:
+        return ModelFitFailure(error=failure.message, duration_seconds=0.0)
     logger.info(
         "Fitting model: rows=%d indicators=%d sampler=%s",
         sum(series.history.times.layout[0][0] for series in data_for_model.series.values()),

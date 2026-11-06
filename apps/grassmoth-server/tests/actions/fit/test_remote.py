@@ -9,9 +9,10 @@ import pytest
 from grassmoth.actions.contracts.io import FitInputs
 from grassmoth.artifacts.model.question import QuestionSpec
 from grassmoth.artifacts.sampling import (
-    GuidedPathSpec,
+    GuidedMethodSpec,
     InferenceHardware,
     MarginalParticleGibbsSpec,
+    PathUpdateSpec,
     SamplerSpec,
 )
 from grassmoth_server.actions.contracts.identity import CallId
@@ -73,7 +74,7 @@ def test_modal_function_requests_selected_gpu_without_changing_joint_sampler(
             num_chains=4,
             time_limit_seconds=time_limit,
             algorithm=MarginalParticleGibbsSpec(
-                path_update=GuidedPathSpec(method="twisted_particle_agrad")
+                path_update=PathUpdateSpec(method=GuidedMethodSpec(kind="twisted_particle_agrad"))
             ),
         ),
         compute_loo_diagnostics=False,

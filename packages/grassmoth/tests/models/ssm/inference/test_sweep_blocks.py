@@ -8,7 +8,10 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.artifacts.sampling import GuidedPathSpec, SamplerSpec
+from grassmoth.artifacts.sampling import (
+    PathUpdateSpec,
+    SamplerSpec,
+)
 from grassmoth.compute.budget import (
     AcceleratorMemoryBudget,
     ComputeBudget,
@@ -203,7 +206,7 @@ def test_history_budget_places_combined_diagnostics_on_host(monkeypatch):
 
 
 def test_adaptation_rolling_totals_match_window_and_freeze_after_warmup():
-    spec = latent_adaptation(GuidedPathSpec())
+    spec = latent_adaptation(PathUpdateSpec())
     state = initialize_adaptation(jnp.ones((2, 3)))
     rng = np.random.default_rng(91)
     proposed = rng.integers(0, 2, (ADAPTATION_WINDOW + 8, 2, 3)).astype(bool)

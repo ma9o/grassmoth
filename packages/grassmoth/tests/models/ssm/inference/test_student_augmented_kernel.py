@@ -11,7 +11,16 @@ import numpyro.distributions as dist
 import pytest
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, FixedLatentStepSpec, GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanMethodSpec,
+    BlockedPathUpdateSpec,
+    ConditionalParameterProposalSpec,
+    FixedLatentStepSpec,
+    GuidedMethodSpec,
+    ParameterMeanProposalSpec,
+    PathUpdateSpec,
+    WholePathUpdateSpec,
+)
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
@@ -122,9 +131,17 @@ def test_augmented_sweep_preserves_joint_marginal_posterior(
         parameter_proposal=proposal,
         parameter_reference_path=jnp.zeros((2, 1)),
         path_update=(
-            AuxiliaryKalmanSpec(block_length=1 if method == "kalman_blocked" else None)
+            PathUpdateSpec(
+                method=AuxiliaryKalmanMethodSpec(),
+                update=BlockedPathUpdateSpec(block_length=1)
+                if method == "kalman_blocked"
+                else WholePathUpdateSpec(),
+                proposal=ConditionalParameterProposalSpec()
+                if method == "kalman_blocked"
+                else ParameterMeanProposalSpec(),
+            )
             if method.startswith("kalman")
-            else GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
+            else PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa))
         ),
         initial_chart=PathChart(
             jnp.broadcast_to(jnp.array([[-0.35, 0.2, 0.15]]), (2, 1, 3)),
@@ -166,8 +183,9 @@ def test_trace_and_split_sweeps_preserve_marginal_caches_and_fixed_steps(fixed):
         num_parameter_particles=3,
         parameter_proposal="pseudo_langevin",
         parameter_reference_path=jnp.zeros((2, 1)),
-        path_update=GuidedPathSpec(
-            method="twisted_particle_agrad", num_particles=8, kappa=1, **options
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8, kappa=1),
+            **options,
         ),
     )
     state = _initialize(target, kernel, jnp.zeros(5))

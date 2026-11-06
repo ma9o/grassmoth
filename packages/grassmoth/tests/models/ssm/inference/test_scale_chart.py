@@ -12,11 +12,16 @@ import pytest
 from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
-    AuxiliaryKalmanSpec,
+    AuxiliaryKalmanMethodSpec,
+    BlockedPathUpdateSpec,
+    ConditionalParameterProposalSpec,
     GaussianInitializationSpec,
-    GuidedPathSpec,
+    GuidedMethodSpec,
     MarginalParticleGibbsSpec,
+    ParameterMeanProposalSpec,
+    PathUpdateSpec,
     SamplerSpec,
+    WholePathUpdateSpec,
 )
 from grassmoth.models.ssm.inference.continuation import frozen_particle_tuning
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
@@ -147,9 +152,17 @@ def test_scale_charted_joint_kernel_preserves_analytic_physical_posterior(method
     kernel = build_marginal_particle_gibbs_kernel(
         target,
         path_update=(
-            AuxiliaryKalmanSpec(block_length=2 if method == "kalman_blocked" else None)
+            PathUpdateSpec(
+                method=AuxiliaryKalmanMethodSpec(),
+                update=BlockedPathUpdateSpec(block_length=2)
+                if method == "kalman_blocked"
+                else WholePathUpdateSpec(),
+                proposal=ConditionalParameterProposalSpec()
+                if method == "kalman_blocked"
+                else ParameterMeanProposalSpec(),
+            )
             if method.startswith("kalman")
-            else GuidedPathSpec(method=method, num_particles=8, kappa=1)
+            else PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=1))
         ),
         num_parameter_particles=2,
         param_step_size=0.3,
@@ -202,7 +215,7 @@ def test_scale_chart_checkpoint_continuation_restores_its_learned_center():
     )
     assert isinstance(initialization, ParticleInitialization)
     chart = _chart()
-    spec = GuidedPathSpec(method="particle_mgrad", num_particles=8, kappa=1)
+    spec = PathUpdateSpec(method=GuidedMethodSpec(kind="particle_mgrad", num_particles=8, kappa=1))
     kernel = build_marginal_particle_gibbs_kernel(
         target, path_update=spec, num_parameter_particles=2, initial_chart=chart
     )
@@ -271,7 +284,9 @@ def test_float32_distant_scale_labels_have_zero_mass_without_saturating_the_map(
     kernel = build_marginal_particle_gibbs_kernel(
         target,
         num_parameter_particles=2,
-        path_update=GuidedPathSpec(method="particle_mgrad", num_particles=4, kappa=1),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="particle_mgrad", num_particles=4, kappa=1)
+        ),
         initial_chart=chart,
     )
     state = _initialize_chain_state(

@@ -24,9 +24,9 @@ from grassmoth.artifacts.reports.profiling import (
     TimingSpread,
 )
 from grassmoth.artifacts.sampling import (
-    AuxiliaryKalmanSpec,
+    AuxiliaryKalmanMethodSpec,
     FixedLatentStepSpec,
-    GuidedPathSpec,
+    GuidedMethodSpec,
     MarginalParticleGibbsSpec,
     SamplerSpec,
 )
@@ -259,8 +259,8 @@ def run_marginal_particle_gibbs(
         jnp.asarray(initial_latent_delta_value, dtype=observations.dtype),
     )
     curvature_limited = (
-        isinstance(kernel.path_update, GuidedPathSpec)
-        and kernel.path_update.kappa == 1
+        isinstance(kernel.path_update.method, GuidedMethodSpec)
+        and kernel.path_update.method.kappa == 1
         and not isinstance(kernel.path_update.latent_step, FixedLatentStepSpec)
     )
     latent_free_mask = (
@@ -395,14 +395,14 @@ def run_marginal_particle_gibbs(
                     "path_block_acceptance": info["path_block_acceptance"],
                     "path_update_rms": info["path_update_rms"],
                 }
-                if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
+                if isinstance(kernel.path_update.method, AuxiliaryKalmanMethodSpec)
                 else {}
             ),
             **{
                 metric.history_key: info[metric.history_key]
                 for metric in (
                     ()
-                    if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
+                    if isinstance(kernel.path_update.method, AuxiliaryKalmanMethodSpec)
                     else ParticleWeightMetric
                 )
             },
@@ -549,9 +549,9 @@ def run_marginal_particle_gibbs(
         )
     dimensions = (
         None
-        if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
+        if isinstance(kernel.path_update.method, AuxiliaryKalmanMethodSpec)
         else ParticleProfileDimensions(
-            particles=kernel.path_update.num_particles, labels=kernel.num_parameter_particles
+            particles=kernel.path_update.method.num_particles, labels=kernel.num_parameter_particles
         )
     )
 

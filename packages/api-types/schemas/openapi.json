@@ -1984,76 +1984,38 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "AuxiliaryKalmanSpec-Input": {
+      "AuxiliaryKalmanMethodSpec-Input": {
         "additionalProperties": false,
-        "description": "Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.\n\nCorenflos & S\u00e4rkk\u00e4 (2025), https://arxiv.org/abs/2303.00301, sections 2.2\u20132.4.\nWhole-path forward and reverse approximations are rebuilt at their respective\npaths. Blocks instead linearize at the fixed auxiliary under a sampled label.\nNormalized proposal densities correct to the true nonlinear target.",
+        "description": "Parallel Gaussian proposals corrected to exact nonlinear densities.\n\nCorenflos & S\u00e4rkk\u00e4 (2025), sections 2.2\u20132.4. Poor Gaussian fits, long memory\nand separated modes can reduce acceptance without changing the target.",
         "properties": {
-          "method": {
+          "kind": {
             "const": "auxiliary_kalman",
             "default": "auxiliary_kalman",
-            "title": "Method",
+            "title": "Kind",
             "type": "string"
-          },
-          "block_length": {
-            "anyOf": [
-              {
-                "minimum": 1,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": 300,
-            "description": "Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.",
-            "title": "Block Length"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Input",
-            "description": "Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Interval readings and deterministic recurrences are replayed exactly under every label, never proposed. Parameter proposals and final parameter-label selection remain MPGibbs."
           }
         },
-        "title": "AuxiliaryKalmanSpec",
+        "title": "AuxiliaryKalmanMethodSpec",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "AuxiliaryKalmanSpec-Output": {
+      "AuxiliaryKalmanMethodSpec-Output": {
         "additionalProperties": false,
-        "description": "Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.\n\nCorenflos & S\u00e4rkk\u00e4 (2025), https://arxiv.org/abs/2303.00301, sections 2.2\u20132.4.\nWhole-path forward and reverse approximations are rebuilt at their respective\npaths. Blocks instead linearize at the fixed auxiliary under a sampled label.\nNormalized proposal densities correct to the true nonlinear target.",
+        "description": "Parallel Gaussian proposals corrected to exact nonlinear densities.\n\nCorenflos & S\u00e4rkk\u00e4 (2025), sections 2.2\u20132.4. Poor Gaussian fits, long memory\nand separated modes can reduce acceptance without changing the target.",
         "properties": {
-          "method": {
+          "kind": {
             "const": "auxiliary_kalman",
             "default": "auxiliary_kalman",
-            "title": "Method",
+            "title": "Kind",
             "type": "string"
-          },
-          "block_length": {
-            "anyOf": [
-              {
-                "minimum": 1,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": 300,
-            "description": "Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.",
-            "title": "Block Length"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Output",
-            "description": "Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Interval readings and deterministic recurrences are replayed exactly under every label, never proposed. Parameter proposals and final parameter-label selection remain MPGibbs."
           }
         },
         "required": [
-          "method",
-          "block_length",
-          "latent_step"
+          "kind"
         ],
-        "title": "AuxiliaryKalmanSpec",
+        "title": "AuxiliaryKalmanMethodSpec",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
@@ -2393,6 +2355,58 @@
         "x-layer": "authored",
         "x-concern": "scientific_model",
         "description": "A binary operator combines two scalar expression operands."
+      },
+      "BlockedPathUpdateSpec-Input": {
+        "additionalProperties": false,
+        "description": "Update contiguous trajectory blocks.",
+        "properties": {
+          "kind": {
+            "const": "blocked",
+            "default": "blocked",
+            "title": "Kind",
+            "type": "string"
+          },
+          "block_length": {
+            "default": 300,
+            "description": "Time points per block. The implemented Kalman update alternates colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.",
+            "minimum": 1,
+            "title": "Block Length",
+            "type": "integer"
+          }
+        },
+        "title": "BlockedPathUpdateSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "BlockedPathUpdateSpec-Output": {
+        "additionalProperties": false,
+        "description": "Update contiguous trajectory blocks.",
+        "properties": {
+          "kind": {
+            "const": "blocked",
+            "default": "blocked",
+            "title": "Kind",
+            "type": "string"
+          },
+          "block_length": {
+            "default": 300,
+            "description": "Time points per block. The implemented Kalman update alternates colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.",
+            "minimum": 1,
+            "title": "Block Length",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "block_length"
+        ],
+        "title": "BlockedPathUpdateSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
       },
       "Body_upload_file_api_upload_post": {
         "properties": {
@@ -3314,6 +3328,43 @@
         "title": "ComputedExtractionSpec",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.observations.preparation",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ConditionalParameterProposalSpec-Input": {
+        "additionalProperties": false,
+        "description": "Build proposals under a label sampled conditional on the current path.\n\nThe blocked Kalman update holds this label fixed during its conditional block\nmoves. This is not the ensemble mean and can retain parameter/path dependence.",
+        "properties": {
+          "kind": {
+            "const": "conditional_parameter",
+            "default": "conditional_parameter",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "ConditionalParameterProposalSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ConditionalParameterProposalSpec-Output": {
+        "additionalProperties": false,
+        "description": "Build proposals under a label sampled conditional on the current path.\n\nThe blocked Kalman update holds this label fixed during its conditional block\nmoves. This is not the ensemble mean and can retain parameter/path dependence.",
+        "properties": {
+          "kind": {
+            "const": "conditional_parameter",
+            "default": "conditional_parameter",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ConditionalParameterProposalSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
@@ -16642,18 +16693,18 @@
         "x-concern": "identity",
         "description": "A native Git object identity for an immutable tree or commit."
       },
-      "GuidedPathSpec-Input": {
+      "GuidedMethodSpec-Input": {
         "additionalProperties": false,
-        "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nCorenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear\ntransitions and densities pay every weight, so each method's approximation costs\nmixing, never the target.",
+        "description": "Particle-mGRAD or twisted Particle-aGRAD with their particle-bank settings.\n\nCorenflos & Finke (2024), sections 4.1\u20134.4. mGRAD integrates out the path\nauxiliary; twisted aGRAD retains it and adds Gaussian look-ahead. These\nmethods use the same exact parameter-mixture target, with different weights.",
         "properties": {
-          "method": {
+          "kind": {
             "default": "particle_mgrad",
             "description": "particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings, such as long interval windows, can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency.",
             "enum": [
               "particle_mgrad",
               "twisted_particle_agrad"
             ],
-            "title": "Method",
+            "title": "Kind",
             "type": "string"
           },
           "num_particles": {
@@ -16662,10 +16713,6 @@
             "minimum": 2,
             "title": "Num Particles",
             "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Input",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
           },
           "kappa": {
             "default": 1,
@@ -16683,32 +16730,26 @@
             "minimum": 1,
             "title": "Scan Unroll",
             "type": "integer"
-          },
-          "prefix_mixture": {
-            "default": false,
-            "description": "Opt in to per-parameter-label local Gaussian proposals, mixed with the unfloored prefix label probabilities. Every particle pays the full mixture density; the shared auxiliary law and look-ahead remain unchanged. Requires twisted_particle_agrad with kappa=1 and point readings without replay. Early label collapse, poor shared guidance and separated modes can reduce mixing.",
-            "title": "Prefix Mixture",
-            "type": "boolean"
           }
         },
-        "title": "GuidedPathSpec",
+        "title": "GuidedMethodSpec",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "GuidedPathSpec-Output": {
+      "GuidedMethodSpec-Output": {
         "additionalProperties": false,
-        "description": "Sequential conditional SMC with exact Gaussian transition-informed proposals.\n\nCorenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear\ntransitions and densities pay every weight, so each method's approximation costs\nmixing, never the target.",
+        "description": "Particle-mGRAD or twisted Particle-aGRAD with their particle-bank settings.\n\nCorenflos & Finke (2024), sections 4.1\u20134.4. mGRAD integrates out the path\nauxiliary; twisted aGRAD retains it and adds Gaussian look-ahead. These\nmethods use the same exact parameter-mixture target, with different weights.",
         "properties": {
-          "method": {
+          "kind": {
             "default": "particle_mgrad",
             "description": "particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings, such as long interval windows, can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency.",
             "enum": [
               "particle_mgrad",
               "twisted_particle_agrad"
             ],
-            "title": "Method",
+            "title": "Kind",
             "type": "string"
           },
           "num_particles": {
@@ -16717,10 +16758,6 @@
             "minimum": 2,
             "title": "Num Particles",
             "type": "integer"
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Output",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
           },
           "kappa": {
             "default": 1,
@@ -16738,23 +16775,15 @@
             "minimum": 1,
             "title": "Scan Unroll",
             "type": "integer"
-          },
-          "prefix_mixture": {
-            "default": false,
-            "description": "Opt in to per-parameter-label local Gaussian proposals, mixed with the unfloored prefix label probabilities. Every particle pays the full mixture density; the shared auxiliary law and look-ahead remain unchanged. Requires twisted_particle_agrad with kappa=1 and point readings without replay. Early label collapse, poor shared guidance and separated modes can reduce mixing.",
-            "title": "Prefix Mixture",
-            "type": "boolean"
           }
         },
         "required": [
-          "method",
+          "kind",
           "num_particles",
-          "latent_step",
           "kappa",
-          "scan_unroll",
-          "prefix_mixture"
+          "scan_unroll"
         ],
-        "title": "GuidedPathSpec",
+        "title": "GuidedMethodSpec",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
@@ -20693,24 +20722,12 @@
         "x-concern": "scientific_model"
       },
       "NutsSmootherSpec-Input": {
-        "discriminator": {
-          "mapping": {
-            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanSpec-Input",
-            "joint": "#/components/schemas/JointSmootherSpec-Input",
-            "particle_mgrad": "#/components/schemas/GuidedPathSpec-Input",
-            "twisted_particle_agrad": "#/components/schemas/GuidedPathSpec-Input"
-          },
-          "propertyName": "method"
-        },
-        "oneOf": [
+        "anyOf": [
           {
             "$ref": "#/components/schemas/JointSmootherSpec-Input"
           },
           {
-            "$ref": "#/components/schemas/GuidedPathSpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/AuxiliaryKalmanSpec-Input"
+            "$ref": "#/components/schemas/PathUpdateSpec-Input"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -20718,24 +20735,12 @@
         "x-concern": "scientific_model"
       },
       "NutsSmootherSpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanSpec-Output",
-            "joint": "#/components/schemas/JointSmootherSpec-Output",
-            "particle_mgrad": "#/components/schemas/GuidedPathSpec-Output",
-            "twisted_particle_agrad": "#/components/schemas/GuidedPathSpec-Output"
-          },
-          "propertyName": "method"
-        },
-        "oneOf": [
+        "anyOf": [
           {
             "$ref": "#/components/schemas/JointSmootherSpec-Output"
           },
           {
-            "$ref": "#/components/schemas/GuidedPathSpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/AuxiliaryKalmanSpec-Output"
+            "$ref": "#/components/schemas/PathUpdateSpec-Output"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -21577,6 +21582,101 @@
         "x-concern": "identity",
         "description": "A scientific parameter identity connects component coefficients to one parameter definition."
       },
+      "ParameterMeanProposalSpec-Input": {
+        "additionalProperties": false,
+        "description": "Build proposal dynamics at the mean of supported parameter candidates.\n\nThis repository's shared-guide construction is symmetric in the ensemble.\nSeparated parameter components can be poorly represented by their mean.",
+        "properties": {
+          "kind": {
+            "const": "parameter_mean",
+            "default": "parameter_mean",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "ParameterMeanProposalSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ParameterMeanProposalSpec-Output": {
+        "additionalProperties": false,
+        "description": "Build proposal dynamics at the mean of supported parameter candidates.\n\nThis repository's shared-guide construction is symmetric in the ensemble.\nSeparated parameter components can be poorly represented by their mean.",
+        "properties": {
+          "kind": {
+            "const": "parameter_mean",
+            "default": "parameter_mean",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "ParameterMeanProposalSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ParameterMixtureProposalSpec-Input": {
+        "additionalProperties": false,
+        "description": "Mix parameter-specific proposals and pay the complete proposal density.\n\nCorenflos (2025), section 3.4 motivates running-prefix transition mixtures.\nThe implemented twisted-aGRAD variant uses local Gaussian components with a\nshared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not\nimplemented. Early label collapse and poor shared guidance can reduce mixing.",
+        "properties": {
+          "kind": {
+            "const": "parameter_mixture",
+            "default": "parameter_mixture",
+            "title": "Kind",
+            "type": "string"
+          },
+          "weights": {
+            "default": "running_prefix",
+            "description": "running_prefix uses each particle's exact label probabilities through the previous time (Corenflos 2025, section 3.4). prior uses parameter priors and the ensemble-proposal correction, without path evidence; currently unsupported.",
+            "enum": [
+              "running_prefix",
+              "prior"
+            ],
+            "title": "Weights",
+            "type": "string"
+          }
+        },
+        "title": "ParameterMixtureProposalSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ParameterMixtureProposalSpec-Output": {
+        "additionalProperties": false,
+        "description": "Mix parameter-specific proposals and pay the complete proposal density.\n\nCorenflos (2025), section 3.4 motivates running-prefix transition mixtures.\nThe implemented twisted-aGRAD variant uses local Gaussian components with a\nshared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not\nimplemented. Early label collapse and poor shared guidance can reduce mixing.",
+        "properties": {
+          "kind": {
+            "const": "parameter_mixture",
+            "default": "parameter_mixture",
+            "title": "Kind",
+            "type": "string"
+          },
+          "weights": {
+            "default": "running_prefix",
+            "description": "running_prefix uses each particle's exact label probabilities through the previous time (Corenflos 2025, section 3.4). prior uses parameter priors and the ensemble-proposal correction, without path evidence; currently unsupported.",
+            "enum": [
+              "running_prefix",
+              "prior"
+            ],
+            "title": "Weights",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "weights"
+        ],
+        "title": "ParameterMixtureProposalSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "ParameterProposal": {
         "enum": [
           "random_walk",
@@ -22180,44 +22280,186 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "PathUpdateSpec-Input": {
+      "PathMethodSpec-Input": {
         "discriminator": {
           "mapping": {
-            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanSpec-Input",
-            "particle_mgrad": "#/components/schemas/GuidedPathSpec-Input",
-            "twisted_particle_agrad": "#/components/schemas/GuidedPathSpec-Input"
+            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanMethodSpec-Input",
+            "particle_mgrad": "#/components/schemas/GuidedMethodSpec-Input",
+            "twisted_particle_agrad": "#/components/schemas/GuidedMethodSpec-Input"
           },
-          "propertyName": "method"
+          "propertyName": "kind"
         },
         "oneOf": [
           {
-            "$ref": "#/components/schemas/GuidedPathSpec-Input"
+            "$ref": "#/components/schemas/GuidedMethodSpec-Input"
           },
           {
-            "$ref": "#/components/schemas/AuxiliaryKalmanSpec-Input"
+            "$ref": "#/components/schemas/AuxiliaryKalmanMethodSpec-Input"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "PathUpdateSpec-Output": {
+      "PathMethodSpec-Output": {
         "discriminator": {
           "mapping": {
-            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanSpec-Output",
-            "particle_mgrad": "#/components/schemas/GuidedPathSpec-Output",
-            "twisted_particle_agrad": "#/components/schemas/GuidedPathSpec-Output"
+            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanMethodSpec-Output",
+            "particle_mgrad": "#/components/schemas/GuidedMethodSpec-Output",
+            "twisted_particle_agrad": "#/components/schemas/GuidedMethodSpec-Output"
           },
-          "propertyName": "method"
+          "propertyName": "kind"
         },
         "oneOf": [
           {
-            "$ref": "#/components/schemas/GuidedPathSpec-Output"
+            "$ref": "#/components/schemas/GuidedMethodSpec-Output"
           },
           {
-            "$ref": "#/components/schemas/AuxiliaryKalmanSpec-Output"
+            "$ref": "#/components/schemas/AuxiliaryKalmanMethodSpec-Output"
           }
         ],
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PathProposalSpec-Input": {
+        "discriminator": {
+          "mapping": {
+            "conditional_parameter": "#/components/schemas/ConditionalParameterProposalSpec-Input",
+            "parameter_mean": "#/components/schemas/ParameterMeanProposalSpec-Input",
+            "parameter_mixture": "#/components/schemas/ParameterMixtureProposalSpec-Input"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ParameterMeanProposalSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/ParameterMixtureProposalSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/ConditionalParameterProposalSpec-Input"
+          }
+        ],
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PathProposalSpec-Output": {
+        "discriminator": {
+          "mapping": {
+            "conditional_parameter": "#/components/schemas/ConditionalParameterProposalSpec-Output",
+            "parameter_mean": "#/components/schemas/ParameterMeanProposalSpec-Output",
+            "parameter_mixture": "#/components/schemas/ParameterMixtureProposalSpec-Output"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ParameterMeanProposalSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/ParameterMixtureProposalSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/ConditionalParameterProposalSpec-Output"
+          }
+        ],
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PathUpdateScopeSpec-Input": {
+        "discriminator": {
+          "mapping": {
+            "blocked": "#/components/schemas/BlockedPathUpdateSpec-Input",
+            "whole_path": "#/components/schemas/WholePathUpdateSpec-Input"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/WholePathUpdateSpec-Input"
+          },
+          {
+            "$ref": "#/components/schemas/BlockedPathUpdateSpec-Input"
+          }
+        ],
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PathUpdateScopeSpec-Output": {
+        "discriminator": {
+          "mapping": {
+            "blocked": "#/components/schemas/BlockedPathUpdateSpec-Output",
+            "whole_path": "#/components/schemas/WholePathUpdateSpec-Output"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/WholePathUpdateSpec-Output"
+          },
+          {
+            "$ref": "#/components/schemas/BlockedPathUpdateSpec-Output"
+          }
+        ],
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PathUpdateSpec-Input": {
+        "additionalProperties": false,
+        "description": "Common declarative path settings, with support resolved before execution.\n\nThe schema describes independent choices; support_failure owns the current\nimplementation matrix. Model-dependent restrictions belong to fit preflight.",
+        "properties": {
+          "method": {
+            "$ref": "#/components/schemas/PathMethodSpec-Input"
+          },
+          "update": {
+            "$ref": "#/components/schemas/PathUpdateScopeSpec-Input"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/PathProposalSpec-Input"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Input",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & S\u00e4rkk\u00e4 2025, sections 2.2\u20132.4)."
+          }
+        },
+        "title": "PathUpdateSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PathUpdateSpec-Output": {
+        "additionalProperties": false,
+        "description": "Common declarative path settings, with support resolved before execution.\n\nThe schema describes independent choices; support_failure owns the current\nimplementation matrix. Model-dependent restrictions belong to fit preflight.",
+        "properties": {
+          "method": {
+            "$ref": "#/components/schemas/PathMethodSpec-Output"
+          },
+          "update": {
+            "$ref": "#/components/schemas/PathUpdateScopeSpec-Output"
+          },
+          "proposal": {
+            "$ref": "#/components/schemas/PathProposalSpec-Output"
+          },
+          "latent_step": {
+            "$ref": "#/components/schemas/LatentStepSpec-Output",
+            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & S\u00e4rkk\u00e4 2025, sections 2.2\u20132.4)."
+          }
+        },
+        "required": [
+          "method",
+          "update",
+          "proposal",
+          "latent_step"
+        ],
+        "title": "PathUpdateSpec",
+        "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
@@ -26237,6 +26479,43 @@
           "msg",
           "type"
         ]
+      },
+      "WholePathUpdateSpec-Input": {
+        "additionalProperties": false,
+        "description": "Update the complete trajectory; particle methods still build it sequentially.",
+        "properties": {
+          "kind": {
+            "const": "whole_path",
+            "default": "whole_path",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "title": "WholePathUpdateSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "WholePathUpdateSpec-Output": {
+        "additionalProperties": false,
+        "description": "Update the complete trajectory; particle methods still build it sequentially.",
+        "properties": {
+          "kind": {
+            "const": "whole_path",
+            "default": "whole_path",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "WholePathUpdateSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
       },
       "WindowExpression": {
         "description": "Deterministic support-window expression that returns one scalar per window. Use Python-like syntax over source_columns with arithmetic, comparisons, if/else, and helper functions such as any(), sum(), mean(), std(), first(), last(), count_true(), count_non_null(), lower(), contains(), and contains_any(). Use None for missing values.",

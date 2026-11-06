@@ -16,7 +16,11 @@ from grassmoth.artifacts.model.expressions import LiteralExpression, coefficient
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec, LikelihoodSpec, NormalLawSpec
 from grassmoth.artifacts.model.mechanism import DriftMechanismSpec, PotentialMechanismSpec
 from grassmoth.artifacts.model.reasoning import ReasoningSpec
-from grassmoth.artifacts.sampling import FixedLatentStepSpec, GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    FixedLatentStepSpec,
+    GuidedMethodSpec,
+    PathUpdateSpec,
+)
 from grassmoth.models.ssm.compile.state_space import (
     AdditiveRecurrences,
     ParallelRecurrences,
@@ -209,7 +213,9 @@ def test_static_and_accumulator_target_preserves_support_density_feedback_and_gr
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=4)
+        ),
     )
     after, info = jax.jit(kernel.step_fn)(
         _initial(target, coordinates, kernel=kernel), jax.random.key(4)
@@ -248,9 +254,8 @@ def test_parameter_free_model_moves_paths_and_replays_static_and_accumulated_sta
         target,
         num_parameter_particles=2,
         exact_constraints=problem.exact_constraints,
-        path_update=GuidedPathSpec(
-            method="twisted_particle_agrad",
-            num_particles=8,
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8),
             latent_step=FixedLatentStepSpec(delta=0.1),
         ),
     )
@@ -288,7 +293,7 @@ def test_unmeasured_input_is_pinned_at_every_grid_point_and_never_proposed():
         param_step_size=0.01,
         parameter_proposal="random_walk",
         exact_constraints=problem.exact_constraints,
-        path_update=GuidedPathSpec(method="particle_mgrad", num_particles=4),
+        path_update=PathUpdateSpec(method=GuidedMethodSpec(kind="particle_mgrad", num_particles=4)),
     )
     after, info = jax.jit(kernel.step_fn)(_initial(target, path, kernel=kernel), jax.random.key(6))
     np.testing.assert_array_equal(after.latent_trajectory[:, input_index], path[:, input_index])
@@ -347,7 +352,7 @@ def test_parallel_static_sampler_recovers_one_shared_gaussian_unknown(parameter_
         num_parameter_particles=2,
         param_step_size=0.01,
         parameter_proposal="pseudo_langevin",
-        path_update=GuidedPathSpec(method="particle_mgrad", num_particles=4),
+        path_update=PathUpdateSpec(method=GuidedMethodSpec(kind="particle_mgrad", num_particles=4)),
     )
 
     def chain(key):
@@ -593,7 +598,9 @@ def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(kappa
         num_parameter_particles=2,
         param_step_size=0.1,
         parameter_proposal="random_walk",
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=9, kappa=kappa),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=9, kappa=kappa)
+        ),
     )
 
     def draw_and_step(key):
@@ -654,7 +661,9 @@ def test_parallel_accumulator_preserves_an_exact_random_initial_value():
     target = problem.runtime
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=4)
+        ),
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=target.exact_constraints,

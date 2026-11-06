@@ -28,8 +28,8 @@ export function FitOutcome({ context }: { context: ScopeContext }) {
           ? settings.algorithm.method === "nuts_da"
             ? settings.algorithm.smoother.method === "joint"
               ? smootherLabels.joint
-              : `NUTS-DA + ${smootherLabels[settings.algorithm.smoother.method]}`
-            : smootherLabels[settings.algorithm.path_update.method]
+              : `NUTS-DA + ${smootherLabels[settings.algorithm.smoother.method.kind]}`
+            : smootherLabels[settings.algorithm.path_update.method.kind]
           : "Unavailable"}{" "}
         · {mcmc?.num_chains ?? "Unavailable"} chains ×{" "}
         {mcmc?.num_samples_per_chain ?? "Unavailable"} draws ·{" "}

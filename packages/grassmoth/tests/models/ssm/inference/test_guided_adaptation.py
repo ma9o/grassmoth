@@ -5,7 +5,14 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.artifacts.sampling import GuidedPathSpec, MarginalParticleGibbsSpec
+from grassmoth.artifacts.sampling import (
+    FixedLatentStepSpec,
+    GaussianInitializationSpec,
+    GuidedMethodSpec,
+    MarginalParticleGibbsSpec,
+    PathUpdateSpec,
+    SamplerSpec,
+)
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     _curvature_limits,
     adapt_curvature_geometry,
@@ -127,8 +134,8 @@ def test_non_gaussian_limits_follow_current_warmup_state(kind):
 @pytest.mark.parametrize(
     "spec",
     [
-        GuidedPathSpec(method="particle_mgrad", kappa=1),
-        GuidedPathSpec(method="twisted_particle_agrad", kappa=1),
+        PathUpdateSpec(method=GuidedMethodSpec(kind="particle_mgrad", kappa=1)),
+        PathUpdateSpec(method=GuidedMethodSpec(kind="twisted_particle_agrad", kappa=1)),
     ],
 )
 def test_controller_obeys_changing_parameter_scale_and_freezes(spec):
@@ -158,8 +165,8 @@ def test_controller_obeys_changing_parameter_scale_and_freezes(spec):
 @pytest.mark.parametrize(
     "spec",
     [
-        GuidedPathSpec(method="particle_mgrad", kappa=0),
-        GuidedPathSpec(method="twisted_particle_agrad", kappa=0),
+        PathUpdateSpec(method=GuidedMethodSpec(kind="particle_mgrad", kappa=0)),
+        PathUpdateSpec(method=GuidedMethodSpec(kind="twisted_particle_agrad", kappa=0)),
     ],
 )
 def test_zero_drift_retains_existing_unbounded_controller(spec):
@@ -179,11 +186,7 @@ def test_zero_drift_retains_existing_unbounded_controller(spec):
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize("fixed", [False, True])
 def test_runner_initializes_inside_curvature_window_and_keeps_fixed_assignment(fixed):
-    from grassmoth.artifacts.sampling import (
-        FixedLatentStepSpec,
-        GaussianInitializationSpec,
-        SamplerSpec,
-    )
+
     from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
         build_marginal_particle_gibbs_kernel,
     )
@@ -211,14 +214,14 @@ def test_runner_initializes_inside_curvature_window_and_keeps_fixed_assignment(f
     )
     assert isinstance(initialization, ParticleInitialization)
     spec = (
-        GuidedPathSpec(
-            method="twisted_particle_agrad",
-            kappa=1,
-            num_particles=4,
+        PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=4, kappa=1),
             latent_step=FixedLatentStepSpec(delta=0.003),
         )
         if fixed
-        else GuidedPathSpec(method="twisted_particle_agrad", kappa=1, num_particles=4)
+        else PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=4, kappa=1)
+        )
     )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
@@ -310,10 +313,6 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
     from grassmoth.artifacts.arrays import NumericalArray
     from grassmoth.artifacts.continuation import SamplerCheckpoint
     from grassmoth.artifacts.probability.families import DistributionFamily
-    from grassmoth.artifacts.sampling import (
-        GaussianInitializationSpec,
-        SamplerSpec,
-    )
     from grassmoth.models.ssm.inference.continuation import frozen_particle_tuning
     from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
         build_marginal_particle_gibbs_kernel,
@@ -342,7 +341,9 @@ def test_state_dependent_metric_freezes_and_continues_without_recalibration(fami
         execution_context=EXECUTION_CONTEXT,
     )
     assert isinstance(initialization, ParticleInitialization)
-    spec = GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1)
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8, kappa=1)
+    )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
         path_update=spec,

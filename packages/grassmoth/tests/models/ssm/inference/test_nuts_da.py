@@ -5,12 +5,15 @@ import pytest
 
 from grassmoth.artifacts.reports.posterior_diagnostics import NutsDADiagnostics
 from grassmoth.artifacts.sampling import (
-    AuxiliaryKalmanSpec,
+    AuxiliaryKalmanMethodSpec,
+    BlockedPathUpdateSpec,
+    ConditionalParameterProposalSpec,
     FixedTrajectorySpec,
-    GuidedPathSpec,
+    GuidedMethodSpec,
     JointSmootherSpec,
     NutsDASpec,
     NutsTrajectorySpec,
+    PathUpdateSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.fit import fit
@@ -38,25 +41,31 @@ pytestmark = pytest.mark.inference(concern="sampling")
         pytest.param(
             "centred",
             NutsTrajectorySpec(),
-            GuidedPathSpec(num_particles=16),
+            PathUpdateSpec(method=GuidedMethodSpec(num_particles=16)),
             id="conditional-centred-mgrad",
         ),
         pytest.param(
             "non_centred",
             NutsTrajectorySpec(),
-            GuidedPathSpec(num_particles=16),
+            PathUpdateSpec(method=GuidedMethodSpec(num_particles=16)),
             id="conditional-noncentred-mgrad",
         ),
         pytest.param(
             "mixed",
             NutsTrajectorySpec(),
-            GuidedPathSpec(method="twisted_particle_agrad", num_particles=16),
+            PathUpdateSpec(
+                method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=16)
+            ),
             id="conditional-mixed-twisted",
         ),
         pytest.param(
             "centred",
             NutsTrajectorySpec(),
-            AuxiliaryKalmanSpec(block_length=2),
+            PathUpdateSpec(
+                method=AuxiliaryKalmanMethodSpec(),
+                update=BlockedPathUpdateSpec(block_length=2),
+                proposal=ConditionalParameterProposalSpec(),
+            ),
             id="conditional-centred-kalman",
         ),
     ],
@@ -69,7 +78,8 @@ def test_parallel_joint_nuts_recovers_analytic_parameter_state_covariance(
     # coordinates; retain enough draws to use the same covariance tolerance.
     num_samples = (
         3000
-        if isinstance(trajectory, FixedTrajectorySpec) or isinstance(smoother, AuxiliaryKalmanSpec)
+        if isinstance(trajectory, FixedTrajectorySpec)
+        or isinstance(smoother.method, AuxiliaryKalmanMethodSpec)
         else 750
     )
     run = run_nuts_da(
@@ -136,7 +146,15 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior():
 
 @pytest.mark.parametrize("feature", ["nonlinear_recurrence", "student"])
 @pytest.mark.parametrize(
-    "smoother", [GuidedPathSpec(num_particles=8), AuxiliaryKalmanSpec(block_length=2)]
+    "smoother",
+    [
+        PathUpdateSpec(method=GuidedMethodSpec(num_particles=8)),
+        PathUpdateSpec(
+            method=AuxiliaryKalmanMethodSpec(),
+            update=BlockedPathUpdateSpec(block_length=2),
+            proposal=ConditionalParameterProposalSpec(),
+        ),
+    ],
 )
 def test_conditional_nuts_keeps_exact_replay_and_reading_scores(feature, smoother):
     from packages.grassmoth.tests.models.ssm.inference.test_guided_recurrences import (
@@ -191,13 +209,17 @@ def test_conditional_nuts_keeps_exact_replay_and_reading_scores(feature, smoothe
         pytest.param(
             "non_centred",
             NutsTrajectorySpec(max_tree_depth=3),
-            GuidedPathSpec(num_particles=8),
+            PathUpdateSpec(method=GuidedMethodSpec(num_particles=8)),
             id="conditional-mgrad",
         ),
         pytest.param(
             "centred",
             NutsTrajectorySpec(max_tree_depth=3),
-            AuxiliaryKalmanSpec(block_length=2),
+            PathUpdateSpec(
+                method=AuxiliaryKalmanMethodSpec(),
+                update=BlockedPathUpdateSpec(block_length=2),
+                proposal=ConditionalParameterProposalSpec(),
+            ),
             id="conditional-kalman",
         ),
     ],

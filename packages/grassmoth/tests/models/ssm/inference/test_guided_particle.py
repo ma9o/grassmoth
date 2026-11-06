@@ -19,12 +19,18 @@ from grassmoth.artifacts.model.expressions import state
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec
 from grassmoth.artifacts.model.parameter import SiteKind
 from grassmoth.artifacts.sampling import (
-    AuxiliaryKalmanSpec,
+    AuxiliaryKalmanMethodSpec,
+    BlockedPathUpdateSpec,
+    ConditionalParameterProposalSpec,
     FixedLatentStepSpec,
     GaussianInitializationSpec,
-    GuidedPathSpec,
+    GuidedMethodSpec,
     MarginalParticleGibbsSpec,
+    ParameterMeanProposalSpec,
+    ParameterMixtureProposalSpec,
+    PathUpdateSpec,
     SamplerSpec,
+    WholePathUpdateSpec,
 )
 from grassmoth.models.ssm.compile.state_space import ParallelRecurrences, StateSpace
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
@@ -79,9 +85,26 @@ def test_auxiliary_kalman_runner_retains_paths_and_freezes_step(fixed, block_len
     )
     assert isinstance(initialization, ParticleInitialization)
     spec = (
-        AuxiliaryKalmanSpec(latent_step=FixedLatentStepSpec(delta=0.1), block_length=block_length)
+        PathUpdateSpec(
+            method=AuxiliaryKalmanMethodSpec(),
+            update=WholePathUpdateSpec()
+            if (block_length) is None
+            else BlockedPathUpdateSpec(block_length=block_length),
+            proposal=ParameterMeanProposalSpec()
+            if (block_length) is None
+            else ConditionalParameterProposalSpec(),
+            latent_step=FixedLatentStepSpec(delta=0.1),
+        )
         if fixed
-        else AuxiliaryKalmanSpec(block_length=block_length)
+        else PathUpdateSpec(
+            method=AuxiliaryKalmanMethodSpec(),
+            update=WholePathUpdateSpec()
+            if (block_length) is None
+            else BlockedPathUpdateSpec(block_length=block_length),
+            proposal=ParameterMeanProposalSpec()
+            if (block_length) is None
+            else ConditionalParameterProposalSpec(),
+        )
     )
     kernel = build_marginal_particle_gibbs_kernel(
         target, path_update=spec, num_parameter_particles=2
@@ -264,8 +287,9 @@ def test_guided_updates_preserve_path_and_label_posterior(
     target, labels, starts, expected_mean, expected_second, expected_labels = _case(
         cubic, pinned=pinned, steps=steps, dimension=dimension
     )
-    spec = GuidedPathSpec(
-        method=method, num_particles=8, kappa=kappa, prefix_mixture=prefix_mixture
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa),
+        proposal=ParameterMixtureProposalSpec() if prefix_mixture else ParameterMeanProposalSpec(),
     )
     mask = target.independent_mask
     if pinned:
@@ -692,7 +716,7 @@ def test_guided_filter_keeps_zero_mass_candidates_out_of_selected_path(monkeypat
     )
     times = np.arange(3.0)
     target = interval_target(times, np.zeros((3, 1)), times[:, None], ("last",))
-    spec = GuidedPathSpec(method=method, num_particles=32, kappa=0)
+    spec = PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=32, kappa=0))
     labels = jnp.array([[-0.45], [0.55]])
     reference = jnp.zeros((3, 1))
     setup = build_smoother_setup(
@@ -781,7 +805,14 @@ def test_auxiliary_kalman_keeps_mpgibbs_parameter_proposal_and_label_law():
     reference = jnp.array([0.1, 0.2, -0.1, 0.3])
     key = jax.random.key(49)
     traces = []
-    for spec in (GuidedPathSpec(method="particle_mgrad", num_particles=8), AuxiliaryKalmanSpec()):
+    for spec in (
+        PathUpdateSpec(method=GuidedMethodSpec(kind="particle_mgrad", num_particles=8)),
+        PathUpdateSpec(
+            method=AuxiliaryKalmanMethodSpec(),
+            update=BlockedPathUpdateSpec(block_length=300),
+            proposal=ConditionalParameterProposalSpec(),
+        ),
+    ):
         kernel = build_marginal_particle_gibbs_kernel(
             target, num_parameter_particles=2, path_update=spec
         )

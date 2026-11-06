@@ -57,7 +57,6 @@ def _fit_selected(
     from grassmoth_server.study.queries.data import read_data_history
 
     source = fit_source(store, request.target)
-    history = read_data_history(store, source.data_ref)
     previous = (
         prior_fit(store, request.target.fit_ref)
         if isinstance(request.target, ContinueFitTarget)
@@ -68,6 +67,9 @@ def _fit_selected(
     sampler = resolve_sampler_spec(
         request.settings, None if previous is None else previous.settings
     )
+    if (failure := sampler.support_failure) is not None:
+        return Rejected(code="UNSUPPORTED_PATH_UPDATE", subject="fit", detail=failure.message)
+    history = read_data_history(store, source.data_ref)
     previous_cache = None if previous is None else previous.full_fit
     directory = Path(call_dir(store.workspace_id, call_id))
     previous_result = (

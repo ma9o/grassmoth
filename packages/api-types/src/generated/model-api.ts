@@ -605,52 +605,32 @@ export interface components {
             readonly interpretation: "prior_predictive";
         };
         /**
-         * AuxiliaryKalmanSpec
-         * @description Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.
+         * AuxiliaryKalmanMethodSpec
+         * @description Parallel Gaussian proposals corrected to exact nonlinear densities.
          *
-         *     Corenflos & Särkkä (2025), https://arxiv.org/abs/2303.00301, sections 2.2–2.4.
-         *     Whole-path forward and reverse approximations are rebuilt at their respective
-         *     paths. Blocks instead linearize at the fixed auxiliary under a sampled label.
-         *     Normalized proposal densities correct to the true nonlinear target.
+         *     Corenflos & Särkkä (2025), sections 2.2–2.4. Poor Gaussian fits, long memory
+         *     and separated modes can reduce acceptance without changing the target.
          */
-        readonly "AuxiliaryKalmanSpec-Input": {
+        readonly "AuxiliaryKalmanMethodSpec-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            readonly method: "auxiliary_kalman";
-            /**
-             * Block Length
-             * @description Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.
-             * @default 300
-             */
-            readonly block_length?: number | null;
-            /** @description Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Interval readings and deterministic recurrences are replayed exactly under every label, never proposed. Parameter proposals and final parameter-label selection remain MPGibbs. */
-            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
+            readonly kind: "auxiliary_kalman";
         };
         /**
-         * AuxiliaryKalmanSpec
-         * @description Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.
+         * AuxiliaryKalmanMethodSpec
+         * @description Parallel Gaussian proposals corrected to exact nonlinear densities.
          *
-         *     Corenflos & Särkkä (2025), https://arxiv.org/abs/2303.00301, sections 2.2–2.4.
-         *     Whole-path forward and reverse approximations are rebuilt at their respective
-         *     paths. Blocks instead linearize at the fixed auxiliary under a sampled label.
-         *     Normalized proposal densities correct to the true nonlinear target.
+         *     Corenflos & Särkkä (2025), sections 2.2–2.4. Poor Gaussian fits, long memory
+         *     and separated modes can reduce acceptance without changing the target.
          */
-        readonly "AuxiliaryKalmanSpec-Output": {
+        readonly "AuxiliaryKalmanMethodSpec-Output": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            readonly method: "auxiliary_kalman";
-            /**
-             * Block Length
-             * @description Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.
-             * @default 300
-             */
-            readonly block_length: number | null;
-            /** @description Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. Poor local Gaussian fits, strong nonlinearity and separated parameter or path modes can lower acceptance. Exact nonlinear Metropolis corrections preserve the target. Interval readings and deterministic recurrences are replayed exactly under every label, never proposed. Parameter proposals and final parameter-label selection remain MPGibbs. */
-            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
+            readonly kind: "auxiliary_kalman";
         };
         /**
          * BernoulliLogitsLawSpec[Expression]
@@ -708,6 +688,40 @@ export interface components {
          * @enum {string}
          */
         readonly BinaryOperator: "add" | "subtract" | "multiply" | "divide" | "power" | "maximum";
+        /**
+         * BlockedPathUpdateSpec
+         * @description Update contiguous trajectory blocks.
+         */
+        readonly "BlockedPathUpdateSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "blocked";
+            /**
+             * Block Length
+             * @description Time points per block. The implemented Kalman update alternates colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.
+             * @default 300
+             */
+            readonly block_length?: number;
+        };
+        /**
+         * BlockedPathUpdateSpec
+         * @description Update contiguous trajectory blocks.
+         */
+        readonly "BlockedPathUpdateSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "blocked";
+            /**
+             * Block Length
+             * @description Time points per block. The implemented Kalman update alternates colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.
+             * @default 300
+             */
+            readonly block_length: number;
+        };
         /** Body_upload_file_api_upload_post */
         readonly Body_upload_file_api_upload_post: {
             /** File */
@@ -966,6 +980,34 @@ export interface components {
              * @default null
              */
             readonly fill_null_limit: number | null;
+        };
+        /**
+         * ConditionalParameterProposalSpec
+         * @description Build proposals under a label sampled conditional on the current path.
+         *
+         *     The blocked Kalman update holds this label fixed during its conditional block
+         *     moves. This is not the ensemble mean and can retain parameter/path dependence.
+         */
+        readonly "ConditionalParameterProposalSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "conditional_parameter";
+        };
+        /**
+         * ConditionalParameterProposalSpec
+         * @description Build proposals under a label sampled conditional on the current path.
+         *
+         *     The blocked Kalman update holds this label fixed during its conditional block
+         *     moves. This is not the ensemble mean and can retain parameter/path dependence.
+         */
+        readonly "ConditionalParameterProposalSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "conditional_parameter";
         };
         /** @description A persistent construct identity survives changes to its display name. */
         readonly "ConstructId-Input": `construct:${string}`;
@@ -4615,27 +4657,25 @@ export interface components {
         /** @description A native Git object identity for an immutable tree or commit. */
         readonly "GitOid-Output": string;
         /**
-         * GuidedPathSpec
-         * @description Sequential conditional SMC with exact Gaussian transition-informed proposals.
+         * GuidedMethodSpec
+         * @description Particle-mGRAD or twisted Particle-aGRAD with their particle-bank settings.
          *
-         *     Corenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear
-         *     transitions and densities pay every weight, so each method's approximation costs
-         *     mixing, never the target.
+         *     Corenflos & Finke (2024), sections 4.1–4.4. mGRAD integrates out the path
+         *     auxiliary; twisted aGRAD retains it and adds Gaussian look-ahead. These
+         *     methods use the same exact parameter-mixture target, with different weights.
          */
-        readonly "GuidedPathSpec-Input": {
+        readonly "GuidedMethodSpec-Input": {
             /**
              * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings, such as long interval windows, can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
-            readonly method: "particle_mgrad" | "twisted_particle_agrad";
+            readonly kind: "particle_mgrad" | "twisted_particle_agrad";
             /**
              * Num Particles
              * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary.
              * @default 64
              */
             readonly num_particles?: number;
-            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
-            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
             /**
              * Kappa
              * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
@@ -4649,35 +4689,27 @@ export interface components {
              * @default 8
              */
             readonly scan_unroll?: number;
-            /**
-             * Prefix Mixture
-             * @description Opt in to per-parameter-label local Gaussian proposals, mixed with the unfloored prefix label probabilities. Every particle pays the full mixture density; the shared auxiliary law and look-ahead remain unchanged. Requires twisted_particle_agrad with kappa=1 and point readings without replay. Early label collapse, poor shared guidance and separated modes can reduce mixing.
-             * @default false
-             */
-            readonly prefix_mixture?: boolean;
         };
         /**
-         * GuidedPathSpec
-         * @description Sequential conditional SMC with exact Gaussian transition-informed proposals.
+         * GuidedMethodSpec
+         * @description Particle-mGRAD or twisted Particle-aGRAD with their particle-bank settings.
          *
-         *     Corenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear
-         *     transitions and densities pay every weight, so each method's approximation costs
-         *     mixing, never the target.
+         *     Corenflos & Finke (2024), sections 4.1–4.4. mGRAD integrates out the path
+         *     auxiliary; twisted aGRAD retains it and adds Gaussian look-ahead. These
+         *     methods use the same exact parameter-mixture target, with different weights.
          */
-        readonly "GuidedPathSpec-Output": {
+        readonly "GuidedMethodSpec-Output": {
             /**
              * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings, such as long interval windows, can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
-            readonly method: "particle_mgrad" | "twisted_particle_agrad";
+            readonly kind: "particle_mgrad" | "twisted_particle_agrad";
             /**
              * Num Particles
              * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary.
              * @default 64
              */
             readonly num_particles: number;
-            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path; large ones let the dynamics dominate, approaching conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). */
-            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
             /**
              * Kappa
              * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
@@ -4691,12 +4723,6 @@ export interface components {
              * @default 8
              */
             readonly scan_unroll: number;
-            /**
-             * Prefix Mixture
-             * @description Opt in to per-parameter-label local Gaussian proposals, mixed with the unfloored prefix label probabilities. Every particle pays the full mixture density; the shared auxiliary law and look-ahead remain unchanged. Requires twisted_particle_agrad with kappa=1 and point readings without replay. Early label collapse, poor shared guidance and separated modes can reduce mixing.
-             * @default false
-             */
-            readonly prefix_mixture: boolean;
         };
         /** HTTPValidationError */
         readonly HTTPValidationError: {
@@ -5116,10 +5142,11 @@ export interface components {
          */
         readonly "JointSmootherSpec-Input": {
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
+             * Method
+             * @default joint
+             * @constant
              */
-            readonly method: "joint";
+            readonly method?: "joint";
         };
         /**
          * JointSmootherSpec
@@ -5127,8 +5154,9 @@ export interface components {
          */
         readonly "JointSmootherSpec-Output": {
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
+             * Method
+             * @default joint
+             * @constant
              */
             readonly method: "joint";
         };
@@ -6034,8 +6062,8 @@ export interface components {
             /** @description NUTS chooses each trajectory's length; fixed runs a set number of steps. */
             readonly trajectory: components["schemas"]["JointTrajectorySpec-Output"];
         };
-        readonly "NutsSmootherSpec-Input": components["schemas"]["JointSmootherSpec-Input"] | components["schemas"]["GuidedPathSpec-Input"] | components["schemas"]["AuxiliaryKalmanSpec-Input"];
-        readonly "NutsSmootherSpec-Output": components["schemas"]["JointSmootherSpec-Output"] | components["schemas"]["GuidedPathSpec-Output"] | components["schemas"]["AuxiliaryKalmanSpec-Output"];
+        readonly "NutsSmootherSpec-Input": components["schemas"]["JointSmootherSpec-Input"] | components["schemas"]["PathUpdateSpec-Input"];
+        readonly "NutsSmootherSpec-Output": components["schemas"]["JointSmootherSpec-Output"] | components["schemas"]["PathUpdateSpec-Output"];
         /**
          * NutsTrajectorySpec
          * @description A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).
@@ -6242,6 +6270,80 @@ export interface components {
         readonly "ParameterId-Input": `parameter:${string}`;
         /** @description A scientific parameter identity connects component coefficients to one parameter definition. */
         readonly "ParameterId-Output": `parameter:${string}`;
+        /**
+         * ParameterMeanProposalSpec
+         * @description Build proposal dynamics at the mean of supported parameter candidates.
+         *
+         *     This repository's shared-guide construction is symmetric in the ensemble.
+         *     Separated parameter components can be poorly represented by their mean.
+         */
+        readonly "ParameterMeanProposalSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "parameter_mean";
+        };
+        /**
+         * ParameterMeanProposalSpec
+         * @description Build proposal dynamics at the mean of supported parameter candidates.
+         *
+         *     This repository's shared-guide construction is symmetric in the ensemble.
+         *     Separated parameter components can be poorly represented by their mean.
+         */
+        readonly "ParameterMeanProposalSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "parameter_mean";
+        };
+        /**
+         * ParameterMixtureProposalSpec
+         * @description Mix parameter-specific proposals and pay the complete proposal density.
+         *
+         *     Corenflos (2025), section 3.4 motivates running-prefix transition mixtures.
+         *     The implemented twisted-aGRAD variant uses local Gaussian components with a
+         *     shared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not
+         *     implemented. Early label collapse and poor shared guidance can reduce mixing.
+         */
+        readonly "ParameterMixtureProposalSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "parameter_mixture";
+            /**
+             * Weights
+             * @description running_prefix uses each particle's exact label probabilities through the previous time (Corenflos 2025, section 3.4). prior uses parameter priors and the ensemble-proposal correction, without path evidence; currently unsupported.
+             * @default running_prefix
+             * @enum {string}
+             */
+            readonly weights?: "running_prefix" | "prior";
+        };
+        /**
+         * ParameterMixtureProposalSpec
+         * @description Mix parameter-specific proposals and pay the complete proposal density.
+         *
+         *     Corenflos (2025), section 3.4 motivates running-prefix transition mixtures.
+         *     The implemented twisted-aGRAD variant uses local Gaussian components with a
+         *     shared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not
+         *     implemented. Early label collapse and poor shared guidance can reduce mixing.
+         */
+        readonly "ParameterMixtureProposalSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "parameter_mixture";
+            /**
+             * Weights
+             * @description running_prefix uses each particle's exact label probabilities through the previous time (Corenflos 2025, section 3.4). prior uses parameter priors and the ensemble-proposal correction, without path evidence; currently unsupported.
+             * @default running_prefix
+             * @enum {string}
+             */
+            readonly weights: "running_prefix" | "prior";
+        };
         /** @enum {string} */
         readonly ParameterProposal: "random_walk" | "pseudo_langevin";
         /**
@@ -6424,8 +6526,40 @@ export interface components {
             /** Nonfinite Fraction */
             readonly nonfinite_fraction: number;
         };
-        readonly "PathUpdateSpec-Input": components["schemas"]["GuidedPathSpec-Input"] | components["schemas"]["AuxiliaryKalmanSpec-Input"];
-        readonly "PathUpdateSpec-Output": components["schemas"]["GuidedPathSpec-Output"] | components["schemas"]["AuxiliaryKalmanSpec-Output"];
+        readonly "PathMethodSpec-Input": components["schemas"]["GuidedMethodSpec-Input"] | components["schemas"]["AuxiliaryKalmanMethodSpec-Input"];
+        readonly "PathMethodSpec-Output": components["schemas"]["GuidedMethodSpec-Output"] | components["schemas"]["AuxiliaryKalmanMethodSpec-Output"];
+        readonly "PathProposalSpec-Input": components["schemas"]["ParameterMeanProposalSpec-Input"] | components["schemas"]["ParameterMixtureProposalSpec-Input"] | components["schemas"]["ConditionalParameterProposalSpec-Input"];
+        readonly "PathProposalSpec-Output": components["schemas"]["ParameterMeanProposalSpec-Output"] | components["schemas"]["ParameterMixtureProposalSpec-Output"] | components["schemas"]["ConditionalParameterProposalSpec-Output"];
+        readonly "PathUpdateScopeSpec-Input": components["schemas"]["WholePathUpdateSpec-Input"] | components["schemas"]["BlockedPathUpdateSpec-Input"];
+        readonly "PathUpdateScopeSpec-Output": components["schemas"]["WholePathUpdateSpec-Output"] | components["schemas"]["BlockedPathUpdateSpec-Output"];
+        /**
+         * PathUpdateSpec
+         * @description Common declarative path settings, with support resolved before execution.
+         *
+         *     The schema describes independent choices; support_failure owns the current
+         *     implementation matrix. Model-dependent restrictions belong to fit preflight.
+         */
+        readonly "PathUpdateSpec-Input": {
+            readonly method?: components["schemas"]["PathMethodSpec-Input"];
+            readonly update?: components["schemas"]["PathUpdateScopeSpec-Input"];
+            readonly proposal?: components["schemas"]["PathProposalSpec-Input"];
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & Särkkä 2025, sections 2.2–2.4). */
+            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
+        };
+        /**
+         * PathUpdateSpec
+         * @description Common declarative path settings, with support resolved before execution.
+         *
+         *     The schema describes independent choices; support_failure owns the current
+         *     implementation matrix. Model-dependent restrictions belong to fit preflight.
+         */
+        readonly "PathUpdateSpec-Output": {
+            readonly method: components["schemas"]["PathMethodSpec-Output"];
+            readonly update: components["schemas"]["PathUpdateScopeSpec-Output"];
+            readonly proposal: components["schemas"]["PathProposalSpec-Output"];
+            /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & Särkkä 2025, sections 2.2–2.4). */
+            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
+        };
         /**
          * PersistenceTransformSpec
          * @description Map persistence p to -log(p) divided by its explicit interval in days.
@@ -7901,6 +8035,28 @@ export interface components {
             readonly input?: unknown;
             /** Context */
             readonly ctx?: Record<string, never>;
+        };
+        /**
+         * WholePathUpdateSpec
+         * @description Update the complete trajectory; particle methods still build it sequentially.
+         */
+        readonly "WholePathUpdateSpec-Input": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "whole_path";
+        };
+        /**
+         * WholePathUpdateSpec
+         * @description Update the complete trajectory; particle methods still build it sequentially.
+         */
+        readonly "WholePathUpdateSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly kind: "whole_path";
         };
         /** @description Deterministic support-window expression that returns one scalar per window. Use Python-like syntax over source_columns with arithmetic, comparisons, if/else, and helper functions such as any(), sum(), mean(), std(), first(), last(), count_true(), count_non_null(), lower(), contains(), and contains_any(). Use None for missing values. */
         readonly WindowExpression: string;

@@ -13,8 +13,9 @@ from grassmoth.artifacts.arrays import NumericalArray
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
     GaussianInitializationSpec,
-    GuidedPathSpec,
+    GuidedMethodSpec,
     MarginalParticleGibbsSpec,
+    PathUpdateSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.continuation import frozen_particle_tuning
@@ -161,7 +162,7 @@ def test_charted_joint_kernel_preserves_analytic_physical_posterior(method):
     )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=GuidedPathSpec(method=method, num_particles=8, kappa=1),
+        path_update=PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=1)),
         num_parameter_particles=2,
         param_step_size=0.3,
         initial_chart=chart,
@@ -223,7 +224,9 @@ def test_chart_checkpoint_continuation_preserves_physical_draws_and_frozen_nativ
     )
     assert isinstance(initialization, ParticleInitialization)
     chart = computed_chart(target, initialization.positions, initialization.paths)
-    spec = GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1)
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8, kappa=1)
+    )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
         path_update=spec,
@@ -313,7 +316,9 @@ def test_partial_exact_observation_excludes_its_coordinate_from_translation():
     )
     kernel = build_marginal_particle_gibbs_kernel(
         target,
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8, kappa=1)
+        ),
         num_parameter_particles=2,
         exact_constraints=constraints,
         initial_chart=_translation_chart(

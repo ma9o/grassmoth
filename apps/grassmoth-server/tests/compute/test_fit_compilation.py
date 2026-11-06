@@ -10,7 +10,8 @@ from jax._src import cache_key, compiler
 from grassmoth.artifacts.sampling import (
     FixedLatentStepSpec,
     GaussianInitializationSpec,
-    GuidedPathSpec,
+    GuidedMethodSpec,
+    PathUpdateSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
@@ -95,9 +96,11 @@ def test_particle_fit_settings_reuse_jax_executable_and_preserve_transitions(tmp
             if diagnostic
             else (),
             # With kappa=1 an adapted step gains a curvature bound, which changes the program.
-            path_update=GuidedPathSpec(num_particles=4, kappa=0, latent_step=FixedLatentStepSpec())
+            path_update=PathUpdateSpec(
+                method=GuidedMethodSpec(num_particles=4, kappa=0), latent_step=FixedLatentStepSpec()
+            )
             if fixed
-            else GuidedPathSpec(num_particles=4, kappa=0),
+            else PathUpdateSpec(method=GuidedMethodSpec(num_particles=4, kappa=0)),
         )
         with local_compilation_cache(tmp_path, commit=lambda: None):
             result = run_marginal_particle_gibbs(

@@ -19,7 +19,10 @@ from grassmoth.artifacts.model.likelihood import (
 from grassmoth.artifacts.model.parameter_context import iter_coefficient_uses
 from grassmoth.artifacts.observations.spec import LabeledMeasurement, NumericMeasurement
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    GuidedMethodSpec,
+    PathUpdateSpec,
+)
 from grassmoth.models.ssm import compiled_access as numeric
 from grassmoth.models.ssm.execution.observation_model import compile_observation_model
 from grassmoth.models.ssm.inference import problem as problem_module
@@ -427,7 +430,9 @@ def _conditioned_initial_state(problem):
     runtime = problem.runtime
     kernel = build_marginal_particle_gibbs_kernel(
         runtime,
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=4)
+        ),
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=problem.exact_constraints,
@@ -496,7 +501,9 @@ def test_conditioned_smoother_traces_with_missing_and_observed_coordinates(point
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4, kappa=kappa),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=4, kappa=kappa)
+        ),
     )
     shape, _ = jax.eval_shape(kernel.step_fn, state, jax.random.key(1))
     assert shape.latent_trajectory.shape == (3, 2)
@@ -512,7 +519,9 @@ def test_particle_updates_keep_exact_readings_and_move_missing_states(point_prob
         num_parameter_particles=2,
         param_step_size=0.01,
         exact_constraints=point_problem.exact_constraints,
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=16, kappa=kappa),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=16, kappa=kappa)
+        ),
     )
     step = jax.jit(kernel.step_fn)
     missing_values = []

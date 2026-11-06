@@ -28,15 +28,22 @@
           "kind": "untempered"
         },
         "path_update": {
-          "method": "particle_mgrad",
-          "num_particles": 128,
+          "method": {
+            "kind": "particle_mgrad",
+            "num_particles": 128,
+            "kappa": 1,
+            "scan_unroll": 8
+          },
+          "update": {
+            "kind": "whole_path"
+          },
+          "proposal": {
+            "kind": "parameter_mean"
+          },
           "latent_step": {
             "kind": "adapted",
             "target": 0.5
-          },
-          "kappa": 1,
-          "scan_unroll": 8,
-          "prefix_mixture": false
+          }
         },
         "parameter_proposal": "random_walk",
         "diagnostic_metrics": [],

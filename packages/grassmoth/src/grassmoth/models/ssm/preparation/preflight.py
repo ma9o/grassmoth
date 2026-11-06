@@ -10,9 +10,10 @@ import numpy as np
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.artifacts.sampling import (
-    AuxiliaryKalmanSpec,
+    AuxiliaryKalmanMethodSpec,
     JointSmootherSpec,
     NutsDASpec,
+    ParameterMixtureProposalSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm import compiled_access as numeric
@@ -39,6 +40,8 @@ def validate_sampler_support(
     sampler: SamplerSpec,
 ) -> ObservationPreflightFailure | None:
     """Own sampler-specific restrictions, including checks before remote allocation."""
+    if (failure := sampler.support_failure) is not None:
+        return ObservationPreflightFailure.rejected(failure.message)
     if DistributionFamily.STUDENT_T in numeric.diffusion_families(compiled):
         return ObservationPreflightFailure.rejected(
             "Exact inference currently requires Gaussian latent diffusion for every state."
@@ -48,7 +51,7 @@ def validate_sampler_support(
     if isinstance(path_update, JointSmootherSpec):
         return None
     intervals = any(item.support.support_kind == "interval" for item in compiled.observations)
-    if isinstance(path_update, AuxiliaryKalmanSpec):
+    if isinstance(path_update.method, AuxiliaryKalmanMethodSpec):
         if not isinstance(options, NutsDASpec) and {"particle_identity", "particle_weights"} & set(
             options.diagnostic_metrics
         ):
@@ -57,15 +60,12 @@ def validate_sampler_support(
                 "require a particle path update."
             )
         return None
-    if path_update.prefix_mixture:
-        if path_update.method != "twisted_particle_agrad" or path_update.kappa != 1:
-            return ObservationPreflightFailure.rejected(
-                "Prefix-mixture proposals require twisted Particle-aGRAD with kappa=1."
-            )
-        if compiled.state_space.requires_replay or intervals:
-            return ObservationPreflightFailure.rejected(
-                "Prefix-mixture proposals support point readings without replay."
-            )
+    if isinstance(path_update.proposal, ParameterMixtureProposalSpec) and (
+        compiled.state_space.requires_replay or intervals
+    ):
+        return ObservationPreflightFailure.rejected(
+            "Running-prefix mixture proposals support point readings without replay."
+        )
     return None
 
 

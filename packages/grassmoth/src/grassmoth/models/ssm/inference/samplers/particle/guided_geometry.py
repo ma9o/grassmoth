@@ -11,7 +11,9 @@ from typing import Literal, NamedTuple
 import jax
 import jax.numpy as jnp
 
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    GuidedMethodSpec,
+)
 from grassmoth.models.ssm.inference.samplers.particle.guided_information import (
     InformationRule,
     memory_information,
@@ -132,7 +134,7 @@ def _build_twist(
     memory: SequentialObservationRuntime,
     auxiliary: Float[Array, "T D"],
     mask: Bool[Array, "T D"],
-    spec: GuidedPathSpec,
+    spec: GuidedMethodSpec,
     information: GaussianTwist,
 ) -> tuple[GaussianTwist, Float[Array, "T-1 D D"]]:
     """Batch all guide geometry over time before the sequential particle filter.
@@ -143,7 +145,7 @@ def _build_twist(
     """
     target, guide = memory.target, memory.guide
     steps, dimension = auxiliary.shape
-    if spec.method != "twisted_particle_agrad" or steps == 1:
+    if spec.kind != "twisted_particle_agrad" or steps == 1:
         covariances = jax.vmap(
             lambda previous, index: target.transition_moments(guide, previous, index)[1]
         )(auxiliary[:-1], jnp.arange(1, steps))
@@ -176,7 +178,7 @@ def _memory_guide(
     auxiliary: Float[Array, "T D"],
     variance: Float[Array, "T D"],
     mask: Bool[Array, "T D"],
-    spec: GuidedPathSpec,
+    spec: GuidedMethodSpec,
     rule: InformationRule,
 ) -> tuple[GaussianTwist, _ProposalGeometry]:
     """Build a singular augmented guide at u, sampling only independent coordinates.
@@ -216,7 +218,7 @@ def _memory_guide(
     parents, innovations, offsets, covariances, matrices, shifts, noises = jax.vmap(affine)(
         points[:-1], auxiliary[1:], jnp.arange(1, steps)
     )
-    if spec.method == "twisted_particle_agrad":
+    if spec.kind == "twisted_particle_agrad":
         twist = future_information(matrices, shifts, noises, information)
     else:
         twist = GaussianTwist(
@@ -265,7 +267,7 @@ def build_guide(
     auxiliary: Float[Array, "T D"],
     variance: Float[Array, "T D"],
     mask: Bool[Array, "T D"],
-    spec: GuidedPathSpec,
+    spec: GuidedMethodSpec,
 ) -> tuple[GaussianTwist, _ProposalGeometry]:
     """Build proposal generation and its normalized density from a fixed guide."""
     if geometry == "memory":

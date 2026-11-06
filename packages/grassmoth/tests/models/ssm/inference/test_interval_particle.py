@@ -13,7 +13,15 @@ import numpyro.distributions as dist
 import pytest
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanMethodSpec,
+    BlockedPathUpdateSpec,
+    ConditionalParameterProposalSpec,
+    GuidedMethodSpec,
+    ParameterMeanProposalSpec,
+    PathUpdateSpec,
+    WholePathUpdateSpec,
+)
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
@@ -187,9 +195,17 @@ def test_charted_updates_preserve_analytic_interval_posterior(method):
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
         path_update=(
-            AuxiliaryKalmanSpec(block_length=None if method == "kalman_full" else int(method[-1]))
+            PathUpdateSpec(
+                method=AuxiliaryKalmanMethodSpec(),
+                update=WholePathUpdateSpec()
+                if method == "kalman_full"
+                else BlockedPathUpdateSpec(block_length=int(method[-1])),
+                proposal=ParameterMeanProposalSpec()
+                if method == "kalman_full"
+                else ConditionalParameterProposalSpec(),
+            )
             if method.startswith("kalman")
-            else GuidedPathSpec(method=method, num_particles=8, kappa=1)
+            else PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=1))
         ),
         initial_chart=chart,
     )
@@ -229,7 +245,9 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(kappa):
         param_step_size=0.3,
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=12, kappa=kappa),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=12, kappa=kappa)
+        ),
     )
     # Replicate chains to resolve the weakly identified offset/path direction
     # without loosening the analytic moment tolerances.

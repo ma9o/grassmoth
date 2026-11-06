@@ -8,11 +8,17 @@ import pytest
 from pydantic import ValidationError
 
 from grassmoth.artifacts.sampling import (
-    AuxiliaryKalmanSpec,
+    AuxiliaryKalmanMethodSpec,
+    BlockedPathUpdateSpec,
+    ConditionalParameterProposalSpec,
     FixedLatentStepSpec,
-    GuidedPathSpec,
+    GuidedMethodSpec,
     MarginalParticleGibbsSpec,
+    ParameterMeanProposalSpec,
+    ParameterMixtureProposalSpec,
+    PathUpdateSpec,
     SamplerSpec,
+    WholePathUpdateSpec,
 )
 from grassmoth.models.ssm.compile.inputs import CompiledDynamicalModel
 from grassmoth.models.ssm.compile.state_space import (
@@ -47,16 +53,21 @@ def test_auxiliary_kalman_request_roundtrip_and_identity(step):
         {
             "algorithm": {
                 "method": "mpgibbs",
-                "path_update": {"method": "auxiliary_kalman", "latent_step": step},
+                "path_update": {
+                    "method": {"kind": "auxiliary_kalman"},
+                    "update": {"kind": "blocked", "block_length": 300},
+                    "proposal": {"kind": "conditional_parameter"},
+                    "latent_step": step,
+                },
             }
         }
     )
     assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
-    assert isinstance(sampler.algorithm.path_update, AuxiliaryKalmanSpec)
+    assert isinstance(sampler.algorithm.path_update.method, AuxiliaryKalmanMethodSpec)
     assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
     assert sampler.kernel_identity != SamplerSpec().kernel_identity
     with pytest.raises(ValidationError, match="num_particles"):
-        AuxiliaryKalmanSpec.model_validate({"method": "auxiliary_kalman", "num_particles": 256})
+        AuxiliaryKalmanMethodSpec.model_validate({"kind": "auxiliary_kalman", "num_particles": 256})
 
 
 @pytest.mark.parametrize(
@@ -84,7 +95,16 @@ def test_auxiliary_kalman_admission(
     )
     sampler = SamplerSpec(
         algorithm=MarginalParticleGibbsSpec(
-            path_update=AuxiliaryKalmanSpec(block_length=block_length), diagnostic_metrics=metrics
+            path_update=PathUpdateSpec(
+                method=AuxiliaryKalmanMethodSpec(),
+                update=WholePathUpdateSpec()
+                if (block_length) is None
+                else BlockedPathUpdateSpec(block_length=block_length),
+                proposal=ParameterMeanProposalSpec()
+                if (block_length) is None
+                else ConditionalParameterProposalSpec(),
+            ),
+            diagnostic_metrics=metrics,
         )
     )
     failure = validate_sampler_support(compiled, sampler)
@@ -108,7 +128,8 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(
     )
     sampler = SamplerSpec(
         algorithm=MarginalParticleGibbsSpec(
-            path_update=GuidedPathSpec(method=method), compiler_reparameterization=True
+            path_update=PathUpdateSpec(method=GuidedMethodSpec(kind=method)),
+            compiler_reparameterization=True,
         )
     )
     assert validate_sampler_support(compiled, sampler) is None
@@ -117,7 +138,9 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(
 @pytest.mark.parametrize("method", ["particle_mgrad", "twisted_particle_agrad"])
 def test_guided_configuration_roundtrip_and_continuation_identity(method):
     sampler = SamplerSpec(
-        algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method=method, kappa=1))
+        algorithm=MarginalParticleGibbsSpec(
+            path_update=PathUpdateSpec(method=GuidedMethodSpec(kind=method, kappa=1))
+        )
     )
     assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
     # Particle-mGRAD with kappa=1 is the default path update.
@@ -127,7 +150,9 @@ def test_guided_configuration_roundtrip_and_continuation_identity(method):
     assert (
         sampler.kernel_identity
         != SamplerSpec(
-            algorithm=MarginalParticleGibbsSpec(path_update=GuidedPathSpec(method=method, kappa=0))
+            algorithm=MarginalParticleGibbsSpec(
+                path_update=PathUpdateSpec(method=GuidedMethodSpec(kind=method, kappa=0))
+            )
         ).kernel_identity
     )
 
@@ -171,23 +196,26 @@ def test_prefix_mixture_admission(monkeypatch, method, kappa, support, recurrenc
     )
     sampler = SamplerSpec(
         algorithm=MarginalParticleGibbsSpec(
-            path_update=GuidedPathSpec(method=method, kappa=kappa, prefix_mixture=True)
+            path_update=PathUpdateSpec(
+                method=GuidedMethodSpec(kind=method, kappa=kappa),
+                proposal=ParameterMixtureProposalSpec(),
+            )
         )
     )
     assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
     assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
-    assert isinstance(sampler.algorithm.path_update, GuidedPathSpec)
+    assert isinstance(sampler.algorithm.path_update.method, GuidedMethodSpec)
     ordinary = sampler.revised(
         algorithm=sampler.algorithm.revised(
-            path_update=sampler.algorithm.path_update.revised(prefix_mixture=False)
+            path_update=sampler.algorithm.path_update.revised(proposal=ParameterMeanProposalSpec())
         )
     )
     assert sampler.kernel_identity != ordinary.kernel_identity
-    assert GuidedPathSpec().prefix_mixture is False
+    assert isinstance(PathUpdateSpec().proposal, ParameterMeanProposalSpec)
     failure = validate_sampler_support(compiled, sampler)
     assert (failure is None) == accepted
     if failure is not None:
-        assert "Prefix-mixture" in failure.message
+        assert "mixture" in failure.message
 
 
 @pytest.mark.parametrize(
@@ -199,7 +227,7 @@ def test_prefix_mixture_admission(monkeypatch, method, kappa, support, recurrenc
 )
 def test_path_update_boundary_owns_scale_policy(settings):
     with pytest.raises(ValidationError):
-        GuidedPathSpec.model_validate(settings)
+        PathUpdateSpec.model_validate(settings)
 
 
 @pytest.mark.parametrize(
@@ -216,7 +244,14 @@ def test_path_update_boundary_owns_scale_policy(settings):
 )
 def test_sampler_boundary_rejects_unknown_modes(field):
     raw = (
-        {"path_update": {"method": "particle_mgrad", field: "bogus"}}
+        {
+            "path_update": {
+                "method": {"kind": "particle_mgrad"},
+                "update": {"kind": "whole_path"},
+                "proposal": {"kind": "parameter_mean"},
+                field: "bogus",
+            }
+        }
         if field == "drift"
         else {field: "bogus"}
     )
@@ -270,7 +305,7 @@ def test_runner_rejects_invalid_initial_chains_before_any_step(monkeypatch, inva
         initial_chart=None,
         initial_param_step_size=jnp.asarray([0.01]),
         initial_parameter_chol=jnp.eye(1),
-        path_update=GuidedPathSpec(latent_step=FixedLatentStepSpec(delta=0.1)),
+        path_update=PathUpdateSpec(latent_step=FixedLatentStepSpec(delta=0.1)),
         min_scale=jnp.asarray([1e-6]),
         max_scale=jnp.asarray([1.0]),
     )
@@ -343,3 +378,63 @@ def test_computed_translation_is_the_only_translation_contract():
     )
     assert ordinary.kernel_identity != computed.kernel_identity
     assert SamplerSpec.model_validate_json(computed.model_dump_json()) == computed
+
+
+@pytest.mark.parametrize("engine", ["mpgibbs", "nuts_da"])
+@pytest.mark.parametrize(
+    ("method", "scope", "proposal", "weights", "supported"),
+    [
+        ("particle_mgrad", "whole_path", "parameter_mean", None, True),
+        ("twisted_particle_agrad", "whole_path", "parameter_mean", None, True),
+        ("auxiliary_kalman", "whole_path", "parameter_mean", None, True),
+        ("twisted_particle_agrad", "whole_path", "parameter_mixture", "running_prefix", True),
+        ("auxiliary_kalman", "blocked", "conditional_parameter", None, True),
+        ("particle_mgrad", "whole_path", "parameter_mixture", "running_prefix", False),
+        ("twisted_particle_agrad", "whole_path", "parameter_mixture", "prior", False),
+        ("auxiliary_kalman", "whole_path", "parameter_mixture", "prior", False),
+        ("auxiliary_kalman", "whole_path", "parameter_mixture", "running_prefix", False),
+        ("particle_mgrad", "blocked", "parameter_mean", None, False),
+        ("twisted_particle_agrad", "blocked", "conditional_parameter", None, False),
+        ("auxiliary_kalman", "blocked", "parameter_mean", None, False),
+        ("auxiliary_kalman", "blocked", "parameter_mixture", "prior", False),
+        ("auxiliary_kalman", "whole_path", "conditional_parameter", None, False),
+    ],
+)
+def test_common_path_schema_preserves_requests_and_reports_support(
+    engine, method, scope, proposal, weights, supported
+):
+    path = {
+        "method": {"kind": method},
+        "update": {"kind": scope, **({"block_length": 17} if scope == "blocked" else {})},
+        "proposal": {"kind": proposal, **({"weights": weights} if weights else {})},
+        "latent_step": {"kind": "fixed", "delta": 0.3},
+    }
+    sampler = SamplerSpec.model_validate(
+        {
+            "algorithm": {
+                "method": engine,
+                "smoother" if engine == "nuts_da" else "path_update": path,
+            }
+        }
+    )
+    assert SamplerSpec.model_validate_json(sampler.model_dump_json()) == sampler
+    assert (sampler.support_failure is None) == supported
+    if not supported:
+        assert sampler.support_failure is not None
+        assert sampler.support_failure.message
+
+
+def test_continuation_identity_distinguishes_update_and_proposal_laws():
+    base = PathUpdateSpec(method=AuxiliaryKalmanMethodSpec())
+    blocked = base.revised(
+        update=BlockedPathUpdateSpec(block_length=17), proposal=ConditionalParameterProposalSpec()
+    )
+    mixture = base.revised(proposal=ParameterMixtureProposalSpec(weights="prior"))
+    variants = (
+        base,
+        blocked,
+        blocked.revised(update=BlockedPathUpdateSpec(block_length=23)),
+        mixture,
+        mixture.revised(proposal=ParameterMixtureProposalSpec(weights="running_prefix")),
+    )
+    assert len({variant.kernel_identity for variant in variants}) == len(variants)

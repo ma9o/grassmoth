@@ -46,7 +46,8 @@ from jax.scipy.linalg import solve_triangular
 from pydantic import Field
 
 from grassmoth.artifacts.sampling import (
-    AuxiliaryKalmanSpec,
+    AuxiliaryKalmanMethodSpec,
+    BlockedPathUpdateSpec,
     MarginalParticleGibbsSpec,
     ParameterProposal,
     ParticleDiagnosticMetric,
@@ -427,7 +428,7 @@ def build_marginal_particle_gibbs_kernel(
         block_key = boundary.key
 
         with jax.named_scope("particle_smoother_full"):
-            if isinstance(path_update, AuxiliaryKalmanSpec):
+            if isinstance(path_update.method, AuxiliaryKalmanMethodSpec):
                 guide = chart_target.context(ctx.guide_position, runtime_times)
                 smoother = (trace_auxiliary_kalman_step if record_trace else auxiliary_kalman_step)(
                     chart_target,
@@ -435,7 +436,9 @@ def build_marginal_particle_gibbs_kernel(
                     guide,
                     block_key,
                     x_ref,
-                    block_length=path_update.block_length,
+                    block_length=path_update.update.block_length
+                    if isinstance(path_update.update, BlockedPathUpdateSpec)
+                    else None,
                     log_precisions=boundary.precisions.log_values
                     if isinstance(boundary, PrecisionPathUpdate)
                     else None,
@@ -611,7 +614,9 @@ def build_marginal_particle_gibbs_kernel(
                 Auxiliary Kalman has two candidates per time: the current path and the proposal.
                 """
                 candidate_count = (
-                    2 if isinstance(path_update, AuxiliaryKalmanSpec) else path_update.num_particles
+                    2
+                    if isinstance(path_update.method, AuxiliaryKalmanMethodSpec)
+                    else path_update.method.num_particles
                 )
                 particle_ids = jnp.arange(candidate_count, dtype=origin_path.dtype)
                 return {

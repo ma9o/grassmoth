@@ -12,7 +12,10 @@ from scipy.special import logsumexp
 from scipy.stats import multivariate_normal, nbinom, norm
 
 from grassmoth.artifacts.probability.families import DistributionFamily
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    GuidedMethodSpec,
+    PathUpdateSpec,
+)
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import guided_delta_limit
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.samplers.particle.guided import (
@@ -62,7 +65,7 @@ def test_memory_guide_matches_dense_auxiliary_conditioning(variance):
             auxiliary,
             variances,
             mask,
-            GuidedPathSpec(method="twisted_particle_agrad", kappa=1),
+            GuidedMethodSpec(kind="twisted_particle_agrad", kappa=1),
             "actual_law",
         )
     )()
@@ -152,7 +155,7 @@ def _window_posterior():
 )
 def test_guided_windows_preserve_joint_path_and_label_posterior(method, kappa):
     target, labels, starts, expected_mean, expected_second, probabilities = _window_posterior()
-    spec = GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
+    spec = PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa))
     setup = build_smoother_setup(
         target,
         num_parameter_particles=2,

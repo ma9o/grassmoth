@@ -24,7 +24,16 @@
      "kind": "untempered"
     },
     "path_update": {
-     "method": "auxiliary_kalman",
+     "method": {
+      "kind": "auxiliary_kalman"
+     },
+     "update": {
+      "kind": "blocked",
+      "block_length": 300
+     },
+     "proposal": {
+      "kind": "conditional_parameter"
+     },
      "latent_step": {
       "kind": "adapted",
       "target": 0.5

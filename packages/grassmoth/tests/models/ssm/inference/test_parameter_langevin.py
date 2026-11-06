@@ -9,7 +9,10 @@ import numpy as np
 import numpyro.distributions as dist
 import pytest
 
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    GuidedMethodSpec,
+    PathUpdateSpec,
+)
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
@@ -73,7 +76,9 @@ def test_large_stale_pilot_score_moves_parameters_without_poisoning_guided_paths
         parameter_proposal="pseudo_langevin",
         parameter_reference_path=pilot,
         parameter_preconditioner_chol=jnp.array([[0.03]]),
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8, kappa=1)
+        ),
     )
     initial = _state(target, kernel, jnp.array([-4.25]), jnp.full((5, 1), 20.0))
     # The old drift would push a log observation scale beyond floating-point support.
@@ -115,7 +120,7 @@ def test_bounded_label_correction_equals_the_two_gaussian_log_densities():
         num_parameter_particles=3,
         parameter_proposal="pseudo_langevin",
         parameter_preconditioner_chol=chol,
-        path_update=GuidedPathSpec(num_particles=4),
+        path_update=PathUpdateSpec(method=GuidedMethodSpec(num_particles=4)),
     )
     state = _state(target, kernel, jnp.array([0.5, -0.3]), jnp.zeros((1, 1)), step=0.3)
     traced = jax.jit(kernel.trace_step_fn)(state, jax.random.key(93))
@@ -140,8 +145,10 @@ def test_bounded_label_correction_equals_the_two_gaussian_log_densities():
 @pytest.mark.parametrize(
     "path_update",
     [
-        GuidedPathSpec(num_particles=8),
-        GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1),
+        PathUpdateSpec(method=GuidedMethodSpec(num_particles=8)),
+        PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8, kappa=1)
+        ),
     ],
 )
 def test_out_of_support_candidates_have_zero_mass_and_leave_a_finite_path_update(path_update):

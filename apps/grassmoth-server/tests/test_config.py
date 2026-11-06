@@ -7,13 +7,16 @@ from pydantic import ValidationError
 
 from grassmoth.artifacts.sampling import (
     AdaptedLatentStepSpec,
-    AuxiliaryKalmanSpec,
+    AuxiliaryKalmanMethodSpec,
+    BlockedPathUpdateSpec,
+    ConditionalParameterProposalSpec,
     FixedLatentStepSpec,
     GaussianInitializationSpec,
-    GuidedPathSpec,
+    GuidedMethodSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     NutsTrajectorySpec,
+    PathUpdateSpec,
     SamplerSpec,
 )
 from grassmoth_server.actions.contracts.settings import FitSettingsSpec
@@ -46,10 +49,10 @@ class TestSamplerSpec:
         result = InferenceConfig().sampler
         assert isinstance(result.algorithm, MarginalParticleGibbsSpec)
         assert result.algorithm.n_parameter_particles == 2
-        assert isinstance(result.algorithm.path_update, GuidedPathSpec)
-        assert result.algorithm.path_update.method == "particle_mgrad"
-        assert result.algorithm.path_update.num_particles == 64
-        assert result.algorithm.path_update.kappa == 1
+        assert isinstance(result.algorithm.path_update.method, GuidedMethodSpec)
+        assert result.algorithm.path_update.method.kind == "particle_mgrad"
+        assert result.algorithm.path_update.method.num_particles == 64
+        assert result.algorithm.path_update.method.kappa == 1
         assert result.algorithm.path_update.latent_step == AdaptedLatentStepSpec(target=0.5)
         assert result.algorithm.parameter_proposal == "random_walk"
         encoded = result.model_dump_json()
@@ -66,8 +69,9 @@ class TestSamplerSpec:
             num_chains=2,
             seed=3,
             algorithm=MarginalParticleGibbsSpec(
-                path_update=GuidedPathSpec(
-                    num_particles=8, latent_step=FixedLatentStepSpec(delta=0.31)
+                path_update=PathUpdateSpec(
+                    method=GuidedMethodSpec(num_particles=8),
+                    latent_step=FixedLatentStepSpec(delta=0.31),
                 )
             ),
         )
@@ -119,10 +123,24 @@ class TestSamplerSpec:
             == 30
         )
         kalman = resolve_sampler_spec(
-            FitSettingsSpec(algorithm=MarginalParticleGibbsSpec(path_update=AuxiliaryKalmanSpec()))
+            FitSettingsSpec(
+                algorithm=MarginalParticleGibbsSpec(
+                    path_update=PathUpdateSpec(
+                        method=AuxiliaryKalmanMethodSpec(),
+                        update=BlockedPathUpdateSpec(block_length=300),
+                        proposal=ConditionalParameterProposalSpec(),
+                    )
+                )
+            )
         )
         assert kalman == configured.revised(
-            algorithm=MarginalParticleGibbsSpec(path_update=AuxiliaryKalmanSpec())
+            algorithm=MarginalParticleGibbsSpec(
+                path_update=PathUpdateSpec(
+                    method=AuxiliaryKalmanMethodSpec(),
+                    update=BlockedPathUpdateSpec(block_length=300),
+                    proposal=ConditionalParameterProposalSpec(),
+                )
+            )
         )
         nuts = resolve_sampler_spec(
             FitSettingsSpec.model_validate(
@@ -144,7 +162,15 @@ class TestSamplerSpec:
         )
         assert reset.algorithm == MarginalParticleGibbsSpec()
         with pytest.raises(ValidationError, match="path_update"):
-            FitSettingsSpec.model_validate({"path_update": {"method": "auxiliary_kalman"}})
+            FitSettingsSpec.model_validate(
+                {
+                    "path_update": {
+                        "method": {"kind": "auxiliary_kalman"},
+                        "update": {"kind": "blocked", "block_length": 300},
+                        "proposal": {"kind": "conditional_parameter"},
+                    }
+                }
+            )
         with pytest.raises(ValidationError, match="frozen"):
             resolved.seed = 8  # ty: ignore[invalid-assignment] -- Exercise runtime rejection of a frozen field.
 
@@ -189,11 +215,14 @@ FULL_CONFIG = textwrap.dedent("""\
           method: mpgibbs
           n_parameter_particles: 3
           path_update:
-            num_particles: 24
+            method:
+              kind: twisted_particle_agrad
+              num_particles: 24
+            update: {kind: whole_path}
+            proposal: {kind: parameter_mean}
             latent_step:
               kind: fixed
               delta: 0.29
-            method: twisted_particle_agrad
           param_target_accept: 0.4
           initialization:
             scale: 0.25
@@ -257,13 +286,13 @@ class TestLoadConfig:
         assert cfg.inference.sampler.seed == 123
         assert cfg.inference.compute_loo_diagnostics is False
         assert isinstance(cfg.inference.sampler.algorithm, MarginalParticleGibbsSpec)
-        assert isinstance(cfg.inference.sampler.algorithm.path_update, GuidedPathSpec)
-        assert cfg.inference.sampler.algorithm.path_update.num_particles == 24
+        assert isinstance(cfg.inference.sampler.algorithm.path_update.method, GuidedMethodSpec)
+        assert cfg.inference.sampler.algorithm.path_update.method.num_particles == 24
         assert cfg.inference.sampler.algorithm.n_parameter_particles == 3
         assert cfg.inference.sampler.algorithm.path_update.latent_step == FixedLatentStepSpec(
             delta=0.29
         )
-        assert cfg.inference.sampler.algorithm.path_update.method == "twisted_particle_agrad"
+        assert cfg.inference.sampler.algorithm.path_update.method.kind == "twisted_particle_agrad"
         assert cfg.inference.sampler.algorithm.param_target_accept == 0.4
         assert cfg.inference.sampler.algorithm.initialization == GaussianInitializationSpec(
             scale=0.25

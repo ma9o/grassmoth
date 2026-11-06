@@ -8,7 +8,13 @@ from typing import TYPE_CHECKING, NamedTuple
 import jax
 import jax.numpy as jnp
 
-from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, FixedLatentStepSpec, GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanMethodSpec,
+    BlockedPathUpdateSpec,
+    FixedLatentStepSpec,
+    GuidedMethodSpec,
+    PathUpdateSpec,
+)
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
     DELTA_MAX,
     INITIAL_MOVEMENT_MULTIPLIER,
@@ -33,7 +39,6 @@ from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoothe
 from grassmoth.models.ssm.inference.warmup.parameter_adaptation import covariance_windows
 
 if TYPE_CHECKING:
-    from grassmoth.artifacts.sampling import PathUpdateSpec
     from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 
 
@@ -71,8 +76,8 @@ class ConditionalPathKernel:
         """Whether adapted guided drift uses the shared frozen curvature metric."""
         settings = self.settings
         return (
-            isinstance(settings, GuidedPathSpec)
-            and settings.kappa == 1
+            isinstance(settings.method, GuidedMethodSpec)
+            and settings.method.kappa == 1
             and not isinstance(settings.latent_step, FixedLatentStepSpec)
         )
 
@@ -119,14 +124,16 @@ class ConditionalPathKernel:
         precisions = (
             boundary.precisions.log_values if isinstance(boundary, PrecisionPathUpdate) else None
         )
-        if isinstance(self.settings, AuxiliaryKalmanSpec):
+        if isinstance(self.settings.method, AuxiliaryKalmanMethodSpec):
             result = auxiliary_kalman_step(
                 target,
                 boundary.context,
                 context,
                 boundary.key,
                 reference,
-                block_length=self.settings.block_length,
+                block_length=self.settings.update.block_length
+                if isinstance(self.settings.update, BlockedPathUpdateSpec)
+                else None,
                 log_precisions=precisions,
             )
         else:

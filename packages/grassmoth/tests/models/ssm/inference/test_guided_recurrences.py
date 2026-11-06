@@ -13,7 +13,10 @@ from numpy.polynomial.hermite import hermgauss
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal, norm
 
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    GuidedMethodSpec,
+    PathUpdateSpec,
+)
 from grassmoth.models.ssm.compile.state_space import (
     ParallelRecurrences,
     SequentialRecurrences,
@@ -187,7 +190,7 @@ def test_recurrence_guide_matches_dense_gaussian_conditioning(steps, random_init
             auxiliary,
             jnp.full(auxiliary.shape, variance),
             target.independent_mask,
-            GuidedPathSpec(method="twisted_particle_agrad", kappa=1),
+            GuidedMethodSpec(kind="twisted_particle_agrad", kappa=1),
             "actual_law",
         )
     )()
@@ -261,7 +264,7 @@ def _recurrence_posterior():
 )
 def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa):
     target, labels, starts, expected_mean, expected_second, label_masses = _recurrence_posterior()
-    spec = GuidedPathSpec(method=method, num_particles=8, kappa=kappa)
+    spec = PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa))
     setup = build_smoother_setup(
         target,
         num_parameter_particles=2,
@@ -444,7 +447,9 @@ def test_fixed_initial_state_without_memory_keeps_backward_selection():
     chosen = rng.choice(2, 4096, p=probabilities)
     samples = means[chosen] + rng.normal(size=(4096, 2)) @ np.linalg.cholesky(covariance).T
     starts = jnp.asarray(np.column_stack((0.2 * labels[chosen], samples))[..., None])
-    spec = GuidedPathSpec(method="twisted_particle_agrad", num_particles=8, kappa=1)
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8, kappa=1)
+    )
     setup = build_smoother_setup(
         target,
         num_parameter_particles=2,
@@ -521,7 +526,12 @@ def test_time_scaled_recurrence_and_overlapping_window_mixture_invariance(method
                 block_length=2 if method == "kalman_blocked" else None,
             ).latent_path
         return guided_step(
-            target, ctx, guide, GuidedPathSpec(method=method, num_particles=8, kappa=1), key, path
+            target,
+            ctx,
+            guide,
+            PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=1)),
+            key,
+            path,
         ).latent_path
 
     @jax.jit

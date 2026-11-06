@@ -150,10 +150,12 @@ _GUIDED_PARTICLES = (
     "5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat "
     "arbitrary."
 )
-_GUIDED_STEP = (
+_PATH_STEP = (
     "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep "
-    "proposals near the current path; large ones let the dynamics dominate, approaching "
-    "conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6)."
+    "proposals near the current path. For particle updates, large scales approach conditional "
+    "SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, "
+    "delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal "
+    "(Corenflos & Särkkä 2025, sections 2.2–2.4)."
 )
 _GUIDED_KAPPA = (
     "1 shifts the auxiliary point along the gradient of the observation densities, mixed "
@@ -175,15 +177,15 @@ _GUIDED_SCAN_UNROLL = (
 )
 
 
-class GuidedPathSpec(Value):
-    """Sequential conditional SMC with exact Gaussian transition-informed proposals.
+class GuidedMethodSpec(Value):
+    """Particle-mGRAD or twisted Particle-aGRAD with their particle-bank settings.
 
-    Corenflos & Finke (2024). Parameter labels remain marginalized, and exact nonlinear
-    transitions and densities pay every weight, so each method's approximation costs
-    mixing, never the target.
+    Corenflos & Finke (2024), sections 4.1–4.4. mGRAD integrates out the path
+    auxiliary; twisted aGRAD retains it and adds Gaussian look-ahead. These
+    methods use the same exact parameter-mixture target, with different weights.
     """
 
-    method: Literal["particle_mgrad", "twisted_particle_agrad"] = Field(
+    kind: Literal["particle_mgrad", "twisted_particle_agrad"] = Field(
         default="particle_mgrad",
         description=(
             "particle_mgrad integrates the path auxiliary out of the particle weights with the "
@@ -198,53 +200,163 @@ class GuidedPathSpec(Value):
         ),
     )
     num_particles: int = Field(default=64, ge=2, description=_GUIDED_PARTICLES)
-    latent_step: LatentStepSpec = Field(
-        default_factory=AdaptedLatentStepSpec, description=_GUIDED_STEP
-    )
     kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
     scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
-    prefix_mixture: bool = Field(
-        default=False,
-        description=(
-            "Opt in to per-parameter-label local Gaussian proposals, mixed with the "
-            "unfloored prefix label probabilities. Every particle pays the full mixture "
-            "density; the shared auxiliary law and look-ahead remain unchanged. Requires "
-            "twisted_particle_agrad with kappa=1 and point readings without replay. "
-            "Early label collapse, poor shared guidance and separated modes can reduce mixing."
-        ),
-    )
 
 
-class AuxiliaryKalmanSpec(Value):
-    """Exact whole-path or blocked Metropolis update with parallel Gaussian proposals.
+class AuxiliaryKalmanMethodSpec(Value):
+    """Parallel Gaussian proposals corrected to exact nonlinear densities.
 
-    Corenflos & Särkkä (2025), https://arxiv.org/abs/2303.00301, sections 2.2–2.4.
-    Whole-path forward and reverse approximations are rebuilt at their respective
-    paths. Blocks instead linearize at the fixed auxiliary under a sampled label.
-    Normalized proposal densities correct to the true nonlinear target.
+    Corenflos & Särkkä (2025), sections 2.2–2.4. Poor Gaussian fits, long memory
+    and separated modes can reduce acceptance without changing the target.
     """
 
-    method: Literal["auxiliary_kalman"] = "auxiliary_kalman"
-    block_length: int | None = Field(
+    kind: Literal["auxiliary_kalman"] = "auxiliary_kalman"
+
+
+type PathMethodSpec = Annotated[
+    GuidedMethodSpec | AuxiliaryKalmanMethodSpec, Field(discriminator="kind")
+]
+
+
+class WholePathUpdateSpec(Value):
+    """Update the complete trajectory; particle methods still build it sequentially."""
+
+    kind: Literal["whole_path"] = "whole_path"
+
+
+class BlockedPathUpdateSpec(Value):
+    """Update contiguous trajectory blocks."""
+
+    kind: Literal["blocked"] = "blocked"
+    block_length: int = Field(
         default=300,
         ge=1,
-        description="Time points per block; null updates the whole path. Blocks use a conditional parameter label, alternating colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.",
+        description="Time points per block. The implemented Kalman update alternates colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.",
     )
-    latent_step: LatentStepSpec = Field(
-        default_factory=AdaptedLatentStepSpec,
+
+
+type PathUpdateScopeSpec = Annotated[
+    WholePathUpdateSpec | BlockedPathUpdateSpec, Field(discriminator="kind")
+]
+
+
+class ParameterMeanProposalSpec(Value):
+    """Build proposal dynamics at the mean of supported parameter candidates.
+
+    This repository's shared-guide construction is symmetric in the ensemble.
+    Separated parameter components can be poorly represented by their mean.
+    """
+
+    kind: Literal["parameter_mean"] = "parameter_mean"
+
+
+class ParameterMixtureProposalSpec(Value):
+    """Mix parameter-specific proposals and pay the complete proposal density.
+
+    Corenflos (2025), section 3.4 motivates running-prefix transition mixtures.
+    The implemented twisted-aGRAD variant uses local Gaussian components with a
+    shared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not
+    implemented. Early label collapse and poor shared guidance can reduce mixing.
+    """
+
+    kind: Literal["parameter_mixture"] = "parameter_mixture"
+    weights: Literal["running_prefix", "prior"] = Field(
+        default="running_prefix",
         description=(
-            "Auxiliary variance delta/2, fixed or adapted during warmup using per-time-point "
-            "acceptance. Parallel Kalman operations draw Gaussian paths or conditional blocks. "
-            "Poor local Gaussian fits, strong nonlinearity and separated parameter or "
-            "path modes can lower acceptance. Exact nonlinear Metropolis corrections "
-            "preserve the target. Interval readings and deterministic recurrences are "
-            "replayed exactly under every label, never proposed. Parameter proposals and "
-            "final parameter-label selection remain MPGibbs."
+            "running_prefix uses each particle's exact label probabilities through the "
+            "previous time (Corenflos 2025, section 3.4). prior uses parameter priors and "
+            "the ensemble-proposal correction, without path evidence; currently unsupported."
         ),
     )
 
 
-type PathUpdateSpec = Annotated[GuidedPathSpec | AuxiliaryKalmanSpec, Field(discriminator="method")]
+class ConditionalParameterProposalSpec(Value):
+    """Build proposals under a label sampled conditional on the current path.
+
+    The blocked Kalman update holds this label fixed during its conditional block
+    moves. This is not the ensemble mean and can retain parameter/path dependence.
+    """
+
+    kind: Literal["conditional_parameter"] = "conditional_parameter"
+
+
+type PathProposalSpec = Annotated[
+    ParameterMeanProposalSpec | ParameterMixtureProposalSpec | ConditionalParameterProposalSpec,
+    Field(discriminator="kind"),
+]
+
+
+class UnsupportedPathUpdate(Value):
+    """An authored path configuration for which no execution kernel is implemented."""
+
+    message: str
+
+
+class PathUpdateSpec(Value):
+    """Common declarative path settings, with support resolved before execution.
+
+    The schema describes independent choices; support_failure owns the current
+    implementation matrix. Model-dependent restrictions belong to fit preflight.
+    """
+
+    method: PathMethodSpec = Field(default_factory=GuidedMethodSpec)
+    update: PathUpdateScopeSpec = Field(default_factory=WholePathUpdateSpec)
+    proposal: PathProposalSpec = Field(default_factory=ParameterMeanProposalSpec)
+    latent_step: LatentStepSpec = Field(
+        default_factory=AdaptedLatentStepSpec, description=_PATH_STEP
+    )
+
+    @property
+    def support_failure(self) -> UnsupportedPathUpdate | None:
+        """Resolve method, scope and proposal support without silently changing a choice."""
+        method, update, proposal = self.method, self.update, self.proposal
+        if isinstance(update, BlockedPathUpdateSpec):
+            if not isinstance(method, AuxiliaryKalmanMethodSpec):
+                return UnsupportedPathUpdate(
+                    message="Blocked updates are implemented only for auxiliary Kalman."
+                )
+            if not isinstance(proposal, ConditionalParameterProposalSpec):
+                return UnsupportedPathUpdate(
+                    message="Blocked auxiliary Kalman requires a conditional_parameter proposal."
+                )
+            return None
+        if isinstance(proposal, ConditionalParameterProposalSpec):
+            return UnsupportedPathUpdate(
+                message="Conditional-parameter proposals are implemented only for blocked auxiliary Kalman."
+            )
+        if isinstance(proposal, ParameterMeanProposalSpec):
+            return None
+        if isinstance(method, AuxiliaryKalmanMethodSpec):
+            return UnsupportedPathUpdate(
+                message="Parameter-mixture proposals are not implemented for auxiliary Kalman."
+            )
+        if method.kind != "twisted_particle_agrad":
+            return UnsupportedPathUpdate(
+                message="Parameter-mixture proposals are not implemented for Particle-mGRAD."
+            )
+        if proposal.weights != "running_prefix":
+            return UnsupportedPathUpdate(
+                message="Twisted Particle-aGRAD implements only running_prefix mixture weights."
+            )
+        if method.kappa != 1:
+            return UnsupportedPathUpdate(
+                message="Running-prefix mixture proposals require twisted Particle-aGRAD with kappa=1."
+            )
+        return None
+
+    @property
+    def kernel_identity(self) -> tuple[str | int, ...]:
+        """Identify the method, scope and proposal law for native continuation."""
+        method, update, proposal = self.method, self.update, self.proposal
+        return (
+            method.kind,
+            method.kappa if isinstance(method, GuidedMethodSpec) else 0,
+            update.kind,
+            update.block_length if isinstance(update, BlockedPathUpdateSpec) else 0,
+            proposal.kind,
+            proposal.weights if isinstance(proposal, ParameterMixtureProposalSpec) else "",
+        )
 
 
 type JointParameterization = Literal["centred", "non_centred", "mixed"]
@@ -293,12 +405,10 @@ type JointTrajectorySpec = Annotated[
 class JointSmootherSpec(Value):
     """Include free latent coordinates in the Hamiltonian update."""
 
-    method: Literal["joint"] = "joint"
+    method: Literal["joint"] = "joint"  # noqa: FIELD002 -- Distinguishes joint smoothing from the object-valued method in PathUpdateSpec.
 
 
-type NutsSmootherSpec = Annotated[
-    JointSmootherSpec | GuidedPathSpec | AuxiliaryKalmanSpec, Field(discriminator="method")
-]
+type NutsSmootherSpec = JointSmootherSpec | PathUpdateSpec
 
 
 class NutsDASpec(Value):
@@ -358,9 +468,11 @@ class NutsDASpec(Value):
         return (
             self.method,
             self.parameterization,
-            self.smoother.method,
-            self.smoother.kappa if isinstance(self.smoother, GuidedPathSpec) else 0,
-            self.smoother.prefix_mixture if isinstance(self.smoother, GuidedPathSpec) else False,
+            *(
+                (self.smoother.method,)
+                if isinstance(self.smoother, JointSmootherSpec)
+                else self.smoother.kernel_identity
+            ),
             trajectory.kind,
             trajectory.max_tree_depth
             if isinstance(trajectory, NutsTrajectorySpec)
@@ -382,7 +494,7 @@ class MarginalParticleGibbsSpec(Value):
         ),
     )
     path_update: PathUpdateSpec = Field(
-        default_factory=GuidedPathSpec,
+        default_factory=PathUpdateSpec,
         description=(
             "Exact path update: particle_mgrad (default) or twisted_particle_agrad, both "
             "guided, or auxiliary_kalman."
@@ -456,12 +568,9 @@ class MarginalParticleGibbsSpec(Value):
     def kernel_identity(self) -> tuple[str | int, ...]:
         """Identify kernels whose private state has the same scientific interpretation."""
         path_update = self.path_update
-        guided = isinstance(path_update, GuidedPathSpec)
         return (
             "mpgibbs",
-            path_update.method,
-            path_update.kappa if guided else 0,
-            path_update.prefix_mixture if guided else False,
+            *path_update.kernel_identity,
             self.parameter_proposal,
             self.compiler_reparameterization,
         )
@@ -556,6 +665,13 @@ class SamplerSpec(Value):
         default_factory=MarginalParticleGibbsSpec,
         description="Exact joint sampler: MPGibbs parameter/path updates or NUTS-DA.",
     )
+
+    @property
+    def support_failure(self) -> UnsupportedPathUpdate | None:
+        """Reject unsupported path choices before compilation or remote dispatch."""
+        algorithm = self.algorithm
+        path = algorithm.smoother if isinstance(algorithm, NutsDASpec) else algorithm.path_update
+        return None if isinstance(path, JointSmootherSpec) else path.support_failure
 
     @property
     def kernel_identity(self) -> tuple[str | int, ...]:

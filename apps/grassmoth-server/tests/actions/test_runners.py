@@ -49,3 +49,45 @@ def test_action_inputs_keep_their_request_through_temporal(action):
         return await pydantic_data_converter.decode(encoded, [ActionInput])
 
     assert run_async(round_trip()) == [original]
+
+
+@pytest.mark.parametrize("hardware", ["local", "L40S"])
+def test_unsupported_path_update_is_rejected_before_data_loading_or_dispatch(monkeypatch, hardware):
+    from unittest.mock import Mock
+
+    from grassmoth.public import SamplerSpec
+    from grassmoth_server.actions import runners
+    from grassmoth_server.actions.contracts.requests import call_identity
+    from grassmoth_server.actions.fit import execution
+    from grassmoth_server.study.queries import data
+    from grassmoth_server.study.records import Rejected
+
+    sampler = SamplerSpec.model_validate(
+        {
+            "hardware": hardware,
+            "algorithm": {
+                "method": "mpgibbs",
+                "path_update": {
+                    "method": {"kind": "particle_mgrad"},
+                    "proposal": {"kind": "parameter_mixture", "weights": "running_prefix"},
+                },
+            },
+        }
+    )
+    request = FitRequest[GitOid](
+        input=FitInput[GitOid](
+            target=NewFitTarget(
+                dynamical_model_spec_ref=git_oid(1),
+                data_ref=DataRef(revision=git_oid(2), replicate_index=0),
+            )
+        )
+    )
+    monkeypatch.setattr(runners, "fit_source", Mock())
+    monkeypatch.setattr(execution, "resolve_sampler_spec", lambda *_args: sampler)
+    read = Mock(side_effect=AssertionError("Unsupported settings must stop before data loading"))
+    monkeypatch.setattr(data, "read_data_history", read)
+    result = runners._fit_selected(Mock(), {}, request.input, call_identity(request))
+    assert isinstance(result, Rejected)
+    assert result.code == "UNSUPPORTED_PATH_UPDATE"
+    assert "Particle-mGRAD" in result.detail
+    read.assert_not_called()

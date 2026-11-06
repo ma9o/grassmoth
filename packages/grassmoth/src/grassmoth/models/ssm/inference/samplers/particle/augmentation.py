@@ -9,13 +9,16 @@ import jax
 import jax.numpy as jnp
 from jax import random
 
-from grassmoth.artifacts.sampling import FixedLatentStepSpec, GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    FixedLatentStepSpec,
+    GuidedMethodSpec,
+    PathUpdateSpec,
+)
 from grassmoth.models.ssm.inference.samplers.particle.adaptation import DELTA_MAX
 from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
 from grassmoth.models.ssm.inference.targets.student_precision import draw_student_precisions
 
 if TYPE_CHECKING:
-    from grassmoth.artifacts.sampling import PathUpdateSpec
     from grassmoth.models.ssm.inference.samplers.particle.contract import (
         SmootherContext,
         SmootherSetup,
@@ -87,8 +90,8 @@ def begin_path_update(
     )
     if (
         precisions is not None
-        and isinstance(path_update, GuidedPathSpec)
-        and path_update.kappa == 1
+        and isinstance(path_update.method, GuidedMethodSpec)
+        and path_update.method.kappa == 1
         and not isinstance(path_update.latent_step, FixedLatentStepSpec)
     ):
         limit = precisions.step_limit(target, ctx.contexts, static.latent_free_mask, DELTA_MAX)

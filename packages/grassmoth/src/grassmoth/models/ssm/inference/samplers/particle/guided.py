@@ -53,7 +53,11 @@ import jax
 import jax.numpy as jnp
 from jax.typing import DTypeLike
 
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    GuidedMethodSpec,
+    ParameterMixtureProposalSpec,
+    PathUpdateSpec,
+)
 from grassmoth.models.ssm.inference.samplers.particle.contract import (
     ParticleSmootherResult,
     SmootherContext,
@@ -209,19 +213,17 @@ class _GuidedComponents(NamedTuple):
     selector: PathSelector
 
 
-def _guided_components(target: ParticleTarget, spec: GuidedPathSpec) -> _GuidedComponents:
+def _guided_components(target: ParticleTarget, spec: GuidedMethodSpec) -> _GuidedComponents:
     """Resolve immutable choices from the method and compiled support before tracing scans."""
     return _GuidedComponents(
-        "actual_law"
-        if spec.method == "twisted_particle_agrad" and spec.kappa == 1
-        else "unshifted",
+        "actual_law" if spec.kind == "twisted_particle_agrad" and spec.kappa == 1 else "unshifted",
         "memory" if target.intervals is not None or target.state_space.requires_replay else "point",
         "ancestral"
         if target.state_space.recurrence
         else (
             "backward"
             if target.intervals is None
-            else ("marginal_window_replay" if spec.method == "particle_mgrad" else "window_replay")
+            else ("marginal_window_replay" if spec.kind == "particle_mgrad" else "window_replay")
         ),
     )
 
@@ -230,7 +232,7 @@ def _guided_step(
     target: ParticleTarget,
     ctx: SmootherContext,
     guide: ParticleContext,
-    spec: GuidedPathSpec,
+    spec: PathUpdateSpec,
     key: PRNGKeyArray,
     reference: Float[Array, "T D"],
     *,
@@ -240,7 +242,8 @@ def _guided_step(
     """Run an exact conditional filter, selecting paths by their compiled memory."""
     mask = ctx.latent_free_mask
     steps, dimension = reference.shape
-    count = spec.num_particles
+    method = cast("GuidedMethodSpec", spec.method)
+    count = method.num_particles
     variance = jnp.broadcast_to(ctx.amala_delta.reshape((steps, -1)), reference.shape) / 2
     aux_key, first_key, forward_key, backward_key = jax.random.split(key, 4)
     memory = sequential_observations(target, ctx.contexts, guide, log_precisions)
@@ -249,7 +252,7 @@ def _guided_step(
     def observe(
         value: Float[Array, " R"], index: Int[Array, ""] | int
     ) -> tuple[Float[Array, " K"], Float[Array, " D"]]:
-        if spec.kappa == 0:
+        if method.kappa == 0:
             return memory.log_probs(value, jnp.asarray(index)).astype(
                 ctx.traj_dtype
             ), jnp.zeros_like(memory.state(value))
@@ -270,10 +273,10 @@ def _guided_step(
         + (jnp.sqrt(variance) * jax.random.normal(aux_key, reference.shape, reference.dtype)),
         reference,
     )
-    components = _guided_components(target, spec)
-    if spec.prefix_mixture:
+    components = _guided_components(target, method)
+    if isinstance(spec.proposal, ParameterMixtureProposalSpec):
         information = point_information(components.information, observe, auxiliary, variance, mask)
-        twist, _ = _build_twist(memory, auxiliary, mask, spec, information)
+        twist, _ = _build_twist(memory, auxiliary, mask, method, information)
         geometry = _mixture_geometry(target, ctx.contexts, auxiliary, mask, information, twist)
     else:
         twist, geometry = build_guide(
@@ -285,12 +288,12 @@ def _guided_step(
             auxiliary,
             variance,
             mask,
-            spec,
+            method,
         )
     initial_mean = target.initial_moments(guide)[0]
     marginal = (
         jax.vmap(marginal_geometry, in_axes=(0, 0, 0, None))(geometry.chol, variance, mask, count)
-        if spec.method == "particle_mgrad"
+        if method.kind == "particle_mgrad"
         else None
     )
 
@@ -334,7 +337,7 @@ def _guided_step(
         return memory.transition_log_probs(previous, current, index).astype(ctx.traj_dtype)
 
     initial_geometry = jax.tree.map(lambda value: value[0], geometry)
-    if spec.prefix_mixture:
+    if isinstance(spec.proposal, ParameterMixtureProposalSpec):
         initial_means = jax.vmap(lambda context: target.initial_moments(context)[0])(ctx.contexts)
         initial_centers = initial_geometry.center(initial_means, mask[0])
         first, first_density, first_centers = _mixture_particles(
@@ -403,7 +406,7 @@ def _guided_step(
         ancestors = _killing(weights, killing_noise)
         parents = previous[ancestors]
         parent_scores = scores[ancestors]
-        if spec.prefix_mixture:
+        if isinstance(spec.proposal, ParameterMixtureProposalSpec):
             means = jax.vmap(
                 lambda parent: jax.vmap(
                     lambda context: target.transition_moments(context, parent, index)[0]
@@ -464,7 +467,7 @@ def _guided_step(
                 (count - 1, ctx.num_parameter_particles),
                 dtype=reference.dtype,
             )
-            if spec.prefix_mixture
+            if isinstance(spec.proposal, ParameterMixtureProposalSpec)
             else jnp.empty((count - 1, 0), dtype=reference.dtype),
         )
 
@@ -477,7 +480,7 @@ def _guided_step(
                 jax.vmap(forward_noise)(jax.random.split(forward_key, steps - 1)),
                 jax.tree.map(lambda value: value[1:], geometry),
             ),
-            unroll=spec.scan_unroll,
+            unroll=method.scan_unroll,
         )
     )
     observation_bank = jnp.concatenate((first_observed[None], tail_observed))
@@ -506,7 +509,7 @@ def _guided_step(
         observe,
         transition,
         reference.dtype,
-        spec.scan_unroll,
+        method.scan_unroll,
     )
     norms = jnp.linalg.norm(jnp.where(mask, gradients, 0.0), axis=-1)
     measurements = weight_history_fields(
@@ -547,7 +550,7 @@ def guided_step(
     target: ParticleTarget,
     ctx: SmootherContext,
     guide: ParticleContext,
-    spec: GuidedPathSpec,
+    spec: PathUpdateSpec,
     key: PRNGKeyArray,
     reference: Float[Array, "T D"],
     *,
@@ -563,7 +566,7 @@ def trace_guided_step(
     target: ParticleTarget,
     ctx: SmootherContext,
     guide: ParticleContext,
-    spec: GuidedPathSpec,
+    spec: PathUpdateSpec,
     key: PRNGKeyArray,
     reference: Float[Array, "T D"],
     *,

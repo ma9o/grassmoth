@@ -7,10 +7,11 @@ import pytest
 
 from grassmoth.artifacts.continuation import SamplerCheckpoint
 from grassmoth.artifacts.sampling import (
-    GuidedPathSpec,
+    GuidedMethodSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     NutsTrajectorySpec,
+    PathUpdateSpec,
     SamplerSpec,
 )
 from grassmoth.models.ssm.inference.fit import fit
@@ -27,15 +28,19 @@ pytestmark = pytest.mark.inference(concern="sampling")
     "algorithm",
     [
         MarginalParticleGibbsSpec(
-            path_update=GuidedPathSpec(method="particle_mgrad", num_particles=4)
+            path_update=PathUpdateSpec(
+                method=GuidedMethodSpec(kind="particle_mgrad", num_particles=4)
+            )
         ),
         MarginalParticleGibbsSpec(
-            path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4)
+            path_update=PathUpdateSpec(
+                method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=4)
+            )
         ),
         NutsDASpec(parameterization="mixed", trajectory=NutsTrajectorySpec(max_tree_depth=3)),
         pytest.param(
             NutsDASpec(
-                smoother=GuidedPathSpec(num_particles=4),
+                smoother=PathUpdateSpec(method=GuidedMethodSpec(num_particles=4)),
                 parameterization="non_centred",
                 trajectory=NutsTrajectorySpec(max_tree_depth=3),
             ),

@@ -5,7 +5,10 @@ import jax.numpy as jnp
 import numpy as np
 import pytest
 
-from grassmoth.artifacts.sampling import GuidedPathSpec
+from grassmoth.artifacts.sampling import (
+    GuidedMethodSpec,
+    PathUpdateSpec,
+)
 from grassmoth.models.ssm.inference.samplers.mpgibbs import kernel as kernel_module
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import _initialize_chain_state
 from grassmoth.models.ssm.inference.samplers.particle.contract import ParticleSmootherResult
@@ -43,7 +46,7 @@ def test_retained_chart_coordinates_preserve_physical_identity_and_caches(
     kernel = kernel_module.build_marginal_particle_gibbs_kernel(
         target,
         num_parameter_particles=2,
-        path_update=GuidedPathSpec(method="particle_mgrad", num_particles=2),
+        path_update=PathUpdateSpec(method=GuidedMethodSpec(kind="particle_mgrad", num_particles=2)),
         initial_chart=chart,
     )
     state = _initialize_chain_state(
@@ -88,7 +91,9 @@ def test_charted_profile_components_return_production_physical_paths_and_caches(
     kernel = kernel_module.build_marginal_particle_gibbs_kernel(
         target,
         num_parameter_particles=2,
-        path_update=GuidedPathSpec(method="twisted_particle_agrad", num_particles=4, kappa=1),
+        path_update=PathUpdateSpec(
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=4, kappa=1)
+        ),
         initial_chart=chart,
     )
     starts = jnp.array([[0.45, -0.2, 0.15], [-0.6, 0.3, -0.1]])

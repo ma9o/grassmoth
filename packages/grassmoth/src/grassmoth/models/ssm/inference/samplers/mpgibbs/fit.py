@@ -19,7 +19,11 @@ from grassmoth.artifacts.identity import ConstructRef
 from grassmoth.artifacts.reports.posterior_diagnostics import (
     ParticleSamplerDiagnostics,
 )
-from grassmoth.artifacts.sampling import AuxiliaryKalmanSpec, MarginalParticleGibbsSpec
+from grassmoth.artifacts.sampling import (
+    AuxiliaryKalmanMethodSpec,
+    MarginalParticleGibbsSpec,
+    SamplerSpec,
+)
 from grassmoth.models.ssm.inference.continuation import (
     frozen_particle_tuning,
 )
@@ -57,7 +61,6 @@ from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
 
 if TYPE_CHECKING:
     from grassmoth.artifacts.reports.posterior_diagnostics import DiagnosticPhase
-    from grassmoth.artifacts.sampling import SamplerSpec
     from grassmoth.compute.context import ModelExecutionContext
     from grassmoth.models.ssm.parameterization import PriorRuntimeBundle
     from grassmoth.models.ssm.preparation.binding import BoundPanel
@@ -87,10 +90,10 @@ def fit_marginal_particle_gibbs(
         sampler.num_samples_per_chain,
         int(observations.shape[0]),
         int(observations.shape[1]) if observations.ndim >= 2 else 0,
-        options.path_update.method,
+        options.path_update.method.kind,
         None
-        if isinstance(options.path_update, AuxiliaryKalmanSpec)
-        else options.path_update.num_particles,
+        if isinstance(options.path_update.method, AuxiliaryKalmanMethodSpec)
+        else options.path_update.method.num_particles,
         options.n_parameter_particles,
     )
 
@@ -283,8 +286,8 @@ def fit_marginal_particle_gibbs(
         else "m_pgibbs_pseudo_langevin",
         mcmc_phase_seconds=float(mcmc_phase_seconds),
         drift="none"
-        if isinstance(kernel.path_update, AuxiliaryKalmanSpec)
-        else ("observation" if kernel.path_update.kappa else "none"),
+        if isinstance(kernel.path_update.method, AuxiliaryKalmanMethodSpec)
+        else ("observation" if kernel.path_update.method.kappa else "none"),
         diagnostic_metrics=kernel.diagnostic_metrics,
         param_target_accept=float(kernel.target_accept[0]),
         parameter_preconditioned=bool(kernel.preconditioned),
@@ -301,11 +304,11 @@ def fit_marginal_particle_gibbs(
         path_weights=summarize_particle_weights(
             summary_extra_fields,
             num_steps=len(bundle.runtime.times),
-            num_particles=options.path_update.num_particles,
+            num_particles=options.path_update.method.num_particles,
             phase=diagnostic_summary_phase,
         )
         if "particle_weights" in kernel.diagnostic_metrics
-        and not isinstance(options.path_update, AuxiliaryKalmanSpec)
+        and not isinstance(options.path_update.method, AuxiliaryKalmanMethodSpec)
         else None,
         latent_move_rms_mean=float(jnp.mean(summary_extra_fields["latent_move_rms"]))
         if "latent_move_rms" in summary_extra_fields
