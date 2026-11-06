@@ -28,7 +28,6 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import _initialize_chain_state
-from grassmoth.models.ssm.inference.targets.coordinates import PathChart
 from grassmoth_test_support.interval_particle import interval_target
 from grassmoth_test_support.observation import observation_laws
 from grassmoth_test_support.student_reference import student_features, student_quadrature
@@ -77,7 +76,7 @@ def _target():
             lambda z: {"z": z},
             lambda z: dist.Normal(0.0, 1.0).log_prob(z).sum(),
         ),
-        context=lambda z, grid: (eqx.filter(model(z), eqx.is_array), grid, jnp.zeros(1), None),
+        context=lambda z, grid: (eqx.filter(model(z), eqx.is_array), grid, jnp.zeros(1)),
         dynamical_model=lambda context: eqx.combine(context[0], static),
     )
 
@@ -101,25 +100,22 @@ def _initialize(target, kernel, joint):
         param_min_scale=1e-6,
         param_max_scale=1e3,
         initial_latent_trajectory=joint[3:, None],
-        chart=kernel.initial_chart,
     )
 
 
 @pytest.mark.parametrize(
-    ("method", "kappa", "proposal", "translated"),
+    ("method", "kappa", "proposal"),
     [
-        ("particle_mgrad", 0, "random_walk", False),
-        ("twisted_particle_agrad", 0, "pseudo_langevin", False),
-        ("particle_mgrad", 1, "random_walk", False),
-        ("twisted_particle_agrad", 1, "pseudo_langevin", False),
-        ("twisted_particle_agrad", 1, "pseudo_langevin", True),
-        ("particle_mgrad", 1, "random_walk", True),
-        ("kalman_full", 1, "random_walk", True),
-        ("kalman_blocked", 1, "random_walk", True),
+        ("particle_mgrad", 0, "random_walk"),
+        ("twisted_particle_agrad", 0, "pseudo_langevin"),
+        ("particle_mgrad", 1, "random_walk"),
+        ("twisted_particle_agrad", 1, "pseudo_langevin"),
+        ("kalman_full", 1, "random_walk"),
+        ("kalman_blocked", 1, "random_walk"),
     ],
 )
 def test_augmented_sweep_preserves_joint_marginal_posterior(
-    marginal_reference, method, kappa, proposal, translated
+    marginal_reference, method, kappa, proposal
 ):
     starts, expected, variance = marginal_reference
     # Round the starts to float32 first, so unmoved coordinates compare equal.
@@ -143,14 +139,6 @@ def test_augmented_sweep_preserves_joint_marginal_posterior(
             if method.startswith("kalman")
             else PathUpdateSpec(method=GuidedMethodSpec(kind=method, num_particles=8, kappa=kappa))
         ),
-        initial_chart=PathChart(
-            jnp.broadcast_to(jnp.array([[-0.35, 0.2, 0.15]]), (2, 1, 3)),
-            jnp.array([0.1, -0.2, 0.3]),
-            jnp.array([[[0.2, -0.1, 0.1]], [[-0.15, 0.25, 0.05]]]),
-            jnp.array([[0.2], [-0.1]]),
-        )
-        if translated
-        else None,
     )
 
     def one(joint, key):

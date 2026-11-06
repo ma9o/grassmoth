@@ -47,20 +47,16 @@ The [joint coordinates](../packages/grassmoth/src/grassmoth/models/ssm/inference
 | Deterministic recurrence stages: exact per-label replay, ancestral tracing | Adapted | Plain particle Gibbs path selection (Andrieu, Doucet & Holenstein 2010) | [sequential], [guided-selection] | `5f4484d7` | [t-recurrences] | Weaker movement at early times |
 | StudentT precision augmentation, with the final label drawn from the marginal | Adapted | Scale mixtures (Carlin, Polson & Stoffer 1992), with an ordered partial collapse ([van Dyk & Park][vdp]; [Hosszejni][hosszejni] on degrees of freedom) | [student], [augmentation], [kernel] | `52807ada`, [auxiliary Kalman on TAIL](../benchmarks/suite/notes.md#tail-with-blocked-auxiliary-kalman-and-student-t-precisions--2026-11-04) | [t-student], [t-student-kernel] | Ambiguous outliers switch only through precision updates |
 | Parameter proposal covariance adapted in warmup | Adapted | [C25][c25] §3.4 allows it; its experiments fix Σ = I | [parameter-adaptation] | `868ef169` | [t-parameter-adaptation] | Poor covariance estimates |
-| Optional computed path chart | Adapted | Parameterization framework of [Papaspiliopoulos, Roberts & Sköld 2007][prs07]; frozen-surrogate mean response and structural scaling are our construction | [computed-chart], [path-curvature], [translation], [runner] | Opt-in; off by default | [t-computed-chart], [t-translation], [t-scale] | Local linearization, PSD clipping, separated modes and data-pinned deviations can limit mixing; a diagonal chart cannot transport every correlated path mode |
 | Bounded pseudo-Langevin drift; invalid candidates get zero label mass | Ours | [C25][c25] §3.1's unbounded drift | [kernel], [context] | `b11c87e6` | [t-langevin] | Its fixed pilot direction goes stale; it gave no gain over the random walk on PARAM |
 | Noise factorizations prepared once per sweep | Numerical | — | [guided], [particle-target] | `b076b7ad` | [t-particle] | None: exact for additive diffusion |
 | Native mixing diagnostics: frequency refresh, regional movement | Numerical | — | [scorecard] | `ac5ec9e5` | [t-scorecard] | Report only; they never alter sampling |
 
 **Rules every piece above follows:**
 
-- **Initialization.** The [path seed][path-seed] backtracks on the exact path density and uses PSD curvature in predictor space from the [shared path curvature][path-curvature] at the fixed initial parameter center. That curvature adds each open window's memory as noise-free coordinates, so interval readings inform the seed and the computed chart through the same augmented smoother. Exact replay preserves deterministic recurrences, static states and constraints. The seed changes only MPGibbs starts, not the retained target or diagnostics; a non-finite seed returns an initialization failure.
+- **Initialization.** The [path seed][path-seed] backtracks on the exact path density and uses PSD curvature in predictor space from the [shared path curvature][path-curvature] at the fixed initial parameter center. That curvature adds each open window's memory as noise-free coordinates, so interval readings inform the seed through the same augmented smoother. Exact replay preserves deterministic recurrences, static states and constraints. The seed changes only MPGibbs starts, not the retained target or diagnostics; a non-finite seed returns an initialization failure.
 - **Shape and depth.** Guided path updates propose every free coordinate at every time. Their forward pass has linear depth, and the twist's information scan has logarithmic depth for a fixed augmented dimension.
-- **One shared guide.** A single Gaussian guide is shared symmetrically across the parameter ensemble. Recurrences and window statistics inherit shared state innovations, with no added process noise.
+- **Physical path coordinates.** MPGibbs proposes and scores paths in physical model coordinates. The [proposal contract](../packages/grassmoth/src/grassmoth/artifacts/sampling.py) selects a shared mean guide, a parameter-specific mixture, or a conditional parameter label. The [prefix mixture](../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/prefix_mixture.py) covers individual parameter candidates and pays the complete proposal density; its shared auxiliary and look-ahead can still limit mixing. Recurrences and window statistics inherit shared state innovations, with no added process noise.
 - **Proposal auxiliaries and continuation.** Auxiliary paths and precisions belong to individual moves. [Native continuation][continuation] retains the [runner]'s tuning and adaptation state, including learned path geometry.
-- **Computed path chart.** The [computed chart][computed-chart] combines translation and structural diffusion scaling: `x_t = c_t + B_t(η − η*) + exp(A_t(η − η*)) ⊙ (z_t − c_t)`. One reference at mean parameters and their IEKS path freezes dynamics and window-memory Jacobians, reading curvature, and exact pin support and values. Transition means, predictor offsets and transition covariances vary in that surrogate; regression, conditional covariance and pinned marginal precision vary consistently with the covariance. The initial covariance stays fixed. The center is its Gaussian mean and the translation is its full first-order mean response, including covariance changes. Neither IEKS nor PSD clipping is differentiated. Each state's structural log-diffusion slope supplies the scale; all coefficients act as the identity on excluded coordinates at each time.
-- **Chart execution.** One compiled builder runs before warmup and between host blocks ending exactly at adaptation boundaries. It installs the complete chart while preserving physical state, caches and random keys. The chart freezes for retention; native continuation restores its complete coefficients. Older incompatible native shapes return an expected initialization failure, without migration. Every initial and transition factor pays its own time-indexed log-Jacobian, and both transition endpoints and Gaussian proposal covariances use their own frames. Exact physical replay owns recurrences and overlapping windows. The warmup metric is learned in physical units, which equal chart units at the reference; its frozen numbers define one common chart-unit auxiliary law for every label. Student-t conditional curvature uses time-indexed chart loadings.
-- **Chart limits and arithmetic.** Structural scaling rescales every free deviation, including slow modes pinned by readings, and therefore need not minimize residual coupling. It cannot promise convergence under nonlinearity or multiple modes. Builder boundaries reject non-finite coefficients or current scales outside the numerical domain with a typed initialization failure. Float32 proposals whose scale squares or reciprocals cannot remain finite and normal receive zero label mass before contributing to the common guide; exponents are never clipped. Reported paths, conditioning and diagnostics remain in physical units.
 
 <!-- cspell:ignore Särkkä Andrieu Doucet Holenstein Polson Stoffer Hosszejni Papaspiliopoulos Sköld Kastner Frühwirth Schnatter Schär -- author names. -->
 
@@ -68,7 +64,6 @@ The [joint coordinates](../packages/grassmoth/src/grassmoth/models/ssm/inference
 [cf24]: https://arxiv.org/abs/2401.14868v1
 [vdp]: https://www.ma.imperial.ac.uk/~dvandyk/Research/08-jasa-pcg.pdf
 [hosszejni]: https://arxiv.org/abs/2109.01726
-[prs07]: https://doi.org/10.1214/088342307000000014
 [kernel]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/mpgibbs/kernel.py
 [guided]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/guided.py
 [marginal]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/samplers/particle/marginal.py
@@ -88,9 +83,7 @@ The [joint coordinates](../packages/grassmoth/src/grassmoth/models/ssm/inference
 [initialization]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/initialization.py
 [path-seed]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/ieks.py
 [t-path-seed]: ../packages/grassmoth/tests/models/ssm/inference/test_ieks_initialization.py
-[computed-chart]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/computed_chart.py
 [path-curvature]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/warmup/path_curvature.py
-[translation]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/targets/coordinates.py
 [scorecard]: ../packages/grassmoth/src/grassmoth/models/ssm/inference/diagnostics/scorecard.py
 [t-particle]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_particle.py
 [t-information]: ../packages/grassmoth/tests/models/ssm/inference/test_guided_information.py
@@ -101,9 +94,6 @@ The [joint coordinates](../packages/grassmoth/src/grassmoth/models/ssm/inference
 [t-student]: ../packages/grassmoth/tests/models/ssm/inference/test_student_precision.py
 [t-student-kernel]: ../packages/grassmoth/tests/models/ssm/inference/test_student_augmented_kernel.py
 [t-parameter-adaptation]: ../packages/grassmoth/tests/models/ssm/inference/test_parameter_adaptation.py
-[t-computed-chart]: ../packages/grassmoth/tests/models/ssm/inference/test_computed_chart.py
-[t-translation]: ../packages/grassmoth/tests/models/ssm/inference/test_translation_chart.py
-[t-scale]: ../packages/grassmoth/tests/models/ssm/inference/test_scale_chart.py
 [t-langevin]: ../packages/grassmoth/tests/models/ssm/inference/test_parameter_langevin.py
 [t-scorecard]: ../packages/grassmoth/tests/models/ssm/inference/test_scorecard_diagnostics.py
 

@@ -135,15 +135,7 @@ def test_conditional_curvature_is_label_symmetric_and_ignores_missing_rows():
         ("last",),
         families=(DistributionFamily.STUDENT_T,),
     )
-    from grassmoth.models.ssm.inference.targets.coordinates import PathChart
 
-    chart = PathChart(
-        jnp.zeros((3, 1, 1)),
-        jnp.zeros(1),
-        jnp.array([[[0.2]], [[-0.3]], [[0.7]]]),
-        jnp.zeros((3, 1)),
-    )
-    target = target.in_coordinates(chart)
     contexts = jax.vmap(lambda z: target.context(z, target.times))(jnp.array([[0.1], [-0.4]]))
     context = target.context(jnp.array([0.1]), target.times)
     precision = draw_student_precisions(target, context, jnp.zeros((3, 1)), jax.random.key(17))
@@ -154,8 +146,6 @@ def test_conditional_curvature_is_label_symmetric_and_ignores_missing_rows():
         np.exp(np.asarray(precision.log_values[:, 0])) / 0.2,
         0.0,
     )
-    scale_squares = np.exp(2 * np.array([0.2, -0.3, 0.7])[:, None] * np.array([0.1, -0.4])[None])
-    conditional_information *= scale_squares.max(axis=1)
     np.testing.assert_allclose(limit[:, 0], 2 / np.maximum(conditional_information, 0.2), rtol=1e-6)
     assert float(limit[1, 0]) == 10.0
     permuted = jax.tree.map(lambda value: value[::-1], contexts)

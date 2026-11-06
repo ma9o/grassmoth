@@ -43,16 +43,12 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_particle_weights
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
-from grassmoth.models.ssm.inference.targets.coordinates import (
-    PathChart,
-)
 from grassmoth.models.ssm.inference.types import (
     JointPosteriorDraws,
     MCMCPosterior,
     ProductionDiagnostics,
     UnretainedRun,
 )
-from grassmoth.models.ssm.inference.warmup.computed_chart import computed_chart
 from grassmoth.models.ssm.inference.warmup.initialization import (
     continued_particle_initialization,
     prepare_particle_initialization,
@@ -136,33 +132,6 @@ def fit_marginal_particle_gibbs(
             )
     if isinstance(initialization, InitializationFailure):
         return initialization
-    chart: PathChart | None = None
-    chart_builder = None
-    if options.compiler_reparameterization:
-        positions, paths = jnp.asarray(initialization.positions), jnp.asarray(initialization.paths)
-        if continuation is not None and sampler.num_warmup == 0:
-            # Only a native-shape template; restoration owns the frozen coefficients.
-            coefficients = jnp.zeros((*paths.shape[1:], positions.shape[-1]), paths.dtype)
-            chart = PathChart(
-                coefficients, jnp.mean(positions, axis=0), coefficients, jnp.zeros_like(paths[0])
-            )
-        else:
-            chart_started = clock()
-
-            def construct_chart(positions: jax.Array, paths: jax.Array) -> PathChart:
-                return computed_chart(bundle.runtime, positions, paths)
-
-            # This same executable serves the initial build and every host rebuild.
-            chart_builder = compiler(construct_chart, positions, paths).call
-            chart = chart_builder(positions, paths)
-            if not bool(chart.usable_at(positions)):
-                return InitializationFailure.unavailable(
-                    "Computed path chart construction produced non-finite coefficients or unrepresentable current scales."
-                )
-            logger.info(
-                "computed path chart: %.3fs shape=%s", clock() - chart_started, chart.slopes.shape
-            )
-
     phase_t0 = clock()
     logger.info("phase 3/4: building marginalized Particle Gibbs joint kernel...")
     kernel = build_marginal_particle_gibbs_kernel(
@@ -177,7 +146,6 @@ def fit_marginal_particle_gibbs(
         else initialization.paths[0],
         diagnostic_metrics=options.diagnostic_metrics,
         path_update=options.path_update,
-        initial_chart=chart,
     )
     run_result = run_marginal_particle_gibbs(
         bundle.runtime,
@@ -186,25 +154,10 @@ def fit_marginal_particle_gibbs(
         key=sampling_key,
         initialization=initialization,
         execution_context=execution_context,
-        chart_builder=chart_builder,
         continuation=continuation,
     )
     if isinstance(run_result, InitializationFailure):
         return run_result
-    final_chart = run_result.final_chart
-    if final_chart is not None:
-        logger.info(
-            "frozen path chart: shape=%s reference=%s slopes range=%s exponents range=%s center range=%s",
-            final_chart.slopes.shape,
-            np.asarray(final_chart.reference).tolist(),
-            [float(np.min(final_chart.slopes)), float(np.max(final_chart.slopes))]
-            if final_chart.slopes.size
-            else [],
-            [float(np.min(final_chart.exponents)), float(np.max(final_chart.exponents))]
-            if final_chart.exponents.size
-            else [],
-            [float(np.min(final_chart.center)), float(np.max(final_chart.center))],
-        )
     tuning = (
         continuation.tuning
         if continuation is not None and isinstance(continuation.tuning, ParticleTuning)

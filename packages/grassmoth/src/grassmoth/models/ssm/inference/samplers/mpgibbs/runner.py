@@ -75,9 +75,6 @@ from grassmoth.models.ssm.inference.samplers.sweeps import (
     compile_projected_sweeps,
     run_sweeps,
 )
-from grassmoth.models.ssm.inference.targets.coordinates import (
-    PathChart,
-)
 from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
@@ -116,7 +113,6 @@ class ParticleChainResult:
     random_key: jax.Array
     last_parameters: jax.Array
     last_paths: jax.Array
-    final_chart: PathChart | None
     retained_draws: int
     profile: FitProfileReport | None = None
 
@@ -155,7 +151,6 @@ def _initialize_chain_state(
     param_max_scale: float | Float[Array, ""],
     initial_latent_trajectory: Float[Array, "T D"],
     exact_constraints: ExactStateConstraints | None = None,
-    chart: PathChart | None = None,
 ) -> TrajectoryMCMCState:
     context = target.context(init_position, times)
     latent_trajectory = jnp.asarray(
@@ -188,7 +183,6 @@ def _initialize_chain_state(
         param_step_size=param_step_value,
         parameter_chol=parameter_chol,
         param_da=da_init(param_step_value),
-        chart=chart,
     )
 
 
@@ -221,7 +215,6 @@ def run_marginal_particle_gibbs(
     key: PRNGKeyArray,
     initialization: ParticleInitialization,
     execution_context: ModelExecutionContext,
-    chart_builder: Callable[[jax.Array, jax.Array], PathChart] | None = None,
     continuation: SamplerCheckpoint | None = None,
 ) -> ParticleChainResult | InitializationFailure:
     """Run marginalized Particle Gibbs chains from paired starts."""
@@ -285,7 +278,6 @@ def run_marginal_particle_gibbs(
             param_min_scale=kernel.min_scale[0],
             param_max_scale=kernel.max_scale[0],
             initial_latent_trajectory=path,
-            chart=kernel.initial_chart,
         )
         geometry = jnp.ones_like(path)
         if curvature_limited:
@@ -351,9 +343,6 @@ def run_marginal_particle_gibbs(
     ) -> tuple[_Population, dict[str, jax.Array]]:
         next_key, step_key = random.split(current.random_key)
         keys = random.split(step_key, num_chains)
-        # Geometry is learned in physical units, equal to chart units at its reference.
-        # Its numbers then define one frozen chart-unit metric for every label;
-        # never rescale the auxiliary law separately for a candidate.
         # Keep its scalar controller in the state and saved response; expand
         # only the kernel operand, then restore it before adaptation.
         kernel_states = (
@@ -472,7 +461,7 @@ def run_marginal_particle_gibbs(
             tuning = adapt_scales(
                 current.adaptation,
                 scale_adaptation,
-                info["latent_controller_accepted"],
+                info["latent_accepted"],
                 info["latent_proposed"],
                 warmup_steps[0],
                 maximum,
@@ -587,32 +576,12 @@ def run_marginal_particle_gibbs(
             split_total=sum_timings(split),
         )
 
-    def rebuild_chart(current: _Population) -> _Population | InitializationFailure:
-        assert chart_builder is not None
-        chart = chart_builder(current.chains.position, current.chains.latent_trajectory)
-        if not bool(chart.usable_at(current.chains.position)):
-            return InitializationFailure.unavailable(
-                "Computed path chart rebuild produced non-finite coefficients or unrepresentable current scales."
-            )
-        assert current.chains.chart is not None
-        installed = jax.tree.map(
-            lambda value, old: jnp.broadcast_to(value, old.shape), chart, current.chains.chart
-        )
-        # Physical state, caches, adaptation, iteration and keys are untouched.
-        return current._replace(chains=current.chains._replace(chart=installed))
-
     run = run_sweeps(
         plan,
         initial,
         execution_context=execution_context,
         profile=profile_state if execution_context.profile else None,
-        warmup_boundaries=tuple(int(end) + 1 for end in np.asarray(windows)[:, 1])
-        if chart_builder is not None
-        else (),
-        warmup_boundary=rebuild_chart if chart_builder is not None else None,
     )
-    if isinstance(run, InitializationFailure):
-        return run
     final = run.state
     draw_fields = frozenset(("positions", "paths", "observation_log_probs", "log_posterior"))
     warmup_extra = {
@@ -669,7 +638,4 @@ def run_marginal_particle_gibbs(
         random_key=final.random_key,
         last_parameters=final.chains.position,
         last_paths=final.chains.latent_trajectory,
-        final_chart=None
-        if final.chains.chart is None
-        else jax.tree.map(lambda value: value[0], final.chains.chart),
     )

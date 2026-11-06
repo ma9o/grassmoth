@@ -1,4 +1,4 @@
-"""Local positive path curvature for initialization, charts and path proposals.
+"""Local positive path curvature for initialization and path proposals.
 
 Dynamics are affine linearizations with their exact, possibly singular noise.
 Window memory joins the state as noise-free coordinates whose exact accumulators
@@ -9,7 +9,7 @@ algebra, while keeping dynamics Jacobians and reading quadratics frozen. These a
 and proposals only; auxiliary Kalman moves correct against the exact target.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 import jax
@@ -125,7 +125,6 @@ class PathCurvature:
     """
 
     matrices: jax.Array
-    initial_covariance: jax.Array
     covariances: jax.Array
     regression: jax.Array
     pinned_precision: jax.Array
@@ -195,25 +194,6 @@ class PathCurvature:
         information = GaussianTwist(self.precision, observed_shift.at[:-1].add(pinned_shift[1:]))
         return GaussianPathTerms(
             self.conditioned_matrices, conditioned_offsets, self.covariances, information
-        )
-
-    def with_transition_noise(
-        self, target: ParticleTarget, context: ParticleContext, path: jax.Array
-    ) -> "PathCurvature":
-        """Vary raw transition Q and all derived pin conditioning in one frozen geometry.
-
-        The initial covariance, fixed support, reading curvature and dynamics/memory
-        Jacobians stay at the reference. This operation contains no linearization or
-        PSD clipping and is the only noise dependence differentiated by the chart.
-        """
-        covariances, regression, pinned_precision, _ = _path_noise(
-            target, context, path, self.memory, self.initial_covariance
-        )
-        return replace(
-            self,
-            covariances=covariances,
-            regression=regression,
-            pinned_precision=pinned_precision,
         )
 
     def mean(self, target: ParticleTarget, context: ParticleContext, path: jax.Array) -> jax.Array:
@@ -395,7 +375,6 @@ def linearize_path(
         gradient = jnp.concatenate((gradient, windows[3]), axis=-1)
     return PathCurvature(
         matrices,
-        initial_covariance,
         conditioned_covariances,
         regression,
         pinned_precision,

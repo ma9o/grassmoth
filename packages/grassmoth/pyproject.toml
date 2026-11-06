@@ -257,7 +257,6 @@ jaxtyping_modules = [
     "grassmoth.models.ssm.inference.samplers.particle.marginal",
     "grassmoth.models.ssm.inference.samplers.particle.math",
     "grassmoth.models.ssm.inference.samplers.particle.twist",
-    "grassmoth.models.ssm.inference.warmup.computed_chart",
     "grassmoth.models.ssm.inference.warmup.initialization",
     "grassmoth.models.ssm.inference.warmup.parameter_adaptation",
     "grassmoth.models.ssm.inference.warmup.path_curvature",

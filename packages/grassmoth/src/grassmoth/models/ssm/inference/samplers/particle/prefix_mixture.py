@@ -4,6 +4,12 @@ The midpoint twist and shared auxiliary law remain unchanged. Every particle,
 including the reference, pays the full normalized mixture density. Early prefix
 label collapse and a poor common twist can reduce efficiency without changing
 exact target weights. Sampler admission limits this proposal to point readings without replay.
+
+Parameter-specific components cover differing path dynamics in physical units;
+this is the proposal-level alternative to the removed learned translation/scale
+charts. The rationale and limited chart-replacement experiments are recorded in
+ParameterMixtureProposalSpec. Correct mixture weights ensure invariance, not
+adequate overlap, global exploration or convergence.
 """
 
 from typing import cast

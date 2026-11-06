@@ -32,7 +32,6 @@ from grassmoth.models.ssm.execution.observation_model import (
 )
 from grassmoth_test_support.interval_particle import interval_target
 from grassmoth_test_support.observation import observation_laws
-from packages.grassmoth.tests.models.ssm.inference.test_translation_chart import _translation_chart
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -290,57 +289,33 @@ def test_prepared_noise_matches_native_values_and_gradients(with_interval):
     np.testing.assert_array_equal(actual_y[1][:, 2], 0.0)
 
 
-@pytest.mark.parametrize("translated", [False, True])
-def test_prepared_transition_means_preserve_charted_densities(translated):
+def test_prepared_transition_means_preserve_exact_densities():
     times = np.array([0.0, 0.7, 1.8])
-    base = interval_target(times, np.full((3, 1), 0.2), times[:, None], ("last",), state_dim=2)
+    target = interval_target(times, np.full((3, 1), 0.2), times[:, None], ("last",), state_dim=2)
     predecessors = jnp.array([[0.2, -0.4], [-0.3, 0.7]])
     successors = jnp.array([[0.6, 0.1], [-0.2, -0.5]])
     indices = jnp.arange(1, len(times))
     position = jnp.array([0.45])
-    chart = _translation_chart(
-        jnp.broadcast_to(jnp.array([[-0.8], [0.3]]), (3, 2, 1)), jnp.array([-0.2])
-    )
-    chart_previous = (
-        chart.frame(position).encode(predecessors, indices - 1) if translated else predecessors
-    )
-    chart_current = chart.frame(position).encode(successors, indices) if translated else successors
-    physical_path = jnp.concatenate((predecessors[:1], successors))
-    path = chart.encode(position, physical_path) if translated else physical_path
-    target = base.in_coordinates(chart) if translated else base
 
-    def compare():
-        context = target.context(position, target.times)
+    def compare(parameter):
+        context = target.context(parameter, target.times)
         noise = target.prepare_noise_factors(context, target.observations)
         means = jax.vmap(
             lambda previous, index: target.prepare_transition_mean(context, previous, index)
-        )(chart_previous, indices)
+        )(predecessors, indices)
         prepared = jax.vmap(
             lambda current, index, mean: target.transition_log_prob_with_mean(
                 context, noise, current, index, mean
             )
-        )(chart_current, indices, means)
+        )(successors, indices, means)
         declared = jax.vmap(
             lambda previous, current, index: target.transition_log_prob(
                 context, previous, current, index
             )
-        )(chart_previous, chart_current, indices)
+        )(predecessors, successors, indices)
+        return jnp.stack((prepared, declared))
 
-        def expected(parameter, coordinates):
-            decoded = chart.decode(parameter, coordinates) if translated else coordinates
-            return base.log_posterior(parameter, decoded, base.observations, base.times)
-
-        def actual(parameter, coordinates):
-            return target.log_posterior(parameter, coordinates, target.observations, target.times)
-
-        return (
-            prepared,
-            declared,
-            jax.value_and_grad(actual, argnums=(0, 1))(position, path),
-            jax.value_and_grad(expected, argnums=(0, 1))(position, path),
-        )
-
-    prepared, declared, actual, expected = jax.jit(compare)()
-    np.testing.assert_allclose(prepared, declared, rtol=1e-5, atol=1e-6)
-    for result, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
-        np.testing.assert_allclose(result, reference, rtol=1e-5, atol=1e-6)
+    densities = jax.jit(compare)(position)
+    gradients = jax.jit(jax.jacrev(compare))(position)
+    np.testing.assert_allclose(densities[0], densities[1], rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(gradients[0], gradients[1], rtol=1e-5, atol=1e-6)

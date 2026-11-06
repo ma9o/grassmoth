@@ -33,7 +33,7 @@ def retain_state(state: object) -> tuple[NumericalArray, ...]:
 def restore_state[State](
     template: State, leaves: tuple[NumericalArray, ...]
 ) -> State | InitializationFailure:
-    """Restore only the current native leaf shapes; older chart states are unsupported."""
+    """Restore only the current native leaf shapes; incompatible native states are unsupported."""
     originals, structure = jax.tree.flatten(jax.tree.map(jnp.asarray, template))
     expected = tuple(
         jax.random.key_data(value) if jnp.issubdtype(value.dtype, jax.dtypes.prng_key) else value
@@ -44,7 +44,7 @@ def restore_state[State](
         for original, saved in zip(expected, leaves, strict=True)
     ):
         return InitializationFailure.unavailable(
-            "Native continuation state is incompatible with this runtime's path-chart shape. Start a new fit."
+            "Native continuation state is incompatible with this runtime's state shape. Start a new fit."
         )
     restored = tuple(
         jax.random.wrap_key_data(jnp.asarray(saved.values))

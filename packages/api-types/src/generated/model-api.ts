@@ -5336,12 +5336,6 @@ export interface components {
             /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */
             readonly path_update?: components["schemas"]["PathUpdateSpec-Input"];
             /**
-             * Compiler Reparameterization
-             * @description Compute one time-indexed path chart with translation and structural diffusion scaling, including interval readings and deterministic recurrences. Its center and full mean response share a frozen Gaussian surrogate at mean parameters and their IEKS path; transition covariance and pin conditioning contribute to the response. Build once before warmup and rebuild between warmup blocks at adaptation boundaries. Freeze before retained draws. Every label pays the exact time-indexed Jacobian; densities, reported paths and diagnostics retain physical model units. Native continuation retains the complete chart; incompatible native state shapes are rejected. Strong nonlinearity, separated modes and data-pinned deviations can limit mixing.
-             * @default false
-             */
-            readonly compiler_reparameterization?: boolean;
-            /**
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk
              */
@@ -5383,12 +5377,6 @@ export interface components {
             readonly n_parameter_particles: number;
             /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */
             readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
-            /**
-             * Compiler Reparameterization
-             * @description Compute one time-indexed path chart with translation and structural diffusion scaling, including interval readings and deterministic recurrences. Its center and full mean response share a frozen Gaussian surrogate at mean parameters and their IEKS path; transition covariance and pin conditioning contribute to the response. Build once before warmup and rebuild between warmup blocks at adaptation boundaries. Freeze before retained draws. Every label pays the exact time-indexed Jacobian; densities, reported paths and diagnostics retain physical model units. Native continuation retains the complete chart; incompatible native state shapes are rejected. Strong nonlinearity, separated modes and data-pinned deviations can limit mixing.
-             * @default false
-             */
-            readonly compiler_reparameterization: boolean;
             /**
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk
@@ -6306,6 +6294,17 @@ export interface components {
          *     The implemented twisted-aGRAD variant uses local Gaussian components with a
          *     shared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not
          *     implemented. Early label collapse and poor shared guidance can reduce mixing.
+         *
+         *     Design decision (2026-11-06): use candidate-specific proposal coverage to
+         *     address parameter/path mismatch directly, without learned translation or
+         *     diffusion-scale charts. Exact mixture-density corrections preserve the target;
+         *     they do not guarantee efficient mixing. A scalar low-diffusion experiment
+         *     found that the running-prefix mixture in physical coordinates matched the
+         *     charted mean-guide control in total effective samples per second. The separate
+         *     SV blocked-Kalman run used conditional-parameter proposals, not this mixture,
+         *     and retained parameter R-hat of 1.07--1.11; it does not establish general chart
+         *     replacement. Source runs: scratchpad/chart-replacement-20261106 and
+         *     scratchpad/sv-blocked-chart-off-20261106.
          */
         readonly "ParameterMixtureProposalSpec-Input": {
             /**
@@ -6329,6 +6328,17 @@ export interface components {
          *     The implemented twisted-aGRAD variant uses local Gaussian components with a
          *     shared auxiliary and look-ahead. Prior-weighted and Kalman mixtures are not
          *     implemented. Early label collapse and poor shared guidance can reduce mixing.
+         *
+         *     Design decision (2026-11-06): use candidate-specific proposal coverage to
+         *     address parameter/path mismatch directly, without learned translation or
+         *     diffusion-scale charts. Exact mixture-density corrections preserve the target;
+         *     they do not guarantee efficient mixing. A scalar low-diffusion experiment
+         *     found that the running-prefix mixture in physical coordinates matched the
+         *     charted mean-guide control in total effective samples per second. The separate
+         *     SV blocked-Kalman run used conditional-parameter proposals, not this mixture,
+         *     and retained parameter R-hat of 1.07--1.11; it does not establish general chart
+         *     replacement. Source runs: scratchpad/chart-replacement-20261106 and
+         *     scratchpad/sv-blocked-chart-off-20261106.
          */
         readonly "ParameterMixtureProposalSpec-Output": {
             /**

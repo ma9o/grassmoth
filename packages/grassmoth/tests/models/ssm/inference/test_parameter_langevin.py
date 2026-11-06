@@ -34,7 +34,7 @@ def _scale_target(*, bounded_prior=False):
             bound[0],
             jnp.exp(2 * position[0]).reshape((1, 1)),
         )
-        return model, bound[1], bound[2], bound[3]
+        return model, bound[1], bound[2]
 
     def prior(position):
         if bounded_prior:

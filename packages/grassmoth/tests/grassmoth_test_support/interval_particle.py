@@ -84,7 +84,7 @@ def interval_target(
     _, static = eqx.partition(model(jnp.zeros(1)), eqx.is_array)
 
     def context(position: jax.Array, grid: jax.Array) -> ParticleContext:
-        return eqx.filter(model(position), eqx.is_array), grid, jnp.zeros(state_dim), None
+        return eqx.filter(model(position), eqx.is_array), grid, jnp.zeros(state_dim)
 
     def declared(bound: ParticleContext) -> dsx.DynamicalModel:
         return eqx.combine(bound[0], static)
@@ -181,14 +181,3 @@ def initialize_interval_chain(
         param_max_scale=1.0,
         initial_latent_trajectory=joint[1:, None],
     )
-
-
-def computed_translation_slopes(
-    target: ParticleTarget, position: jax.Array, path: jax.Array
-) -> jax.Array:
-    """Expose the frozen-surrogate response alone for independent dense controls."""
-    from grassmoth.models.ssm.inference.warmup.computed_chart import _mean_response
-    from grassmoth.models.ssm.inference.warmup.path_curvature import linearize_path
-
-    curvature = linearize_path(target, target.context(position, target.times), path)
-    return _mean_response(target, curvature, position, path)[1]

@@ -10,7 +10,6 @@ import numpy as np
 from blackjax.adaptation.step_size import DualAveragingAdaptationState, dual_averaging_adaptation
 
 from grassmoth.artifacts.immutability import freeze_fields
-from grassmoth.models.ssm.inference.targets.coordinates import PathChart
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext
 from grassmoth.models.ssm.shapes import Array, Float
 
@@ -31,8 +30,6 @@ class TrajectoryMCMCState(NamedTuple):
     # BlackJAX dual-averaging state. Carried but not updated when
     # adaptation_scheme == "simple"; evolves only during warmup otherwise.
     param_da: DualAveragingAdaptationState
-    # The physical path remains the durable state; the chart is fixed within a sweep.
-    chart: PathChart | None = None
 
 
 def trajectory_state(
@@ -47,7 +44,6 @@ def trajectory_state(
     param_step_size: Float[Array, ""],
     parameter_chol: Float[Array, "U U"],
     param_da: DualAveragingAdaptationState,
-    chart: PathChart | None = None,
 ) -> TrajectoryMCMCState:
     """Construct one chain, binding parameter, path and tuning axes together.
 
@@ -66,7 +62,6 @@ def trajectory_state(
         param_step_size,
         parameter_chol,
         param_da,
-        chart,
     )
 
 

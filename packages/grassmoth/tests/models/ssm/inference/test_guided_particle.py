@@ -145,8 +145,8 @@ def _case(cubic, *, pinned=False, steps=3, dimension=1):
     base = interval_target(times, readings[:, None], times[:, None], ("last",))
 
     def context(position, grid):
-        arrays, _, _, _ = base.context(position, grid)
-        return arrays, grid, position, None
+        arrays, _, _ = base.context(position, grid)
+        return arrays, grid, position
 
     def declared(bound):
         model = base.dynamical_model(bound)
@@ -201,8 +201,8 @@ def _correlated_gaussian_case(sample_count=4096):
     noise = np.array([[0.2, 0.06], [0.06, 0.28]])
 
     def context(position, grid):
-        arrays, _, _, _ = base.context(position, grid)
-        return arrays, grid, position, None
+        arrays, _, _ = base.context(position, grid)
+        return arrays, grid, position
 
     def declared(bound):
         evolution = dsx.LinearGaussianStateEvolution(
