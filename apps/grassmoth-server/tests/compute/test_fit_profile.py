@@ -28,6 +28,7 @@ def test_profile_times_native_parts_and_preserves_the_chain(tmp_path):
         num_warmup=2,
         num_samples_per_chain=2,
         algorithm=MarginalParticleGibbsSpec(
+            n_parameter_particles=2,
             initialization=GaussianInitializationSpec(),
             path_update=PathUpdateSpec(method=GuidedMethodSpec(num_particles=4)),
         ),
