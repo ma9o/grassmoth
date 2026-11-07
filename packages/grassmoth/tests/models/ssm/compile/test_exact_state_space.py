@@ -647,7 +647,7 @@ def test_parallel_accumulator_kernel_preserves_gaussian_joint_distribution(kappa
         param_step_size=0.1,
         parameter_proposal="random_walk",
         path_update=PathUpdateSpec(
-            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=9, kappa=kappa)
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8, kappa=kappa)
         ),
     )
 

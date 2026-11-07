@@ -4671,11 +4671,10 @@ export interface components {
              */
             readonly kind: "particle_mgrad" | "twisted_particle_agrad";
             /**
-             * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary.
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary. Must be a power of two.
              * @default 64
              */
-            readonly num_particles?: number;
+            readonly num_particles?: components["schemas"]["ParticleCount"];
             /**
              * Kappa
              * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
@@ -4705,11 +4704,10 @@ export interface components {
              */
             readonly kind: "particle_mgrad" | "twisted_particle_agrad";
             /**
-             * Num Particles
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary.
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary. Must be a power of two.
              * @default 64
              */
-            readonly num_particles: number;
+            readonly num_particles: components["schemas"]["ParticleCount"];
             /**
              * Kappa
              * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
@@ -5328,11 +5326,10 @@ export interface components {
              */
             readonly method: "mpgibbs";
             /**
-             * N Parameter Particles
-             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Heuristic: default M = 8; no ESS advantage has been established.
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Must be a power of two. Heuristic: default M = 8; no ESS advantage has been established.
              * @default 8
              */
-            readonly n_parameter_particles?: number;
+            readonly n_parameter_particles?: components["schemas"]["ParticleCount"];
             /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */
             readonly path_update?: components["schemas"]["PathUpdateSpec-Input"];
             /**
@@ -5370,11 +5367,10 @@ export interface components {
              */
             readonly method: "mpgibbs";
             /**
-             * N Parameter Particles
-             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Heuristic: default M = 8; no ESS advantage has been established.
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Must be a power of two. Heuristic: default M = 8; no ESS advantage has been established.
              * @default 8
              */
-            readonly n_parameter_particles: number;
+            readonly n_parameter_particles: components["schemas"]["ParticleCount"];
             /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */
             readonly path_update: components["schemas"]["PathUpdateSpec-Output"];
             /**
@@ -6402,6 +6398,7 @@ export interface components {
             readonly k: number | ("infinity" | "-infinity" | "undefined");
             readonly status: components["schemas"]["CheckStatus"];
         };
+        readonly ParticleCount: number;
         /** @enum {string} */
         readonly ParticleDiagnosticMetric: "particle_identity" | "parameter_movement" | "particle_weights" | "frequency_refresh" | "regional_movement";
         readonly ParticleDiagnosticMetrics: readonly components["schemas"]["ParticleDiagnosticMetric"][];

@@ -215,11 +215,11 @@ FULL_CONFIG = textwrap.dedent("""\
         seed: 123
         algorithm:
           method: mpgibbs
-          n_parameter_particles: 3
+          n_parameter_particles: 4
           path_update:
             method:
               kind: twisted_particle_agrad
-              num_particles: 24
+              num_particles: 32
             update: {kind: whole_path}
             proposal: {kind: parameter_mean}
             latent_step:
@@ -289,8 +289,8 @@ class TestLoadConfig:
         assert cfg.inference.compute_loo_diagnostics is False
         assert isinstance(cfg.inference.sampler.algorithm, MarginalParticleGibbsSpec)
         assert isinstance(cfg.inference.sampler.algorithm.path_update.method, GuidedMethodSpec)
-        assert cfg.inference.sampler.algorithm.path_update.method.num_particles == 24
-        assert cfg.inference.sampler.algorithm.n_parameter_particles == 3
+        assert cfg.inference.sampler.algorithm.path_update.method.num_particles == 32
+        assert cfg.inference.sampler.algorithm.n_parameter_particles == 4
         assert cfg.inference.sampler.algorithm.path_update.latent_step == FixedLatentStepSpec(
             delta=0.29
         )

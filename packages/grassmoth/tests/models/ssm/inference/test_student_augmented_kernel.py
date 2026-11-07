@@ -224,7 +224,7 @@ def test_fused_tail_preserves_student_precision_conditioning(kappa, dimension):
     reference = jnp.broadcast_to(jnp.array([[0.1], [-0.3]]), (2, dimension))
     log_precisions = jnp.array([[0.2, -0.7], [1.1, 0.5]])
     spec = PathUpdateSpec(
-        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=7, kappa=kappa),
+        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=8, kappa=kappa),
         proposal=ParameterMixtureProposalSpec(),
     )
 

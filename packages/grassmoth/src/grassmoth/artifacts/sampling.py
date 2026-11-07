@@ -56,6 +56,21 @@ type ParticleDiagnosticMetrics = Annotated[
 ]
 
 
+def _power_of_two(value: int) -> int:
+    """Require sizes that fill the GPU kernels' power-of-two tiles exactly.
+
+    Other sizes would pad those tiles, and padded tiles cost more than full ones:
+    L40S SV C10/P128/u8, separate sessions, M17 takes 63.80 ms per sweep against 43.85 ms
+    at M32.
+    """
+    if value.bit_count() != 1:
+        raise ValueError(f"Must be a power of two (2, 4, 8, ...), got {value}")
+    return value
+
+
+type ParticleCount = Annotated[int, Field(ge=2), AfterValidator(_power_of_two)]
+
+
 class AdaptedLatentStepSpec(Value):
     """Warmup adapts the per-time scale towards the assigned movement target."""
 
@@ -148,7 +163,7 @@ _GUIDED_PARTICLES = (
     "grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default "
     "is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section "
     "5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat "
-    "arbitrary."
+    "arbitrary. Must be a power of two."
 )
 _PATH_STEP = (
     "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep "
@@ -199,7 +214,7 @@ class GuidedMethodSpec(Value):
             "local fits and multiple modes cost efficiency."
         ),
     )
-    num_particles: int = Field(default=64, ge=2, description=_GUIDED_PARTICLES)
+    num_particles: ParticleCount = Field(default=64, description=_GUIDED_PARTICLES)
     kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
     scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
 
@@ -513,13 +528,12 @@ class MarginalParticleGibbsSpec(Value):
     """Exact marginalized parameter and path updates with particle-specific tuning."""
 
     method: Literal["mpgibbs"] = "mpgibbs"
-    n_parameter_particles: int = Field(
+    n_parameter_particles: ParticleCount = Field(
         default=8,
-        ge=2,
         description=(
             "Parameter particles M per sweep: the current value and M - 1 proposals around "
-            "one auxiliary point. Work grows as O(TNM). Heuristic: default M = 8; "
-            "no ESS advantage has been established."
+            "one auxiliary point. Work grows as O(TNM). Must be a power of two. Heuristic: "
+            "default M = 8; no ESS advantage has been established."
         ),
     )
     path_update: PathUpdateSpec = Field(

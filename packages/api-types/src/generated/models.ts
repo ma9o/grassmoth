@@ -194,6 +194,7 @@ export type ParameterRef = components["schemas"]["ParameterRef"];
 export type ParameterSpec = components["schemas"]["ParameterSpec-Output"];
 export type ParameterTransformSpec = components["schemas"]["ParameterTransformSpec-Output"];
 export type ParetoKPoint = components["schemas"]["ParetoKPoint"];
+export type ParticleCount = components["schemas"]["ParticleCount"];
 export type ParticleDiagnosticMetric = components["schemas"]["ParticleDiagnosticMetric"];
 export type ParticleDiagnosticMetrics = components["schemas"]["ParticleDiagnosticMetrics"];
 export type ParticleProfileDimensions = components["schemas"]["ParticleProfileDimensions"];

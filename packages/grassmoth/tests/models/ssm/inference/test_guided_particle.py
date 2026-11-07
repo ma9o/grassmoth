@@ -929,7 +929,7 @@ def test_scalar_tail_preserves_complete_guided_trace(pinned, kappa):
         ),
     )
     spec = PathUpdateSpec(
-        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=7, kappa=kappa),
+        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=8, kappa=kappa),
         proposal=ParameterMixtureProposalSpec(),
     )
     mask = target.independent_mask.at[1, 0].set(not pinned)

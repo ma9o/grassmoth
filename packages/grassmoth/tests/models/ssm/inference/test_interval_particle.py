@@ -237,7 +237,7 @@ def test_interval_particle_kernel_recovers_analytic_joint_posterior(kappa):
         parameter_proposal="random_walk",
         parameter_reference_path=jnp.asarray(mean[1:, None]),
         path_update=PathUpdateSpec(
-            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=12, kappa=kappa)
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=16, kappa=kappa)
         ),
     )
     # Replicate chains to resolve the weakly identified offset/path direction

@@ -68,6 +68,10 @@ def test_auxiliary_kalman_request_roundtrip_and_identity(step):
     assert sampler.kernel_identity != SamplerSpec().kernel_identity
     with pytest.raises(ValidationError, match="num_particles"):
         AuxiliaryKalmanMethodSpec.model_validate({"kind": "auxiliary_kalman", "num_particles": 256})
+    with pytest.raises(ValidationError, match="power of two"):
+        GuidedMethodSpec(kind="particle_mgrad", num_particles=24)
+    with pytest.raises(ValidationError, match="power of two"):
+        MarginalParticleGibbsSpec(n_parameter_particles=3)
 
 
 @pytest.mark.parametrize(
