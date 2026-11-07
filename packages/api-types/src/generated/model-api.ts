@@ -4666,12 +4666,12 @@ export interface components {
          */
         readonly "GuidedMethodSpec-Input": {
             /**
-             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
+             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal, at most 16 state dimensions and a limited particle bank, the shapes its fused GPU tail covers. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             readonly kind: "particle_mgrad" | "twisted_particle_agrad";
             /**
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary. Must be a power of two.
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary. Must be a power of two; Particle-mGRAD also limits it jointly with the parameter particles.
              * @default 64
              */
             readonly num_particles?: components["schemas"]["ParticleCount"];
@@ -4699,12 +4699,12 @@ export interface components {
          */
         readonly "GuidedMethodSpec-Output": {
             /**
-             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
+             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal, at most 16 state dimensions and a limited particle bank, the shapes its fused GPU tail covers. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             readonly kind: "particle_mgrad" | "twisted_particle_agrad";
             /**
-             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary. Must be a power of two.
+             * @description Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat arbitrary. Must be a power of two; Particle-mGRAD also limits it jointly with the parameter particles.
              * @default 64
              */
             readonly num_particles: components["schemas"]["ParticleCount"];
@@ -5326,7 +5326,7 @@ export interface components {
              */
             readonly method: "mpgibbs";
             /**
-             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Must be a power of two. Heuristic: default M = 8; no ESS advantage has been established.
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Must be a power of two. Particle-mGRAD allows M up to 64 and NM up to 8192, or 4096 above N = 512, the shapes its fused GPU tail covers. Heuristic: default M = 8; no ESS advantage has been established.
              * @default 8
              */
             readonly n_parameter_particles?: components["schemas"]["ParticleCount"];
@@ -5367,7 +5367,7 @@ export interface components {
              */
             readonly method: "mpgibbs";
             /**
-             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Must be a power of two. Heuristic: default M = 8; no ESS advantage has been established.
+             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Must be a power of two. Particle-mGRAD allows M up to 64 and NM up to 8192, or 4096 above N = 512, the shapes its fused GPU tail covers. Heuristic: default M = 8; no ESS advantage has been established.
              * @default 8
              */
             readonly n_parameter_particles: components["schemas"]["ParticleCount"];

@@ -14,6 +14,7 @@ from grassmoth.artifacts.sampling import (
     FixedLatentStepSpec,
     GuidedMethodSpec,
     MarginalParticleGibbsSpec,
+    NutsDASpec,
     ParameterMeanProposalSpec,
     ParameterMixtureProposalSpec,
     PathUpdateSpec,
@@ -154,6 +155,74 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(monkeypatch,
         )
     )
     assert validate_sampler_support(compiled, sampler) is None
+
+
+@pytest.mark.parametrize(
+    ("particles", "labels", "accepted"),
+    [
+        (64, 64, True),
+        (128, 64, True),
+        (256, 32, True),
+        (512, 16, True),
+        (1024, 4, True),
+        (2048, 2, True),
+        (64, 128, False),
+        (256, 64, False),
+        (512, 32, False),
+        (1024, 8, False),
+        (2048, 4, False),
+        (4096, 2, False),
+    ],
+)
+def test_mgrad_rejects_particle_banks_beyond_its_fused_tail(particles, labels, accepted):
+    def sampler(kind):
+        return SamplerSpec(
+            algorithm=MarginalParticleGibbsSpec(
+                n_parameter_particles=labels,
+                path_update=PathUpdateSpec(
+                    method=GuidedMethodSpec(kind=kind, num_particles=particles)
+                ),
+            )
+        )
+
+    assert (sampler("particle_mgrad").support_failure is None) == accepted
+    assert sampler("twisted_particle_agrad").support_failure is None
+
+
+@pytest.mark.parametrize(("particles", "accepted"), [(4096, True), (8192, False)])
+def test_mgrad_smoother_counts_one_label_under_nuts(particles, accepted):
+    sampler = SamplerSpec(
+        algorithm=NutsDASpec(
+            smoother=PathUpdateSpec(method=GuidedMethodSpec(num_particles=particles))
+        )
+    )
+    assert (sampler.support_failure is None) == accepted
+
+
+@pytest.mark.parametrize(
+    ("size", "method", "accepted"),
+    [
+        (16, "particle_mgrad", True),
+        (17, "particle_mgrad", False),
+        (17, "twisted_particle_agrad", True),
+    ],
+)
+def test_mgrad_rejects_models_beyond_its_fused_tail(monkeypatch, size, method, accepted):
+    from grassmoth.models.ssm import compiled_access
+
+    monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
+    coordinates = tuple(range(size))
+    compiled = Mock(
+        spec=CompiledDynamicalModel,
+        state_space=StateSpace(size, (), coordinates, coordinates, (), (), "diagonal", "diagonal"),
+        observations=(Mock(support=Mock(support_kind="point")),),
+    )
+    sampler = SamplerSpec(
+        algorithm=MarginalParticleGibbsSpec(
+            path_update=PathUpdateSpec(method=GuidedMethodSpec(kind=method))
+        )
+    )
+    assert (validate_sampler_support(compiled, sampler) is None) == accepted
 
 
 @pytest.mark.parametrize("method", ["particle_mgrad", "twisted_particle_agrad"])

@@ -10,6 +10,7 @@ import numpy as np
 from grassmoth.artifacts.model.likelihood import DeltaLawSpec
 from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.artifacts.sampling import (
+    MGRAD_STATE_LIMIT,
     AuxiliaryKalmanMethodSpec,
     JointSmootherSpec,
     NutsDASpec,
@@ -67,6 +68,14 @@ def validate_sampler_support(
             "Running-prefix mixture proposals support point readings without replay; select "
             "twisted_particle_agrad with parameter_mean, or auxiliary_kalman, for interval "
             "readings or deterministic recurrences."
+        )
+    if (
+        path_update.method.kind == "particle_mgrad"
+        and compiled.state_space.size > MGRAD_STATE_LIMIT
+    ):
+        return ObservationPreflightFailure.rejected(
+            f"Particle-mGRAD supports at most {MGRAD_STATE_LIMIT} state dimensions; this model "
+            f"has {compiled.state_space.size}. Select twisted_particle_agrad or auxiliary_kalman."
         )
     return None
 

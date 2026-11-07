@@ -41,7 +41,8 @@ Particle-mGRAD retains the untwisted local proposal and integrates its auxiliary
 out of the bank weights. The observation-only auxiliary drift is common to all
 labels. Thus the non-Markovian mixture prefix/suffix accounting remains exact, and
 backward selection uses the true target without auxiliary factors (CF24 Appendix
-D.2).
+D.2). Fit preflight limits it to the fused tail's shapes, so its only other route
+is the unfused bank for dense diffusion.
 """
 
 from types import MappingProxyType
@@ -85,14 +86,7 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
     select_path,
 )
 from grassmoth.models.ssm.inference.samplers.particle.guided_tail import (
-    MIXTURE_TAIL_DIMENSION_LIMIT,
-    MIXTURE_TAIL_LARGE_PARTICLE_LIMIT,
-    MIXTURE_TAIL_LARGE_TILE_FACTOR,
-    MIXTURE_TAIL_TILE_LIMIT,
-    MIXTURE_TAIL_WIDE_COORDINATE_LIMIT,
-    MIXTURE_TAIL_WIDE_TILE_FACTOR,
     diagonal_mixture_tail,
-    tail_coordinate_block,
 )
 from grassmoth.models.ssm.inference.samplers.particle.marginal_mixture import (
     MarginalMixtureBank,
@@ -306,23 +300,7 @@ def _guided_step(
             mask,
             method,
         )
-    fused_tail = (
-        (1 << (count - 1).bit_length()) * (1 << (ctx.num_parameter_particles - 1).bit_length())
-        <= MIXTURE_TAIL_TILE_LIMIT
-        * (
-            MIXTURE_TAIL_WIDE_TILE_FACTOR
-            * (MIXTURE_TAIL_LARGE_TILE_FACTOR if count <= MIXTURE_TAIL_LARGE_PARTICLE_LIMIT else 1)
-            if tail_coordinate_block(dimension, count, ctx.num_parameter_particles)
-            <= MIXTURE_TAIL_WIDE_COORDINATE_LIMIT
-            else 1
-        )
-        and marginal_mixture
-        and isinstance(geometry, _DiagonalProposalGeometry)
-        and 0 < dimension <= MIXTURE_TAIL_DIMENSION_LIMIT
-        and target.intervals is None
-        and not target.state_space.requires_replay
-    )
-
+    fused_tail = marginal_mixture and isinstance(geometry, _DiagonalProposalGeometry)
     prepare_parent_law = fused_tail
 
     def raw_observe(value: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:

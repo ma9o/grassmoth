@@ -1068,9 +1068,7 @@ def test_shared_backward_points_preserve_fixed_start_diffused_coordinates():
     ("dimension", "steps", "unroll"),
     [(3, 1, 8), (3, 2, 8), (3, 17, 8), (3, 19, 1), (3, 19, 8), (3, 19, 16), (9, 17, 8), (9, 19, 8)],
 )
-def test_vector_tail_carries_across_unrolled_scan(monkeypatch, dimension, steps, unroll):
-    from grassmoth.models.ssm.inference.samplers.particle import guided
-
+def test_vector_tail_carries_across_unrolled_scan(dimension, steps, unroll):
     times = np.arange(float(steps))
     readings = np.sin(times * 0.4)[:, None]
     base = interval_target(times, readings, times[:, None], ("last",), state_dim=dimension)
@@ -1096,22 +1094,32 @@ def test_vector_tail_carries_across_unrolled_scan(monkeypatch, dimension, steps,
             base.state_space, initial_covariance="diagonal", transition_covariance="diagonal"
         ),
     )
+    # Dense factors carry the same law through the unfused route.
+    dense = replace(
+        target,
+        state_space=replace(
+            target.state_space, initial_covariance="dense", transition_covariance="dense"
+        ),
+    )
     labels = jnp.array([[-0.3], [0.0], [0.4]])
     reference = jnp.broadcast_to(jnp.asarray(readings), (steps, dimension))
-    setup = build_smoother_setup(
-        target, num_parameter_particles=3, free_mask=target.independent_mask, diagnostic_metrics=()
-    )
-    ctx = build_smoother_context(
-        setup,
-        labels,
-        jnp.zeros(3),
-        reference=reference,
-        delta=jnp.full((steps, dimension), 0.2),
-        trajectory_dtype=reference.dtype,
-    )
-    guide = target.context(jnp.mean(labels, axis=0), target.times)
 
-    def run(scan_unroll):
+    def run(bound, scan_unroll):
+        setup = build_smoother_setup(
+            bound,
+            num_parameter_particles=3,
+            free_mask=bound.independent_mask,
+            diagnostic_metrics=(),
+        )
+        ctx = build_smoother_context(
+            setup,
+            labels,
+            jnp.zeros(3),
+            reference=reference,
+            delta=jnp.full((steps, dimension), 0.2),
+            trajectory_dtype=reference.dtype,
+        )
+        guide = bound.context(jnp.mean(labels, axis=0), bound.times)
         spec = PathUpdateSpec(
             method=GuidedMethodSpec(
                 kind="particle_mgrad", num_particles=16, kappa=1, scan_unroll=scan_unroll
@@ -1119,13 +1127,12 @@ def test_vector_tail_carries_across_unrolled_scan(monkeypatch, dimension, steps,
             proposal=ParameterMixtureProposalSpec(),
         )
         return jax.jit(
-            lambda: trace_guided_step(target, ctx, guide, spec, jax.random.key(821), reference)
+            lambda: trace_guided_step(bound, ctx, guide, spec, jax.random.key(821), reference)
         )()
 
-    fused = run(unroll)
-    serial = run(1)
-    monkeypatch.setattr(guided, "MIXTURE_TAIL_TILE_LIMIT", 0)
-    unfused = run(unroll)
+    fused = run(target, unroll)
+    serial = run(target, 1)
+    unfused = run(dense, unroll)
     for reference_result in (serial, unfused):
         for actual, expected in zip(
             jax.tree.leaves(fused), jax.tree.leaves(reference_result), strict=True

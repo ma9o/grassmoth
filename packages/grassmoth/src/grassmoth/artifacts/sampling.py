@@ -70,6 +70,62 @@ def _power_of_two(value: int) -> int:
 
 type ParticleCount = Annotated[int, Field(ge=2), AfterValidator(_power_of_two)]
 
+MGRAD_STATE_LIMIT: Annotated[
+    int,
+    Field(
+        description=(
+            "Particle-mGRAD rejects larger models, the end of its fused GPU tail's measured range. "
+            "Paired L40S L96 D40, C10/P128/K8/u8: extending the four-coordinate tail and finisher "
+            "beyond D16 increased ordinary sweep time 7.35 to 8.10 ms."
+        )
+    ),
+] = 16
+
+MGRAD_PARAMETER_PARTICLE_LIMIT: Annotated[
+    int,
+    Field(
+        description=(
+            "Largest Particle-mGRAD parameter-particle count that has been gated and timed. "
+            "L40S: D1/3/9 P128/K64 pass isolated no-spill gates. Paired C10/P128/u8: the fused "
+            "tail at K64 reduced SV ordinary sweeps 91.93 to 64.52 ms and PARAM D3 88.01 to "
+            "83.87 ms. Nothing larger has been gated or timed."
+        )
+    ),
+] = 64
+
+MGRAD_BANK_LIMIT: Annotated[
+    int,
+    Field(
+        description=(
+            "Largest particles-by-parameter-particles product in Particle-mGRAD's fused GPU tail. "
+            "Paired L40S C10/P128/u8: the tail reduced ordinary sweeps at 8192 entries (K64) as "
+            "stated for the parameter-particle limit, and at 4096 entries (K32) 113.24 to 43.85 ms "
+            "on SV and 75.64 to 57.39 ms on PARAM. Many shapes within it haven't been timed."
+        )
+    ),
+] = 8192
+
+MGRAD_LARGE_PARTICLE_COUNT: Annotated[
+    int,
+    Field(
+        description=(
+            "L40S isolated forward gates at D9: P512/K16 passes; P1024/K8 spills, with the "
+            "responsible kernel not isolated. Paired SV C10/u8 P512/K8 ordinary sweeps took "
+            "49.96 ms on the tail against 68.73 ms off it."
+        )
+    ),
+] = 512
+
+MGRAD_LARGE_PARTICLE_BANK_LIMIT: Annotated[
+    int,
+    Field(
+        description=(
+            "Heuristic: above the large-particle count, retain the tail's earlier 4096-entry "
+            "limit. No shape above 512 particles has been timed."
+        )
+    ),
+] = 4096
+
 
 class AdaptedLatentStepSpec(Value):
     """Warmup adapts the per-time scale towards the assigned movement target."""
@@ -163,7 +219,8 @@ _GUIDED_PARTICLES = (
     "grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default "
     "is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section "
     "5.2) use 32 particles; Corenflos & Särkkä (2025, section 4) use 25 and call that somewhat "
-    "arbitrary. Must be a power of two."
+    "arbitrary. Must be a power of two; Particle-mGRAD also limits it jointly with the parameter "
+    "particles."
 )
 _PATH_STEP = (
     "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep "
@@ -206,7 +263,9 @@ class GuidedMethodSpec(Value):
             "particle_mgrad integrates the path auxiliary out of the particle weights with the "
             "untwisted proposal (section 4.2); it has no look-ahead, so separated path "
             "components and informative future readings can slow its mixing. It requires a "
-            "parameter_mixture proposal. twisted_particle_agrad keeps the auxiliary variable "
+            f"parameter_mixture proposal, at most {MGRAD_STATE_LIMIT} state dimensions and a "
+            "limited particle bank, the shapes its fused GPU tail covers. "
+            "twisted_particle_agrad keeps the auxiliary variable "
             "in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary "
             "path: a parallel backward information scan guides the sequential filter, and "
             "proposals combine exact nonlinear transition means with the approximate twist, "
@@ -331,6 +390,25 @@ class UnsupportedPathUpdate(Value):
     """An authored path configuration for which no execution kernel is implemented."""
 
     message: str
+
+
+def _mgrad_bank_failure(particles: int, labels: int) -> UnsupportedPathUpdate | None:
+    """Reject a particle bank too large for Particle-mGRAD's fused GPU tail."""
+    limit = (
+        MGRAD_BANK_LIMIT
+        if particles <= MGRAD_LARGE_PARTICLE_COUNT
+        else MGRAD_LARGE_PARTICLE_BANK_LIMIT
+    )
+    if labels <= MGRAD_PARAMETER_PARTICLE_LIMIT and particles * labels <= limit:
+        return None
+    return UnsupportedPathUpdate(
+        message=(
+            f"Particle-mGRAD allows at most {MGRAD_PARAMETER_PARTICLE_LIMIT} parameter particles "
+            f"and at most {MGRAD_BANK_LIMIT} particles times parameter particles, or "
+            f"{MGRAD_LARGE_PARTICLE_BANK_LIMIT} above {MGRAD_LARGE_PARTICLE_COUNT} particles; "
+            f"got {particles} particles and {labels} parameter particles."
+        )
+    )
 
 
 class PathUpdateSpec(Value):
@@ -541,8 +619,11 @@ class MarginalParticleGibbsSpec(Value):
         default=8,
         description=(
             "Parameter particles M per sweep: the current value and M - 1 proposals around "
-            "one auxiliary point. Work grows as O(TNM). Must be a power of two. Heuristic: "
-            "default M = 8; no ESS advantage has been established."
+            "one auxiliary point. Work grows as O(TNM). Must be a power of two. Particle-mGRAD "
+            f"allows M up to {MGRAD_PARAMETER_PARTICLE_LIMIT} and NM up to {MGRAD_BANK_LIMIT}, "
+            f"or {MGRAD_LARGE_PARTICLE_BANK_LIMIT} above N = {MGRAD_LARGE_PARTICLE_COUNT}, the "
+            "shapes its fused GPU tail covers. Heuristic: default M = 8; no ESS advantage has "
+            "been established."
         ),
     )
     path_update: PathUpdateSpec = Field(
@@ -707,7 +788,17 @@ class SamplerSpec(Value):
         """Reject unsupported path choices before compilation or remote dispatch."""
         algorithm = self.algorithm
         path = algorithm.smoother if isinstance(algorithm, NutsDASpec) else algorithm.path_update
-        return None if isinstance(path, JointSmootherSpec) else path.support_failure
+        if isinstance(path, JointSmootherSpec):
+            return None
+        method = path.method
+        return path.support_failure or (
+            _mgrad_bank_failure(
+                method.num_particles,
+                1 if isinstance(algorithm, NutsDASpec) else algorithm.n_parameter_particles,
+            )
+            if isinstance(method, GuidedMethodSpec) and method.kind == "particle_mgrad"
+            else None
+        )
 
     @property
     def kernel_identity(self) -> tuple[str | int, ...]:

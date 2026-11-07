@@ -21,51 +21,20 @@ from grassmoth.models.ssm.inference.samplers.particle.math import (
     TRITON_NUM_WARPS,
 )
 
-MIXTURE_TAIL_TILE_LIMIT: Annotated[
+TAIL_SINGLE_TILE_ENTRIES: Annotated[
     int,
     Field(
-        description="Heuristic: cap the fused particle-label tile at 2048 entries to bound register use; the measured L40S tile of 128 particles by 8 labels uses 64 registers per thread."
+        description="Heuristic: up to 2048 particle-label entries keep one coordinate tile at D<=8; the measured L40S tile of 128 particles by 8 labels uses 64 registers per thread. Eight-coordinate tiles at D5 and D8 spill at P128/K32; four-coordinate tiles pass."
     ),
 ] = 2048
 
 
-MIXTURE_TAIL_WIDE_TILE_FACTOR: Annotated[
-    int,
-    Field(
-        description="Measured L40S C10/P128/u8 at M32: doubling the 2048-entry admission limit reduced ordinary sweeps 113.24 to 43.85 ms on SV and 75.64 to 57.39 ms on PARAM. Larger coordinate tiles retain the previous limit."
-    ),
-] = 2
-
-MIXTURE_TAIL_WIDE_COORDINATE_LIMIT: Annotated[
-    int,
-    Field(
-        description="L40S P128/K32: four-coordinate tiles at D9 pass the isolated no-spill gate; eight-coordinate tiles at D5 and D8 spill. The wider D9 tail reduced paired ordinary C10/T2049/u8 sweeps 169.71 to 96.26 ms at K32; the combined change reduced K17 sweeps 127.60 to 92.72 ms. Admission follows the coordinate tile width shared with lowering."
-    ),
-] = 4
-
-
-MIXTURE_TAIL_LARGE_PARTICLE_LIMIT: Annotated[
-    int,
-    Field(
-        description="L40S isolated forward gates at D9: P512/K16 passes; P1024/K8 spills, with the responsible kernel not isolated. Bound only newly widened admission; retain the existing <=4096-entry route."
-    ),
-] = 512
-
-
-MIXTURE_TAIL_LARGE_TILE_FACTOR: Annotated[
+TAIL_EIGHT_WARP_ENTRIES: Annotated[
     int,
     Field(
         description="Paired L40S C10/P128/u8: eight warps above 4096 particle-label entries reduced SV K64 ordinary sweeps 91.93 to 64.52 ms and PARAM D3/K64 88.01 to 83.87 ms. Padded tiles lose on this route: SV K33 regressed 93.89 to 130.85 ms. Particle and label counts are powers of two, so requests can't reach those."
     ),
-] = 2
-
-
-MIXTURE_TAIL_DIMENSION_LIMIT: Annotated[
-    int,
-    Field(
-        description="Paired L40S L96 D40, C10/P128/K8/u8: extending the four-coordinate tail and finisher beyond D16 increased ordinary sweep time 7.35 to 8.10 ms. Retain the measured dimension cap."
-    ),
-] = 16
+] = 4096
 
 
 TAIL_COORDINATE_TILE: Annotated[
@@ -94,7 +63,7 @@ def tail_coordinate_block(dimension: int, particles: int, labels: int) -> int:
     product = (1 << max(particles - 1, 0).bit_length()) * (1 << max(labels - 1, 0).bit_length())
     return (
         1 << max(dimension - 1, 0).bit_length()
-        if dimension <= TAIL_COORDINATE_TILE and product <= MIXTURE_TAIL_TILE_LIMIT
+        if dimension <= TAIL_COORDINATE_TILE and product <= TAIL_SINGLE_TILE_ENTRIES
         else min(1 << max(dimension - 1, 0).bit_length(), TAIL_PARALLEL_COORDINATE_TILE)
     )
 
@@ -102,11 +71,7 @@ def tail_coordinate_block(dimension: int, particles: int, labels: int) -> int:
 def tail_warps(particles: int, labels: int) -> int:
     """Use eight warps for the measured wider admission; retain four below it."""
     product = (1 << max(particles - 1, 0).bit_length()) * (1 << max(labels - 1, 0).bit_length())
-    return TRITON_NUM_WARPS * (
-        MIXTURE_TAIL_LARGE_TILE_FACTOR
-        if product > MIXTURE_TAIL_TILE_LIMIT * MIXTURE_TAIL_WIDE_TILE_FACTOR
-        else 1
-    )
+    return 2 * TRITON_NUM_WARPS if product > TAIL_EIGHT_WARP_ENTRIES else TRITON_NUM_WARPS
 
 
 def diagonal_mixture_tail(
