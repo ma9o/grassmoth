@@ -21,7 +21,19 @@ TRITON_NUM_WARPS: Annotated[
 
 
 def label_logsumexp(values: Float[Array, "*batch K"]) -> Float[Array, " *batch"]:
-    """Sum tiny label mixtures without a separate parallel reduction kernel."""
+    """Fold small mixtures; reduce arrays above 32 labels.
+
+    L40S, SV C10/P128/T3000/u8, 2026-11-07: at M50 the array
+    reduction reduced paired ordinary sweeps 97.76 to 82.48 ms and
+    compile time 20.88 to 14.68 s. Retain the fold through 32 labels,
+    where the wider fused tail avoids this per-step reduction. Routes still
+    unfused at 17 to 32 labels retain the fold; the array form is unmeasured
+    on them.
+    """
+    if values.shape[-1] > 32:
+        maximum = jnp.max(values, axis=-1, keepdims=True)
+        shift = jax.lax.stop_gradient(jnp.where(jnp.isfinite(maximum), maximum, 0.0))
+        return jnp.log(jnp.sum(jnp.exp(values - shift), axis=-1)) + shift[..., 0]
     if values.shape[-1] == 1:
         return values[..., 0]
     maximum = values[..., 0]

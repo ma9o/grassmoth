@@ -153,7 +153,7 @@ def test_backward_from_moments_preserves_exact_selection_and_suffix(
     np.testing.assert_allclose(actual[1], expected_suffix, atol=5e-6, rtol=5e-6)
 
 
-@pytest.mark.parametrize("labels", [1, 2, 3, 8, 17])
+@pytest.mark.parametrize("labels", [1, 2, 3, 8, 17, 32, 33, 50])
 def test_small_label_reduction_preserves_zero_mass_and_large_log_densities(labels):
     values = np.array(
         [[-np.inf, -np.inf, -np.inf], [1000.0, 1001.0, -1000.0], [0.0, -np.inf, 0.0]],
