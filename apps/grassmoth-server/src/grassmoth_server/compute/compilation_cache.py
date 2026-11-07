@@ -76,17 +76,24 @@ def compile_program[Result](
 
 
 _AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
-_KERNELS = "xla_gpu_kernel_cache_file"
 _LOGGER = logging.getLogger(__name__)
 _CACHE_LOCK = Lock()
 
-type CacheFamily = Literal["executable", "autotune", "kernels"]
+type CacheFamily = Literal["executable", "autotune"]
 
 
 def accelerator_partition() -> str:
-    """Use the same topology fingerprint bytes as JAX's accelerator_config key."""
+    """Partition by topology and the executable/autotune-only cache generation.
+
+    The 2026-11-07 L40S differential reproduced incorrect numerical outputs
+    when reusing XLA's kernel-file cache. Disabling that cache matched uncached
+    execution. A new namespace also excludes executables built from those
+    kernels; JAX continues to own versioned executable and autotuning keys.
+    """
     topology = xla_client.get_topology_for_devices(jax.local_devices())
-    return hashlib.sha256(topology.fingerprint().to_bytes(8, "big")).hexdigest()
+    return hashlib.sha256(
+        b"executable-autotune-only-v1\0" + topology.fingerprint().to_bytes(8, "big")
+    ).hexdigest()
 
 
 _MANIFEST_LIMIT = 128 * 1024
@@ -96,8 +103,8 @@ _MANIFEST_LIMIT = 128 * 1024
 def _local_directory() -> Iterator[Path]:
     """Serialize the process-global JAX configuration and its stable local path.
 
-    XLA's kernel-cache filename participates in the executable key. A random
-    temporary directory therefore invalidates otherwise identical programs.
+    Keep cache locations stable across fits so paths cannot invalidate
+    otherwise identical compiler keys.
     The lock lives outside the cleared directory and also excludes other local
     processes; interrupted runs cannot contribute uncommitted cache files.
     """
@@ -128,14 +135,12 @@ class CachePolicy(Value):
 
     executables: CacheLimit
     autotune: CacheLimit
-    kernels: CacheLimit
 
     def families(self) -> tuple[tuple[CacheFamily, CacheLimit], ...]:
         """Enumerate the cache files produced by JAX and XLA."""
         return (
             ("executable", self.executables),
             ("autotune", self.autotune),
-            ("kernels", self.kernels),
         )
 
     def archive_bytes(self) -> int:
@@ -153,7 +158,6 @@ FIT_CACHE_MIN_COMPILE_SECONDS = 0.0
 FIT_CACHE_POLICY = CachePolicy(
     executables=CacheLimit(files=384, bytes=192 * 1024**2),
     autotune=CacheLimit(files=128, bytes=16 * 1024**2),
-    kernels=CacheLimit(files=1, bytes=128 * 1024**2),
 )
 
 
@@ -173,7 +177,7 @@ class CacheEntry(Value):
         executable = len(parts) == 1 and path.endswith("-cache")
         autotune = len(parts) > 1 and parts[0] == _AUTOTUNE
         if (
-            not (executable or autotune or path == _KERNELS)
+            not (executable or autotune)
             or ".." in parts
             or PurePosixPath(path).is_absolute()
             or str(PurePosixPath(path)) != path
@@ -186,8 +190,6 @@ class CacheEntry(Value):
     @property
     def family(self) -> CacheFamily:
         """Project the family already established by path parsing."""
-        if self.path == _KERNELS:
-            return "kernels"
         return "autotune" if self.path.startswith(_AUTOTUNE + "/") else "executable"
 
 
@@ -227,11 +229,7 @@ def _selected(working: Path, policy: CachePolicy) -> tuple[CacheEntry, ...]:
     entries: list[CacheEntry] = []
     for family, limit in policy.families():
         candidates = (
-            (working / _AUTOTUNE).rglob("*")
-            if family == "autotune"
-            else (working / _KERNELS,)
-            if family == "kernels"
-            else working.glob("*-cache")
+            (working / _AUTOTUNE).rglob("*") if family == "autotune" else working.glob("*-cache")
         )
         files = sorted(
             (path for path in candidates if not path.is_symlink() and path.is_file()),
@@ -389,7 +387,7 @@ def local_compilation_cache(
             "jax_enable_compilation_cache": True,
             "jax_persistent_cache_min_compile_time_secs": FIT_CACHE_MIN_COMPILE_SECONDS,
             "jax_persistent_cache_min_entry_size_bytes": 0,
-            "jax_persistent_cache_enable_xla_caches": f"{_AUTOTUNE},{_KERNELS}",
+            "jax_persistent_cache_enable_xla_caches": _AUTOTUNE,
             "jax_compilation_cache_max_size": -1,
         }
         old = {name: jax.config.values[name] for name in settings}

@@ -26,7 +26,6 @@ from grassmoth_server.compute.compilation_cache import (
 
 pytestmark = pytest.mark.contract
 AUTOTUNE = "xla_gpu_per_fusion_autotune_cache_dir"
-KERNELS = "xla_gpu_kernel_cache_file"
 
 
 @pytest.mark.parametrize("package", ["grassmoth", "grassmoth_server"])
@@ -150,7 +149,6 @@ def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path
     policy = CachePolicy(
         executables=CacheLimit(files=2, bytes=9),
         autotune=CacheLimit(files=1, bytes=5),
-        kernels=CacheLimit(files=1, bytes=6),
     )
     _file(working, "old-cache", b"1234", 1)
     _file(working, "new-cache", b"12345", 3)
@@ -159,12 +157,12 @@ def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path
     _file(working, "ignored-atime", b"ignored", 5)
     _file(working, f"{AUTOTUNE}/old.opaque", b"123", 1)
     _file(working, f"{AUTOTUNE}/nested/new.opaque", b"1234", 2)
-    _file(working, KERNELS, b"kernel", 2)
+    _file(working, "xla_gpu_kernel_cache_file", b"excluded kernel", 2)
     (working / "link-cache").symlink_to(working / "new-cache")
     archive = tmp_path / "volume" / "selected.tar"
     commit = Mock()
     persisted = persist_cache(archive, working, (), policy, commit)
-    assert (persisted.files, persisted.bytes) == (4, 19)
+    assert (persisted.files, persisted.bytes) == (3, 13)
     assert persisted.archive_bytes == archive.stat().st_size <= policy.archive_bytes()
     assert min(persisted.copy_seconds, persisted.selection_seconds, persisted.commit_seconds) >= 0
     commit.assert_called_once_with()
@@ -172,12 +170,11 @@ def test_separate_selection_bounds_round_trip_and_unchanged_skip_commit(tmp_path
     assert [entry.path for entry in staged] == [
         "new-cache",
         "old-cache",
-        KERNELS,
         f"{AUTOTUNE}/nested/new.opaque",
     ]
     assert (transfer.files, transfer.bytes, transfer.archive_bytes) == (
-        4,
-        19,
+        3,
+        13,
         persisted.archive_bytes,
     )
     for entry in staged:
@@ -243,7 +240,7 @@ def test_local_lifecycle_isolated_namespaces_failure_cleanup_and_accounting(tmp_
     with local_compilation_cache(persistent, commit=commit, report=reports.append) as working:
         assert not working.is_relative_to(persistent)
         assert jax.config.jax_compilation_cache_dir == str(working)
-        assert jax.config.jax_persistent_cache_enable_xla_caches == f"{AUTOTUNE},{KERNELS}"
+        assert jax.config.jax_persistent_cache_enable_xla_caches == AUTOTUNE
         _file(working, "compiled-cache", b"binary", 100)
     assert not working.exists()
     assert [(r.phase, r.files, r.bytes) for r in reports] == [
@@ -287,7 +284,7 @@ def test_commit_failure_propagates_and_restores_configuration(tmp_path, monkeypa
     assert jax.config.jax_compilation_cache_dir == original
 
 
-def test_kernel_cache_path_does_not_change_executable_keys_between_contexts(tmp_path, monkeypatch):
+def test_cache_paths_preserve_executable_keys_between_contexts(tmp_path, monkeypatch):
     from jax._src import cache_key
 
     keys = []
@@ -319,9 +316,9 @@ def test_topology_writers_keep_separate_jax_binaries(tmp_path, monkeypatch):
         monkeypatch.setattr(cache, "accelerator_partition", lambda topology=topology: topology)
         with local_compilation_cache(tmp_path, commit=commit) as working:
             assert not (working / "compiled-cache").exists()
-            assert not (working / KERNELS).exists()
+            assert not (working / AUTOTUNE / "selected").exists()
             _file(working, "compiled-cache", topology.encode(), 2)
-            _file(working, KERNELS, topology.encode(), 2)
+            _file(working, f"{AUTOTUNE}/selected", topology.encode(), 2)
     assert commit.call_count == 2
     snapshots = {path.name: path.read_bytes() for path in tmp_path.iterdir()}
     assert set(snapshots) == {"a" * 64 + ".tar", "b" * 64 + ".tar"}
@@ -329,13 +326,13 @@ def test_topology_writers_keep_separate_jax_binaries(tmp_path, monkeypatch):
         monkeypatch.setattr(cache, "accelerator_partition", lambda topology=topology: topology)
         with local_compilation_cache(tmp_path, commit=commit) as working:
             assert (working / "compiled-cache").read_bytes() == topology.encode()
-            assert (working / KERNELS).read_bytes() == topology.encode()
+            assert (working / AUTOTUNE / "selected").read_bytes() == topology.encode()
     assert commit.call_count == 2
     assert snapshots == {path.name: path.read_bytes() for path in tmp_path.iterdir()}
-    assert FIT_CACHE_POLICY.archive_bytes() <= 336 * 1024**2 + 128 * 1024 + 513 * 1024 + 10240
+    assert FIT_CACHE_POLICY.archive_bytes() <= 208 * 1024**2 + 128 * 1024 + 512 * 1024 + 10240
 
 
-def test_accelerator_partition_matches_jax_fingerprint_component(monkeypatch):
+def test_accelerator_partition_excludes_kernel_cache_generation(monkeypatch):
     from grassmoth_server.compute import compilation_cache as cache
 
     devices = [object()]
@@ -343,7 +340,9 @@ def test_accelerator_partition_matches_jax_fingerprint_component(monkeypatch):
     topology = SimpleNamespace(fingerprint=lambda: 123456789)
     describe = Mock(return_value=topology)
     monkeypatch.setattr(cache.xla_client, "get_topology_for_devices", describe)
-    assert (
-        cache.accelerator_partition() == hashlib.sha256((123456789).to_bytes(8, "big")).hexdigest()
-    )
+    first = cache.accelerator_partition()
+    assert first != hashlib.sha256((123456789).to_bytes(8, "big")).hexdigest()
     describe.assert_called_once_with(devices)
+    assert cache.accelerator_partition() == first
+    topology.fingerprint = lambda: 987654321
+    assert cache.accelerator_partition() != first
