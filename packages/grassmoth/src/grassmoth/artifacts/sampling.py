@@ -205,8 +205,8 @@ class GuidedMethodSpec(Value):
         description=(
             "particle_mgrad integrates the path auxiliary out of the particle weights with the "
             "untwisted proposal (section 4.2); it has no look-ahead, so separated path "
-            "components and informative future readings, such as long interval windows, can "
-            "slow its mixing. twisted_particle_agrad keeps the auxiliary variable "
+            "components and informative future readings can slow its mixing. It requires a "
+            "parameter_mixture proposal. twisted_particle_agrad keeps the auxiliary variable "
             "in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary "
             "path: a parallel backward information scan guides the sequential filter, and "
             "proposals combine exact nonlinear transition means with the approximate twist, "
@@ -261,6 +261,7 @@ class ParameterMeanProposalSpec(Value):
 
     This repository's shared-guide construction is symmetric in the ensemble.
     Separated parameter components can be poorly represented by their mean.
+    Particle-mGRAD doesn't offer it: only its mixture proposal runs the fused GPU tail.
     """
 
     kind: Literal["parameter_mean"] = "parameter_mean"
@@ -344,11 +345,12 @@ class PathUpdateSpec(Value):
     proposal: PathProposalSpec = Field(
         default_factory=_default_path_proposal,
         description=(
-            "Heuristic: Particle-mGRAD defaults to a running-prefix parameter mixture to "
-            "cover individual parameter candidates; an ESS advantage has not been established. "
-            "Other methods default to parameter_mean. Mixtures currently require point "
-            "observations without deterministic recurrences; select parameter_mean explicitly "
-            "for mGRAD with intervals or recurrences."
+            "Particle-mGRAD requires a running-prefix parameter mixture, the only proposal "
+            "with its fused GPU tail, which also covers individual parameter candidates. "
+            "Heuristic: an ESS advantage has not been established. Other methods default to "
+            "parameter_mean. Mixtures currently require point observations without "
+            "deterministic recurrences; select twisted_particle_agrad with parameter_mean, or "
+            "auxiliary_kalman, for intervals or recurrences."
         ),
     )
     latent_step: LatentStepSpec = Field(
@@ -374,7 +376,14 @@ class PathUpdateSpec(Value):
                 message="Conditional-parameter proposals are implemented only for blocked auxiliary Kalman."
             )
         if isinstance(proposal, ParameterMeanProposalSpec):
-            return None
+            return (
+                UnsupportedPathUpdate(
+                    message="Particle-mGRAD requires a parameter_mixture proposal; select "
+                    "twisted_particle_agrad for parameter_mean."
+                )
+                if method.kind == "particle_mgrad"
+                else None
+            )
         if isinstance(method, AuxiliaryKalmanMethodSpec):
             return UnsupportedPathUpdate(
                 message="Parameter-mixture proposals are not implemented for auxiliary Kalman."

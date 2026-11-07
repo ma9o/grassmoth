@@ -272,8 +272,6 @@ def _recurrence_posterior():
     [
         ("twisted_particle_agrad", 1),
         ("twisted_particle_agrad", 0),
-        ("particle_mgrad", 1),
-        ("particle_mgrad", 0),
     ],
 )
 def test_ancestral_recurrences_preserve_nonlinear_joint_posterior(method, kappa):
@@ -472,9 +470,7 @@ def test_fixed_initial_state_without_memory_keeps_backward_selection():
     assert np.any(picks[:, 1] != parents[np.arange(32), 1, picks[:, 2]])
 
 
-@pytest.mark.parametrize(
-    "method", ["particle_mgrad", "twisted_particle_agrad", "kalman_full", "kalman_blocked"]
-)
+@pytest.mark.parametrize("method", ["twisted_particle_agrad", "kalman_full", "kalman_blocked"])
 def test_recurrence_and_overlapping_window_mixture_invariance(method):
     from grassmoth.models.ssm.inference.samplers.particle.auxiliary_kalman import (
         auxiliary_kalman_step,

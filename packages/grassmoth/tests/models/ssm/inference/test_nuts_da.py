@@ -43,19 +43,19 @@ pytestmark = pytest.mark.inference(concern="sampling")
             "centred",
             NutsTrajectorySpec(),
             PathUpdateSpec(
-                method=GuidedMethodSpec(num_particles=16),
+                method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=16),
                 proposal=ParameterMeanProposalSpec(),
             ),
-            id="conditional-centred-mgrad",
+            id="conditional-centred-twisted",
         ),
         pytest.param(
             "non_centred",
             NutsTrajectorySpec(),
             PathUpdateSpec(
-                method=GuidedMethodSpec(num_particles=16),
+                method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=16),
                 proposal=ParameterMeanProposalSpec(),
             ),
-            id="conditional-noncentred-mgrad",
+            id="conditional-noncentred-twisted",
         ),
         pytest.param(
             "mixed",
@@ -156,7 +156,7 @@ def test_nuts_fit_preserves_nonlinear_model_and_shared_posterior():
     "smoother",
     [
         PathUpdateSpec(
-            method=GuidedMethodSpec(num_particles=8),
+            method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8),
             proposal=ParameterMeanProposalSpec(),
         ),
         PathUpdateSpec(
@@ -220,10 +220,10 @@ def test_conditional_nuts_keeps_exact_replay_and_reading_scores(feature, smoothe
             "non_centred",
             NutsTrajectorySpec(max_tree_depth=3),
             PathUpdateSpec(
-                method=GuidedMethodSpec(num_particles=8),
+                method=GuidedMethodSpec(kind="twisted_particle_agrad", num_particles=8),
                 proposal=ParameterMeanProposalSpec(),
             ),
-            id="conditional-mgrad",
+            id="conditional-twisted",
         ),
         pytest.param(
             "centred",

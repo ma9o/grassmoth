@@ -127,10 +127,7 @@ def test_auxiliary_kalman_admission(
 @pytest.mark.parametrize(
     "recurrences", [(), (AdditiveRecurrences((0,)),), (SequentialRecurrences((0,)),)]
 )
-@pytest.mark.parametrize("method", ["particle_mgrad", "twisted_particle_agrad"])
-def test_guided_preflight_accepts_interval_readings_and_recurrences(
-    monkeypatch, method, recurrences
-):
+def test_guided_preflight_accepts_interval_readings_and_recurrences(monkeypatch, recurrences):
     from grassmoth.models.ssm import compiled_access
 
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
@@ -151,7 +148,8 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(
     sampler = SamplerSpec(
         algorithm=MarginalParticleGibbsSpec(
             path_update=PathUpdateSpec(
-                method=GuidedMethodSpec(kind=method), proposal=ParameterMeanProposalSpec()
+                method=GuidedMethodSpec(kind="twisted_particle_agrad"),
+                proposal=ParameterMeanProposalSpec(),
             ),
         )
     )
@@ -409,7 +407,7 @@ def test_initialization_failure_stops_production_before_sampling(monkeypatch):
 @pytest.mark.parametrize(
     ("method", "scope", "proposal", "weights", "supported"),
     [
-        ("particle_mgrad", "whole_path", "parameter_mean", None, True),
+        ("particle_mgrad", "whole_path", "parameter_mean", None, False),
         ("twisted_particle_agrad", "whole_path", "parameter_mean", None, True),
         ("auxiliary_kalman", "whole_path", "parameter_mean", None, True),
         ("twisted_particle_agrad", "whole_path", "parameter_mixture", "running_prefix", True),

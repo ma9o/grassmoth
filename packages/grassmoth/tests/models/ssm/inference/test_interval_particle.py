@@ -175,7 +175,7 @@ def test_mixed_overlapping_intervals_match_independent_laws_and_gradients():
 
 
 @pytest.mark.parametrize(
-    "method", ["particle_mgrad", "twisted_particle_agrad", "kalman_full", "kalman_2", "kalman_4"]
+    "method", ["twisted_particle_agrad", "kalman_full", "kalman_2", "kalman_4"]
 )
 def test_updates_preserve_analytic_interval_posterior(method):
 

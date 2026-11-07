@@ -277,8 +277,6 @@ def _correlated_gaussian_case(sample_count=4096, *, independent=False):
         )
     ]
     + [
-        ("particle_mgrad", 0.0, 0, False, 3, 2, False),
-        ("particle_mgrad", 0.7, 1, True, 3, 1, False),
         pytest.param("particle_mgrad", 0.0, 1, False, 3, 2, True, id="mgrad_mixture_gaussian"),
         pytest.param("particle_mgrad", 0.0, 0, False, 3, 2, True, id="mgrad_mixture_unshifted"),
         pytest.param("particle_mgrad", 0.0, 1, False, 1, 1, True, id="mgrad_mixture_single_time"),
@@ -888,7 +886,9 @@ def test_diagonal_guided_geometry_preserves_dense_filter_and_backward_trace(mixt
         ),
     )
     spec = PathUpdateSpec(
-        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=8),
+        method=GuidedMethodSpec(
+            kind="particle_mgrad" if mixture else "twisted_particle_agrad", num_particles=8
+        ),
         proposal=ParameterMixtureProposalSpec() if mixture else ParameterMeanProposalSpec(),
     )
     mask = target.independent_mask.at[1, 1].set(not pinned)

@@ -4666,7 +4666,7 @@ export interface components {
          */
         readonly "GuidedMethodSpec-Input": {
             /**
-             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings, such as long interval windows, can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
+             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             readonly kind: "particle_mgrad" | "twisted_particle_agrad";
@@ -4699,7 +4699,7 @@ export interface components {
          */
         readonly "GuidedMethodSpec-Output": {
             /**
-             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings, such as long interval windows, can slow its mixing. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
+             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
              * @enum {string}
              */
             readonly kind: "particle_mgrad" | "twisted_particle_agrad";
@@ -6260,6 +6260,7 @@ export interface components {
          *
          *     This repository's shared-guide construction is symmetric in the ensemble.
          *     Separated parameter components can be poorly represented by their mean.
+         *     Particle-mGRAD doesn't offer it: only its mixture proposal runs the fused GPU tail.
          */
         readonly "ParameterMeanProposalSpec-Input": {
             /**
@@ -6274,6 +6275,7 @@ export interface components {
          *
          *     This repository's shared-guide construction is symmetric in the ensemble.
          *     Separated parameter components can be poorly represented by their mean.
+         *     Particle-mGRAD doesn't offer it: only its mixture proposal runs the fused GPU tail.
          */
         readonly "ParameterMeanProposalSpec-Output": {
             /**
@@ -6555,7 +6557,7 @@ export interface components {
         readonly "PathUpdateSpec-Input": {
             readonly method?: components["schemas"]["PathMethodSpec-Input"];
             readonly update?: components["schemas"]["PathUpdateScopeSpec-Input"];
-            /** @description Heuristic: Particle-mGRAD defaults to a running-prefix parameter mixture to cover individual parameter candidates; an ESS advantage has not been established. Other methods default to parameter_mean. Mixtures currently require point observations without deterministic recurrences; select parameter_mean explicitly for mGRAD with intervals or recurrences. */
+            /** @description Particle-mGRAD requires a running-prefix parameter mixture, the only proposal with its fused GPU tail, which also covers individual parameter candidates. Heuristic: an ESS advantage has not been established. Other methods default to parameter_mean. Mixtures currently require point observations without deterministic recurrences; select twisted_particle_agrad with parameter_mean, or auxiliary_kalman, for intervals or recurrences. */
             readonly proposal?: components["schemas"]["PathProposalSpec-Input"];
             /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & Särkkä 2025, sections 2.2–2.4). */
             readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
@@ -6570,7 +6572,7 @@ export interface components {
         readonly "PathUpdateSpec-Output": {
             readonly method: components["schemas"]["PathMethodSpec-Output"];
             readonly update: components["schemas"]["PathUpdateScopeSpec-Output"];
-            /** @description Heuristic: Particle-mGRAD defaults to a running-prefix parameter mixture to cover individual parameter candidates; an ESS advantage has not been established. Other methods default to parameter_mean. Mixtures currently require point observations without deterministic recurrences; select parameter_mean explicitly for mGRAD with intervals or recurrences. */
+            /** @description Particle-mGRAD requires a running-prefix parameter mixture, the only proposal with its fused GPU tail, which also covers individual parameter candidates. Heuristic: an ESS advantage has not been established. Other methods default to parameter_mean. Mixtures currently require point observations without deterministic recurrences; select twisted_particle_agrad with parameter_mean, or auxiliary_kalman, for intervals or recurrences. */
             readonly proposal: components["schemas"]["PathProposalSpec-Output"];
             /** @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & Särkkä 2025, sections 2.2–2.4). */
             readonly latent_step: components["schemas"]["LatentStepSpec-Output"];

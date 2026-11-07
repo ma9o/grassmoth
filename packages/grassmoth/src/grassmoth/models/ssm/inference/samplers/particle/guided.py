@@ -10,8 +10,9 @@ the auxiliary density, psi_t/psi_(t-1), and the complete normalized proposal.
 Backward selection uses prefix AND suffix label densities, divided by the prefix
 sum and psi_t. Summing label mixtures independently at each time would be wrong.
 
-The single Gaussian proposal guide is built at the mean unconstrained parameter
-over labels with finite corrected prior, symmetrically in the labels. The auxiliary drift is an observation-only
+Twisted Particle-aGRAD's parameter-mean proposal builds its single Gaussian guide
+at the mean unconstrained parameter over labels with finite corrected prior,
+symmetrically in the labels. The auxiliary drift is an observation-only
 mixture score, common to every label. Consequently the final label law does not
 contain an auxiliary factor. For twisted kappa=1, the local proposal and future
 twist share a Gaussian approximation of the readings times the actual auxiliary
@@ -38,12 +39,9 @@ genealogical degeneracy; near-uniform weights do not guarantee movement.
 
 Particle-mGRAD retains the untwisted local proposal and integrates its auxiliary
 out of the bank weights. The observation-only auxiliary drift is common to all
-labels and may depend on the candidate's window memory. Thus the non-Markovian
-mixture prefix/suffix accounting remains exact, and backward selection uses the
-true target without auxiliary factors (CF24 Appendix D.2). The same swap identity
-covers window memory, so its bounded window replay pays only true factors, and
-recurrences trace ancestors as for aGRAD. Without look-ahead, a long informative
-window pays its whole factor at its anchor, which can slow mixing.
+labels. Thus the non-Markovian mixture prefix/suffix accounting remains exact, and
+backward selection uses the true target without auxiliary factors (CF24 Appendix
+D.2).
 """
 
 from types import MappingProxyType
@@ -95,11 +93,6 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_tail import (
     MIXTURE_TAIL_WIDE_TILE_FACTOR,
     diagonal_mixture_tail,
     tail_coordinate_block,
-)
-from grassmoth.models.ssm.inference.samplers.particle.marginal import (
-    DiagonalMarginalGeometry,
-    MarginalGeometry,
-    marginal_geometry,
 )
 from grassmoth.models.ssm.inference.samplers.particle.marginal_mixture import (
     MarginalMixtureBank,
@@ -238,11 +231,7 @@ def _guided_components(target: ParticleTarget, spec: GuidedMethodSpec) -> _Guide
         "memory" if target.intervals is not None or target.state_space.requires_replay else "point",
         "ancestral"
         if target.state_space.recurrence
-        else (
-            "backward"
-            if target.intervals is None
-            else ("marginal_window_replay" if spec.kind == "particle_mgrad" else "window_replay")
-        ),
+        else ("backward" if target.intervals is None else "window_replay"),
     )
 
 
@@ -262,9 +251,7 @@ def _guided_step(
     steps, dimension = reference.shape
     method = cast("GuidedMethodSpec", spec.method)
     count = method.num_particles
-    marginal_mixture = method.kind == "particle_mgrad" and isinstance(
-        spec.proposal, ParameterMixtureProposalSpec
-    )
+    marginal_mixture = method.kind == "particle_mgrad"
     variance = jnp.broadcast_to(ctx.amala_delta.reshape((steps, -1)), reference.shape) / 2
     aux_key, first_key, forward_key, backward_key = jax.random.split(key, 4)
     memory = sequential_observations(target, ctx.contexts, guide, log_precisions)
@@ -369,11 +356,6 @@ def _guided_step(
         return cast("jax.Array", observed), cast("jax.Array", derivatives)
 
     initial_mean = target.initial_moments(guide)[0]
-    marginal = (
-        jax.vmap(marginal_geometry, in_axes=(0, 0, 0, None))(geometry, variance, mask, count)
-        if method.kind == "particle_mgrad" and not marginal_mixture
-        else None
-    )
 
     def local_factors(
         particles: Float[Array, "P R"], index: Int[Array, ""] | int
@@ -396,13 +378,6 @@ def _guided_step(
         if mixture_bank is not None:
             return mixture_bank.log_weights(scores, variance[index], mask[index])
         proposal: _ProposalGeometry = jax.tree.map(lambda value: value[index], geometry)
-        if marginal is not None:
-            factors: MarginalGeometry | DiagonalMarginalGeometry = jax.tree.map(
-                lambda value: value[index], marginal
-            )
-            return factors.log_weights(
-                particles, centers - proposal.shift, scores, variance[index], mask[index]
-            )
         density = _masked_normal_log_prob(
             auxiliary[index],
             particles + variance[index] * scores,
