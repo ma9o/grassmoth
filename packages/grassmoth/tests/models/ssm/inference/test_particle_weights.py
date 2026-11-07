@@ -13,6 +13,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
     SequentialWeightDiagnostics,
 )
 from grassmoth.models.ssm.inference.samplers.particle.weights import (
+    requested_weight_statistics,
     summarize_particle_weights,
     weight_statistics,
 )
@@ -83,3 +84,19 @@ def test_weight_payload_preserves_filter_times_aggregates_and_nonfinite_evidence
     assert last.nonfinite_fraction == 0
     payload = json.dumps(result.model_dump(mode="json"), allow_nan=False)
     assert SequentialWeightDiagnostics.model_validate_json(payload) == result
+
+
+@pytest.mark.inference(concern="sampling")
+@pytest.mark.parametrize("enabled", [False, True])
+def test_requested_weight_statistics_preserves_runtime_switch(enabled):
+    logits = jnp.array([[[0.0, -jnp.inf, -2.0], [1.0, 2.0, 3.0]]])
+    # Keyword operands are always mapped by vmap, so bind the shared flag explicitly.
+    call = jax.jit(
+        jax.vmap(lambda x, flag: requested_weight_statistics(x, enabled=flag), in_axes=(0, None))
+    )
+    actual = call(logits, jnp.asarray([enabled]))
+    expected = jax.vmap(weight_statistics)(logits)
+    for metric, value in actual.items():
+        np.testing.assert_allclose(
+            value, expected[metric] if enabled else jnp.zeros_like(value), rtol=2e-6, atol=2e-6
+        )

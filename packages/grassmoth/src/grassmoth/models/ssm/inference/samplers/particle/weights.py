@@ -77,10 +77,16 @@ def weight_history_fields(
 def requested_weight_statistics(
     logits: jax.Array, *, enabled: jax.Array | bool
 ) -> dict[ParticleWeightMetric, jax.Array]:
-    """Skip all diagnostic reductions when weight measurements are disabled."""
+    """Skip diagnostic reductions when disabled, including after XLA optimization.
+
+    XLA's conditional simplifier treats reductions and elementwise operations as
+    cheap regardless of shape, so it otherwise speculates this whole calculation
+    and selects the result afterwards. The identity barrier keeps the calculation
+    inside its runtime branch without specializing the executable on the flag.
+    """
     result: dict[ParticleWeightMetric, jax.Array] = jax.lax.cond(
         jnp.reshape(enabled, ()),
-        weight_statistics,
+        lambda values: weight_statistics(jax.lax.optimization_barrier(values)),
         lambda values: {
             metric: jnp.zeros(values.shape[:-1], dtype=values.dtype)
             for metric in ParticleWeightMetric
