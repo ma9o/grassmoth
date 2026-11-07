@@ -66,7 +66,6 @@ def test_vector_tail_matches_unfused(dimension, gradient_enabled):
             jnp.asarray(0),
             jnp.cumsum(jnp.exp(prior_labels)),
             jnp.full((1, x.shape[0]), 0.37),
-            resample=_killing_reference,
             compute_gradient=gradient_enabled,
         )
     )()

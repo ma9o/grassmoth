@@ -89,7 +89,6 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
 from grassmoth.models.ssm.inference.samplers.particle.guided_tail import (
     MIXTURE_TAIL_DIMENSION_LIMIT,
     MIXTURE_TAIL_TILE_LIMIT,
-    TAIL_COORDINATE_TILE,
     diagonal_mixture_tail,
 )
 from grassmoth.models.ssm.inference.samplers.particle.marginal import (
@@ -325,7 +324,7 @@ def _guided_step(
         and not target.state_space.requires_replay
     )
 
-    prepare_parent_law = fused_tail and dimension <= TAIL_COORDINATE_TILE
+    prepare_parent_law = fused_tail
 
     def raw_observe(value: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
         def density(state: jax.Array) -> tuple[jax.Array, jax.Array]:
@@ -627,7 +626,6 @@ def _guided_step(
                 reference_running,
                 all_noise[2],
                 compute_gradient=method.kappa != 0,
-                resample=_killing,
             )
             current_twists = None
         else:
