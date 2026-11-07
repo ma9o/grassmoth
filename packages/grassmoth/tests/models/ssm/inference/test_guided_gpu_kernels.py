@@ -140,9 +140,11 @@ def test_backward_from_moments_preserves_exact_selection_and_suffix(
                 points,
                 np.diagonal(whiteners, axis1=-2, axis2=-1) if diagonal else whiteners,
                 normalizers,
-                scores,
-                observations,
-                gumbels,
+                scores[:, 0],
+                scores[:, 1:],
+                observations[:, 0],
+                observations[:, 1:],
+                gumbels[:, ::-1].copy(),
                 last,
             )
         )

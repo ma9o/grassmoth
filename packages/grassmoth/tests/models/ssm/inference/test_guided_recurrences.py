@@ -64,7 +64,9 @@ class _Evolution(DiscreteTimeStateEvolution):
                 0.5 * x[2] + 0.3 * x[1] + self.nonlinear * 0.1 * jnp.tanh(x[2]) ** 3,
             ]
         )
-        return SupportedNormal(mean, jnp.diag(jnp.array([0.3, 0.0, 0.0])), (0,))
+        return SupportedNormal(
+            mean, jnp.diag(jnp.array([0.3, 0.0, 0.0])), (0,), covariance_structure="dense"
+        )
 
 
 def _target(nonlinear, *, random_initial=False, steps=4):
@@ -91,6 +93,7 @@ def _target(nonlinear, *, random_initial=False, steps=4):
                 jnp.array([0.2 * label, 0.2 * label, -0.1 * label]),
                 jnp.diag(jnp.array([0.65, 0.4 if random_initial else 0.0, 0.0])),
                 (0, 1) if random_initial else (0,),
+                covariance_structure="dense",
             ),
             state_evolution=_Evolution(label, nonlinear),
             observation_model=HeterogeneousObservation(
@@ -397,7 +400,9 @@ def test_fixed_initial_state_without_memory_keeps_backward_selection():
             "HeterogeneousObservation", model.observation_model
         ).measurement.manifest_means[0]
         return dsx.DynamicalModel(
-            initial_condition=SupportedNormal(jnp.array([0.2 * label]), jnp.zeros((1, 1)), ()),
+            initial_condition=SupportedNormal(
+                jnp.array([0.2 * label]), jnp.zeros((1, 1)), (), covariance_structure="dense"
+            ),
             state_evolution=model.state_evolution,
             observation_model=model.observation_model,
             t0=0.0,

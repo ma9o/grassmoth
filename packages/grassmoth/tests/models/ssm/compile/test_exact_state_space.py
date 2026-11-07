@@ -106,7 +106,7 @@ def test_supported_density_and_gradients_preserve_correlated_nonleading_coordina
     def score(parameters, values):
         chol = factor(parameters)
         covariance = jnp.zeros((4, 4)).at[jnp.ix_(active, active)].set(chol @ chol.T)
-        law = SupportedNormal(mean, covariance, (1, 3))
+        law = SupportedNormal(mean, covariance, (1, 3), covariance_structure="dense")
         return target._modeled_log_prob(law, values, (1, 3))
 
     def analytic(parameters, values):
@@ -799,3 +799,27 @@ def test_observation_structure_uses_fixed_and_free_support(kind):
         DenseLoadings if kind in {"fixed_loading", "free_loading"} else CoordinateLoadings,
     )
     assert structure.covariance == ("dense" if kind == "correlated_noise" else "diagonal")
+
+
+@pytest.mark.parametrize("variance", [[0.3, 1.2], [0.0, 1.2], [-0.2, 1.2], [float("nan"), 1.2]])
+def test_supported_diagonal_covariance_and_factor_match_dense_domain(variance):
+    active = jnp.array([1, 3])
+    covariance = jnp.zeros((4, 4)).at[jnp.ix_(active, active)].set(jnp.diag(jnp.asarray(variance)))
+    dense = SupportedNormal(jnp.zeros(4), covariance, (1, 3), covariance_structure="dense")
+    diagonal = SupportedNormal(jnp.zeros(4), covariance, (1, 3), covariance_structure="diagonal")
+    leaves, structure = jax.tree.flatten(diagonal)
+    reconstructed = jax.tree.unflatten(structure, leaves)
+    np.testing.assert_allclose(
+        reconstructed.covariance_matrix, diagonal.covariance_matrix, equal_nan=True
+    )
+    for field in ("scale_tril", "covariance_matrix"):
+        np.testing.assert_allclose(
+            getattr(diagonal, field), getattr(dense, field), atol=2e-6, rtol=2e-6, equal_nan=True
+        )
+    np.testing.assert_allclose(
+        diagonal.log_prob(jnp.array([0.0, 0.2, 0.0, 0.3])),
+        dense.log_prob(jnp.array([0.0, 0.2, 0.0, 0.3])),
+        atol=2e-6,
+        rtol=2e-6,
+        equal_nan=True,
+    )

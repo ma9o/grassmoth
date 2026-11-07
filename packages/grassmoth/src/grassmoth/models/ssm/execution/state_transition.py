@@ -1,6 +1,6 @@
 """Dynestyx Euler–Maruyama transitions with compiler-owned Gaussian support."""
 
-from typing import override
+from typing import Literal, override
 
 import dynestyx as dsx
 import equinox as eqx
@@ -23,6 +23,7 @@ class SupportedEulerMaruyama(DiscreteTimeStateEvolution):
 
     continuous: dsx.StochasticContinuousTimeStateEvolution
     indices: tuple[int, ...] = eqx.field(static=True)
+    covariance_structure: Literal["diagonal", "dense"] = eqx.field(static=True)
 
     @override
     def __call__(
@@ -31,4 +32,9 @@ class SupportedEulerMaruyama(DiscreteTimeStateEvolution):
         moments = euler_maruyama_loc_cov(
             self.continuous, x, u, jnp.asarray(t_now), jnp.asarray(t_next)
         )
-        return SupportedNormal(moments["loc"], moments["cov"], self.indices)
+        return SupportedNormal(
+            moments["loc"],
+            moments["cov"],
+            self.indices,
+            covariance_structure=self.covariance_structure,
+        )

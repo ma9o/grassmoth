@@ -212,7 +212,12 @@ def initial_state_distribution(
     """Embed the modeled initial law in a state vector with lawless inputs."""
     if input_values is not None:
         mean = jnp.where(numeric.input_mask(compiled_dynamical_model), input_values[0], mean)
-    return SupportedNormal(mean, covariance, compiled_dynamical_model.state_space.initial)
+    return SupportedNormal(
+        mean,
+        covariance,
+        compiled_dynamical_model.state_space.initial,
+        covariance_structure=compiled_dynamical_model.state_space.initial_covariance,
+    )
 
 
 def assemble_likelihood_inputs(

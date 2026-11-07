@@ -129,6 +129,7 @@ def build_particle_problem(
             state_evolution=SupportedEulerMaruyama(
                 cast("dsx.StochasticContinuousTimeStateEvolution", model.state_evolution),
                 compiled_dynamical_model.state_space.transition,
+                compiled_dynamical_model.state_space.transition_covariance,
             ),
             observation_model=model.observation_model,
             t0=model.t0,

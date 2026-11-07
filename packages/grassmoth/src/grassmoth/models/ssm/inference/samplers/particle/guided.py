@@ -75,7 +75,9 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_information import 
     point_information,
 )
 from grassmoth.models.ssm.inference.samplers.particle.guided_random import (
+    MIXTURE_DRAW_FOLD_IN,
     KillingNoise,
+    TailRandomKeys,
     killing_draws,
     particle_normal,
     particle_uniform,
@@ -87,6 +89,7 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
 from grassmoth.models.ssm.inference.samplers.particle.guided_tail import (
     MIXTURE_TAIL_DIMENSION_LIMIT,
     MIXTURE_TAIL_TILE_LIMIT,
+    TAIL_COORDINATE_TILE,
     diagonal_mixture_tail,
 )
 from grassmoth.models.ssm.inference.samplers.particle.marginal import (
@@ -322,6 +325,8 @@ def _guided_step(
         and not target.state_space.requires_replay
     )
 
+    prepare_parent_law = fused_tail and dimension <= TAIL_COORDINATE_TILE
+
     def raw_observe(value: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
         def density(state: jax.Array) -> tuple[jax.Array, jax.Array]:
             observed = memory.log_probs(memory.replace_current(value, state, index), index).astype(
@@ -417,7 +422,7 @@ def _guided_step(
         first_noise = (
             particle_normal(first_key, (count - 1, dimension), reference.dtype),
             particle_uniform(
-                jax.random.fold_in(first_key, 0x4D495854),
+                jax.random.fold_in(first_key, MIXTURE_DRAW_FOLD_IN),
                 (count if marginal_mixture else count - 1,),
                 dtype=reference.dtype,
             ),
@@ -451,7 +456,9 @@ def _guided_step(
     first_scores = (
         first_scores - jnp.where(jnp.isneginf(first_normalizer), 0.0, first_normalizer)[:, None]
     )
-    first_twists = twist.log_density(first_memory, 0)
+    first_twists = (
+        twist.log_density(first_memory, 0) if method.kind == "twisted_particle_agrad" else None
+    )
     first_weights = (
         first_normalizer
         + weight_correction(
@@ -462,7 +469,7 @@ def _guided_step(
             first_density,
             first_mixture_bank,
         )
-        + first_twists
+        + (first_twists if first_twists is not None else 0.0)
     )
 
     def forward(
@@ -470,40 +477,49 @@ def _guided_step(
             Float[Array, "P R"],
             Float[Array, " P"],
             Float[Array, "P K"],
-            Float[Array, " P"],
+            Float[Array, " P"] | None,
             Int[Array, " P"],
-            Float[Array, "P carried_labels"],
+            Int[Array, " P"],
+            Float[Array, " P"],
         ],
-        inputs: tuple[
-            Int[Array, ""],
-            tuple[KillingNoise, Float[Array, "P-1 D"], Float[Array, " component_draws"]],
-            _ProposalGeometry,
-        ],
+        index: Int[Array, ""],
     ) -> tuple[
         tuple[
             Float[Array, "P R"],
             Float[Array, " P"],
             Float[Array, "P K"],
-            Float[Array, " P"],
+            Float[Array, " P"] | None,
             Int[Array, " P"],
-            Float[Array, "P carried_labels"],
+            Int[Array, " P"],
+            Float[Array, " P"],
         ],
         tuple[
             Float[Array, "P R"],
             Float[Array, " P"],
             Float[Array, "P K"],
-            Float[Array, " P"],
+            Float[Array, " P"] | None,
             Int[Array, " P"],
             Float[Array, "P D"],
-            Float[Array, "P K"],
+            Float[Array, "P K 1"],
         ],
     ]:
-        previous, weights, scores, previous_twists, prepared_ancestors, previous_running = carry
-        index, draws, proposal = inputs
-        killing_noise, noise, component_noise = draws
+        (
+            previous,
+            weights,
+            scores,
+            previous_twists,
+            prepared_ancestors,
+            prepared_labels,
+            prepared_correction,
+        ) = carry
+        proposal = jax.tree.map(lambda value: value[index], geometry)
+        noise_index = jnp.minimum(index - 1, steps - 2)
+        killing_noise, noise, component_noise = jax.tree.map(
+            lambda value: value[noise_index], all_noise
+        )
         ancestors = prepared_ancestors if fused_tail else _killing(weights, killing_noise)
         parents = gather_particles(previous, ancestors)
-        parent_scores = gather_particles(scores, ancestors)
+        parent_scores = scores if prepare_parent_law else gather_particles(scores, ancestors)
         current_mixture_bank = None
         if isinstance(spec.proposal, ParameterMixtureProposalSpec):
             means = jax.vmap(
@@ -514,11 +530,7 @@ def _guided_step(
             component_centers = proposal.center(means, mask[index])
             if marginal_mixture:
                 if fused_tail:
-                    parent_running = gather_particles(previous_running, ancestors)
-                    component_running = jnp.where(
-                        jnp.arange(count)[:, None] == 0, reference_running, parent_running
-                    )
-                    labels = categorical_from_running(component_running, component_noise)
+                    labels = prepared_labels
                     current_mixture_bank = mixture_bank_from_labels(
                         proposal,
                         component_centers,
@@ -539,6 +551,10 @@ def _guided_step(
                         component_noise,
                         reference[index],
                         mask[index],
+                    )
+                if prepare_parent_law:
+                    current_mixture_bank = current_mixture_bank._replace(
+                        label_correction=prepared_correction
                     )
                 current, centers = current_mixture_bank.particles, current_mixture_bank.centers
                 proposal_density = None
@@ -582,28 +598,38 @@ def _guided_step(
             )
             assert current_mixture_bank is not None
             bank = current_mixture_bank
-            next_weights, next_scores, observed, next_ancestors, next_running = (
-                diagonal_mixture_tail(
-                    current,
-                    bank.prior_centers,
-                    bank.geometry.chol,
-                    bank.geometry.whiten,
-                    bank.label_correction,
-                    observed,
-                    raw_gradients,
-                    parent_scores,
-                    transition_scores,
-                    ctx.initial_label_log_probs,
-                    reference_observed[index],
-                    gradients[index],
-                    variance[index],
-                    mask[index],
-                    killing_noise,
-                    compute_gradient=method.kappa != 0,
-                    resample=_killing,
-                )
+            (
+                next_weights,
+                next_scores,
+                observed,
+                next_ancestors,
+                _,
+                next_labels,
+                next_parent_scores,
+                next_correction,
+            ) = diagonal_mixture_tail(
+                current,
+                bank.prior_centers,
+                bank.geometry.chol,
+                bank.geometry.whiten,
+                bank.label_correction,
+                observed,
+                raw_gradients,
+                parent_scores,
+                transition_scores,
+                ctx.initial_label_log_probs,
+                reference_observed,
+                gradients,
+                variance,
+                mask,
+                tail_noise,
+                index,
+                reference_running,
+                all_noise[2],
+                compute_gradient=method.kappa != 0,
+                resample=_killing,
             )
-            current_twists = jnp.zeros_like(next_weights)
+            current_twists = None
         else:
             observed, current_gradients = local_factors(current_memory, index)
             next_scores = parent_scores + transition_scores + observed
@@ -611,7 +637,11 @@ def _guided_step(
             # subtracting two increasingly large log densities as the time grid grows.
             increment = label_logsumexp(next_scores)
             next_scores = next_scores - jnp.where(jnp.isneginf(increment), 0.0, increment)[:, None]
-            current_twists = twist.log_density(current_memory, index)
+            current_twists = (
+                twist.log_density(current_memory, index)
+                if method.kind == "twisted_particle_agrad"
+                else None
+            )
             next_weights: jax.Array = (
                 increment
                 + weight_correction(
@@ -622,26 +652,33 @@ def _guided_step(
                     proposal_density,
                     current_mixture_bank,
                 )
-                + current_twists
-                - gather_particles(previous_twists, ancestors)
+                + (current_twists if current_twists is not None else 0.0)
+                - (
+                    gather_particles(previous_twists, ancestors)
+                    if previous_twists is not None
+                    else 0.0
+                )
             )
             next_ancestors = ancestors
-            next_running = previous_running
+            next_labels = prepared_labels
+            next_parent_scores = next_scores
+            next_correction = prepared_correction
         return (
             current_memory,
             next_weights,
-            next_scores,
+            next_parent_scores if prepare_parent_law else next_scores,
             current_twists,
             next_ancestors,
-            next_running,
+            next_labels,
+            next_correction,
         ), (
             current_memory,
             next_weights,
             next_scores,
             current_twists,
             ancestors,
-            centers,
-            observed,
+            cast("Float[Array, 'P D']", centers),
+            observed[..., None],
         )
 
     def forward_noise(
@@ -652,7 +689,7 @@ def _guided_step(
             _killing_noise(resample_key, count, reference.dtype),
             particle_normal(proposal_key, (count - 1, dimension), reference.dtype),
             particle_uniform(
-                jax.random.fold_in(proposal_key, 0x4D495854),
+                jax.random.fold_in(proposal_key, MIXTURE_DRAW_FOLD_IN),
                 (count if marginal_mixture else count - 1,),
                 dtype=reference.dtype,
             )
@@ -660,23 +697,68 @@ def _guided_step(
             else jnp.empty((0,), dtype=reference.dtype),
         )
 
-    all_noise = jax.vmap(forward_noise)(jax.random.split(forward_key, steps - 1))
-    initial_ancestors = (
-        _killing(first_weights, jax.tree.map(lambda value: value[0], all_noise[0]))
-        if fused_tail and steps > 1
-        else jnp.arange(count)
+    forward_steps = steps - 1
+    scan_steps = (
+        ((forward_steps + method.scan_unroll - 1) // method.scan_unroll) * method.scan_unroll
+        if components.selector == "backward"
+        else forward_steps
     )
-    if fused_tail:
-        all_noise = (
-            jax.tree.map(lambda value: jnp.concatenate((value[1:], value[-1:])), all_noise[0]),
-            all_noise[1],
-            all_noise[2],
+    step_keys = jax.random.split(forward_key, max(1, forward_steps))
+    if prepare_parent_law:
+        split_keys = jax.vmap(lambda key: jax.random.split(key, 2))(step_keys)
+        subkeys = jax.vmap(
+            lambda resample, proposal: jnp.concatenate(
+                (
+                    jax.random.split(resample, 3),
+                    jax.random.fold_in(proposal, MIXTURE_DRAW_FOLD_IN)[None],
+                )
+            )
+        )(split_keys[:, 0], split_keys[:, 1])
+        reference_draws = jax.vmap(forward_noise)(step_keys)
+        tail_noise = TailRandomKeys(
+            jax.random.key_data(subkeys), reference_draws[0], reference_draws[2]
         )
+        first_draws = forward_noise(step_keys[0])
+        all_noise = (
+            KillingNoise(*(jnp.zeros((1, count), dtype=reference.dtype) for _ in range(3))),
+            jax.vmap(lambda key: particle_normal(key, (count - 1, dimension), reference.dtype))(
+                split_keys[:, 1]
+            ),
+            jnp.empty((1, 0), dtype=reference.dtype),
+        )
+    else:
+        all_noise = jax.vmap(forward_noise)(step_keys)
+        first_draws = jax.tree.map(lambda value: value[0], all_noise)
+        tail_noise = all_noise[0]
+    initial_ancestors = (
+        _killing(first_weights, first_draws[0]) if fused_tail and steps > 1 else jnp.arange(count)
+    )
     reference_running = categorical_running_mass(ctx.initial_label_log_probs)
     first_running = (
         categorical_running_mass(first_scores)
         if fused_tail
         else jnp.empty((count, 0), dtype=reference.dtype)
+    )
+    first_labels = (
+        categorical_from_running(
+            jnp.where(
+                jnp.arange(count)[:, None] == 0,
+                reference_running,
+                gather_particles(first_running, initial_ancestors),
+            ),
+            first_draws[2],
+        )
+        if fused_tail
+        else jnp.zeros((count,), dtype=jnp.int32)
+    )
+    first_parent_scores = (
+        gather_particles(first_scores, initial_ancestors) if prepare_parent_law else first_scores
+    )
+    first_correction = (
+        ctx.initial_label_log_probs[first_labels]
+        - first_parent_scores[jnp.arange(count), first_labels]
+        if prepare_parent_law
+        else jnp.zeros((count,), dtype=reference.dtype)
     )
     _, (tail, tail_weights, tail_scores, tail_twists, ancestors, centers, tail_observed) = (
         jax.lax.scan(
@@ -684,25 +766,29 @@ def _guided_step(
             (
                 first_memory,
                 first_weights,
-                first_scores,
+                first_parent_scores,
                 first_twists,
                 initial_ancestors,
-                first_running,
+                first_labels,
+                first_correction,
             ),
-            (
-                jnp.arange(1, steps),
-                all_noise,
-                jax.tree.map(lambda value: value[1:], geometry),
-            ),
+            jnp.minimum(jnp.arange(1, scan_steps + 1), steps - 1),
             unroll=method.scan_unroll,
         )
     )
-    observation_bank = jnp.concatenate((first_observed[None], tail_observed))
-    memory_bank = jnp.concatenate((first_memory[None], tail))
+    # A distinct history shape prevents CSE from turning the two fills into a fill plus copy.
+    tail_observed = tail_observed[..., 0]
+    memory_bank = jnp.concatenate((first_memory[None], tail[:forward_steps]))
     bank = memory.state(memory_bank)
-    weights = jnp.concatenate((first_weights[None], tail_weights))
-    scores = jnp.concatenate((first_scores[None], tail_scores))
-    backward_weights = weights - jnp.concatenate((first_twists[None], tail_twists))
+    weights = jnp.concatenate((first_weights[None], tail_weights[:forward_steps]))
+    if first_twists is not None:
+        assert tail_twists is not None
+        backward_weights = weights - jnp.concatenate(
+            (first_twists[None], tail_twists[:forward_steps])
+        )
+    else:
+        backward_weights = weights
+    ancestors = ancestors[:forward_steps]
     terminal_key, earlier_key = jax.random.split(backward_key)
     last = jax.random.categorical(terminal_key, weights[-1]).astype(jnp.int32)
 
@@ -712,8 +798,10 @@ def _guided_step(
         memory_bank,
         bank,
         backward_weights,
-        scores,
-        observation_bank,
+        first_scores,
+        tail_scores,
+        first_observed,
+        tail_observed,
         ancestors,
         last,
         earlier_key,
@@ -749,7 +837,7 @@ def _guided_step(
                 auxiliary=auxiliary,
                 particles=bank,
                 proposal_centers=jnp.concatenate(
-                    (jnp.broadcast_to(first_center, first.shape)[None], centers)
+                    (jnp.broadcast_to(first_center, first.shape)[None], centers[:forward_steps])
                 ),
                 ancestors=ancestors,
                 filter_log_weights=weights,

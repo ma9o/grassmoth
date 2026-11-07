@@ -543,7 +543,10 @@ class _Stock(DiscreteTimeStateEvolution):
     def __call__(self, x, u, t_now, t_next):
         del u, t_now, t_next
         return SupportedNormal(
-            jnp.array([0.7 * x[0], x[1] + x[0]]), jnp.diag(jnp.array([0.3, 0.0])), (0,)
+            jnp.array([0.7 * x[0], x[1] + x[0]]),
+            jnp.diag(jnp.array([0.3, 0.0])),
+            (0,),
+            covariance_structure="dense",
         )
 
 
@@ -568,7 +571,9 @@ def _stock_posterior(count):
             "HeterogeneousObservation", base.dynamical_model(bound).observation_model
         )
         return dsx.DynamicalModel(
-            initial_condition=SupportedNormal(jnp.zeros(2), jnp.diag(jnp.array([1.0, 0.0])), (0,)),
+            initial_condition=SupportedNormal(
+                jnp.zeros(2), jnp.diag(jnp.array([1.0, 0.0])), (0,), covariance_structure="dense"
+            ),
             state_evolution=_Stock(),
             observation_model=HeterogeneousObservation(
                 MeasurementParams(
@@ -992,11 +997,14 @@ def test_scalar_tail_zero_mass_with_disabled_gradient_preserves_other_particles(
             parent,
             jnp.zeros_like(observed),
             prior_labels,
-            observed[0],
-            jnp.zeros(1),
-            variance,
-            mask,
-            noise,
+            observed[:1],
+            jnp.zeros((1, 1)),
+            variance[None],
+            mask[None],
+            jax.tree.map(lambda value: value[None], noise),
+            jnp.asarray(0),
+            jnp.cumsum(jnp.exp(prior_labels)),
+            jnp.full((1, x.shape[0]), 0.37),
             compute_gradient=False,
             resample=_killing_reference,
         )
@@ -1024,7 +1032,7 @@ def test_shared_backward_points_preserve_fixed_start_diffused_coordinates():
 
     def declared(bound):
         original = base.dynamical_model(bound)
-        initial = SupportedNormal(bound[2][:1], jnp.zeros((1, 1)), ())
+        initial = SupportedNormal(bound[2][:1], jnp.zeros((1, 1)), (), covariance_structure="dense")
         return eqx.tree_at(lambda model: model.initial_condition, original, initial)
 
     target = replace(
@@ -1057,10 +1065,11 @@ def test_shared_backward_points_preserve_fixed_start_diffused_coordinates():
     np.testing.assert_allclose(normalized, memory.noise.transitions.log_normalizer[:, 1], atol=1e-7)
 
 
-def test_vector_tail_carries_across_unrolled_scan(monkeypatch):
+@pytest.mark.parametrize(("steps", "unroll"), [(1, 8), (2, 8), (17, 8), (19, 1), (19, 8), (19, 16)])
+def test_vector_tail_carries_across_unrolled_scan(monkeypatch, steps, unroll):
     from grassmoth.models.ssm.inference.samplers.particle import guided
 
-    steps, dimension = 19, 3
+    dimension = 3
     times = np.arange(float(steps))
     readings = np.sin(times * 0.4)[:, None]
     base = interval_target(times, readings, times[:, None], ("last",), state_dim=dimension)
@@ -1100,21 +1109,27 @@ def test_vector_tail_carries_across_unrolled_scan(monkeypatch):
         trajectory_dtype=reference.dtype,
     )
     guide = target.context(jnp.mean(labels, axis=0), target.times)
-    spec = PathUpdateSpec(
-        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=16, kappa=1, scan_unroll=8),
-        proposal=ParameterMixtureProposalSpec(),
-    )
 
-    def run():
+    def run(scan_unroll):
+        spec = PathUpdateSpec(
+            method=GuidedMethodSpec(
+                kind="particle_mgrad", num_particles=16, kappa=1, scan_unroll=scan_unroll
+            ),
+            proposal=ParameterMixtureProposalSpec(),
+        )
         return jax.jit(
             lambda: trace_guided_step(target, ctx, guide, spec, jax.random.key(821), reference)
         )()
 
-    fused = run()
+    fused = run(unroll)
+    serial = run(1)
     monkeypatch.setattr(guided, "MIXTURE_TAIL_TILE_LIMIT", 0)
-    unfused = run()
-    for actual, expected in zip(jax.tree.leaves(fused), jax.tree.leaves(unfused), strict=True):
-        if jnp.issubdtype(actual.dtype, jnp.integer):
-            np.testing.assert_array_equal(actual, expected)
-        else:
-            np.testing.assert_allclose(actual, expected, atol=5e-5, rtol=5e-5)
+    unfused = run(unroll)
+    for reference_result in (serial, unfused):
+        for actual, expected in zip(
+            jax.tree.leaves(fused), jax.tree.leaves(reference_result), strict=True
+        ):
+            if jnp.issubdtype(actual.dtype, jnp.integer):
+                np.testing.assert_array_equal(actual, expected)
+            else:
+                np.testing.assert_allclose(actual, expected, atol=5e-5, rtol=5e-5)

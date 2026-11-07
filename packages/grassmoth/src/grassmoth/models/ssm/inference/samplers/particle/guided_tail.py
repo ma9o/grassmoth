@@ -8,11 +8,21 @@ import jax
 import jax.numpy as jnp
 from pydantic import Field
 
-from grassmoth.models.ssm.inference.samplers.particle.guided_random import KillingNoise
+from grassmoth.models.ssm.inference.samplers.particle.guided_random import (
+    KillingNoise,
+    TailRandomKeys,
+    _gumbel,
+    _threefry,
+    _uniform_bits,
+)
 from grassmoth.models.ssm.inference.samplers.particle.marginal_mixture import (
     _diagonal_integral_terms,
 )
-from grassmoth.models.ssm.inference.samplers.particle.math import TRITON_NUM_WARPS
+from grassmoth.models.ssm.inference.samplers.particle.math import (
+    TRITON_NUM_WARPS,
+    categorical_from_running,
+    gather_particles,
+)
 
 MIXTURE_TAIL_TILE_LIMIT: Annotated[
     int,
@@ -53,11 +63,14 @@ def diagonal_mixture_tail(
     reference_gradient: jax.Array,
     variance: jax.Array,
     mask: jax.Array,
-    killing_noise: KillingNoise,
+    killing_noise: KillingNoise | TailRandomKeys,
+    index: jax.Array,
+    reference_running: jax.Array,
+    label_noise: jax.Array,
     *,
     compute_gradient: bool,
     resample: Callable[[jax.Array, KillingNoise], jax.Array],
-) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
     """Fuse exact label sums, the CF24 D.2 bank integral and conditional resampling.
 
     Model densities and their per-label derivatives remain ordinary JAX code.
@@ -70,6 +83,7 @@ def diagonal_mixture_tail(
     from jax.experimental import pallas as pl
     from jax.experimental.pallas import triton as pt
 
+    generate_random = isinstance(killing_noise, TailRandomKeys)
     count, labels = observed.shape
     dimension = x.shape[-1]
     coordinate_block = min(TAIL_COORDINATE_TILE, pl.next_power_of_2(dimension))
@@ -96,20 +110,38 @@ def diagonal_mixture_tail(
         survival_ref,
         replacement_ref,
         rotation_ref,
+        index_ref,
+        reference_running_ref,
+        label_noise_ref,
+        random_keys_ref,
         weights_out,
         scores_out,
         observations_out,
         ancestors_out,
         cumulative_out,
         label_running_out,
+        labels_out,
+        parent_scores_out,
+        correction_out,
         *,
         interpret,
     ):
+        index = index_ref[()]
+        noise_index = jnp.minimum(index, survival_ref.shape[0] - 1)
+
+        def draw(component, counters):
+            row = jnp.minimum(index, random_keys_ref.shape[0] - 1)
+            key0 = random_keys_ref[row, component, 0]
+            key1 = random_keys_ref[row, component, 1]
+            counters = counters.astype(jnp.uint32)
+            high, low = _threefry(key0, key1, jnp.zeros_like(counters), counters)
+            return _uniform_bits(high, low)
+
         p = jnp.arange(block)
         k = jnp.arange(label_block)
         valid = (p[:, None] < count) & (k[None, :] < labels)
         obs = pt.load(observed_ref.at[p[:, None], k[None, :]], mask=valid, other=-jnp.inf)
-        ref_obs = pt.load(reference_obs_ref.at[k], mask=k < labels, other=-jnp.inf)
+        ref_obs = pt.load(reference_obs_ref.at[index, k], mask=k < labels, other=-jnp.inf)
         obs = jnp.where(p[:, None] == 0, ref_obs[None, :], obs)
         if compute_gradient:
             prior_labels = pt.load(label_ref.at[k], mask=k < labels, other=-jnp.inf)
@@ -152,7 +184,7 @@ def diagonal_mixture_tail(
                 )
                 gradient = jnp.sum(probability[:, :, None] * derivative, axis=1)
                 reference_gradient = pt.load(
-                    reference_grad_ref.at[d], mask=d < dimension, other=0.0
+                    reference_grad_ref.at[index, d], mask=d < dimension, other=0.0
                 )
                 gradient = jnp.where(p[:, None] == 0, reference_gradient[None, :], gradient)
             else:
@@ -161,8 +193,8 @@ def diagonal_mixture_tail(
             prior = pt.load(prior_ref.at[p[:, None], d[None, :]], mask=coordinate_valid, other=0.0)
             chol = pt.load(chol_ref.at[p[:, None], d[None, :]], mask=coordinate_valid, other=1.0)
             white = pt.load(white_ref.at[p[:, None], d[None, :]], mask=coordinate_valid, other=1.0)
-            variance = pt.load(variance_ref.at[d], mask=d < dimension, other=1.0)
-            free = pt.load(mask_ref.at[d], mask=d < dimension, other=False)
+            variance = pt.load(variance_ref.at[index, d], mask=d < dimension, other=1.0)
+            free = pt.load(mask_ref.at[index, d], mask=d < dimension, other=False)
             return total + jnp.sum(
                 _diagonal_integral_terms(
                     x, prior, chol, white, gradient, variance, free, coordinate_valid, count
@@ -182,7 +214,11 @@ def diagonal_mixture_tail(
             cumulative = jnp.cumsum(survival / jnp.sum(survival))
             rotation_mass = jnp.where((p > 0) & (p < count), (1.0 - survival) / count, 0.0)
             rotation_mass = jnp.where(p == 0, 1.0 - jnp.sum(rotation_mass), rotation_mass)
-            rotation_noise = pt.load(rotation_ref.at[p], mask=p < count, other=-jnp.inf)
+            rotation_noise = (
+                jnp.where(p < count, _gumbel(draw(2, p)), -jnp.inf)
+                if generate_random and not interpret
+                else pt.load(rotation_ref.at[noise_index, p], mask=p < count, other=-jnp.inf)
+            )
             rotation_logits = jnp.log(rotation_mass) + rotation_noise
             rotation = jnp.min(jnp.where(rotation_logits == jnp.max(rotation_logits), p, block))
             source = (p + rotation) % count
@@ -190,8 +226,16 @@ def diagonal_mixture_tail(
             if not interpret:
                 pt.debug_barrier()
             chosen_logits = pt.load(weights_out.at[source])
-            survival_noise = pt.load(survival_ref.at[source])
-            replacement_noise = pt.load(replacement_ref.at[source])
+            survival_noise = (
+                draw(0, source)
+                if generate_random and not interpret
+                else pt.load(survival_ref.at[noise_index, source])
+            )
+            replacement_noise = (
+                draw(1, source)
+                if generate_random and not interpret
+                else pt.load(replacement_ref.at[noise_index, source])
+            )
 
             def search_step(_, bounds):
                 lower, upper = bounds
@@ -212,6 +256,32 @@ def diagonal_mixture_tail(
             )
             ancestors = jnp.where(p == 0, 0, ancestors).astype(jnp.int32)
             pt.store(ancestors_out.at[p], ancestors, mask=p < count)
+            running = pt.load(
+                label_running_out.at[ancestors[:, None], k[None, :]], mask=valid, other=0.0
+            )
+            reference_running = pt.load(reference_running_ref.at[k], mask=k < labels, other=0.0)
+            running = jnp.where(p[:, None] == 0, reference_running[None, :], running)
+            total = jnp.sum(jnp.where(k[None, :] == labels - 1, running, 0.0), axis=1)
+            uniform = (
+                jnp.where(p < count, draw(3, p), 0.0)
+                if generate_random and not interpret
+                else pt.load(label_noise_ref.at[noise_index, p], mask=p < count, other=0.0)
+            )
+            label = jnp.sum(
+                (running <= (uniform * total)[:, None]) & (k[None, :] < labels - 1), axis=1
+            )
+            label = jnp.where(total > 0, label, 0).astype(jnp.int32)
+            pt.store(labels_out.at[p], label, mask=p < count)
+            parent_law = pt.load(
+                scores_out.at[ancestors[:, None], k[None, :]], mask=valid, other=0.0
+            )
+            pt.store(parent_scores_out.at[p[:, None], k[None, :]], parent_law, mask=valid)
+            selected_score = jnp.sum(
+                jnp.where(k[None, :] == label[:, None], parent_law, 0.0), axis=1
+            )
+            prior_score = pt.load(label_ref.at[label], mask=p < count, other=0.0)
+            pt.store(correction_out.at[p], prior_score - selected_score, mask=p < count)
+
         else:
             partial = terms + jnp.where(pl.program_id(0) == 0, increment + correction, 0.0)
             pt.store(weights_out.at[pl.program_id(0), p], partial, mask=p < count)
@@ -234,6 +304,10 @@ def diagonal_mixture_tail(
         survival_ref,
         replacement_ref,
         rotation_ref,
+        index_ref,
+        reference_running_ref,
+        label_noise_ref,
+        random_keys_ref,
         weights_out,
         scores_out,
         observations_out,
@@ -259,16 +333,26 @@ def diagonal_mixture_tail(
             survival_ref,
             replacement_ref,
             rotation_ref,
+            index_ref,
+            reference_running_ref,
+            label_noise_ref,
+            random_keys_ref,
             weights_out,
             scores_out,
             observations_out,
             None,
             None,
             label_running_out,
+            None,
+            None,
+            None,
             interpret=interpret,
         )
 
     def run(*args, interpret):
+        if generate_random and not interpret:
+            empty = jnp.zeros((1, count), dtype=x.dtype)
+            args = (*args[:14], empty, empty, empty, *args[17:19], empty, args[20])
         weight_shape = (count,) if tiles == 1 else (tiles, count)
         common_outputs = (
             jax.ShapeDtypeStruct(weight_shape, x.dtype),
@@ -282,6 +366,9 @@ def diagonal_mixture_tail(
                 jax.ShapeDtypeStruct((count,), jnp.int32),
                 jax.ShapeDtypeStruct((count,), x.dtype),
                 running_output,
+                jax.ShapeDtypeStruct((count,), jnp.int32),
+                jax.ShapeDtypeStruct((count, labels), x.dtype),
+                jax.ShapeDtypeStruct((count,), x.dtype),
             )
             body = partial(kernel, interpret=interpret)
         else:
@@ -299,6 +386,17 @@ def diagonal_mixture_tail(
             else "diagonal_mgrad_mixture_tail_coordinates",
         )(*args)
 
+    noise_arrays = (
+        killing_noise.reference if isinstance(killing_noise, TailRandomKeys) else killing_noise
+    )
+    label_noise = (
+        killing_noise.label_reference if isinstance(killing_noise, TailRandomKeys) else label_noise
+    )
+    random_keys = (
+        killing_noise.values
+        if isinstance(killing_noise, TailRandomKeys)
+        else jnp.empty((0, 4, 2), dtype=jnp.uint32)
+    )
     result = jax.lax.platform_dependent(
         x,
         prior,
@@ -314,17 +412,57 @@ def diagonal_mixture_tail(
         reference_gradient,
         variance,
         mask,
-        *killing_noise,
+        *noise_arrays,
+        index,
+        reference_running,
+        label_noise,
+        random_keys,
         cpu=partial(run, interpret=True),
         cuda=partial(run, interpret=False),
     )
     if tiles == 1:
-        weights, scores, observations, ancestors, _, running_mass = result
+        (
+            weights,
+            scores,
+            observations,
+            ancestors,
+            _,
+            running_mass,
+            next_labels,
+            next_parent_scores,
+            next_correction,
+        ) = result
     else:
         partials, scores, observations, running_mass = result
         weights = jnp.sum(partials, axis=0)
-        ancestors = resample(weights, killing_noise)
+        ancestors = resample(
+            weights,
+            jax.tree.map(
+                lambda value: value[jnp.minimum(index, value.shape[0] - 1)], killing_noise
+            ),
+        )
+        parent_running = gather_particles(running_mass, ancestors)
+        component_running = jnp.where(
+            jnp.arange(count)[:, None] == 0, reference_running, parent_running
+        )
+        next_labels = categorical_from_running(
+            component_running, label_noise[jnp.minimum(index, label_noise.shape[0] - 1)]
+        )
+        next_parent_scores = gather_particles(scores, ancestors)
+        next_correction = (
+            label_prior[next_labels] - next_parent_scores[jnp.arange(count), next_labels]
+        )
+
     return cast(
-        "tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]",
-        (weights, scores, observations, ancestors, running_mass),
+        "tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]",
+        (
+            weights,
+            scores,
+            observations,
+            ancestors,
+            running_mass,
+            next_labels,
+            next_parent_scores,
+            next_correction,
+        ),
     )

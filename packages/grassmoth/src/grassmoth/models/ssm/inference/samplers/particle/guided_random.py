@@ -24,6 +24,22 @@ class KillingNoise(NamedTuple):
     rotation: jax.Array
 
 
+class TailRandomKeys(NamedTuple):
+    """Per-time survival, replacement, rotation and label Threefry subkeys."""
+
+    values: jax.Array
+    reference: KillingNoise
+    label_reference: jax.Array
+
+
+MIXTURE_DRAW_FOLD_IN: Annotated[
+    int,
+    Field(
+        description="Heuristic: fixed stream-separation tag 0x4D495854 for the mixture label draw, preserving the established proposal-key stream."
+    ),
+] = 0x4D495854
+
+
 PARTICLE_PRNG: Annotated[
     Literal["threefry2x32"],
     Field(

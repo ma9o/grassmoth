@@ -15,7 +15,9 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import (
 from grassmoth.models.ssm.inference.samplers.particle.guided_tail import diagonal_mixture_tail
 from grassmoth.models.ssm.inference.samplers.particle.marginal_mixture import MarginalMixtureBank
 from grassmoth.models.ssm.inference.samplers.particle.math import (
+    categorical_from_running,
     categorical_running_mass,
+    gather_particles,
     label_logsumexp,
 )
 
@@ -56,11 +58,14 @@ def test_vector_tail_matches_unfused(dimension, gradient_enabled):
             parent,
             transition,
             prior_labels,
-            reference_obs,
-            reference_gradient,
-            variance,
-            mask,
-            noise,
+            reference_obs[None],
+            reference_gradient[None],
+            variance[None],
+            mask[None],
+            jax.tree.map(lambda value: value[None], noise),
+            jnp.asarray(0),
+            jnp.cumsum(jnp.exp(prior_labels)),
+            jnp.full((1, x.shape[0]), 0.37),
             resample=_killing_reference,
             compute_gradient=gradient_enabled,
         )
@@ -87,6 +92,17 @@ def test_vector_tail_matches_unfused(dimension, gradient_enabled):
         obs,
         _killing_reference(weights, noise),
         categorical_running_mass(raw),
+        categorical_from_running(
+            jnp.where(
+                jnp.arange(p)[:, None] == 0,
+                jnp.cumsum(jnp.exp(prior_labels)),
+                gather_particles(categorical_running_mass(raw), _killing_reference(weights, noise)),
+            ),
+            jnp.full((p,), 0.37),
+        ),
     )
+    prepared_scores = gather_particles(scores, expected[3])
+    prepared_correction = prior_labels[expected[5]] - prepared_scores[jnp.arange(p), expected[5]]
+    expected = (*expected, prepared_scores, prepared_correction)
     for a, b in zip(actual, expected, strict=True):
         np.testing.assert_allclose(a, b, atol=2e-4, rtol=3e-5)

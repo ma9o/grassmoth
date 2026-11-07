@@ -25,8 +25,10 @@ def _backward_from_moments(
     points: Float[Array, "T-1 P D"],
     whiteners: jax.Array,
     normalizers: Float[Array, "T-1 K"],
-    scores: Float[Array, "T P K"],
-    observations: Float[Array, "T P K"],
+    first_scores: Float[Array, "P K"],
+    scores: Float[Array, "S P K"],
+    first_observations: Float[Array, "P K"],
+    observations: Float[Array, "S P K"],
     gumbels: Float[Array, "T-1 P"],
     last: Int[Array, ""],
 ) -> tuple[Int[Array, " T"], Float[Array, " K"]]:
@@ -45,9 +47,10 @@ def _backward_from_moments(
     from jax.experimental import pallas as pl
     from jax.experimental.pallas import triton as pltriton
 
-    steps, count, labels = scores.shape
+    steps, count = weights.shape
+    labels = first_scores.shape[-1]
     if steps == 1:
-        return last[None], observations[0, last]
+        return last[None], first_observations[last]
     particle_block = pl.next_power_of_2(count)
     label_block = pl.next_power_of_2(labels)
     dimension = means.shape[-1]
@@ -72,7 +75,7 @@ def _backward_from_moments(
     if dimension == 0:
         # Empty transition laws have zero quadratic form. Pallas's interpreter
         # requires nonempty operand buffers even when the kernel never reads them.
-        means = points = whiteners = jnp.zeros((), dtype=scores.dtype)
+        means = points = whiteners = jnp.zeros((steps - 1, 1), dtype=scores.dtype)
 
     def kernel(
         means_ref,
@@ -80,44 +83,51 @@ def _backward_from_moments(
         whiteners_ref,
         normalizers_ref,
         weights_ref,
+        first_scores_ref,
         scores_ref,
+        first_observations_ref,
         observations_ref,
         gumbels_ref,
         last_ref,
         picks_ref,
         suffix_ref,
     ):
+        chain = pl.program_id(0)
         p = jnp.arange(particle_block)
         k = jnp.arange(label_block)
         d = jnp.arange(dimension_block)
-        last_pick = last_ref[()]
+        last_pick = last_ref[chain]
         initial_suffix = pltriton.load(
-            observations_ref.at[steps - 1, last_pick, k], mask=k < labels, other=0.0
+            observations_ref.at[steps - 2, chain, last_pick, k], mask=k < labels, other=0.0
         )
-        picks_ref[steps - 1] = last_pick
+        picks_ref[chain, steps - 1] = last_pick
 
         def body(offset, carry):
             following, suffix = carry
             index = steps - 2 - offset
             valid = (p[:, None] < count) & (k[None, :] < labels)
-            normalizer = pltriton.load(normalizers_ref.at[index, k], mask=k < labels, other=0.0)
+            normalizer = pltriton.load(
+                normalizers_ref.at[index, chain, k], mask=k < labels, other=0.0
+            )
             if dimension == 0:
                 norm = jnp.zeros((particle_block, label_block), dtype=scores.dtype)
             else:
                 centers = pltriton.load(
-                    means_ref.at[index, p[:, None, None], k[None, :, None], d[None, None, :]],
+                    means_ref.at[
+                        index, chain, p[:, None, None], k[None, :, None], d[None, None, :]
+                    ],
                     mask=valid[:, :, None] & (d[None, None, :] < dimension),
                     other=0.0,
                 )
                 if dimension > 1:
                     following_point = pltriton.load(
-                        points_ref.at[index, following, k[:, None], d[None, :]],
+                        points_ref.at[index, chain, following, k[:, None], d[None, :]],
                         mask=(k[:, None] < labels) & (d[None, :] < dimension),
                         other=0.0,
                     )
                 else:
                     following_point = pltriton.load(
-                        points_ref.at[index, following, d[None, :]],
+                        points_ref.at[index, chain, following, d[None, :]],
                         mask=d[None, :] < dimension,
                         other=0.0,
                     )
@@ -125,9 +135,9 @@ def _backward_from_moments(
 
                 def squared_norm(row, total):
                     address = (
-                        whiteners_ref.at[index, k[:, None], d[None, :]]
+                        whiteners_ref.at[index, chain, k[:, None], d[None, :]]
                         if diagonal
-                        else whiteners_ref.at[index, k[:, None], row, d[None, :]]
+                        else whiteners_ref.at[index, chain, k[:, None], row, d[None, :]]
                     )
                     whitener = pltriton.load(
                         address,
@@ -145,51 +155,96 @@ def _backward_from_moments(
                     )
                 )
             edge = normalizer[None, :] - 0.5 * norm
-            prefix = pltriton.load(
-                scores_ref.at[index, p[:, None], k[None, :]], mask=valid, other=-jnp.inf
+            first_prefix = pltriton.load(
+                first_scores_ref.at[chain, p[:, None], k[None, :]],
+                mask=valid & (index == 0),
+                other=-jnp.inf,
             )
+            tail_prefix = pltriton.load(
+                scores_ref.at[jnp.maximum(index - 1, 0), chain, p[:, None], k[None, :]],
+                mask=valid & (index > 0),
+                other=-jnp.inf,
+            )
+            prefix = jnp.where(index == 0, first_prefix, tail_prefix)
             total = prefix + edge + suffix[None, :]
             maximum = jnp.max(total, axis=1)
             shift = jnp.where(jnp.isfinite(maximum), maximum, 0.0)
             mixed = jnp.log(jnp.sum(jnp.exp(total - shift[:, None]), axis=1)) + shift
-            weight = pltriton.load(weights_ref.at[index, p], mask=p < count, other=-jnp.inf)
-            noise = pltriton.load(gumbels_ref.at[index, p], mask=p < count, other=0.0)
+            weight = pltriton.load(weights_ref.at[index, chain, p], mask=p < count, other=-jnp.inf)
+            noise = pltriton.load(gumbels_ref.at[chain, offset, p], mask=p < count, other=0.0)
             value = mixed + weight + noise
             pick = jnp.min(jnp.where(value == jnp.max(value), p, particle_block))
             chosen_edge = jnp.sum(jnp.where(p[:, None] == pick, edge, 0.0), axis=0)
-            observed = pltriton.load(
-                observations_ref.at[index, pick, k], mask=k < labels, other=0.0
+            first_observed = pltriton.load(
+                first_observations_ref.at[chain, pick, k],
+                mask=(k < labels) & (index == 0),
+                other=0.0,
             )
-            picks_ref[index] = pick
+            tail_observed = pltriton.load(
+                observations_ref.at[jnp.maximum(index - 1, 0), chain, pick, k],
+                mask=(k < labels) & (index > 0),
+                other=0.0,
+            )
+            observed = jnp.where(index == 0, first_observed, tail_observed)
+            picks_ref[chain, index] = pick
             return pick, suffix + chosen_edge + observed
 
         _, suffix = jax.lax.fori_loop(0, steps - 1, body, (last_pick, initial_suffix))
-        pltriton.store(suffix_ref.at[k], suffix, mask=k < labels)
+        pltriton.store(suffix_ref.at[chain, k], suffix, mask=k < labels)
 
     def run(*args, interpret):
+        chains = args[-1].shape[0]
         return pl.pallas_call(
             kernel,
             out_shape=(
-                jax.ShapeDtypeStruct((steps,), jnp.int32),
-                jax.ShapeDtypeStruct((labels,), scores.dtype),
+                jax.ShapeDtypeStruct((chains, steps), jnp.int32),
+                jax.ShapeDtypeStruct((chains, labels), scores.dtype),
             ),
+            grid=(chains,),
             interpret=interpret,
             compiler_params=pltriton.CompilerParams(num_warps=TRITON_NUM_WARPS),
-            name="exact_backward_from_moments",
+            name="exact_backward_from_time_major_moments",
         )(*args)
 
-    result = jax.lax.platform_dependent(
+    def dispatch(*args):
+        return jax.lax.platform_dependent(
+            *args, cpu=partial(run, interpret=True), cuda=partial(run, interpret=False)
+        )
+
+    timed = (True, True, True, True, True, False, True, False, True, False, False)
+
+    @jax.custom_batching.custom_vmap
+    def call(*args):
+        values = tuple(
+            jnp.expand_dims(value, 1 if time_axis else 0)
+            for value, time_axis in zip(args, timed, strict=True)
+        )
+        return tuple(value[0] for value in dispatch(*values))
+
+    @call.def_vmap
+    def batch(chains, batched, *args):
+        values = tuple(
+            value if mapped else jnp.broadcast_to(value, (chains, *value.shape))
+            for value, mapped in zip(args, batched, strict=True)
+        )
+        values = tuple(
+            jnp.swapaxes(value, 0, 1) if time_axis else value
+            for value, time_axis in zip(values, timed, strict=True)
+        )
+        return dispatch(*values), (True, True)
+
+    result = call(
         means,
         points,
         whiteners,
         normalizers,
         weights,
+        first_scores,
         scores,
+        first_observations,
         observations,
         gumbels,
         last,
-        cpu=partial(run, interpret=True),
-        cuda=partial(run, interpret=False),
     )
     return cast("tuple[jax.Array, jax.Array]", result)
 
@@ -311,8 +366,10 @@ def select_path(
     memory_bank: Float[Array, "T P R"],
     bank: Float[Array, "T P D"],
     backward_weights: Float[Array, "T P"],
-    scores: Float[Array, "T P K"],
-    observation_bank: Float[Array, "T P K"],
+    first_scores: Float[Array, "P K"],
+    scores: Float[Array, "S P K"],
+    first_observations: Float[Array, "P K"],
+    observation_bank: Float[Array, "S P K"],
     ancestors: Int[Array, "T-1 P"],
     last: Int[Array, ""],
     earlier_key: PRNGKeyArray,
@@ -327,6 +384,7 @@ def select_path(
     """Recover a path with the selector authorized by the compiled memory support."""
     steps, count, _ = bank.shape
     if selector != "backward":
+        scores = jnp.concatenate((first_scores[None], scores[: steps - 1]))
         if selector == "ancestral":
             # The exact conditional filter's genealogy is valid even when a deterministic
             # stage feeds nonlinear later drift. No suffix splices or quadratic replay.
@@ -374,7 +432,7 @@ def select_path(
 
         gumbels = jax.vmap(lambda k: particle_gumbel(k, (count,), dtype=reference_dtype))(
             jax.random.split(earlier_key, steps - 1)
-        )[::-1]
+        )
         coordinates = jnp.asarray(memory.target.state_space.transition, dtype=jnp.int32)
 
         # Transition coordinates are independent at t>=1, including those with
@@ -388,7 +446,9 @@ def select_path(
             points,
             jnp.swapaxes(memory.noise.transitions.whitener[:, 1:], 0, 1),
             normalizers,
+            first_scores,
             scores,
+            first_observations,
             observation_bank,
             gumbels,
             last,
