@@ -29,17 +29,17 @@ MIXTURE_TAIL_TILE_LIMIT: Annotated[
 ] = 2048
 
 
-MIXTURE_TAIL_SMALL_STATE_FACTOR: Annotated[
+MIXTURE_TAIL_WIDE_TILE_FACTOR: Annotated[
     int,
     Field(
         description="Measured L40S C10/P128/u8 at M32: doubling the 2048-entry admission limit reduced ordinary sweeps 113.24 to 43.85 ms on SV and 75.64 to 57.39 ms on PARAM. Larger coordinate tiles retain the previous limit."
     ),
 ] = 2
 
-MIXTURE_TAIL_SMALL_STATE_DIMENSIONS: Annotated[
+MIXTURE_TAIL_WIDE_COORDINATE_LIMIT: Annotated[
     int,
     Field(
-        description="Admit the wider tile only through the measured M32 PARAM path, D3 padded to four coordinates. Unmeasured above that: the D9 no-spill gates fail in the backward kernel at K16 and K32 with or without this limit, so they say nothing about the wider tile."
+        description="L40S P128/K32: four-coordinate tiles at D9 pass the isolated no-spill gate; eight-coordinate tiles at D5 and D8 spill. The wider D9 tail reduced paired ordinary C10/T2049/u8 sweeps 169.71 to 96.26 ms at K32; the combined change reduced K17 sweeps 127.60 to 92.72 ms. Admission follows the coordinate tile width shared with lowering."
     ),
 ] = 4
 
@@ -66,6 +66,15 @@ TAIL_PARALLEL_COORDINATE_TILE: Annotated[
         description="Paired L40S HD D=9, P=128, K=8, unroll=8: four-coordinate tiles reduced sweep time 58.66 to 54.37 ms at C=10 and 80.61 to 76.97 ms at C=40. Two-coordinate tiles gained slightly more at C=10 but less at C=40. D<=8 retains its single-CTA tile."
     ),
 ] = 4
+
+
+def tail_coordinate_block(dimension: int) -> int:
+    """Share the padded coordinate extent between admission and kernel lowering."""
+    return (
+        1 << max(dimension - 1, 0).bit_length()
+        if dimension <= TAIL_COORDINATE_TILE
+        else TAIL_PARALLEL_COORDINATE_TILE
+    )
 
 
 def diagonal_mixture_tail(
@@ -107,11 +116,7 @@ def diagonal_mixture_tail(
     generate_random = isinstance(killing_noise, TailRandomKeys)
     count, labels = observed.shape
     dimension = x.shape[-1]
-    coordinate_block = (
-        pl.next_power_of_2(dimension)
-        if dimension <= TAIL_COORDINATE_TILE
-        else TAIL_PARALLEL_COORDINATE_TILE
-    )
+    coordinate_block = tail_coordinate_block(dimension)
     tiles = pl.cdiv(dimension, coordinate_block)
     block_dtype = observed.dtype
     block = pl.next_power_of_2(count)

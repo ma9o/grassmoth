@@ -88,10 +88,11 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.guided_tail import (
     MIXTURE_TAIL_DIMENSION_LIMIT,
-    MIXTURE_TAIL_SMALL_STATE_DIMENSIONS,
-    MIXTURE_TAIL_SMALL_STATE_FACTOR,
     MIXTURE_TAIL_TILE_LIMIT,
+    MIXTURE_TAIL_WIDE_COORDINATE_LIMIT,
+    MIXTURE_TAIL_WIDE_TILE_FACTOR,
     diagonal_mixture_tail,
+    tail_coordinate_block,
 )
 from grassmoth.models.ssm.inference.samplers.particle.marginal import (
     DiagonalMarginalGeometry,
@@ -320,8 +321,8 @@ def _guided_step(
         (1 << (count - 1).bit_length()) * (1 << (ctx.num_parameter_particles - 1).bit_length())
         <= MIXTURE_TAIL_TILE_LIMIT
         * (
-            MIXTURE_TAIL_SMALL_STATE_FACTOR
-            if dimension <= MIXTURE_TAIL_SMALL_STATE_DIMENSIONS
+            MIXTURE_TAIL_WIDE_TILE_FACTOR
+            if tail_coordinate_block(dimension) <= MIXTURE_TAIL_WIDE_COORDINATE_LIMIT
             else 1
         )
         and marginal_mixture
