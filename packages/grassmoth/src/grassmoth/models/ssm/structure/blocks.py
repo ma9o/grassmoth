@@ -58,6 +58,13 @@ class DiffusionBlockSpec:
         freeze_fields(self)
 
     @property
+    def effective_support(self) -> np.ndarray:
+        """Nonzero fixed entries and every free Cholesky coefficient."""
+        import numpy as np
+
+        return (np.asarray(self.diffusion_chol_template) != 0) | self.diffusion_chol_support
+
+    @property
     def diffusion_diag_positions(self) -> tuple[int, ...]:
         """Diagonal Cholesky coordinates whose diffusion scales are free parameters."""
         from grassmoth.models.ssm.structure.assembly import chol_diag_positions
@@ -142,6 +149,13 @@ class SparseBlockSpec[Position: int | tuple[int, int]]:
     def __post_init__(self) -> None:
         """Own immutable collections describing the block's fixed template and free positions."""
         freeze_fields(self)
+
+    @property
+    def effective_support(self) -> np.ndarray:
+        """Nonzero fixed entries and every free coefficient, independent of its value."""
+        import numpy as np
+
+        return (np.asarray(self.template) != 0) | self.free_support
 
     @property
     def n_free(self) -> int:

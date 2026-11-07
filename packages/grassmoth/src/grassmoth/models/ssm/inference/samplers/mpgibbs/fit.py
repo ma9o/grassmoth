@@ -41,6 +41,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
     run_marginal_particle_gibbs,
 )
+from grassmoth.models.ssm.inference.samplers.particle.guided_random import PARTICLE_PRNG
 from grassmoth.models.ssm.inference.samplers.particle.weights import summarize_particle_weights
 from grassmoth.models.ssm.inference.samplers.progress import inference_phase
 from grassmoth.models.ssm.inference.types import (
@@ -93,7 +94,7 @@ def fit_marginal_particle_gibbs(
         options.n_parameter_particles,
     )
 
-    base_key = random.key(sampler.seed)
+    base_key = random.key(sampler.seed, impl=PARTICLE_PRNG)
     trace_key, initialization_key, sampling_key = random.split(base_key, 3)
 
     phase_t0 = clock()

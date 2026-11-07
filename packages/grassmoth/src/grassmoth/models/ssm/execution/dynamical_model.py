@@ -30,6 +30,7 @@ from grassmoth.models.ssm.execution.observation_dispatch import (
 from grassmoth.models.ssm.execution.observation_groups import LawGroup, compile_law_groups
 from grassmoth.models.ssm.execution.observation_model import grouped_density, grouped_response
 from grassmoth.models.ssm.execution.supported_normal import SupportedNormal
+from grassmoth.models.ssm.structure.observation import CoordinateLoadings, ObservationStructure
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -66,9 +67,13 @@ class HeterogeneousObservation(dsx.ObservationModel):
     measurement: MeasurementParams
     laws: ObservationLaws
     group_indices: tuple[tuple[int, ...], ...] = eqx.field(static=True)
+    structure: ObservationStructure = eqx.field(static=True)
 
-    def __init__(self, measurement: MeasurementParams, laws: ObservationLaws) -> None:
+    def __init__(
+        self, measurement: MeasurementParams, laws: ObservationLaws, structure: ObservationStructure
+    ) -> None:
         """Own the channel grouping once, with numerical law operands retained as array leaves."""
+        self.structure = structure
         self.measurement = measurement
         self.laws = laws
         self.group_indices = tuple(group.indices for group in compile_law_groups(laws))
@@ -82,6 +87,22 @@ class HeterogeneousObservation(dsx.ObservationModel):
 
     def linear_predictor(self, state: jax.Array) -> jax.Array:
         """Map latent states to observation predictors through loadings and manifest intercepts."""
+        loadings = self.structure.loadings
+        if isinstance(loadings, CoordinateLoadings):
+            columns = jnp.asarray(loadings.columns, dtype=jnp.int32)
+            coefficients = self.measurement.lambda_mat[jnp.arange(len(loadings.columns)), columns]
+            readings = (
+                jnp.concatenate(
+                    tuple(
+                        jax.lax.slice_in_dim(state, column, column + 1, axis=-1)
+                        for column in loadings.columns
+                    ),
+                    axis=-1,
+                )
+                if loadings.columns
+                else state[:0]
+            )
+            return coefficients * readings + self.measurement.manifest_means
         return self.measurement.lambda_mat @ state + self.measurement.manifest_means
 
     def density_groups(self) -> tuple[LawGroup, ...]:
@@ -255,6 +276,7 @@ def build_dynamical_model(
         observation_model=HeterogeneousObservation(
             measurement,
             laws,
+            compiled_dynamical_model.observation_structure,
         ),
         t0=t0,
     )

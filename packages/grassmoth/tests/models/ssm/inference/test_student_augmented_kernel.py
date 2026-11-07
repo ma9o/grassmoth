@@ -28,6 +28,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import (
     build_marginal_particle_gibbs_kernel,
 )
 from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import _initialize_chain_state
+from grassmoth.models.ssm.structure.observation import DenseLoadings, ObservationStructure
 from grassmoth_test_support.interval_particle import interval_target
 from grassmoth_test_support.observation import observation_laws
 from grassmoth_test_support.student_reference import student_features, student_quadrature
@@ -35,11 +36,15 @@ from grassmoth_test_support.student_reference import student_features, student_q
 pytestmark = pytest.mark.inference(concern="sampling")
 
 
-def _target():
+def _target(dimension=1):
     times = np.arange(2.0)
     readings = np.array([[1.4, -0.4], [-0.8, 0.6]])
     base = interval_target(
-        times, readings, np.broadcast_to(times[:, None], readings.shape), ("last", "last")
+        times,
+        readings,
+        np.broadcast_to(times[:, None], readings.shape),
+        ("last", "last"),
+        state_dim=dimension,
     )
 
     template_laws = observation_laws(
@@ -50,19 +55,22 @@ def _target():
         df = 3 * jnp.exp(0.7 * z[0])
         scale = jnp.exp(-0.3 + 0.3 * z[1])
         return dsx.DynamicalModel(
-            initial_condition=dist.MultivariateNormal(jnp.zeros(1), jnp.eye(1)),
+            initial_condition=dist.MultivariateNormal(jnp.zeros(dimension), jnp.eye(dimension)),
             state_evolution=dsx.LinearGaussianStateEvolution(
-                jnp.array([[0.7]]), jnp.array([[0.3]])
+                jnp.eye(dimension) * 0.7, jnp.eye(dimension) * 0.3
             ),
             observation_model=HeterogeneousObservation(
                 MeasurementParams(
-                    jnp.array([[1.0], [-0.7]]) * (1 + 0.3 * z[2]),
+                    jnp.broadcast_to(jnp.array([[1.0], [-0.7]]), (2, dimension))
+                    / dimension
+                    * (1 + 0.3 * z[2]),
                     jnp.array([0.2, -0.1]),
                     jnp.eye(2) * scale**2,
                 ),
                 tuple(
                     eqx.tree_at(lambda value: value.df.values, law, (df,)) for law in template_laws
                 ),
+                structure=ObservationStructure(DenseLoadings(), "dense"),
             ),
             t0=0.0,
         )
@@ -76,7 +84,7 @@ def _target():
             lambda z: {"z": z},
             lambda z: dist.Normal(0.0, 1.0).log_prob(z).sum(),
         ),
-        context=lambda z, grid: (eqx.filter(model(z), eqx.is_array), grid, jnp.zeros(1)),
+        context=lambda z, grid: (eqx.filter(model(z), eqx.is_array), grid, jnp.zeros(dimension)),
         dynamical_model=lambda context: eqx.combine(context[0], static),
     )
 
@@ -195,3 +203,60 @@ def test_trace_and_split_sweeps_preserve_marginal_caches_and_fixed_steps(fixed):
     continued = run(run(state, keys[:2]), keys[2:])
     for left, right in zip(jax.tree.leaves(whole), jax.tree.leaves(continued), strict=True):
         np.testing.assert_array_equal(left, right)
+
+
+@pytest.mark.parametrize("kappa", [0, 1])
+@pytest.mark.parametrize("dimension", [1, 3])
+def test_fused_tail_preserves_student_precision_conditioning(kappa, dimension):
+    from grassmoth.artifacts.sampling import ParameterMixtureProposalSpec
+    from grassmoth.models.ssm.inference.samplers.particle.context import build_smoother_context
+    from grassmoth.models.ssm.inference.samplers.particle.guided import trace_guided_step
+    from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
+
+    dense = _target(dimension)
+    diagonal = replace(
+        dense,
+        state_space=replace(
+            dense.state_space, initial_covariance="diagonal", transition_covariance="diagonal"
+        ),
+    )
+    labels = jnp.array([[0.1, -0.2, 0.3], [-0.3, 0.1, -0.4]])
+    reference = jnp.broadcast_to(jnp.array([[0.1], [-0.3]]), (2, dimension))
+    log_precisions = jnp.array([[0.2, -0.7], [1.1, 0.5]])
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=7, kappa=kappa),
+        proposal=ParameterMixtureProposalSpec(),
+    )
+
+    def run(target):
+        setup = build_smoother_setup(
+            target,
+            num_parameter_particles=2,
+            free_mask=target.independent_mask,
+            diagnostic_metrics=(),
+        )
+        context = build_smoother_context(
+            setup,
+            labels,
+            jnp.array([0.1, -0.3]),
+            reference=reference,
+            delta=jnp.full((2, dimension), 0.2),
+            trajectory_dtype=reference.dtype,
+        )
+        guide = target.context(jnp.mean(labels, axis=0), target.times)
+        return jax.jit(
+            lambda: trace_guided_step(
+                target,
+                context,
+                guide,
+                spec,
+                jax.random.key(71),
+                reference,
+                log_precisions=log_precisions,
+            )
+        )()
+
+    for actual, expected in zip(
+        jax.tree.leaves(run(diagonal)), jax.tree.leaves(run(dense)), strict=True
+    ):
+        np.testing.assert_allclose(actual, expected, atol=3e-5, rtol=3e-5)

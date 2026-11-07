@@ -156,6 +156,7 @@ def test_observation_model_keeps_partial_and_complete_missingness(runtime):
 def test_native_discrete_law_samples_categories_from_predictors():
     from grassmoth.models.ssm.execution.contracts import MeasurementParams
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
+    from grassmoth.models.ssm.structure.observation import DenseLoadings, ObservationStructure
     from grassmoth_test_support.observation import observation_laws
 
     observation = HeterogeneousObservation(
@@ -170,6 +171,7 @@ def test_native_discrete_law_samples_categories_from_predictors():
             },
             level_counts=(3, 3),
         ),
+        structure=ObservationStructure(DenseLoadings(), "dense"),
     )
     # At this predictor both declared laws concentrate on their final category.
     # Reconstructing a law from the response mean would lose that information.

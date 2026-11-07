@@ -1,0 +1,330 @@
+"""Fused diagonal mGRAD mixture normalization, gradient contraction and bank integral."""
+
+from collections.abc import Callable
+from functools import partial
+from typing import Annotated, cast
+
+import jax
+import jax.numpy as jnp
+from pydantic import Field
+
+from grassmoth.models.ssm.inference.samplers.particle.guided_random import KillingNoise
+from grassmoth.models.ssm.inference.samplers.particle.marginal_mixture import (
+    _diagonal_integral_terms,
+)
+from grassmoth.models.ssm.inference.samplers.particle.math import TRITON_NUM_WARPS
+
+MIXTURE_TAIL_TILE_LIMIT: Annotated[
+    int,
+    Field(
+        description="Heuristic: cap the fused particle-label tile at 2048 entries to bound register use; the measured L40S tile of 128 particles by 8 labels uses 64 registers per thread."
+    ),
+] = 2048
+
+
+MIXTURE_TAIL_DIMENSION_LIMIT: Annotated[
+    int,
+    Field(
+        description="Measured L40S cutover: whole-coordinate fused tail improved D=3 and D=9 native sweeps; the tiled D=40 arm regressed 16.08 to 18.17 ms. Cap padded coordinate width at 16."
+    ),
+] = 16
+
+
+TAIL_COORDINATE_TILE: Annotated[
+    int,
+    Field(
+        description="Measured L40S HD D=9 tail: two eight-coordinate CTAs plus reduction/resampling improved 70.33 to 66.78 ms/sweep versus one sixteen-coordinate CTA. D<=8 keeps one fused resampling launch."
+    ),
+] = 8
+
+
+def diagonal_mixture_tail(
+    x: jax.Array,
+    prior: jax.Array,
+    chol: jax.Array,
+    whitener: jax.Array,
+    correction: jax.Array,
+    observed: jax.Array,
+    derivatives: jax.Array,
+    parent_scores: jax.Array,
+    transitions: jax.Array,
+    label_prior: jax.Array,
+    reference_observed: jax.Array,
+    reference_gradient: jax.Array,
+    variance: jax.Array,
+    mask: jax.Array,
+    killing_noise: KillingNoise,
+    *,
+    compute_gradient: bool,
+    resample: Callable[[jax.Array, KillingNoise], jax.Array],
+) -> tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]:
+    """Fuse exact label sums, the CF24 D.2 bank integral and conditional resampling.
+
+    Model densities and their per-label derivatives remain ordinary JAX code.
+    When kappa is zero, no gradient mixture is evaluated: a zero-mass candidate
+    therefore keeps its zero score without introducing an undefined 0/0.
+    Resampling uses the next time's already-generated independent noise, with
+    the original cyclic conditioning on ancestor zero. Its particle payloads
+    are gathered by XLA in the following step.
+    """
+    from jax.experimental import pallas as pl
+    from jax.experimental.pallas import triton as pt
+
+    count, labels = observed.shape
+    dimension = x.shape[-1]
+    coordinate_block = min(TAIL_COORDINATE_TILE, pl.next_power_of_2(dimension))
+    tiles = pl.cdiv(dimension, coordinate_block)
+    block_dtype = observed.dtype
+    block = pl.next_power_of_2(count)
+    label_block = pl.next_power_of_2(labels)
+
+    def kernel(
+        x_ref,
+        prior_ref,
+        chol_ref,
+        white_ref,
+        corr_ref,
+        observed_ref,
+        derivative_ref,
+        parent_ref,
+        transition_ref,
+        label_ref,
+        reference_obs_ref,
+        reference_grad_ref,
+        variance_ref,
+        mask_ref,
+        survival_ref,
+        replacement_ref,
+        rotation_ref,
+        weights_out,
+        scores_out,
+        observations_out,
+        ancestors_out,
+        cumulative_out,
+        label_running_out,
+        *,
+        interpret,
+    ):
+        p = jnp.arange(block)
+        k = jnp.arange(label_block)
+        valid = (p[:, None] < count) & (k[None, :] < labels)
+        obs = pt.load(observed_ref.at[p[:, None], k[None, :]], mask=valid, other=-jnp.inf)
+        ref_obs = pt.load(reference_obs_ref.at[k], mask=k < labels, other=-jnp.inf)
+        obs = jnp.where(p[:, None] == 0, ref_obs[None, :], obs)
+        if compute_gradient:
+            prior_labels = pt.load(label_ref.at[k], mask=k < labels, other=-jnp.inf)
+            obs_logits = obs + prior_labels[None, :]
+            maximum = jnp.max(obs_logits, axis=1)
+            shift = jnp.where(jnp.isfinite(maximum), maximum, 0.0)
+            mass = jnp.exp(obs_logits - shift[:, None])
+            probability = mass / jnp.sum(mass, axis=1)[:, None]
+        else:
+            probability = jnp.zeros_like(obs)
+        parent = pt.load(parent_ref.at[p[:, None], k[None, :]], mask=valid, other=-jnp.inf)
+        transition = pt.load(transition_ref.at[p[:, None], k[None, :]], mask=valid, other=0.0)
+        scores = parent + transition + obs
+        maximum = jnp.max(scores, axis=1)
+        shift = jnp.where(jnp.isfinite(maximum), maximum, 0.0)
+        prefix_mass = jnp.exp(scores - shift[:, None])
+        running_mass = jnp.cumsum(prefix_mass, axis=1)
+        increment = jnp.log(jnp.sum(prefix_mass, axis=1)) + shift
+        pt.store(
+            label_running_out.at[p[:, None], k[None, :]],
+            running_mass,
+            mask=valid & (pl.program_id(0) == 0),
+        )
+        normalized = scores - jnp.where(jnp.isneginf(increment), 0.0, increment)[:, None]
+        pt.store(
+            scores_out.at[p[:, None], k[None, :]], normalized, mask=valid & (pl.program_id(0) == 0)
+        )
+        pt.store(
+            observations_out.at[p[:, None], k[None, :]], obs, mask=valid & (pl.program_id(0) == 0)
+        )
+
+        def coordinate_step(tile, total):
+            d = tile * coordinate_block + jnp.arange(coordinate_block)
+            coordinate_valid = (p[:, None] < count) & (d[None, :] < dimension)
+            if compute_gradient:
+                derivative = pt.load(
+                    derivative_ref.at[p[:, None, None], k[None, :, None], d[None, None, :]],
+                    mask=valid[:, :, None] & (d[None, None, :] < dimension),
+                    other=0.0,
+                )
+                gradient = jnp.sum(probability[:, :, None] * derivative, axis=1)
+                reference_gradient = pt.load(
+                    reference_grad_ref.at[d], mask=d < dimension, other=0.0
+                )
+                gradient = jnp.where(p[:, None] == 0, reference_gradient[None, :], gradient)
+            else:
+                gradient = jnp.zeros((block, coordinate_block), dtype=block_dtype)
+            x = pt.load(x_ref.at[p[:, None], d[None, :]], mask=coordinate_valid, other=0.0)
+            prior = pt.load(prior_ref.at[p[:, None], d[None, :]], mask=coordinate_valid, other=0.0)
+            chol = pt.load(chol_ref.at[p[:, None], d[None, :]], mask=coordinate_valid, other=1.0)
+            white = pt.load(white_ref.at[p[:, None], d[None, :]], mask=coordinate_valid, other=1.0)
+            variance = pt.load(variance_ref.at[d], mask=d < dimension, other=1.0)
+            free = pt.load(mask_ref.at[d], mask=d < dimension, other=False)
+            return total + jnp.sum(
+                _diagonal_integral_terms(
+                    x, prior, chol, white, gradient, variance, free, coordinate_valid, count
+                ),
+                axis=1,
+            )
+
+        initial = jnp.zeros((block,), dtype=block_dtype)
+        terms = coordinate_step(pl.program_id(0), initial)
+        correction = pt.load(corr_ref.at[p], mask=p < count, other=0.0)
+        if tiles == 1:
+            integral = correction + terms
+            pt.store(weights_out.at[p], increment + integral, mask=p < count)
+            values = jnp.where(p < count, increment + integral, -jnp.inf)
+            maximum = jnp.max(values)
+            survival = jnp.exp(values - maximum)
+            cumulative = jnp.cumsum(survival / jnp.sum(survival))
+            rotation_mass = jnp.where((p > 0) & (p < count), (1.0 - survival) / count, 0.0)
+            rotation_mass = jnp.where(p == 0, 1.0 - jnp.sum(rotation_mass), rotation_mass)
+            rotation_noise = pt.load(rotation_ref.at[p], mask=p < count, other=-jnp.inf)
+            rotation_logits = jnp.log(rotation_mass) + rotation_noise
+            rotation = jnp.min(jnp.where(rotation_logits == jnp.max(rotation_logits), p, block))
+            source = (p + rotation) % count
+            pt.store(cumulative_out.at[p], cumulative, mask=p < count)
+            if not interpret:
+                pt.debug_barrier()
+            chosen_logits = pt.load(weights_out.at[source])
+            survival_noise = pt.load(survival_ref.at[source])
+            replacement_noise = pt.load(replacement_ref.at[source])
+
+            def search_step(_, bounds):
+                lower, upper = bounds
+                middle = (lower + upper) // 2
+                value = pt.load(cumulative_out.at[jnp.minimum(middle, count - 1)])
+                right = (middle < count) & (value <= replacement_noise)
+                return jnp.where(right, middle + 1, lower), jnp.where(right, upper, middle)
+
+            lower, _ = jax.lax.fori_loop(
+                0,
+                count.bit_length(),
+                search_step,
+                (jnp.zeros((block,), dtype=jnp.int32), jnp.full((block,), count, dtype=jnp.int32)),
+            )
+            replacements = jnp.minimum(lower, count - 1)
+            ancestors = jnp.where(
+                survival_noise < jnp.exp(chosen_logits - maximum), source, replacements
+            )
+            ancestors = jnp.where(p == 0, 0, ancestors).astype(jnp.int32)
+            pt.store(ancestors_out.at[p], ancestors, mask=p < count)
+        else:
+            partial = terms + jnp.where(pl.program_id(0) == 0, increment + correction, 0.0)
+            pt.store(weights_out.at[pl.program_id(0), p], partial, mask=p < count)
+
+    def coordinate_kernel(
+        x_ref,
+        prior_ref,
+        chol_ref,
+        white_ref,
+        corr_ref,
+        observed_ref,
+        derivative_ref,
+        parent_ref,
+        transition_ref,
+        label_ref,
+        reference_obs_ref,
+        reference_grad_ref,
+        variance_ref,
+        mask_ref,
+        survival_ref,
+        replacement_ref,
+        rotation_ref,
+        weights_out,
+        scores_out,
+        observations_out,
+        label_running_out,
+        *,
+        interpret,
+    ):
+        kernel(
+            x_ref,
+            prior_ref,
+            chol_ref,
+            white_ref,
+            corr_ref,
+            observed_ref,
+            derivative_ref,
+            parent_ref,
+            transition_ref,
+            label_ref,
+            reference_obs_ref,
+            reference_grad_ref,
+            variance_ref,
+            mask_ref,
+            survival_ref,
+            replacement_ref,
+            rotation_ref,
+            weights_out,
+            scores_out,
+            observations_out,
+            None,
+            None,
+            label_running_out,
+            interpret=interpret,
+        )
+
+    def run(*args, interpret):
+        weight_shape = (count,) if tiles == 1 else (tiles, count)
+        common_outputs = (
+            jax.ShapeDtypeStruct(weight_shape, x.dtype),
+            jax.ShapeDtypeStruct((count, labels), x.dtype),
+            jax.ShapeDtypeStruct((count, labels), x.dtype),
+        )
+        running_output = jax.ShapeDtypeStruct((count, labels), x.dtype)
+        if tiles == 1:
+            outputs = (
+                *common_outputs,
+                jax.ShapeDtypeStruct((count,), jnp.int32),
+                jax.ShapeDtypeStruct((count,), x.dtype),
+                running_output,
+            )
+            body = partial(kernel, interpret=interpret)
+        else:
+            outputs = (*common_outputs, running_output)
+
+            body = partial(coordinate_kernel, interpret=interpret)
+        return pl.pallas_call(
+            body,
+            out_shape=outputs,
+            grid=(tiles,),
+            interpret=interpret,
+            compiler_params=pt.CompilerParams(num_warps=TRITON_NUM_WARPS),
+            name="diagonal_mgrad_mixture_tail_killing"
+            if tiles == 1
+            else "diagonal_mgrad_mixture_tail_coordinates",
+        )(*args)
+
+    result = jax.lax.platform_dependent(
+        x,
+        prior,
+        chol,
+        whitener,
+        correction,
+        observed,
+        derivatives,
+        parent_scores,
+        transitions,
+        label_prior,
+        reference_observed,
+        reference_gradient,
+        variance,
+        mask,
+        *killing_noise,
+        cpu=partial(run, interpret=True),
+        cuda=partial(run, interpret=False),
+    )
+    if tiles == 1:
+        weights, scores, observations, ancestors, _, running_mass = result
+    else:
+        partials, scores, observations, running_mass = result
+        weights = jnp.sum(partials, axis=0)
+        ancestors = resample(weights, killing_noise)
+    return cast(
+        "tuple[jax.Array, jax.Array, jax.Array, jax.Array, jax.Array]",
+        (weights, scores, observations, ancestors, running_mass),
+    )

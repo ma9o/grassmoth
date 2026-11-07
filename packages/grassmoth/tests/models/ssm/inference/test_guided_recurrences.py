@@ -35,6 +35,7 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import _me
 from grassmoth.models.ssm.inference.samplers.particle.setup import build_smoother_setup
 from grassmoth.models.ssm.inference.targets.path_factors import prepare_path_factors
 from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
+from grassmoth.models.ssm.structure.observation import DenseLoadings, ObservationStructure
 from grassmoth_test_support.interval_particle import interval_target
 
 pytestmark = pytest.mark.inference(concern="sampling")
@@ -99,6 +100,7 @@ def _target(nonlinear, *, random_initial=False, steps=4):
                     jnp.eye(3) * 0.45,
                 ),
                 cast("HeterogeneousObservation", original.observation_model).laws,
+                structure=ObservationStructure(DenseLoadings(), "dense"),
             ),
             t0=0.0,
         )
@@ -108,7 +110,16 @@ def _target(nonlinear, *, random_initial=False, steps=4):
         base,
         context=context,
         dynamical_model=declared,
-        state_space=StateSpace(3, (), (0, 1) if random_initial else (0,), (0,), (), (recurrence,)),
+        state_space=StateSpace(
+            3,
+            (),
+            (0, 1) if random_initial else (0,),
+            (0,),
+            (),
+            (recurrence,),
+            initial_covariance="dense",
+            transition_covariance="dense",
+        ),
         intervals=replace(base.intervals, dynamical_model=declared)
         if base.intervals is not None
         else None,
@@ -393,7 +404,11 @@ def test_fixed_initial_state_without_memory_keeps_backward_selection():
         )
 
     target = replace(
-        base, dynamical_model=declared, state_space=StateSpace(1, (), (), (0,), (), ())
+        base,
+        dynamical_model=declared,
+        state_space=StateSpace(
+            1, (), (), (0,), (), (), initial_covariance="dense", transition_covariance="dense"
+        ),
     )
     labels = np.array([-0.45, 0.55])
     prior = 0.3 * np.array([[1.0, 0.7], [0.7, 1.49]])

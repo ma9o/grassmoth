@@ -30,6 +30,7 @@ from grassmoth.models.ssm.execution.observation_model import (
     grouped_density_with_noise,
     prepare_grouped_density,
 )
+from grassmoth.models.ssm.structure.observation import DenseLoadings, ObservationStructure
 from grassmoth_test_support.interval_particle import interval_target
 from grassmoth_test_support.observation import observation_laws
 
@@ -94,10 +95,14 @@ def test_prepared_point_terms_preserve_authored_operands_and_derivatives(
             else:
                 authored.append(PoissonLawSpec(rate=operand))
         model = HeterogeneousObservation(
-            MeasurementParams(jnp.eye(2), jnp.zeros(2), jnp.eye(2)), tuple(authored)
+            MeasurementParams(jnp.eye(2), jnp.zeros(2), jnp.eye(2)),
+            tuple(authored),
+            structure=ObservationStructure(DenseLoadings(), "dense"),
         )
         groups = model.density_groups()
-        factors = prepare_grouped_density(groups, model.measurement.manifest_cov, readings)
+        factors = prepare_grouped_density(
+            groups, model.measurement.manifest_cov, readings, model.structure.covariance
+        )
         predictors = jnp.array(
             [
                 [parameters[1], jnp.nan],
@@ -188,6 +193,7 @@ def test_prepared_noise_matches_native_values_and_gradients(with_interval):
                 old.measurement.manifest_cov * scale,
             ),
             old.laws,
+            structure=ObservationStructure(DenseLoadings(), "dense"),
         )
         evolution = dsx.GaussianStateEvolution(
             lambda state, _u, t0, t1: state + (t1 - t0) * (0.2 * jnp.sin(state) - 0.4 * state**3),
@@ -319,3 +325,52 @@ def test_prepared_transition_means_preserve_exact_densities():
     gradients = jax.jit(jax.jacrev(compare))(position)
     np.testing.assert_allclose(densities[0], densities[1], rtol=1e-5, atol=1e-6)
     np.testing.assert_allclose(gradients[0], gradients[1], rtol=1e-5, atol=1e-6)
+
+
+@pytest.mark.parametrize(
+    "observed", [(True, True, True), (True, False, True), (False, False, False)]
+)
+def test_diagonal_observation_factors_preserve_jitter_missingness_and_derivatives(observed):
+    from grassmoth.models.ssm.execution.emissions import prepare_gaussian_block_noise
+
+    mask = jnp.asarray(observed)
+    parameters = jnp.array([-8.0, 0.2, 1.3, 0.7, -0.4, 0.9])
+
+    def score(values, structure):
+        covariance = jnp.diag(jnp.exp(2 * values[:3]))
+        residual = jnp.where(mask, values[3:], 0.0)
+        return prepare_gaussian_block_noise(covariance, mask, structure).log_prob(residual)
+
+    for transform in (jax.value_and_grad, jax.hessian):
+        actual = jax.jit(transform(lambda values: score(values, "diagonal")))(parameters)
+        expected = jax.jit(transform(lambda values: score(values, "dense")))(parameters)
+        for left, right in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+            np.testing.assert_allclose(left, right, rtol=3e-6, atol=3e-6)
+
+
+@pytest.mark.parametrize("columns", [(0,), (0, 0, 2), (3, 1, 3)])
+def test_coordinate_predictor_preserves_forward_reverse_and_second_derivatives(columns):
+    from grassmoth.models.ssm.structure.observation import CoordinateLoadings
+
+    rows = jnp.arange(len(columns))
+    indices = jnp.asarray(columns)
+    laws = observation_laws((DistributionFamily.GAUSSIAN,) * len(columns))
+    parameters = jnp.arange(len(columns) + 4, dtype=jnp.float32) / 5 + 0.2
+
+    def score(values, sparse):
+        coefficients, state = values[: len(columns)], values[len(columns) :]
+        matrix = jnp.zeros((len(columns), 4)).at[rows, indices].set(coefficients)
+        model = HeterogeneousObservation(
+            MeasurementParams(matrix, jnp.ones(len(columns)), jnp.eye(len(columns))),
+            laws,
+            ObservationStructure(
+                CoordinateLoadings(columns) if sparse else DenseLoadings(), "diagonal"
+            ),
+        )
+        return jnp.sin(model.linear_predictor(state)).sum()
+
+    for transform in (jax.value_and_grad, jax.jacfwd, jax.hessian):
+        actual = jax.jit(transform(lambda values: score(values, True)))(parameters)
+        expected = jax.jit(transform(lambda values: score(values, False)))(parameters)
+        for left, right in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+            np.testing.assert_allclose(left, right, rtol=2e-6, atol=2e-6)

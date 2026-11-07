@@ -57,6 +57,7 @@ from grassmoth.models.ssm.inference.warmup.initialization import (
     prepare_particle_initialization,
 )
 from grassmoth.models.ssm.inference.warmup.outcomes import InitializationFailure
+from grassmoth.models.ssm.structure.observation import DenseLoadings, ObservationStructure
 from grassmoth_test_support.compute import EXECUTION_CONTEXT
 from grassmoth_test_support.inference import compile_model_fixture
 from grassmoth_test_support.interval_particle import initialize_interval_chain, interval_target
@@ -185,7 +186,7 @@ def _case(cubic, *, pinned=False, steps=3, dimension=1):
     )
 
 
-def _correlated_gaussian_case(sample_count=4096):
+def _correlated_gaussian_case(sample_count=4096, *, independent=False):
     """Dense Gaussian conditioning, independent of the particle proposal algebra."""
     steps, dimension = 3, 2
     times = np.arange(float(steps))
@@ -198,7 +199,8 @@ def _correlated_gaussian_case(sample_count=4096):
         state_dim=dimension,
     )
     matrix = np.array([[0.7, 0.25], [-0.1, 0.6]])
-    noise = np.array([[0.2, 0.06], [0.06, 0.28]])
+    correlation = 0.0 if independent else 0.06
+    noise = np.array([[0.2, correlation], [correlation, 0.28]])
 
     def context(position, grid):
         arrays, _, _ = base.context(position, grid)
@@ -213,6 +215,13 @@ def _correlated_gaussian_case(sample_count=4096):
         )
 
     target = replace(base, context=context, dynamical_model=declared)
+    if independent:
+        target = replace(
+            target,
+            state_space=replace(
+                target.state_space, initial_covariance="diagonal", transition_covariance="diagonal"
+            ),
+        )
     labels = np.array([-0.45, 0.55])
     transform = np.eye(steps * dimension)
     for index in range(1, steps):
@@ -566,6 +575,7 @@ def _stock_posterior(count):
                     jnp.eye(2), observation.measurement.manifest_means, jnp.diag(jnp.asarray(noise))
                 ),
                 observation.laws,
+                structure=ObservationStructure(DenseLoadings(), "dense"),
             ),
             t0=0.0,
         )
@@ -573,7 +583,16 @@ def _stock_posterior(count):
     target = replace(
         base,
         dynamical_model=declared,
-        state_space=StateSpace(2, (), (0,), (0,), (), (ParallelRecurrences((1,)),)),
+        state_space=StateSpace(
+            2,
+            (),
+            (0,),
+            (0,),
+            (),
+            (ParallelRecurrences((1,)),),
+            initial_covariance="dense",
+            transition_covariance="dense",
+        ),
     )
     innovations = np.eye(steps)
     for t in range(1, steps):
@@ -851,3 +870,251 @@ def test_auxiliary_kalman_keeps_mpgibbs_parameter_proposal_and_label_law():
     )
     np.testing.assert_allclose(info["final_label_log_probs"], expected, atol=3e-6)
     assert np.isfinite(result.complete_log_posterior)
+
+
+@pytest.mark.parametrize("mixture", [False, True])
+@pytest.mark.parametrize("pinned", [False, True])
+def test_diagonal_guided_geometry_preserves_dense_filter_and_backward_trace(mixture, pinned):
+    target, labels, starts, *_ = _correlated_gaussian_case(2, independent=True)
+    dense = replace(
+        target,
+        state_space=replace(
+            target.state_space, initial_covariance="dense", transition_covariance="dense"
+        ),
+    )
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=8),
+        proposal=ParameterMixtureProposalSpec() if mixture else ParameterMeanProposalSpec(),
+    )
+    mask = target.independent_mask.at[1, 1].set(not pinned)
+
+    def run(bound):
+        setup = build_smoother_setup(
+            bound, num_parameter_particles=2, free_mask=mask, diagnostic_metrics=()
+        )
+        ctx = build_smoother_context(
+            setup,
+            labels,
+            jnp.zeros(2),
+            reference=starts[0],
+            delta=jnp.broadcast_to(jnp.array([0.12, 0.9]), (3, 2)),
+            trajectory_dtype=starts.dtype,
+        )
+        guide = bound.context(jnp.mean(labels, axis=0), bound.times)
+        return jax.jit(
+            lambda: trace_guided_step(bound, ctx, guide, spec, jax.random.key(71), starts[0])
+        )()
+
+    actual, expected = run(target), run(dense)
+    for measured, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        if jnp.issubdtype(measured.dtype, jnp.integer):
+            np.testing.assert_array_equal(measured, reference)
+        else:
+            np.testing.assert_allclose(measured, reference, atol=2e-5, rtol=2e-5)
+
+
+@pytest.mark.parametrize("pinned", [False, True])
+@pytest.mark.parametrize("kappa", [0, 1])
+def test_scalar_tail_preserves_complete_guided_trace(pinned, kappa):
+    dense, labels, starts, *_ = _case(0.7)
+    target = replace(
+        dense,
+        state_space=replace(
+            dense.state_space, initial_covariance="diagonal", transition_covariance="diagonal"
+        ),
+    )
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=7, kappa=kappa),
+        proposal=ParameterMixtureProposalSpec(),
+    )
+    mask = target.independent_mask.at[1, 0].set(not pinned)
+
+    def run(bound):
+        setup = build_smoother_setup(
+            bound, num_parameter_particles=2, free_mask=mask, diagnostic_metrics=()
+        )
+        ctx = build_smoother_context(
+            setup,
+            labels,
+            jnp.zeros(2),
+            reference=starts[0],
+            delta=jnp.full((3, 1), 0.2),
+            trajectory_dtype=starts.dtype,
+        )
+        guide = bound.context(jnp.mean(labels, axis=0), bound.times)
+        return jax.jit(
+            lambda: trace_guided_step(bound, ctx, guide, spec, jax.random.key(71), starts[0])
+        )()
+
+    actual, expected = run(target), run(dense)
+    for measured, reference in zip(jax.tree.leaves(actual), jax.tree.leaves(expected), strict=True):
+        if jnp.issubdtype(measured.dtype, jnp.integer):
+            np.testing.assert_array_equal(measured, reference)
+        else:
+            np.testing.assert_allclose(measured, reference, atol=3e-5, rtol=3e-5)
+
+
+def test_scalar_tail_zero_mass_with_disabled_gradient_preserves_other_particles():
+    from grassmoth.models.ssm.inference.samplers.particle.guided import (
+        _killing_noise,
+        _killing_reference,
+    )
+    from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import (
+        _DiagonalProposalGeometry,
+    )
+    from grassmoth.models.ssm.inference.samplers.particle.guided_tail import diagonal_mixture_tail
+    from grassmoth.models.ssm.inference.samplers.particle.marginal_mixture import (
+        MarginalMixtureBank,
+    )
+    from grassmoth.models.ssm.inference.samplers.particle.math import label_logsumexp
+
+    x = jnp.array([[0.4], [1.2], [-0.8], [0.9]])
+    prior = x * 0.3
+    chol = jnp.array([[0.7], [0.8], [1.2], [0.9]])
+    geometry = _DiagonalProposalGeometry(
+        jnp.zeros_like(x), jnp.zeros_like(x), chol, 1 / chol, jnp.zeros(4)
+    )
+    bank = MarginalMixtureBank(x, prior, prior, geometry, jnp.zeros(4))
+    observed = jnp.array([[0.4, 0.7], [-1.0, 2.0], [-jnp.inf, -jnp.inf], [2.0, -0.3]])
+    prior_labels = jnp.log(jnp.array([0.4, 0.6]))
+    parent = jnp.broadcast_to(prior_labels, observed.shape)
+    variance, mask = jnp.array([0.2]), jnp.array([True])
+    noise = _killing_noise(jax.random.key(37), 4, x.dtype)
+    actual = jax.jit(
+        lambda: diagonal_mixture_tail(
+            x,
+            prior,
+            chol,
+            1 / chol,
+            jnp.zeros(4),
+            observed,
+            jnp.zeros((4, 2, 1)),
+            parent,
+            jnp.zeros_like(observed),
+            prior_labels,
+            observed[0],
+            jnp.zeros(1),
+            variance,
+            mask,
+            noise,
+            compute_gradient=False,
+            resample=_killing_reference,
+        )
+    )()
+    increment = label_logsumexp(parent + observed)
+    weights = increment + bank.log_weights(jnp.zeros_like(x), variance, mask)
+    scores = parent + observed - jnp.where(jnp.isneginf(increment), 0.0, increment)[:, None]
+    np.testing.assert_allclose(actual[0], weights, rtol=2e-6, atol=2e-6)
+    np.testing.assert_allclose(actual[1], scores, rtol=2e-6, atol=2e-6)
+    np.testing.assert_array_equal(actual[2], observed)
+    np.testing.assert_array_equal(actual[3], _killing_reference(weights, noise))
+    assert np.isfinite(np.asarray(actual[0])[[0, 1, 3]]).all()
+    assert np.isneginf(actual[0][2])
+
+
+def test_shared_backward_points_preserve_fixed_start_diffused_coordinates():
+    from grassmoth.models.ssm.inference.targets.sequential import sequential_observations
+
+    times = np.arange(3.0)
+    base = interval_target(times, np.array([[0.1], [-0.2], [0.3]]), times[:, None], ("last",))
+
+    def context(position, grid):
+        arrays, _, _ = base.context(position, grid)
+        return arrays, grid, position
+
+    def declared(bound):
+        original = base.dynamical_model(bound)
+        initial = SupportedNormal(bound[2][:1], jnp.zeros((1, 1)), ())
+        return eqx.tree_at(lambda model: model.initial_condition, original, initial)
+
+    target = replace(
+        base,
+        context=context,
+        dynamical_model=declared,
+        state_space=replace(base.state_space, initial=()),
+    )
+    labels = jnp.array([[-0.7], [0.4]])
+    contexts = jax.vmap(lambda label: target.context(label, target.times))(labels)
+    guide = target.context(jnp.array([0.1]), target.times)
+    memory = sequential_observations(target, contexts, guide)
+    initial = jax.vmap(memory.initial)(jnp.array([[0.0], [0.2], [-0.1]]))
+    # Initial states differ by label even though the independently carried row is shared.
+    np.testing.assert_allclose(memory.replayed_states(initial[0])[:-1, 0], labels[:, 0])
+    current = jax.vmap(memory.advance, in_axes=(0, 0, None))(
+        initial, jnp.array([[0.3], [-0.6], [0.8]]), jnp.array(1)
+    )
+    coordinates = jnp.asarray(target.state_space.transition)
+    exact_points = jax.vmap(
+        lambda value: jax.vmap(
+            lambda context, state: target.project_state(context, state, 1)[coordinates]
+        )(contexts, memory.replayed_states(value)[:-1])
+    )(current)
+    shared = memory.state(current)[..., coordinates]
+    np.testing.assert_array_equal(
+        exact_points, jnp.broadcast_to(shared[:, None], exact_points.shape)
+    )
+    normalized = memory.transition_log_probs_with_means(current[0], jnp.array(1), exact_points[0])
+    np.testing.assert_allclose(normalized, memory.noise.transitions.log_normalizer[:, 1], atol=1e-7)
+
+
+def test_vector_tail_carries_across_unrolled_scan(monkeypatch):
+    from grassmoth.models.ssm.inference.samplers.particle import guided
+
+    steps, dimension = 19, 3
+    times = np.arange(float(steps))
+    readings = np.sin(times * 0.4)[:, None]
+    base = interval_target(times, readings, times[:, None], ("last",), state_dim=dimension)
+
+    def context(position, grid):
+        arrays, _, _ = base.context(position, grid)
+        return arrays, grid, position
+
+    def model(bound):
+        original = base.dynamical_model(bound)
+        evolution = dsx.LinearGaussianStateEvolution(
+            jnp.eye(dimension) * 0.7,
+            jnp.eye(dimension) * 0.3 * jnp.exp(bound[2][0]),
+            bias=jnp.full((dimension,), 0.2 * bound[2][0]),
+        )
+        return eqx.tree_at(lambda value: value.state_evolution, original, evolution)
+
+    target = replace(
+        base,
+        context=context,
+        dynamical_model=model,
+        state_space=replace(
+            base.state_space, initial_covariance="diagonal", transition_covariance="diagonal"
+        ),
+    )
+    labels = jnp.array([[-0.3], [0.0], [0.4]])
+    reference = jnp.broadcast_to(jnp.asarray(readings), (steps, dimension))
+    setup = build_smoother_setup(
+        target, num_parameter_particles=3, free_mask=target.independent_mask, diagnostic_metrics=()
+    )
+    ctx = build_smoother_context(
+        setup,
+        labels,
+        jnp.zeros(3),
+        reference=reference,
+        delta=jnp.full((steps, dimension), 0.2),
+        trajectory_dtype=reference.dtype,
+    )
+    guide = target.context(jnp.mean(labels, axis=0), target.times)
+    spec = PathUpdateSpec(
+        method=GuidedMethodSpec(kind="particle_mgrad", num_particles=16, kappa=1, scan_unroll=8),
+        proposal=ParameterMixtureProposalSpec(),
+    )
+
+    def run():
+        return jax.jit(
+            lambda: trace_guided_step(target, ctx, guide, spec, jax.random.key(821), reference)
+        )()
+
+    fused = run()
+    monkeypatch.setattr(guided, "MIXTURE_TAIL_TILE_LIMIT", 0)
+    unfused = run()
+    for actual, expected in zip(jax.tree.leaves(fused), jax.tree.leaves(unfused), strict=True):
+        if jnp.issubdtype(actual.dtype, jnp.integer):
+            np.testing.assert_array_equal(actual, expected)
+        else:
+            np.testing.assert_allclose(actual, expected, atol=5e-5, rtol=5e-5)

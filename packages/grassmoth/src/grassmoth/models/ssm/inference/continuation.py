@@ -47,7 +47,7 @@ def restore_state[State](
             "Native continuation state is incompatible with this runtime's state shape. Start a new fit."
         )
     restored = tuple(
-        jax.random.wrap_key_data(jnp.asarray(saved.values))
+        jax.random.wrap_key_data(jnp.asarray(saved.values), impl=jax.random.key_impl(original))
         if jnp.issubdtype(original.dtype, jax.dtypes.prng_key)
         else jnp.asarray(saved.values, dtype=original.dtype)
         for original, saved in zip(originals, leaves, strict=True)

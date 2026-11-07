@@ -62,6 +62,7 @@ from grassmoth.models.ssm.inference.samplers.particle.adaptation import (
 from grassmoth.models.ssm.inference.samplers.particle.diagnostics import (
     excluded_particle_diagnostics,
 )
+from grassmoth.models.ssm.inference.samplers.particle.guided_random import PARTICLE_PRNG
 from grassmoth.models.ssm.inference.samplers.particle.math import _masked_mean
 from grassmoth.models.ssm.inference.samplers.profiling import (
     REPETITIONS,
@@ -316,7 +317,9 @@ def run_marginal_particle_gibbs(
         states,
         key
         if continuation is None
-        else jax.random.wrap_key_data(jax.device_put(continuation.random_key.values)),
+        else jax.random.wrap_key_data(
+            jax.device_put(continuation.random_key.values), impl=PARTICLE_PRNG
+        ),
         jnp.asarray(0),
         initialize_adaptation(states.latent_delta),
         initialize_parameter_covariance(chain_init_positions, initialization.parameter_chol),

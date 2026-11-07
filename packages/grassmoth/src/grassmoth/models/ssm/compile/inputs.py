@@ -12,6 +12,7 @@ from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.artifacts.probability.joint_layout import JointLawLayout
 from grassmoth.compilation_errors import AggregatedCompileError, IncompleteModelError
 from grassmoth.models.parameters import execution_parameters
+from grassmoth.models.ssm.compile.layout.observations import compile_observation_structure
 from grassmoth.models.ssm.compile.prior_compilation import bind_parameters, compile_priors
 from grassmoth.models.ssm.compile.prior_indexing import build_site_bindings
 from grassmoth.models.ssm.parameterization import (
@@ -45,6 +46,7 @@ if TYPE_CHECKING:
         SparseBlockSpec,
         T0CholBlockSpec,
     )
+    from grassmoth.models.ssm.structure.observation import ObservationStructure
     from grassmoth.models.ssm.structure.sites import SiteDescriptor
     from grassmoth.models.structure import StructuralSelection
 
@@ -130,6 +132,7 @@ class CompiledDynamicalModel:
     static_factors: tuple[CompiledState, ...]
     diffusion_block: DiffusionBlockSpec
     loading_block: SparseBlockSpec[tuple[int, int]]
+    observation_structure: ObservationStructure
     observation_mean_block: SparseBlockSpec[int]
     observation_noise_block: ManifestCholBlockSpec
     initial_mean_block: SparseBlockSpec[int]
@@ -320,6 +323,7 @@ def compile_model(
             ),
             diffusion_block=blocks[0],
             loading_block=blocks[1],
+            observation_structure=compile_observation_structure(blocks[1], blocks[3]),
             observation_mean_block=blocks[2],
             observation_noise_block=blocks[3],
             initial_mean_block=blocks[4],

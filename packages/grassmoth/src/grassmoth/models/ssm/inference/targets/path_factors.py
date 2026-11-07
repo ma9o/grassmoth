@@ -16,7 +16,7 @@ from grassmoth.models.ssm.execution.observation_model import (
 
 if TYPE_CHECKING:
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
-    from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
+    from grassmoth.models.ssm.execution.gaussian_noise import PreparedGaussianNoise
     from grassmoth.models.ssm.inference.targets.particle import (
         ParticleContext,
         ParticleNoiseFactors,
@@ -48,7 +48,7 @@ class PathFactorRuntime:
     context: ParticleContext
     readings: jax.Array
     noise: ParticleNoiseFactors
-    interval_noise: tuple[GaussianNoiseFactors, ...]
+    interval_noise: tuple[PreparedGaussianNoise, ...]
     log_precisions: jax.Array | None = None
 
     @property
@@ -193,6 +193,7 @@ def prepare_path_factors(
             compile_law_groups(observation.laws, intervals.memory.channels, interval=True),
             observation.measurement.manifest_cov,
             jnp.where(emitted, readings, jnp.nan),
+            observation.structure.covariance,
         )
     return PathFactorRuntime(
         target,

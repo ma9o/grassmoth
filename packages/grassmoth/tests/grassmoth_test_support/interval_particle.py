@@ -23,6 +23,7 @@ from grassmoth.models.ssm.inference.samplers.mpgibbs.runner import (
 )
 from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
+from grassmoth.models.ssm.structure.observation import DenseLoadings, ObservationStructure
 from grassmoth_test_support.inference import make_observation_support_runtime
 from grassmoth_test_support.observation import observation_laws
 
@@ -77,6 +78,7 @@ def interval_target(
                     jnp.asarray(covariance),
                 ),
                 laws,
+                structure=ObservationStructure(DenseLoadings(), "dense"),
             ),
             t0=0.0,
         )
@@ -120,6 +122,8 @@ def interval_target(
             tuple(range(state_dim)),
             (),
             (),
+            initial_covariance="dense",
+            transition_covariance="dense",
         ),
         output_coordinates=(),
         point_reading_mask=jnp.broadcast_to(

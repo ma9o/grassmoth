@@ -17,7 +17,7 @@ import pytest
 from grassmoth.artifacts.reports.posterior_diagnostics import GaussianInitializationDiagnostics
 from grassmoth.models.ssm.covariance import symmetrize
 from grassmoth.models.ssm.inference.samplers.mpgibbs.kernel import _bounded_parameter_drift
-from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import _ProposalGeometry
+from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import _DenseProposalGeometry
 from grassmoth.models.ssm.inference.samplers.particle.guided_information import point_information
 from grassmoth.models.ssm.inference.samplers.particle.twist import GaussianTwist, future_information
 from grassmoth.models.ssm.inference.warmup.initialization import ParticleInitialization
@@ -83,7 +83,7 @@ def test_guide_information_rejects_inconsistent_path_arrays(mismatch):
 
 
 def test_forward_proposal_noise_excludes_the_conditioned_particle():
-    geometry = _ProposalGeometry(
+    geometry = _DenseProposalGeometry(
         jnp.eye(2), jnp.zeros(2), jnp.eye(2), jnp.eye(2), jnp.array(0.0), jnp.zeros((2, 2))
     )
     with pytest.raises(jaxtyping.TypeCheckError, match="noise"):

@@ -12,6 +12,7 @@ ParameterMixtureProposalSpec. Correct mixture weights ensure invariance, not
 adequate overlap, global exploration or convergence.
 """
 
+from collections.abc import Callable
 from typing import cast
 
 import jax
@@ -19,9 +20,9 @@ import jax.numpy as jnp
 from jax.scipy.special import logsumexp
 
 from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import (
-    _proposal_geometry,
     _ProposalGeometry,
 )
+from grassmoth.models.ssm.inference.samplers.particle.math import categorical_from_uniform
 from grassmoth.models.ssm.inference.samplers.particle.twist import GaussianTwist
 from grassmoth.models.ssm.inference.targets.particle import ParticleContext, ParticleTarget
 
@@ -33,6 +34,9 @@ def _mixture_geometry(
     mask: jax.Array,
     information: GaussianTwist,
     twist: GaussianTwist,
+    factory: Callable[
+        [jax.Array, GaussianTwist, jax.Array, jax.Array, jax.Array], _ProposalGeometry
+    ],
 ) -> _ProposalGeometry:
     """Give each label its covariance while retaining the common local/future information."""
 
@@ -40,7 +44,7 @@ def _mixture_geometry(
         covariances = jax.vmap(
             lambda previous, index: target.transition_moments(context, previous, index)[1]
         )(auxiliary[:-1], jnp.arange(1, auxiliary.shape[0]))
-        return jax.vmap(_proposal_geometry)(
+        return jax.vmap(factory)(
             jnp.concatenate((target.initial_moments(context)[1][None], covariances)),
             information,
             mask,
@@ -64,11 +68,12 @@ def _mixture_particles(
     mask: jax.Array,
 ) -> tuple[jax.Array, jax.Array, jax.Array]:
     """Sample free particles by component; score all particles under the full mixture."""
-    components = jnp.argmax(label_log_probs[1:] + component_noise, axis=-1)
+    components = categorical_from_uniform(label_log_probs[1:], component_noise)
     selected_centers = centers[jnp.arange(1, centers.shape[0]), components]
+    selected = jax.tree.map(lambda value: value[components], proposal)
     free = jnp.where(
         mask,
-        selected_centers + jnp.sum(noise[:, None, :] * proposal.chol[components], axis=-1),
+        selected_centers + selected.transform_noise(noise),
         reference,
     )
     particles = jnp.concatenate((reference[None], free))

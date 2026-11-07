@@ -6,7 +6,9 @@ import pytest
 from scipy.special import logsumexp
 from scipy.stats import multivariate_normal
 
+from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import _proposal_geometry
 from grassmoth.models.ssm.inference.samplers.particle.marginal import marginal_geometry
+from grassmoth.models.ssm.inference.samplers.particle.twist import GaussianTwist
 
 pytestmark = pytest.mark.inference(concern="sampling")
 
@@ -24,7 +26,13 @@ def test_marginal_bank_weights_match_dense_integrated_proposal(kappa):
     particles = rng.normal(size=(count, dimension)) * mask
     gradients = kappa * rng.normal(size=(count, dimension)) * mask
     factors = marginal_geometry(
-        jnp.asarray(np.linalg.cholesky(covariance)),
+        _proposal_geometry(
+            jnp.asarray(prior_covariance),
+            GaussianTwist(jnp.diag(jnp.asarray(mask / variance)), jnp.zeros(dimension)),
+            jnp.asarray(mask),
+            jnp.zeros((dimension, dimension)),
+            jnp.zeros(dimension),
+        ),
         jnp.asarray(variance),
         jnp.asarray(mask),
         count,

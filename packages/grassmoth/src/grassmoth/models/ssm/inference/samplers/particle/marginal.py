@@ -17,6 +17,10 @@ from typing import NamedTuple
 import jax
 import jax.numpy as jnp
 
+from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import (
+    _DiagonalProposalGeometry,
+    _ProposalGeometry,
+)
 from grassmoth.models.ssm.shapes import Array, Bool, Float
 
 
@@ -50,13 +54,52 @@ class MarginalGeometry(NamedTuple):
         )
 
 
+class DiagonalMarginalGeometry(NamedTuple):
+    """Independent-coordinate factors of the individual and marginal mean laws."""
+
+    auxiliary_map: jax.Array
+    whiten: jax.Array
+    mean_whiten: jax.Array
+
+    def log_weights(
+        self,
+        particles: Float[Array, "P D"],
+        prior_centers: Float[Array, "P D"],
+        gradients: Float[Array, "P D"],
+        variance: Float[Array, " D"],
+        mask: Bool[Array, " D"],
+    ) -> Float[Array, " P"]:
+        """Integrate the same shared auxiliary independently in each coordinate."""
+        count = particles.shape[0]
+        others = count - 1
+        residual = jnp.where(mask, particles - prior_centers, 0.0)
+        mean = jnp.mean(residual, axis=0)
+        contrast = (residual - mean) * self.whiten
+        auxiliary_mean = jnp.where(mask, particles + variance * gradients, 0.0)
+        other_mean = (count * mean - residual) / others
+        difference = (other_mean - auxiliary_mean * self.auxiliary_map) * self.mean_whiten
+        return 0.5 * (
+            count / others * jnp.sum(contrast**2, axis=-1)
+            - others * jnp.sum(difference**2, axis=-1)
+        )
+
+
 def marginal_geometry(
-    chol: Float[Array, "D D"],
+    proposal: _ProposalGeometry,
     variance: Float[Array, " D"],
     mask: Bool[Array, " D"],
     count: int,
-) -> MarginalGeometry:
+) -> MarginalGeometry | DiagonalMarginalGeometry:
     """Factor once per time; dummy pinned coordinates have zero residuals."""
+    chol = proposal.chol
+    if isinstance(proposal, _DiagonalProposalGeometry):
+        covariance = chol * chol
+        auxiliary_map = covariance * (mask / variance)
+        shared = auxiliary_map * variance * auxiliary_map
+        mean_chol = jnp.sqrt(covariance + (count - 1) * shared)
+        return DiagonalMarginalGeometry(
+            auxiliary_map, jnp.reciprocal(chol), jnp.reciprocal(mean_chol)
+        )
     covariance = chol @ chol.T
     auxiliary_map = covariance * (mask / variance)[None, :]
     shared = (auxiliary_map * variance[None, :]) @ auxiliary_map.T

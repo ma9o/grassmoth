@@ -24,6 +24,7 @@ from grassmoth.models.ssm.inference.samplers.particle.twist import (
     future_information,
     symmetric,
 )
+from grassmoth.models.ssm.inference.targets.particle import ParticleTarget
 from grassmoth.models.ssm.inference.targets.sequential import SequentialObservationRuntime
 from grassmoth.models.ssm.shapes import Array, Bool, Float, Int, PRNGKeyArray
 
@@ -37,7 +38,7 @@ def _free_covariance(
     return covariance * mask[:, None] * mask[None, :] + jnp.diag((~mask).astype(covariance.dtype))
 
 
-class _ProposalGeometry(NamedTuple):
+class _DenseProposalGeometry(NamedTuple):
     """One covariance factor and affine mean map per time, shared by all particles."""
 
     mean_map: jax.Array
@@ -46,6 +47,14 @@ class _ProposalGeometry(NamedTuple):
     whiten: jax.Array
     log_normalizer: jax.Array
     parent_map: jax.Array
+
+    def parent_shift(self, parents: jax.Array) -> jax.Array:
+        """Pull the augmented-memory guide back to the independent coordinates."""
+        return parents @ self.parent_map.T
+
+    def transform_noise(self, noise: jax.Array) -> jax.Array:
+        """Apply the same covariance factor used by the proposal density."""
+        return jnp.sum(noise[..., None, :] * self.chol, axis=-1)
 
     def center(
         self, prior_mean: Float[Array, "*batch D"], mask: Bool[Array, " D"]
@@ -108,19 +117,82 @@ class _ProposalGeometry(NamedTuple):
         return self.log_normalizer - 0.5 * jnp.sum(whitened**2, axis=-1)
 
 
+class _DiagonalProposalGeometry(NamedTuple):
+    """Coordinate-wise proposal factors for structurally independent Gaussian noise."""
+
+    mean_map: jax.Array
+    shift: jax.Array
+    chol: jax.Array
+    whiten: jax.Array
+    log_normalizer: jax.Array
+
+    def center(self, prior_mean: jax.Array, mask: jax.Array) -> jax.Array:
+        """Apply the exact diagonal affine map to nonlinear prior means."""
+        return jnp.where(mask, prior_mean, 0.0) * self.mean_map + self.shift
+
+    def parent_shift(self, parents: jax.Array) -> jax.Array:
+        """Point geometry has no augmented-memory parent correction."""
+        return jnp.zeros_like(parents)
+
+    def transform_noise(self, noise: jax.Array) -> jax.Array:
+        """Apply independent Gaussian coordinate scales."""
+        return self.chol * noise
+
+    def initial_particles(
+        self,
+        center: Float[Array, " D"],
+        key: PRNGKeyArray,
+        reference: Float[Array, "T D"],
+        mask: Bool[Array, "T D"],
+        count: int,
+    ) -> Float[Array, "{count} D"]:
+        """Draw the initial bank with the reference conditioned at particle zero."""
+        noise = jax.random.normal(key, (count - 1, reference.shape[1]), reference.dtype)
+        return jnp.concatenate(
+            (
+                reference[0, None],
+                jnp.where(mask[0], center + self.transform_noise(noise), reference[0]),
+            )
+        )
+
+    def next_particles(
+        self,
+        centers: Float[Array, "P D"],
+        noise: Float[Array, "P-1 D"],
+        reference: Float[Array, "T D"],
+        mask: Bool[Array, "T D"],
+        index: Int[Array, ""],
+    ) -> Float[Array, "P D"]:
+        """Draw the forward bank with the same independent scales as its density."""
+        return jnp.concatenate(
+            (
+                reference[index, None],
+                jnp.where(mask[index], centers[1:] + self.transform_noise(noise), reference[index]),
+            )
+        )
+
+    def log_density(self, difference: jax.Array, mask: jax.Array) -> jax.Array:
+        """Evaluate the normalized proposal on its free coordinates."""
+        whitened = jnp.where(mask, difference, 0.0) * self.whiten
+        return self.log_normalizer - 0.5 * jnp.sum(whitened**2, axis=-1)
+
+
+type _ProposalGeometry = _DenseProposalGeometry | _DiagonalProposalGeometry
+
+
 def _proposal_geometry(
     covariance: Float[Array, "D D"],
     local: GaussianTwist,
     mask: Bool[Array, " D"],
     precision: Float[Array, "D D"],
     shift: Float[Array, " D"],
-) -> _ProposalGeometry:
+) -> _DenseProposalGeometry:
     identity = jnp.eye(local.shift.size, dtype=local.shift.dtype)
     prior_precision = jnp.linalg.solve(_free_covariance(covariance, mask), identity)
     posterior_precision = prior_precision + local.precision + precision
     posterior_covariance = symmetric(jnp.linalg.solve(posterior_precision, identity))
     chol = jnp.linalg.cholesky(posterior_covariance)
-    return _ProposalGeometry(
+    return _DenseProposalGeometry(
         posterior_covariance @ prior_precision,
         posterior_covariance @ (local.shift + shift),
         chol,
@@ -128,6 +200,49 @@ def _proposal_geometry(
         -0.5 * jnp.sum(mask) * jnp.log(2.0 * jnp.pi) - jnp.sum(jnp.log(jnp.diag(chol))),
         jnp.zeros_like(covariance),
     )
+
+
+def _diagonal_proposal_geometry(
+    covariance: jax.Array,
+    local: GaussianTwist,
+    mask: jax.Array,
+    precision: jax.Array,
+    shift: jax.Array,
+) -> _DiagonalProposalGeometry:
+    """Factor the independent-coordinate form of the same Gaussian product.
+
+    The caller owns the proof: both model covariances are diagonal, local
+    information is the unshifted auxiliary law, and future twisting is absent.
+    Unit dummy coordinates match the dense free-marginal embedding exactly.
+    """
+    prior_precision = jnp.reciprocal(jnp.where(mask, jnp.diag(covariance), 1.0))
+    posterior_variance = jnp.reciprocal(
+        prior_precision + jnp.diag(local.precision) + jnp.diag(precision)
+    )
+    chol = jnp.sqrt(posterior_variance)
+    return _DiagonalProposalGeometry(
+        posterior_variance * prior_precision,
+        posterior_variance * (local.shift + shift),
+        chol,
+        jnp.reciprocal(chol),
+        -0.5 * jnp.sum(mask) * jnp.log(2 * jnp.pi) - jnp.sum(jnp.log(chol)),
+    )
+
+
+def _point_geometry_factory(
+    target: ParticleTarget,
+    rule: InformationRule,
+    spec: GuidedMethodSpec,
+) -> Callable[[jax.Array, GaussianTwist, jax.Array, jax.Array, jax.Array], _ProposalGeometry]:
+    """Select diagonal algebra only from the compiler and method's structural proof."""
+    if (
+        rule == "unshifted"
+        and spec.kind != "twisted_particle_agrad"
+        and target.state_space.initial_covariance == "diagonal"
+        and target.state_space.transition_covariance == "diagonal"
+    ):
+        return _diagonal_proposal_geometry
+    return _proposal_geometry
 
 
 def _build_twist(
@@ -276,7 +391,7 @@ def build_guide(
         )
     information = point_information(rule, observe, auxiliary, variance, mask)
     twist, transition_covariances = _build_twist(memory, auxiliary, mask, spec, information)
-    proposal = jax.vmap(_proposal_geometry)(
+    proposal = jax.vmap(_point_geometry_factory(memory.target, rule, spec))(
         jnp.concatenate(
             (memory.target.initial_moments(memory.guide)[1][None], transition_covariances)
         ),

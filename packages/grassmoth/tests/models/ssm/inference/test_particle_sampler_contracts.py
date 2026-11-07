@@ -90,7 +90,16 @@ def test_auxiliary_kalman_admission(
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
     compiled = Mock(
         spec=CompiledDynamicalModel,
-        state_space=StateSpace(1, (), (0,), (0,), (), recurrences),
+        state_space=StateSpace(
+            1,
+            (),
+            (0,),
+            (0,),
+            (),
+            recurrences,
+            initial_covariance="dense",
+            transition_covariance="dense",
+        ),
         observations=(Mock(support=Mock(support_kind=support)),),
     )
     sampler = SamplerSpec(
@@ -123,7 +132,16 @@ def test_guided_preflight_accepts_interval_readings_and_recurrences(
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
     compiled = Mock(
         spec=CompiledDynamicalModel,
-        state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
+        state_space=StateSpace(
+            1,
+            (),
+            (0,),
+            () if recurrences else (0,),
+            (),
+            recurrences,
+            initial_covariance="dense",
+            transition_covariance="dense",
+        ),
         observations=(Mock(support=Mock(support_kind="interval")),),
     )
     sampler = SamplerSpec(
@@ -177,7 +195,16 @@ def test_prefix_mixture_admission(monkeypatch, method, kappa, support, recurrenc
     monkeypatch.setattr(compiled_access, "diffusion_families", lambda _compiled: ())
     compiled = Mock(
         spec=CompiledDynamicalModel,
-        state_space=StateSpace(1, (), (0,), () if recurrences else (0,), (), recurrences),
+        state_space=StateSpace(
+            1,
+            (),
+            (0,),
+            () if recurrences else (0,),
+            (),
+            recurrences,
+            initial_covariance="dense",
+            transition_covariance="dense",
+        ),
         observations=(Mock(support=Mock(support_kind=support)),),
     )
     sampler = SamplerSpec(
@@ -361,6 +388,8 @@ def test_initialization_failure_stops_production_before_sampling(monkeypatch):
                     transition=(0,),
                     static=(),
                     recurrence=(),
+                    initial_covariance="dense",
+                    transition_covariance="dense",
                 ),
             ),
         ),

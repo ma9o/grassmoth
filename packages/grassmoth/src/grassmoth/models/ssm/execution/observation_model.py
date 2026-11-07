@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import jax
 import jax.numpy as jnp
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from grassmoth.models.ssm.dynamics.expression import BoundExpression
     from grassmoth.models.ssm.execution.contracts import ObservationLaws
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
-    from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
+    from grassmoth.models.ssm.execution.gaussian_noise import PreparedGaussianNoise
     from grassmoth.models.ssm.execution.observation_dispatch import PointObservationSampler
     from grassmoth.models.ssm.execution.observation_operator import ObservationOperator
     from grassmoth.models.ssm.preparation.observations import ObservationSupportRuntime
@@ -75,7 +75,7 @@ class CompiledObservationModel:
 class ObservationDensityFactors:
     """Gaussian noise and fixed scalar event terms on the same observation grid."""
 
-    gaussian: tuple[GaussianNoiseFactors, ...]
+    gaussian: tuple[PreparedGaussianNoise, ...]
     scalar: tuple[FixedLawTerms | None, ...]
 
     def at(self, index: jax.Array | int) -> ObservationDensityFactors:
@@ -135,15 +135,18 @@ def grouped_density(
 
 
 def prepare_grouped_noise(
-    groups: tuple[LawGroup, ...], covariance: jax.Array, observations: jax.Array
-) -> tuple[GaussianNoiseFactors, ...]:
+    groups: tuple[LawGroup, ...],
+    covariance: jax.Array,
+    observations: jax.Array,
+    structure: Literal["diagonal", "dense"],
+) -> tuple[PreparedGaussianNoise, ...]:
     """Prepare each Gaussian group's noise for every recorded missingness pattern."""
 
-    def prepare(group: LawGroup) -> GaussianNoiseFactors:
+    def prepare(group: LawGroup) -> PreparedGaussianNoise:
         indices = jnp.asarray(group.indices, dtype=jnp.int32)
         return jax.vmap(
             lambda mask: emissions.prepare_gaussian_block_noise(
-                covariance[jnp.ix_(indices, indices)], mask[indices]
+                covariance[jnp.ix_(indices, indices)], mask[indices], structure
             )
         )(~jnp.isnan(observations))
 
@@ -151,7 +154,10 @@ def prepare_grouped_noise(
 
 
 def prepare_grouped_density(
-    groups: tuple[LawGroup, ...], covariance: jax.Array, observations: jax.Array
+    groups: tuple[LawGroup, ...],
+    covariance: jax.Array,
+    observations: jax.Array,
+    structure: Literal["diagonal", "dense"],
 ) -> ObservationDensityFactors:
     """Hoist only event terms whose authored concentration has no state operands."""
     scales = jnp.sqrt(jnp.diag(covariance))
@@ -203,7 +209,7 @@ def prepare_grouped_density(
         return jax.vmap(terms)(observations)
 
     return ObservationDensityFactors(
-        prepare_grouped_noise(groups, covariance, observations),
+        prepare_grouped_noise(groups, covariance, observations, structure),
         tuple(prepare(group) for group in groups),
     )
 
@@ -270,7 +276,7 @@ def prepare_mean_density(
     log_precision: jax.Array | None = None,
 ) -> ResponseFn:
     """Bind one row's exact noise and scalar laws before mapping candidate means."""
-    noise = prepare_grouped_noise(groups, R, jnp.where(mask > 0.5, y, jnp.nan)[None])
+    noise = prepare_grouped_noise(groups, R, jnp.where(mask > 0.5, y, jnp.nan)[None], "dense")
     return prepare_mean_density_with_noise(
         groups, y, R, mask, tuple(factor.at(0) for factor in noise), log_precision
     )
@@ -281,7 +287,7 @@ def prepare_mean_density_with_noise(
     y: jax.Array,
     R: jax.Array,
     mask: jax.Array,
-    noise: tuple[GaussianNoiseFactors, ...],
+    noise: tuple[PreparedGaussianNoise, ...],
     log_precision: jax.Array | None = None,
 ) -> ResponseFn:
     """Bind each interval law before mapping across candidate response means."""

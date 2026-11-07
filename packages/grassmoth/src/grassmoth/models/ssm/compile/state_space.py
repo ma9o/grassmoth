@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import networkx as nx
 import numpy as np
@@ -56,6 +56,8 @@ class StateSpace:
     transition: tuple[int, ...]
     static: tuple[int, ...]
     recurrence: tuple[AdditiveRecurrences | ParallelRecurrences | SequentialRecurrences, ...]
+    initial_covariance: Literal["diagonal", "dense"]
+    transition_covariance: Literal["diagonal", "dense"]
 
     @property
     def initial_path_coordinates(self) -> tuple[int, ...]:
@@ -94,15 +96,16 @@ def compile_state_space(
         initial.diag_support
     )
     initial_random |= np.any(np.asarray(static_loadings) != 0, axis=1)
-    transition_random = np.any(
-        (np.asarray(diffusion.diffusion_chol_template) != 0)
-        | np.asarray(diffusion.diffusion_chol_support),
-        axis=1,
-    )
+    transition_random = np.any(diffusion.effective_support, axis=1)
     transition = tuple(int(i) for i in np.flatnonzero(transition_random) if i not in inputs)
     deterministic = tuple(
         i for i in range(diffusion.n_latent) if i not in (*inputs, *static, *transition)
     )
+    off_diagonal = ~np.eye(diffusion.n_latent, dtype=bool)
+    transition_support = diffusion.effective_support
+    initial_support = (np.asarray(initial.template) != 0) | np.asarray(initial.correlation_support)
+    static_support = np.asarray(static_loadings) != 0
+    shared_static = static_support.astype(int) @ static_support.astype(int).T != 0
     return StateSpace(
         size=diffusion.n_latent,
         inputs=inputs,
@@ -110,6 +113,12 @@ def compile_state_space(
         transition=transition,
         static=static,
         recurrence=_compile_recurrence(dynamics, deterministic),
+        initial_covariance=(
+            "dense" if np.any((initial_support | shared_static) & off_diagonal) else "diagonal"
+        ),
+        transition_covariance=(
+            "dense" if np.any(transition_support & off_diagonal) else "diagonal"
+        ),
     )
 
 

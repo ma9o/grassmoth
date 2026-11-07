@@ -15,7 +15,11 @@ from grassmoth.models.ssm.compile.state_space import (
     SequentialRecurrences,
 )
 from grassmoth.models.ssm.execution.affine import compose_affine_maps
-from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
+from grassmoth.models.ssm.execution.gaussian_noise import (
+    DiagonalGaussianNoiseFactors,
+    GaussianNoiseFactors,
+    PreparedGaussianNoise,
+)
 from grassmoth.models.ssm.execution.innovations import GaussianPathMap
 from grassmoth.models.ssm.execution.observation_model import (
     ObservationDensityFactors,
@@ -46,7 +50,7 @@ type ParticleContext = tuple[dsx.DynamicalModel, jax.Array, jax.Array]
 class ParticleNoiseFactors:
     """Exact noise factors for one fixed parameter context and its observation grid."""
 
-    transitions: GaussianNoiseFactors
+    transitions: PreparedGaussianNoise
     observations: ObservationDensityFactors
 
 
@@ -277,13 +281,14 @@ class ParticleTarget:
         initial = self.initial_moments(context)[0]
         indices = jnp.asarray(self.state_space.transition, dtype=jnp.int32)
 
-        def transition(index: jax.Array) -> GaussianNoiseFactors:
+        def transition(index: jax.Array) -> PreparedGaussianNoise:
             distribution = cast(
                 "dist.MultivariateNormal", self._transition_distribution(context, initial, index)
             )
-            return GaussianNoiseFactors.from_cholesky(
-                jnp.asarray(distribution.scale_tril)[jnp.ix_(indices, indices)]
-            )
+            chol = jnp.asarray(distribution.scale_tril)[jnp.ix_(indices, indices)]
+            if self.state_space.transition_covariance == "diagonal":
+                return DiagonalGaussianNoiseFactors.from_scale(jnp.diag(chol))
+            return GaussianNoiseFactors.from_cholesky(chol)
 
         transitions = jax.vmap(transition)(jnp.arange(1, context[1].size))
         # The unused origin row also makes a traced length-zero scan well shaped.
@@ -298,6 +303,7 @@ class ParticleTarget:
                 model.density_groups(),
                 model.measurement.manifest_cov,
                 self._point_observations(observations),
+                model.structure.covariance,
             ),
         )
 

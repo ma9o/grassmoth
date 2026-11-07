@@ -16,6 +16,7 @@ from grassmoth.models.ssm.execution.innovations import GaussianPathMap, conditio
 from grassmoth.models.ssm.inference.conditioning import compile_exact_state_constraints
 from grassmoth.models.ssm.inference.joint_coordinates import build_joint_coordinates
 from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
+from grassmoth.models.ssm.structure.observation import DenseLoadings, ObservationStructure
 from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.interval_particle import gaussian_interval_case, interval_target
 from grassmoth_test_support.observation import observation_laws
@@ -127,6 +128,7 @@ def _correlated_target(pinned=0.3):
                     jnp.eye(3) * 0.2,
                 ),
                 laws,
+                structure=ObservationStructure(DenseLoadings(), "dense"),
             ),
             t0=0.0,
         )

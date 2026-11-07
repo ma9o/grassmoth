@@ -26,6 +26,7 @@ from grassmoth.models.ssm.compile.state_space import (
     ParallelRecurrences,
     SequentialRecurrences,
     _compile_recurrence,
+    compile_state_space,
 )
 from grassmoth.models.ssm.dynamics.expression import ExpressionComponentSpec
 from grassmoth.models.ssm.dynamics.spec import DynamicsSpec
@@ -45,6 +46,53 @@ from grassmoth_test_support.inference import bind_panel_fixture, compile_fit_fix
 
 
 pytestmark = pytest.mark.inference(concern="sampling")
+
+
+@pytest.mark.parametrize(
+    ("source", "initial_dense", "transition_dense"),
+    [
+        ("independent", False, False),
+        ("fixed_diffusion", False, True),
+        ("free_diffusion", False, True),
+        ("fixed_initial", True, False),
+        ("free_initial", True, False),
+        ("shared_static", True, False),
+        ("independent_static", False, False),
+    ],
+)
+def test_covariance_structure_includes_fixed_free_and_shared_noise(
+    source, initial_dense, transition_dense
+):
+    compiled = compile_fit_fixture(_model()).compiled_dynamical_model
+    diffusion = compiled.diffusion_block
+    initial = compiled.initial_covariance_block
+    size = len(compiled.states)
+    indices = {state.name: index for index, state in enumerate(compiled.states)}
+    first, second = sorted((indices["driver"], indices["outcome"]))
+    if source == "fixed_diffusion":
+        diffusion = replace(
+            diffusion,
+            diffusion_chol_template=diffusion.diffusion_chol_template.at[second, first].set(0.2),
+        )
+    elif source == "free_diffusion":
+        support = np.array(diffusion.diffusion_chol_support)
+        support[second, first] = True
+        diffusion = replace(diffusion, diffusion_chol_support=support)
+    elif source == "fixed_initial":
+        initial = replace(initial, template=initial.template.at[second, first].set(0.2))
+    elif source == "free_initial":
+        support = np.array(initial.correlation_support)
+        support[second, first] = True
+        initial = replace(initial, correlation_support=support)
+    loadings = jnp.zeros((size, 2))
+    if source in {"shared_static", "independent_static"}:
+        loadings = loadings.at[first, 0].set(1.0)
+        loadings = loadings.at[second, int(source == "independent_static")].set(1.0)
+    space = compile_state_space(
+        diffusion, initial, loadings, compiled.states, DynamicsSpec(n_latent=size, components=())
+    )
+    assert space.initial_covariance == ("dense" if initial_dense else "diagonal")
+    assert space.transition_covariance == ("dense" if transition_dense else "diagonal")
 
 
 def test_supported_density_and_gradients_preserve_correlated_nonleading_coordinates():
@@ -724,3 +772,30 @@ def test_exact_static_readings_share_one_value_and_inconsistent_constraints_are_
         assert isinstance(
             validate_observation_support_for_fit(invalid_panel), ObservationPreflightFailure
         )
+
+
+@pytest.mark.parametrize(
+    "kind", ["coordinate", "fixed_loading", "free_loading", "correlated_noise"]
+)
+def test_observation_structure_uses_fixed_and_free_support(kind):
+    from grassmoth.models.ssm.compile.layout.observations import compile_observation_structure
+    from grassmoth.models.ssm.structure.observation import CoordinateLoadings, DenseLoadings
+
+    compiled = compile_fit_fixture(_model()).compiled_dynamical_model
+    block, noise = compiled.loading_block, compiled.observation_noise_block
+    row = 0
+    column = int(np.flatnonzero(~block.effective_support[row])[0])
+    if kind == "fixed_loading":
+        block = replace(block, template=block.template.at[row, column].set(0.4))
+    elif kind == "free_loading":
+        support = np.array(block.free_support)
+        support[row, column] = True
+        block = replace(block, free_support=support)
+    elif kind == "correlated_noise":
+        noise = replace(noise, template=noise.template.at[1, 0].set(0.2))
+    structure = compile_observation_structure(block, noise)
+    assert isinstance(
+        structure.loadings,
+        DenseLoadings if kind in {"fixed_loading", "free_loading"} else CoordinateLoadings,
+    )
+    assert structure.covariance == ("dense" if kind == "correlated_noise" else "diagonal")

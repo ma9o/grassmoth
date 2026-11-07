@@ -65,6 +65,8 @@ from grassmoth.models.ssm.inference.samplers.particle.contract import (
 from grassmoth.models.ssm.inference.samplers.particle.guided_geometry import (
     GuideGeometry,
     _build_twist,
+    _DiagonalProposalGeometry,
+    _point_geometry_factory,
     _ProposalGeometry,
     build_guide,
 )
@@ -72,21 +74,37 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_information import 
     InformationRule,
     point_information,
 )
+from grassmoth.models.ssm.inference.samplers.particle.guided_random import (
+    KillingNoise,
+    killing_draws,
+    particle_normal,
+    particle_uniform,
+)
 from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
     PathSelector,
     select_path,
 )
+from grassmoth.models.ssm.inference.samplers.particle.guided_tail import (
+    MIXTURE_TAIL_DIMENSION_LIMIT,
+    MIXTURE_TAIL_TILE_LIMIT,
+    diagonal_mixture_tail,
+)
 from grassmoth.models.ssm.inference.samplers.particle.marginal import (
+    DiagonalMarginalGeometry,
     MarginalGeometry,
     marginal_geometry,
 )
 from grassmoth.models.ssm.inference.samplers.particle.marginal_mixture import (
     MarginalMixtureBank,
     marginal_mixture_bank,
+    mixture_bank_from_labels,
 )
 from grassmoth.models.ssm.inference.samplers.particle.math import (
     TRITON_NUM_WARPS,
     _masked_normal_log_prob,
+    categorical_from_running,
+    categorical_running_mass,
+    gather_particles,
     label_logsumexp,
 )
 from grassmoth.models.ssm.inference.samplers.particle.prefix_mixture import (
@@ -109,22 +127,11 @@ from grassmoth.models.ssm.inference.tracing import (
 from grassmoth.models.ssm.shapes import Array, Float, Int, PRNGKeyArray
 
 
-class _KillingNoise(NamedTuple):
-    survival: jax.Array
-    replacement: jax.Array
-    rotation: jax.Array
+def _killing_noise(key: PRNGKeyArray, count: int, dtype: DTypeLike) -> KillingNoise:
+    return killing_draws(key, count, dtype)
 
 
-def _killing_noise(key: PRNGKeyArray, count: int, dtype: DTypeLike) -> _KillingNoise:
-    survival, replacement, rotation = jax.random.split(key, 3)
-    return _KillingNoise(
-        jax.random.uniform(survival, (count,), dtype=dtype),
-        jax.random.uniform(replacement, (count,), dtype=dtype),
-        jax.random.gumbel(rotation, (count,), dtype=dtype),
-    )
-
-
-def _killing_reference(logits: Float[Array, " P"], noise: _KillingNoise) -> Int[Array, " P"]:
+def _killing_reference(logits: Float[Array, " P"], noise: KillingNoise) -> Int[Array, " P"]:
     """Killing with cyclic conditioning on ancestor[0] = 0.
 
     Karppinen, Singh & Vihola's conditional resampling, as used by the paper:
@@ -145,7 +152,7 @@ def _killing_reference(logits: Float[Array, " P"], noise: _KillingNoise) -> Int[
 
 
 def _killing_fused(
-    logits: Float[Array, " P"], noise: _KillingNoise, *, interpret: bool = False
+    logits: Float[Array, " P"], noise: KillingNoise, *, interpret: bool = False
 ) -> Int[Array, " P"]:
     """Fuse conditional resampling's reductions in a single particle block."""
     from jax.experimental import pallas as pl
@@ -204,7 +211,7 @@ def _killing_fused(
     return cast("jax.Array", result)
 
 
-def _killing(logits: Float[Array, " P"], noise: _KillingNoise) -> Int[Array, " P"]:
+def _killing(logits: Float[Array, " P"], noise: KillingNoise) -> Int[Array, " P"]:
     return cast(
         "jax.Array",
         jax.lax.platform_dependent(logits, noise, cpu=_killing_reference, cuda=_killing_fused),
@@ -277,14 +284,22 @@ def _guided_step(
         mask,
         reference
         + variance * gradients
-        + (jnp.sqrt(variance) * jax.random.normal(aux_key, reference.shape, reference.dtype)),
+        + (jnp.sqrt(variance) * particle_normal(aux_key, reference.shape, reference.dtype)),
         reference,
     )
     components = _guided_components(target, method)
     if isinstance(spec.proposal, ParameterMixtureProposalSpec):
         information = point_information(components.information, observe, auxiliary, variance, mask)
         twist, _ = _build_twist(memory, auxiliary, mask, method, information)
-        geometry = _mixture_geometry(target, ctx.contexts, auxiliary, mask, information, twist)
+        geometry = _mixture_geometry(
+            target,
+            ctx.contexts,
+            auxiliary,
+            mask,
+            information,
+            twist,
+            _point_geometry_factory(target, components.information, method),
+        )
     else:
         twist, geometry = build_guide(
             components.geometry,
@@ -297,9 +312,49 @@ def _guided_step(
             mask,
             method,
         )
+    fused_tail = (
+        (1 << (count - 1).bit_length()) * (1 << (ctx.num_parameter_particles - 1).bit_length())
+        <= MIXTURE_TAIL_TILE_LIMIT
+        and marginal_mixture
+        and isinstance(geometry, _DiagonalProposalGeometry)
+        and 0 < dimension <= MIXTURE_TAIL_DIMENSION_LIMIT
+        and target.intervals is None
+        and not target.state_space.requires_replay
+    )
+
+    def raw_observe(value: jax.Array, index: jax.Array) -> tuple[jax.Array, jax.Array]:
+        def density(state: jax.Array) -> tuple[jax.Array, jax.Array]:
+            observed = memory.log_probs(memory.replace_current(value, state, index), index).astype(
+                ctx.traj_dtype
+            )
+            return observed, observed
+
+        if method.kappa == 0:
+            observed = memory.log_probs(value, index).astype(ctx.traj_dtype)
+            return observed, jnp.zeros(
+                (ctx.num_parameter_particles, dimension), dtype=ctx.traj_dtype
+            )
+        if dimension <= ctx.num_parameter_particles:
+            derivatives, observed = jax.jacfwd(density, has_aux=True)(memory.state(value))
+            return cast("jax.Array", observed), cast("jax.Array", derivatives)
+
+        def component(context, noise, state):
+            return target.observation_increment_with_noise(
+                context,
+                noise,
+                state,
+                index,
+                None if log_precisions is None else log_precisions[index],
+            ).astype(ctx.traj_dtype)
+
+        observed, derivatives = jax.vmap(
+            jax.value_and_grad(component, argnums=2), in_axes=(0, 0, None)
+        )(ctx.contexts, memory.noise, memory.state(value))
+        return cast("jax.Array", observed), cast("jax.Array", derivatives)
+
     initial_mean = target.initial_moments(guide)[0]
     marginal = (
-        jax.vmap(marginal_geometry, in_axes=(0, 0, 0, None))(geometry.chol, variance, mask, count)
+        jax.vmap(marginal_geometry, in_axes=(0, 0, 0, None))(geometry, variance, mask, count)
         if method.kind == "particle_mgrad" and not marginal_mixture
         else None
     )
@@ -308,9 +363,10 @@ def _guided_step(
         particles: Float[Array, "P R"], index: Int[Array, ""] | int
     ) -> tuple[Float[Array, "P K"], Float[Array, "P D"]]:
         # The conditioned particle is the reference: reuse its observation and score.
-        observed, scores = jax.vmap(observe, in_axes=(0, None))(particles[1:], index)
-        observed = jnp.concatenate((reference_observed[index, None], observed))
-        scores = jnp.concatenate((gradients[index, None], scores))
+        observed, scores = jax.vmap(observe, in_axes=(0, None))(particles, index)
+        conditioned = jnp.arange(count)[:, None] == 0
+        observed = jnp.where(conditioned, reference_observed[index], observed)
+        scores = jnp.where(conditioned, gradients[index], scores)
         return observed, scores
 
     def weight_correction(
@@ -325,7 +381,9 @@ def _guided_step(
             return mixture_bank.log_weights(scores, variance[index], mask[index])
         proposal: _ProposalGeometry = jax.tree.map(lambda value: value[index], geometry)
         if marginal is not None:
-            factors: MarginalGeometry = jax.tree.map(lambda value: value[index], marginal)
+            factors: MarginalGeometry | DiagonalMarginalGeometry = jax.tree.map(
+                lambda value: value[index], marginal
+            )
             return factors.log_weights(
                 particles, centers - proposal.shift, scores, variance[index], mask[index]
             )
@@ -357,10 +415,10 @@ def _guided_step(
             jnp.broadcast_to(ctx.initial_label_log_probs, (count, ctx.num_parameter_particles)),
         )
         first_noise = (
-            jax.random.normal(first_key, (count - 1, dimension), reference.dtype),
-            jax.random.gumbel(
+            particle_normal(first_key, (count - 1, dimension), reference.dtype),
+            particle_uniform(
                 jax.random.fold_in(first_key, 0x4D495854),
-                (count if marginal_mixture else count - 1, ctx.num_parameter_particles),
+                (count if marginal_mixture else count - 1,),
                 dtype=reference.dtype,
             ),
             reference[0],
@@ -409,15 +467,27 @@ def _guided_step(
 
     def forward(
         carry: tuple[
-            Float[Array, "P R"], Float[Array, " P"], Float[Array, "P K"], Float[Array, " P"]
+            Float[Array, "P R"],
+            Float[Array, " P"],
+            Float[Array, "P K"],
+            Float[Array, " P"],
+            Int[Array, " P"],
+            Float[Array, "P carried_labels"],
         ],
         inputs: tuple[
             Int[Array, ""],
-            tuple[_KillingNoise, Float[Array, "P-1 D"], Float[Array, "component_draws components"]],
+            tuple[KillingNoise, Float[Array, "P-1 D"], Float[Array, " component_draws"]],
             _ProposalGeometry,
         ],
     ) -> tuple[
-        tuple[Float[Array, "P R"], Float[Array, " P"], Float[Array, "P K"], Float[Array, " P"]],
+        tuple[
+            Float[Array, "P R"],
+            Float[Array, " P"],
+            Float[Array, "P K"],
+            Float[Array, " P"],
+            Int[Array, " P"],
+            Float[Array, "P carried_labels"],
+        ],
         tuple[
             Float[Array, "P R"],
             Float[Array, " P"],
@@ -428,12 +498,12 @@ def _guided_step(
             Float[Array, "P K"],
         ],
     ]:
-        previous, weights, scores, previous_twists = carry
+        previous, weights, scores, previous_twists, prepared_ancestors, previous_running = carry
         index, draws, proposal = inputs
         killing_noise, noise, component_noise = draws
-        ancestors = _killing(weights, killing_noise)
-        parents = previous[ancestors]
-        parent_scores = scores[ancestors]
+        ancestors = prepared_ancestors if fused_tail else _killing(weights, killing_noise)
+        parents = gather_particles(previous, ancestors)
+        parent_scores = gather_particles(scores, ancestors)
         current_mixture_bank = None
         if isinstance(spec.proposal, ParameterMixtureProposalSpec):
             means = jax.vmap(
@@ -443,16 +513,33 @@ def _guided_step(
             )(parents)
             component_centers = proposal.center(means, mask[index])
             if marginal_mixture:
-                current_mixture_bank = marginal_mixture_bank(
-                    proposal,
-                    component_centers,
-                    parent_scores,
-                    ctx.initial_label_log_probs,
-                    noise,
-                    component_noise,
-                    reference[index],
-                    mask[index],
-                )
+                if fused_tail:
+                    parent_running = gather_particles(previous_running, ancestors)
+                    component_running = jnp.where(
+                        jnp.arange(count)[:, None] == 0, reference_running, parent_running
+                    )
+                    labels = categorical_from_running(component_running, component_noise)
+                    current_mixture_bank = mixture_bank_from_labels(
+                        proposal,
+                        component_centers,
+                        parent_scores,
+                        ctx.initial_label_log_probs,
+                        noise,
+                        labels,
+                        reference[index],
+                        mask[index],
+                    )
+                else:
+                    current_mixture_bank = marginal_mixture_bank(
+                        proposal,
+                        component_centers,
+                        parent_scores,
+                        ctx.initial_label_log_probs,
+                        noise,
+                        component_noise,
+                        reference[index],
+                        mask[index],
+                    )
                 current, centers = current_mixture_bank.particles, current_mixture_bank.centers
                 proposal_density = None
             else:
@@ -467,30 +554,87 @@ def _guided_step(
                 )
         else:
             means = jax.vmap(lambda value: memory.guide_moments(value, index)[0])(parents)
-            centers = proposal.center(means, mask[index]) + parents @ proposal.parent_map.T
+            centers = proposal.center(means, mask[index]) + proposal.parent_shift(parents)
             current = proposal.next_particles(centers, noise, reference, mask, index)
             proposal_density = None
         current_memory = jax.vmap(memory.advance, in_axes=(0, 0, None))(parents, current, index)
-        observed, current_gradients = local_factors(current_memory, index)
-        next_scores = (
-            parent_scores
-            + jax.vmap(transition, in_axes=(0, 0, None))(parents, current_memory, index)
-            + observed
-        )
-        # Normalized prefix label laws remove repeated prefix reductions and avoid
-        # subtracting two increasingly large log densities as the time grid grows.
-        increment = label_logsumexp(next_scores)
-        next_scores = next_scores - jnp.where(jnp.isneginf(increment), 0.0, increment)[:, None]
-        current_twists = twist.log_density(current_memory, index)
-        next_weights: jax.Array = (
-            increment
-            + weight_correction(
-                current, centers, current_gradients, index, proposal_density, current_mixture_bank
+        if (
+            isinstance(spec.proposal, ParameterMixtureProposalSpec)
+            and not target.state_space.requires_replay
+        ):
+            # The proposal already evaluated each label's exact nonlinear drift.
+            # Replayed states can differ between labels, so they use the scorer
+            # bound to their reconstructed predecessor instead.
+            transition_scores = jax.vmap(
+                memory.transition_log_probs_with_means, in_axes=(0, None, 0)
+            )(
+                current_memory,
+                index,
+                means[..., jnp.asarray(target.state_space.transition, dtype=jnp.int32)],
+            ).astype(ctx.traj_dtype)
+        else:
+            transition_scores = jax.vmap(transition, in_axes=(0, 0, None))(
+                parents, current_memory, index
             )
-            + current_twists
-            - previous_twists[ancestors]
-        )
-        return (current_memory, next_weights, next_scores, current_twists), (
+        if fused_tail:
+            observed, raw_gradients = jax.vmap(raw_observe, in_axes=(0, None))(
+                current_memory, index
+            )
+            assert current_mixture_bank is not None
+            bank = current_mixture_bank
+            next_weights, next_scores, observed, next_ancestors, next_running = (
+                diagonal_mixture_tail(
+                    current,
+                    bank.prior_centers,
+                    bank.geometry.chol,
+                    bank.geometry.whiten,
+                    bank.label_correction,
+                    observed,
+                    raw_gradients,
+                    parent_scores,
+                    transition_scores,
+                    ctx.initial_label_log_probs,
+                    reference_observed[index],
+                    gradients[index],
+                    variance[index],
+                    mask[index],
+                    killing_noise,
+                    compute_gradient=method.kappa != 0,
+                    resample=_killing,
+                )
+            )
+            current_twists = jnp.zeros_like(next_weights)
+        else:
+            observed, current_gradients = local_factors(current_memory, index)
+            next_scores = parent_scores + transition_scores + observed
+            # Normalized prefix label laws remove repeated prefix reductions and avoid
+            # subtracting two increasingly large log densities as the time grid grows.
+            increment = label_logsumexp(next_scores)
+            next_scores = next_scores - jnp.where(jnp.isneginf(increment), 0.0, increment)[:, None]
+            current_twists = twist.log_density(current_memory, index)
+            next_weights: jax.Array = (
+                increment
+                + weight_correction(
+                    current,
+                    centers,
+                    current_gradients,
+                    index,
+                    proposal_density,
+                    current_mixture_bank,
+                )
+                + current_twists
+                - gather_particles(previous_twists, ancestors)
+            )
+            next_ancestors = ancestors
+            next_running = previous_running
+        return (
+            current_memory,
+            next_weights,
+            next_scores,
+            current_twists,
+            next_ancestors,
+            next_running,
+        ), (
             current_memory,
             next_weights,
             next_scores,
@@ -502,27 +646,52 @@ def _guided_step(
 
     def forward_noise(
         step_key: PRNGKeyArray,
-    ) -> tuple[_KillingNoise, Float[Array, "N D"], Float[Array, "component_draws K"]]:
+    ) -> tuple[KillingNoise, Float[Array, "N D"], Float[Array, " component_draws"]]:
         resample_key, proposal_key = jax.random.split(step_key)
         return (
             _killing_noise(resample_key, count, reference.dtype),
-            jax.random.normal(proposal_key, (count - 1, dimension), reference.dtype),
-            jax.random.gumbel(
+            particle_normal(proposal_key, (count - 1, dimension), reference.dtype),
+            particle_uniform(
                 jax.random.fold_in(proposal_key, 0x4D495854),
-                (count if marginal_mixture else count - 1, ctx.num_parameter_particles),
+                (count if marginal_mixture else count - 1,),
                 dtype=reference.dtype,
             )
             if isinstance(spec.proposal, ParameterMixtureProposalSpec)
-            else jnp.empty((count - 1, 0), dtype=reference.dtype),
+            else jnp.empty((0,), dtype=reference.dtype),
         )
 
+    all_noise = jax.vmap(forward_noise)(jax.random.split(forward_key, steps - 1))
+    initial_ancestors = (
+        _killing(first_weights, jax.tree.map(lambda value: value[0], all_noise[0]))
+        if fused_tail and steps > 1
+        else jnp.arange(count)
+    )
+    if fused_tail:
+        all_noise = (
+            jax.tree.map(lambda value: jnp.concatenate((value[1:], value[-1:])), all_noise[0]),
+            all_noise[1],
+            all_noise[2],
+        )
+    reference_running = categorical_running_mass(ctx.initial_label_log_probs)
+    first_running = (
+        categorical_running_mass(first_scores)
+        if fused_tail
+        else jnp.empty((count, 0), dtype=reference.dtype)
+    )
     _, (tail, tail_weights, tail_scores, tail_twists, ancestors, centers, tail_observed) = (
         jax.lax.scan(
             forward,
-            (first_memory, first_weights, first_scores, first_twists),
+            (
+                first_memory,
+                first_weights,
+                first_scores,
+                first_twists,
+                initial_ancestors,
+                first_running,
+            ),
             (
                 jnp.arange(1, steps),
-                jax.vmap(forward_noise)(jax.random.split(forward_key, steps - 1)),
+                all_noise,
                 jax.tree.map(lambda value: value[1:], geometry),
             ),
             unroll=method.scan_unroll,

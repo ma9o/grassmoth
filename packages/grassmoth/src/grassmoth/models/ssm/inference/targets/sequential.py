@@ -17,7 +17,7 @@ from grassmoth.models.ssm.execution.observation_model import (
 
 if TYPE_CHECKING:
     from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
-    from grassmoth.models.ssm.execution.gaussian_noise import GaussianNoiseFactors
+    from grassmoth.models.ssm.execution.gaussian_noise import PreparedGaussianNoise
     from grassmoth.models.ssm.inference.targets.intervals import ParticleIntervalObservations
     from grassmoth.models.ssm.inference.targets.particle import (
         ParticleContext,
@@ -32,7 +32,7 @@ class WindowMemoryRuntime:
 
     intervals: ParticleIntervalObservations
     labels: int
-    noise: tuple[GaussianNoiseFactors, ...]
+    noise: tuple[PreparedGaussianNoise, ...]
 
     @property
     def shape(self) -> tuple[int, int, int, int]:
@@ -77,7 +77,7 @@ class WindowMemoryRuntime:
             context: ParticleContext,
             state: jax.Array,
             memory: jax.Array,
-            noise: tuple[GaussianNoiseFactors, ...],
+            noise: tuple[PreparedGaussianNoise, ...],
         ) -> jax.Array:
             model = cast(
                 "HeterogeneousObservation",
@@ -112,7 +112,7 @@ def _window_memory(
     )
     readings = jnp.where(observed & jnp.isfinite(observations), observations, jnp.nan)
 
-    def noise(context: ParticleContext) -> tuple[GaussianNoiseFactors, ...]:
+    def noise(context: ParticleContext) -> tuple[PreparedGaussianNoise, ...]:
         model = cast(
             "HeterogeneousObservation", intervals.dynamical_model(context).observation_model
         )
@@ -120,6 +120,7 @@ def _window_memory(
             compile_law_groups(model.laws, memory.channels, interval=True),
             model.measurement.manifest_cov,
             readings,
+            model.structure.covariance,
         )
 
     return WindowMemoryRuntime(

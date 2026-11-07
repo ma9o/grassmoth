@@ -17,9 +17,7 @@ def compile_point_reading_mask(model: CompiledDynamicalModel, observations: jax.
     """Mark direct dependencies only; an accumulator reading never expands to its drivers."""
     # The compiled predictor drops fixed zero loadings while retaining every
     # free loading, independently of its current numerical parameter value.
-    dependencies = (
-        np.asarray(model.loading_block.template) != 0
-    ) | model.loading_block.free_support
+    dependencies = model.loading_block.effective_support
     observed = np.asarray(observations)
     mask = np.zeros((len(observed), len(model.states)), dtype=bool)
     for channel, observation in enumerate(model.observations):

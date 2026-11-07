@@ -28,6 +28,11 @@ from grassmoth.models.ssm.structure.assembly import (
     rect_matrix_positions,
 )
 from grassmoth.models.ssm.structure.blocks import ManifestCholBlockSpec, SparseBlockSpec
+from grassmoth.models.ssm.structure.observation import (
+    CoordinateLoadings,
+    DenseLoadings,
+    ObservationStructure,
+)
 from grassmoth.models.ssm.structure.sites import SiteDescriptor
 from grassmoth.models.structure import get_reference_indicator_lookup, selected_state_ids
 
@@ -207,3 +212,23 @@ def likelihood_sites(selection: StructuralSelection) -> tuple[SiteDescriptor, ..
         for parameter in execution_parameters(selection)
     }
     return tuple(site for site in sites if site.site_kind in sampled_quantities)
+
+
+def compile_observation_structure(
+    block: SparseBlockSpec[tuple[int, int]], noise: ManifestCholBlockSpec
+) -> ObservationStructure:
+    """Prove coordinate predictors from fixed and free support, and independent noise.
+
+    ManifestCholBlockSpec replaces only diagonal scales. A diagonal fixed
+    template therefore proves diagonal covariance for every parameter value.
+    Zero loading rows may read any coordinate since their coefficient is zero.
+    """
+    support = block.effective_support
+    loadings = (
+        CoordinateLoadings(tuple(int(np.argmax(row)) for row in support))
+        if np.all(np.sum(support, axis=1) <= 1)
+        else DenseLoadings()
+    )
+    off_diagonal = ~np.eye(noise.n_manifest, dtype=bool)
+    covariance = "dense" if np.any(np.asarray(noise.template)[off_diagonal] != 0) else "diagonal"
+    return ObservationStructure(loadings, covariance)

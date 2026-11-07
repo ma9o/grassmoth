@@ -14,6 +14,7 @@ from grassmoth.artifacts.probability.families import DistributionFamily
 from grassmoth.models.ssm.execution.contracts import MeasurementParams
 from grassmoth.models.ssm.execution.dynamical_model import HeterogeneousObservation
 from grassmoth.models.ssm.predictive.observations import sample_model_observations
+from grassmoth.models.ssm.structure.observation import DenseLoadings, ObservationStructure
 from grassmoth_test_support.observation import observation_laws
 
 
@@ -75,6 +76,7 @@ def sample_observation_fixture(
             observation_model=HeterogeneousObservation(
                 MeasurementParams(jnp.eye(channels), jnp.zeros(channels), covariance),
                 observation_laws(families, links, parameters, level_counts=manifest_level_counts),
+                structure=ObservationStructure(DenseLoadings(), "dense"),
             ),
             control_dim=0,
             t0=times[0],
