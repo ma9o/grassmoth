@@ -47,7 +47,7 @@ MIXTURE_TAIL_WIDE_COORDINATE_LIMIT: Annotated[
 MIXTURE_TAIL_DIMENSION_LIMIT: Annotated[
     int,
     Field(
-        description="Measured L40S cutover: whole-coordinate fused tail improved D=3 and D=9 native sweeps; the tiled D=40 arm regressed 16.08 to 18.17 ms. Cap padded coordinate width at 16."
+        description="Paired L40S L96 D40, C10/P128/K8/u8: extending the four-coordinate tail and finisher beyond D16 increased ordinary sweep time 7.35 to 8.10 ms. Retain the measured dimension cap."
     ),
 ] = 16
 
@@ -55,7 +55,7 @@ MIXTURE_TAIL_DIMENSION_LIMIT: Annotated[
 TAIL_COORDINATE_TILE: Annotated[
     int,
     Field(
-        description="Measured L40S HD D=9 tail: two eight-coordinate CTAs plus reduction/resampling improved 70.33 to 66.78 ms/sweep versus one sixteen-coordinate CTA. D<=8 keeps one fused resampling launch."
+        description="Measured L40S HD D=9 tail: two eight-coordinate CTAs plus reduction/resampling improved 70.33 to 66.78 ms/sweep versus one sixteen-coordinate CTA. D<=8 keeps one fused resampling launch through 2048 particle-label entries."
     ),
 ] = 8
 
@@ -63,17 +63,23 @@ TAIL_COORDINATE_TILE: Annotated[
 TAIL_PARALLEL_COORDINATE_TILE: Annotated[
     int,
     Field(
-        description="Paired L40S HD D=9, P=128, K=8, unroll=8: four-coordinate tiles reduced sweep time 58.66 to 54.37 ms at C=10 and 80.61 to 76.97 ms at C=40. Two-coordinate tiles gained slightly more at C=10 but less at C=40. D<=8 retains its single-CTA tile."
+        description="Paired L40S HD D=9, P=128, K=8, unroll=8: four-coordinate tiles reduced sweep time 58.66 to 54.37 ms at C=10 and 80.61 to 76.97 ms at C=40. Two-coordinate tiles gained slightly more at C=10 but less at C=40. D<=8 retains its single-CTA tile through 2048 particle-label entries."
     ),
 ] = 4
 
 
-def tail_coordinate_block(dimension: int) -> int:
-    """Share the padded coordinate extent between admission and kernel lowering."""
+def tail_coordinate_block(dimension: int, particles: int, labels: int) -> int:
+    """Keep the single-CTA default; split coordinates for wider particle-label banks.
+
+    L40S D8/C10/P128/K32/u8: four-coordinate tiles reduced paired ordinary
+    sweeps 140.09 to 83.61 ms; D5/6/8 pass isolated no-spill gates. Split only
+    above 2048 particle-label entries, preserving the default K8 tile.
+    """
+    product = (1 << max(particles - 1, 0).bit_length()) * (1 << max(labels - 1, 0).bit_length())
     return (
         1 << max(dimension - 1, 0).bit_length()
-        if dimension <= TAIL_COORDINATE_TILE
-        else TAIL_PARALLEL_COORDINATE_TILE
+        if dimension <= TAIL_COORDINATE_TILE and product <= MIXTURE_TAIL_TILE_LIMIT
+        else min(1 << max(dimension - 1, 0).bit_length(), TAIL_PARALLEL_COORDINATE_TILE)
     )
 
 
@@ -116,7 +122,7 @@ def diagonal_mixture_tail(
     generate_random = isinstance(killing_noise, TailRandomKeys)
     count, labels = observed.shape
     dimension = x.shape[-1]
-    coordinate_block = tail_coordinate_block(dimension)
+    coordinate_block = tail_coordinate_block(dimension, count, labels)
     tiles = pl.cdiv(dimension, coordinate_block)
     block_dtype = observed.dtype
     block = pl.next_power_of_2(count)

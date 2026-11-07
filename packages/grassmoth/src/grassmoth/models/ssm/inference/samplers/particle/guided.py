@@ -322,7 +322,8 @@ def _guided_step(
         <= MIXTURE_TAIL_TILE_LIMIT
         * (
             MIXTURE_TAIL_WIDE_TILE_FACTOR
-            if tail_coordinate_block(dimension) <= MIXTURE_TAIL_WIDE_COORDINATE_LIMIT
+            if tail_coordinate_block(dimension, count, ctx.num_parameter_particles)
+            <= MIXTURE_TAIL_WIDE_COORDINATE_LIMIT
             else 1
         )
         and marginal_mixture
