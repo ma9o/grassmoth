@@ -44,6 +44,22 @@ MIXTURE_TAIL_WIDE_COORDINATE_LIMIT: Annotated[
 ] = 4
 
 
+MIXTURE_TAIL_LARGE_PARTICLE_LIMIT: Annotated[
+    int,
+    Field(
+        description="L40S isolated forward gates at D9: P512/K16 passes; P1024/K8 spills, with the responsible kernel not isolated. Bound only newly widened admission; retain the existing <=4096-entry route."
+    ),
+] = 512
+
+
+MIXTURE_TAIL_LARGE_TILE_FACTOR: Annotated[
+    int,
+    Field(
+        description="Paired L40S C10/P128/u8: eight warps above 4096 particle-label entries reduced SV K64 ordinary sweeps 91.93 to 64.52 ms and PARAM D3/K64 88.01 to 83.87 ms. Padded tiles lose on this route: SV K33 regressed 93.89 to 130.85 ms. Particle and label counts are powers of two, so requests can't reach those."
+    ),
+] = 2
+
+
 MIXTURE_TAIL_DIMENSION_LIMIT: Annotated[
     int,
     Field(
@@ -80,6 +96,16 @@ def tail_coordinate_block(dimension: int, particles: int, labels: int) -> int:
         1 << max(dimension - 1, 0).bit_length()
         if dimension <= TAIL_COORDINATE_TILE and product <= MIXTURE_TAIL_TILE_LIMIT
         else min(1 << max(dimension - 1, 0).bit_length(), TAIL_PARALLEL_COORDINATE_TILE)
+    )
+
+
+def tail_warps(particles: int, labels: int) -> int:
+    """Use eight warps for the measured wider admission; retain four below it."""
+    product = (1 << max(particles - 1, 0).bit_length()) * (1 << max(labels - 1, 0).bit_length())
+    return TRITON_NUM_WARPS * (
+        MIXTURE_TAIL_LARGE_TILE_FACTOR
+        if product > MIXTURE_TAIL_TILE_LIMIT * MIXTURE_TAIL_WIDE_TILE_FACTOR
+        else 1
     )
 
 
@@ -456,7 +482,7 @@ def diagonal_mixture_tail(
             out_shape=outputs,
             grid=(tiles,),
             interpret=interpret,
-            compiler_params=pt.CompilerParams(num_warps=TRITON_NUM_WARPS),
+            compiler_params=pt.CompilerParams(num_warps=tail_warps(count, labels)),
             name="diagonal_mgrad_mixture_tail_killing"
             if tiles == 1
             else "diagonal_mgrad_mixture_tail_coordinates",
@@ -576,7 +602,7 @@ def diagonal_mixture_tail(
                 ),
                 grid=(1,),
                 interpret=interpret,
-                compiler_params=pt.CompilerParams(num_warps=TRITON_NUM_WARPS),
+                compiler_params=pt.CompilerParams(num_warps=tail_warps(count, labels)),
                 name="diagonal_mgrad_mixture_finish",
             )(*args)
 

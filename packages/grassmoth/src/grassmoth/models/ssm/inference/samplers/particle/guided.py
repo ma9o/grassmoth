@@ -88,6 +88,8 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.guided_tail import (
     MIXTURE_TAIL_DIMENSION_LIMIT,
+    MIXTURE_TAIL_LARGE_PARTICLE_LIMIT,
+    MIXTURE_TAIL_LARGE_TILE_FACTOR,
     MIXTURE_TAIL_TILE_LIMIT,
     MIXTURE_TAIL_WIDE_COORDINATE_LIMIT,
     MIXTURE_TAIL_WIDE_TILE_FACTOR,
@@ -322,6 +324,7 @@ def _guided_step(
         <= MIXTURE_TAIL_TILE_LIMIT
         * (
             MIXTURE_TAIL_WIDE_TILE_FACTOR
+            * (MIXTURE_TAIL_LARGE_TILE_FACTOR if count <= MIXTURE_TAIL_LARGE_PARTICLE_LIMIT else 1)
             if tail_coordinate_block(dimension, count, ctx.num_parameter_particles)
             <= MIXTURE_TAIL_WIDE_COORDINATE_LIMIT
             else 1
