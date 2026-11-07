@@ -88,6 +88,8 @@ from grassmoth.models.ssm.inference.samplers.particle.guided_selection import (
 )
 from grassmoth.models.ssm.inference.samplers.particle.guided_tail import (
     MIXTURE_TAIL_DIMENSION_LIMIT,
+    MIXTURE_TAIL_SMALL_STATE_DIMENSIONS,
+    MIXTURE_TAIL_SMALL_STATE_FACTOR,
     MIXTURE_TAIL_TILE_LIMIT,
     diagonal_mixture_tail,
 )
@@ -317,6 +319,11 @@ def _guided_step(
     fused_tail = (
         (1 << (count - 1).bit_length()) * (1 << (ctx.num_parameter_particles - 1).bit_length())
         <= MIXTURE_TAIL_TILE_LIMIT
+        * (
+            MIXTURE_TAIL_SMALL_STATE_FACTOR
+            if dimension <= MIXTURE_TAIL_SMALL_STATE_DIMENSIONS
+            else 1
+        )
         and marginal_mixture
         and isinstance(geometry, _DiagonalProposalGeometry)
         and 0 < dimension <= MIXTURE_TAIL_DIMENSION_LIMIT

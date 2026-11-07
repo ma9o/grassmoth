@@ -29,6 +29,21 @@ MIXTURE_TAIL_TILE_LIMIT: Annotated[
 ] = 2048
 
 
+MIXTURE_TAIL_SMALL_STATE_FACTOR: Annotated[
+    int,
+    Field(
+        description="Measured L40S C10/P128/u8 at M32: doubling the 2048-entry admission limit reduced ordinary sweeps 113.24 to 43.85 ms on SV and 75.64 to 57.39 ms on PARAM. Larger coordinate tiles retain the previous limit."
+    ),
+] = 2
+
+MIXTURE_TAIL_SMALL_STATE_DIMENSIONS: Annotated[
+    int,
+    Field(
+        description="Admit the wider tile only through the measured M32 PARAM path, D3 padded to four coordinates. Unmeasured above that: the D9 no-spill gates fail in the backward kernel at K16 and K32 with or without this limit, so they say nothing about the wider tile."
+    ),
+] = 4
+
+
 MIXTURE_TAIL_DIMENSION_LIMIT: Annotated[
     int,
     Field(
