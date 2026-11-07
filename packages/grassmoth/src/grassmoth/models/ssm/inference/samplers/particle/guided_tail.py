@@ -395,7 +395,7 @@ def diagonal_mixture_tail(
     random_keys = (
         killing_noise.values
         if isinstance(killing_noise, TailRandomKeys)
-        else jnp.empty((0, 4, 2), dtype=jnp.uint32)
+        else jnp.zeros((1, 4, 2), dtype=jnp.uint32)
     )
     result = jax.lax.platform_dependent(
         x,
