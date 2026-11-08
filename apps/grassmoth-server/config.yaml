@@ -30,8 +30,8 @@ inference:
   # Local studies retain their store/history here; only numerical fitting runs on GPU.
   compute_loo_diagnostics: false
   sampler:
-    # SamplerSpec in packages/grassmoth/src/grassmoth/artifacts/sampling.py owns each field's
-    # meaning and the source of its default.
+    # SamplerLaunchSpec in packages/grassmoth/src/grassmoth/artifacts/sampling.py owns
+    # launch controls; at most one of path particles, parameter particles and chains is auto.
     hardware: L40S
     num_warmup: 4000
     num_samples_per_chain: 1000
@@ -40,7 +40,7 @@ inference:
     algorithm:
       method: mpgibbs
       n_parameter_particles: 8
-      # path_update.method.kind: particle_mgrad, twisted_particle_agrad or auxiliary_kalman.
+      # Public launches use whole-path Particle-mGRAD with running-prefix parameter mixtures.
       path_update:
         method:
           kind: particle_mgrad

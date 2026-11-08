@@ -65,9 +65,8 @@ def validate_sampler_support(
         compiled.state_space.requires_replay or intervals
     ):
         return ObservationPreflightFailure.rejected(
-            "Running-prefix mixture proposals support point readings without replay; select "
-            "twisted_particle_agrad with parameter_mean, or auxiliary_kalman, for interval "
-            "readings or deterministic recurrences."
+            "Running-prefix mixture proposals support point readings without replay. "
+            "Interval readings and deterministic recurrences are not supported by this path update."
         )
     if (
         path_update.method.kind == "particle_mgrad"
@@ -75,7 +74,7 @@ def validate_sampler_support(
     ):
         return ObservationPreflightFailure.rejected(
             f"Particle-mGRAD supports at most {MGRAD_STATE_LIMIT} state dimensions; this model "
-            f"has {compiled.state_space.size}. Select twisted_particle_agrad or auxiliary_kalman."
+            f"has {compiled.state_space.size}."
         )
     return None
 

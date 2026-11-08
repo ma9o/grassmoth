@@ -16,7 +16,7 @@ from grassmoth.public import (
 
 
 class FitSettingsSpec(Value):
-    """Optional numerical controls applied to the configured joint sampler.
+    """Optional controls for the configured whole-path MPGibbs Particle-mGRAD sampler.
 
     Each field means what the SamplerSpec field of the same name means. Null keeps the
     server's configured value, or the continued fit's. Profiling applies only to
@@ -31,7 +31,7 @@ class FitSettingsSpec(Value):
     time_limit_seconds: int | None = Field(default=None, ge=1)
     algorithm: InferenceAlgorithmLaunchSpec | None = Field(
         default=None,
-        description="Replace the complete configured or continued algorithm; omitted inherits it. Variant defaults fill unspecified algorithm fields.",
+        description="Replace the complete configured or continued MPGibbs Particle-mGRAD algorithm; omitted inherits it. Launches use whole-path updates and running-prefix parameter mixtures. Defaults fill unspecified algorithm fields.",
     )
     num_samples_per_chain: int | None = Field(default=None, ge=0)
     num_warmup: int | None = Field(default=None, ge=0)

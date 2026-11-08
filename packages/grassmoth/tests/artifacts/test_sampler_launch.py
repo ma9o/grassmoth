@@ -3,7 +3,11 @@
 import pytest
 from pydantic import ValidationError
 
-from grassmoth.artifacts.sampling import SamplerLaunchSpec, SamplerSpec
+from grassmoth.artifacts.sampling import (
+    SamplerLaunchSpec,
+    SamplerSpec,
+    UnsupportedSamplerLaunch,
+)
 
 pytestmark = pytest.mark.contract
 
@@ -66,3 +70,71 @@ def test_launch_reuses_numerical_defaults_and_constraints():
     ]:
         with pytest.raises(ValidationError):
             SamplerLaunchSpec.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    "algorithm",
+    [
+        {"method": "nuts_da"},
+        {"method": "mpgibbs", "path_update": {"method": {"kind": "auxiliary_kalman"}}},
+        {"method": "mpgibbs", "path_update": {"method": {"kind": "twisted_particle_agrad"}}},
+        {
+            "method": "mpgibbs",
+            "path_update": {"update": {"kind": "blocked", "block_length": 10}},
+        },
+        {"method": "mpgibbs", "path_update": {"proposal": {"kind": "parameter_mean"}}},
+        {"method": "mpgibbs", "path_update": {"proposal": {"kind": "conditional_parameter"}}},
+        {
+            "method": "mpgibbs",
+            "path_update": {"proposal": {"kind": "parameter_mixture", "weights": "prior"}},
+        },
+    ],
+)
+def test_launch_rejects_alternatives_but_numerical_specs_remain_available(algorithm):
+    payload = {"algorithm": algorithm}
+    numerical = SamplerSpec.model_validate(payload)
+    with pytest.raises(ValidationError):
+        SamplerLaunchSpec.model_validate(payload)
+    inherited = SamplerLaunchSpec.from_resolved(numerical)
+    assert isinstance(inherited, UnsupportedSamplerLaunch)
+    assert inherited.message
+    assert SamplerSpec.model_validate_json(numerical.model_dump_json()) == numerical
+
+
+@pytest.mark.parametrize("kappa", [0, 1])
+@pytest.mark.parametrize("parameter_proposal", ["random_walk", "pseudo_langevin"])
+def test_supported_inheritance_preserves_every_control(kappa, parameter_proposal):
+    numerical = SamplerSpec.model_validate(
+        {
+            "num_warmup": 17,
+            "num_samples_per_chain": 23,
+            "num_chains": 3,
+            "thinning": False,
+            "seed": 19,
+            "hardware": "local",
+            "time_limit_seconds": 37,
+            "algorithm": {
+                "method": "mpgibbs",
+                "n_parameter_particles": 16,
+                "path_update": {
+                    "method": {
+                        "kind": "particle_mgrad",
+                        "num_particles": 32,
+                        "kappa": kappa,
+                        "scan_unroll": 2,
+                    },
+                    "latent_step": {"kind": "fixed", "delta": 0.31},
+                },
+                "parameter_proposal": parameter_proposal,
+                "diagnostic_metrics": ["particle_weights"],
+                "param_target_accept": 0.3,
+                "adaptation_scheme": "simple",
+                "initialization": {"scale": 0.7},
+            },
+        }
+    )
+    inherited = SamplerLaunchSpec.from_resolved(numerical)
+    assert isinstance(inherited, SamplerLaunchSpec)
+    assert inherited.automatic_dimension is None
+    assert inherited.resolve(128) == numerical
+    assert SamplerLaunchSpec.model_validate_json(inherited.model_dump_json()) == inherited

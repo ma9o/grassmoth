@@ -14,6 +14,7 @@ from grassmoth.public import (
     ParticleMgradMemoryShape,
     SamplerLaunchSpec,
     SamplerSpec,
+    SharedMemoryBudget,
     estimate_particle_mgrad_memory,
 )
 from grassmoth_server.actions.contracts.identity import CallId
@@ -72,7 +73,9 @@ def test_auto_particle_count_respects_supported_bank_even_with_abundant_memory(
     )
     launch = SamplerLaunchSpec.model_validate(payload)
     resolved = _admit(launch, budget=_budget())
-    assert resolved == launch.resolve(expected)
+    assert isinstance(resolved, capacity.FitAdmission)
+    assert resolved.sampler == launch.resolve(expected)
+    assert (f"N={expected}" if axis == "particles" else f"M={expected}") in resolved.detail
 
 
 def test_auto_chains_selects_integer_capacity_and_preserves_fixed_counts(shape):
@@ -82,7 +85,10 @@ def test_auto_chains_selects_integer_capacity_and_preserves_fixed_counts(shape):
     resolved = _admit(
         launch, budget=_budget(report.sampling.host_bytes, report.sampling.device_bytes)
     )
-    assert resolved == launch.resolve(7)
+    assert isinstance(resolved, capacity.FitAdmission)
+    assert resolved.sampler == launch.resolve(7)
+    assert "C=7" in resolved.detail
+    assert resolved.detail.count("100.00%") == 2
 
 
 def test_initialization_peak_does_not_control_static_or_automatic_admission(shape, monkeypatch):
@@ -99,17 +105,19 @@ def test_initialization_peak_does_not_control_static_or_automatic_admission(shap
         return result.revised(initialization=initialization, peak=initialization)
 
     monkeypatch.setattr(capacity, "estimate_particle_mgrad_memory", with_large_initialization)
-    assert _admit(SamplerLaunchSpec.from_resolved(expected), budget=budget) == expected
-    assert _admit(launch, budget=budget) == expected
+    for configured in (SamplerLaunchSpec.from_resolved(expected), launch):
+        admitted = _admit(configured, budget=budget)
+        assert isinstance(admitted, capacity.FitAdmission)
+        assert admitted.sampler == expected
+        assert str(initialization.host_bytes) not in admitted.detail
     rejected = _admit(SamplerLaunchSpec.from_resolved(launch.resolve(8)), budget=budget)
     assert isinstance(rejected, Rejected)
     assert rejected.code == "FIT_CAPACITY_EXCEEDED"
     rejected_report = estimate_particle_mgrad_memory(shape, launch.resolve(8))
     assert isinstance(rejected_report, ParticleMgradMemoryReport)
-    assert (
-        f"host={rejected_report.sampling.host_bytes} bytes, "
-        f"device={rejected_report.sampling.device_bytes} bytes."
-    ) in rejected.detail
+    assert "required /" in rejected.detail
+    assert "available" in rejected.detail
+    assert "short by" in rejected.detail
     assert str(initialization.host_bytes) not in rejected.detail
 
 
@@ -119,19 +127,22 @@ def test_static_and_minimum_auto_reject_without_execution(shape):
         assert isinstance(rejected, Rejected)
         assert rejected.code == "FIT_CAPACITY_EXCEEDED"
     launch = SamplerLaunchSpec(num_chains=3)
-    assert _admit(launch, budget=_budget()) == launch.resolve(2)
+    admitted = _admit(launch, budget=_budget())
+    assert isinstance(admitted, capacity.FitAdmission)
+    assert admitted.sampler == launch.resolve(2)
 
 
 def test_continuation_keeps_chain_random_stream_and_kernel_rules(shape):
     previous = SamplerSpec(num_chains=3, seed=7, num_warmup=0)
     inherited = SamplerLaunchSpec.from_resolved(previous)
+    assert isinstance(inherited, SamplerLaunchSpec)
     for changes in ({"num_chains": "auto"}, {"num_chains": 4}, {"seed": 8}):
         launch = inherited.revised(**changes)
         result = _admit(launch, budget=_budget(), previous=previous)
         assert isinstance(result, Rejected)
         assert result.code == "INCOMPATIBLE_CONTINUATION"
     launch = inherited.revised(algorithm=inherited.algorithm.revised(n_parameter_particles="auto"))
-    assert isinstance(_admit(launch, budget=_budget(), previous=previous), SamplerSpec)
+    assert isinstance(_admit(launch, budget=_budget(), previous=previous), capacity.FitAdmission)
     changed = launch.revised(
         algorithm=launch.algorithm.revised(parameter_proposal="pseudo_langevin")
     )
@@ -154,6 +165,7 @@ def test_partial_request_rejects_two_explicit_auto_counts():
 def test_previous_cached_bytes_reserve_host_memory_independent_of_new_diagnostics(shape, metrics):
     previous = SamplerSpec()
     launch = SamplerLaunchSpec.from_resolved(previous)
+    assert isinstance(launch, SamplerLaunchSpec)
     launch = launch.revised(algorithm=launch.algorithm.revised(diagnostic_metrics=metrics))
     report = estimate_particle_mgrad_memory(shape, launch.resolve(2))
     assert isinstance(report, ParticleMgradMemoryReport)
@@ -170,11 +182,12 @@ def test_previous_cached_bytes_reserve_host_memory_independent_of_new_diagnostic
     budget = _budget(
         report.sampling.host_bytes + 3 * cached_bytes - 1, report.sampling.device_bytes
     )
-    assert isinstance(_admit(launch, budget=budget), SamplerSpec)
+    assert isinstance(_admit(launch, budget=budget), capacity.FitAdmission)
     rejected = capacity.admit_sampler(launch, Mock(), Mock(), budget=budget, previous=continuation)
     assert isinstance(rejected, Rejected)
     assert rejected.code == "FIT_CAPACITY_EXCEEDED"
-    assert "Previous-result host reserve=3000000 bytes" in rejected.detail
+    assert "Occupied host=2.86 MiB" in rejected.detail
+    assert "short by 1 bytes" in rejected.detail
 
 
 def test_omissions_inherit_auto_but_a_second_merged_auto_is_rejected(monkeypatch):
@@ -208,3 +221,37 @@ def test_remote_hardware_budget_uses_fixed_host_and_conservative_device_pool(mon
     assert fit_compute_budget(InferenceHardware.A100) == fit_compute_budget(
         InferenceHardware.A100_40GB
     )
+
+
+@pytest.mark.parametrize("shared", [False, True])
+def test_capacity_log_and_errors_use_remaining_budget_after_occupied_memory(shape, shared):
+    launch = SamplerLaunchSpec(hardware="local" if shared else "L40S", num_chains="auto")
+    report = estimate_particle_mgrad_memory(shape, launch.resolve(5))
+    assert isinstance(report, ParticleMgradMemoryReport)
+    occupied = MemoryDemand(host_bytes=1234, device_bytes=5678)
+    budget = ComputeBudget(
+        memory=SharedMemoryBudget(
+            available_bytes=report.sampling.host_bytes
+            + report.sampling.device_bytes
+            + occupied.host_bytes
+            + occupied.device_bytes
+        )
+        if shared
+        else AcceleratorMemoryBudget(
+            host_bytes=report.sampling.host_bytes + occupied.host_bytes,
+            device_bytes=report.sampling.device_bytes + occupied.device_bytes,
+        ),
+        occupied=occupied,
+    )
+    admitted = _admit(launch, budget=budget)
+    assert isinstance(admitted, capacity.FitAdmission)
+    assert admitted.sampler.num_chains == 5
+    assert "N=64, M=8, C=5" in admitted.detail
+    assert admitted.detail.count("100.00%") == (1 if shared else 2)
+    assert ("shared host/device=" in admitted.detail) is shared
+    rejected = _admit(launch.revised(num_chains=6), budget=budget)
+    assert isinstance(rejected, Rejected)
+    assert "120.00%" in rejected.detail
+    assert "required /" in rejected.detail
+    assert "available" in rejected.detail
+    assert "short by" in rejected.detail

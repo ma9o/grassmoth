@@ -9,6 +9,7 @@ from temporalio import activity
 from temporalio.exceptions import ApplicationError
 
 from grassmoth.public import AggregatedCompileError, IncompleteModelError
+from grassmoth_server.actions.call_logs import collect_call_snapshot
 from grassmoth_server.actions.contracts.requests import PrepareDataRequest, call_identity
 from grassmoth_server.actions.edit_model import edit_model
 from grassmoth_server.actions.edit_question import edit_question
@@ -36,7 +37,6 @@ from grassmoth_server.actions.temporal.study.messages import (
     EvaluateChecksInput,
     ReadInputsInput,
 )
-from grassmoth_server.storage.traces import collect_run_traces
 from grassmoth_server.study.errors import StudyLookupError
 from grassmoth_server.study.persistence.history import StudyRepository
 from grassmoth_server.study.persistence.store import ArtifactStore
@@ -199,20 +199,12 @@ def _journal_attempt(activity_input: AttemptPublication) -> StudyRevision:
                 else ()
             )
             messages = messages[:-1] + announcements + messages[-1:]
-    logs = collect_run_traces(activity_input.workspace_id, identity)
-    trace_ids = tuple(path.removeprefix("traces/").removesuffix(".json") for path in logs)
-    from pydantic import TypeAdapter
-
-    from grassmoth_server.actions.contracts.progress import ProgressEvent
-    from grassmoth_server.actions.progress import read_events
-
+    snapshot = collect_call_snapshot(activity_input.workspace_id, identity)
     if record.attempt_id is not None:
-        events = tuple(read_events(activity_input.workspace_id, identity))
-        logs["progress.json"] = TypeAdapter(tuple[ProgressEvent, ...]).dump_json(events)
-        failures = extraction_failure_messages(events, datetime.now(UTC))
+        failures = extraction_failure_messages(snapshot.events, datetime.now(UTC))
         messages = (*messages[:-1], *failures, *messages[-1:])
-    record = record.with_logs(messages=messages, trace_ids=trace_ids)
-    return journal.append(record, logs=logs)
+    record = record.with_logs(messages=messages, trace_ids=snapshot.trace_ids)
+    return journal.append(record, logs=dict(snapshot.logs))
 
 
 @activity.defn

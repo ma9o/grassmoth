@@ -2,17 +2,23 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 from unittest.mock import Mock
+from uuid import UUID
 
 import numpy as np
 import pytest
 
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.observations.reference import DataRef
+from grassmoth.public import SamplerSpec
+from grassmoth_server.actions.call_logs import collect_call_log
+from grassmoth_server.actions.contracts.call_state import RunningCall
 from grassmoth_server.actions.contracts.inputs import FitInput, NewFitTarget
 from grassmoth_server.actions.contracts.requests import FitRequest
 from grassmoth_server.actions.contracts.settings import FitSettingsSpec
+from grassmoth_server.actions.fit.capacity import FitAdmission
 from grassmoth_server.actions.runners import run_action_locally
 from grassmoth_server.study.persistence.store import read_model
 from grassmoth_server.study.state import apply_effects
@@ -34,6 +40,26 @@ if TYPE_CHECKING:
     from grassmoth_server.study.persistence.store import ArtifactStore
 
 
+def _admit_without_execution(launch, *_args, **_kwargs):
+    return FitAdmission(
+        sampler=launch.resolve(2),
+        detail="Sampling demand fits the configured host and device budgets.",
+    )
+
+
+def _capacity_messages(workspace_id, request):
+    log = collect_call_log(
+        workspace_id,
+        RunningCall(attempt_id=UUID(int=1), seq=1, request=request),
+        at=datetime.now(UTC),
+    )
+    return tuple(
+        message
+        for message in log.messages
+        if message.kind == "log" and message.code == "FIT_CAPACITY_ESTIMATE"
+    )
+
+
 def test_inference_advances_model_and_uses_the_selected_input(
     integration_workspace: str,
     artifact_store: ArtifactStore,
@@ -47,9 +73,7 @@ def test_inference_advances_model_and_uses_the_selected_input(
     from grassmoth.models.ssm.inference.types import JointPosteriorDraws
     from grassmoth_server.actions.fit import capacity
 
-    monkeypatch.setattr(
-        capacity, "admit_sampler", lambda launch, *_args, **_kwargs: launch.resolve(2)
-    )
+    monkeypatch.setattr(capacity, "admit_sampler", _admit_without_execution)
 
     original = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=original.revision)
@@ -165,9 +189,7 @@ def test_library_fit_failure_stops_before_publication(
     from grassmoth_server.actions.fit import action as flow
     from grassmoth_server.actions.fit import capacity
 
-    monkeypatch.setattr(
-        capacity, "admit_sampler", lambda launch, *_args, **_kwargs: launch.resolve(2)
-    )
+    monkeypatch.setattr(capacity, "admit_sampler", _admit_without_execution)
 
     model = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=model.revision)
@@ -234,3 +256,52 @@ def test_capacity_rejection_stops_before_remote_dispatch(
     assert result == rejection
     admission.assert_called_once()
     dispatch.assert_not_called()
+    assert not _capacity_messages(integration_workspace, request)
+
+
+def test_capacity_estimate_is_persisted_before_remote_dispatch(
+    integration_workspace, artifact_store, monkeypatch
+):
+    from grassmoth_server.actions.fit import capacity, remote
+
+    model = fx.seed_model(artifact_store)
+    panel = fx.seed_panel(artifact_store, model_revision=model.revision)
+    question = write_question(artifact_store)
+    admitted = FitAdmission(
+        sampler=SamplerSpec(hardware="L40S", num_chains=3),
+        detail=(
+            "L40S: N=64, M=8, C=3. Estimated sampling memory: "
+            "host=1 KiB / 4 KiB (25.00%); device=2 KiB / 8 KiB (25.00%)."
+        ),
+    )
+    monkeypatch.setattr(capacity, "admit_sampler", Mock(return_value=admitted))
+    request = FitRequest[GitOid](
+        input=FitInput[GitOid](
+            target=NewFitTarget(
+                dynamical_model_spec_ref=model.revision,
+                data_ref=DataRef(revision=panel.revision, replicate_index=0),
+            ),
+            settings=FitSettingsSpec(hardware="L40S", num_chains="auto"),
+        )
+    )
+
+    def inspect_dispatch(inputs, **_kwargs):
+        assert inputs.sampler == admitted.sampler
+        (message,) = _capacity_messages(integration_workspace, request)
+        assert message.severity == "info"
+        assert message.subject == "fit"
+        assert message.detail == admitted.detail
+        raise RuntimeError("Reached mocked remote dispatch")
+
+    dispatch = Mock(side_effect=inspect_dispatch)
+    monkeypatch.setattr(remote, "fit_on_modal", dispatch)
+    with pytest.raises(RuntimeError, match="Reached mocked remote dispatch"):
+        run_async(
+            run_action_locally(
+                integration_workspace,
+                request,
+                {"model": model.revision, "question": question.revision},
+            )
+        )
+    dispatch.assert_called_once()
+    assert len(_capacity_messages(integration_workspace, request)) == 1

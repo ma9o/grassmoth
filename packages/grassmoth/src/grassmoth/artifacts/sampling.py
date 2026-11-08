@@ -820,10 +820,19 @@ _PARTICLE_DEFAULTS = MarginalParticleGibbsSpec()
 _SAMPLER_DEFAULTS = SamplerSpec()
 
 
-class GuidedMethodLaunchSpec(Value):
-    """Authored particle count, resolved to GuidedMethodSpec before execution."""
+class UnsupportedSamplerLaunch(Value):
+    """Numerical sampler settings that the production launch cannot represent."""
 
-    kind: Annotated[GuidedMethodKind, GuidedMethodSpec.model_fields["kind"]] = _GUIDED_DEFAULTS.kind
+    message: str
+
+
+class GuidedMethodLaunchSpec(Value):
+    """Particle-mGRAD launch controls, resolved before numerical execution."""
+
+    kind: Literal["particle_mgrad"] = Field(  # noqa: FIELD002 -- Launch wire selector rejects disabled path methods while retaining the sampler request structure.
+        default="particle_mgrad",
+        description="Particle-mGRAD integrates the path auxiliary out of the particle weights.",
+    )
     num_particles: ParticleLaunchCount = Field(
         default=_GUIDED_DEFAULTS.num_particles,
         description=(
@@ -840,8 +849,12 @@ class GuidedMethodLaunchSpec(Value):
     )
 
     @classmethod
-    def from_resolved(cls, value: GuidedMethodSpec) -> Self:
-        """Carry numerical controls into an inherited launch."""
+    def from_resolved(cls, value: GuidedMethodSpec) -> Self | UnsupportedSamplerLaunch:
+        """Carry supported numerical controls into an inherited launch."""
+        if value.kind != "particle_mgrad":
+            return UnsupportedSamplerLaunch(
+                message="Fit launches support only the Particle-mGRAD path method."
+            )
         return cls(
             kind=value.kind,
             num_particles=value.num_particles,
@@ -859,44 +872,70 @@ class GuidedMethodLaunchSpec(Value):
         )
 
 
-type PathMethodLaunchSpec = Annotated[
-    GuidedMethodLaunchSpec | AuxiliaryKalmanMethodSpec, Field(discriminator="kind")
-]
+type PathMethodLaunchSpec = GuidedMethodLaunchSpec
+
+
+class ParameterMixtureLaunchSpec(Value):
+    """The running-prefix parameter mixture supported by Particle-mGRAD launches."""
+
+    kind: Literal["parameter_mixture"] = "parameter_mixture"  # noqa: FIELD002 -- Launch wire selector rejects other proposal laws while retaining the sampler request structure.
+    weights: Literal["running_prefix"] = Field(  # noqa: FIELD002 -- Launch wire selector rejects unsupported weights while retaining the sampler request structure.
+        default="running_prefix",
+        description=(
+            "Mix parameter-specific proposals using exact label probabilities through the "
+            "previous time (Corenflos 2025, section 3.4). Requires point readings without "
+            "deterministic recurrences."
+        ),
+    )
+
+    def resolve(self) -> ParameterMixtureProposalSpec:
+        """Construct the numerical proposal without changing its law."""
+        return ParameterMixtureProposalSpec(weights=self.weights)
 
 
 class PathUpdateLaunchSpec(Value):
-    """Launch-time path controls with the numerical owner's defaults and constraints."""
+    """Whole-path Particle-mGRAD with a running-prefix parameter mixture."""
 
     method: PathMethodLaunchSpec = Field(default_factory=GuidedMethodLaunchSpec)
-    update: PathUpdateScopeSpec = Field(
-        default=_PATH_DEFAULTS.update, description=PathUpdateSpec.model_fields["update"].description
-    )
-    proposal: PathProposalSpec = Field(default_factory=_default_path_proposal)
+    update: WholePathUpdateSpec = Field(default_factory=WholePathUpdateSpec)
+    proposal: ParameterMixtureLaunchSpec = Field(default_factory=ParameterMixtureLaunchSpec)
     latent_step: LatentStepSpec = Field(
         default=_PATH_DEFAULTS.latent_step,
         description=PathUpdateSpec.model_fields["latent_step"].description,
     )
 
     @classmethod
-    def from_resolved(cls, value: PathUpdateSpec) -> Self:
-        """Preserve the inherited path method, proposal, scope and tuning."""
+    def from_resolved(cls, value: PathUpdateSpec) -> Self | UnsupportedSamplerLaunch:
+        """Preserve an inherited path law or refuse an unavailable launch choice."""
+        if not isinstance(value.method, GuidedMethodSpec):
+            return UnsupportedSamplerLaunch(
+                message="Fit launches support only the Particle-mGRAD path method."
+            )
+        method = GuidedMethodLaunchSpec.from_resolved(value.method)
+        if isinstance(method, UnsupportedSamplerLaunch):
+            return method
+        if not isinstance(value.update, WholePathUpdateSpec):
+            return UnsupportedSamplerLaunch(message="Fit launches support only whole-path updates.")
+        if (
+            not isinstance(value.proposal, ParameterMixtureProposalSpec)
+            or value.proposal.weights != "running_prefix"
+        ):
+            return UnsupportedSamplerLaunch(
+                message="Fit launches require a running-prefix parameter-mixture proposal."
+            )
         return cls(
-            method=GuidedMethodLaunchSpec.from_resolved(value.method)
-            if isinstance(value.method, GuidedMethodSpec)
-            else value.method,
+            method=method,
             update=value.update,
-            proposal=value.proposal,
+            proposal=ParameterMixtureLaunchSpec(weights=value.proposal.weights),
             latent_step=value.latent_step,
         )
 
     def resolve(self, count: int) -> PathUpdateSpec:
         """Project launch controls to the integer-only path owner."""
         return PathUpdateSpec(
-            method=self.method.resolve(count)
-            if isinstance(self.method, GuidedMethodLaunchSpec)
-            else self.method,
+            method=self.method.resolve(count),
             update=self.update,
-            proposal=self.proposal,
+            proposal=self.proposal.resolve(),
             latent_step=self.latent_step,
         )
 
@@ -904,7 +943,7 @@ class PathUpdateLaunchSpec(Value):
 class MarginalParticleGibbsLaunchSpec(Value):
     """Authored MPGibbs controls; only particle counts may request memory sizing."""
 
-    method: Literal["mpgibbs"] = "mpgibbs"
+    method: Literal["mpgibbs"] = "mpgibbs"  # noqa: FIELD002 -- Launch wire selector rejects disabled samplers while retaining the sampler request structure.
     n_parameter_particles: ParticleLaunchCount = Field(
         default=_PARTICLE_DEFAULTS.n_parameter_particles,
         description="Parameter particles M, or auto for analytical Particle-mGRAD memory sizing.",
@@ -928,11 +967,14 @@ class MarginalParticleGibbsLaunchSpec(Value):
     )
 
     @classmethod
-    def from_resolved(cls, value: MarginalParticleGibbsSpec) -> Self:
+    def from_resolved(cls, value: MarginalParticleGibbsSpec) -> Self | UnsupportedSamplerLaunch:
         """Preserve all inherited MPGibbs controls before request overrides."""
+        path_update = PathUpdateLaunchSpec.from_resolved(value.path_update)
+        if isinstance(path_update, UnsupportedSamplerLaunch):
+            return path_update
         return cls(
             n_parameter_particles=value.n_parameter_particles,
-            path_update=PathUpdateLaunchSpec.from_resolved(value.path_update),
+            path_update=path_update,
             parameter_proposal=value.parameter_proposal,
             diagnostic_metrics=value.diagnostic_metrics,
             param_target_accept=value.param_target_accept,
@@ -955,16 +997,17 @@ class MarginalParticleGibbsLaunchSpec(Value):
         )
 
 
-type InferenceAlgorithmLaunchSpec = Annotated[
-    MarginalParticleGibbsLaunchSpec | NutsDASpec, Field(discriminator="method")
-]
+type InferenceAlgorithmLaunchSpec = MarginalParticleGibbsLaunchSpec
 
 
 class SamplerLaunchSpec(Value):
-    """Configuration before one optional capacity-selected count becomes an integer.
+    """MPGibbs and Particle-mGRAD configuration before optional count resolution.
 
     Omitted values retain numerical defaults. The resolved SamplerSpec, never
     this launch specification, is passed to kernels and retained in checkpoints.
+    This production restriction belongs to the launch types. Numerical NUTS,
+    twisted Particle-aGRAD and auxiliary Kalman remain available for reference
+    execution; exposing those choices again requires widening the launch owners.
     """
 
     num_warmup: Annotated[int, SamplerSpec.model_fields["num_warmup"]] = (
@@ -988,8 +1031,13 @@ class SamplerLaunchSpec(Value):
     algorithm: InferenceAlgorithmLaunchSpec = Field(default_factory=MarginalParticleGibbsLaunchSpec)
 
     @classmethod
-    def from_resolved(cls, value: SamplerSpec) -> Self:
-        """Inherit a checkpoint without introducing an automatic axis."""
+    def from_resolved(cls, value: SamplerSpec) -> Self | UnsupportedSamplerLaunch:
+        """Inherit supported settings without changing their kernel or adding auto."""
+        if not isinstance(value.algorithm, MarginalParticleGibbsSpec):
+            return UnsupportedSamplerLaunch(message="Fit launches support only MPGibbs.")
+        algorithm = MarginalParticleGibbsLaunchSpec.from_resolved(value.algorithm)
+        if isinstance(algorithm, UnsupportedSamplerLaunch):
+            return algorithm
         return cls(
             num_warmup=value.num_warmup,
             num_samples_per_chain=value.num_samples_per_chain,
@@ -998,9 +1046,7 @@ class SamplerLaunchSpec(Value):
             seed=value.seed,
             hardware=value.hardware,
             time_limit_seconds=value.time_limit_seconds,
-            algorithm=MarginalParticleGibbsLaunchSpec.from_resolved(value.algorithm)
-            if isinstance(value.algorithm, MarginalParticleGibbsSpec)
-            else value.algorithm,
+            algorithm=algorithm,
         )
 
     @property
@@ -1008,23 +1054,22 @@ class SamplerLaunchSpec(Value):
         """The unique requested automatic axis, after launch validation."""
         if self.num_chains == "auto":
             return "chains"
-        if isinstance(self.algorithm, MarginalParticleGibbsLaunchSpec):
-            if self.algorithm.n_parameter_particles == "auto":
-                return "parameters"
-            method = self.algorithm.path_update.method
-            if isinstance(method, GuidedMethodLaunchSpec) and method.num_particles == "auto":
-                return "particles"
+        if self.algorithm.n_parameter_particles == "auto":
+            return "parameters"
+        if self.algorithm.path_update.method.num_particles == "auto":
+            return "particles"
         return None
 
     @model_validator(mode="after")
     def one_automatic_dimension(self) -> Self:
         """N and M change one joint transition; choose at most one free launch axis."""
-        automatic = int(self.num_chains == "auto")
-        if isinstance(self.algorithm, MarginalParticleGibbsLaunchSpec):
-            automatic += int(self.algorithm.n_parameter_particles == "auto")
-            method = self.algorithm.path_update.method
-            if isinstance(method, GuidedMethodLaunchSpec):
-                automatic += int(method.num_particles == "auto")
+        automatic = sum(
+            (
+                self.num_chains == "auto",
+                self.algorithm.n_parameter_particles == "auto",
+                self.algorithm.path_update.method.num_particles == "auto",
+            )
+        )
         if automatic > 1:
             raise ValueError(
                 "At most one of path particles N, parameter particles M and chains C may be auto"
@@ -1041,7 +1086,5 @@ class SamplerLaunchSpec(Value):
             seed=self.seed,
             hardware=self.hardware,
             time_limit_seconds=self.time_limit_seconds,
-            algorithm=self.algorithm.resolve(count)
-            if isinstance(self.algorithm, MarginalParticleGibbsLaunchSpec)
-            else self.algorithm,
+            algorithm=self.algorithm.resolve(count),
         )

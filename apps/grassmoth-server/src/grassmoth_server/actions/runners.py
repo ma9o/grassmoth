@@ -9,6 +9,7 @@ or changing pinned versions. The enclosing action evaluates its checks before pu
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -28,7 +29,7 @@ from grassmoth_server.actions.fit.selection import fit_source, prior_fit
 from grassmoth_server.compute.fit_results import download_fit_result, load_full_fit
 from grassmoth_server.storage.paths import call_dir
 from grassmoth_server.study.persistence.store import ArtifactStore
-from grassmoth_server.study.records import Applied, Rejected
+from grassmoth_server.study.records import ActionMessage, Applied, Rejected
 
 if TYPE_CHECKING:
     from grassmoth.public import GitOid
@@ -53,6 +54,7 @@ def _fit_selected(
     request: FitInput[GitOid],
     call_id: CallId,
 ) -> Applied[GitOid] | Rejected:
+    from grassmoth_server.actions.call_logs import emit_message
     from grassmoth_server.actions.fit.action import run_fit
     from grassmoth_server.actions.fit.capacity import admit_sampler
     from grassmoth_server.actions.fit.execution import resolve_sampler_spec
@@ -74,6 +76,8 @@ def _fit_selected(
         )
     except ValidationError as error:
         return Rejected(code="INVALID_SAMPLER_LAUNCH", subject="fit", detail=str(error))
+    if isinstance(launch, Rejected):
+        return launch
     history = read_data_history(store, source.data_ref)
     previous_cache = None if previous is None else previous.full_fit
     directory = Path(call_dir(store.workspace_id, call_id))
@@ -83,15 +87,27 @@ def _fit_selected(
     dynamical_model_spec = model_values(store, read_model(store, pins["model"]))
     question = read_question(store, pins["question"])
     selection = StructuralSelection.for_question(dynamical_model_spec, question)
-    sampler = admit_sampler(
+    admission = admit_sampler(
         launch,
         selection,
         history.observations,
         budget=fit_compute_budget(launch.hardware),
         previous=previous,
     )
-    if isinstance(sampler, Rejected):
-        return sampler
+    if isinstance(admission, Rejected):
+        return admission
+    sampler = admission.sampler
+    emit_message(
+        store.workspace_id,
+        call_id,
+        ActionMessage(
+            timestamp=datetime.now(UTC),
+            severity="info",
+            code="FIT_CAPACITY_ESTIMATE",
+            subject="fit",
+            detail=admission.detail,
+        ),
+    )
     previous_result = (
         load_full_fit(directory, previous.full_fit)
         if previous is not None and sampler.hardware == InferenceHardware.LOCAL

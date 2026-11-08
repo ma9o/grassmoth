@@ -6,7 +6,8 @@ import json
 import re
 from typing import TYPE_CHECKING
 
-from grassmoth.public import SamplerLaunchSpec, SamplerSpec
+from grassmoth.public import SamplerLaunchSpec, SamplerSpec, UnsupportedSamplerLaunch
+from grassmoth_server.study.records import Rejected
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
 
 def resolve_sampler_spec(
     settings: FitSettingsSpec, previous: SamplerSpec | None = None
-) -> SamplerLaunchSpec:
+) -> SamplerLaunchSpec | Rejected:
     """Merge launch overrides; capacity resolution produces the numerical SamplerSpec."""
     from grassmoth_server.config import get_config
 
@@ -27,6 +28,8 @@ def resolve_sampler_spec(
         if previous is None
         else SamplerLaunchSpec.from_resolved(previous)
     )
+    if isinstance(configured, UnsupportedSamplerLaunch):
+        return Rejected(code="INCOMPATIBLE_CONTINUATION", subject="fit", detail=configured.message)
     return SamplerLaunchSpec(
         num_warmup=configured.num_warmup if settings.num_warmup is None else settings.num_warmup,
         num_samples_per_chain=configured.num_samples_per_chain

@@ -10,7 +10,12 @@ import pytest
 
 from grassmoth.artifacts.identity import GitOid
 from grassmoth.artifacts.model.dynamical_model_spec import DynamicalModelSpec
-from grassmoth_server.actions.call_logs import collect_call_log, read_call_log
+from grassmoth_server.actions.call_logs import (
+    collect_call_log,
+    collect_call_snapshot,
+    emit_message,
+    read_call_log,
+)
 from grassmoth_server.actions.contracts.call_state import RunningCall
 from grassmoth_server.actions.contracts.inputs import EditModelInput
 from grassmoth_server.actions.contracts.progress import StepEvent
@@ -71,6 +76,34 @@ def test_collects_finalized_traces_and_validates_commit_paths(data_root):
         trace_log_path("../scratch")
 
 
+def test_collected_snapshot_retains_all_sources_after_scratch_removal(data_root):
+    del data_root
+    workspace_id, identity = "ws-snapshot", "call-snapshot"
+    _scratch_trace(workspace_id, identity, "stage")
+    emit_event(workspace_id, identity, StepEvent(attempt_id=UUID(int=3), status="running"))
+    message = ActionMessage(
+        timestamp=datetime(2026, 10, 1, tzinfo=UTC),
+        severity="info",
+        code="EXECUTION_ESTIMATE",
+        subject="fit",
+        detail="Collected once before dispatch.",
+    )
+    emit_message(workspace_id, identity, message)
+    snapshot = collect_call_snapshot(workspace_id, identity)
+    logs = snapshot.logs
+    storage.rm_tree(data_module.call_dir(workspace_id, identity))
+    assert snapshot.logs == logs
+    assert snapshot.trace_ids == ("stage",)
+    assert snapshot.execution_messages == (message,)
+    assert len(snapshot.events) == 1
+    event = snapshot.events[0]
+    assert isinstance(event, StepEvent)
+    assert event.status == "running"
+    assert event.cursor
+    assert LLMTrace.model_validate_json(logs["traces/stage.json"]) == _trace()
+    assert set(logs) == {"traces/stage.json", "progress.json", "messages.json"}
+
+
 def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_root):
     del data_root
     from grassmoth_server.study.persistence.store import ArtifactStore
@@ -109,12 +142,25 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     emit_event(
         "ws-trace", call_identity(request), StepEvent(attempt_id=attempt_id, status="running")
     )
+    execution_message = ActionMessage(
+        timestamp=datetime(2026, 10, 1, 0, 0, 1, tzinfo=UTC),
+        severity="info",
+        code="EXECUTION_ESTIMATE",
+        subject="edit_model",
+        detail="An execution message retained before the action finishes.",
+    )
+    emit_message("ws-trace", call_identity(request), execution_message)
+    emit_message("ws-trace", "another-call", execution_message.revised(detail="Another call."))
     live = collect_call_log(
         "ws-trace",
         RunningCall(attempt_id=attempt_id, seq=1, request=request, messages=messages),
         at=datetime.now(UTC),
     )
     assert {message.kind for message in live.messages} == {"log", "progress", "trace"}
+    assert [message for message in live.messages if message.kind == "log"] == [
+        *messages,
+        execution_message,
+    ]
     publication_input = AttemptPublication(
         workspace_id="ws-trace",
         record=AttemptRecord(
@@ -144,6 +190,10 @@ def test_raised_attempt_discovers_trace_and_retry_no_longer_needs_scratch(data_r
     assert repository.call(call_identity(request)) == record
     log = read_call_log(repository, publication.commit_id)
     assert {message.kind for message in log.messages} == {"log", "progress", "trace", "failure"}
+    assert [message for message in log.messages if message.kind == "log"] == [
+        *messages,
+        execution_message,
+    ]
     assert (
         next(message for message in log.messages if message.kind == "progress").progress
         == next(message for message in live.messages if message.kind == "progress").progress

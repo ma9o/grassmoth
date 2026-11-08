@@ -1984,24 +1984,7 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "AuxiliaryKalmanMethodSpec-Input": {
-        "additionalProperties": false,
-        "description": "Parallel Gaussian proposals corrected to exact nonlinear densities.\n\nCorenflos & S\u00e4rkk\u00e4 (2025), sections 2.2\u20132.4. Poor Gaussian fits, long memory\nand separated modes can reduce acceptance without changing the target.",
-        "properties": {
-          "kind": {
-            "const": "auxiliary_kalman",
-            "default": "auxiliary_kalman",
-            "title": "Kind",
-            "type": "string"
-          }
-        },
-        "title": "AuxiliaryKalmanMethodSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "AuxiliaryKalmanMethodSpec-Output": {
+      "AuxiliaryKalmanMethodSpec": {
         "additionalProperties": false,
         "description": "Parallel Gaussian proposals corrected to exact nonlinear densities.\n\nCorenflos & S\u00e4rkk\u00e4 (2025), sections 2.2\u20132.4. Poor Gaussian fits, long memory\nand separated modes can reduce acceptance without changing the target.",
         "properties": {
@@ -2356,31 +2339,7 @@
         "x-concern": "scientific_model",
         "description": "A binary operator combines two scalar expression operands."
       },
-      "BlockedPathUpdateSpec-Input": {
-        "additionalProperties": false,
-        "description": "Update contiguous trajectory blocks.",
-        "properties": {
-          "kind": {
-            "const": "blocked",
-            "default": "blocked",
-            "title": "Kind",
-            "type": "string"
-          },
-          "block_length": {
-            "default": 300,
-            "description": "Time points per block. The implemented Kalman update alternates colours and random half-block shifts. Each block pays its exact nonlinear boundary and interior densities. Colours separate blocks by the full window support, with cached factors covering every affected reading. Deterministic recurrences that reach a density or later reading require sequential updates through the whole suffix; output-only recurrences preserve parallel block updates. The default 300 led path movement among 30, 100 and 300 in short probes on 3,000 days of stochastic volatility. At full length it gave 3.6 times the whole path's worst bulk ESS per second; the whole path's single accept/reject left R-hat at 1.16. On Lorenz-96's 300 steps, 25-step blocks gave a quarter of the whole path's, so retune per model.",
-            "minimum": 1,
-            "title": "Block Length",
-            "type": "integer"
-          }
-        },
-        "title": "BlockedPathUpdateSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "BlockedPathUpdateSpec-Output": {
+      "BlockedPathUpdateSpec": {
         "additionalProperties": false,
         "description": "Update contiguous trajectory blocks.",
         "properties": {
@@ -3346,24 +3305,7 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "ConditionalParameterProposalSpec-Input": {
-        "additionalProperties": false,
-        "description": "Build proposals under a label sampled conditional on the current path.\n\nThe blocked Kalman update holds this label fixed during its conditional block\nmoves. This is not the ensemble mean and can retain parameter/path dependence.",
-        "properties": {
-          "kind": {
-            "const": "conditional_parameter",
-            "default": "conditional_parameter",
-            "title": "Kind",
-            "type": "string"
-          }
-        },
-        "title": "ConditionalParameterProposalSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ConditionalParameterProposalSpec-Output": {
+      "ConditionalParameterProposalSpec": {
         "additionalProperties": false,
         "description": "Build proposals under a label sampled conditional on the current path.\n\nThe blocked Kalman update holds this label fixed during its conditional block\nmoves. This is not the ensemble mean and can retain parameter/path dependence.",
         "properties": {
@@ -15983,7 +15925,7 @@
       },
       "FitSettingsSpec-Input": {
         "additionalProperties": false,
-        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's. Profiling applies only to\nthis execution.",
+        "description": "Optional controls for the configured whole-path MPGibbs Particle-mGRAD sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's. Profiling applies only to\nthis execution.",
         "properties": {
           "profile": {
             "default": false,
@@ -16025,7 +15967,7 @@
               }
             ],
             "default": null,
-            "description": "Replace the complete configured or continued algorithm; omitted inherits it. Variant defaults fill unspecified algorithm fields."
+            "description": "Replace the complete configured or continued MPGibbs Particle-mGRAD algorithm; omitted inherits it. Launches use whole-path updates and running-prefix parameter mixtures. Defaults fill unspecified algorithm fields."
           },
           "num_samples_per_chain": {
             "anyOf": [
@@ -16098,7 +16040,7 @@
       },
       "FitSettingsSpec-Output": {
         "additionalProperties": false,
-        "description": "Optional numerical controls applied to the configured joint sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's. Profiling applies only to\nthis execution.",
+        "description": "Optional controls for the configured whole-path MPGibbs Particle-mGRAD sampler.\n\nEach field means what the SamplerSpec field of the same name means. Null keeps the\nserver's configured value, or the continued fit's. Profiling applies only to\nthis execution.",
         "properties": {
           "profile": {
             "default": false,
@@ -16140,7 +16082,7 @@
               }
             ],
             "default": null,
-            "description": "Replace the complete configured or continued algorithm; omitted inherits it. Variant defaults fill unspecified algorithm fields."
+            "description": "Replace the complete configured or continued MPGibbs Particle-mGRAD algorithm; omitted inherits it. Launches use whole-path updates and running-prefix parameter mixtures. Defaults fill unspecified algorithm fields."
           },
           "num_samples_per_chain": {
             "anyOf": [
@@ -16379,31 +16321,7 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "FixedTrajectorySpec-Input": {
-        "additionalProperties": false,
-        "description": "A fixed number of leapfrog steps, with the step size jittered by up to 20%.",
-        "properties": {
-          "kind": {
-            "const": "fixed",
-            "default": "fixed",
-            "title": "Kind",
-            "type": "string"
-          },
-          "steps": {
-            "default": 8,
-            "description": "Leapfrog steps per transition. The default 8 and jitter width 20% are heuristics; no paper or recorded benchmark sets them. Each transition scales the adapted step size by a uniform factor in [0.8, 1.2], so trajectories cannot stay periodic (Neal 2011, section 5.3.2). Every transition costs the same number of gradients, so chains advanced together never wait for the longest NUTS tree, which limits NUTS on accelerators (Hoffman, Radul & Sountsov 2021).",
-            "minimum": 1,
-            "title": "Steps",
-            "type": "integer"
-          }
-        },
-        "title": "FixedTrajectorySpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "FixedTrajectorySpec-Output": {
+      "FixedTrajectorySpec": {
         "additionalProperties": false,
         "description": "A fixed number of leapfrog steps, with the step size jittered by up to 20%.",
         "properties": {
@@ -16724,112 +16642,7 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "GuidedMethodLaunchSpec-Input": {
-        "additionalProperties": false,
-        "description": "Authored particle count, resolved to GuidedMethodSpec before execution.",
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/GuidedMethodKind",
-            "default": "particle_mgrad",
-            "description": "particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal, at most 16 state dimensions and a limited particle bank, the shapes its fused GPU tail covers. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency."
-          },
-          "num_particles": {
-            "$ref": "#/components/schemas/ParticleLaunchCount",
-            "default": 64,
-            "description": "Path particles N, or auto to select the largest supported power of two admitted by the analytical host/device memory estimate. At most one of N, M and chains may be auto. Automatic selection is available for Particle-mGRAD."
-          },
-          "kappa": {
-            "$ref": "#/components/schemas/GuidedGradientWeight",
-            "default": 1,
-            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method."
-          },
-          "scan_unroll": {
-            "default": 8,
-            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.",
-            "minimum": 1,
-            "title": "Scan Unroll",
-            "type": "integer"
-          }
-        },
-        "title": "GuidedMethodLaunchSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "GuidedMethodLaunchSpec-Output": {
-        "additionalProperties": false,
-        "description": "Authored particle count, resolved to GuidedMethodSpec before execution.",
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/GuidedMethodKind",
-            "default": "particle_mgrad",
-            "description": "particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal, at most 16 state dimensions and a limited particle bank, the shapes its fused GPU tail covers. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency."
-          },
-          "num_particles": {
-            "$ref": "#/components/schemas/ParticleLaunchCount",
-            "default": 64,
-            "description": "Path particles N, or auto to select the largest supported power of two admitted by the analytical host/device memory estimate. At most one of N, M and chains may be auto. Automatic selection is available for Particle-mGRAD."
-          },
-          "kappa": {
-            "$ref": "#/components/schemas/GuidedGradientWeight",
-            "default": 1,
-            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method."
-          },
-          "scan_unroll": {
-            "default": 8,
-            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.",
-            "minimum": 1,
-            "title": "Scan Unroll",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "kind",
-          "num_particles",
-          "kappa",
-          "scan_unroll"
-        ],
-        "title": "GuidedMethodLaunchSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "GuidedMethodSpec-Input": {
-        "additionalProperties": false,
-        "description": "Particle-mGRAD or twisted Particle-aGRAD with their particle-bank settings.\n\nCorenflos & Finke (2024), sections 4.1\u20134.4. mGRAD integrates out the path\nauxiliary; twisted aGRAD retains it and adds Gaussian look-ahead. These\nmethods use the same exact parameter-mixture target, with different weights.",
-        "properties": {
-          "kind": {
-            "$ref": "#/components/schemas/GuidedMethodKind",
-            "default": "particle_mgrad",
-            "description": "particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal, at most 16 state dimensions and a limited particle bank, the shapes its fused GPU tail covers. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency."
-          },
-          "num_particles": {
-            "$ref": "#/components/schemas/ParticleCount",
-            "default": 64,
-            "description": "Particles per sweep, including the current path. Each extends a parent chosen at the previous time, so work grows linearly in particles and times, and the filter's depth grows linearly with the number of times (Corenflos & Finke 2024, section 4.7). The default is a heuristic; no paper or recorded benchmark sets it. Corenflos & Finke (2024, section 5.2) use 32 particles; Corenflos & S\u00e4rkk\u00e4 (2025, section 4) use 25 and call that somewhat arbitrary. Must be a power of two; Particle-mGRAD also limits it jointly with the parameter particles."
-          },
-          "kappa": {
-            "$ref": "#/components/schemas/GuidedGradientWeight",
-            "default": 1,
-            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method."
-          },
-          "scan_unroll": {
-            "default": 8,
-            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.",
-            "minimum": 1,
-            "title": "Scan Unroll",
-            "type": "integer"
-          }
-        },
-        "title": "GuidedMethodSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "GuidedMethodSpec-Output": {
+      "GuidedMethodSpec": {
         "additionalProperties": false,
         "description": "Particle-mGRAD or twisted Particle-aGRAD with their particle-bank settings.\n\nCorenflos & Finke (2024), sections 4.1\u20134.4. mGRAD integrates out the path\nauxiliary; twisted aGRAD retains it and adds Gaussian look-ahead. These\nmethods use the same exact parameter-mixture target, with different weights.",
         "properties": {
@@ -17370,41 +17183,117 @@
         "x-concern": "scientific_model"
       },
       "InferenceAlgorithmLaunchSpec-Input": {
-        "discriminator": {
-          "mapping": {
-            "mpgibbs": "#/components/schemas/MarginalParticleGibbsLaunchSpec-Input",
-            "nuts_da": "#/components/schemas/NutsDASpec-Input"
+        "additionalProperties": false,
+        "description": "Authored MPGibbs controls; only particle counts may request memory sizing.",
+        "properties": {
+          "method": {
+            "const": "mpgibbs",
+            "default": "mpgibbs",
+            "title": "Method",
+            "type": "string"
           },
-          "propertyName": "method"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/MarginalParticleGibbsLaunchSpec-Input"
+          "n_parameter_particles": {
+            "$ref": "#/components/schemas/ParticleLaunchCount",
+            "default": 8,
+            "description": "Parameter particles M, or auto for analytical Particle-mGRAD memory sizing."
           },
-          {
-            "$ref": "#/components/schemas/NutsDASpec-Input"
+          "path_update": {
+            "$ref": "#/components/schemas/PathUpdateLaunchSpec-Input"
+          },
+          "parameter_proposal": {
+            "$ref": "#/components/schemas/ParameterProposal",
+            "default": "random_walk",
+            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel."
+          },
+          "diagnostic_metrics": {
+            "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
+            "default": [],
+            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
+          },
+          "param_target_accept": {
+            "default": 0.2,
+            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.",
+            "title": "Param Target Accept",
+            "type": "number"
+          },
+          "adaptation_scheme": {
+            "$ref": "#/components/schemas/AdaptationScheme",
+            "default": "dual_averaging",
+            "description": "How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step."
+          },
+          "initialization": {
+            "$ref": "#/components/schemas/GaussianInitializationSpec-Input",
+            "default": {
+              "scale": 0.1
+            },
+            "description": "Independent Gaussian starts, which also set the initial proposal scale."
           }
-        ],
+        },
+        "title": "MarginalParticleGibbsLaunchSpec",
+        "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "InferenceAlgorithmLaunchSpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "mpgibbs": "#/components/schemas/MarginalParticleGibbsLaunchSpec-Output",
-            "nuts_da": "#/components/schemas/NutsDASpec-Output"
+        "additionalProperties": false,
+        "description": "Authored MPGibbs controls; only particle counts may request memory sizing.",
+        "properties": {
+          "method": {
+            "const": "mpgibbs",
+            "default": "mpgibbs",
+            "title": "Method",
+            "type": "string"
           },
-          "propertyName": "method"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/MarginalParticleGibbsLaunchSpec-Output"
+          "n_parameter_particles": {
+            "$ref": "#/components/schemas/ParticleLaunchCount",
+            "default": 8,
+            "description": "Parameter particles M, or auto for analytical Particle-mGRAD memory sizing."
           },
-          {
-            "$ref": "#/components/schemas/NutsDASpec-Output"
+          "path_update": {
+            "$ref": "#/components/schemas/PathUpdateLaunchSpec-Output"
+          },
+          "parameter_proposal": {
+            "$ref": "#/components/schemas/ParameterProposal",
+            "default": "random_walk",
+            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel."
+          },
+          "diagnostic_metrics": {
+            "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
+            "default": [],
+            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
+          },
+          "param_target_accept": {
+            "default": 0.2,
+            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.",
+            "title": "Param Target Accept",
+            "type": "number"
+          },
+          "adaptation_scheme": {
+            "$ref": "#/components/schemas/AdaptationScheme",
+            "default": "dual_averaging",
+            "description": "How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step."
+          },
+          "initialization": {
+            "$ref": "#/components/schemas/GaussianInitializationSpec-Output",
+            "default": {
+              "scale": 0.1
+            },
+            "description": "Independent Gaussian starts, which also set the initial proposal scale."
           }
+        },
+        "required": [
+          "method",
+          "n_parameter_particles",
+          "path_update",
+          "parameter_proposal",
+          "diagnostic_metrics",
+          "param_target_accept",
+          "adaptation_scheme",
+          "initialization"
         ],
+        "title": "MarginalParticleGibbsLaunchSpec",
+        "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
@@ -17413,7 +17302,7 @@
         "discriminator": {
           "mapping": {
             "mpgibbs": "#/components/schemas/MarginalParticleGibbsSpec",
-            "nuts_da": "#/components/schemas/NutsDASpec-Output"
+            "nuts_da": "#/components/schemas/NutsDASpec"
           },
           "propertyName": "method"
         },
@@ -17422,7 +17311,7 @@
             "$ref": "#/components/schemas/MarginalParticleGibbsSpec"
           },
           {
-            "$ref": "#/components/schemas/NutsDASpec-Output"
+            "$ref": "#/components/schemas/NutsDASpec"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -18245,24 +18134,7 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "JointSmootherSpec-Input": {
-        "additionalProperties": false,
-        "description": "Include free latent coordinates in the Hamiltonian update.",
-        "properties": {
-          "method": {
-            "const": "joint",
-            "default": "joint",
-            "title": "Method",
-            "type": "string"
-          }
-        },
-        "title": "JointSmootherSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "JointSmootherSpec-Output": {
+      "JointSmootherSpec": {
         "additionalProperties": false,
         "description": "Include free latent coordinates in the Hamiltonian update.",
         "properties": {
@@ -18282,40 +18154,20 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "JointTrajectorySpec-Input": {
+      "JointTrajectorySpec": {
         "discriminator": {
           "mapping": {
-            "fixed": "#/components/schemas/FixedTrajectorySpec-Input",
-            "nuts": "#/components/schemas/NutsTrajectorySpec-Input"
+            "fixed": "#/components/schemas/FixedTrajectorySpec",
+            "nuts": "#/components/schemas/NutsTrajectorySpec"
           },
           "propertyName": "kind"
         },
         "oneOf": [
           {
-            "$ref": "#/components/schemas/NutsTrajectorySpec-Input"
+            "$ref": "#/components/schemas/NutsTrajectorySpec"
           },
           {
-            "$ref": "#/components/schemas/FixedTrajectorySpec-Input"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "JointTrajectorySpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "fixed": "#/components/schemas/FixedTrajectorySpec-Output",
-            "nuts": "#/components/schemas/NutsTrajectorySpec-Output"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/NutsTrajectorySpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/FixedTrajectorySpec-Output"
+            "$ref": "#/components/schemas/FixedTrajectorySpec"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -18845,122 +18697,6 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "MarginalParticleGibbsLaunchSpec-Input": {
-        "additionalProperties": false,
-        "description": "Authored MPGibbs controls; only particle counts may request memory sizing.",
-        "properties": {
-          "method": {
-            "const": "mpgibbs",
-            "default": "mpgibbs",
-            "title": "Method",
-            "type": "string"
-          },
-          "n_parameter_particles": {
-            "$ref": "#/components/schemas/ParticleLaunchCount",
-            "default": 8,
-            "description": "Parameter particles M, or auto for analytical Particle-mGRAD memory sizing."
-          },
-          "path_update": {
-            "$ref": "#/components/schemas/PathUpdateLaunchSpec-Input"
-          },
-          "parameter_proposal": {
-            "$ref": "#/components/schemas/ParameterProposal",
-            "default": "random_walk",
-            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel."
-          },
-          "diagnostic_metrics": {
-            "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
-            "default": [],
-            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
-          },
-          "param_target_accept": {
-            "default": 0.2,
-            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.",
-            "title": "Param Target Accept",
-            "type": "number"
-          },
-          "adaptation_scheme": {
-            "$ref": "#/components/schemas/AdaptationScheme",
-            "default": "dual_averaging",
-            "description": "How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step."
-          },
-          "initialization": {
-            "$ref": "#/components/schemas/GaussianInitializationSpec-Input",
-            "default": {
-              "scale": 0.1
-            },
-            "description": "Independent Gaussian starts, which also set the initial proposal scale."
-          }
-        },
-        "title": "MarginalParticleGibbsLaunchSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "MarginalParticleGibbsLaunchSpec-Output": {
-        "additionalProperties": false,
-        "description": "Authored MPGibbs controls; only particle counts may request memory sizing.",
-        "properties": {
-          "method": {
-            "const": "mpgibbs",
-            "default": "mpgibbs",
-            "title": "Method",
-            "type": "string"
-          },
-          "n_parameter_particles": {
-            "$ref": "#/components/schemas/ParticleLaunchCount",
-            "default": 8,
-            "description": "Parameter particles M, or auto for analytical Particle-mGRAD memory sizing."
-          },
-          "path_update": {
-            "$ref": "#/components/schemas/PathUpdateLaunchSpec-Output"
-          },
-          "parameter_proposal": {
-            "$ref": "#/components/schemas/ParameterProposal",
-            "default": "random_walk",
-            "description": "random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel."
-          },
-          "diagnostic_metrics": {
-            "$ref": "#/components/schemas/ParticleDiagnosticMetrics",
-            "default": [],
-            "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
-          },
-          "param_target_accept": {
-            "default": 0.2,
-            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.",
-            "title": "Param Target Accept",
-            "type": "number"
-          },
-          "adaptation_scheme": {
-            "$ref": "#/components/schemas/AdaptationScheme",
-            "default": "dual_averaging",
-            "description": "How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step."
-          },
-          "initialization": {
-            "$ref": "#/components/schemas/GaussianInitializationSpec-Output",
-            "default": {
-              "scale": 0.1
-            },
-            "description": "Independent Gaussian starts, which also set the initial proposal scale."
-          }
-        },
-        "required": [
-          "method",
-          "n_parameter_particles",
-          "path_update",
-          "parameter_proposal",
-          "diagnostic_metrics",
-          "param_target_accept",
-          "adaptation_scheme",
-          "initialization"
-        ],
-        "title": "MarginalParticleGibbsLaunchSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
       "MarginalParticleGibbsSpec": {
         "additionalProperties": false,
         "description": "Exact marginalized parameter and path updates with particle-specific tuning.",
@@ -18977,7 +18713,7 @@
             "description": "Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Must be a power of two. Particle-mGRAD allows M up to 64 and NM up to 8192, or 4096 above N = 512, the shapes its fused GPU tail covers. Heuristic: default M = 8; no ESS advantage has been established."
           },
           "path_update": {
-            "$ref": "#/components/schemas/PathUpdateSpec-Output",
+            "$ref": "#/components/schemas/PathUpdateSpec",
             "description": "Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman."
           },
           "parameter_proposal": {
@@ -20785,7 +20521,7 @@
         "x-layer": "findings",
         "x-concern": "scientific_model"
       },
-      "NutsDASpec-Input": {
+      "NutsDASpec": {
         "additionalProperties": false,
         "description": "Hamiltonian updates with dual averaging and diagonal mass adaptation.\n\nThe joint smoother moves parameters and free latent coordinates together.\nOther smoothers alternate the same Hamiltonian parameter kernel with an exact\nconditional path update. Both reconstruct deterministic recurrences exactly\nand target the same joint posterior.",
         "properties": {
@@ -20796,7 +20532,7 @@
             "type": "string"
           },
           "smoother": {
-            "$ref": "#/components/schemas/NutsSmootherSpec-Input",
+            "$ref": "#/components/schemas/NutsSmootherSpec",
             "description": "joint moves parameters and free latent coordinates together. Selecting a path smoother alternates NUTS on parameters conditional on the current path coordinates with that exact path update at the new parameters. The configured parameterization also applies to this conditional parameter block; non-centred holds innovations fixed, centred holds states fixed. Both preserve the same joint posterior."
           },
           "parameterization": {
@@ -20813,45 +20549,7 @@
             "type": "number"
           },
           "trajectory": {
-            "$ref": "#/components/schemas/JointTrajectorySpec-Input",
-            "description": "NUTS chooses each trajectory's length; fixed runs a set number of steps."
-          }
-        },
-        "title": "NutsDASpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "NutsDASpec-Output": {
-        "additionalProperties": false,
-        "description": "Hamiltonian updates with dual averaging and diagonal mass adaptation.\n\nThe joint smoother moves parameters and free latent coordinates together.\nOther smoothers alternate the same Hamiltonian parameter kernel with an exact\nconditional path update. Both reconstruct deterministic recurrences exactly\nand target the same joint posterior.",
-        "properties": {
-          "method": {
-            "const": "nuts_da",
-            "default": "nuts_da",
-            "title": "Method",
-            "type": "string"
-          },
-          "smoother": {
-            "$ref": "#/components/schemas/NutsSmootherSpec-Output",
-            "description": "joint moves parameters and free latent coordinates together. Selecting a path smoother alternates NUTS on parameters conditional on the current path coordinates with that exact path update at the new parameters. The configured parameterization also applies to this conditional parameter block; non-centred holds innovations fixed, centred holds states fixed. Both preserve the same joint posterior."
-          },
-          "parameterization": {
-            "$ref": "#/components/schemas/JointParameterization",
-            "default": "centred",
-            "description": "Coordinates the sampler moves in; the posterior is the same in all three, only its geometry changes. centred samples each path directly, standardized by the prior's per-step covariances at the starting parameters. non_centred samples each free coordinate's Euler-Maruyama innovation and rebuilds the path from the current parameters. mixed keeps coordinates with a direct point reading centred and makes the rest non-centred. Centred mixes well where data pin the states, non-centred where data are weak against the dynamics (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). Frozen per fit; changing it on a continued fit requires warmup."
-          },
-          "target_accept_prob": {
-            "default": 0.8,
-            "description": "Mean acceptance statistic that dual averaging steers the step size towards during warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks the step, which removes divergences in strongly curved regions at the cost of longer trajectories. 0.8 is the NumPyro and Stan default.",
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Target Accept Prob",
-            "type": "number"
-          },
-          "trajectory": {
-            "$ref": "#/components/schemas/JointTrajectorySpec-Output",
+            "$ref": "#/components/schemas/JointTrajectorySpec",
             "description": "NUTS chooses each trajectory's length; fixed runs a set number of steps."
           }
         },
@@ -20868,57 +20566,20 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "NutsSmootherSpec-Input": {
+      "NutsSmootherSpec": {
         "anyOf": [
           {
-            "$ref": "#/components/schemas/JointSmootherSpec-Input"
+            "$ref": "#/components/schemas/JointSmootherSpec"
           },
           {
-            "$ref": "#/components/schemas/PathUpdateSpec-Input"
+            "$ref": "#/components/schemas/PathUpdateSpec"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "NutsSmootherSpec-Output": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/JointSmootherSpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/PathUpdateSpec-Output"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "NutsTrajectorySpec-Input": {
-        "additionalProperties": false,
-        "description": "A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).",
-        "properties": {
-          "kind": {
-            "const": "nuts",
-            "default": "nuts",
-            "title": "Kind",
-            "type": "string"
-          },
-          "max_tree_depth": {
-            "default": 10,
-            "description": "Maximum number of trajectory doublings per transition, so at most 2^max_tree_depth - 1 leapfrog steps. The report gives the fraction of transitions that reach it; frequent hits mean the step is small against the posterior's longest scale, and each extra level can double the cost. 10 is the NumPyro and Stan default.",
-            "minimum": 1,
-            "title": "Max Tree Depth",
-            "type": "integer"
-          }
-        },
-        "title": "NutsTrajectorySpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "NutsTrajectorySpec-Output": {
+      "NutsTrajectorySpec": {
         "additionalProperties": false,
         "description": "A dynamically terminated trajectory, bounded by tree depth (Hoffman & Gelman 2014).",
         "properties": {
@@ -21729,24 +21390,7 @@
         "x-concern": "identity",
         "description": "A scientific parameter identity connects component coefficients to one parameter definition."
       },
-      "ParameterMeanProposalSpec-Input": {
-        "additionalProperties": false,
-        "description": "Build proposal dynamics at the mean of supported parameter candidates.\n\nThis repository's shared-guide construction is symmetric in the ensemble.\nSeparated parameter components can be poorly represented by their mean.\nParticle-mGRAD doesn't offer it: only its mixture proposal runs the fused GPU tail.",
-        "properties": {
-          "kind": {
-            "const": "parameter_mean",
-            "default": "parameter_mean",
-            "title": "Kind",
-            "type": "string"
-          }
-        },
-        "title": "ParameterMeanProposalSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "ParameterMeanProposalSpec-Output": {
+      "ParameterMeanProposalSpec": {
         "additionalProperties": false,
         "description": "Build proposal dynamics at the mean of supported parameter candidates.\n\nThis repository's shared-guide construction is symmetric in the ensemble.\nSeparated parameter components can be poorly represented by their mean.\nParticle-mGRAD doesn't offer it: only its mixture proposal runs the fused GPU tail.",
         "properties": {
@@ -21766,9 +21410,9 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "ParameterMixtureProposalSpec-Input": {
+      "ParameterMixtureLaunchSpec-Input": {
         "additionalProperties": false,
-        "description": "Mix parameter-specific proposals with exact density or auxiliary-label corrections.\n\nCorenflos (2025), section 3.4 motivates running-prefix transition mixtures.\nParticle-mGRAD retains each proposal component label and integrates out the\nGaussian path auxiliary, extending Corenflos & Finke (2024), Appendix D.2.\nTwisted Particle-aGRAD pays the full mixture density with a shared auxiliary\nand look-ahead. Both require point observations without deterministic\nrecurrences. Prior-weighted and Kalman mixtures are not implemented. Early\nlabel collapse and poor shared guidance can reduce mixing.\n\nDesign decision (2026-11-06): use candidate-specific proposal coverage to\naddress parameter/path mismatch directly, without learned translation or\ndiffusion-scale charts. Exact proposal corrections preserve the target;\nthey do not guarantee efficient mixing. A scalar low-diffusion experiment\nfound that twisted-aGRAD's running-prefix mixture in physical coordinates\nmatched the charted mean-guide control in total effective samples per second. The separate\nSV blocked-Kalman run used conditional-parameter proposals, not this mixture,\nand retained parameter R-hat of 1.07--1.11; it does not establish general chart\nreplacement. Source runs: scratchpad/chart-replacement-20261106 and\nscratchpad/sv-blocked-chart-off-20261106.",
+        "description": "The running-prefix parameter mixture supported by Particle-mGRAD launches.",
         "properties": {
           "kind": {
             "const": "parameter_mixture",
@@ -21777,23 +21421,48 @@
             "type": "string"
           },
           "weights": {
+            "const": "running_prefix",
             "default": "running_prefix",
-            "description": "running_prefix uses each particle's exact label probabilities through the previous time (Corenflos 2025, section 3.4). prior uses parameter priors and the ensemble-proposal correction, without path evidence; currently unsupported.",
-            "enum": [
-              "running_prefix",
-              "prior"
-            ],
+            "description": "Mix parameter-specific proposals using exact label probabilities through the previous time (Corenflos 2025, section 3.4). Requires point readings without deterministic recurrences.",
             "title": "Weights",
             "type": "string"
           }
         },
-        "title": "ParameterMixtureProposalSpec",
+        "title": "ParameterMixtureLaunchSpec",
         "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "ParameterMixtureProposalSpec-Output": {
+      "ParameterMixtureLaunchSpec-Output": {
+        "additionalProperties": false,
+        "description": "The running-prefix parameter mixture supported by Particle-mGRAD launches.",
+        "properties": {
+          "kind": {
+            "const": "parameter_mixture",
+            "default": "parameter_mixture",
+            "title": "Kind",
+            "type": "string"
+          },
+          "weights": {
+            "const": "running_prefix",
+            "default": "running_prefix",
+            "description": "Mix parameter-specific proposals using exact label probabilities through the previous time (Corenflos 2025, section 3.4). Requires point readings without deterministic recurrences.",
+            "title": "Weights",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "weights"
+        ],
+        "title": "ParameterMixtureLaunchSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "ParameterMixtureProposalSpec": {
         "additionalProperties": false,
         "description": "Mix parameter-specific proposals with exact density or auxiliary-label corrections.\n\nCorenflos (2025), section 3.4 motivates running-prefix transition mixtures.\nParticle-mGRAD retains each proposal component label and integrates out the\nGaussian path auxiliary, extending Corenflos & Finke (2024), Appendix D.2.\nTwisted Particle-aGRAD pays the full mixture density with a shared auxiliary\nand look-ahead. Both require point observations without deterministic\nrecurrences. Prior-weighted and Kalman mixtures are not implemented. Early\nlabel collapse and poor shared guidance can reduce mixing.\n\nDesign decision (2026-11-06): use candidate-specific proposal coverage to\naddress parameter/path mismatch directly, without learned translation or\ndiffusion-scale charts. Exact proposal corrections preserve the target;\nthey do not guarantee efficient mixing. A scalar low-diffusion experiment\nfound that twisted-aGRAD's running-prefix mixture in physical coordinates\nmatched the charted mean-guide control in total effective samples per second. The separate\nSV blocked-Kalman run used conditional-parameter proposals, not this mixture,\nand retained parameter R-hat of 1.07--1.11; it does not establish general chart\nreplacement. Source runs: scratchpad/chart-replacement-20261106 and\nscratchpad/sv-blocked-chart-off-20261106.",
         "properties": {
@@ -22449,131 +22118,120 @@
         "x-concern": "scientific_model"
       },
       "PathMethodLaunchSpec-Input": {
-        "discriminator": {
-          "mapping": {
-            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanMethodSpec-Input",
-            "particle_mgrad": "#/components/schemas/GuidedMethodLaunchSpec-Input",
-            "twisted_particle_agrad": "#/components/schemas/GuidedMethodLaunchSpec-Input"
+        "additionalProperties": false,
+        "description": "Particle-mGRAD launch controls, resolved before numerical execution.",
+        "properties": {
+          "kind": {
+            "const": "particle_mgrad",
+            "default": "particle_mgrad",
+            "description": "Particle-mGRAD integrates the path auxiliary out of the particle weights.",
+            "title": "Kind",
+            "type": "string"
           },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/GuidedMethodLaunchSpec-Input"
+          "num_particles": {
+            "$ref": "#/components/schemas/ParticleLaunchCount",
+            "default": 64,
+            "description": "Path particles N, or auto to select the largest supported power of two admitted by the analytical host/device memory estimate. At most one of N, M and chains may be auto. Automatic selection is available for Particle-mGRAD."
           },
-          {
-            "$ref": "#/components/schemas/AuxiliaryKalmanMethodSpec-Input"
+          "kappa": {
+            "$ref": "#/components/schemas/GuidedGradientWeight",
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method."
+          },
+          "scan_unroll": {
+            "default": 8,
+            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.",
+            "minimum": 1,
+            "title": "Scan Unroll",
+            "type": "integer"
           }
-        ],
+        },
+        "title": "GuidedMethodLaunchSpec",
+        "type": "object",
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
       "PathMethodLaunchSpec-Output": {
+        "additionalProperties": false,
+        "description": "Particle-mGRAD launch controls, resolved before numerical execution.",
+        "properties": {
+          "kind": {
+            "const": "particle_mgrad",
+            "default": "particle_mgrad",
+            "description": "Particle-mGRAD integrates the path auxiliary out of the particle weights.",
+            "title": "Kind",
+            "type": "string"
+          },
+          "num_particles": {
+            "$ref": "#/components/schemas/ParticleLaunchCount",
+            "default": 64,
+            "description": "Path particles N, or auto to select the largest supported power of two admitted by the analytical host/device memory estimate. At most one of N, M and chains may be auto. Automatic selection is available for Particle-mGRAD."
+          },
+          "kappa": {
+            "$ref": "#/components/schemas/GuidedGradientWeight",
+            "default": 1,
+            "description": "1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method."
+          },
+          "scan_unroll": {
+            "default": 8,
+            "description": "Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.",
+            "minimum": 1,
+            "title": "Scan Unroll",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "num_particles",
+          "kappa",
+          "scan_unroll"
+        ],
+        "title": "GuidedMethodLaunchSpec",
+        "type": "object",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
+      "PathMethodSpec": {
         "discriminator": {
           "mapping": {
-            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanMethodSpec-Output",
-            "particle_mgrad": "#/components/schemas/GuidedMethodLaunchSpec-Output",
-            "twisted_particle_agrad": "#/components/schemas/GuidedMethodLaunchSpec-Output"
+            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanMethodSpec",
+            "particle_mgrad": "#/components/schemas/GuidedMethodSpec",
+            "twisted_particle_agrad": "#/components/schemas/GuidedMethodSpec"
           },
           "propertyName": "kind"
         },
         "oneOf": [
           {
-            "$ref": "#/components/schemas/GuidedMethodLaunchSpec-Output"
+            "$ref": "#/components/schemas/GuidedMethodSpec"
           },
           {
-            "$ref": "#/components/schemas/AuxiliaryKalmanMethodSpec-Output"
+            "$ref": "#/components/schemas/AuxiliaryKalmanMethodSpec"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "PathMethodSpec-Input": {
+      "PathProposalSpec": {
         "discriminator": {
           "mapping": {
-            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanMethodSpec-Input",
-            "particle_mgrad": "#/components/schemas/GuidedMethodSpec-Input",
-            "twisted_particle_agrad": "#/components/schemas/GuidedMethodSpec-Input"
+            "conditional_parameter": "#/components/schemas/ConditionalParameterProposalSpec",
+            "parameter_mean": "#/components/schemas/ParameterMeanProposalSpec",
+            "parameter_mixture": "#/components/schemas/ParameterMixtureProposalSpec"
           },
           "propertyName": "kind"
         },
         "oneOf": [
           {
-            "$ref": "#/components/schemas/GuidedMethodSpec-Input"
+            "$ref": "#/components/schemas/ParameterMeanProposalSpec"
           },
           {
-            "$ref": "#/components/schemas/AuxiliaryKalmanMethodSpec-Input"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "PathMethodSpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "auxiliary_kalman": "#/components/schemas/AuxiliaryKalmanMethodSpec-Output",
-            "particle_mgrad": "#/components/schemas/GuidedMethodSpec-Output",
-            "twisted_particle_agrad": "#/components/schemas/GuidedMethodSpec-Output"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/GuidedMethodSpec-Output"
+            "$ref": "#/components/schemas/ParameterMixtureProposalSpec"
           },
           {
-            "$ref": "#/components/schemas/AuxiliaryKalmanMethodSpec-Output"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "PathProposalSpec-Input": {
-        "discriminator": {
-          "mapping": {
-            "conditional_parameter": "#/components/schemas/ConditionalParameterProposalSpec-Input",
-            "parameter_mean": "#/components/schemas/ParameterMeanProposalSpec-Input",
-            "parameter_mixture": "#/components/schemas/ParameterMixtureProposalSpec-Input"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/ParameterMeanProposalSpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/ParameterMixtureProposalSpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/ConditionalParameterProposalSpec-Input"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "PathProposalSpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "conditional_parameter": "#/components/schemas/ConditionalParameterProposalSpec-Output",
-            "parameter_mean": "#/components/schemas/ParameterMeanProposalSpec-Output",
-            "parameter_mixture": "#/components/schemas/ParameterMixtureProposalSpec-Output"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/ParameterMeanProposalSpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/ParameterMixtureProposalSpec-Output"
-          },
-          {
-            "$ref": "#/components/schemas/ConditionalParameterProposalSpec-Output"
+            "$ref": "#/components/schemas/ConditionalParameterProposalSpec"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
@@ -22582,19 +22240,16 @@
       },
       "PathUpdateLaunchSpec-Input": {
         "additionalProperties": false,
-        "description": "Launch-time path controls with the numerical owner's defaults and constraints.",
+        "description": "Whole-path Particle-mGRAD with a running-prefix parameter mixture.",
         "properties": {
           "method": {
             "$ref": "#/components/schemas/PathMethodLaunchSpec-Input"
           },
           "update": {
-            "$ref": "#/components/schemas/PathUpdateScopeSpec-Input",
-            "default": {
-              "kind": "whole_path"
-            }
+            "$ref": "#/components/schemas/WholePathUpdateSpec-Input"
           },
           "proposal": {
-            "$ref": "#/components/schemas/PathProposalSpec-Input"
+            "$ref": "#/components/schemas/ParameterMixtureLaunchSpec-Input"
           },
           "latent_step": {
             "$ref": "#/components/schemas/LatentStepSpec-Input",
@@ -22613,19 +22268,16 @@
       },
       "PathUpdateLaunchSpec-Output": {
         "additionalProperties": false,
-        "description": "Launch-time path controls with the numerical owner's defaults and constraints.",
+        "description": "Whole-path Particle-mGRAD with a running-prefix parameter mixture.",
         "properties": {
           "method": {
             "$ref": "#/components/schemas/PathMethodLaunchSpec-Output"
           },
           "update": {
-            "$ref": "#/components/schemas/PathUpdateScopeSpec-Output",
-            "default": {
-              "kind": "whole_path"
-            }
+            "$ref": "#/components/schemas/WholePathUpdateSpec-Output"
           },
           "proposal": {
-            "$ref": "#/components/schemas/PathProposalSpec-Output"
+            "$ref": "#/components/schemas/ParameterMixtureLaunchSpec-Output"
           },
           "latent_step": {
             "$ref": "#/components/schemas/LatentStepSpec-Output",
@@ -22648,30 +22300,10 @@
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "PathUpdateScopeSpec-Input": {
+      "PathUpdateScopeSpec": {
         "discriminator": {
           "mapping": {
-            "blocked": "#/components/schemas/BlockedPathUpdateSpec-Input",
-            "whole_path": "#/components/schemas/WholePathUpdateSpec-Input"
-          },
-          "propertyName": "kind"
-        },
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/WholePathUpdateSpec-Input"
-          },
-          {
-            "$ref": "#/components/schemas/BlockedPathUpdateSpec-Input"
-          }
-        ],
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "PathUpdateScopeSpec-Output": {
-        "discriminator": {
-          "mapping": {
-            "blocked": "#/components/schemas/BlockedPathUpdateSpec-Output",
+            "blocked": "#/components/schemas/BlockedPathUpdateSpec",
             "whole_path": "#/components/schemas/WholePathUpdateSpec-Output"
           },
           "propertyName": "kind"
@@ -22681,50 +22313,25 @@
             "$ref": "#/components/schemas/WholePathUpdateSpec-Output"
           },
           {
-            "$ref": "#/components/schemas/BlockedPathUpdateSpec-Output"
+            "$ref": "#/components/schemas/BlockedPathUpdateSpec"
           }
         ],
         "x-python-module": "grassmoth.artifacts.sampling",
         "x-layer": "authored",
         "x-concern": "scientific_model"
       },
-      "PathUpdateSpec-Input": {
+      "PathUpdateSpec": {
         "additionalProperties": false,
         "description": "Common declarative path settings, with support resolved before execution.\n\nThe schema describes independent choices; support_failure owns the current\nimplementation matrix. Model-dependent restrictions belong to fit preflight.",
         "properties": {
           "method": {
-            "$ref": "#/components/schemas/PathMethodSpec-Input"
+            "$ref": "#/components/schemas/PathMethodSpec"
           },
           "update": {
-            "$ref": "#/components/schemas/PathUpdateScopeSpec-Input"
+            "$ref": "#/components/schemas/PathUpdateScopeSpec"
           },
           "proposal": {
-            "$ref": "#/components/schemas/PathProposalSpec-Input",
-            "description": "Particle-mGRAD requires a running-prefix parameter mixture, the only proposal with its fused GPU tail, which also covers individual parameter candidates. Heuristic: an ESS advantage has not been established. Other methods default to parameter_mean. Mixtures currently require point observations without deterministic recurrences; select twisted_particle_agrad with parameter_mean, or auxiliary_kalman, for intervals or recurrences."
-          },
-          "latent_step": {
-            "$ref": "#/components/schemas/LatentStepSpec-Input",
-            "description": "Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & S\u00e4rkk\u00e4 2025, sections 2.2\u20132.4)."
-          }
-        },
-        "title": "PathUpdateSpec",
-        "type": "object",
-        "x-python-module": "grassmoth.artifacts.sampling",
-        "x-layer": "authored",
-        "x-concern": "scientific_model"
-      },
-      "PathUpdateSpec-Output": {
-        "additionalProperties": false,
-        "description": "Common declarative path settings, with support resolved before execution.\n\nThe schema describes independent choices; support_failure owns the current\nimplementation matrix. Model-dependent restrictions belong to fit preflight.",
-        "properties": {
-          "method": {
-            "$ref": "#/components/schemas/PathMethodSpec-Output"
-          },
-          "update": {
-            "$ref": "#/components/schemas/PathUpdateScopeSpec-Output"
-          },
-          "proposal": {
-            "$ref": "#/components/schemas/PathProposalSpec-Output",
+            "$ref": "#/components/schemas/PathProposalSpec",
             "description": "Particle-mGRAD requires a running-prefix parameter mixture, the only proposal with its fused GPU tail, which also covers individual parameter candidates. Heuristic: an ESS advantage has not been established. Other methods default to parameter_mean. Mixtures currently require point observations without deterministic recurrences; select twisted_particle_agrad with parameter_mean, or auxiliary_kalman, for intervals or recurrences."
           },
           "latent_step": {

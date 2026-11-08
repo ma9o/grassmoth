@@ -16,13 +16,15 @@ from grassmoth_server.actions.contracts.logs import (
 )
 from grassmoth_server.actions.contracts.progress import ProgressEvent
 from grassmoth_server.llm.traces import LLMTrace
+from grassmoth_server.study.records import ActionMessage
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from grassmoth_server.study.records import ActionMessage, FailedOutcome
+    from grassmoth_server.study.records import FailedOutcome
 
 _PROGRESS = TypeAdapter(tuple[ProgressEvent, ...])
+_MESSAGES = TypeAdapter(tuple[ActionMessage, ...])
 
 
 def assemble_call_log(
@@ -45,6 +47,8 @@ def assemble_call_log(
                 )
                 for event in _PROGRESS.validate_json(raw)
             )
+        elif path == "messages.json":
+            entries.extend(_MESSAGES.validate_json(raw))
         elif path.startswith("traces/"):
             entries.append(
                 TraceLogMessage(

@@ -330,6 +330,9 @@ from grassmoth.artifacts.sampling import (
 from grassmoth.artifacts.sampling import (
     SamplerSpec as SamplerSpec,
 )
+from grassmoth.artifacts.sampling import (
+    UnsupportedSamplerLaunch as UnsupportedSamplerLaunch,
+)
 from grassmoth.artifacts.scenarios import (
     CausalEffectResult as CausalEffectResult,
 )
