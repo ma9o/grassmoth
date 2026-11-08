@@ -189,7 +189,7 @@ def test_posterior_marginals_and_traces_preserve_joint_draws_and_extra_fields(pa
 
 @pytest.mark.inference(concern="sampling")
 @pytest.mark.parametrize("constant", [False, True])
-def test_device_plot_summaries_use_full_draws_and_average_ties(constant):
+def test_host_plot_summaries_use_full_draws_and_average_ties(constant):
     from arviz_stats.base.array import array_stats
     from scipy.stats import rankdata
 
@@ -356,6 +356,7 @@ def test_latent_diagnostics_bound_selection_and_detect_late_frozen_coordinate(
     selected_shapes = []
 
     def record_selection(samples):
+        assert isinstance(samples, np.ndarray)
         selected_shapes.append(samples.shape)
         return chain_statistics(samples)
 
@@ -365,10 +366,9 @@ def test_latent_diagnostics_bound_selection_and_detect_late_frozen_coordinate(
         getitem = type(source).__getitem__
 
         def bounded_getitem(value, index):
-            selected = getitem(value, index)
             if value is source:
-                assert selected.size <= 2 * 64 * 256
-            return selected
+                raise AssertionError("Retained paths must transfer before coordinate selection")
+            return getitem(value, index)
 
         monkeypatch.setattr(type(source), "__getitem__", bounded_getitem)
     evidence = latent.LatentChainEvidence.from_draws(
@@ -405,6 +405,103 @@ def test_latent_diagnostics_bound_selection_and_detect_late_frozen_coordinate(
             ),
             rtol=5e-5,
         )
+
+
+@pytest.mark.inference(concern="sampling")
+def test_retained_reports_do_not_upload_histories_to_jax(monkeypatch, particle_posterior):
+    """Report consumers may copy device inputs to host, but cannot create device work."""
+    import jax
+
+    from grassmoth.models.ssm.inference.diagnostics.plots import build_rank_histograms
+
+    def no_device_work(*_args, **_kwargs):
+        raise AssertionError("Reporting must not place retained draws on an accelerator")
+
+    monkeypatch.setattr(jnp, "asarray", no_device_work)
+    monkeypatch.setattr(jax, "device_put", no_device_work)
+    monkeypatch.setattr(jax, "jit", no_device_work)
+    refs = references([("alpha", ()), ("beta", (0,)), ("beta", (1,)), ("sigma", ())])
+    report = particle_posterior.get_mcmc_diagnostics(refs)
+    ranks = build_rank_histograms(particle_posterior.diagnostics.mcmc.chain_samples, refs)
+    marginals = compute_posterior_marginals(particle_posterior.draws.parameters, refs)
+    assert len(report.per_parameter) == len(ranks) == len(marginals) == 4
+    assert report.num_samples_per_chain == 64
+    assert all(sum(chain) == 64 for rank in ranks for chain in rank.chains)
+
+
+@pytest.mark.inference(concern="sampling")
+def test_host_projection_preserves_native_transforms_across_chunks(monkeypatch):
+    import jax
+    import numpyro.distributions as dist
+
+    from grassmoth.models.ssm.inference.parameter_tracing import extract_constrained_samples
+    from grassmoth.models.ssm.inference.parameter_transform import ParameterTransform
+
+    transform = dist.transforms.StickBreakingTransform()
+
+    def constrain(position):
+        simplex = transform(position)
+        return {"simplex": simplex, "positive": jnp.exp(position), "derived": simplex[0] ** 2}
+
+    positions = np.random.default_rng(418).normal(size=(259, 3)).astype(np.float32)
+    expected = jax.device_get(jax.vmap(constrain)(positions))
+    original_jit = jax.jit
+    shapes = []
+
+    def cpu_jit(function, **options):
+        assert options["backend"] == "cpu"
+        compiled = original_jit(function, **options)
+
+        def call(batch):
+            assert isinstance(batch, np.ndarray)
+            assert batch.shape[0] <= 256
+            shapes.append(batch.shape)
+            result = compiled(batch)
+            assert all(
+                device.platform == "cpu" for value in result.values() for device in value.devices()
+            )
+            return result
+
+        return call
+
+    monkeypatch.setattr(jax, "jit", cpu_jit)
+    parameters = ParameterTransform(
+        initial_position=jnp.zeros(3),
+        unravel=lambda _: {},
+        constrain=constrain,
+        log_prior=lambda _: jnp.asarray(0.0),
+    )
+    actual = extract_constrained_samples(positions, parameters, frozenset(expected))
+    assert shapes == [(256, 3), (3, 3)]
+    for name, values in actual.items():
+        assert isinstance(values, np.ndarray)
+        assert values.dtype == np.float32
+        np.testing.assert_allclose(values, expected[name], rtol=1e-6, atol=1e-7)
+
+
+@pytest.mark.inference(concern="sampling")
+@pytest.mark.parametrize("family", ["beta", "student", "transformed"])
+def test_prior_curves_keep_native_density_on_cpu(family):
+    import numpyro.distributions as dist
+
+    from grassmoth.study.projections.priors import _native_curve, _viewport_draws, prior_density
+
+    law = {
+        "beta": dist.Beta(2.0, 3.0),
+        "student": dist.StudentT(4.0, 0.3, 1.2),
+        "transformed": dist.TransformedDistribution(
+            dist.Normal(0.2, 0.7), dist.transforms.ExpTransform()
+        ),
+    }[family]
+    viewport = _viewport_draws(law)
+    assert viewport.dtype == np.float32
+    assert all(device.platform == "cpu" for device in viewport.devices())
+    low, high = np.quantile(np.asarray(viewport), [0.01, 0.99])
+    grid, density = _native_curve(law, np.float32(low), np.float32(high))
+    assert all(device.platform == "cpu" for array in (grid, density) for device in array.devices())
+    curve = prior_density(law)
+    np.testing.assert_allclose(curve.x, grid, rtol=1e-6)
+    np.testing.assert_allclose(curve.density, np.exp(np.asarray(law.log_prob(grid))), rtol=1e-6)
 
 
 @pytest.mark.contract

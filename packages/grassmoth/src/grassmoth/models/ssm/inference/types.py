@@ -23,6 +23,7 @@ from types import MappingProxyType
 from typing import Annotated, Self
 
 import jax.numpy as jnp
+import numpy as np
 from numpy.typing import NDArray
 
 from grassmoth.artifacts.immutability import freeze_fields
@@ -94,7 +95,7 @@ class UnretainedRun:
 
     settings: SamplerSpec
     compiled_step: Compiled
-    phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]]
+    phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray | NDArray]]
     profile: FitProfileReport | None = None
 
     @classmethod
@@ -102,7 +103,7 @@ class UnretainedRun:
         cls,
         settings: SamplerSpec,
         compiled_step: Compiled,
-        phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray]],
+        phase_extra_fields: Mapping[str, Mapping[str, jnp.ndarray | NDArray]],
         profile: FitProfileReport | None = None,
     ) -> UnretainedRun:
         """Own a completed interval whose settings retain no posterior samples."""
@@ -233,7 +234,7 @@ class MCMCPosterior:
             reference = references[coordinate]
             if reference is not None:
                 label, subject = reference
-                metrics = chain_statistics(jnp.asarray(values)[..., None])[0]
+                metrics = chain_statistics(values[..., None])[0]
                 r_hat, bulk, tail, mcse_mean = (
                     float(value) if math.isfinite(value) else None for value in metrics
                 )
@@ -247,10 +248,10 @@ class MCMCPosterior:
                         mcse_mean=mcse_mean,
                     )
                 )
-        extra = mcmc.get_extra_fields()
+        extra = mcmc.get_extra_fields(group_by_chain=True)
 
         def average(name: str) -> float | None:
-            return float(jnp.mean(jnp.asarray(extra[name]))) if name in extra else None
+            return float(np.mean(np.asarray(extra[name]))) if name in extra else None
 
         return ChainDiagnostics(
             num_chains=int(mcmc.num_chains),
@@ -282,11 +283,10 @@ class MCMCPosterior:
         measurements. This does not estimate leave-future-out forecast skill.
         """
         exact_rows = self.diagnostics.exact_observation_rows
-        if exact_rows is not None and bool(jnp.any(exact_rows)):
+        if exact_rows is not None and bool(np.any(np.asarray(exact_rows))):
             # Removing an equality increases the support dimension. Reweighting
             # draws confined to that equality cannot recover the held-out target.
             return None
-        import numpy as np
         from arviz_stats.loo import loo
         from arviz_stats.utils import ELPDDataLOO
 

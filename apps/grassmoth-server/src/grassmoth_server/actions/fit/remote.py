@@ -29,7 +29,11 @@ from grassmoth_server.compute.analysis_cache import (
     retained_fit_result,
 )
 from grassmoth_server.compute.fit_results import RemoteFitResult
-from grassmoth_server.compute.resources import HOST_MEMORY_ALLOCATION_ENV
+from grassmoth_server.compute.resources import (
+    FIT_DEVICE_MEMORY_FRACTION,
+    FIT_HOST_MEMORY_MIB,
+    HOST_MEMORY_ALLOCATION_ENV,
+)
 from grassmoth_server.study.persistence.codec import pack_payload, pack_result, unpack_result
 
 if TYPE_CHECKING:
@@ -44,7 +48,6 @@ if TYPE_CHECKING:
     )
 
 _FIT_CPU_CORES = 8
-_FIT_HOST_MEMORY_MIB = 32768
 FIT_CACHE_VOLUME_ENV = "GRASSMOTH_FIT_CACHE_VOLUME"
 _RESULT_HEADER_BYTES = 8 + hashlib.sha256().digest_size
 _RESULT_CHUNK_BYTES = 8 * 1024**2
@@ -234,13 +237,13 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
             # Reserve a contiguous pool before backend initialization so large
             # compiled sweep workspaces do not depend on allocator growth.
             "XLA_PYTHON_CLIENT_PREALLOCATE": "true",
-            "XLA_PYTHON_CLIENT_MEM_FRACTION": "0.90",
+            "XLA_PYTHON_CLIENT_MEM_FRACTION": FIT_DEVICE_MEMORY_FRACTION,
             FIT_CACHE_VOLUME_ENV: cache_volume,
             "JAX_COMPILATION_CACHE_DIR": "/tmp/grassmoth-jax",
             "JAX_ENABLE_COMPILATION_CACHE": "true",
             "JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS": str(FIT_CACHE_MIN_COMPILE_SECONDS),
             "JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES": "0",
-            HOST_MEMORY_ALLOCATION_ENV: str(_FIT_HOST_MEMORY_MIB * 1024**2),
+            HOST_MEMORY_ALLOCATION_ENV: str(FIT_HOST_MEMORY_MIB * 1024**2),
             # Keep small host-side NumPy/SciPy operations within one BLAS thread.
             "OPENBLAS_NUM_THREADS": "1",
             "OMP_NUM_THREADS": "1",
@@ -248,7 +251,7 @@ def _dispatch_fit(payload: FitComputeInput, *, hardware: InferenceHardware) -> F
         },
         gpu=hardware.value,
         cpu=(_FIT_CPU_CORES, _FIT_CPU_CORES),
-        memory=(_FIT_HOST_MEMORY_MIB, _FIT_HOST_MEMORY_MIB),
+        memory=(FIT_HOST_MEMORY_MIB, FIT_HOST_MEMORY_MIB),
         timeout=payload.sampler.time_limit_seconds,
         startup_timeout=payload.sampler.time_limit_seconds,
         scaledown_window=2,

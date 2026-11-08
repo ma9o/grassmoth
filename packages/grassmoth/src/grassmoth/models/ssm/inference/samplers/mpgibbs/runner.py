@@ -118,9 +118,11 @@ class ParticleChainResult:
     profile: FitProfileReport | None = None
 
     @property
-    def post_warmup_complete_log_posterior_mean(self) -> jnp.ndarray:
+    def post_warmup_complete_log_posterior_mean(
+        self,
+    ) -> np.ndarray[tuple[int, ...], np.dtype[np.generic]]:
         """Project the retained density history without retaining a duplicate summary."""
-        return jnp.mean(self.complete_log_posterior_history, axis=1)
+        return np.mean(np.asarray(self.complete_log_posterior_history), axis=1)
 
     def __post_init__(self) -> None:
         """Freeze retained, warmup, and combined chain diagnostics."""

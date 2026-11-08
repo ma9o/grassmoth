@@ -12,6 +12,8 @@ import asyncio
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from pydantic import ValidationError
+
 from grassmoth.public import FitInputs, InferenceHardware, StructuralSelection
 from grassmoth_server.actions.contracts.effects import ActionEffects
 from grassmoth_server.actions.contracts.inputs import ContinueFitTarget, FitInput
@@ -52,7 +54,9 @@ def _fit_selected(
     call_id: CallId,
 ) -> Applied[GitOid] | Rejected:
     from grassmoth_server.actions.fit.action import run_fit
+    from grassmoth_server.actions.fit.capacity import admit_sampler
     from grassmoth_server.actions.fit.execution import resolve_sampler_spec
+    from grassmoth_server.compute.resources import fit_compute_budget
     from grassmoth_server.config import get_config
     from grassmoth_server.study.queries.data import read_data_history
 
@@ -64,26 +68,37 @@ def _fit_selected(
     )
     if isinstance(previous, Rejected):
         return previous
-    sampler = resolve_sampler_spec(
-        request.settings, None if previous is None else previous.settings
-    )
-    if (failure := sampler.support_failure) is not None:
-        return Rejected(code="UNSUPPORTED_PATH_UPDATE", subject="fit", detail=failure.message)
+    try:
+        launch = resolve_sampler_spec(
+            request.settings, None if previous is None else previous.settings
+        )
+    except ValidationError as error:
+        return Rejected(code="INVALID_SAMPLER_LAUNCH", subject="fit", detail=str(error))
     history = read_data_history(store, source.data_ref)
     previous_cache = None if previous is None else previous.full_fit
     directory = Path(call_dir(store.workspace_id, call_id))
-    previous_result = (
-        load_full_fit(directory, previous.full_fit)
-        if previous is not None and sampler.hardware == InferenceHardware.LOCAL
-        else None
-    )
 
     from grassmoth_server.study.persistence.store import model_values, read_model, read_question
 
     dynamical_model_spec = model_values(store, read_model(store, pins["model"]))
     question = read_question(store, pins["question"])
+    selection = StructuralSelection.for_question(dynamical_model_spec, question)
+    sampler = admit_sampler(
+        launch,
+        selection,
+        history.observations,
+        budget=fit_compute_budget(launch.hardware),
+        previous=previous,
+    )
+    if isinstance(sampler, Rejected):
+        return sampler
+    previous_result = (
+        load_full_fit(directory, previous.full_fit)
+        if previous is not None and sampler.hardware == InferenceHardware.LOCAL
+        else None
+    )
     inputs = FitInputs(
-        selection=StructuralSelection.for_question(dynamical_model_spec, question),
+        selection=selection,
         question=question,
         data_for_model=history.observations,
         sampler=sampler,

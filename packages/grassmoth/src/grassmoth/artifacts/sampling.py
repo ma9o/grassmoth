@@ -25,9 +25,9 @@ References:
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal, Self, cast
 
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, Field, model_validator
 
 from grassmoth.artifacts.base import Value
 
@@ -249,6 +249,10 @@ _GUIDED_SCAN_UNROLL = (
 )
 
 
+type GuidedMethodKind = Literal["particle_mgrad", "twisted_particle_agrad"]
+type GuidedGradientWeight = Literal[0, 1]
+
+
 class GuidedMethodSpec(Value):
     """Particle-mGRAD or twisted Particle-aGRAD with their particle-bank settings.
 
@@ -257,7 +261,7 @@ class GuidedMethodSpec(Value):
     methods use the same exact parameter-mixture target, with different weights.
     """
 
-    kind: Literal["particle_mgrad", "twisted_particle_agrad"] = Field(
+    kind: GuidedMethodKind = Field(
         default="particle_mgrad",
         description=(
             "particle_mgrad integrates the path auxiliary out of the particle weights with the "
@@ -274,7 +278,7 @@ class GuidedMethodSpec(Value):
         ),
     )
     num_particles: ParticleCount = Field(default=64, description=_GUIDED_PARTICLES)
-    kappa: Literal[0, 1] = Field(default=1, description=_GUIDED_KAPPA)
+    kappa: GuidedGradientWeight = Field(default=1, description=_GUIDED_KAPPA)
     scan_unroll: int = Field(default=8, ge=1, description=_GUIDED_SCAN_UNROLL)
 
 
@@ -804,3 +808,240 @@ class SamplerSpec(Value):
     def kernel_identity(self) -> tuple[str | int, ...]:
         """Identify the algorithm whose private state the checkpoint retains."""
         return self.algorithm.kernel_identity
+
+
+type ParticleLaunchCount = ParticleCount | Literal["auto"]
+type ChainLaunchCount = Annotated[int, Field(ge=1)] | Literal["auto"]
+type AutomaticParticleDimension = Literal["particles", "parameters", "chains"]
+
+_GUIDED_DEFAULTS = GuidedMethodSpec()
+_PATH_DEFAULTS = PathUpdateSpec()
+_PARTICLE_DEFAULTS = MarginalParticleGibbsSpec()
+_SAMPLER_DEFAULTS = SamplerSpec()
+
+
+class GuidedMethodLaunchSpec(Value):
+    """Authored particle count, resolved to GuidedMethodSpec before execution."""
+
+    kind: Annotated[GuidedMethodKind, GuidedMethodSpec.model_fields["kind"]] = _GUIDED_DEFAULTS.kind
+    num_particles: ParticleLaunchCount = Field(
+        default=_GUIDED_DEFAULTS.num_particles,
+        description=(
+            "Path particles N, or auto to select the largest supported power of two admitted "
+            "by the analytical host/device memory estimate. At most one of N, M and chains "
+            "may be auto. Automatic selection is available for Particle-mGRAD."
+        ),
+    )
+    kappa: Annotated[GuidedGradientWeight, GuidedMethodSpec.model_fields["kappa"]] = (
+        _GUIDED_DEFAULTS.kappa
+    )
+    scan_unroll: Annotated[int, GuidedMethodSpec.model_fields["scan_unroll"]] = (
+        _GUIDED_DEFAULTS.scan_unroll
+    )
+
+    @classmethod
+    def from_resolved(cls, value: GuidedMethodSpec) -> Self:
+        """Carry numerical controls into an inherited launch."""
+        return cls(
+            kind=value.kind,
+            num_particles=value.num_particles,
+            kappa=value.kappa,
+            scan_unroll=value.scan_unroll,
+        )
+
+    def resolve(self, count: int) -> GuidedMethodSpec:
+        """Bind a path count while preserving every fixed control."""
+        return GuidedMethodSpec(
+            kind=self.kind,
+            num_particles=count if self.num_particles == "auto" else self.num_particles,
+            kappa=self.kappa,
+            scan_unroll=self.scan_unroll,
+        )
+
+
+type PathMethodLaunchSpec = Annotated[
+    GuidedMethodLaunchSpec | AuxiliaryKalmanMethodSpec, Field(discriminator="kind")
+]
+
+
+class PathUpdateLaunchSpec(Value):
+    """Launch-time path controls with the numerical owner's defaults and constraints."""
+
+    method: PathMethodLaunchSpec = Field(default_factory=GuidedMethodLaunchSpec)
+    update: PathUpdateScopeSpec = Field(
+        default=_PATH_DEFAULTS.update, description=PathUpdateSpec.model_fields["update"].description
+    )
+    proposal: PathProposalSpec = Field(default_factory=_default_path_proposal)
+    latent_step: LatentStepSpec = Field(
+        default=_PATH_DEFAULTS.latent_step,
+        description=PathUpdateSpec.model_fields["latent_step"].description,
+    )
+
+    @classmethod
+    def from_resolved(cls, value: PathUpdateSpec) -> Self:
+        """Preserve the inherited path method, proposal, scope and tuning."""
+        return cls(
+            method=GuidedMethodLaunchSpec.from_resolved(value.method)
+            if isinstance(value.method, GuidedMethodSpec)
+            else value.method,
+            update=value.update,
+            proposal=value.proposal,
+            latent_step=value.latent_step,
+        )
+
+    def resolve(self, count: int) -> PathUpdateSpec:
+        """Project launch controls to the integer-only path owner."""
+        return PathUpdateSpec(
+            method=self.method.resolve(count)
+            if isinstance(self.method, GuidedMethodLaunchSpec)
+            else self.method,
+            update=self.update,
+            proposal=self.proposal,
+            latent_step=self.latent_step,
+        )
+
+
+class MarginalParticleGibbsLaunchSpec(Value):
+    """Authored MPGibbs controls; only particle counts may request memory sizing."""
+
+    method: Literal["mpgibbs"] = "mpgibbs"
+    n_parameter_particles: ParticleLaunchCount = Field(
+        default=_PARTICLE_DEFAULTS.n_parameter_particles,
+        description="Parameter particles M, or auto for analytical Particle-mGRAD memory sizing.",
+    )
+    path_update: PathUpdateLaunchSpec = Field(default_factory=PathUpdateLaunchSpec)
+    parameter_proposal: Annotated[
+        ParameterProposal, MarginalParticleGibbsSpec.model_fields["parameter_proposal"]
+    ] = _PARTICLE_DEFAULTS.parameter_proposal
+    diagnostic_metrics: Annotated[
+        ParticleDiagnosticMetrics, MarginalParticleGibbsSpec.model_fields["diagnostic_metrics"]
+    ] = _PARTICLE_DEFAULTS.diagnostic_metrics
+    param_target_accept: Annotated[
+        float, MarginalParticleGibbsSpec.model_fields["param_target_accept"]
+    ] = _PARTICLE_DEFAULTS.param_target_accept
+    adaptation_scheme: Annotated[
+        AdaptationScheme, MarginalParticleGibbsSpec.model_fields["adaptation_scheme"]
+    ] = _PARTICLE_DEFAULTS.adaptation_scheme
+    initialization: GaussianInitializationSpec = Field(
+        default=_PARTICLE_DEFAULTS.initialization,
+        description=MarginalParticleGibbsSpec.model_fields["initialization"].description,
+    )
+
+    @classmethod
+    def from_resolved(cls, value: MarginalParticleGibbsSpec) -> Self:
+        """Preserve all inherited MPGibbs controls before request overrides."""
+        return cls(
+            n_parameter_particles=value.n_parameter_particles,
+            path_update=PathUpdateLaunchSpec.from_resolved(value.path_update),
+            parameter_proposal=value.parameter_proposal,
+            diagnostic_metrics=value.diagnostic_metrics,
+            param_target_accept=value.param_target_accept,
+            adaptation_scheme=value.adaptation_scheme,
+            initialization=value.initialization,
+        )
+
+    def resolve(self, count: int) -> MarginalParticleGibbsSpec:
+        """Resolve either particle count without changing the remaining kernel."""
+        return MarginalParticleGibbsSpec(
+            n_parameter_particles=count
+            if self.n_parameter_particles == "auto"
+            else self.n_parameter_particles,
+            path_update=self.path_update.resolve(count),
+            parameter_proposal=self.parameter_proposal,
+            diagnostic_metrics=self.diagnostic_metrics,
+            param_target_accept=self.param_target_accept,
+            adaptation_scheme=self.adaptation_scheme,
+            initialization=self.initialization,
+        )
+
+
+type InferenceAlgorithmLaunchSpec = Annotated[
+    MarginalParticleGibbsLaunchSpec | NutsDASpec, Field(discriminator="method")
+]
+
+
+class SamplerLaunchSpec(Value):
+    """Configuration before one optional capacity-selected count becomes an integer.
+
+    Omitted values retain numerical defaults. The resolved SamplerSpec, never
+    this launch specification, is passed to kernels and retained in checkpoints.
+    """
+
+    num_warmup: Annotated[int, SamplerSpec.model_fields["num_warmup"]] = (
+        _SAMPLER_DEFAULTS.num_warmup
+    )
+    num_samples_per_chain: Annotated[int, SamplerSpec.model_fields["num_samples_per_chain"]] = (
+        _SAMPLER_DEFAULTS.num_samples_per_chain
+    )
+    num_chains: ChainLaunchCount = Field(
+        default=_SAMPLER_DEFAULTS.num_chains,
+        description="Independent chains C, or auto for analytical Particle-mGRAD memory sizing.",
+    )
+    thinning: Annotated[bool, SamplerSpec.model_fields["thinning"]] = _SAMPLER_DEFAULTS.thinning
+    seed: Annotated[int, SamplerSpec.model_fields["seed"]] = _SAMPLER_DEFAULTS.seed
+    hardware: Annotated[InferenceHardware, SamplerSpec.model_fields["hardware"]] = (
+        _SAMPLER_DEFAULTS.hardware
+    )
+    time_limit_seconds: Annotated[int, SamplerSpec.model_fields["time_limit_seconds"]] = (
+        _SAMPLER_DEFAULTS.time_limit_seconds
+    )
+    algorithm: InferenceAlgorithmLaunchSpec = Field(default_factory=MarginalParticleGibbsLaunchSpec)
+
+    @classmethod
+    def from_resolved(cls, value: SamplerSpec) -> Self:
+        """Inherit a checkpoint without introducing an automatic axis."""
+        return cls(
+            num_warmup=value.num_warmup,
+            num_samples_per_chain=value.num_samples_per_chain,
+            num_chains=value.num_chains,
+            thinning=value.thinning,
+            seed=value.seed,
+            hardware=value.hardware,
+            time_limit_seconds=value.time_limit_seconds,
+            algorithm=MarginalParticleGibbsLaunchSpec.from_resolved(value.algorithm)
+            if isinstance(value.algorithm, MarginalParticleGibbsSpec)
+            else value.algorithm,
+        )
+
+    @property
+    def automatic_dimension(self) -> AutomaticParticleDimension | None:
+        """The unique requested automatic axis, after launch validation."""
+        if self.num_chains == "auto":
+            return "chains"
+        if isinstance(self.algorithm, MarginalParticleGibbsLaunchSpec):
+            if self.algorithm.n_parameter_particles == "auto":
+                return "parameters"
+            method = self.algorithm.path_update.method
+            if isinstance(method, GuidedMethodLaunchSpec) and method.num_particles == "auto":
+                return "particles"
+        return None
+
+    @model_validator(mode="after")
+    def one_automatic_dimension(self) -> Self:
+        """N and M change one joint transition; choose at most one free launch axis."""
+        automatic = int(self.num_chains == "auto")
+        if isinstance(self.algorithm, MarginalParticleGibbsLaunchSpec):
+            automatic += int(self.algorithm.n_parameter_particles == "auto")
+            method = self.algorithm.path_update.method
+            if isinstance(method, GuidedMethodLaunchSpec):
+                automatic += int(method.num_particles == "auto")
+        if automatic > 1:
+            raise ValueError(
+                "At most one of path particles N, parameter particles M and chains C may be auto"
+            )
+        return self
+
+    def resolve(self, count: int) -> SamplerSpec:
+        """Replace the automatic count through the numerical owner's constructor."""
+        return SamplerSpec(
+            num_warmup=self.num_warmup,
+            num_samples_per_chain=self.num_samples_per_chain,
+            num_chains=count if self.num_chains == "auto" else self.num_chains,
+            thinning=self.thinning,
+            seed=self.seed,
+            hardware=self.hardware,
+            time_limit_seconds=self.time_limit_seconds,
+            algorithm=self.algorithm.resolve(count)
+            if isinstance(self.algorithm, MarginalParticleGibbsLaunchSpec)
+            else self.algorithm,
+        )

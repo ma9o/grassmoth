@@ -6,7 +6,6 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 import jax
-import jax.numpy as jnp
 import jax.random as random
 import numpy as np
 
@@ -178,7 +177,6 @@ def fit_marginal_particle_gibbs(
         run_result.starting_values,
         bundle=bundle,
         compiled_dynamical_model=panel.compiled_dynamical_model,
-        compiler=compiler,
     )
     if sampler.num_samples_per_chain == 0:
         return UnretainedRun.completed(
@@ -196,14 +194,16 @@ def fit_marginal_particle_gibbs(
 
     phase_t0 = clock()
     logger.info("phase 4/4: extracting public posterior samples...")
+    density_mask = np.asarray(bundle.runtime.state_density_mask)
+    free_mask = (
+        density_mask
+        if bundle.exact_constraints is None
+        else density_mask & np.isnan(np.asarray(bundle.exact_constraints.values))
+    )
     with inference_phase("mpgibbs", "latent_diagnostics", execution_context=execution_context):
         latent_chains = LatentChainEvidence.from_draws(
             paths=run_result.latent_paths,
-            free_mask=np.asarray(
-                bundle.runtime.state_density_mask
-                if bundle.exact_constraints is None
-                else bundle.runtime.state_density_mask & bundle.exact_constraints.free_mask
-            ),
+            free_mask=free_mask,
             states=tuple(
                 (ConstructRef(id=s.id), s.name) for s in panel.compiled_dynamical_model.states
             ),
@@ -216,7 +216,6 @@ def fit_marginal_particle_gibbs(
         bundle=bundle,
         num_chains=sampler.num_chains,
         num_samples=run_result.retained_draws,
-        compiler=compiler,
     )
     mcmc = build_pmcmc_mcmc_result(
         chain_samples=grouped_public_samples,
@@ -246,9 +245,15 @@ def fit_marginal_particle_gibbs(
         param_target_accept=float(kernel.target_accept[0]),
         parameter_preconditioned=bool(kernel.preconditioned),
         diagnostic_summary_phase=diagnostic_summary_phase,
-        parameter_accept_rate=float(jnp.mean(summary_extra_fields["parameter_accept_prob"])),
-        latent_update_fraction=float(jnp.mean(summary_extra_fields["latent_accept_prob"])),
-        latent_frozen_fraction=float(jnp.mean(summary_extra_fields["latent_frozen_frac"])),
+        parameter_accept_rate=float(
+            np.mean(np.asarray(summary_extra_fields["parameter_accept_prob"]))
+        ),
+        latent_update_fraction=float(
+            np.mean(np.asarray(summary_extra_fields["latent_accept_prob"]))
+        ),
+        latent_frozen_fraction=float(
+            np.mean(np.asarray(summary_extra_fields["latent_frozen_frac"]))
+        ),
         initial_param_step_size=jax.device_get(run_result.initial_param_step_size).tolist(),
         final_param_step_size=jax.device_get(run_result.final_param_step_size).tolist(),
         chain_post_warmup_complete_log_posterior_mean=jax.device_get(
@@ -264,24 +269,30 @@ def fit_marginal_particle_gibbs(
         if "particle_weights" in kernel.diagnostic_metrics
         and not isinstance(options.path_update.method, AuxiliaryKalmanMethodSpec)
         else None,
-        latent_move_rms_mean=float(jnp.mean(summary_extra_fields["latent_move_rms"]))
+        latent_move_rms_mean=float(np.mean(np.asarray(summary_extra_fields["latent_move_rms"])))
         if "latent_move_rms" in summary_extra_fields
         else None,
-        parameter_jump_rms_mean=float(jnp.mean(summary_extra_fields["parameter_jump_rms"]))
+        parameter_jump_rms_mean=float(
+            np.mean(np.asarray(summary_extra_fields["parameter_jump_rms"]))
+        )
         if "parameter_jump_rms" in summary_extra_fields
         else None,
         reference_path_hit_rate_mean=float(
-            jnp.mean(summary_extra_fields["reference_path_hit_rate"])
+            np.mean(np.asarray(summary_extra_fields["reference_path_hit_rate"]))
         )
         if "reference_path_hit_rate" in summary_extra_fields
         else None,
         selected_particle_unique_count_mean=float(
-            jnp.mean(summary_extra_fields["selected_particle_unique_count"])
+            np.mean(
+                np.asarray(summary_extra_fields["selected_particle_unique_count"]), dtype=np.float32
+            )
         )
         if "selected_particle_unique_count" in summary_extra_fields
         else None,
-        amala_grad_norm_mean=float(jnp.mean(summary_extra_fields["amala_grad_norm_mean"])),
-        amala_grad_norm_max=float(jnp.max(summary_extra_fields["amala_grad_norm_max"])),
+        amala_grad_norm_mean=float(
+            np.mean(np.asarray(summary_extra_fields["amala_grad_norm_mean"]))
+        ),
+        amala_grad_norm_max=float(np.max(np.asarray(summary_extra_fields["amala_grad_norm_max"]))),
     )
     diagnostics = ProductionDiagnostics(
         profile=run_result.profile,
@@ -300,9 +311,7 @@ def fit_marginal_particle_gibbs(
         },
         warmup_complete_log_posterior_history=run_result.warmup_complete_log_posterior_history,
         all_complete_log_posterior_history=run_result.all_complete_log_posterior_history,
-        exact_observation_rows=jnp.any(
-            ~bundle.exact_constraints.free_mask & bundle.runtime.state_density_mask, axis=-1
-        )
+        exact_observation_rows=np.any(~free_mask & density_mask, axis=-1)
         if bundle.exact_constraints is not None
         else None,
     )

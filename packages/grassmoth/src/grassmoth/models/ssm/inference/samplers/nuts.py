@@ -81,7 +81,7 @@ class NutsDARun:
     positions: jax.Array
     paths: jax.Array | NDArray
     observation_log_probs: jax.Array
-    phase_extra_fields: Mapping[str, Mapping[str, jax.Array]]
+    phase_extra_fields: Mapping[str, Mapping[str, jax.Array | NDArray]]
     final_step_size: jax.Array
     compiled_step: Compiled
     checkpoint: SamplerCheckpoint
@@ -477,7 +477,7 @@ def run_nuts_da(
         name: value for name, value in run.history.posterior.items() if name not in draw_fields
     }
     all_extra = {
-        name: jnp.concatenate((run.history.warmup[name], value), axis=1)
+        name: np.concatenate((np.asarray(run.history.warmup[name]), np.asarray(value)), axis=1)
         for name, value in posterior.items()
     }
     return NutsDARun(
@@ -551,13 +551,16 @@ def fit_nuts_da(
             run.phase_extra_fields,
             profile=run.profile,
         )
-    free_mask = bundle.runtime.state_density_mask
-    if bundle.exact_constraints is not None:
-        free_mask = free_mask & bundle.exact_constraints.free_mask
+    density_mask = np.asarray(bundle.runtime.state_density_mask)
+    free_mask = (
+        density_mask
+        if bundle.exact_constraints is None
+        else density_mask & np.isnan(np.asarray(bundle.exact_constraints.values))
+    )
     with inference_phase("nuts_da", "latent_diagnostics", execution_context=execution_context):
         latent_chains = LatentChainEvidence.from_draws(
             paths=run.paths,
-            free_mask=np.asarray(free_mask),
+            free_mask=free_mask,
             states=tuple(
                 (ConstructRef(id=s.id), s.name) for s in panel.compiled_dynamical_model.states
             ),
@@ -570,7 +573,6 @@ def fit_nuts_da(
             bundle=bundle,
             num_chains=sampler.num_chains,
             num_samples=run.retained_draws,
-            compiler=compiler,
         ),
         chain_extra_fields=extra,
         num_chains=sampler.num_chains,
@@ -590,19 +592,19 @@ def fit_nuts_da(
             compiled_step=run.compiled_step,
             public_sites=tuple(sorted(bundle.public_sites)),
             latent_chains=latent_chains,
-            exact_observation_rows=jnp.any(
-                ~bundle.exact_constraints.free_mask & bundle.runtime.state_density_mask, axis=-1
-            )
+            exact_observation_rows=np.any(~free_mask & density_mask, axis=-1)
             if bundle.exact_constraints is not None
             else None,
             sampler_diagnostics=NutsDADiagnostics(
                 settings=sampler,
-                divergences=int(jnp.sum(extra["diverging"])),
-                mean_accept_prob=float(jnp.mean(extra["accept_prob"])),
-                mean_num_steps=float(jnp.mean(extra["num_steps"])),
+                divergences=int(np.sum(np.asarray(extra["diverging"]))),
+                mean_accept_prob=float(np.mean(np.asarray(extra["accept_prob"]))),
+                mean_num_steps=float(np.mean(np.asarray(extra["num_steps"]), dtype=np.float32)),
                 mcmc_phase_seconds=clock() - started,
-                final_step_size=tuple(float(value) for value in run.final_step_size),
-                max_tree_depth_fraction=float(jnp.mean(extra["max_tree_depth_reached"]))
+                final_step_size=tuple(float(value) for value in np.asarray(run.final_step_size)),
+                max_tree_depth_fraction=float(
+                    np.mean(np.asarray(extra["max_tree_depth_reached"]), dtype=np.float32)
+                )
                 if "max_tree_depth_reached" in extra
                 else None,
             ),

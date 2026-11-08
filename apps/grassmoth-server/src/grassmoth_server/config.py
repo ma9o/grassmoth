@@ -11,7 +11,7 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import ConfigDict, TypeAdapter, with_config
 
-from grassmoth.public import SamplerSpec
+from grassmoth.public import SamplerLaunchSpec
 from grassmoth_server.llm.specs import EmbeddedLLMSpec, EmbeddedReasoningEffort
 
 # Centralized .env loading — all modules that need env vars import from config.py
@@ -74,7 +74,7 @@ class InferenceConfig:
     """Shell settings alongside the single owned sampler specification."""
 
     compute_loo_diagnostics: bool = True
-    sampler: SamplerSpec = field(default_factory=SamplerSpec)
+    sampler: SamplerLaunchSpec = field(default_factory=SamplerLaunchSpec)
 
 
 # ---------------------------------------------------------------------------

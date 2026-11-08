@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from typing import Self
 
 import jax
-import jax.numpy as jnp
 import numpy as np
 from numpy.typing import NDArray
 
@@ -27,22 +26,15 @@ def joint_latent_paths(layout: JointLawLayout, atoms: NDArray, chains: int) -> N
     )
 
 
-@jax.jit
-def _frozen_chain(samples: jax.Array) -> jax.Array:
-    return jnp.any(jnp.all(samples == samples[:, :1], axis=1))
-
-
-def _selected_statistics(
-    paths: jax.Array | NDArray, dimension: int, selected: NDArray
-) -> NDArray | None:
+def _selected_statistics(paths: NDArray, dimension: int, selected: NDArray) -> NDArray | None:
     """Gather and check only one coordinate batch; a frozen chain fails the construct."""
     batch_size = chain_statistic_batch_size(*paths.shape[:2])
     batches = []
     for start in range(0, selected.size, batch_size):
-        # Select time and state together: slicing an entire state first would
-        # allocate chains × draws × times on the sampling device.
-        samples = jnp.asarray(paths[:, :, selected[start : start + batch_size], dimension])
-        if bool(_frozen_chain(samples)):
+        # Coordinate selection happens only after the complete paths have a
+        # host owner, so even tiny samplers need no reporting GPU workspace.
+        samples = paths[:, :, selected[start : start + batch_size], dimension]
+        if np.any(np.all(samples == samples[:, :1], axis=1)):
             return None
         batches.append(chain_statistics(samples))
     return np.concatenate(batches, axis=0)
@@ -50,7 +42,7 @@ def _selected_statistics(
 
 @dataclass(frozen=True)
 class LatentChainEvidence:
-    """Host-owned paths and the full-chain summaries computed before transfer."""
+    """Host-owned paths and full-chain summaries computed after transfer."""
 
     paths: NDArray
     free_mask: NDArray
@@ -64,9 +56,10 @@ class LatentChainEvidence:
         free_mask: NDArray,
         states: tuple[tuple[ConstructRef, str], ...],
     ) -> Self:
-        """Reduce bounded device batches, then transfer the full paths exactly once."""
-        diagnostics = _latent_chain_diagnostics(paths, free_mask, states)
-        return cls(jax.device_get(paths), free_mask, states, diagnostics)
+        """Transfer paths once, then reduce bounded host batches without device gathers."""
+        host_paths = np.asarray(paths)
+        diagnostics = _latent_chain_diagnostics(host_paths, free_mask, states)
+        return cls(host_paths, free_mask, states, diagnostics)
 
     def __post_init__(self) -> None:
         """Share immutable host evidence between conditioning and report consumers."""
@@ -74,7 +67,7 @@ class LatentChainEvidence:
 
 
 def _latent_chain_diagnostics(
-    paths: jax.Array | NDArray,
+    paths: NDArray,
     free_mask: NDArray,
     states: tuple[tuple[ConstructRef, str], ...],
 ) -> tuple[LatentDiagnostics, ...]:

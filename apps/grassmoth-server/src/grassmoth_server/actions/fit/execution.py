@@ -6,7 +6,7 @@ import json
 import re
 from typing import TYPE_CHECKING
 
-from grassmoth.public import SamplerSpec
+from grassmoth.public import SamplerLaunchSpec, SamplerSpec
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -18,12 +18,16 @@ if TYPE_CHECKING:
 
 def resolve_sampler_spec(
     settings: FitSettingsSpec, previous: SamplerSpec | None = None
-) -> SamplerSpec:
-    """Resolve public overrides once, before numerical preparation or execution."""
+) -> SamplerLaunchSpec:
+    """Merge launch overrides; capacity resolution produces the numerical SamplerSpec."""
     from grassmoth_server.config import get_config
 
-    configured = get_config().inference.sampler if previous is None else previous
-    return SamplerSpec(
+    configured = (
+        get_config().inference.sampler
+        if previous is None
+        else SamplerLaunchSpec.from_resolved(previous)
+    )
+    return SamplerLaunchSpec(
         num_warmup=configured.num_warmup if settings.num_warmup is None else settings.num_warmup,
         num_samples_per_chain=configured.num_samples_per_chain
         if settings.num_samples_per_chain is None

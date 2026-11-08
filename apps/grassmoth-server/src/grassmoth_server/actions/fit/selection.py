@@ -18,6 +18,18 @@ class FitContinuation(Value):
     full_fit: AnalysisCacheEntry
     settings: SamplerSpec
 
+    @property
+    def retained_host_bytes(self) -> int:
+        """Reserve the cached body's decode overlap without guessing its old controls.
+
+        codec.unpack_result can hold the entire wire payload, decoded binary
+        chunks, and joined large-buffer restorations simultaneously: three times
+        the uncompressed shared-buffer MessagePack size bounds those byte stores.
+        NumericalArray.values views restored bytes without copying. Keep this
+        conservative loading reserve throughout initialization and sampling.
+        """
+        return 3 * self.full_fit.size
+
 
 def prior_fit(store: ArtifactStore, revision: GitOid) -> FitContinuation | Rejected:
     """Select only fits with retained full evidence for continuation."""

@@ -29,7 +29,6 @@ from grassmoth.models.ssm.inference.types import (
     MCMCPosterior,
     ProductionDiagnostics,
 )
-from grassmoth_test_support.compute import compile_program
 from grassmoth_test_support.inference import particle_posterior
 
 pytestmark = pytest.mark.contract
@@ -87,9 +86,7 @@ def test_library_parameter_output_preserves_public_vector_sites_and_chain_order(
         point_reading_mask=jnp.ones((4, 1), dtype=bool),
     )
     problem = ParticleProblem(runtime=runtime, site_info={}, public_sites=frozenset({"beta"}))
-    samples = extract_grouped_public_samples(
-        positions, bundle=problem, num_chains=2, num_samples=3, compiler=compile_program
-    )
+    samples = extract_grouped_public_samples(positions, bundle=problem, num_chains=2, num_samples=3)
     assert set(samples) == {"beta"}
     np.testing.assert_array_equal(samples["beta"], 2 * positions)
     mcmc = TrajectoryMCMCResult(samples, {}, num_chains=2, num_samples=3)
@@ -133,9 +130,7 @@ def test_fixed_model_samples_replay_deterministics_with_zero_parameter_dimension
         constrain=lambda _: {"lambda": jnp.ones((2, 1)), "internal": jnp.array(5.0)},
         log_prior=_no_numerical_execution,
     )
-    samples = extract_constrained_samples(
-        jnp.zeros((3, 0)), parameters, {"lambda"}, compiler=compile_program
-    )
+    samples = extract_constrained_samples(jnp.zeros((3, 0)), parameters, {"lambda"})
     assert set(samples) == {"lambda"}
     np.testing.assert_array_equal(samples["lambda"], np.ones((3, 2, 1)))
     bundle = Mock(
@@ -146,7 +141,7 @@ def test_fixed_model_samples_replay_deterministics_with_zero_parameter_dimension
         public_sites=frozenset({"lambda"}),
     )
     grouped = extract_grouped_public_samples(
-        jnp.zeros((2, 3, 0)), bundle=bundle, num_chains=2, num_samples=3, compiler=compile_program
+        jnp.zeros((2, 3, 0)), bundle=bundle, num_chains=2, num_samples=3
     )
     np.testing.assert_array_equal(grouped["lambda"], np.ones((2, 3, 2, 1)))
 

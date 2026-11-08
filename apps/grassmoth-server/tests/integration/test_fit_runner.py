@@ -45,6 +45,11 @@ def test_inference_advances_model_and_uses_the_selected_input(
     from grassmoth.actions.fit.execution import FittedModelResult
     from grassmoth.models.ssm import compiled_access as numerics
     from grassmoth.models.ssm.inference.types import JointPosteriorDraws
+    from grassmoth_server.actions.fit import capacity
+
+    monkeypatch.setattr(
+        capacity, "admit_sampler", lambda launch, *_args, **_kwargs: launch.resolve(2)
+    )
 
     original = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=original.revision)
@@ -158,6 +163,11 @@ def test_library_fit_failure_stops_before_publication(
     from grassmoth.actions.fit.execution import ModelFitFailure
     from grassmoth_server.actions.errors import ModelFitError
     from grassmoth_server.actions.fit import action as flow
+    from grassmoth_server.actions.fit import capacity
+
+    monkeypatch.setattr(
+        capacity, "admit_sampler", lambda launch, *_args, **_kwargs: launch.resolve(2)
+    )
 
     model = fx.seed_model(artifact_store)
     panel = fx.seed_panel(artifact_store, model_revision=model.revision)
@@ -192,3 +202,35 @@ def test_library_fit_failure_stops_before_publication(
     compute.assert_called_once()
     write_result.assert_not_called()
     result_record.assert_not_called()
+
+
+def test_capacity_rejection_stops_before_remote_dispatch(
+    integration_workspace, artifact_store, monkeypatch
+):
+    from grassmoth_server.actions.fit import capacity, remote
+    from grassmoth_server.study.records import Rejected
+
+    model = fx.seed_model(artifact_store)
+    panel = fx.seed_panel(artifact_store, model_revision=model.revision)
+    question = write_question(artifact_store)
+    rejection = Rejected(code="FIT_CAPACITY_EXCEEDED", subject="fit", detail="Insufficient memory")
+    admission, dispatch = Mock(return_value=rejection), Mock()
+    monkeypatch.setattr(capacity, "admit_sampler", admission)
+    monkeypatch.setattr(remote, "fit_on_modal", dispatch)
+    request = FitRequest[GitOid](
+        input=FitInput[GitOid](
+            target=NewFitTarget(
+                dynamical_model_spec_ref=model.revision,
+                data_ref=DataRef(revision=panel.revision, replicate_index=0),
+            ),
+            settings=FitSettingsSpec(hardware="L40S", num_chains="auto"),
+        )
+    )
+    result = run_async(
+        run_action_locally(
+            integration_workspace, request, {"model": model.revision, "question": question.revision}
+        )
+    )
+    assert result == rejection
+    admission.assert_called_once()
+    dispatch.assert_not_called()

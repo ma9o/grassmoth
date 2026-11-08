@@ -12,14 +12,58 @@ import psutil
 from grassmoth.public import (
     AcceleratorMemoryBudget,
     ComputeBudget,
+    InferenceHardware,
     MemoryDemand,
     SharedMemoryBudget,
 )
 
-# This is a planning reserve, independent of JAX's allocator fraction. GPU
-# bytes_limit is the allocator's usable pool, not Modal's host-memory request.
+# This planning reserve covers sampling-estimate error and allocation overhead.
+# Initialization and compiler/autotuning peaks do not enter launch sizing.
+# The margin is independent of JAX's allocator fraction.
+# GPU bytes_limit is the usable allocator pool, not Modal's host-memory request.
 MEMORY_BUDGET_FRACTION = 0.8
 HOST_MEMORY_ALLOCATION_ENV = "GRASSMOTH_HOST_MEMORY_ALLOCATION_BYTES"
+FIT_HOST_MEMORY_MIB = 32768
+FIT_DEVICE_MEMORY_FRACTION = "0.90"
+
+
+def fit_compute_budget(hardware: InferenceHardware) -> ComputeBudget:
+    """Plan before dispatch from fixed deployment allocations, without acquiring a GPU.
+
+    Modal https://modal.com/docs/guide/gpu documents A100/H100 upgrades; use
+    the smaller promised device. NVIDIA's product specifications give advertised
+    GB, converted conservatively as decimal 10**9 bytes, not GiB. Capacities were
+    verified 2026-11-08 against NVIDIA's virtualization GPU table, NIM support
+    matrix and Modal's GPU guide. The remote allocator reserves 90%, then the
+    existing runtime planning policy leaves 20% of that pool as headroom.
+    https://www.nvidia.com/en-us/data-center/graphics-cards-for-virtualization/
+    https://docs.nvidia.com/nim/large-language-models/2.0.13/reference/support-matrix.html
+    https://docs.nvidia.com/brev/reference/gpu-types
+    """
+    if hardware is InferenceHardware.LOCAL:
+        return read_compute_budget()
+    gigabytes = {
+        InferenceHardware.T4: 16,
+        InferenceHardware.L4: 24,
+        InferenceHardware.A10: 24,
+        InferenceHardware.L40S: 48,
+        InferenceHardware.A100: 40,
+        InferenceHardware.A100_40GB: 40,
+        InferenceHardware.A100_80GB: 80,
+        InferenceHardware.RTX_PRO_6000: 96,
+        InferenceHardware.H100: 80,
+        InferenceHardware.H100_ONLY: 80,
+        InferenceHardware.H200: 141,
+        InferenceHardware.B200: 180,
+    }[hardware]
+    return ComputeBudget(
+        memory=AcceleratorMemoryBudget(
+            host_bytes=int(FIT_HOST_MEMORY_MIB * 1024**2 * MEMORY_BUDGET_FRACTION),
+            device_bytes=int(
+                gigabytes * 10**9 * float(FIT_DEVICE_MEMORY_FRACTION) * MEMORY_BUDGET_FRACTION
+            ),
+        )
+    )
 
 
 def _host_memory() -> tuple[int, int]:

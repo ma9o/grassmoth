@@ -853,6 +853,7 @@ export interface components {
              */
             readonly parameter_accept_prob_mean: number | null;
         };
+        readonly ChainLaunchCount: number | "auto";
         readonly Change_DataPoint_: Domain.Added<Domain.DataPoint> | Domain.Removed<Domain.DataPoint> | Domain.Revised<Domain.DataPoint>;
         /** @enum {string} */
         readonly CheckOutcome: "passed" | "failed";
@@ -4386,7 +4387,7 @@ export interface components {
              * @description Replace the complete configured or continued algorithm; omitted inherits it. Variant defaults fill unspecified algorithm fields.
              * @default null
              */
-            readonly algorithm?: components["schemas"]["InferenceAlgorithmSpec-Input"] | null;
+            readonly algorithm?: components["schemas"]["InferenceAlgorithmLaunchSpec-Input"] | null;
             /**
              * Num Samples Per Chain
              * @default null
@@ -4397,11 +4398,8 @@ export interface components {
              * @default null
              */
             readonly num_warmup?: number | null;
-            /**
-             * Num Chains
-             * @default null
-             */
-            readonly num_chains?: number | null;
+            /** @default null */
+            readonly num_chains?: components["schemas"]["ChainLaunchCount"] | null;
             /**
              * Thinning
              * @default null
@@ -4439,7 +4437,7 @@ export interface components {
              * @description Replace the complete configured or continued algorithm; omitted inherits it. Variant defaults fill unspecified algorithm fields.
              * @default null
              */
-            readonly algorithm: components["schemas"]["InferenceAlgorithmSpec-Output"] | null;
+            readonly algorithm: components["schemas"]["InferenceAlgorithmLaunchSpec-Output"] | null;
             /**
              * Num Samples Per Chain
              * @default null
@@ -4450,11 +4448,8 @@ export interface components {
              * @default null
              */
             readonly num_warmup: number | null;
-            /**
-             * Num Chains
-             * @default null
-             */
-            readonly num_chains: number | null;
+            /** @default null */
+            readonly num_chains: components["schemas"]["ChainLaunchCount"] | null;
             /**
              * Thinning
              * @default null
@@ -4656,6 +4651,64 @@ export interface components {
         readonly "GitOid-Input": string;
         /** @description A native Git object identity for an immutable tree or commit. */
         readonly "GitOid-Output": string;
+        /** @enum {integer} */
+        readonly GuidedGradientWeight: 0 | 1;
+        /** @enum {string} */
+        readonly GuidedMethodKind: "particle_mgrad" | "twisted_particle_agrad";
+        /**
+         * GuidedMethodLaunchSpec
+         * @description Authored particle count, resolved to GuidedMethodSpec before execution.
+         */
+        readonly "GuidedMethodLaunchSpec-Input": {
+            /**
+             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal, at most 16 state dimensions and a limited particle bank, the shapes its fused GPU tail covers. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly kind: "particle_mgrad" | "twisted_particle_agrad";
+            /**
+             * @description Path particles N, or auto to select the largest supported power of two admitted by the analytical host/device memory estimate. At most one of N, M and chains may be auto. Automatic selection is available for Particle-mGRAD.
+             * @default 64
+             */
+            readonly num_particles?: components["schemas"]["ParticleLaunchCount"];
+            /**
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
+             * @default 1
+             */
+            readonly kappa?: components["schemas"]["GuidedGradientWeight"];
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.
+             * @default 8
+             */
+            readonly scan_unroll?: number;
+        };
+        /**
+         * GuidedMethodLaunchSpec
+         * @description Authored particle count, resolved to GuidedMethodSpec before execution.
+         */
+        readonly "GuidedMethodLaunchSpec-Output": {
+            /**
+             * @description particle_mgrad integrates the path auxiliary out of the particle weights with the untwisted proposal (section 4.2); it has no look-ahead, so separated path components and informative future readings can slow its mixing. It requires a parameter_mixture proposal, at most 16 state dimensions and a limited particle bank, the shapes its fused GPU tail covers. twisted_particle_agrad keeps the auxiliary variable in the weights (section 4.1) and adds a Gaussian look-ahead built at the auxiliary path: a parallel backward information scan guides the sequential filter, and proposals combine exact nonlinear transition means with the approximate twist, whose normalized densities and twist ratios are paid in full (section 4.4); poor local fits and multiple modes cost efficiency. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly kind: "particle_mgrad" | "twisted_particle_agrad";
+            /**
+             * @description Path particles N, or auto to select the largest supported power of two admitted by the analytical host/device memory estimate. At most one of N, M and chains may be auto. Automatic selection is available for Particle-mGRAD.
+             * @default 64
+             */
+            readonly num_particles: components["schemas"]["ParticleLaunchCount"];
+            /**
+             * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
+             * @default 1
+             */
+            readonly kappa: components["schemas"]["GuidedGradientWeight"];
+            /**
+             * Scan Unroll
+             * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.
+             * @default 8
+             */
+            readonly scan_unroll: number;
+        };
         /**
          * GuidedMethodSpec
          * @description Particle-mGRAD or twisted Particle-aGRAD with their particle-bank settings.
@@ -4676,12 +4729,10 @@ export interface components {
              */
             readonly num_particles?: components["schemas"]["ParticleCount"];
             /**
-             * Kappa
              * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
              * @default 1
-             * @enum {integer}
              */
-            readonly kappa?: 0 | 1;
+            readonly kappa?: components["schemas"]["GuidedGradientWeight"];
             /**
              * Scan Unroll
              * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.
@@ -4709,12 +4760,10 @@ export interface components {
              */
             readonly num_particles: components["schemas"]["ParticleCount"];
             /**
-             * Kappa
              * @description 1 shifts the auxiliary point along the gradient of the observation densities, mixed over parameter labels; 0 omits it (Corenflos & Finke 2024, Algorithm 6). The shift is a Langevin step on the observation term: for a Gaussian reading it overshoots once the scale exceeds four times that reading's variance. The default 1 is the gradient-informed form (section 4.5). Figure 5 of that paper puts it well ahead of 0 for twisted Particle-aGRAD, but its grayed curves don't distinguish the two for Particle-mGRAD, the default method.
              * @default 1
-             * @enum {integer}
              */
-            readonly kappa: 0 | 1;
+            readonly kappa: components["schemas"]["GuidedGradientWeight"];
             /**
              * Scan Unroll
              * @description Time steps per iteration of the forward filter and backward-selection loops. Unrolling changes how XLA compiles these sequential loops, not the algorithm or its target. Each step runs small kernels, so on a GPU per-iteration overhead is a large share of a sweep; unrolling amortizes it at the cost of a larger program and longer compilation. A CPU has little such overhead to remove. 1 disables unrolling. The default 8 was the fastest of 1, 4 and 8 for twisted Particle-aGRAD (kappa 1) on an A10, with identical transitions. Retune it per device and model size.
@@ -4894,8 +4943,9 @@ export interface components {
             /** @description Whether higher values move with (positive) or against (negative) the construct. */
             readonly construct_polarity: components["schemas"]["IndicatorPolarity"];
         };
-        readonly "InferenceAlgorithmSpec-Input": components["schemas"]["MarginalParticleGibbsSpec-Input"] | components["schemas"]["NutsDASpec-Input"];
-        readonly "InferenceAlgorithmSpec-Output": components["schemas"]["MarginalParticleGibbsSpec-Output"] | components["schemas"]["NutsDASpec-Output"];
+        readonly "InferenceAlgorithmLaunchSpec-Input": components["schemas"]["MarginalParticleGibbsLaunchSpec-Input"] | components["schemas"]["NutsDASpec-Input"];
+        readonly "InferenceAlgorithmLaunchSpec-Output": components["schemas"]["MarginalParticleGibbsLaunchSpec-Output"] | components["schemas"]["NutsDASpec-Output"];
+        readonly InferenceAlgorithmSpec: components["schemas"]["MarginalParticleGibbsSpec"] | components["schemas"]["NutsDASpec-Output"];
         /**
          * InferenceEvidence
          * @description Native telemetry buffers; posterior atoms and coordinates belong to the model.
@@ -5316,22 +5366,21 @@ export interface components {
             readonly value: number;
         };
         /**
-         * MarginalParticleGibbsSpec
-         * @description Exact marginalized parameter and path updates with particle-specific tuning.
+         * MarginalParticleGibbsLaunchSpec
+         * @description Authored MPGibbs controls; only particle counts may request memory sizing.
          */
-        readonly "MarginalParticleGibbsSpec-Input": {
+        readonly "MarginalParticleGibbsLaunchSpec-Input": {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             readonly method: "mpgibbs";
             /**
-             * @description Parameter particles M per sweep: the current value and M - 1 proposals around one auxiliary point. Work grows as O(TNM). Must be a power of two. Particle-mGRAD allows M up to 64 and NM up to 8192, or 4096 above N = 512, the shapes its fused GPU tail covers. Heuristic: default M = 8; no ESS advantage has been established.
+             * @description Parameter particles M, or auto for analytical Particle-mGRAD memory sizing.
              * @default 8
              */
-            readonly n_parameter_particles?: components["schemas"]["ParticleCount"];
-            /** @description Exact path update: particle_mgrad (default) or twisted_particle_agrad, both guided, or auxiliary_kalman. */
-            readonly path_update?: components["schemas"]["PathUpdateSpec-Input"];
+            readonly n_parameter_particles?: components["schemas"]["ParticleLaunchCount"];
+            readonly path_update?: components["schemas"]["PathUpdateLaunchSpec-Input"];
             /**
              * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
              * @default random_walk
@@ -5353,14 +5402,64 @@ export interface components {
              * @default dual_averaging
              */
             readonly adaptation_scheme?: components["schemas"]["AdaptationScheme"];
-            /** @description Independent Gaussian starts, which also set the initial proposal scale. */
+            /**
+             * @description Independent Gaussian starts, which also set the initial proposal scale.
+             * @default {
+             *       "scale": 0.1
+             *     }
+             */
             readonly initialization?: components["schemas"]["GaussianInitializationSpec-Input"];
+        };
+        /**
+         * MarginalParticleGibbsLaunchSpec
+         * @description Authored MPGibbs controls; only particle counts may request memory sizing.
+         */
+        readonly "MarginalParticleGibbsLaunchSpec-Output": {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            readonly method: "mpgibbs";
+            /**
+             * @description Parameter particles M, or auto for analytical Particle-mGRAD memory sizing.
+             * @default 8
+             */
+            readonly n_parameter_particles: components["schemas"]["ParticleLaunchCount"];
+            readonly path_update: components["schemas"]["PathUpdateLaunchSpec-Output"];
+            /**
+             * @description random_walk splits a preconditioned Gaussian step into two symmetric halves through the auxiliary point. pseudo_langevin drifts the first half along the log-posterior gradient at a path fixed when the kernel is built, and corrects the asymmetry exactly in the selection weights; the current path would break that correction (Corenflos 2025, section 3.1). It is kept as the control for gradients within the same kernel.
+             * @default random_walk
+             */
+            readonly parameter_proposal: components["schemas"]["ParameterProposal"];
+            /**
+             * @description Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler.
+             * @default []
+             */
+            readonly diagnostic_metrics: components["schemas"]["ParticleDiagnosticMetrics"];
+            /**
+             * Param Target Accept
+             * @description Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.
+             * @default 0.2
+             */
+            readonly param_target_accept: number;
+            /**
+             * @description How warmup adapts the parameter step: dual_averaging (default) keeps the averaged step at the end of warmup (Hoffman & Gelman 2014, section 3.2); simple uses a constant gain and keeps the last step.
+             * @default dual_averaging
+             */
+            readonly adaptation_scheme: components["schemas"]["AdaptationScheme"];
+            /**
+             * @description Independent Gaussian starts, which also set the initial proposal scale.
+             * @default {
+             *       "scale": 0.1
+             *     }
+             */
+            readonly initialization: components["schemas"]["GaussianInitializationSpec-Output"];
         };
         /**
          * MarginalParticleGibbsSpec
          * @description Exact marginalized parameter and path updates with particle-specific tuning.
          */
-        readonly "MarginalParticleGibbsSpec-Output": {
+        readonly MarginalParticleGibbsSpec: {
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -6404,6 +6503,7 @@ export interface components {
         /** @enum {string} */
         readonly ParticleDiagnosticMetric: "particle_identity" | "parameter_movement" | "particle_weights" | "frequency_refresh" | "regional_movement";
         readonly ParticleDiagnosticMetrics: readonly components["schemas"]["ParticleDiagnosticMetric"][];
+        readonly ParticleLaunchCount: components["schemas"]["ParticleCount"] | "auto";
         /**
          * ParticleProfileDimensions
          * @description Particle-kernel work dimensions per chain.
@@ -6541,10 +6641,56 @@ export interface components {
             /** Nonfinite Fraction */
             readonly nonfinite_fraction: number;
         };
+        readonly "PathMethodLaunchSpec-Input": components["schemas"]["GuidedMethodLaunchSpec-Input"] | components["schemas"]["AuxiliaryKalmanMethodSpec-Input"];
+        readonly "PathMethodLaunchSpec-Output": components["schemas"]["GuidedMethodLaunchSpec-Output"] | components["schemas"]["AuxiliaryKalmanMethodSpec-Output"];
         readonly "PathMethodSpec-Input": components["schemas"]["GuidedMethodSpec-Input"] | components["schemas"]["AuxiliaryKalmanMethodSpec-Input"];
         readonly "PathMethodSpec-Output": components["schemas"]["GuidedMethodSpec-Output"] | components["schemas"]["AuxiliaryKalmanMethodSpec-Output"];
         readonly "PathProposalSpec-Input": components["schemas"]["ParameterMeanProposalSpec-Input"] | components["schemas"]["ParameterMixtureProposalSpec-Input"] | components["schemas"]["ConditionalParameterProposalSpec-Input"];
         readonly "PathProposalSpec-Output": components["schemas"]["ParameterMeanProposalSpec-Output"] | components["schemas"]["ParameterMixtureProposalSpec-Output"] | components["schemas"]["ConditionalParameterProposalSpec-Output"];
+        /**
+         * PathUpdateLaunchSpec
+         * @description Launch-time path controls with the numerical owner's defaults and constraints.
+         */
+        readonly "PathUpdateLaunchSpec-Input": {
+            readonly method?: components["schemas"]["PathMethodLaunchSpec-Input"];
+            /**
+             * @default {
+             *       "kind": "whole_path"
+             *     }
+             */
+            readonly update?: components["schemas"]["PathUpdateScopeSpec-Input"];
+            readonly proposal?: components["schemas"]["PathProposalSpec-Input"];
+            /**
+             * @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & Särkkä 2025, sections 2.2–2.4).
+             * @default {
+             *       "kind": "adapted",
+             *       "target": 0.5
+             *     }
+             */
+            readonly latent_step?: components["schemas"]["LatentStepSpec-Input"];
+        };
+        /**
+         * PathUpdateLaunchSpec
+         * @description Launch-time path controls with the numerical owner's defaults and constraints.
+         */
+        readonly "PathUpdateLaunchSpec-Output": {
+            readonly method: components["schemas"]["PathMethodLaunchSpec-Output"];
+            /**
+             * @default {
+             *       "kind": "whole_path"
+             *     }
+             */
+            readonly update: components["schemas"]["PathUpdateScopeSpec-Output"];
+            readonly proposal: components["schemas"]["PathProposalSpec-Output"];
+            /**
+             * @description Per-time-step scale: adapted towards a movement target, or fixed. Small scales keep proposals near the current path. For particle updates, large scales approach conditional SMC with the transition as proposal (Corenflos & Finke 2024, section 4.6). For Kalman, delta/2 is the auxiliary variance in the whole-path or block Gaussian proposal (Corenflos & Särkkä 2025, sections 2.2–2.4).
+             * @default {
+             *       "kind": "adapted",
+             *       "target": 0.5
+             *     }
+             */
+            readonly latent_step: components["schemas"]["LatentStepSpec-Output"];
+        };
         readonly "PathUpdateScopeSpec-Input": components["schemas"]["WholePathUpdateSpec-Input"] | components["schemas"]["BlockedPathUpdateSpec-Input"];
         readonly "PathUpdateScopeSpec-Output": components["schemas"]["WholePathUpdateSpec-Output"] | components["schemas"]["BlockedPathUpdateSpec-Output"];
         /**
@@ -7263,7 +7409,7 @@ export interface components {
              */
             readonly time_limit_seconds: number;
             /** @description Exact joint sampler: MPGibbs parameter/path updates or NUTS-DA. */
-            readonly algorithm: components["schemas"]["InferenceAlgorithmSpec-Output"];
+            readonly algorithm: components["schemas"]["InferenceAlgorithmSpec"];
         };
         /**
          * ScalarStatisticComparison

@@ -517,9 +517,7 @@ class TestAutoReparamSSM:
             compiler=compile_program,
         )
         particles = jnp.stack([parameters.initial_position, parameters.initial_position + 0.05])
-        samples = extract_constrained_samples(
-            particles, parameters, public_sites, compiler=compile_program
-        )
+        samples = extract_constrained_samples(particles, parameters, public_sites)
 
         assert "vf_0_p0" in samples
         assert "diffusion_diag_free" in samples

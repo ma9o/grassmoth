@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import lru_cache, partial
 from typing import TYPE_CHECKING
 
 import jax
@@ -30,10 +30,10 @@ def prior_density(prior: dist.Distribution) -> DensityCurve:
 
 @lru_cache(maxsize=128)
 def _density_curve(prior: dist.Distribution) -> DensityCurve:
-    draws = np.asarray(prior.sample(jax.random.PRNGKey(0), (256,)))
+    host_prior = jax.device_get(prior)
+    draws = np.asarray(_viewport_draws(host_prior))
     low, high = np.quantile(draws, [0.01, 0.99])
-    x = jnp.linspace(low, high, 100)
-    y = np.asarray(jnp.exp(prior.log_prob(x)))
+    x, y = jax.device_get(_native_curve(host_prior, np.float32(low), np.float32(high)))
     points = tuple(
         (float(value), float(density))
         for value, density in zip(np.asarray(x), y, strict=True)
@@ -42,6 +42,21 @@ def _density_curve(prior: dist.Distribution) -> DensityCurve:
     return DensityCurve(
         x=tuple(point[0] for point in points), density=tuple(point[1] for point in points)
     )
+
+
+@partial(jax.jit, backend="cpu")
+def _viewport_draws(prior: dist.Distribution) -> jax.Array:
+    """Keep the existing 256 native viewport draws off the sampling accelerator."""
+    return jnp.asarray(prior.sample(jax.random.PRNGKey(0), (256,)))
+
+
+@partial(jax.jit, backend="cpu")
+def _native_curve(
+    prior: dist.Distribution, low: np.float32, high: np.float32
+) -> tuple[jax.Array, jax.Array]:
+    """Evaluate the existing 100-point viewport with the exact native log density."""
+    grid = jnp.linspace(low, high, 100)
+    return grid, jnp.exp(prior.log_prob(grid))
 
 
 def quantity_prior_densities(

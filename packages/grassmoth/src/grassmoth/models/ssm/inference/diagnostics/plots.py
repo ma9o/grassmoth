@@ -3,11 +3,8 @@
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
-from functools import partial
 from typing import TYPE_CHECKING
 
-import jax
-import jax.numpy as jnp
 import numpy as np
 
 from grassmoth.artifacts.arrays import NumericalArray
@@ -23,6 +20,7 @@ from grassmoth.artifacts.reports.posterior_diagnostics import (
 )
 
 if TYPE_CHECKING:
+    import jax
     from numpy.typing import NDArray
 
 
@@ -33,17 +31,18 @@ HIST_PADDING_DEFAULT = 0.5
 
 
 def sample_coordinates(
-    samples: Mapping[str, jnp.ndarray | NDArray], *, sample_dims: int
-) -> Iterator[tuple[ParameterCoordinate, jnp.ndarray | NDArray]]:
-    """Yield scalar event coordinates while preserving the requested leading sampling dimensions."""
+    samples: Mapping[str, jax.Array | NDArray], *, sample_dims: int
+) -> Iterator[tuple[ParameterCoordinate, NDArray]]:
+    """Transfer each site before selecting scalar coordinates on its host owner."""
     for name, values in samples.items():
+        values = np.asarray(values)
         for indices in np.ndindex(values.shape[sample_dims:]):
             coordinate = ParameterCoordinate(site_name=name, indices=indices)
             yield coordinate, values[(slice(None),) * sample_dims + indices]
 
 
 def build_trace_data(
-    chain_samples: Mapping[str, jnp.ndarray | NDArray], references: ParameterReferences
+    chain_samples: Mapping[str, jax.Array | NDArray], references: ParameterReferences
 ) -> tuple[TraceSeries, ...]:
     """Keep every draw; auxiliary coordinates have an explicit None binding."""
     traces = []
@@ -61,7 +60,7 @@ def build_trace_data(
 
 
 def build_rank_histograms(
-    chain_samples: Mapping[str, jnp.ndarray | NDArray],
+    chain_samples: Mapping[str, jax.Array | NDArray],
     references: ParameterReferences,
     n_bins: int = 20,
 ) -> tuple[RankHistogram, ...]:
@@ -73,7 +72,7 @@ def build_rank_histograms(
             continue
         _, subject = reference
         n_chains, n_samples = values.shape
-        counts = np.asarray(_rank_counts(jnp.asarray(values), n_bins))
+        counts = _rank_counts(values, n_bins)
         histograms.append(
             RankHistogram(
                 subject=subject,
@@ -87,48 +86,46 @@ def build_rank_histograms(
     return tuple(histograms)
 
 
-@partial(jax.jit, static_argnums=(1,))
-def _rank_counts(values: jax.Array, n_bins: int) -> jax.Array:
+def _rank_counts(values: NDArray, n_bins: int) -> NDArray:
     # Rejected MCMC moves repeat floats. Average ties, as in rank-normalized
     # convergence diagnostics, instead of assigning arbitrary sort-order ranks.
     pooled = values.reshape(-1)
-    ordered = jnp.sort(pooled)
-    left = jnp.searchsorted(ordered, pooled, side="left")
-    right = jnp.searchsorted(ordered, pooled, side="right")
-    ranks = ((left.astype(jnp.float32) + right + 1) / 2).reshape(values.shape)
-    return jax.vmap(lambda chain: jnp.histogram(chain, bins=n_bins, range=(1, pooled.size + 1))[0])(
-        ranks
+    ordered = np.sort(pooled)
+    left = np.searchsorted(ordered, pooled, side="left")
+    right = np.searchsorted(ordered, pooled, side="right")
+    ranks = ((left.astype(np.float32) + right.astype(np.float32) + 1) / 2).reshape(values.shape)
+    return np.stack(
+        [np.histogram(chain, bins=n_bins, range=(1, pooled.size + 1))[0] for chain in ranks]
     )
 
 
-@partial(jax.jit, static_argnums=(1,))
-def _marginal_summary(draws: jax.Array, n_bins: int) -> tuple[jax.Array, ...]:
-    ordered = jnp.sort(draws)
+def _marginal_summary(draws: NDArray, n_bins: int) -> tuple[NDArray, ...]:
+    ordered = np.sort(draws)
     width = min(int(0.94 * draws.size), draws.size - 1)
-    start = jnp.argmin(ordered[width:] - ordered[: draws.size - width])
-    padding = jnp.where(
+    start = np.argmin(ordered[width:] - ordered[: draws.size - width])
+    padding = np.where(
         ordered[-1] > ordered[0],
         (ordered[-1] - ordered[0]) * HIST_PADDING_RATIO,
         HIST_PADDING_DEFAULT,
     )
-    density, edges = jnp.histogram(
+    density, edges = np.histogram(
         draws, bins=n_bins, range=(ordered[0] - padding, ordered[-1] + padding), density=True
     )
     return (
         (edges[:-1] + edges[1:]) / 2,
-        density,
-        jnp.stack((jnp.mean(draws), jnp.std(draws), ordered[start], ordered[start + width])),
+        density.astype(np.float32),
+        np.stack((np.mean(draws), np.std(draws), ordered[start], ordered[start + width])),
     )
 
 
 def param_marginal(
-    parameter: str, subject: ParameterRef, values: jnp.ndarray | NDArray, n_bins: int = 50
+    parameter: str, subject: ParameterRef, values: jax.Array | NDArray, n_bins: int = 50
 ) -> PosteriorMarginal:
-    """Reduce full-chain moments, density, HDI and empirical CDF on the device."""
-    draws = jnp.asarray(values, dtype=jnp.float32)
-    centers, density, summary = (np.asarray(value) for value in _marginal_summary(draws, n_bins))
-    unique, counts = jnp.unique(draws[jnp.isfinite(draws)], return_counts=True)
-    cumulative = jnp.cumsum(counts) / jnp.sum(counts)
+    """Reduce full-chain moments, density, HDI and empirical CDF on the host."""
+    draws = np.asarray(values, dtype=np.float32)
+    centers, density, summary = _marginal_summary(draws, n_bins)
+    unique, counts = np.unique(draws[np.isfinite(draws)], return_counts=True)
+    cumulative = np.cumsum(counts).astype(np.float32) / np.float32(np.sum(counts))
     return PosteriorMarginal(
         parameter=parameter,
         subject=subject,
@@ -149,7 +146,7 @@ def param_marginal(
 
 
 def compute_posterior_marginals(
-    samples: Mapping[str, jnp.ndarray | NDArray], references: ParameterReferences, n_bins: int = 50
+    samples: Mapping[str, jax.Array | NDArray], references: ParameterReferences, n_bins: int = 50
 ) -> tuple[PosteriorMarginal, ...]:
     """Build posterior marginals for the sampled coordinates that have scientific parameter owners."""
     return tuple(

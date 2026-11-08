@@ -1,8 +1,9 @@
-"""The scientific actions, the value types crossing their service boundary, and two helpers.
+"""Scientific actions, shared boundary values and pure preparation helpers.
 
 ``support_windows`` and ``normalize_level_label`` let the service's extraction workers
-use the windows and level labels that ``prepare_data`` applies. All exports retain
-their implementation and type owners; this module has no logic.
+use the windows and level labels that ``prepare_data`` applies. Particle-memory
+helpers admit launch counts before compute dispatch. All exports retain their
+implementation and type owners; this module has no logic.
 """
 
 from grassmoth.actions.contracts.io import (
@@ -61,6 +62,9 @@ from grassmoth.actions.fit.continuation import (
 )
 from grassmoth.actions.fit.execution import (
     ModelFitFailure as ModelFitFailure,
+)
+from grassmoth.actions.fit.memory import (
+    particle_mgrad_memory_shape as particle_mgrad_memory_shape,
 )
 from grassmoth.actions.model_diff import (
     model_diff as model_diff,
@@ -279,10 +283,16 @@ from grassmoth.artifacts.sampling import (
     AdaptationScheme as AdaptationScheme,
 )
 from grassmoth.artifacts.sampling import (
+    ChainLaunchCount as ChainLaunchCount,
+)
+from grassmoth.artifacts.sampling import (
     FixedTrajectorySpec as FixedTrajectorySpec,
 )
 from grassmoth.artifacts.sampling import (
     GaussianInitializationSpec as GaussianInitializationSpec,
+)
+from grassmoth.artifacts.sampling import (
+    InferenceAlgorithmLaunchSpec as InferenceAlgorithmLaunchSpec,
 )
 from grassmoth.artifacts.sampling import (
     InferenceAlgorithmSpec as InferenceAlgorithmSpec,
@@ -313,6 +323,9 @@ from grassmoth.artifacts.sampling import (
 )
 from grassmoth.artifacts.sampling import (
     PathUpdateSpec as PathUpdateSpec,
+)
+from grassmoth.artifacts.sampling import (
+    SamplerLaunchSpec as SamplerLaunchSpec,
 )
 from grassmoth.artifacts.sampling import (
     SamplerSpec as SamplerSpec,
@@ -352,6 +365,18 @@ from grassmoth.compute.budget import (
 )
 from grassmoth.compute.context import (
     ModelExecutionContext as ModelExecutionContext,
+)
+from grassmoth.compute.particle_memory import (
+    ParticleMgradMemoryFailure as ParticleMgradMemoryFailure,
+)
+from grassmoth.compute.particle_memory import (
+    ParticleMgradMemoryReport as ParticleMgradMemoryReport,
+)
+from grassmoth.compute.particle_memory import (
+    ParticleMgradMemoryShape as ParticleMgradMemoryShape,
+)
+from grassmoth.compute.particle_memory import (
+    estimate_particle_mgrad_memory as estimate_particle_mgrad_memory,
 )
 from grassmoth.compute.programs import (
     PreparedProgram as PreparedProgram,

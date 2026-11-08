@@ -33,6 +33,9 @@ def test_batched_diagnostics_match_native_rank_tail_and_mcse(chains, draws):
     samples[:, :, 3] = np.arange(chains, dtype=np.float32)[:, None]
     samples[:, :, 6] = np.round(samples[:, :, 6])
     samples[0, 0, 9] = np.nan
+    samples[0, 0, 15] = np.inf
+    if draws > 1:
+        samples[0, 1, 18] = -np.inf
     accepted = rng.random((chains, draws)) < 0.2
     accepted[:, 0] = True
     indices = np.maximum.accumulate(np.where(accepted, np.arange(draws), 0), axis=1)

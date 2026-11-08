@@ -12,16 +12,20 @@ from grassmoth.artifacts.sampling import (
     ConditionalParameterProposalSpec,
     FixedLatentStepSpec,
     GaussianInitializationSpec,
+    GuidedMethodLaunchSpec,
     GuidedMethodSpec,
+    MarginalParticleGibbsLaunchSpec,
     MarginalParticleGibbsSpec,
     NutsDASpec,
     NutsTrajectorySpec,
     ParameterMixtureProposalSpec,
+    PathUpdateLaunchSpec,
     PathUpdateSpec,
+    SamplerLaunchSpec,
     SamplerSpec,
 )
 from grassmoth_server.actions.contracts.settings import FitSettingsSpec
-from grassmoth_server.actions.fit.execution import resolve_sampler_spec
+from grassmoth_server.actions.fit.execution import resolve_sampler_spec as resolve_sampler_launch
 from grassmoth_server.config import (
     EmbeddedLLMDefaults,
     ExtractionWorkersConfig,
@@ -36,6 +40,13 @@ from grassmoth_server.llm.specs import EmbeddedLLMSpec
 
 pytestmark = pytest.mark.contract
 
+
+def _resolved_sampler(
+    settings: FitSettingsSpec, previous: SamplerSpec | None = None
+) -> SamplerSpec:
+    return resolve_sampler_launch(settings, previous).resolve(2)
+
+
 # =============================================================================
 # Owned sampler specification and override resolution
 # =============================================================================
@@ -47,7 +58,7 @@ class TestSamplerSpec:
             SamplerSpec.model_validate({"unknown_option": True})
 
     def test_marginal_particle_gibbs_defaults(self):
-        result = InferenceConfig().sampler
+        result = InferenceConfig().sampler.resolve(2)
         assert isinstance(result.algorithm, MarginalParticleGibbsSpec)
         assert result.algorithm.n_parameter_particles == 8
         assert isinstance(result.algorithm.path_update.method, GuidedMethodSpec)
@@ -83,10 +94,12 @@ class TestSamplerSpec:
             "get_config",
             lambda: PipelineConfig(
                 extraction_workers=config.extraction_workers,
-                inference=InferenceConfig(sampler=configured),
+                inference=InferenceConfig(
+                    sampler=SamplerLaunchSpec.model_validate(configured.model_dump())
+                ),
             ),
         )
-        resolved = resolve_sampler_spec(
+        resolved = _resolved_sampler(
             FitSettingsSpec(
                 num_warmup=0,
                 num_samples_per_chain=30,
@@ -104,7 +117,7 @@ class TestSamplerSpec:
         ) == (0, 30, 4, 0, 90)
         assert isinstance(resolved.algorithm, MarginalParticleGibbsSpec)
         assert isinstance(configured.algorithm, MarginalParticleGibbsSpec)
-        assert resolved.algorithm.path_update is configured.algorithm.path_update
+        assert resolved.algorithm.path_update == configured.algorithm.path_update
         assert resolved.algorithm.path_update.latent_step == FixedLatentStepSpec(delta=0.31)
         assert (
             configured.num_warmup,
@@ -112,22 +125,20 @@ class TestSamplerSpec:
             configured.num_chains,
             configured.seed,
         ) == (10, 20, 2, 3)
-        assert resolve_sampler_spec(FitSettingsSpec()) == configured
-        assert resolve_sampler_spec(
-            FitSettingsSpec(algorithm=MarginalParticleGibbsSpec(adaptation_scheme="simple"))
+        assert _resolved_sampler(FitSettingsSpec()) == configured
+        assert _resolved_sampler(
+            FitSettingsSpec(algorithm=MarginalParticleGibbsLaunchSpec(adaptation_scheme="simple"))
         ) == (configured.revised(algorithm=MarginalParticleGibbsSpec(adaptation_scheme="simple")))
         assert configured.time_limit_seconds == 14400
-        assert resolve_sampler_spec(FitSettingsSpec(), resolved).time_limit_seconds == 90
+        assert _resolved_sampler(FitSettingsSpec(), resolved).time_limit_seconds == 90
         assert (
-            resolve_sampler_spec(
-                FitSettingsSpec(time_limit_seconds=30), resolved
-            ).time_limit_seconds
+            _resolved_sampler(FitSettingsSpec(time_limit_seconds=30), resolved).time_limit_seconds
             == 30
         )
-        kalman = resolve_sampler_spec(
+        kalman = _resolved_sampler(
             FitSettingsSpec(
-                algorithm=MarginalParticleGibbsSpec(
-                    path_update=PathUpdateSpec(
+                algorithm=MarginalParticleGibbsLaunchSpec(
+                    path_update=PathUpdateLaunchSpec(
                         method=AuxiliaryKalmanMethodSpec(),
                         update=BlockedPathUpdateSpec(block_length=300),
                         proposal=ConditionalParameterProposalSpec(),
@@ -144,7 +155,7 @@ class TestSamplerSpec:
                 )
             )
         )
-        nuts = resolve_sampler_spec(
+        nuts = _resolved_sampler(
             FitSettingsSpec.model_validate(
                 {
                     "algorithm": {
@@ -158,8 +169,8 @@ class TestSamplerSpec:
         assert nuts.algorithm == NutsDASpec(
             parameterization="mixed", trajectory=NutsTrajectorySpec(max_tree_depth=5)
         )
-        assert resolve_sampler_spec(FitSettingsSpec(), nuts).algorithm is nuts.algorithm
-        reset = resolve_sampler_spec(
+        assert _resolved_sampler(FitSettingsSpec(), nuts).algorithm == nuts.algorithm
+        reset = _resolved_sampler(
             FitSettingsSpec.model_validate({"algorithm": {"method": "mpgibbs"}}), nuts
         )
         assert reset.algorithm == MarginalParticleGibbsSpec()
@@ -177,7 +188,7 @@ class TestSamplerSpec:
             resolved.seed = 8  # ty: ignore[invalid-assignment] -- Exercise runtime rejection of a frozen field.
 
     def test_custom_chains_and_seed(self):
-        result = InferenceConfig(sampler=SamplerSpec(num_chains=8, seed=42)).sampler
+        result = InferenceConfig(sampler=SamplerLaunchSpec(num_chains=8, seed=42)).sampler
         assert result.num_chains == 8
         assert result.seed == 42
 
@@ -287,8 +298,10 @@ class TestLoadConfig:
         assert cfg.inference.sampler.num_chains == 2
         assert cfg.inference.sampler.seed == 123
         assert cfg.inference.compute_loo_diagnostics is False
-        assert isinstance(cfg.inference.sampler.algorithm, MarginalParticleGibbsSpec)
-        assert isinstance(cfg.inference.sampler.algorithm.path_update.method, GuidedMethodSpec)
+        assert isinstance(cfg.inference.sampler.algorithm, MarginalParticleGibbsLaunchSpec)
+        assert isinstance(
+            cfg.inference.sampler.algorithm.path_update.method, GuidedMethodLaunchSpec
+        )
         assert cfg.inference.sampler.algorithm.path_update.method.num_particles == 32
         assert cfg.inference.sampler.algorithm.n_parameter_particles == 4
         assert cfg.inference.sampler.algorithm.path_update.latent_step == FixedLatentStepSpec(
@@ -316,7 +329,7 @@ class TestLoadConfig:
 
         cfg = load_config()
         sampler = cfg.inference.sampler
-        assert isinstance(sampler.algorithm, MarginalParticleGibbsSpec)
+        assert isinstance(sampler.algorithm, MarginalParticleGibbsLaunchSpec)
         assert sampler.num_warmup == 500
         assert sampler.algorithm.initialization == GaussianInitializationSpec(scale=0.25)
 

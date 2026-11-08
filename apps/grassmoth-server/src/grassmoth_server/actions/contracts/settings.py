@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import Self
 
-from grassmoth.public import InferenceAlgorithmSpec, InferenceHardware, Value
+from pydantic import Field, model_validator
+
+from grassmoth.public import (
+    ChainLaunchCount,
+    InferenceAlgorithmLaunchSpec,
+    InferenceHardware,
+    SamplerLaunchSpec,
+    Value,
+)
 
 
 class FitSettingsSpec(Value):
@@ -21,12 +29,22 @@ class FitSettingsSpec(Value):
     )
     hardware: InferenceHardware | None = None
     time_limit_seconds: int | None = Field(default=None, ge=1)
-    algorithm: InferenceAlgorithmSpec | None = Field(
+    algorithm: InferenceAlgorithmLaunchSpec | None = Field(
         default=None,
         description="Replace the complete configured or continued algorithm; omitted inherits it. Variant defaults fill unspecified algorithm fields.",
     )
     num_samples_per_chain: int | None = Field(default=None, ge=0)
     num_warmup: int | None = Field(default=None, ge=0)
-    num_chains: int | None = Field(default=None, ge=1)
+    num_chains: ChainLaunchCount | None = None
     thinning: bool | None = None
     seed: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def one_automatic_dimension(self) -> Self:
+        """Reject two explicit auto requests; merged configuration is checked again."""
+        defaults = SamplerLaunchSpec()
+        SamplerLaunchSpec(
+            algorithm=defaults.algorithm if self.algorithm is None else self.algorithm,
+            num_chains=defaults.num_chains if self.num_chains is None else self.num_chains,
+        )
+        return self

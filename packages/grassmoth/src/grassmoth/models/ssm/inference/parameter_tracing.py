@@ -15,12 +15,15 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from numpy.typing import NDArray
+
     from grassmoth.compute.programs import ProgramCompiler
     from grassmoth.models.ssm.inference.reparameterization import Strategy
     from grassmoth.models.ssm.preparation.binding import BoundPanel
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 import numpyro.distributions as dist
 from numpyro import handlers
 
@@ -148,15 +151,24 @@ def prepare_model_parameters(
 
 
 def extract_constrained_samples(
-    particles: jnp.ndarray,
+    particles: jax.Array | NDArray,
     parameters: ParameterTransform,
     public_sites: Set[str],
-    *,
-    compiler: ProgramCompiler,
-) -> dict[str, jnp.ndarray]:
-    """Replay the prior program and retain its authored parameter/deterministic sites."""
+) -> dict[str, NDArray]:
+    """Replay authored transforms in host chunks without additional accelerator memory.
+
+    The 256-draw chunk is a host-workspace heuristic, not a statistical setting.
+    Every draw and public deterministic site is retained. The explicit CPU JIT
+    executes the same native NumPyro replay as initialization and sampling.
+    """
 
     def constrained_samples(positions: jax.Array) -> dict[str, jax.Array]:
         return _filter_public_samples(jax.vmap(parameters.constrain)(positions), public_sites)
 
-    return compiler(constrained_samples, particles).call(particles)
+    project = jax.jit(constrained_samples, backend="cpu")
+    positions = np.asarray(particles)
+    batches = [
+        jax.device_get(project(positions[start : start + 256]))
+        for start in range(0, max(1, len(positions)), 256)
+    ]
+    return {name: np.concatenate([batch[name] for batch in batches]) for name in batches[0]}
