@@ -229,3 +229,25 @@ def test_owned_mappings_detach_nested_inputs_defaults_and_revisions() -> None:
     assert (
         Contract.model_json_schema(mode="serialization")["properties"]["groups"]["type"] == "object"
     )
+
+
+@pytest.mark.parametrize(
+    "probability", [-0.5, 0.0, 1.0, 1.5, float("nan"), float("inf"), float("-inf")]
+)
+def test_sampler_acceptance_targets_require_finite_open_probabilities(probability):
+    from pydantic import ValidationError
+
+    from grassmoth.artifacts.sampling import (
+        MarginalParticleGibbsLaunchSpec,
+        MarginalParticleGibbsSpec,
+        NutsDASpec,
+    )
+
+    for owner, field in (
+        (MarginalParticleGibbsSpec, "param_target_accept"),
+        (MarginalParticleGibbsLaunchSpec, "param_target_accept"),
+        (NutsDASpec, "target_accept_prob"),
+    ):
+        with pytest.raises(ValidationError):
+            owner.model_validate({field: probability})
+        assert getattr(owner.model_validate({field: 0.4}), field) == 0.4

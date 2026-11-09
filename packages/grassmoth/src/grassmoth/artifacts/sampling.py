@@ -33,6 +33,7 @@ from grassmoth.artifacts.base import Value
 
 type ParameterProposal = Literal["random_walk", "pseudo_langevin"]
 type AdaptationScheme = Literal["simple", "dual_averaging"]
+type AcceptanceProbability = Annotated[float, Field(gt=0, lt=1, allow_inf_nan=False)]
 type ParticleDiagnosticMetric = Literal[
     "particle_identity",
     "parameter_movement",
@@ -579,11 +580,8 @@ class NutsDASpec(Value):
             "Frozen per fit; changing it on a continued fit requires warmup."
         ),
     )
-    target_accept_prob: float = Field(
+    target_accept_prob: AcceptanceProbability = Field(
         default=0.8,
-        gt=0,
-        lt=1,
-        allow_inf_nan=False,
         description=(
             "Mean acceptance statistic that dual averaging steers the step size towards during "
             "warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks "
@@ -660,7 +658,7 @@ class MarginalParticleGibbsSpec(Value):
             "convergence check reads them; they explain a failing sampler."
         ),
     )
-    param_target_accept: float = Field(
+    param_target_accept: AcceptanceProbability = Field(
         default=0.2,
         description=(
             "Target fraction of sweeps in which the parameters move to a proposed particle. "
@@ -956,7 +954,7 @@ class MarginalParticleGibbsLaunchSpec(Value):
         ParticleDiagnosticMetrics, MarginalParticleGibbsSpec.model_fields["diagnostic_metrics"]
     ] = _PARTICLE_DEFAULTS.diagnostic_metrics
     param_target_accept: Annotated[
-        float, MarginalParticleGibbsSpec.model_fields["param_target_accept"]
+        AcceptanceProbability, MarginalParticleGibbsSpec.model_fields["param_target_accept"]
     ] = _PARTICLE_DEFAULTS.param_target_accept
     adaptation_scheme: Annotated[
         AdaptationScheme, MarginalParticleGibbsSpec.model_fields["adaptation_scheme"]

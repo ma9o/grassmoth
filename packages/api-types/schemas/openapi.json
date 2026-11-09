@@ -654,6 +654,14 @@
   },
   "components": {
     "schemas": {
+      "AcceptanceProbability": {
+        "exclusiveMaximum": 1,
+        "exclusiveMinimum": 0,
+        "type": "number",
+        "x-python-module": "grassmoth.artifacts.sampling",
+        "x-layer": "authored",
+        "x-concern": "scientific_model"
+      },
       "ActionAttempt": {
         "discriminator": {
           "mapping": {
@@ -17191,10 +17199,9 @@
             "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
           },
           "param_target_accept": {
+            "$ref": "#/components/schemas/AcceptanceProbability",
             "default": 0.2,
-            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.",
-            "title": "Param Target Accept",
-            "type": "number"
+            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step."
           },
           "adaptation_scheme": {
             "$ref": "#/components/schemas/AdaptationScheme",
@@ -17244,10 +17251,9 @@
             "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
           },
           "param_target_accept": {
+            "$ref": "#/components/schemas/AcceptanceProbability",
             "default": 0.2,
-            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.",
-            "title": "Param Target Accept",
-            "type": "number"
+            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step."
           },
           "adaptation_scheme": {
             "$ref": "#/components/schemas/AdaptationScheme",
@@ -18707,10 +18713,9 @@
             "description": "Optional traces to record: particle_identity (the selected particle per time step, reference-path hit rate and distinct selected particles), parameter_movement (RMS parameter jump) and particle_weights (filter weight ESS, entropy and spread at each time step). frequency_refresh summarizes retained path movement in DCT bands; regional_movement summarizes movement and frozen step sizes over existing question windows and reading coverage, with the ten worst times. They cost memory and output size, and no convergence check reads them; they explain a failing sampler."
           },
           "param_target_accept": {
+            "$ref": "#/components/schemas/AcceptanceProbability",
             "default": 0.2,
-            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step.",
-            "title": "Param Target Accept",
-            "type": "number"
+            "description": "Target fraction of sweeps in which the parameters move to a proposed particle. Selection is a Barker-type step (Corenflos 2025, section 3.3), whose optimal rate for random-walk proposals is about 0.27 in one dimension and 0.158 in high dimension (Agrawal et al. 2023). The default 0.2 sits between those rates and near the 18% that marginal Particle Gibbs reaches in Corenflos (2025, figure 1). At 0.35, warmup on a six-parameter linear PARAM ended at 43% acceptance with moves of 0.3 posterior SD, which costs an ideal Barker walk about 3.5 times the sweeps per effective draw of the optimal step."
           },
           "adaptation_scheme": {
             "$ref": "#/components/schemas/AdaptationScheme",
@@ -20521,12 +20526,9 @@
             "description": "Coordinates the sampler moves in; the posterior is the same in all three, only its geometry changes. centred samples each path directly, standardized by the prior's per-step covariances at the starting parameters. non_centred samples each free coordinate's Euler-Maruyama innovation and rebuilds the path from the current parameters. mixed keeps coordinates with a direct point reading centred and makes the rest non-centred. Centred mixes well where data pin the states, non-centred where data are weak against the dynamics (Papaspiliopoulos, Roberts & Sk\u00f6ld 2007). Frozen per fit; changing it on a continued fit requires warmup."
           },
           "target_accept_prob": {
+            "$ref": "#/components/schemas/AcceptanceProbability",
             "default": 0.8,
-            "description": "Mean acceptance statistic that dual averaging steers the step size towards during warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks the step, which removes divergences in strongly curved regions at the cost of longer trajectories. 0.8 is the NumPyro and Stan default.",
-            "exclusiveMaximum": 1,
-            "exclusiveMinimum": 0,
-            "title": "Target Accept Prob",
-            "type": "number"
+            "description": "Mean acceptance statistic that dual averaging steers the step size towards during warmup (Hoffman & Gelman 2014, section 3.2). Raising it towards 0.9-0.99 shrinks the step, which removes divergences in strongly curved regions at the cost of longer trajectories. 0.8 is the NumPyro and Stan default."
           },
           "trajectory": {
             "$ref": "#/components/schemas/JointTrajectorySpec",

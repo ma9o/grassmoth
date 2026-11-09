@@ -1,5 +1,6 @@
 /** AUTO-GENERATED from Python's OpenAPI graph. Run bun run codegen. */
 import type { components } from "./model-api";
+export type AcceptanceProbability = components["schemas"]["AcceptanceProbability"];
 export type ActionAttempt = components["schemas"]["ActionAttempt"];
 export type ActionEffects = components["schemas"]["ActionEffects"];
 export type ActionId = components["schemas"]["ActionId"];
