@@ -11,6 +11,7 @@ import { indexModel } from "./entities";
 import { latestSeq } from "./journal";
 import type { ScopeContext } from "./scope";
 import type { EntitySelection } from "./selection";
+import type { TimelineComparison } from "./timeline-comparison";
 
 export type SnapshotReader = (commitId: string | undefined) => {
   data: ModelSnapshot | undefined;
@@ -22,10 +23,10 @@ export type SnapshotReader = (commitId: string | undefined) => {
 export function useWorkbenchSnapshots(
   attempts: readonly TimelineRevision[],
   useSnapshot: SnapshotReader,
+  requestedSeq: number | null,
 ) {
-  const [playheadOverride, viewAt] = useState<number | null>(null);
   const latest = latestSeq(attempts);
-  const playhead = playheadOverride ?? latest;
+  const playhead = requestedSeq ?? latest;
   const record = attempts.find((item) => item.record.seq === playhead);
   // Applied leaves own their results; failed attempts inspect their unchanged parent state.
   const commitId = record
@@ -43,7 +44,7 @@ export function useWorkbenchSnapshots(
       entry.record.attempt.action !== "data_diff" &&
       entry.record.attempt.action !== "model_diff",
   );
-  return { selected, viewAt, focusSeq: playhead, hasSelectedState, hasCurrentState };
+  return { selected, focusSeq: playhead, hasSelectedState, hasCurrentState };
 }
 
 interface WorkbenchOptions {
@@ -52,6 +53,7 @@ interface WorkbenchOptions {
   attempts: readonly TimelineRevision[];
   modelSnapshot: ModelSnapshot;
   focusSeq: number;
+  navigationKey: string;
   result: ActionSuccess | undefined;
   viewAt: (seq: number | null) => void;
 }
@@ -63,29 +65,33 @@ export function useWorkbench({
   attempts,
   modelSnapshot,
   focusSeq,
+  navigationKey,
   result,
   viewAt,
 }: WorkbenchOptions) {
   const [selection, select] = useState<EntitySelection | null>(null);
-  const [comparison, setComparison] = useState<{
-    before: number;
-    after: number;
-    pinned: boolean;
-  } | null>(null);
+  const [comparison, setComparison] = useState<
+    (TimelineComparison & { readonly pinned: boolean }) | null
+  >(null);
+  const [previousNavigation, setPreviousNavigation] = useState(navigationKey);
+  if (previousNavigation !== navigationKey) {
+    setPreviousNavigation(navigationKey);
+    select(null);
+    setComparison(null);
+  }
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
     () => () => {
       if (previewTimer.current) clearTimeout(previewTimer.current);
     },
-    [],
+    [navigationKey],
   );
   const entities = useMemo(() => indexModel(modelSnapshot.dynamical_model_spec), [modelSnapshot]);
   const ticks = attempts;
   const latest = latestSeq(attempts);
   const playhead = focusSeq;
-  const activeComparison = comparison?.before === playhead ? comparison : null;
-  const comparedCall = attempts.find((record) => record.record.seq === activeComparison?.after);
-  const comparedCommit = modelReference(comparedCall, attempts);
+  const activeComparison = comparison?.before.record.seq === playhead ? comparison : null;
+  const comparedCommit = modelReference(activeComparison?.after, attempts);
   const selectedCall = attempts.find((record) => record.record.seq === playhead);
   const selectedCommit = modelReference(selectedCall, attempts);
   const compared = useModelDiff(
@@ -125,12 +131,12 @@ export function useWorkbench({
       350,
     );
   };
-  const previewComparison = (after: number, pinned = false) => {
+  const previewComparison = (pair: TimelineComparison, pinned = false) => {
     retainPreview();
     setComparison((value) =>
-      !pinned && value?.pinned && value.before === playhead
+      !pinned && value?.pinned && value.before.record.seq === playhead
         ? value
-        : { before: playhead, after, pinned },
+        : { ...pair, pinned },
     );
   };
   const dismissComparison = () => {
@@ -139,7 +145,7 @@ export function useWorkbench({
   };
   const selectVersion = (seq: number | null) => {
     dismissComparison();
-    viewAt(seq === latest ? null : seq);
+    viewAt(seq);
   };
   const question = modelSnapshot.question?.text;
   const simulationResult = modelSnapshot.simulation;

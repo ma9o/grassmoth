@@ -15,6 +15,8 @@ import { useLLMTraceForAction } from "@/lib/hooks/use-llm-trace";
 import { useDataComparison } from "@/lib/hooks/use-data-comparison";
 import { useModelSnapshot } from "@/lib/hooks/use-model-snapshot";
 import type { StudyJournal } from "@/lib/hooks/use-study-journal";
+import { useTimelineNavigation } from "@/lib/hooks/use-timeline-navigation";
+import type { TimelineNavigation } from "@/lib/model-asset/timeline-location";
 import { useSimulationPaths } from "@/lib/hooks/use-visuals";
 import {
   useWorkbench,
@@ -32,6 +34,7 @@ export interface CausalModelAssetViewProps {
   dependencies: StudyJournal["dependencies"];
   useActionTrace: UseActionTrace;
   running: readonly RunningAction[];
+  navigation: TimelineNavigation;
 }
 
 /**
@@ -43,9 +46,11 @@ export interface CausalModelAssetViewProps {
  * overlay its saved evidence on the parent version, and the record states what was compared.
  */
 export function CausalModelAssetView(props: CausalModelAssetViewProps) {
-  const { selected, viewAt, focusSeq, hasSelectedState, hasCurrentState } = useWorkbenchSnapshots(
+  const { navigation } = props;
+  const { selected, focusSeq, hasSelectedState, hasCurrentState } = useWorkbenchSnapshots(
     props.attempts,
     props.useSnapshot,
+    navigation.seq,
   );
   if (selected.error)
     return (
@@ -70,7 +75,8 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
           playhead={tick?.record.seq ?? 0}
           latest={0}
           comparedSeq={null}
-          onPlayhead={viewAt}
+          navigation={navigation}
+          onPlayhead={navigation.viewAt}
           onPreviewComparison={() => {}}
           onEndPreview={() => {}}
           onRetainPreview={() => {}}
@@ -81,7 +87,7 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
             workspaceId={props.workspaceId}
             context={null}
             tick={tick}
-            running={props.running}
+            running={navigation.seq === null ? props.running : []}
             useActionTrace={props.useActionTrace}
           />
         </section>
@@ -100,7 +106,6 @@ export function CausalModelAssetView(props: CausalModelAssetViewProps) {
       result={selected.result}
       modelSnapshot={selected.data}
       loadingRevision={selected.isPlaceholderData === true}
-      viewAt={viewAt}
       focusSeq={focusSeq}
     />
   );
@@ -115,14 +120,13 @@ function ModelRevision({
   modelSnapshot,
   result,
   loadingRevision,
-  viewAt,
+  navigation,
   focusSeq,
   running,
 }: CausalModelAssetViewProps & {
   modelSnapshot: ModelSnapshot;
   result: ActionSuccess | undefined;
   loadingRevision: boolean;
-  viewAt: (seq: number | null) => void;
   focusSeq: number;
 }) {
   const {
@@ -150,8 +154,9 @@ function ModelRevision({
     attempts,
     modelSnapshot,
     focusSeq,
+    navigationKey: `${workspaceId}:${navigation.seq ?? "latest"}:${focusSeq}`,
     result,
-    viewAt,
+    viewAt: navigation.viewAt,
   });
   const recordedPaths = useSimulationPaths(modelSnapshot);
   const tick = ticks.find((item) => item.record.seq === focusSeq);
@@ -173,7 +178,11 @@ function ModelRevision({
       comparisonPane.current?.focus({ preventScroll: true });
       comparisonPane.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
-  }, [activeComparison?.pinned, activeComparison?.before, activeComparison?.after]);
+  }, [
+    activeComparison?.pinned,
+    activeComparison?.before.record.seq,
+    activeComparison?.after.record.seq,
+  ]);
 
   return (
     <div
@@ -199,12 +208,13 @@ function ModelRevision({
         dependencies={dependencies}
         playhead={focusSeq}
         latest={latest}
-        comparedSeq={activeComparison?.after ?? null}
+        comparedSeq={activeComparison?.after.record.seq ?? null}
+        navigation={navigation}
         onPlayhead={selectVersion}
-        onPreviewComparison={(seq) => previewComparison(seq)}
+        onPreviewComparison={previewComparison}
         onEndPreview={endPreview}
         onRetainPreview={retainPreview}
-        onKeepComparison={(seq) => previewComparison(seq, true)}
+        onKeepComparison={(pair) => previewComparison(pair, true)}
       />
       <main
         aria-busy={loadingRevision}
@@ -230,7 +240,7 @@ function ModelRevision({
                   onFocus={retainPreview}
                 >
                   <span className="whitespace-nowrap font-medium text-amber-700">
-                    Spec · {playhead} → {activeComparison.after}
+                    Spec · {playhead} → {activeComparison.after.record.seq}
                   </span>
                   {compared.data &&
                     (Object.keys(compared.data.changes).length === 0 ? (
@@ -337,7 +347,7 @@ function ModelRevision({
               tick={tick}
               running={
                 // Work still running has no completed timeline node yet.
-                focusSeq === latest ? running : []
+                navigation.seq === null ? running : []
               }
               useActionTrace={useActionTrace}
             />
@@ -356,6 +366,7 @@ export function CausalModelAsset({
   workspaceId: string;
   journal: StudyJournal;
 }) {
+  const { selection, hrefAt, viewAt } = useTimelineNavigation(journal.attempts);
   const useSnapshot = useMemo(
     () =>
       function useWorkspaceSnapshot(commitId: string | undefined) {
@@ -382,14 +393,35 @@ export function CausalModelAsset({
       },
     [workspaceId, journal.attempts],
   );
+  if (selection.status === "invalid") {
+    return (
+      <div role="alert" className="flex flex-col items-start gap-3 p-6">
+        <h1 className="font-semibold">Timeline action unavailable</h1>
+        <p>{selection.message}</p>
+        <Link
+          href={hrefAt(null)}
+          prefetch={false}
+          onNavigate={(event) => {
+            event.preventDefault();
+            viewAt(null);
+          }}
+          className="text-sm underline underline-offset-4"
+        >
+          Open latest action
+        </Link>
+      </div>
+    );
+  }
   return (
     <CausalModelAssetView
+      key={workspaceId}
       workspaceId={workspaceId}
       useSnapshot={useSnapshot}
       attempts={journal.attempts}
       dependencies={journal.dependencies}
       useActionTrace={useActionTrace}
       running={journal.running}
+      navigation={{ seq: selection.seq, hrefAt, viewAt }}
     />
   );
 }

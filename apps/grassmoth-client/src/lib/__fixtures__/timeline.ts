@@ -1,5 +1,5 @@
 /** Slim action records owned by the journal and timeline contract tests. */
-import type { Applied, TimelineRecord, TimelineRevision } from "@grassmoth/api-types";
+import type { ActionId, Applied, TimelineRecord, TimelineRevision } from "@grassmoth/api-types";
 
 export const applied: Applied<null> = {
   status: "applied",
@@ -45,4 +45,31 @@ export const comparison = revision(6, {
     reasoning: null,
   },
   outcome: applied,
+});
+
+export const comparisonRevisions = (
+  [
+    "edit_question",
+    "edit_model",
+    "prepare_data",
+    "fit",
+    "simulate",
+    "data_diff",
+    "model_diff",
+  ] as const satisfies readonly ActionId[]
+).map((action, index) => ({
+  action,
+  before: revision(20 + index * 2, { action, request: null, outcome: applied }),
+  after: revision(21 + index * 2, { action, request: null, outcome: applied }),
+}));
+
+export const rejectedFit = revision(40, {
+  action: "fit",
+  request: null,
+  outcome: {
+    status: "rejected",
+    code: "INPUT_UNAVAILABLE",
+    subject: "inputs",
+    detail: "inputs missing",
+  },
 });

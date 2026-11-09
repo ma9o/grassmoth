@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "uv run --all-packages uvicorn grassmoth_server.api.app:app --reload --port 8100",
     "notebooks": "uv run --all-packages marimo edit notebooks/",
+    "study:rebuild": "uv run --all-packages python -m scripts.dev.rebuild_france1940simple",
     "lint": "turbo run lint:workspace --continue=always",
     "lint:workspace": "bun run --parallel --no-exit-on-error lint:ruff lint:deptry lint:source-rules lint:ty lint:basedpyright lint:type-boundaries lint:type-boundaries:tests lint:architecture lint:annotations lint:vulture lint:fields lint:public lint:config format:check",
     "lint:fix": "uv run --all-packages ruff check --fix src tests scripts notebooks && bun run format",

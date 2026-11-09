@@ -1,0 +1,77 @@
+{
+  "action": "prepare_data",
+  "input": {
+    "dynamical_model_spec_ref": "latest",
+    "source": "tmp/input",
+    "context": "Selected rows from FRANCE1940's historical sources, values unchanged. Legal weekly-hours regime on each decree date and at the end of June 1940; armament share of national income on 1 January of each year it covers; SGF first-week hours surveys (all industries and metalworking) read at each survey week's midpoint, the 4th; Frankenstein's combat-aircraft production counts over calendar years 1936-1939 and January-June 1940; monthly combat-aircraft deliveries September 1939-May 1940; a definitional zero for production accumulated since 1 January 1936. No filling or interpolation.",
+    "extraction": {
+      "indicator:legal_hours_cap_reading": {
+        "kind": "computed",
+        "how_to_measure": "Legal weekly hours in force on the row's date, read from legal_hours_cap.",
+        "source_columns": [
+          "legal_hours_cap"
+        ],
+        "computed_rule": null,
+        "fill_null": null,
+        "fill_null_limit": null
+      },
+      "indicator:armaments_share_reading": {
+        "kind": "computed",
+        "how_to_measure": "Armament share of national income in percent for the calendar year starting on the row's date, read from armaments_share.",
+        "source_columns": [
+          "armaments_share"
+        ],
+        "computed_rule": null,
+        "fill_null": null,
+        "fill_null_limit": null
+      },
+      "indicator:industry_hours_survey": {
+        "kind": "computed",
+        "how_to_measure": "SGF all-industry first-week survey in weekly hours, read from industry_hours.",
+        "source_columns": [
+          "industry_hours"
+        ],
+        "computed_rule": null,
+        "fill_null": null,
+        "fill_null_limit": null
+      },
+      "indicator:metalworking_hours_survey": {
+        "kind": "computed",
+        "how_to_measure": "SGF metalworking first-week survey in weekly hours, read from metalworking_hours.",
+        "source_columns": [
+          "metalworking_hours"
+        ],
+        "computed_rule": null,
+        "fill_null": null,
+        "fill_null_limit": null
+      },
+      "indicator:cumulative_aircraft_origin": {
+        "kind": "computed",
+        "how_to_measure": "Definitional zero of production accumulated since the study origin, read on 1 January 1936.",
+        "source_columns": [
+          "cumulative_aircraft_origin"
+        ],
+        "computed_rule": null,
+        "fill_null": null,
+        "fill_null_limit": null
+      },
+      "indicator:combat_aircraft_produced": {
+        "kind": "recorded",
+        "how_to_measure": "Combat aircraft produced over each recorded window: calendar years 1936-1939 and January-June 1940.",
+        "value_column": "combat_aircraft_produced",
+        "anchor_column": "combat_aircraft_produced_support_end",
+        "support_start_column": "combat_aircraft_produced_support_start",
+        "support_end_column": "combat_aircraft_produced_support_end"
+      },
+      "indicator:combat_aircraft_delivered": {
+        "kind": "recorded",
+        "how_to_measure": "Combat aircraft delivered in each recorded month, September 1939-May 1940.",
+        "value_column": "combat_aircraft_delivered",
+        "anchor_column": "combat_aircraft_delivered_support_end",
+        "support_start_column": "combat_aircraft_delivered_support_start",
+        "support_end_column": "combat_aircraft_delivered_support_end"
+      }
+    }
+  },
+  "reasoning": "Import the selected readings as recorded: point readings on their dates, counts over their actual windows."
+}

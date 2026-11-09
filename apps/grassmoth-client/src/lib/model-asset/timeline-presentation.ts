@@ -1,4 +1,3 @@
-import type { ActionId } from "@grassmoth/api-types";
 import type { TimelineRevision } from "@grassmoth/api-types";
 import {
   TIMELINE_LANES,
@@ -7,33 +6,18 @@ import {
   type RevisionTimelineNode,
 } from "./revision-timeline";
 
-/** Horizontal pitch between consecutive actions; ticks carry no labels, so columns stay narrow. */
-export const PITCH = 18;
+/** Each action has room for its icon, short commit hash and pin toggle. */
+export const PITCH = 148;
+export const NODE_WIDTH = 124;
+export const NODE_HEIGHT = 28;
 /** Room before the first column and after the last. */
-const PAD = 8;
+const PAD = 12;
 /** Height of the first track from the top of the strip. */
-const TOP = 8;
+const TOP = 20;
 /** From a track to the corridor beside it, where links between lanes run. */
-const CORRIDOR = 5;
+const CORRIDOR = 20;
 /** From a lane's track to the side track its failed attempts hang on. */
-const SIDE = 5;
-/** Mark diameters; a failure is a dead end, so its mark is smaller. */
-export const MARK = 10;
-export const FAILED_MARK = 8;
-
-export type ActionGlyph = "dot" | "diamond" | "ring" | "arrow";
-
-/** One mark and colour per scientific action; the readout names the action. */
-export const ACTION_STYLE: Record<ActionId, { color: string; glyph: ActionGlyph }> = {
-  edit_question: { color: "#b45309", glyph: "diamond" },
-  edit_model: { color: "#475569", glyph: "dot" },
-  prepare_data: { color: "#0f766e", glyph: "diamond" },
-  fit: { color: "#2563eb", glyph: "ring" },
-  data_diff: { color: "#0369a1", glyph: "ring" },
-  model_diff: { color: "#b45309", glyph: "ring" },
-  simulate: { color: "#7c3aed", glyph: "arrow" },
-};
-export const FAILED_COLOR = "#dc2626";
+const SIDE = 36;
 
 /** Vertical positions in one lane: its track, its failures' side track and the corridors beside it. */
 interface TimelineLanePlacement {
@@ -70,8 +54,8 @@ export function timelineLayout(timeline: RevisionTimeline): TimelineLayout {
   return {
     lanes,
     width: 2 * PAD + Math.max(1, timeline.nodes.length) * PITCH,
-    // Room under the lowest track for the latest-action marker.
-    height: bottom + MARK / 2 + 6,
+    // Keep status labels beneath the cards inside the scrollable strip.
+    height: bottom + NODE_HEIGHT / 2 + 20,
   };
 }
 
@@ -87,13 +71,14 @@ export function timelinePoint(layout: TimelineLayout, node: RevisionTimelineNode
 }
 
 /**
- * Within a lane, runs along its track and curves off it into a failure. Between lanes, leaves the
- * producer vertically, runs along the corridor beside the consumer's lane and enters the consumer
- * vertically. Producers never failed, and consumers always sit to the right of their producers.
+ * Connect the right edge of the producer to the left edge of its consumer. Cross-lane links
+ * run through the space between rows, outside the cards. Failed calls have no outgoing links.
  */
 export function timelineLinkPath(layout: TimelineLayout, link: RevisionTimelineLink) {
-  const from = timelinePoint(layout, link.from);
-  const to = timelinePoint(layout, link.to);
+  const source = timelinePoint(layout, link.from);
+  const target = timelinePoint(layout, link.to);
+  const from = { x: source.x + NODE_WIDTH / 2, y: source.y };
+  const to = { x: target.x - NODE_WIDTH / 2, y: target.y };
   if (link.from.lane === link.to.lane) {
     if (from.y === to.y) return `M ${from.x} ${from.y} H ${to.x}`;
     const bend = Math.min(10, to.x - from.x);
@@ -101,8 +86,8 @@ export function timelineLinkPath(layout: TimelineLayout, link: RevisionTimelineL
   }
   const lane = placement(layout, link.to);
   const corridor = link.from.lane > link.to.lane ? lane.below : lane.above;
-  const bend = Math.min(3, (to.x - from.x) / 2);
-  return `M ${from.x} ${from.y} C ${from.x} ${corridor}, ${from.x} ${corridor}, ${from.x + bend} ${corridor} H ${to.x - bend} C ${to.x} ${corridor}, ${to.x} ${corridor}, ${to.x} ${to.y}`;
+  const bend = Math.min(6, (to.x - from.x) / 4);
+  return `M ${from.x} ${from.y} C ${from.x + bend} ${from.y}, ${from.x + bend} ${corridor}, ${from.x + 2 * bend} ${corridor} H ${to.x - 2 * bend} C ${to.x - bend} ${corridor}, ${to.x - bend} ${to.y}, ${to.x} ${to.y}`;
 }
 
 export function timelineTickLabel(tick: TimelineRevision) {

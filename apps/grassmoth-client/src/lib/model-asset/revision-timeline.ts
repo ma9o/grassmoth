@@ -2,7 +2,7 @@ import type { ActionId, RecordDependency } from "@grassmoth/api-types";
 import type { TimelineRevision } from "@grassmoth/api-types";
 
 /**
- * Lanes group actions by what they produce: comparisons read histories, data makes them, and the
+ * Lanes group actions by what they produce: diffs read histories, data makes them, and the
  * model lane starts from the question every model is built to answer. A failed attempt produces
  * nothing, so it hangs off its lane on the side its inputs arrive from.
  */
@@ -11,7 +11,7 @@ export const TIMELINE_LANES: ReadonlyArray<{
   actions: readonly ActionId[];
   failures: "above" | "below";
 }> = [
-  { name: "Comparisons", actions: ["data_diff", "model_diff"], failures: "below" },
+  { name: "Diffs", actions: ["data_diff", "model_diff"], failures: "below" },
   { name: "Data", actions: ["prepare_data", "simulate"], failures: "below" },
   { name: "Model", actions: ["edit_question", "edit_model", "fit"], failures: "above" },
 ];

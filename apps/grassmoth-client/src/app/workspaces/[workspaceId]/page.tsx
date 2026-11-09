@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { use } from "react";
+import { Suspense, use } from "react";
 import { CausalModelAsset } from "@/components/model/causal-model-asset";
 import { useStudyJournal } from "@/lib/hooks/use-study-journal";
 
@@ -36,5 +36,15 @@ export default function ModelPage({ params }: { params: Promise<{ workspaceId: s
     );
   }
 
-  return <CausalModelAsset workspaceId={workspaceId} journal={journal} />;
+  return (
+    <Suspense
+      fallback={
+        <div role="status" className="p-6">
+          Reading timeline selection…
+        </div>
+      }
+    >
+      <CausalModelAsset workspaceId={workspaceId} journal={journal} />
+    </Suspense>
+  );
 }

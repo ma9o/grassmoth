@@ -1,0 +1,14 @@
+{
+  "action": "simulate",
+  "input": {
+    "dynamical_model_spec_ref": "latest",
+    "simulation": {
+      "start": "1936-01-01",
+      "horizon": "1643d",
+      "interventions": []
+    },
+    "seed": 0,
+    "num_replicates": 100
+  },
+  "reasoning": "Prior-predictive histories over the recorded window, to compare with the prepared data before fitting."
+}
