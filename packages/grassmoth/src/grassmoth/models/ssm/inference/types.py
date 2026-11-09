@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Annotated, Self
 
 import jax.numpy as jnp
@@ -140,17 +139,6 @@ class ProductionDiagnostics:
 
     def __post_init__(self) -> None:
         """Freeze phase-specific diagnostic mappings after construction."""
-        if self.phase_extra_fields is not None:
-            object.__setattr__(
-                self,
-                "phase_extra_fields",
-                MappingProxyType(
-                    {
-                        phase: MappingProxyType(dict(values))
-                        for phase, values in self.phase_extra_fields.items()
-                    }
-                ),
-            )
         freeze_fields(self)
 
 
@@ -164,7 +152,6 @@ class JointPosteriorDraws:
 
     def __post_init__(self) -> None:
         """Require aligned parameter and latent-path draws with uniquely labeled state coordinates."""
-        object.__setattr__(self, "parameters", MappingProxyType(dict(self.parameters)))
         counts = set()
         for values in self.parameters.values():
             if values.ndim < 1:

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from grassmoth.artifacts.immutability import freeze_fields
@@ -35,11 +34,6 @@ class DynamicsDraws:
 
     def __post_init__(self) -> None:
         """Freeze component parameter mappings and require a common leading draw axis."""
-        object.__setattr__(
-            self,
-            "parameters",
-            tuple(MappingProxyType(dict(component)) for component in self.parameters),
-        )
         if self.n_draws < 0:
             raise ValueError("Dynamics draw count must be non-negative")
         if len(self.parameters) != len(self.vector_field.components):

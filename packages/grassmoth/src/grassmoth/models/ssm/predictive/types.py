@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 import jax
@@ -59,7 +58,6 @@ class PredictiveDraws:
 
     def __post_init__(self) -> None:
         """Freeze parameter draws and require reference trajectories to share the predictive axes."""
-        object.__setattr__(self, "parameters", MappingProxyType(dict(self.parameters)))
         for name, values in self.parameters.items():
             if values.ndim < 1 or values.shape[0] != self.n_draws:
                 raise ValueError(f"{name} must share the predictive draw axis")

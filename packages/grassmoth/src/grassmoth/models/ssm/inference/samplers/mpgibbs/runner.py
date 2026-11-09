@@ -2,7 +2,6 @@
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from types import MappingProxyType
 from typing import Annotated, NamedTuple
 
 import jax
@@ -126,17 +125,6 @@ class ParticleChainResult:
 
     def __post_init__(self) -> None:
         """Freeze retained, warmup, and combined chain diagnostics."""
-        object.__setattr__(
-            self, "chain_extra_fields", MappingProxyType(dict(self.chain_extra_fields))
-        )
-        object.__setattr__(
-            self,
-            "warmup_chain_extra_fields",
-            MappingProxyType(dict(self.warmup_chain_extra_fields)),
-        )
-        object.__setattr__(
-            self, "all_chain_extra_fields", MappingProxyType(dict(self.all_chain_extra_fields))
-        )
         freeze_fields(self)
 
 
