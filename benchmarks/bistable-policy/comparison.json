@@ -1,0 +1,1962 @@
+{
+  "schema_version": 1,
+  "description": "Compact historical evidence archive; summaries copied from saved scores, no new sampling or diagnostic computation.",
+  "experiment_date": "2026-11-07",
+  "source_path_convention": "Repository-relative identifiers of original artifacts; scratchpad sources need not exist in a fresh clone.",
+  "inputs": {
+    "model.stan": {
+      "path": "scratchpad/model-choice-20261107/stan/norm_centred.stan",
+      "sha256": "bdea5f4900cc14671737e79dcf45b4b33aea75b1df95ab12ccf430a88b08e652"
+    },
+    "data.json": {
+      "path": "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/data.json",
+      "sha256": "62631dbe0281962485d971a980efe742b1c18cbc2eec5dec97acb79e795123f8"
+    },
+    "model-request.json": {
+      "path": "scratchpad/model-choice-20261107/study/02-model-request.json",
+      "sha256": "c25bb137181d0d08558c3b322509e615923130d4084a28575e5640f58fb38eb0"
+    },
+    "data-request.json": {
+      "path": "scratchpad/model-choice-20261107/study/04-data-request.json",
+      "sha256": "6172deeb5f0d19bd2af916560d4e30376a1932ee54f722d14e284fb1248f1c00"
+    },
+    "observations.csv": {
+      "path": "scratchpad/model-choice-20261107/study/observations.csv",
+      "sha256": "fdf104b55b08554e715a1b054f312d3181f9dafd7a590f4e27827a055ba3083b"
+    },
+    "revisions.json": {
+      "path": "scratchpad/model-choice-20261107/study/revisions.json",
+      "sha256": "271cd2c4cca9d7e30a9f1e4909115f5f0c97489818f75eb7bf5d76696612cf1d"
+    },
+    "fit-request.json": {
+      "path": "scratchpad/model-choice-20261107/study/trusted-M2-N256-eight-request.json",
+      "sha256": "22caf2525525c4f5fa607f434e9418ccfc62d54bfcf47da3a2473d1782951e5f"
+    }
+  },
+  "source_reports": [
+    {
+      "path": "scratchpad/model-choice-20261107/trusted-comparison.json",
+      "sha256": "d47e58b6b9ea3b6a6d5dcb61d2f729157bcc0d2d7c4564198d65fc282a7bac99"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/stan-targeted-comparison.json",
+      "sha256": "601e1a264711cdc17a7762afc53839df7e06b3d1a2fce9268a1c2c24ceba7bca"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/stan-rescue-conclusion.md",
+      "sha256": "2f27a09c4007d30b580e3cac919ac1d008b585e1e95585914b2dbec59aa3f092"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/stan-targeted-conclusion.md",
+      "sha256": "d1ba2f20e77f6f7f82ab3eb5932e4bb31d3b51f2db05da3cf40f493c954fe910"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/stan-rescue-selection.json",
+      "sha256": "3ebe48bf114f31c47d461014c832f48d524fc5cd45f4076dca2a9171d4ad6b35"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/trusted-conclusion.md",
+      "sha256": "f27edf4ea94e45a7eb97a11c8f8ad159c368a6fda846020891f8cbd0710d9405"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/stan/rescue-final-audit.json",
+      "sha256": "612ba6e35ed3a26f32781e1562d706f408fc0e534c83d1d1f0f2d60a62988fa2"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/stan/targeted-final-audit.json",
+      "sha256": "152f8707672417f27fad6f7b4d873cf0929d0e3ca69be7fd676ebb881c674303"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/score_trusted.py",
+      "sha256": "7c221d7728e585ec0a6edaca7c68d54f5e1391fc91fbf89eb6e1a79d5bbadb49"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/claude/probe3/common.py",
+      "sha256": "ac0e770815c46a0f9652b284529995d89a9e7caee42fe26b3ab8dc591451c337"
+    },
+    {
+      "path": "scratchpad/model-choice-20261107/study/run.py",
+      "sha256": "afeb8e5154bbe5c4d3653e3814ff041ac0e09cbf8f104ddf9d883d6cd6739d65"
+    }
+  ],
+  "model": {
+    "time_points": 360,
+    "stochastic_constructs": [
+      "x",
+      "z"
+    ],
+    "known_input": "u",
+    "physical_posterior_coordinates": 722,
+    "observed_x_values": 52,
+    "data_seed": 5,
+    "sampling_seed": 19,
+    "fit_target": "Both fits include -1e-6*x drift anchor; archived model.stan and model-request.json specify the fitted target.",
+    "generator_caveat": "The seed-5 generator omits the anchor and fixes initial x=1.5,z=0; both fits use the same anchored target with Gaussian initial-state priors. This is not a prior-predictive dataset."
+  },
+  "diagnostics": {
+    "implementation": "ArviZ-stats 1.3.3",
+    "arithmetic": "float64",
+    "scope": "All 722 physical a,h,x,z coordinates",
+    "rhat": "rank-normalized",
+    "ess": "bulk and 5%/95% tail",
+    "strict_pass_definitions": {
+      "coordinate_gate": "All physical and applicable extra coordinates: finite rank R-hat <1.01, bulk/tail ESS >=400, and no frozen chain.",
+      "fixed_draws": "Valid completion, exactly 128,000 retained draws, >=4 common draws, accounted wall <=300 s, and all-coordinate gate.",
+      "time": "Valid time_budget_exhausted or draw_ceiling_reached termination, eight chains with >=4 common retained draws, accounted wall <=300 s, and all-coordinate gate; reaching the draw ceiling is not required.",
+      "regimes": "Indicator diagnostics are separate evidence, not silently added to or substituted for the common-coordinate gate. Undefined constant indicators never become successful mixing evidence."
+    },
+    "ess_per_second": "Minimum physical bulk ESS divided by reported fit_seconds, including warmup.",
+    "missing_metrics": "null means unavailable, including arms that retained no draws."
+  },
+  "selection": {
+    "stan_rule": "Completed matched-draw Stan arm minimizing maximum rank R-hat across physical groups a,h,x,z; label breaks exact ties; no numerical-reference proximity is used.",
+    "particle_rule": "Fixed requested configuration mgrad-M2-N256-eight; no outcome-based particle selection.",
+    "later_campaign_check": "Neither completed additional fixed-draw arm improved the selected Stan maximum physical R-hat.",
+    "selected_labels": [
+      "mgrad-M2-N256-eight",
+      "rescue-pathfinder-stable"
+    ]
+  },
+  "timing": {
+    "headline": "reported fit_seconds, including warmup",
+    "grassmoth": "Native fit duration includes initialization, JIT, warmup, sampling and native diagnostics. Action wall time includes additional orchestration and publication.",
+    "stan": "Driver fit duration includes Pathfinder, initialization, NUTS warmup/sampling and CSV output; selected executables were already compiled.",
+    "excluded_for_both": "Software installation, development/validation work and offline common scoring.",
+    "selected_stan_historical_pathfinder_build_seconds": 53.24115104202065,
+    "clock_warning": "Native GPU fit and Stan driver fit have different owners; do not present their ratio as a controlled hardware-independent speedup."
+  },
+  "selected": {
+    "CmdStan": {
+      "label": "rescue-pathfinder-stable",
+      "engine": "CmdStan",
+      "retained_total": 128000,
+      "common_retained_per_chain": 16000,
+      "completed_requested_draws": true,
+      "fit_seconds": 118.16623987501953,
+      "groups": {
+        "a": {
+          "max_rhat": 1.085426906308294,
+          "min_bulk": 55.0184867817617,
+          "min_tail": 278.8271712559462
+        },
+        "h": {
+          "max_rhat": 1.022898682611993,
+          "min_bulk": 203.7911868020716,
+          "min_tail": 2711.3776901995047
+        },
+        "x": {
+          "max_rhat": 1.0383930905496885,
+          "min_bulk": 117.53449544487567,
+          "min_tail": 326.9480976660551
+        },
+        "z": {
+          "max_rhat": 1.28141259283758,
+          "min_bulk": 20.98390279808232,
+          "min_tail": 50.05458997401111
+        }
+      },
+      "parameter_moments": {
+        "a": {
+          "mean": 0.2753617708182813,
+          "sd": 0.06625731549234588
+        },
+        "h": {
+          "mean": 0.529559454828125,
+          "sd": 0.02512843013083928
+        }
+      },
+      "passes_common_criteria": false,
+      "passes_strict_rhat": false,
+      "minimum_bulk_per_fit_second": 0.17757950849816573,
+      "minimum_tail_per_fit_second": 0.4235946749845994,
+      "divergences": 0,
+      "depth_limit_fraction": 0.0,
+      "mean_leapfrogs": 242.605,
+      "chains": 8,
+      "requested_draws_per_chain": 16000,
+      "warmup_per_chain": 1000,
+      "compile_seconds": 0.03495479197590612,
+      "measured_total_seconds": 118.20119466699543,
+      "passes_strict_criteria": false,
+      "max_probability_discrepancy": 0.16905591344603943,
+      "probability_discrepancy_time": 248,
+      "p_high_225": 0.202234375,
+      "max_probability_discrepancy_all_retained": 0.16905591344603943,
+      "p_high_225_all_retained": 0.202234375,
+      "parameter_means_all_retained": {
+        "a": 0.2753617708182813,
+        "h": 0.529559454828125
+      },
+      "physical_metrics": {
+        "max_rhat": 1.28141259283758,
+        "min_bulk": 20.98390279808232,
+        "min_tail": 50.05458997401111
+      },
+      "score": {
+        "path": "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable-score.log",
+        "sha256": "23d63ad7fad8f2c2ec790d75dad2cc20309e62096306390b05eba96fa15a58d4"
+      },
+      "manifest": {
+        "path": "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/manifest.json",
+        "sha256": "490099cb618f2d5b25dc0a0b9e4c37e1f0cc45d76332498754b92644d995d1a3"
+      },
+      "configuration": {
+        "arm": "rescue-pathfinder-stable",
+        "chart": 1,
+        "status": "completed",
+        "settings": {
+          "chains": 8,
+          "parallel_chains": 8,
+          "threads_per_chain": 1,
+          "force_one_process_per_chain": true,
+          "iter_warmup": 1000,
+          "iter_sampling": 16000,
+          "seed": 19,
+          "adapt_delta": 0.8,
+          "max_treedepth": 10,
+          "metric": "diag_e",
+          "output_dir": "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable",
+          "show_progress": false,
+          "show_console": false,
+          "refresh": 200,
+          "save_warmup": false,
+          "sig_figs": 7,
+          "inits": [
+            "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder/nuts-init-1.json",
+            "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder/nuts-init-2.json",
+            "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder/nuts-init-3.json",
+            "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder/nuts-init-4.json",
+            "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder/nuts-init-5.json",
+            "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder/nuts-init-6.json",
+            "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder/nuts-init-7.json",
+            "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder/nuts-init-8.json"
+          ],
+          "timeout": 295.50658237500465
+        },
+        "requested_retained_draws": 128000,
+        "hard_fit_limit_seconds": 300,
+        "compile_seconds": 0.03495479197590612,
+        "fit_wall_seconds": 118.16623987501953,
+        "initialization": "Native multipath Pathfinder, then create_inits(seed, chains)",
+        "stan_source": "scratchpad/model-choice-20261107/stan/norm_centred.stan",
+        "stan_sha256": "bdea5f4900cc14671737e79dcf45b4b33aea75b1df95ab12ccf430a88b08e652",
+        "cpp_options": {},
+        "stanc_options": {
+          "O1": true
+        },
+        "nuts_executable": "scratchpad/model-choice-20261107/stan/norm_centred",
+        "pathfinder_stan_source": "scratchpad/model-choice-20261107/stan/norm_pathfinder.stan",
+        "pathfinder_stan_sha256": "bdea5f4900cc14671737e79dcf45b4b33aea75b1df95ab12ccf430a88b08e652",
+        "pathfinder_cpp_options": {
+          "STAN_THREADS": "true",
+          "STAN_CPP_OPTIMS": "true",
+          "STAN_NO_RANGE_CHECKS": "true"
+        },
+        "cmdstanpy": "1.3.2",
+        "cmdstan": "(2, 40)",
+        "pathfinder_executable_info": {
+          "stan_version_major": "2",
+          "stan_version_minor": "40",
+          "stan_version_patch": "0",
+          "STAN_THREADS": "true",
+          "STAN_MPI": "false",
+          "STAN_OPENCL": "false",
+          "STAN_NO_RANGE_CHECKS": "true"
+        },
+        "nuts_executable_info": {
+          "stan_version_major": "2",
+          "stan_version_minor": "40",
+          "stan_version_patch": "0",
+          "STAN_THREADS": "false",
+          "STAN_MPI": "false",
+          "STAN_OPENCL": "false",
+          "STAN_NO_RANGE_CHECKS": "false"
+        },
+        "pathfinder_settings": {
+          "num_paths": 8,
+          "max_lbfgs_iters": 500,
+          "draws": 256,
+          "num_single_draws": 256,
+          "num_elbo_draws": 25,
+          "psis_resample": false,
+          "calculate_lp": true,
+          "seed": 19,
+          "num_threads": 8,
+          "output_dir": "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder",
+          "sig_figs": 16,
+          "refresh": 100,
+          "show_console": false,
+          "timeout": 75
+        },
+        "pathfinder_seconds": 0.9233061249833554,
+        "initialization_seconds": 0.27049900000565685,
+        "unique_nuts_initializations": 8,
+        "nuts_seconds": 116.70721799999592,
+        "pathfinder_diagnostic_messages": [],
+        "pathfinder_reported_pareto_k": [],
+        "pathfinder_pareto_k_note": "PSIS resampling disabled; no PSIS Pareto-k diagnostic is expected.",
+        "total_wall_seconds": 118.2798954169848
+      },
+      "hardware": {
+        "device": "Apple M1 Max",
+        "cpu_cores": 10,
+        "ram_gb": 64,
+        "arithmetic": "float64"
+      },
+      "supervisor_total_seconds": 118.2798954169848
+    },
+    "grassmoth": {
+      "label": "mgrad-M2-N256-eight",
+      "engine": "grassmoth",
+      "retained_total": 128000,
+      "common_retained_per_chain": 16000,
+      "completed_requested_draws": true,
+      "fit_seconds": 125.39763021400002,
+      "groups": {
+        "a": {
+          "max_rhat": 1.003362157200047,
+          "min_bulk": 2255.0610929390737,
+          "min_tail": 1246.7404253817147
+        },
+        "h": {
+          "max_rhat": 1.001621897721688,
+          "min_bulk": 3008.112810516813,
+          "min_tail": 2289.654586604194
+        },
+        "x": {
+          "max_rhat": 1.0003074638643326,
+          "min_bulk": 21201.551058103385,
+          "min_tail": 38217.56015196348
+        },
+        "z": {
+          "max_rhat": 1.002621219022405,
+          "min_bulk": 2542.1316771635143,
+          "min_tail": 1124.4713688629706
+        }
+      },
+      "parameter_moments": {
+        "a": {
+          "mean": 0.2616484463214874,
+          "sd": 0.07098857313394547
+        },
+        "h": {
+          "mean": 0.5259760618209839,
+          "sd": 0.026009777560830116
+        }
+      },
+      "passes_common_criteria": true,
+      "passes_strict_rhat": true,
+      "minimum_bulk_per_fit_second": 17.98328316963128,
+      "minimum_tail_per_fit_second": 8.967245768073765,
+      "divergences": null,
+      "depth_limit_fraction": null,
+      "mean_leapfrogs": null,
+      "chains": 8,
+      "requested_draws_per_chain": 16000,
+      "warmup_per_chain": 2000,
+      "action_wall_seconds": 176.346221,
+      "call_id": "call:a433a88b9aed8b963d51be0734abd9a9a863d9d8e1ff225a3a4b5d7be186aa71",
+      "runtime": [
+        "gpu:NVIDIA L40S:0"
+      ],
+      "passes_strict_criteria": true,
+      "max_probability_discrepancy": 0.013345675684788061,
+      "probability_discrepancy_time": 125,
+      "p_high_225": 0.3659609375,
+      "physical_metrics": {
+        "max_rhat": 1.003362157200047,
+        "min_bulk": 2255.0610929390737,
+        "min_tail": 1124.4713688629706
+      },
+      "score": {
+        "path": "scratchpad/model-choice-20261107/study/trusted-M2-N256-eight.log",
+        "sha256": "a7d75a25f1953350ec82aaee5687d78409a9c7596513dfffc1e313e765499e0c"
+      },
+      "provenance": {
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/study/trusted-M2-N256-eight-manifest.json",
+          "sha256": "94ed62aab671fbe73a699e57cebdd06c312742e4bfe4db124f19edc282fb2bb8"
+        },
+        "source_commit": "93bae1221203e0bfd8fee27e2f2867accadebe43",
+        "source_digest": "d73798f4737126cfbfc97af619490f3c434486ba7db9553c712a59a124948bea",
+        "versions": {
+          "python": "3.12.10",
+          "jax": "0.12.0.1",
+          "jaxlib": "0.12.0.1",
+          "numpyro": "0.22.0",
+          "dynestyx": "0.6.0"
+        },
+        "outcome_commit_id": "eef0c3f621f25bd23ad7f7f65879acd94815e3d4",
+        "model_result_revision": "a5e4fdbe82abaaa4621e448088994eabf56f363c",
+        "call_id": "call:a433a88b9aed8b963d51be0734abd9a9a863d9d8e1ff225a3a4b5d7be186aa71",
+        "revisions": {
+          "question": "709a5c33c9f8b35870f63cc094a6b15c50a10ace",
+          "model": "280ce444148deec0df46ad73e244354568290a6b",
+          "panel": "e329bf3b7bd45f2b2f597dc6a177a39a92dc6d0b"
+        }
+      },
+      "resolved_settings": {
+        "profile": false,
+        "hardware": "L40S",
+        "time_limit_seconds": 300,
+        "algorithm": {
+          "method": "mpgibbs",
+          "n_parameter_particles": 2,
+          "path_update": {
+            "method": {
+              "kind": "particle_mgrad",
+              "num_particles": 256,
+              "kappa": 1,
+              "scan_unroll": 8
+            },
+            "update": {
+              "kind": "whole_path"
+            },
+            "proposal": {
+              "kind": "parameter_mixture",
+              "weights": "running_prefix"
+            },
+            "latent_step": {
+              "kind": "adapted",
+              "target": 0.5
+            }
+          },
+          "parameter_proposal": "random_walk",
+          "diagnostic_metrics": [],
+          "param_target_accept": 0.2,
+          "adaptation_scheme": "dual_averaging",
+          "initialization": {
+            "scale": 1.0
+          }
+        },
+        "num_samples_per_chain": 16000,
+        "num_warmup": 2000,
+        "num_chains": 8,
+        "thinning": false,
+        "seed": 19
+      },
+      "phases": [
+        {
+          "sampler": "mpgibbs",
+          "stage": "building_target",
+          "start_seconds": 0.7487743979999992,
+          "end_seconds": 3.298041855,
+          "outcome": "complete"
+        },
+        {
+          "sampler": "mpgibbs",
+          "stage": "preparing_initialization",
+          "start_seconds": 3.298291698999999,
+          "end_seconds": 8.414829568999998,
+          "outcome": "complete"
+        },
+        {
+          "sampler": "mpgibbs",
+          "stage": "initializing_chains",
+          "start_seconds": 8.539505881,
+          "end_seconds": 10.027493434,
+          "outcome": "complete"
+        },
+        {
+          "sampler": "mpgibbs",
+          "stage": "compiling_observation_projection",
+          "start_seconds": 10.367700030000002,
+          "end_seconds": 10.796025743000001,
+          "outcome": "complete"
+        },
+        {
+          "sampler": "mpgibbs",
+          "stage": "compiling_sweeps",
+          "start_seconds": 10.215341290000001,
+          "end_seconds": 19.251213198000002,
+          "outcome": "complete"
+        },
+        {
+          "sampler": "mpgibbs",
+          "stage": "warmup",
+          "start_seconds": 19.252183221,
+          "end_seconds": 30.520772548,
+          "outcome": "complete"
+        },
+        {
+          "sampler": "mpgibbs",
+          "stage": "sampling",
+          "start_seconds": 30.673186328000003,
+          "end_seconds": 119.182852521,
+          "outcome": "complete"
+        },
+        {
+          "sampler": "mpgibbs",
+          "stage": "latent_diagnostics",
+          "start_seconds": 119.67753186,
+          "end_seconds": 124.959844931,
+          "outcome": "complete"
+        }
+      ],
+      "hardware": {
+        "device": "NVIDIA L40S",
+        "arithmetic": "float32"
+      }
+    }
+  },
+  "stan_campaign": {
+    "fixed_draw_arms": 20,
+    "time_budget_arms": 3,
+    "strict_passes": 0,
+    "scope": "Adaptive campaign on one dataset and one sampling seed per configuration, not an exhaustive algorithm search.",
+    "arms": [
+      {
+        "label": "stan-centred-default",
+        "budget_mode": "fixed_draws",
+        "status": "timed_out",
+        "configuration": {
+          "settings": {
+            "chains": 32,
+            "parallel_chains": 32,
+            "threads_per_chain": 1,
+            "iter_warmup": 2000,
+            "iter_sampling": 4000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 295,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "CmdStan default random Uniform(-2,2) unconstrained"
+        },
+        "retained_total": 21547,
+        "common_retained_per_chain": 75,
+        "completed_requested_draws": false,
+        "physical_metrics": {
+          "max_rhat": 1.0290541094098309,
+          "min_bulk": 805.8652566519946,
+          "min_tail": 954.6053364921653
+        },
+        "strict_pass": false,
+        "fit_seconds": 296.6556656360626,
+        "compile_seconds": 0.01606637501390651,
+        "collector_total_seconds": 296.67173201107653,
+        "supervisor_total_seconds": null,
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/centred-default/manifest.json",
+          "sha256": "470958bd502c6de6db4f0645221028383522935466b5dc046475bb9f3be40261"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/centred-default-score.log",
+          "sha256": "e2dae5067dbd9e3d799bb7fe40e44d653aebb19030e2871e58bde344b2d7d56c"
+        }
+      },
+      {
+        "label": "stan-centred-dense",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 2000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.9,
+            "max_treedepth": 12,
+            "metric": "dense_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "CmdStan default random Uniform(-2,2) unconstrained",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_vectorized.stan",
+          "stan_sha256": "d8a2f96ed87bcdcc825a94608b3163d9bd3d13a2c069a945793b4adca91dce7e"
+        },
+        "retained_total": 0,
+        "common_retained_per_chain": 0,
+        "completed_requested_draws": false,
+        "physical_metrics": null,
+        "strict_pass": false,
+        "fit_seconds": 290.0529711660056,
+        "compile_seconds": 0.01856362499529496,
+        "collector_total_seconds": 290.0715347910009,
+        "supervisor_total_seconds": null,
+        "divergences": null,
+        "depth_limit_fraction": null,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/centred-dense/manifest.json",
+          "sha256": "f0beaba0a9fda4a9d6c41aca3780bd285b7154acc020402db3708072684fb312"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/centred-dense-score.log",
+          "sha256": "e14619a052b3efde16832e5fbb9768c22b0906810ddb73fd0d165242bc41692f"
+        }
+      },
+      {
+        "label": "stan-centred-lean-eight",
+        "budget_mode": "fixed_draws",
+        "status": "completed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "CmdStan default random Uniform(-2,2) unconstrained",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_centred.stan",
+          "stan_sha256": "bdea5f4900cc14671737e79dcf45b4b33aea75b1df95ab12ccf430a88b08e652"
+        },
+        "retained_total": 128000,
+        "common_retained_per_chain": 16000,
+        "completed_requested_draws": true,
+        "physical_metrics": {
+          "max_rhat": 1.3204588358054636,
+          "min_bulk": 18.95702783524313,
+          "min_tail": 33.30924444955336
+        },
+        "strict_pass": false,
+        "fit_seconds": 190.27580479200697,
+        "compile_seconds": 6.1815117910155095,
+        "collector_total_seconds": 196.45731658302248,
+        "supervisor_total_seconds": null,
+        "divergences": 0,
+        "depth_limit_fraction": 3.125e-05,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/centred-lean-eight/manifest.json",
+          "sha256": "44e00403476eb76997058ffb297614cc371899198eee1dfadfc3e67f73e77977"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/centred-lean-eight-score.log",
+          "sha256": "83882d44ae68286067cb4fefb2b589cb4542136223a7c8c79959c62634d22b27"
+        }
+      },
+      {
+        "label": "stan-centred-vectorized",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 32,
+            "parallel_chains": 32,
+            "threads_per_chain": 1,
+            "iter_warmup": 2000,
+            "iter_sampling": 4000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "CmdStan default random Uniform(-2,2) unconstrained",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_vectorized.stan",
+          "stan_sha256": "d8a2f96ed87bcdcc825a94608b3163d9bd3d13a2c069a945793b4adca91dce7e"
+        },
+        "retained_total": 60355,
+        "common_retained_per_chain": 856,
+        "completed_requested_draws": false,
+        "physical_metrics": {
+          "max_rhat": 1.0963422206642204,
+          "min_bulk": 202.3077659746943,
+          "min_tail": 52.595250996540564
+        },
+        "strict_pass": false,
+        "fit_seconds": 290.75236387501354,
+        "compile_seconds": 7.832886958000017,
+        "collector_total_seconds": 298.58525083301356,
+        "supervisor_total_seconds": null,
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/centred-vectorized/manifest.json",
+          "sha256": "e7b45787dc6d6c9a3b264ddb08fc2b9b4bd61bc66c1cf27863ab08a10be3909c"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/centred-vectorized-score.log",
+          "sha256": "1db928e83c89d36b9f815a175d99bc67c1f94c7b5a6152363b77973a4f241c04"
+        }
+      },
+      {
+        "label": "stan-hybrid-tuned",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.95,
+            "max_treedepth": 12,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 4,
+          "initialization": "CmdStan default random Uniform(-2,2) unconstrained",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_vectorized.stan",
+          "stan_sha256": "d8a2f96ed87bcdcc825a94608b3163d9bd3d13a2c069a945793b4adca91dce7e"
+        },
+        "retained_total": 0,
+        "common_retained_per_chain": 0,
+        "completed_requested_draws": false,
+        "physical_metrics": null,
+        "strict_pass": false,
+        "fit_seconds": 290.0325565839885,
+        "compile_seconds": 0.017807958007324487,
+        "collector_total_seconds": 290.0503645419958,
+        "supervisor_total_seconds": null,
+        "divergences": null,
+        "depth_limit_fraction": null,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/hybrid-tuned/manifest.json",
+          "sha256": "e0681367de4cfb57e0ea14c22c39f8ee5710217f5d01d3abd22f7345f6cb6dcf"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/hybrid-tuned-score.log",
+          "sha256": "281620ee42ee1fe614b54bfdd2e0600a5b2ef2bab2bd2efad37fc5d9ffdb84c9"
+        }
+      },
+      {
+        "label": "stan-hybrid-whitened",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 2000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 4,
+          "initialization": "CmdStan default random Uniform(-2,2) unconstrained",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_vectorized.stan",
+          "stan_sha256": "d8a2f96ed87bcdcc825a94608b3163d9bd3d13a2c069a945793b4adca91dce7e"
+        },
+        "retained_total": 5258,
+        "common_retained_per_chain": 602,
+        "completed_requested_draws": false,
+        "physical_metrics": {
+          "max_rhat": 1.599075518489854,
+          "min_bulk": 13.7607892224221,
+          "min_tail": 10.31882767842134
+        },
+        "strict_pass": false,
+        "fit_seconds": 290.0322238340159,
+        "compile_seconds": 0.016303874988807365,
+        "collector_total_seconds": 290.0485277090047,
+        "supervisor_total_seconds": null,
+        "divergences": 59,
+        "depth_limit_fraction": 0.9887790034233549,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/hybrid-whitened/manifest.json",
+          "sha256": "a8f4d458f15cbbc377d9a87c87bace24a57e82fbbc5f27589a3bbffb20f09f4f"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/hybrid-whitened-score.log",
+          "sha256": "e7b8dac2eadc791a8d6f64d035fee9c04c3d2a5675321ad32153b444171d6850"
+        }
+      },
+      {
+        "label": "stan-noncentred",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 2000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 2,
+          "initialization": "CmdStan default random Uniform(-2,2) unconstrained",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_vectorized.stan",
+          "stan_sha256": "d8a2f96ed87bcdcc825a94608b3163d9bd3d13a2c069a945793b4adca91dce7e"
+        },
+        "retained_total": 27814,
+        "common_retained_per_chain": 695,
+        "completed_requested_draws": false,
+        "physical_metrics": {
+          "max_rhat": 1.711685230364399,
+          "min_bulk": 12.41968685712114,
+          "min_tail": 157.62029694966878
+        },
+        "strict_pass": false,
+        "fit_seconds": 290.04296062499634,
+        "compile_seconds": 0.01811779200215824,
+        "collector_total_seconds": 290.0610784169985,
+        "supervisor_total_seconds": null,
+        "divergences": 14392,
+        "depth_limit_fraction": 0.0903501833608974,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/noncentred/manifest.json",
+          "sha256": "f9d12654a225f86986c1a9cfe3a5c5e8d18454af9ae80ae312db8aa922bc3015"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/noncentred-score.log",
+          "sha256": "654e2f45ca80a0f6aa9831f9b7e0cd66a3188931f3baa4e9b81e2743fbe466ce"
+        }
+      },
+      {
+        "label": "rescue-affine-ar",
+        "budget_mode": "fixed_draws",
+        "status": "completed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_affine_threshold.stan",
+          "stan_sha256": "5b28399fd715a8e20d14c1e3d569e3217fa320d7f55a5749036f0ea86f5a508b",
+          "cpp_options": {},
+          "precompiled_seconds": 6.548917250009254,
+          "preparation_seconds": 0.021169082989217713
+        },
+        "retained_total": 128000,
+        "common_retained_per_chain": 16000,
+        "completed_requested_draws": true,
+        "physical_metrics": {
+          "max_rhat": 1.9152640956022104,
+          "min_bulk": 11.082604725623236,
+          "min_tail": 12.779583222686808
+        },
+        "strict_pass": false,
+        "fit_seconds": 32.89813716697972,
+        "compile_seconds": 6.56440879101865,
+        "collector_total_seconds": 39.46254595799837,
+        "supervisor_total_seconds": null,
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-affine-ar/manifest.json",
+          "sha256": "4eb4d7440bf8f69f7be9ab7726503a28269877a8645b98d842f9584e4c343673"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-affine-ar-score.log",
+          "sha256": "78ba97856805f71da77cc56cc4a72cfc61fe346ad2f6f70340e9478ab6acb28a"
+        }
+      },
+      {
+        "label": "rescue-affine-rw",
+        "budget_mode": "fixed_draws",
+        "status": "completed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_affine_threshold.stan",
+          "stan_sha256": "5b28399fd715a8e20d14c1e3d569e3217fa320d7f55a5749036f0ea86f5a508b",
+          "cpp_options": {},
+          "precompiled_seconds": 0,
+          "preparation_seconds": 0.01715258401236497
+        },
+        "retained_total": 128000,
+        "common_retained_per_chain": 16000,
+        "completed_requested_draws": true,
+        "physical_metrics": {
+          "max_rhat": 1.9280305163829556,
+          "min_bulk": 11.034707604228407,
+          "min_tail": 20.271294530547124
+        },
+        "strict_pass": false,
+        "fit_seconds": 223.3606603340013,
+        "compile_seconds": 0.015377958014141768,
+        "collector_total_seconds": 223.37603829201544,
+        "supervisor_total_seconds": null,
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-affine-rw/manifest.json",
+          "sha256": "004c7e5e1b761d1b89570399a0755ef82ec3357cf3f49e2331a23dac07c5ac76"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-affine-rw-score.log",
+          "sha256": "f217d92a264409ed7e1f81c4b1b6f42f8655b12c1dcb504eea92d86b695668ef"
+        }
+      },
+      {
+        "label": "rescue-block14",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_block_sign.stan",
+          "stan_sha256": "9798607e34513ef7bb860a3e435fb8f9fa93a62d9a5368d73fa6c9978b923ce3",
+          "cpp_options": {},
+          "precompiled_seconds": 0,
+          "preparation_seconds": 0.029304041992872953
+        },
+        "retained_total": 56899,
+        "common_retained_per_chain": 2078,
+        "completed_requested_draws": false,
+        "physical_metrics": {
+          "max_rhat": 2.296702479555183,
+          "min_bulk": 9.949056193554728,
+          "min_tail": 22.874348730162684
+        },
+        "strict_pass": false,
+        "fit_seconds": 290.0762190830137,
+        "compile_seconds": 0.016613249987130985,
+        "collector_total_seconds": 290.09283233300084,
+        "supervisor_total_seconds": null,
+        "divergences": 1817,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-block14/manifest.json",
+          "sha256": "c3934982dab0ff19e9c4bb58b24d7b4dae71bc34417a9e846a6a192d3920b360"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-block14-score.log",
+          "sha256": "5d4998a92aeae520df79a06008a1e492816c25037caf9df9a260612ed634a737"
+        }
+      },
+      {
+        "label": "rescue-block7",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 288.9763621259772,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_block_sign.stan",
+          "stan_sha256": "9798607e34513ef7bb860a3e435fb8f9fa93a62d9a5368d73fa6c9978b923ce3",
+          "cpp_options": {},
+          "precompiled_seconds": 8.97583675000351,
+          "preparation_seconds": 0.02945354100666009
+        },
+        "retained_total": 70008,
+        "common_retained_per_chain": 2374,
+        "completed_requested_draws": false,
+        "physical_metrics": {
+          "max_rhat": 2.373491141018943,
+          "min_bulk": 9.792153309239753,
+          "min_tail": 19.887063153049898
+        },
+        "strict_pass": false,
+        "fit_seconds": 289.04487174900714,
+        "compile_seconds": 8.992446084012045,
+        "collector_total_seconds": 298.0373178330192,
+        "supervisor_total_seconds": null,
+        "divergences": 372,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-block7/manifest.json",
+          "sha256": "ecf8776bbcb49c8031cfc0a32226561d20ca8a56e17f082637f6055b127df8d9"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-block7-score.log",
+          "sha256": "4d1723bdcb3852bcee05e53ccb0dedb0f33e15a797bdfb4e9a72a4acdd6c3c3a"
+        }
+      },
+      {
+        "label": "rescue-collapsed-ar",
+        "budget_mode": "fixed_draws",
+        "status": "completed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_collapsed_threshold.stan",
+          "stan_sha256": "1a82da640ae515b91c3b70ed8de3877ecdf057d76e27250ab4f790480d807124",
+          "cpp_options": {},
+          "precompiled_seconds": 6.830513875000179,
+          "preparation_seconds": 0.021169082989217713
+        },
+        "retained_total": 128000,
+        "common_retained_per_chain": 16000,
+        "completed_requested_draws": true,
+        "physical_metrics": {
+          "max_rhat": 2.049989601792823,
+          "min_bulk": 10.551753599803165,
+          "min_tail": 21.563365808105473
+        },
+        "strict_pass": false,
+        "fit_seconds": 42.638455750013236,
+        "compile_seconds": 6.846255541982828,
+        "collector_total_seconds": 49.484711291996064,
+        "supervisor_total_seconds": null,
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-collapsed-ar/manifest.json",
+          "sha256": "241323f87fbe12f069848460160695a2e8c8719e39d9f929e26712b60146db6e"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-collapsed-ar-score.log",
+          "sha256": "7be1d5eb6bd88681394e5a6eee1098c11ae747b61ac5ce4fe278d864a811cf30"
+        }
+      },
+      {
+        "label": "rescue-long-warmup",
+        "budget_mode": "fixed_draws",
+        "status": "completed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 4000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "CmdStan default random Uniform(-2,2) unconstrained",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_centred.stan",
+          "stan_sha256": "bdea5f4900cc14671737e79dcf45b4b33aea75b1df95ab12ccf430a88b08e652"
+        },
+        "retained_total": 128000,
+        "common_retained_per_chain": 16000,
+        "completed_requested_draws": true,
+        "physical_metrics": {
+          "max_rhat": 1.429157291247116,
+          "min_bulk": 15.817701027353472,
+          "min_tail": 48.72949423260472
+        },
+        "strict_pass": false,
+        "fit_seconds": 285.3133634580008,
+        "compile_seconds": 0.019267458003014326,
+        "collector_total_seconds": 285.33263091600384,
+        "supervisor_total_seconds": null,
+        "divergences": 0,
+        "depth_limit_fraction": 5.46875e-05,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-long-warmup/manifest.json",
+          "sha256": "1ee6233ff83fb87adbc2e7aa8ba442a54963bf71b5d1d09ed53944b304924764"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-long-warmup-score.log",
+          "sha256": "1e61038a9856d82f26180852fe04b8b4d0361946262037f54aed1576b3f956a4"
+        }
+      },
+      {
+        "label": "rescue-pathfinder-stable",
+        "budget_mode": "fixed_draws",
+        "status": "completed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "force_one_process_per_chain": true,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 295.50658237500465,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Native multipath Pathfinder, then create_inits(seed, chains)",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_centred.stan",
+          "stan_sha256": "bdea5f4900cc14671737e79dcf45b4b33aea75b1df95ab12ccf430a88b08e652",
+          "cpp_options": {},
+          "stanc_options": {
+            "O1": true
+          },
+          "pathfinder_settings": {
+            "num_paths": 8,
+            "max_lbfgs_iters": 500,
+            "draws": 256,
+            "num_single_draws": 256,
+            "num_elbo_draws": 25,
+            "psis_resample": false,
+            "calculate_lp": true,
+            "seed": 19,
+            "num_threads": 8,
+            "output_dir": "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/pathfinder",
+            "sig_figs": 16,
+            "refresh": 100,
+            "show_console": false,
+            "timeout": 75
+          }
+        },
+        "retained_total": 128000,
+        "common_retained_per_chain": 16000,
+        "completed_requested_draws": true,
+        "physical_metrics": {
+          "max_rhat": 1.28141259283758,
+          "min_bulk": 20.98390279808232,
+          "min_tail": 50.05458997401111
+        },
+        "strict_pass": false,
+        "fit_seconds": 118.16623987501953,
+        "compile_seconds": 0.03495479197590612,
+        "collector_total_seconds": 118.20119466699543,
+        "supervisor_total_seconds": 118.2798954169848,
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable/manifest.json",
+          "sha256": "490099cb618f2d5b25dc0a0b9e4c37e1f0cc45d76332498754b92644d995d1a3"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-pathfinder-stable-score.log",
+          "sha256": "23d63ad7fad8f2c2ec790d75dad2cc20309e62096306390b05eba96fa15a58d4"
+        }
+      },
+      {
+        "label": "rescue-segmented14",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.9,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_segmented.stan",
+          "stan_sha256": "5dc989c2d3108c0ad620ed5e6ec3ae18e6498594ed401aaf68c11a6b28d1f0dc",
+          "cpp_options": {},
+          "precompiled_seconds": 4.274685584008694,
+          "preparation_seconds": 0.02598683300311677
+        },
+        "retained_total": 82236,
+        "common_retained_per_chain": 4746,
+        "completed_requested_draws": false,
+        "physical_metrics": {
+          "max_rhat": 2.1669372755637286,
+          "min_bulk": 10.215184030547341,
+          "min_tail": 21.614861001955894
+        },
+        "strict_pass": false,
+        "fit_seconds": 290.0647218329832,
+        "compile_seconds": 4.288513959036209,
+        "collector_total_seconds": 294.3532357920194,
+        "supervisor_total_seconds": null,
+        "divergences": 1204,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-segmented14/manifest.json",
+          "sha256": "401bd90a109c65f6ea1efafe7b4d7ce305f33dea20782d6b6ca1f690dfaa1c9b"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-segmented14-score.log",
+          "sha256": "eb05967deec6f11b1f8ca481251a98218062f5339e9609b1e801240ea2f381fa"
+        }
+      },
+      {
+        "label": "rescue-sign-fixed",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 289.62357812502887,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_sign_marginal.stan",
+          "stan_sha256": "12760cb5b90a9659db1b9e91974d82cabae797f836828e14519917070f28c50e",
+          "cpp_options": {},
+          "precompiled_seconds": 8.354092291992856,
+          "preparation_seconds": 0.004528624995145947
+        },
+        "retained_total": 70106,
+        "common_retained_per_chain": 4651,
+        "completed_requested_draws": false,
+        "physical_metrics": {
+          "max_rhat": 2.3772521653007095,
+          "min_bulk": 9.781497112397465,
+          "min_tail": 41.11660775992914
+        },
+        "strict_pass": false,
+        "fit_seconds": 289.6839747079939,
+        "compile_seconds": 8.370266416983213,
+        "collector_total_seconds": 298.0542411249771,
+        "supervisor_total_seconds": null,
+        "divergences": 0,
+        "depth_limit_fraction": 0.0007987904031038713,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-sign-fixed/manifest.json",
+          "sha256": "8ebf2e2f66c07357c9109fd9cd2174dbe8df9419b06aab46e6829ef5a43a71da"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-sign-fixed-score.log",
+          "sha256": "5fbf1a3df0bad23a46c6e2a5ab1a42ed2dbb439ecbb833bbb0f5f7fdcd14391e"
+        }
+      },
+      {
+        "label": "rescue-sign-unconstrained",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 289.89685666700825,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_sign_unconstrained.stan",
+          "stan_sha256": "8dab32700eca276e242f0490098eb552f836bfb772b125be27c819b28c53945b",
+          "cpp_options": {},
+          "precompiled_seconds": 8.080436791991815,
+          "preparation_seconds": 0.004528624995145947
+        },
+        "retained_total": 63501,
+        "common_retained_per_chain": 7576,
+        "completed_requested_draws": false,
+        "physical_metrics": {
+          "max_rhat": 1.876329998649424,
+          "min_bulk": 11.250716759443177,
+          "min_tail": 52.075861638424364
+        },
+        "strict_pass": false,
+        "fit_seconds": 289.9493094999925,
+        "compile_seconds": 8.096978916990338,
+        "collector_total_seconds": 298.04628841698286,
+        "supervisor_total_seconds": null,
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-sign-unconstrained/manifest.json",
+          "sha256": "718818153c62897263a3dad80d0609de365f8087b40459d24c02873ed9c8606d"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-sign-unconstrained-score.log",
+          "sha256": "a207d2675799698d76890220704e606f4d4225ae4ac4fc3038816ec63bc5a5ed"
+        }
+      },
+      {
+        "label": "targeted-full-s-clean",
+        "budget_mode": "fixed_draws",
+        "status": "completed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 297.96111299996846,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_affine_threshold.stan",
+          "stan_sha256": "5b28399fd715a8e20d14c1e3d569e3217fa320d7f55a5749036f0ea86f5a508b",
+          "cpp_options": {},
+          "precompiled_seconds": 0,
+          "preparation_seconds": 0.02054545801365748
+        },
+        "retained_total": 128000,
+        "common_retained_per_chain": 16000,
+        "completed_requested_draws": true,
+        "requested_draws_are_ceiling": false,
+        "physical_metrics": {
+          "max_rhat": 2.1298977797658796,
+          "min_bulk": 10.298572700534077,
+          "min_tail": 21.590989688084992
+        },
+        "coordinate_gates": {
+          "physical_coordinate_count": 722,
+          "extra_coordinate_count": 0,
+          "extra_group_names": [],
+          "physical_strict": false,
+          "extra_strict": true,
+          "extra_gate_applicable": false,
+          "all_coordinates_strict": false,
+          "scorer_common_criteria": false,
+          "scorer_strict_rhat": false,
+          "frozen_physical_coordinates": [],
+          "frozen_extra_coordinates": [],
+          "valid_termination": true,
+          "draw_requirement_satisfied": true,
+          "at_least_four_common_draws": true,
+          "within_300_seconds": true
+        },
+        "strict_pass": false,
+        "strict_pass_failed_conditions": [
+          "all_coordinates_strict"
+        ],
+        "timing": {
+          "actual_wall_seconds": 32.51151004200801,
+          "actual_wall_basis": "Derived driver wall: fit + compile - externally charged preparation - precompiled build.",
+          "fit_seconds": 32.515581417042995,
+          "compile_seconds": 0.016474082978675142,
+          "preparation_seconds": 0.02054545801365748,
+          "precompiled_seconds": 0.0,
+          "setup_plus_compile_seconds": 32.53205550002167,
+          "budget_accounted_seconds": 32.53205550002167,
+          "budget_accounting_basis": "Recorded noncompile fit + compile, including declared external preparation/build charges.",
+          "warm_cache_time_comparison": false,
+          "historical_build_costs_added_by_collector": false
+        },
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-full-s-clean/manifest.json",
+          "sha256": "4b22c92860f346a33d8cbe563f3846c3439f559b02ba06c09a0fbe3c2669ca98"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-scores/targeted-full-s-clean.log",
+          "sha256": "842e4bcce4dc7c74f7f257b1fc314227e67819df75f7767ea7180e705d2fd5c1"
+        }
+      },
+      {
+        "label": "targeted-joint-s",
+        "budget_mode": "fixed_draws",
+        "status": "completed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 290,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_joint_threshold.stan",
+          "stan_sha256": "9fa37041b5342f6dc4633ee5c2ba11da3204ebf84701ffa41080846438925d06",
+          "cpp_options": {},
+          "precompiled_seconds": 7.556102000002284,
+          "preparation_seconds": 0.04529783298494294
+        },
+        "retained_total": 128000,
+        "common_retained_per_chain": 16000,
+        "completed_requested_draws": true,
+        "requested_draws_are_ceiling": false,
+        "physical_metrics": {
+          "max_rhat": 2.0636492077334627,
+          "min_bulk": 10.491689916597428,
+          "min_tail": 21.444204077693346
+        },
+        "coordinate_gates": {
+          "physical_coordinate_count": 722,
+          "extra_coordinate_count": 0,
+          "extra_group_names": [],
+          "physical_strict": false,
+          "extra_strict": true,
+          "extra_gate_applicable": false,
+          "all_coordinates_strict": false,
+          "scorer_common_criteria": false,
+          "scorer_strict_rhat": false,
+          "frozen_physical_coordinates": [],
+          "frozen_extra_coordinates": [],
+          "valid_termination": true,
+          "draw_requirement_satisfied": true,
+          "at_least_four_common_draws": true,
+          "within_300_seconds": true
+        },
+        "strict_pass": false,
+        "strict_pass_failed_conditions": [
+          "all_coordinates_strict"
+        ],
+        "timing": {
+          "actual_wall_seconds": 203.85609420901164,
+          "actual_wall_basis": "Derived driver wall: fit + compile - externally charged preparation - precompiled build.",
+          "fit_seconds": 203.87917841700255,
+          "compile_seconds": 7.578315624996321,
+          "preparation_seconds": 0.04529783298494294,
+          "precompiled_seconds": 7.556102000002284,
+          "setup_plus_compile_seconds": 211.45749404199887,
+          "budget_accounted_seconds": 211.45749404199887,
+          "budget_accounting_basis": "Recorded noncompile fit + compile, including declared external preparation/build charges.",
+          "warm_cache_time_comparison": false,
+          "historical_build_costs_added_by_collector": false
+        },
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-joint-s/manifest.json",
+          "sha256": "32049787a5905858dfc66bd25f1ba45d8f341cabbab63fb31f5fc538584f6df0"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-scores/targeted-joint-s.log",
+          "sha256": "88858a213285f57a65a8d33e4953cf57cb6c36d56c1a10719a7c216a11101786"
+        }
+      },
+      {
+        "label": "targeted-sign-logwhiten-clean",
+        "budget_mode": "fixed_draws",
+        "status": "incomplete_or_failed",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 16000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 297.95053320901934,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_sign_logwhiten.stan",
+          "stan_sha256": "70b028f269c8d978a1afc85b281918c558cef3d048581457a3dd4fde99006b91",
+          "cpp_options": {},
+          "precompiled_seconds": 0,
+          "preparation_seconds": 0.02971487498143688
+        },
+        "retained_total": 109887,
+        "common_retained_per_chain": 7843,
+        "completed_requested_draws": false,
+        "requested_draws_are_ceiling": false,
+        "physical_metrics": {
+          "max_rhat": 2.461943452613227,
+          "min_bulk": 9.61600283025516,
+          "min_tail": 22.78263741495875
+        },
+        "coordinate_gates": {
+          "physical_coordinate_count": 722,
+          "extra_coordinate_count": 360,
+          "extra_group_names": [
+            "radius"
+          ],
+          "physical_strict": false,
+          "extra_strict": false,
+          "extra_gate_applicable": true,
+          "all_coordinates_strict": false,
+          "scorer_common_criteria": false,
+          "scorer_strict_rhat": false,
+          "frozen_physical_coordinates": [],
+          "frozen_extra_coordinates": [],
+          "valid_termination": false,
+          "draw_requirement_satisfied": false,
+          "at_least_four_common_draws": true,
+          "within_300_seconds": true
+        },
+        "strict_pass": false,
+        "strict_pass_failed_conditions": [
+          "valid_termination",
+          "draw_requirement_satisfied",
+          "all_coordinates_strict"
+        ],
+        "timing": {
+          "actual_wall_seconds": 298.0130472500168,
+          "actual_wall_basis": "Derived driver wall: fit + compile - externally charged preparation - precompiled build.",
+          "fit_seconds": 298.0248097089934,
+          "compile_seconds": 0.017952416004845873,
+          "preparation_seconds": 0.02971487498143688,
+          "precompiled_seconds": 0.0,
+          "setup_plus_compile_seconds": 298.04276212499826,
+          "budget_accounted_seconds": 298.04276212499826,
+          "budget_accounting_basis": "Recorded noncompile fit + compile, including declared external preparation/build charges.",
+          "warm_cache_time_comparison": false,
+          "historical_build_costs_added_by_collector": false
+        },
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-sign-logwhiten-clean/manifest.json",
+          "sha256": "3a60925989738bcfb6eddbad91e44d3008b3386037e322efe71a84f1975cba36"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-scores/targeted-sign-logwhiten-clean.log",
+          "sha256": "95507b80419c68b8b183424f94d688deeeae0082acaa5d88afdc15e0db91bb62"
+        }
+      },
+      {
+        "label": "targeted-time-pathfinder",
+        "budget_mode": "time",
+        "status": "time_budget_exhausted",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "force_one_process_per_chain": true,
+            "iter_warmup": 1000,
+            "iter_sampling": 1000000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 295.63549104100093,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Native multipath Pathfinder, then create_inits(seed, chains)",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_centred.stan",
+          "stan_sha256": "bdea5f4900cc14671737e79dcf45b4b33aea75b1df95ab12ccf430a88b08e652",
+          "cpp_options": {},
+          "stanc_options": {
+            "O1": true
+          },
+          "precompiled_seconds": 0,
+          "pathfinder_settings": {
+            "num_paths": 8,
+            "max_lbfgs_iters": 500,
+            "draws": 256,
+            "num_single_draws": 256,
+            "num_elbo_draws": 25,
+            "psis_resample": false,
+            "calculate_lp": true,
+            "seed": 19,
+            "num_threads": 8,
+            "output_dir": "scratchpad/model-choice-20261107/stan/targeted-time-pathfinder/pathfinder",
+            "sig_figs": 16,
+            "refresh": 100,
+            "show_console": false,
+            "timeout": 75
+          }
+        },
+        "retained_total": 310027,
+        "common_retained_per_chain": 30366,
+        "completed_requested_draws": false,
+        "requested_draws_are_ceiling": true,
+        "physical_metrics": {
+          "max_rhat": 1.5641902783752277,
+          "min_bulk": 13.570309453673403,
+          "min_tail": 71.1092481687048
+        },
+        "coordinate_gates": {
+          "physical_coordinate_count": 722,
+          "extra_coordinate_count": 0,
+          "extra_group_names": [],
+          "physical_strict": false,
+          "extra_strict": true,
+          "extra_gate_applicable": false,
+          "all_coordinates_strict": false,
+          "scorer_common_criteria": false,
+          "scorer_strict_rhat": false,
+          "frozen_physical_coordinates": [],
+          "frozen_extra_coordinates": [],
+          "valid_termination": true,
+          "draw_requirement_satisfied": true,
+          "at_least_four_common_draws": true,
+          "within_300_seconds": true
+        },
+        "strict_pass": false,
+        "strict_pass_failed_conditions": [
+          "all_coordinates_strict"
+        ],
+        "timing": {
+          "actual_wall_seconds": 297.0868819169991,
+          "actual_wall_basis": "Supervisor-measured wall time for this invocation.",
+          "fit_seconds": 296.953802916978,
+          "compile_seconds": 0.0935942500072997,
+          "preparation_seconds": 0.0,
+          "precompiled_seconds": 0.0,
+          "setup_plus_compile_seconds": 297.0473971669853,
+          "budget_accounted_seconds": 297.0868819169991,
+          "budget_accounting_basis": "Supervisor wall plus explicitly charged preparation and precompiled build costs.",
+          "warm_cache_time_comparison": true,
+          "historical_build_costs_added_by_collector": false
+        },
+        "divergences": 0,
+        "depth_limit_fraction": 0.0001161189186748251,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-time-pathfinder/manifest.json",
+          "sha256": "b385f82093e51729c7b5d96ba15f679f08dae1870ff159fffd3932720d1a37f7"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-scores/targeted-time-pathfinder.log",
+          "sha256": "83925d8b1b7fe99d7257e432bb59f0a6b878e6404c9544324ce8c17422b51ac7"
+        }
+      },
+      {
+        "label": "targeted-time-affine-ar",
+        "budget_mode": "time",
+        "status": "time_budget_exhausted",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 1000000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 297.25689937602147,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_affine_threshold.stan",
+          "stan_sha256": "5b28399fd715a8e20d14c1e3d569e3217fa320d7f55a5749036f0ea86f5a508b",
+          "cpp_options": {},
+          "precompiled_seconds": 0,
+          "preparation_seconds": 0.021169082989217713
+        },
+        "retained_total": 1400350,
+        "common_retained_per_chain": 172789,
+        "completed_requested_draws": false,
+        "requested_draws_are_ceiling": true,
+        "physical_metrics": {
+          "max_rhat": 1.7168361060285304,
+          "min_bulk": 12.20184710418207,
+          "min_tail": 29.908173444169748
+        },
+        "coordinate_gates": {
+          "physical_coordinate_count": 722,
+          "extra_coordinate_count": 0,
+          "extra_group_names": [],
+          "physical_strict": false,
+          "extra_strict": true,
+          "extra_gate_applicable": false,
+          "all_coordinates_strict": false,
+          "scorer_common_criteria": false,
+          "scorer_strict_rhat": false,
+          "frozen_physical_coordinates": [],
+          "frozen_extra_coordinates": [],
+          "valid_termination": true,
+          "draw_requirement_satisfied": true,
+          "at_least_four_common_draws": true,
+          "within_300_seconds": true
+        },
+        "strict_pass": false,
+        "strict_pass_failed_conditions": [
+          "all_coordinates_strict"
+        ],
+        "timing": {
+          "actual_wall_seconds": 297.62364879099187,
+          "actual_wall_basis": "Supervisor-measured wall time for this invocation.",
+          "fit_seconds": 297.62798287399346,
+          "compile_seconds": 0.016834999987622723,
+          "preparation_seconds": 0.021169082989217713,
+          "precompiled_seconds": 0.0,
+          "setup_plus_compile_seconds": 297.6448178739811,
+          "budget_accounted_seconds": 297.6448178739811,
+          "budget_accounting_basis": "Supervisor wall plus explicitly charged preparation and precompiled build costs.",
+          "warm_cache_time_comparison": true,
+          "historical_build_costs_added_by_collector": false
+        },
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-time-affine-ar/manifest.json",
+          "sha256": "ee017b89037082a55198d0618e4f539171a8683c98e3bf09a609d3c47513c11b"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-scores/targeted-time-affine-ar.log",
+          "sha256": "a68881f40730ca36c24612038354e050abba6ce219d260d4cfe228f7f8de5691"
+        }
+      },
+      {
+        "label": "targeted-time-collapsed-ar",
+        "budget_mode": "time",
+        "status": "time_budget_exhausted",
+        "configuration": {
+          "settings": {
+            "chains": 8,
+            "parallel_chains": 8,
+            "threads_per_chain": 1,
+            "iter_warmup": 1000,
+            "iter_sampling": 1000000,
+            "seed": 19,
+            "adapt_delta": 0.8,
+            "max_treedepth": 10,
+            "metric": "diag_e",
+            "timeout": 297.25658808401204,
+            "save_warmup": false,
+            "sig_figs": 7
+          },
+          "chart": 1,
+          "initialization": "Data-informed Gaussian x path and prior-driven z transition initialization; no posterior reference",
+          "stan_source": "scratchpad/model-choice-20261107/stan/norm_collapsed_threshold.stan",
+          "stan_sha256": "1a82da640ae515b91c3b70ed8de3877ecdf057d76e27250ab4f790480d807124",
+          "cpp_options": {},
+          "precompiled_seconds": 0,
+          "preparation_seconds": 0.021169082989217713
+        },
+        "retained_total": 1261797,
+        "common_retained_per_chain": 155674,
+        "completed_requested_draws": false,
+        "requested_draws_are_ceiling": true,
+        "physical_metrics": {
+          "max_rhat": 1.928759212932441,
+          "min_bulk": 11.010983413905869,
+          "min_tail": 25.143354228102307
+        },
+        "coordinate_gates": {
+          "physical_coordinate_count": 722,
+          "extra_coordinate_count": 0,
+          "extra_group_names": [],
+          "physical_strict": false,
+          "extra_strict": true,
+          "extra_gate_applicable": false,
+          "all_coordinates_strict": false,
+          "scorer_common_criteria": false,
+          "scorer_strict_rhat": false,
+          "frozen_physical_coordinates": [],
+          "frozen_extra_coordinates": [],
+          "valid_termination": true,
+          "draw_requirement_satisfied": true,
+          "at_least_four_common_draws": true,
+          "within_300_seconds": true
+        },
+        "strict_pass": false,
+        "strict_pass_failed_conditions": [
+          "all_coordinates_strict"
+        ],
+        "timing": {
+          "actual_wall_seconds": 297.600162540999,
+          "actual_wall_basis": "Supervisor-measured wall time for this invocation.",
+          "fit_seconds": 297.6051224989642,
+          "compile_seconds": 0.01620912502403371,
+          "preparation_seconds": 0.021169082989217713,
+          "precompiled_seconds": 0.0,
+          "setup_plus_compile_seconds": 297.6213316239882,
+          "budget_accounted_seconds": 297.6213316239882,
+          "budget_accounting_basis": "Supervisor wall plus explicitly charged preparation and precompiled build costs.",
+          "warm_cache_time_comparison": true,
+          "historical_build_costs_added_by_collector": false
+        },
+        "divergences": 0,
+        "depth_limit_fraction": 0.0,
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-time-collapsed-ar/manifest.json",
+          "sha256": "472fd0993e09c0a79d675103936038485d532af51bb862c3a6d4d1b8e0fe48a1"
+        },
+        "score": {
+          "path": "scratchpad/model-choice-20261107/stan/targeted-scores/targeted-time-collapsed-ar.log",
+          "sha256": "8eae5815a8d17e2d8a58dc7634836e9dd22ab8fbc609df3b496c19baa77b5fba"
+        }
+      }
+    ],
+    "excluded_attempts": [
+      {
+        "label": "rescue-pathfinder",
+        "reason": "Optimized/threaded NUTS executable SIGSEGV; infrastructure failure, excluded from statistical/budget attempts.",
+        "manifest": {
+          "path": "scratchpad/model-choice-20261107/stan/rescue-pathfinder/manifest.json",
+          "sha256": "bf0861e4afa3be80054f1d6be1120c43cd5876b3745f3f62353c722c72fe4cd6"
+        }
+      },
+      {
+        "label": "targeted-full-s",
+        "replacement_label": "targeted-full-s-clean",
+        "excluded_from_fair_comparison": true,
+        "excluded_from_fair_budget_failures": true,
+        "reported_external_work": "Playwright/root lint, reported duration 54.4 seconds ending approximately 18:58 UTC.",
+        "overlap_assessment": "Overlap uncertain; excluded conservatively."
+      },
+      {
+        "label": "targeted-sign-logwhiten",
+        "replacement_label": "targeted-sign-logwhiten-clean",
+        "excluded_from_fair_comparison": true,
+        "excluded_from_fair_budget_failures": true,
+        "reported_external_work": "Playwright/root lint, reported duration 54.4 seconds ending approximately 18:58 UTC.",
+        "overlap_assessment": "Likely overlap with the reported external work."
+      }
+    ],
+    "historical_build_ledger": {
+      "entries": [
+        {
+          "family": "affine",
+          "source_arm": "rescue-affine-ar",
+          "source_file": "stan/rescue-affine-ar/manifest.json",
+          "source_field": "precompiled_seconds",
+          "seconds": 6.548917250009254
+        },
+        {
+          "family": "collapsed",
+          "source_arm": "rescue-collapsed-ar",
+          "source_file": "stan/rescue-collapsed-ar/manifest.json",
+          "source_field": "precompiled_seconds",
+          "seconds": 6.830513875000179
+        },
+        {
+          "family": "centered",
+          "source_arm": "centred-lean-eight",
+          "source_file": "stan/centred-lean-eight/manifest.json",
+          "source_field": "compile_seconds",
+          "seconds": 6.1815117910155095
+        },
+        {
+          "family": "pathfinder",
+          "source_arm": "rescue-pathfinder",
+          "source_file": "stan/rescue-pathfinder/manifest.json",
+          "source_field": "compile_seconds",
+          "seconds": 53.24115104202065
+        },
+        {
+          "family": "joint",
+          "source_arm": "targeted-joint-s",
+          "source_file": "stan/targeted-joint-s/manifest.json",
+          "source_field": "precompiled_seconds",
+          "seconds": 7.556102000002284
+        },
+        {
+          "family": "log_radius",
+          "source_arm": "targeted-sign-logwhiten",
+          "source_file": "stan/targeted-sign-logwhiten/manifest.json",
+          "source_field": "precompiled_seconds",
+          "seconds": 17.478651459008688
+        }
+      ],
+      "policy": "Historical builds are disclosed separately. They are not added to warm-cache time-arm durations. New builds explicitly charged in a fixed arm's manifest already count there; no cost is double-counted."
+    }
+  },
+  "approximate_reference": {
+    "mean": [
+      0.2599700306662821,
+      0.5263054348765293
+    ],
+    "sd": [
+      0.07016508058718139,
+      0.02616409592080225
+    ],
+    "p_high_225": 0.3701555590126297,
+    "limitation": "Unanchored numerical grid; parameter smoothing retains 98.91% grid mass; discrepancies around 0.01 are unresolved."
+  },
+  "limitations": [
+    "Different hardware and floating-point precision.",
+    "One synthetic dataset; no field validation or universal claim about NUTS.",
+    "Approximate reference omits the anchor and retains 98.91% parameter-grid mass; discrepancies around one percentage point are unresolved, not a uniform error bound.",
+    "The time-budget Pathfinder repeat had different realized initializations despite matching seed/settings and is not a continuation.",
+    "Raw posterior draws, CSV output, binaries and complete logs are deliberately omitted."
+  ]
+}

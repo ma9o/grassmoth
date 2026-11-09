@@ -1,0 +1,1332 @@
+{
+ "action": "edit_model",
+ "input": {
+  "parent_ref": "709a5c33c9f8b35870f63cc094a6b15c50a10ace",
+  "dynamical_model_spec": {
+   "constructs": {
+    "construct:x": {
+     "name": "x",
+     "role": "endogenous",
+     "temporal_status": "time_varying",
+     "coefficients": [
+      {
+       "kind": "coefficient",
+       "role": "diffusion_scale",
+       "value": 0.08,
+       "construct_ids": []
+      },
+      {
+       "kind": "coefficient",
+       "role": "initial_mean",
+       "value": 1.5,
+       "construct_ids": []
+      },
+      {
+       "kind": "coefficient",
+       "role": "initial_scale",
+       "value": 0.5,
+       "construct_ids": []
+      }
+     ],
+     "dynamics": {
+      "mechanism:self-x": {
+       "kind": "drift",
+       "expression": {
+        "kind": "binary",
+        "operator": "subtract",
+        "left": {
+         "kind": "binary",
+         "operator": "multiply",
+         "left": {
+          "kind": "binary",
+          "operator": "multiply",
+          "left": {
+           "kind": "literal",
+           "value": -1.0
+          },
+          "right": {
+           "kind": "coefficient",
+           "role": "decay",
+           "value": 1e-06,
+           "construct_ids": []
+          }
+         },
+         "right": {
+          "kind": "binary",
+          "operator": "subtract",
+          "left": {
+           "kind": "state",
+           "construct_id": "construct:x"
+          },
+          "right": {
+           "kind": "coefficient",
+           "role": "center",
+           "value": 0.0,
+           "construct_ids": []
+          }
+         }
+        },
+        "right": {
+         "kind": "binary",
+         "operator": "multiply",
+         "left": {
+          "kind": "coefficient",
+          "role": "quartic",
+          "value": 0.0,
+          "construct_ids": []
+         },
+         "right": {
+          "kind": "binary",
+          "operator": "power",
+          "left": {
+           "kind": "binary",
+           "operator": "subtract",
+           "left": {
+            "kind": "state",
+            "construct_id": "construct:x"
+           },
+           "right": {
+            "kind": "coefficient",
+            "role": "center",
+            "value": 0.0,
+            "construct_ids": []
+           }
+          },
+          "right": {
+           "kind": "literal",
+           "value": 3.0
+          }
+         }
+        }
+       }
+      },
+      "mechanism:growth-x": {
+       "kind": "drift",
+       "expression": {
+        "kind": "binary",
+        "operator": "add",
+        "left": {
+         "kind": "binary",
+         "operator": "multiply",
+         "left": {
+          "kind": "literal",
+          "value": 0.2
+         },
+         "right": {
+          "kind": "binary",
+          "operator": "subtract",
+          "left": {
+           "kind": "binary",
+           "operator": "multiply",
+           "left": {
+            "kind": "literal",
+            "value": 1.15
+           },
+           "right": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+             "kind": "literal",
+             "value": 1.0
+            },
+            "right": {
+             "kind": "binary",
+             "operator": "multiply",
+             "left": {
+              "kind": "literal",
+              "value": 0.35
+             },
+             "right": {
+              "kind": "call",
+              "function": "sigmoid",
+              "arguments": [
+               {
+                "kind": "binary",
+                "operator": "multiply",
+                "left": {
+                 "kind": "literal",
+                 "value": 4.0
+                },
+                "right": {
+                 "kind": "binary",
+                 "operator": "subtract",
+                 "left": {
+                  "kind": "state",
+                  "construct_id": "construct:x"
+                 },
+                 "right": {
+                  "kind": "literal",
+                  "value": 5.0
+                 }
+                }
+               }
+              ]
+             }
+            }
+           }
+          },
+          "right": {
+           "kind": "literal",
+           "value": 1.0
+          }
+         }
+        },
+        "right": {
+         "kind": "binary",
+         "operator": "multiply",
+         "left": {
+          "kind": "literal",
+          "value": 0.1
+         },
+         "right": {
+          "kind": "call",
+          "function": "sigmoid",
+          "arguments": [
+           {
+            "kind": "binary",
+            "operator": "multiply",
+            "left": {
+             "kind": "literal",
+             "value": 4.0
+            },
+            "right": {
+             "kind": "binary",
+             "operator": "subtract",
+             "left": {
+              "kind": "literal",
+              "value": 1.0
+             },
+             "right": {
+              "kind": "state",
+              "construct_id": "construct:x"
+             }
+            }
+           }
+          ]
+         }
+        }
+       }
+      }
+     },
+     "indicators": {
+      "indicator:x": {
+       "observation": {
+        "name": "x",
+        "measurement": {
+         "dtype": "continuous"
+        },
+        "aggregation": "last",
+        "observation_window": "1d"
+       },
+       "likelihood": {
+        "law": {
+         "distribution": "Normal",
+         "loc": {
+          "kind": "state",
+          "construct_id": "construct:x"
+         },
+         "scale": {
+          "kind": "coefficient",
+          "role": "observation_scale",
+          "value": 0.2,
+          "construct_ids": []
+         }
+        },
+        "standardized": false
+       },
+       "construct_polarity": "positive",
+       "reasoning": {
+        "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+       }
+      }
+     },
+     "reasoning": {
+      "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+     }
+    },
+    "construct:z": {
+     "name": "z",
+     "role": "endogenous",
+     "temporal_status": "time_varying",
+     "coefficients": [
+      {
+       "kind": "coefficient",
+       "role": "diffusion_scale",
+       "value": 0.03,
+       "construct_ids": []
+      },
+      {
+       "kind": "coefficient",
+       "role": "initial_mean",
+       "value": 0.0,
+       "construct_ids": []
+      },
+      {
+       "kind": "coefficient",
+       "role": "initial_scale",
+       "value": 0.1,
+       "construct_ids": []
+      }
+     ],
+     "dynamics": {
+      "mechanism:self-z": {
+       "kind": "drift",
+       "expression": {
+        "kind": "binary",
+        "operator": "subtract",
+        "left": {
+         "kind": "binary",
+         "operator": "multiply",
+         "left": {
+          "kind": "binary",
+          "operator": "multiply",
+          "left": {
+           "kind": "literal",
+           "value": -1.0
+          },
+          "right": {
+           "kind": "coefficient",
+           "role": "decay",
+           "value": 0.14285714285714285,
+           "construct_ids": []
+          }
+         },
+         "right": {
+          "kind": "binary",
+          "operator": "subtract",
+          "left": {
+           "kind": "state",
+           "construct_id": "construct:z"
+          },
+          "right": {
+           "kind": "coefficient",
+           "role": "center",
+           "value": 0.0,
+           "construct_ids": []
+          }
+         }
+        },
+        "right": {
+         "kind": "binary",
+         "operator": "multiply",
+         "left": {
+          "kind": "coefficient",
+          "role": "quartic",
+          "value": 0.0,
+          "construct_ids": []
+         },
+         "right": {
+          "kind": "binary",
+          "operator": "power",
+          "left": {
+           "kind": "binary",
+           "operator": "subtract",
+           "left": {
+            "kind": "state",
+            "construct_id": "construct:z"
+           },
+           "right": {
+            "kind": "coefficient",
+            "role": "center",
+            "value": 0.0,
+            "construct_ids": []
+           }
+          },
+          "right": {
+           "kind": "literal",
+           "value": 3.0
+          }
+         }
+        }
+       }
+      }
+     },
+     "reasoning": {
+      "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+     }
+    },
+    "construct:u": {
+     "name": "u",
+     "role": "exogenous",
+     "temporal_status": "time_varying",
+     "indicators": {
+      "indicator:u": {
+       "observation": {
+        "name": "u",
+        "measurement": {
+         "dtype": "continuous"
+        },
+        "aggregation": "last",
+        "observation_window": "1d"
+       },
+       "likelihood": {
+        "law": {
+         "distribution": "Delta",
+         "v": {
+          "kind": "state",
+          "construct_id": "construct:u"
+         }
+        },
+        "standardized": false
+       },
+       "construct_polarity": "positive",
+       "reasoning": {
+        "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+       }
+      }
+     },
+     "distribution": "distribution:input",
+     "reasoning": {
+      "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+     }
+    }
+   },
+   "edges": {
+    "edge:z-x": {
+     "cause": "construct:z",
+     "effect": "construct:x",
+     "mechanisms": {
+      "mechanism:z-x": {
+       "kind": "drift",
+       "expression": {
+        "kind": "binary",
+        "operator": "multiply",
+        "left": {
+         "kind": "binary",
+         "operator": "multiply",
+         "left": {
+          "kind": "binary",
+          "operator": "multiply",
+          "left": {
+           "kind": "literal",
+           "value": -0.23
+          },
+          "right": {
+           "kind": "coefficient",
+           "role": "weight",
+           "value": "parameter:4ab19aed62fdc634246c1615f6ea4b438a4136494b8c97a442aed52f14b37423",
+           "construct_ids": []
+          }
+         },
+         "right": {
+          "kind": "state",
+          "construct_id": "construct:z"
+         }
+        },
+        "right": {
+         "kind": "binary",
+         "operator": "subtract",
+         "left": {
+          "kind": "literal",
+          "value": 1.0
+         },
+         "right": {
+          "kind": "binary",
+          "operator": "multiply",
+          "left": {
+           "kind": "literal",
+           "value": 0.35
+          },
+          "right": {
+           "kind": "call",
+           "function": "sigmoid",
+           "arguments": [
+            {
+             "kind": "binary",
+             "operator": "multiply",
+             "left": {
+              "kind": "literal",
+              "value": 4.0
+             },
+             "right": {
+              "kind": "binary",
+              "operator": "subtract",
+              "left": {
+               "kind": "state",
+               "construct_id": "construct:x"
+              },
+              "right": {
+               "kind": "literal",
+               "value": 5.0
+              }
+             }
+            }
+           ]
+          }
+         }
+        }
+       }
+      }
+     },
+     "reasoning": {
+      "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+     }
+    },
+    "edge:x-z": {
+     "cause": "construct:x",
+     "effect": "construct:z",
+     "mechanisms": {
+      "mechanism:x-z": {
+       "kind": "drift",
+       "expression": {
+        "kind": "binary",
+        "operator": "multiply",
+        "left": {
+         "kind": "literal",
+         "value": 0.14285714285714285
+        },
+        "right": {
+         "kind": "call",
+         "function": "sigmoid",
+         "arguments": [
+          {
+           "kind": "binary",
+           "operator": "multiply",
+           "left": {
+            "kind": "literal",
+            "value": 16.0
+           },
+           "right": {
+            "kind": "binary",
+            "operator": "subtract",
+            "left": {
+             "kind": "binary",
+             "operator": "add",
+             "left": {
+              "kind": "binary",
+              "operator": "add",
+              "left": {
+               "kind": "state",
+               "construct_id": "construct:z"
+              },
+              "right": {
+               "kind": "binary",
+               "operator": "multiply",
+               "left": {
+                "kind": "literal",
+                "value": 0.05
+               },
+               "right": {
+                "kind": "binary",
+                "operator": "subtract",
+                "left": {
+                 "kind": "state",
+                 "construct_id": "construct:x"
+                },
+                "right": {
+                 "kind": "literal",
+                 "value": 4.0
+                }
+               }
+              }
+             },
+             "right": {
+              "kind": "state",
+              "construct_id": "construct:u"
+             }
+            },
+            "right": {
+             "kind": "coefficient",
+             "role": "center",
+             "value": "parameter:04c0ac03c0ed0deee1a4eb91bcfb684a4fddda7f80a0e7b7f0b5d2d3602e221a",
+             "construct_ids": []
+            }
+           }
+          }
+         ]
+        }
+       }
+      }
+     },
+     "reasoning": {
+      "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+     }
+    },
+    "edge:u-z": {
+     "cause": "construct:u",
+     "effect": "construct:z",
+     "mechanisms": {},
+     "reasoning": {
+      "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+     }
+    }
+   },
+   "parameters": {
+    "parameter:4ab19aed62fdc634246c1615f6ea4b438a4136494b8c97a442aed52f14b37423": {
+     "name": "norm_effect",
+     "distribution": "distribution:prior-a",
+     "reasoning": {
+      "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+     }
+    },
+    "parameter:04c0ac03c0ed0deee1a4eb91bcfb684a4fddda7f80a0e7b7f0b5d2d3602e221a": {
+     "name": "norm_threshold",
+     "distribution": "distribution:prior-h",
+     "reasoning": {
+      "text": "Declared hidden-norm sampler experiment: incidence and an unread tipping norm with dated mandates."
+     }
+    }
+   },
+   "distributions": {
+    "distribution:input": {
+     "distribution": "Delta",
+     "params": {
+      "v": {
+       "array": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.3,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        -0.3,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       "dtype": "float32"
+      },
+      "event_dim": 1
+     }
+    },
+    "distribution:prior-a": {
+     "distribution": "Normal",
+     "params": {
+      "loc": 0.2,
+      "scale": 0.15
+     }
+    },
+    "distribution:prior-h": {
+     "distribution": "Normal",
+     "params": {
+      "loc": 0.5,
+      "scale": 0.05
+     }
+    }
+   },
+   "law_layouts": {
+    "distribution:input": {
+     "parameters": [],
+     "constructs": [
+      "construct:u"
+     ],
+     "time_points": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      41,
+      42,
+      43,
+      44,
+      45,
+      46,
+      47,
+      48,
+      49,
+      50,
+      51,
+      52,
+      53,
+      54,
+      55,
+      56,
+      57,
+      58,
+      59,
+      60,
+      61,
+      62,
+      63,
+      64,
+      65,
+      66,
+      67,
+      68,
+      69,
+      70,
+      71,
+      72,
+      73,
+      74,
+      75,
+      76,
+      77,
+      78,
+      79,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      87,
+      88,
+      89,
+      90,
+      91,
+      92,
+      93,
+      94,
+      95,
+      96,
+      97,
+      98,
+      99,
+      100,
+      101,
+      102,
+      103,
+      104,
+      105,
+      106,
+      107,
+      108,
+      109,
+      110,
+      111,
+      112,
+      113,
+      114,
+      115,
+      116,
+      117,
+      118,
+      119,
+      120,
+      121,
+      122,
+      123,
+      124,
+      125,
+      126,
+      127,
+      128,
+      129,
+      130,
+      131,
+      132,
+      133,
+      134,
+      135,
+      136,
+      137,
+      138,
+      139,
+      140,
+      141,
+      142,
+      143,
+      144,
+      145,
+      146,
+      147,
+      148,
+      149,
+      150,
+      151,
+      152,
+      153,
+      154,
+      155,
+      156,
+      157,
+      158,
+      159,
+      160,
+      161,
+      162,
+      163,
+      164,
+      165,
+      166,
+      167,
+      168,
+      169,
+      170,
+      171,
+      172,
+      173,
+      174,
+      175,
+      176,
+      177,
+      178,
+      179,
+      180,
+      181,
+      182,
+      183,
+      184,
+      185,
+      186,
+      187,
+      188,
+      189,
+      190,
+      191,
+      192,
+      193,
+      194,
+      195,
+      196,
+      197,
+      198,
+      199,
+      200,
+      201,
+      202,
+      203,
+      204,
+      205,
+      206,
+      207,
+      208,
+      209,
+      210,
+      211,
+      212,
+      213,
+      214,
+      215,
+      216,
+      217,
+      218,
+      219,
+      220,
+      221,
+      222,
+      223,
+      224,
+      225,
+      226,
+      227,
+      228,
+      229,
+      230,
+      231,
+      232,
+      233,
+      234,
+      235,
+      236,
+      237,
+      238,
+      239,
+      240,
+      241,
+      242,
+      243,
+      244,
+      245,
+      246,
+      247,
+      248,
+      249,
+      250,
+      251,
+      252,
+      253,
+      254,
+      255,
+      256,
+      257,
+      258,
+      259,
+      260,
+      261,
+      262,
+      263,
+      264,
+      265,
+      266,
+      267,
+      268,
+      269,
+      270,
+      271,
+      272,
+      273,
+      274,
+      275,
+      276,
+      277,
+      278,
+      279,
+      280,
+      281,
+      282,
+      283,
+      284,
+      285,
+      286,
+      287,
+      288,
+      289,
+      290,
+      291,
+      292,
+      293,
+      294,
+      295,
+      296,
+      297,
+      298,
+      299,
+      300,
+      301,
+      302,
+      303,
+      304,
+      305,
+      306,
+      307,
+      308,
+      309,
+      310,
+      311,
+      312,
+      313,
+      314,
+      315,
+      316,
+      317,
+      318,
+      319,
+      320,
+      321,
+      322,
+      323,
+      324,
+      325,
+      326,
+      327,
+      328,
+      329,
+      330,
+      331,
+      332,
+      333,
+      334,
+      335,
+      336,
+      337,
+      338,
+      339,
+      340,
+      341,
+      342,
+      343,
+      344,
+      345,
+      346,
+      347,
+      348,
+      349,
+      350,
+      351,
+      352,
+      353,
+      354,
+      355,
+      356,
+      357,
+      358,
+      359
+     ],
+     "time_origin": "relative",
+     "labels": {}
+    }
+   },
+   "measurement_clock": "1d"
+  }
+ }
+}

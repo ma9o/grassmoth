@@ -1,0 +1,37 @@
+{
+  "action": "fit",
+  "input": {
+    "target": {
+      "kind": "new",
+      "dynamical_model_spec_ref": "280ce444148deec0df46ad73e244354568290a6b",
+      "data_ref": {
+        "revision": "e329bf3b7bd45f2b2f597dc6a177a39a92dc6d0b",
+        "replicate_index": 0
+      }
+    },
+    "settings": {
+      "profile": false,
+      "hardware": "L40S",
+      "time_limit_seconds": 300,
+      "num_samples_per_chain": 16000,
+      "num_warmup": 2000,
+      "num_chains": 8,
+      "thinning": false,
+      "seed": 19,
+      "algorithm": {
+        "method": "mpgibbs",
+        "n_parameter_particles": 2,
+        "path_update": {
+          "method": {
+            "kind": "particle_mgrad",
+            "num_particles": 256
+          }
+        },
+        "initialization": {
+          "scale": 1.0
+        }
+      }
+    },
+    "repeat": 1
+  }
+}

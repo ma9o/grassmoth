@@ -20,11 +20,11 @@ Every study is a [continuous-time nonlinear state-space model](/docs/assumptions
 
 Service fits use MPGibbs with Particle-mGRAD to target the exact posterior; the [fit chart](/docs/assets/action-flows/fit.svg) owns the supported launch path. Gelman's [folk theorem](https://statmodeling.stat.columbia.edu/2008/05/13/the_folk_theore/) holds that computational trouble often signals a problem with the model, and the agent can't switch to an approximation that hides it (unless translated into model specification). This results in a workflow where the LLM frequently cycles between specification and fitting. To keep fitting interactive we implemented [Corenflos & Finke (2024)](https://arxiv.org/abs/2401.14868) and [Corenflos & Särkkä (2025)](https://arxiv.org/abs/2303.00301), which leverage model properties and GPU parallelism to obtain inference times on the order of minutes for the representative classes of problems below.
 
-The measurements below predate removal of MPGibbs' learned path charts and include auxiliary Kalman runs outside the current service launch path. The [archived benchmark requests](/benchmarks/suite) preserve the settings used for those runs.
-
 ### [Stochastic volatility](https://doi.org/10.1111/1467-937X.00050) with cubic drift
 
 Long path (3,000 steps of one state), nonlinear in both the observation (the state sets each return's variance) and the dynamics (a cubic drift pulls the log-variance back), with unknown parameters (persistence and noise scale). See the [case](/benchmarks/cases/suite/SV-cubic).
+
+These SV measurements predate removal of MPGibbs' learned path charts and include auxiliary Kalman runs outside the current service launch path. The [archived benchmark requests](/benchmarks/suite) preserve their settings.
 
 | | mGRAD 256 particles | Blocked aux-Kalman |
 | --- | --- | --- |
@@ -35,18 +35,22 @@ Long path (3,000 steps of one state), nonlinear in both the observation (the sta
 | Worst R̂ | **1.016** | 1.037 |
 | Worst bulk ESS per second | 11.7 | **22.8** |
 
-### [Lorenz-96](https://docs.dart.ucar.edu/en/latest/models/lorenz_96/readme.html)
+### Bistable protective behavior
 
-Wide path (40 states per step), nonlinear in the dynamics (chaotic coupling), with unknown states (half never observed). See the [case](/benchmarks/cases/suite/L96).
+A synthetic epidemic-policy model couples log-incidence and an unobserved protective-norm index over 360 daily time points. Sigmoidal feedback supports low- and high-protection regimes. There are two stochastic states, one known policy input, two unknown global parameters and only 52 weekly incidence readings. Both samplers fit the same nonlinear model; diagnostics cover all 720 latent coordinates and both parameters. See the [model, protocol and results](/benchmarks/bistable-policy/notes.md).
 
-| | mGRAD 256 particles | Blocked aux-Kalman |
+| | MPGibbs + mGRAD (N=256, M=2) | Stan NUTS + Pathfinder starts |
 | --- | --- | --- |
-| Hardware | H200 | L40S |
-| Draws x chains | 4,000 x 80 | 10,000 x 80 |
-| Warmup and sampling | 18 min 38 s | **1 min 33 s** |
-| Worst bulk ESS | 2.4 | **31** |
-| Worst R̂ | 2.51 | **1.04** |
-| Worst bulk ESS per second | 0.0015 | **0.34** |
+| Hardware | L40S | Apple M1 Max |
+| Draws x chains | 16,000 x 8 | 16,000 x 8 |
+| Fit time (including warmup) | 2 min 5 s | 1 min 58 s |
+| Worst bulk ESS | **2,255** | 21 |
+| Worst R̂ | **1.0034** | 1.2814 |
+| Worst bulk ESS per second | **18.0** | 0.18 |
+
+The displayed Stan run had the lowest worst R̂ among completed matched-draw attempts, after extensive tuning. It had zero divergences but still failed mixing checks; mGRAD passed. Further five-minute Stan attempts retaining over a million draws did not close the mixing gap. This is one synthetic dataset and one sampling seed per configuration, on the different hardware shown.
+
+Warmup was 2,000 iterations per chain for mGRAD and 1,000 for Stan. Fit time includes initialization and, for mGRAD, JIT compilation and native diagnostics; Stan includes Pathfinder and uses previously compiled executables. ESS per second uses those fit clocks, excluding the common offline diagnostic scoring. GPU action time including dispatch and persistence was 2 min 56 s. The [timing and selection record](/benchmarks/bistable-policy/notes.md) preserves the full accounting.
 
 ## Quick Start
 

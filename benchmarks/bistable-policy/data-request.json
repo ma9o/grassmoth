@@ -1,0 +1,23 @@
+{
+ "action": "prepare_data",
+ "input": {
+  "dynamical_model_spec_ref": "280ce444148deec0df46ad73e244354568290a6b",
+  "source": "tmp/input",
+  "extraction": {
+   "indicator:x": {
+    "kind": "recorded",
+    "value_column": "x",
+    "anchor_column": "timestamp",
+    "support_start_column": "timestamp",
+    "support_end_column": "timestamp"
+   },
+   "indicator:u": {
+    "kind": "recorded",
+    "value_column": "u",
+    "anchor_column": "timestamp",
+    "support_start_column": "timestamp",
+    "support_end_column": "timestamp"
+   }
+  }
+ }
+}
